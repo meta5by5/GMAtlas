@@ -1,0 +1,41 @@
+/* tokens.css — design tokens. The THREE VISUAL TIERS are encoded here as
+   variables so hierarchy is a system property, not a per-screen decision.
+   No !important anywhere in this codebase (the v0.53 specificity wars are over). */
+
+:root {
+  color-scheme: dark;
+
+  /* Palette */
+  --bg:            #0b1120;
+  --bg-raised:     #0f172a;
+  --bg-inset:      #111c33;
+  --border:        rgba(148, 163, 184, 0.28);
+  --border-strong: rgba(148, 163, 184, 0.45);
+  --text:          #e8eef8;
+  --text-dim:      #93a2bb;
+  --accent:        #7dd3fc;
+  --accent-strong: #38bdf8;
+  --danger:        #f87171;
+  --warn:          #fbbf24;
+  --ok:            #4ade80;
+
+  /* Tier surfaces — Primary reads brightest, Tertiary recedes. */
+  --tier1-bg:     linear-gradient(180deg, #16233d, #0f1b30);
+  --tier1-border: var(--border-strong);
+  --tier2-bg:     rgba(15, 23, 42, 0.55);
+  --tier2-border: var(--border);
+  --tier3-bg:     rgba(9, 14, 26, 0.92);
+  --tier3-border: var(--border);
+
+  /* Spacing / shape / type */
+  --sp-1: 0.25rem; --sp-2: 0.5rem; --sp-3: 0.75rem; --sp-4: 1rem; --sp-6: 1.5rem;
+  --radius: 0.7rem; --radius-sm: 0.45rem;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+
+  /* Layout */
+  --header-h: 3rem;
+  --strip-h: 3.25rem;
+  --copilot-w: 22rem;
+  --edge-w: 3.25rem;
+}

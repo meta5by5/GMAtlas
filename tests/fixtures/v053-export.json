@@ -1,0 +1,46 @@
+{
+  "campaignName": "Hostile Frontier",
+  "planet": "Rocky world",
+  "biome": "Industrial wasteland",
+  "locationType": "Mining facility",
+  "surroundings": "Maintenance tunnel",
+  "intent": "Investigation",
+  "pacing": "Tense",
+  "phase": "Complication",
+  "threatLevel": 6,
+  "mysteryLevel": 4,
+  "currentThread": "Who sabotaged the ore processor, and why is the medic missing?",
+  "missionSeed": "Recover the survey team from Dock 3 before the corporate auditors arrive.",
+  "worldSeed": "Colony under quota pressure; dominant faction hiding an alien breach.",
+  "predictability": 65,
+  "useContinuity": true,
+  "escalateOnComplication": true,
+  "useConflictArchitecture": true,
+  "sceneLog": [
+    { "number": 1, "phase": "Setup", "summary": "Arrival at Dock 3", "text": "Scene 1 text...", "memory": "Mining facility / Maintenance tunnel" },
+    { "number": 2, "phase": "Approach", "summary": "The processor is cold", "text": "Scene 2 text...", "memory": "Ore processing floor" }
+  ],
+  "lastSceneText": "Scene 2 text...",
+  "sceneSegments": ["Opening", "Discovery"],
+  "journal": [
+    { "id": "j1", "createdAt": "2026-06-20T10:00:00.000Z", "source": "Comment", "text": "The medic's badge was found near the reactor.", "isHtml": false },
+    { "id": "j2", "createdAt": "2026-06-20T10:05:00.000Z", "source": "Oracle", "text": "<b>Clue:</b> scratches on the airlock", "isHtml": true }
+  ],
+  "activeCenterTab": "journal",
+  "activeLeftTab": "entityList",
+  "oracleUsage": { "Core Oracles": 12, "Plot Engine": 5 },
+  "oracleFilter": "faction",
+  "entityFilter": "",
+  "entityTagCatalog": { "npc": ["survivor", "corporate"], "location": ["dock", "tunnel"] },
+  "lynxShip": { "name": "Lynx Rescue Ship", "preset": "rescue", "decks": 5, "zones": 4, "threat": "medium", "lighting": "emergency", "mission": "", "threatScore": 0, "output": "" },
+  "entities": {
+    "items": [
+      { "id": "ent_a", "type": "npc", "name": "Administrator Voss", "tags": ["corporate"], "relationships": [], "overview": "Runs the mining colony.", "revealed": "" },
+      { "id": "ent_b", "type": "location", "name": "Dock 3", "tags": ["dock"], "relationships": [], "overview": "Primary landing bay.", "revealed": "" }
+    ],
+    "activeId": "ent_a",
+    "history": ["ent_b", "ent_a"]
+  },
+  "updatedAt": "2026-06-20T10:06:00.000Z",
+  "someUnknownExperimentalField": { "keepMe": true }
+}

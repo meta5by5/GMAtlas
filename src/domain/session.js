@@ -1,0 +1,108 @@
+// session.js — orchestration. These take a whole campaign and return a NEW
+// campaign, composing the pure domain pieces (context shifts, scene generation,
+// oracle rolls) and keeping the timeline + journal in sync. The UI calls these
+// through store.update(); they never touch the store or the DOM themselves.
+
+import { applyShift } from './context.js';
+import { generateScene } from './scenes.js';
+import { tablesWithOverrides, rollTable, rollGroup, formatRoll } from './oracles.js';
+import { linkMentions, parseMentions } from './entities.js';
+
+function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
+
+function pushTimeline(campaign, crumb) {
+  campaign.timeline = campaign.timeline || [];
+  campaign.timeline.push({ ...crumb, at: crumb.at || new Date().toISOString() });
+  // Keep the breadcrumb bar readable — cap at the most recent 6.
+  if (campaign.timeline.length > 6) campaign.timeline = campaign.timeline.slice(-6);
+}
+
+function addJournal(campaign, text, source) {
+  campaign.journal = campaign.journal || [];
+  campaign.journal.push({
+    id: 'j' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    createdAt: new Date().toISOString(),
+    source: source || 'Session',
+    text,
+    isHtml: false,
+  });
+}
+
+/** Generate the next scene, log it, and let consequences nudge the context. */
+export function continueStory(campaign, { toJournal = true } = {}) {
+  const next = clone(campaign);
+  const tables = tablesWithOverrides(next.oracles?.overrides);
+  const scene = generateScene(next, tables);
+
+  next.scenes = next.scenes || [];
+  next.scenes.push(scene);
+
+  // Consequences gently escalate, mirroring v0.53's applyConsequence.
+  const con = String(scene.consequence || '');
+  if (/threat|danger|hostil|attack/i.test(con)) next.context.what.threat = Math.min(10, (next.context.what.threat || 0) + 1);
+  if (/myster|unknown|hidden|strange/i.test(con)) next.context.what.mystery = Math.min(10, (next.context.what.mystery || 0) + 1);
+
+  pushTimeline(next, { kind: 'scene', label: `Scene ${scene.number}` });
+  if (toJournal) addJournal(next, scene.text, 'Scene');
+  return next;
+}
+
+/** Apply a named "Shift Story" action and record it on the timeline. */
+export function applyStoryShift(campaign, shiftName, payload) {
+  const next = clone(campaign);
+  const { context, event } = applyShift(next.context, shiftName, payload);
+  next.context = context;
+  if (event) pushTimeline(next, { kind: 'shift', label: event.label });
+  return next;
+}
+
+/** Roll an oracle table (path array) and append the result to the journal. */
+export function rollOracle(campaign, path, { group = false, toJournal = true } = {}) {
+  const next = clone(campaign);
+  const tables = tablesWithOverrides(next.oracles?.overrides);
+  const roll = group ? rollGroup(tables, path) : rollTable(tables, path);
+  const text = formatRoll(roll);
+
+  // Track usage (drives Co-Pilot suggestions later).
+  next.oracles = next.oracles || { overrides: {}, usage: {} };
+  next.oracles.usage = next.oracles.usage || {};
+  const top = path[0];
+  if (top) next.oracles.usage[top] = (next.oracles.usage[top] || 0) + 1;
+
+  if (toJournal) addJournal(next, text, 'Oracle');
+  return { campaign: next, roll, text };
+}
+
+/** Add a free-form journal note. @mentions auto-create/link entities. */
+export function addNote(campaign, text, source = 'Note') {
+  let next = clone(campaign);
+  addJournal(next, text, source);
+  if (parseMentions(text).length) next = linkMentions(next, text);
+  return next;
+}
+
+/** File a dice-roll result (e.g. a statblock double-click-to-roll) to the journal. */
+export function logRoll(campaign, text, source = 'Roll') {
+  const next = clone(campaign);
+  addJournal(next, text, source);
+  return next;
+}
+
+/** Patch a single context question's fields (from inline editing). */
+export function patchContext(campaign, key, patch) {
+  const next = clone(campaign);
+  next.context[key] = { ...next.context[key], ...patch };
+  return next;
+}
+
+/** Edit a free-text context field and auto-link any @mentions it contains.
+ *  Mentions default to a type that fits the field: WHERE → location,
+ *  WHO → npc, otherwise npc (reclassify in one click in the inspector). */
+export function editContextText(campaign, key, field, value) {
+  let next = patchContext(campaign, key, { [field]: value });
+  if (parseMentions(value).length) {
+    const createType = key === 'where' ? 'location' : 'npc';
+    next = linkMentions(next, value, { createType });
+  }
+  return next;
+}

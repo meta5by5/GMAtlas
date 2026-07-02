@@ -1,0 +1,13 @@
+{
+  "name": "saga-atlas",
+  "version": "0.1.0-phase0",
+  "description": "A campaign operating system for solo and GM-run sci-fi tabletop play. Static, local-first, installable PWA.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.js",
+    "test": "node --test",
+    "serve": "node scripts/build.js && python3 -m http.server 8080"
+  },
+  "license": "UNLICENSED"
+}
