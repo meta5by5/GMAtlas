@@ -22,7 +22,7 @@ const v053 = JSON.parse(readFileSync(join(here, 'fixtures', 'v053-export.json'),
 test('importCampaign detects a legacy v0.53 export and produces a current doc', () => {
   const doc = importCampaign(v053);
   assert.equal(doc.schemaVersion, SCHEMA_VERSION);
-  assert.equal(doc.app, 'Saga Atlas');
+  assert.equal(doc.app, 'GMAtlas');
 });
 
 test('core domain data carries over intact', () => {
@@ -95,7 +95,7 @@ test('migrateDocument upgrades and normalizes an existing document', () => {
   const older = { ...defaultCampaign(), schemaVersion: 0, app: 'Whatever' };
   const doc = migrateDocument(older);
   assert.equal(doc.schemaVersion, SCHEMA_VERSION);
-  assert.equal(doc.app, 'Saga Atlas');
+  assert.equal(doc.app, 'GMAtlas');
 });
 
 test('round-trip: export → import is stable', () => {

@@ -1,6 +1,6 @@
 {
-  "name": "Saga Atlas",
-  "short_name": "Saga Atlas",
+  "name": "GMAtlas",
+  "short_name": "GMAtlas",
   "description": "A campaign operating system for solo and GM-run sci-fi tabletop play.",
   "start_url": "./",
   "scope": "./",

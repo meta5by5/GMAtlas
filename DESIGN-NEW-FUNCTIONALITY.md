@@ -1,4 +1,4 @@
-# Saga Atlas — New Functionality Design
+# GMAtlas — New Functionality Design
 
 *Companion to the Phase 0 foundation. Covers what the re-architecture now makes possible, what is already built, and what is proposed next.*
 
@@ -49,12 +49,15 @@ A deterministic, pure force-directed layout (`domain/graph.js`) renders entity r
 ### 8. Statblock tracks + double-click-to-roll (Phase 3D)
 Requested directly against the Crew Link Starforged character sheet as a visual/interaction reference. Any statblock field can now be a numeric **track** instead of free text — a row of click-to-set boxes (click box *n* to set the value to *n*; click the active box again to step it down, so a full track zeros out one click at a time), matching the Health/Spirit/Supply/Safety meter widgets in that sheet. Health and Hull/Integrity are tracks by default; any other field — including a brand-new one added via **+ Track** — converts between text and track with a single toggle (`#` / `Aa`), so this stays data-driven rather than hardcoding Starforged's specific stat names. Double-clicking a track's value badge rolls it: `domain/dice.js` implements the action-die-vs-two-challenge-dice mechanic (d6 + value vs 2d10, Strong Hit / Weak Hit / Miss, with matches flagged) as a pure, RNG-injectable function — the same reference mechanic v0.53's Starforged roller used, now testable and filed to the Journal like any other roll.
 
+### 9. Document Library + Character Sheets (Phase 4)
+`campaign.documents.library` (item A below) is built: `assets/docs/` is scanned at build time (`scripts/build.js` → `src/data/docsManifest.js`, gitignored/regenerated) into a read-only Reference Library section in the Docs drawer, and the library also accepts real file uploads (FileReader → data URL) alongside the existing text-note documents — both distinct from, and shown alongside, the auto-discovered reference PDFs. Separately, statblocks gained a third kind: `makeStatblock('character', rulesetId)` builds a full player-character sheet from ruleset data in `data/rulesets.js` (Starforged: Edge/Heart/Iron/Shadow/Wits + Health/Spirit/Supply/Momentum; 5PFH: Reaction/Speed/Combat/Savvy/Tough + Luck/XP) — every stat and resource is an ordinary click-to-set/roll track, so no new interaction code was needed, only new *data*. Switchable per entity between rulesets from the statblock header (rebuilds the sheet). A Crew Link new-tab link lives in Settings for character-building workflows this app doesn't replicate (item E, partial — no Shipyard link yet).
+
 ---
 
 ## Proposed next (ranked by value / effort)
 
-### A. Document Library + `@` pointers to documents (Phase 4)
-v0.53 could upload PDFs to browser storage and link a page from the Guide/Journal editor by typing `@` and picking a document. This branch's `@mention` system currently resolves only to **entities** — pointing to **documents** needs the Document Library to exist first (`campaign.documents.library` is reserved in the schema but unbuilt). Scope: PDF upload/local storage, an indexed library list in the Docs drawer, and extending `parseMentions`/the `@`-autocomplete UX to offer documents alongside entities, inserting a page-anchored link. *Effort:* medium-large — this is the next "real infrastructure" phase, similar in weight to entities was.
+### A. Document Library (done) + `@` pointers to documents (remaining)
+**Done** (see item 9 above): the library holds real file uploads and an auto-scanned Reference Library from `assets/docs/`. **Remaining:** this branch's `@mention` system still resolves only to **entities** — extending `parseMentions`/the `@`-autocomplete UX to offer documents alongside entities, inserting a page-anchored link, is the piece still open. *Effort:* medium — narrower now than when the library itself didn't exist.
 
 ### B. Session recap ("Previously on…")
 One click composes a recap from the timeline + recent journal + open threads. *Payoff:* start every session oriented in ten seconds. *Effort:* low — a pure function over data we already keep. This is the natural first place to add optional LLM assistance behind the existing pure-function boundary.
@@ -65,8 +68,8 @@ The data model already carries `oracles.overrides`, and the roll engine already 
 ### D. Genre packs
 `SCENE_TABLES` is data and `settings.genre` is a lens. Package alternative table sets (and tone defaults) as selectable "genre packs" so the same cockpit runs a non-Hostile setting. *Payoff:* delivers the "genre-aware, not genre-locked" principle concretely. *Effort:* medium — a loader + a second data set.
 
-### E. Companion tools done right (Phase 4)
-Crew Link and the Shipyard become **new-tab companions with in-app fallback links**, never embedded iframes — which is the structural fix for the Android failure noted in the chat. *Effort:* low.
+### E. Companion tools done right (Phase 4) — partially done
+Crew Link and the Shipyard become **new-tab companions with in-app fallback links**, never embedded iframes — which is the structural fix for the Android failure noted in the chat. *Done:* a Crew Link link lives in Settings. *Remaining:* no Shipyard link yet (no known official URL to point it at without guessing). *Effort:* low.
 
 ### F. Sync adapter / Crew Log shared database (Phase 6, future)
 Because persistence is one module with a narrow interface and the campaign is a single clean document, adding a sync backend is an *adapter*, not a rewrite. The Crew Log merge then becomes "two front-ends over one document schema." *Effort:* larger, but isolated — nothing above depends on it.

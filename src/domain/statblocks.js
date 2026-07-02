@@ -1,4 +1,4 @@
-// statblocks.js — structured NPC / vehicle statblocks as pure data attached
+// statblocks.js — structured NPC / vehicle / character statblocks as pure data attached
 // to an entity record. Deliberately system-agnostic: an ordered list of
 // key/value fields rather than a hardcoded ruleset, so this stays true to
 // "genre-aware, not genre-locked" — a Hostile/Starforged table works the same
@@ -14,6 +14,10 @@
 // value vs 2d10, see domain/dice.js). Any field can be toggled between the
 // two shapes from the UI, so this stays genre-agnostic: nothing here assumes
 // a specific stat name or ruleset.
+import { findRuleset } from '../data/rulesets.js';
+
+const CHARACTER_DEFAULT_RULESET = 'starforged';
+
 const NPC_DEFAULT_FIELDS = [
   { key: 'Role', value: '' },
   { key: 'Disposition', value: '' },
@@ -42,7 +46,21 @@ export function hasVehicleTag(entity) {
   return Array.isArray(entity && entity.tags) && entity.tags.some((t) => /^vehicles?$/i.test(String(t).trim()));
 }
 
-export function makeStatblock(kind) {
+/** Build a fresh statblock for `kind` ('npc' | 'vehicle' | 'character').
+ *  A 'character' statblock is a full player-character sheet built from the
+ *  chosen ruleset's template (see data/rulesets.js): stats and resource
+ *  tracks are both rendered as click-to-set/roll tracks by the UI — the
+ *  `group` tag only decides which section of the sheet they appear in. */
+export function makeStatblock(kind, rulesetId) {
+  if (kind === 'character') {
+    const ruleset = findRuleset(rulesetId || CHARACTER_DEFAULT_RULESET);
+    const tpl = ruleset.characterTemplate;
+    const fields = [
+      ...tpl.stats.map((s) => ({ key: s.key, value: s.value, max: s.max, track: true, group: 'stat' })),
+      ...tpl.tracks.map((t) => ({ key: t.key, value: t.value, max: t.max, track: true, group: 'resource' })),
+    ];
+    return { kind: 'character', ruleset: ruleset.id, fields };
+  }
   return { kind: kind === 'vehicle' ? 'vehicle' : 'npc', fields: fieldsFrom(kind === 'vehicle' ? VEHICLE_DEFAULT_FIELDS : NPC_DEFAULT_FIELDS) };
 }
 
@@ -129,4 +147,43 @@ export function setStatblockTrackValue(entity, index, n) {
   const target = f.value === n ? n - 1 : n;
   f.value = clamp(target, 0, max);
   return entity;
+}
+
+/** Toggle a field's `attribute` flag so it can be rendered as an attribute
+ *  badge in the UI (e.g. EDGE +3). This is purely visual metadata. */
+export function toggleStatblockFieldAttribute(entity, index) {
+  const f = entity && entity.statblock && entity.statblock.fields[index];
+  if (!f) return entity;
+  f.attribute = !f.attribute;
+  return entity;
+}
+
+/** Parse a stats string like "reaction: 3, tough: 4, combat: 2, ..." into a map
+ *  and return an ordered list suitable for rendering. Recognizes Starforged
+ *  stat names (edge, iron, heart, shadow, wits) and 5PFH names
+ *  (reaction, speed, combat, savvy, tough). */
+export function parseStatsString(str) {
+  const s = String(str || '');
+  const parts = s.split(/[,;]\s*/).map((p) => p.trim()).filter(Boolean);
+  const map = new Map();
+  for (const p of parts) {
+    const m = p.match(/^([^:\s]+)\s*:\s*(.+)$/);
+    if (m) {
+      map.set(m[1].trim().toLowerCase(), m[2].trim());
+    }
+  }
+
+  const starOrder = ['edge','iron','heart','shadow','wits','reaction','speed','combat','savvy','tough'];
+  const fiveOrder = ['reaction','speed','combat','savvy','tough'];
+
+  const hasStar = [...map.keys()].some((k) => starOrder.includes(k));
+  const hasFive = [...map.keys()].some((k) => fiveOrder.includes(k));
+
+  let order = [];
+  if (hasStar) order = starOrder.filter((k) => map.has(k));
+  else if (hasFive) order = fiveOrder.filter((k) => map.has(k));
+  else order = [...map.keys()];
+
+  const ordered = order.map((k) => ({ key: k, value: map.get(k) }));
+  return { map, ordered };
 }

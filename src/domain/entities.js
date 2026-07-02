@@ -6,7 +6,7 @@
 // The data shape (campaign.entities.items) has existed since Phase 0 and the
 // v0.53 migration already fills it; this module gives it behavior.
 
-import { ensureAutoStatblock, makeStatblock, setStatblockField, addStatblockField, removeStatblockField, toggleStatblockFieldTrack, setStatblockTrackValue } from './statblocks.js';
+import { ensureAutoStatblock, makeStatblock, setStatblockField, addStatblockField, removeStatblockField, toggleStatblockFieldTrack, setStatblockTrackValue, toggleStatblockFieldAttribute } from './statblocks.js';
 
 export const ENTITY_TYPES = ['npc', 'location', 'faction', 'asset', 'lore'];
 export const TYPE_LABEL = { npc: 'NPC', location: 'Location', faction: 'Faction', asset: 'Asset', lore: 'Lore' };
@@ -121,6 +121,12 @@ export function parseMentions(text) {
   return out;
 }
 
+// Convenience: parse mentions and return entity objects for each found name
+export function findMentions(campaign, text) {
+  const names = parseMentions(text);
+  return names.map((n) => findByName(campaign, n)).filter(Boolean);
+}
+
 /**
  * Ensure every @mention in `text` maps to an entity (creating missing ones),
  * then link co-mentioned entities to each other. Returns a new campaign.
@@ -145,10 +151,14 @@ export function relationshipCount(entity) {
 }
 
 // --- statblocks (manual add/remove; auto-attach happens in create/update) --
-export function setEntityStatblockKind(campaign, id, kind) {
+// `rulesetId` only matters for kind === 'character'; it defaults to the
+// campaign's Settings > Stat system choice, so entities pick up whichever
+// ruleset is active unless a specific one is passed (e.g. to rebuild a
+// character sheet against a different ruleset — see data-statblock-ruleset).
+export function setEntityStatblockKind(campaign, id, kind, rulesetId) {
   const next = clone(campaign);
   const e = getEntity(next, id);
-  if (e) e.statblock = makeStatblock(kind);
+  if (e) e.statblock = makeStatblock(kind, rulesetId || next.settings.statRuleset);
   return next;
 }
 
@@ -193,3 +203,11 @@ export function setEntityStatblockTrackValue(campaign, id, index, n) {
   if (e) setStatblockTrackValue(e, index, n);
   return next;
 }
+
+export function toggleEntityStatblockFieldAttribute(campaign, id, index) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (e) toggleStatblockFieldAttribute(e, index);
+  return next;
+}
+

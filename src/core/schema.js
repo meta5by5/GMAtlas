@@ -7,7 +7,7 @@
 // Pure data + pure functions only. No DOM, no localStorage. This file is safe
 // to import in the browser AND in Node (tests).
 
-export const APP_NAME = 'Saga Atlas';
+export const APP_NAME = 'GMAtlas';
 
 // Bump this whenever the shape changes; add a matching step in migrate.js.
 export const SCHEMA_VERSION = 1;
@@ -58,6 +58,7 @@ export function defaultCampaign(now = new Date().toISOString()) {
     settings: {
       genre: 'Hostile',  // genre-aware, not genre-locked
       tone: '',
+      statRuleset: 'starforged',
       cie: {},           // Campaign Intelligence Engine settings
       entityTemplates: {},
       form: {},          // legacy Story Director form fields, preserved verbatim

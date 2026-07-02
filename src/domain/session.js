@@ -7,6 +7,7 @@ import { applyShift } from './context.js';
 import { generateScene } from './scenes.js';
 import { tablesWithOverrides, rollTable, rollGroup, formatRoll } from './oracles.js';
 import { linkMentions, parseMentions } from './entities.js';
+import { linkDocumentMentions, parseDocumentMentions } from './documents.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 
@@ -78,6 +79,7 @@ export function addNote(campaign, text, source = 'Note') {
   let next = clone(campaign);
   addJournal(next, text, source);
   if (parseMentions(text).length) next = linkMentions(next, text);
+  if (parseDocumentMentions(text).length) next = linkDocumentMentions(next, text);
   return next;
 }
 
@@ -104,5 +106,6 @@ export function editContextText(campaign, key, field, value) {
     const createType = key === 'where' ? 'location' : 'npc';
     next = linkMentions(next, value, { createType });
   }
+  if (parseDocumentMentions(value).length) next = linkDocumentMentions(next, value);
   return next;
 }

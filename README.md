@@ -1,4 +1,4 @@
-# Saga Atlas
+# GMAtlas
 
 A campaign operating system for solo and GM-run sci-fi tabletop play. Static, local-first, installable as an offline PWA. This is the clean re-architecture branched from the v0.53 prototype.
 
@@ -52,7 +52,8 @@ Open the served URL. On first launch the store migrates any legacy data, then re
 - [x] **Phase 3B** — force-directed relationship graph over the entity links, click-through to the inspector, live badges
 - [x] **Phase 3C** — NPC/vehicle statblocks (auto-attached, `#vehicle` tag aware), drag-and-drop entity↔entity linking, drag-and-drop entities into Journal/context fields as `@mentions`, a Build panel (phase/version/changelog) in Settings
 - [x] **Phase 3D** — Crew-Link-style statblock tracks: any field can be a numeric click-to-set scale (row of boxes), with double-click-to-roll (d6 + value vs 2 challenge dice, filed to the Journal)
-- [ ] **Phase 4** — Document Library (PDF upload/index) + `@` pointers to docs; full responsive polish; Crew Link / Shipyard as new-tab companions; retire legacy nav
+- [x] **Phase 4** — Document Library: auto-scanned Reference Library from `assets/docs/` (rebuilds with the folder) + real file uploads; ruleset-driven Character Sheets (Starforged/5PFH) as rollable stat/resource tracks, switchable per entity; Crew Link new-tab companion link in Settings
+- [ ] **Phase 4 (remaining)** — `@` pointers into documents (page-anchored mention/autocomplete); Shipyard companion link; full responsive polish; retire legacy nav
 - [ ] **Phase 5** — parity cutover
 - [ ] **Phase 6** (future) — optional sync adapter / Crew Log shared database
 

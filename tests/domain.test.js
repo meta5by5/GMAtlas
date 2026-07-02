@@ -10,6 +10,7 @@ import { applyShift, listShifts, contextSummary } from '../src/domain/context.js
 import { generateScene } from '../src/domain/scenes.js';
 import { continueStory, applyStoryShift, rollOracle, patchContext } from '../src/domain/session.js';
 import { defaultCampaign } from '../src/core/schema.js';
+import { parseStatsString } from '../src/domain/statblocks.js';
 
 // --- oracles --------------------------------------------------------------
 test('oracle tables loaded as a module', () => {
@@ -132,6 +133,7 @@ test('contextSummary shows the first line of a multi-line situation', () => {
 // --- threads (new feature) ------------------------------------------------
 import { addThread, advanceThread, removeThread, threadUnderPressure } from '../src/domain/threads.js';
 import { advise } from '../src/domain/copilot.js';
+import { addDocument, updateDocument, removeDocument, parseDocumentMentions, linkDocumentMentions, listDocumentMentions } from '../src/domain/documents.js';
 
 test('threads: add, advance (clamped), complete, remove', () => {
   let camp = defaultCampaign();
@@ -165,6 +167,37 @@ test('Co-Pilot flags a nearly-complete thread', () => {
   const a = advise(camp);
   assert.match(a.observation, /Escape the station/);
   assert.match(a.observation, /3\/4/);
+});
+
+test('document library adds, edits, and removes entries without mutating the source campaign', () => {
+  let camp = defaultCampaign();
+  camp = addDocument(camp, { title: 'Station Manual', content: 'Docking procedures' });
+  assert.equal(camp.documents.library.length, 1);
+  const id = camp.documents.library[0].id;
+  camp = updateDocument(camp, id, { title: 'Docking Manual', content: 'Updated procedures' });
+  assert.equal(camp.documents.library[0].title, 'Docking Manual');
+  assert.match(camp.documents.library[0].content, /Updated/);
+  camp = removeDocument(camp, id);
+  assert.equal(camp.documents.library.length, 0);
+});
+
+test('document library supports uploaded files distinctly from text notes', () => {
+  let camp = defaultCampaign();
+  camp = addDocument(camp, { kind: 'file', title: 'Crew Manifest.pdf', fileName: 'Crew Manifest.pdf', mimeType: 'application/pdf', dataUrl: 'data:application/pdf;base64,AAAA' });
+  const entry = camp.documents.library[0];
+  assert.equal(entry.kind, 'file');
+  assert.equal(entry.fileName, 'Crew Manifest.pdf');
+  assert.equal(entry.dataUrl, 'data:application/pdf;base64,AAAA');
+  assert.equal(entry.content, '');
+});
+
+test('document mentions are parsed and linked to the library', () => {
+  let camp = defaultCampaign();
+  camp = addDocument(camp, { title: 'Station Manual', content: 'Docking procedures' });
+  camp = linkDocumentMentions(camp, 'See @Station Manual and @[Shipyard Guide]');
+  assert.deepEqual(parseDocumentMentions('See @Station Manual and @[Shipyard Guide]'), ['Station Manual', 'Shipyard Guide']);
+  assert.equal(listDocumentMentions(camp).length, 2);
+  assert.equal(listDocumentMentions(camp)[0].documentId, camp.documents.library[0].id);
 });
 
 // --- entities + auto-linking (Phase 3A) -----------------------------------
@@ -207,6 +240,46 @@ test('deleting an entity strips dangling relationships', () => {
 
 test('parseMentions handles @Name and @[Multi Word]', () => {
   assert.deepEqual(parseMentions('Meet @Voss at @[Dock 3] now'), ['Voss', 'Dock 3']);
+});
+
+test('default campaign uses the Starforged stat ruleset', () => {
+  const camp = defaultCampaign();
+  assert.equal(camp.settings.statRuleset, 'starforged');
+});
+
+test('setEntityStatblockKind builds a full Starforged character sheet as rollable tracks', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Scout' }));
+  camp = setEntityStatblockKind(camp, id, 'character', 'starforged');
+  const e = findByName(camp, 'Scout');
+  assert.equal(e.statblock.kind, 'character');
+  assert.equal(e.statblock.ruleset, 'starforged');
+  const byKey = Object.fromEntries(e.statblock.fields.map((f) => [f.key, f]));
+  assert.ok(byKey.Edge.track && byKey.Edge.group === 'stat');
+  assert.ok(byKey.Health.track && byKey.Health.group === 'resource' && byKey.Health.max === 5);
+  assert.ok(byKey.Momentum);
+});
+
+test('setEntityStatblockKind builds a 5PFH character sheet with that ruleset\'s stats', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Scout' }));
+  camp = setEntityStatblockKind(camp, id, 'character', '5pfh');
+  const e = findByName(camp, 'Scout');
+  const keys = e.statblock.fields.map((f) => f.key);
+  assert.deepEqual(keys, ['Reaction', 'Speed', 'Combat', 'Savvy', 'Tough', 'Luck', 'XP']);
+});
+
+test('setEntityStatblockKind defaults the character ruleset to the campaign Settings choice', () => {
+  let camp = defaultCampaign();
+  camp.settings.statRuleset = '5pfh';
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Scout' }));
+  camp = setEntityStatblockKind(camp, id, 'character');
+  assert.equal(findByName(camp, 'Scout').statblock.ruleset, '5pfh');
+});
+
+test('parseStatsString orders Starforged stats first and 5PFH stats in the correct sequence', () => {
+  const result = parseStatsString('combat: 3, edge: 2, tough: 4, wits: 1, speed: 2, heart: 3');
+  assert.deepEqual(result.ordered.map((s) => s.key), ['edge','heart','wits','reaction','speed','combat','savvy','tough'].filter((k) => result.map.has(k)));
 });
 
 test('linkMentions creates missing entities and links co-mentions', () => {

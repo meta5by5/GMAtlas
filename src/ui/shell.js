@@ -12,8 +12,9 @@ import { rollAction, formatRollText } from '../domain/dice.js';
 import {
   createEntity, updateEntity, setEntityTags, removeEntity, setActiveEntity, addRelationship, removeRelationship,
   getEntity, setEntityStatblockKind, removeEntityStatblock, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
-  toggleEntityStatblockFieldTrack, setEntityStatblockTrackValue,
+  toggleEntityStatblockFieldTrack, setEntityStatblockTrackValue, toggleEntityStatblockFieldAttribute,
 } from '../domain/entities.js';
+import { addDocument, updateDocument, removeDocument, getDocument } from '../domain/documents.js';
 import { renderWorkspace } from './workspace/index.js';
 import { renderCopilot } from './copilotPanel.js';
 import { renderDrawer } from './drawers/index.js';
@@ -37,7 +38,7 @@ export function mountShell(el) {
   el.innerHTML = `
     <div class="cockpit">
       <header class="mc-header">
-        <div class="brand"><h1>Saga Atlas</h1><span class="tagline">Frictionless Empowerment</span></div>
+        <div class="brand"><h1>GMAtlas</h1><span class="tagline">Frictionless Empowerment</span></div>
         <div class="header-actions">
           <span class="campaign-title" data-open-settings title="Campaign settings"></span>
           <button class="btn ghost sm" data-continue-story title="Generate the next scene">▶ Scene</button>
@@ -140,7 +141,16 @@ function onClick(ev) {
 
   // --- statblocks ---
   const sbAdd = hit('[data-statblock-add]');
-  if (sbAdd) { const active = store.get().entities.activeId; store.update((d) => setEntityStatblockKind(d, active, sbAdd.dataset.statblockAdd)); return toast('Statblock added'); }
+  if (sbAdd) {
+    const active = store.get().entities.activeId;
+    const entity = getEntity(store.get(), active);
+    const rebuilding = entity && entity.statblock;
+    if (rebuilding && !window.confirm('Rebuild the statblock from this template? Existing field values will be replaced.')) return;
+    const kind = sbAdd.dataset.statblockAdd;
+    const rulesetId = sbAdd.dataset.statblockRuleset;
+    store.update((d) => setEntityStatblockKind(d, active, kind, rulesetId));
+    return toast(rebuilding ? 'Statblock rebuilt' : 'Statblock added');
+  }
   if (hit('[data-statblock-remove]')) { const active = store.get().entities.activeId; store.update((d) => removeEntityStatblock(d, active)); return toast('Statblock removed'); }
   if (hit('[data-statblock-add-field]')) { const active = store.get().entities.activeId; return store.update((d) => addEntityStatblockField(d, active)); }
   if (hit('[data-statblock-add-track-field]')) { const active = store.get().entities.activeId; return store.update((d) => addEntityStatblockField(d, active, { key: 'New Track', value: 0, max: 5, track: true })); }
@@ -148,6 +158,8 @@ function onClick(ev) {
   if (rmField) { const active = store.get().entities.activeId; return store.update((d) => removeEntityStatblockField(d, active, Number(rmField.dataset.statblockRemoveField))); }
   const toggleTrack = hit('[data-statblock-toggle-track]');
   if (toggleTrack) { const active = store.get().entities.activeId; return store.update((d) => toggleEntityStatblockFieldTrack(d, active, Number(toggleTrack.dataset.statblockToggleTrack))); }
+  const toggleAttr = hit('[data-statblock-toggle-attribute]');
+  if (toggleAttr) { const active = store.get().entities.activeId; return store.update((d) => toggleEntityStatblockFieldAttribute(d, active, Number(toggleAttr.dataset.statblockToggleAttribute))); }
   const trackSet = hit('[data-statblock-track-set]');
   if (trackSet) {
     const active = store.get().entities.activeId;
@@ -168,7 +180,38 @@ function onClick(ev) {
   const tdel = hit('[data-thread-del]');
   if (tdel) return store.update((d) => removeThread(d, tdel.dataset.threadDel));
 
-  if (hit('[data-export-campaign]')) return download(`saga-atlas-${stamp()}.json`, store.export());
+  const docAdd = hit('[data-doc-add]');
+  if (docAdd) {
+    const title = window.prompt('Document title:', '');
+    if (title != null && title.trim()) {
+      store.update((d) => addDocument(d, { title: title.trim(), content: '' }));
+      toast('Document added');
+    }
+    return;
+  }
+  const docSave = hit('[data-doc-save]');
+  if (docSave) {
+    const id = docSave.dataset.docSave;
+    const ta = root.querySelector(`[data-doc-content="${id}"]`);
+    const titleInput = root.querySelector(`[data-doc-title="${id}"]`);
+    if (titleInput) {
+      const patch = { title: titleInput.value.trim() || 'Untitled document' };
+      if (ta) patch.content = ta.value;
+      store.update((d) => updateDocument(d, id, patch));
+      toast('Document saved');
+    }
+    return;
+  }
+  const docDel = hit('[data-doc-delete]');
+  if (docDel) {
+    if (window.confirm('Delete this document?')) {
+      store.update((d) => removeDocument(d, docDel.dataset.docDelete));
+      toast('Document deleted');
+    }
+    return;
+  }
+
+  if (hit('[data-export-campaign]')) return download(`gmatlas-${stamp()}.json`, store.export());
   if (hit('[data-export-journal]')) return exportJournal();
   if (hit('[data-new-campaign]')) {
     if (window.confirm('Start a new campaign? Your current one stays exportable but will be replaced in this browser.')) {
@@ -224,6 +267,7 @@ function onChange(ev) {
 
   if (t.closest('[data-campaign-title-input]')) return store.update((d) => { d.meta.title = t.value; return d; });
   if (t.closest('[data-genre-input]')) return store.update((d) => { d.settings.genre = t.value; return d; });
+  if (t.closest('[data-settings-stat-ruleset]')) return store.update((d) => { d.settings.statRuleset = t.value; return d; });
 
   if (t.closest('[data-import-campaign]')) {
     const file = t.files && t.files[0];
@@ -231,6 +275,18 @@ function onChange(ev) {
     const reader = new FileReader();
     reader.onload = () => { try { store.import(reader.result); toast('Campaign imported'); } catch (e) { toast('Import failed'); } };
     reader.readAsText(file);
+    return;
+  }
+
+  if (t.closest('[data-doc-upload]')) {
+    const file = t.files && t.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      store.update((d) => addDocument(d, { kind: 'file', title: file.name, fileName: file.name, mimeType: file.type, dataUrl: reader.result }));
+      toast(`Uploaded ${file.name}`);
+    };
+    reader.readAsDataURL(file);
     return;
   }
 }
@@ -253,16 +309,26 @@ function toggleDrawer(id) { openDrawer = openDrawer === id ? null : id; if (open
 // Native HTML5 DnD, delegated at the root like everything else. A custom
 // MIME type keeps this from reacting to unrelated drags (e.g. file drops).
 const ENTITY_DRAG_TYPE = 'application/x-saga-entity';
+const DOCUMENT_DRAG_TYPE = 'application/x-saga-document';
 
 function onDragStart(ev) {
-  const src = ev.target.closest('[data-drag-entity]');
-  if (!src) return;
-  ev.dataTransfer.setData(ENTITY_DRAG_TYPE, src.dataset.dragEntity);
-  ev.dataTransfer.effectAllowed = 'link';
+  const entitySrc = ev.target.closest('[data-drag-entity]');
+  if (entitySrc) {
+    ev.dataTransfer.setData(ENTITY_DRAG_TYPE, entitySrc.dataset.dragEntity);
+    ev.dataTransfer.effectAllowed = 'link';
+    return;
+  }
+
+  const docSrc = ev.target.closest('[data-drag-document]');
+  if (docSrc) {
+    ev.dataTransfer.setData(DOCUMENT_DRAG_TYPE, docSrc.dataset.dragDocument);
+    ev.dataTransfer.effectAllowed = 'copy';
+  }
 }
 
 function onDragOver(ev) {
-  if (!ev.dataTransfer.types.includes(ENTITY_DRAG_TYPE)) return;
+  const types = ev.dataTransfer.types || [];
+  if (!types.includes(ENTITY_DRAG_TYPE) && !types.includes(DOCUMENT_DRAG_TYPE)) return;
   const target = ev.target.closest('[data-drop-entity], [data-journal-input], textarea[data-ctx]');
   if (target) { ev.preventDefault(); target.classList.add('drop-hover'); }
 }
@@ -273,15 +339,16 @@ function onDragLeave(ev) {
 }
 
 function onDrop(ev) {
-  const id = ev.dataTransfer.getData(ENTITY_DRAG_TYPE);
-  if (!id) return;
+  const entityId = ev.dataTransfer.getData(ENTITY_DRAG_TYPE);
+  const documentId = ev.dataTransfer.getData(DOCUMENT_DRAG_TYPE);
+  if (!entityId && !documentId) return;
 
   const dropEnt = ev.target.closest('[data-drop-entity]');
-  if (dropEnt) {
+  if (dropEnt && entityId) {
     ev.preventDefault();
     dropEnt.classList.remove('drop-hover');
     const targetId = dropEnt.dataset.dropEntity;
-    if (targetId && targetId !== id) { store.update((d) => addRelationship(d, id, targetId, 'linked')); toast('Linked'); }
+    if (targetId && targetId !== entityId) { store.update((d) => addRelationship(d, entityId, targetId, 'linked')); toast('Linked'); }
     return;
   }
 
@@ -289,12 +356,24 @@ function onDrop(ev) {
   if (dropText) {
     ev.preventDefault();
     dropText.classList.remove('drop-hover');
-    const ent = getEntity(store.get(), id);
-    if (ent) {
-      const name = ent.name || 'Unnamed';
-      insertAtCursor(dropText, (/\s/.test(name) ? `@[${name}] ` : `@${name} `));
-      dropText.dispatchEvent(new Event('change', { bubbles: true }));
-      toast(`Mentioned ${name}`);
+    if (documentId) {
+      const doc = getDocument(store.get(), documentId);
+      if (doc) {
+        const title = doc.title || 'Untitled document';
+        insertAtCursor(dropText, (/\s/.test(title) ? `@[${title}] ` : `@${title} `));
+        dropText.dispatchEvent(new Event('change', { bubbles: true }));
+        return toast(`Referenced ${title}`);
+      }
+    }
+
+    if (entityId) {
+      const ent = getEntity(store.get(), entityId);
+      if (ent) {
+        const name = ent.name || 'Unnamed';
+        insertAtCursor(dropText, (/\s/.test(name) ? `@[${name}] ` : `@${name} `));
+        dropText.dispatchEvent(new Event('change', { bubbles: true }));
+        toast(`Mentioned ${name}`);
+      }
     }
   }
 }
@@ -375,7 +454,7 @@ function restoreFocus(sel) {
 function exportJournal() {
   const doc = store.get();
   const text = (doc.journal || []).map((e) => `${new Date(e.createdAt).toLocaleString()} — ${e.source}\n${stripHtml(e.text)}`).join('\n\n');
-  download(`saga-atlas-journal-${stamp()}.txt`, text || 'No journal entries.');
+  download(`gmatlas-journal-${stamp()}.txt`, text || 'No journal entries.');
 }
 
 function download(name, text) {

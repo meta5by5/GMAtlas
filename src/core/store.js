@@ -39,8 +39,22 @@ function createStore() {
       persist();
       localStorage.setItem(MIGRATED_FLAG, new Date().toISOString());
     } else {
-      doc = defaultCampaign();
-      persist();
+      // If the developer has placed an imported campaign into the repository
+      // and the bundler embedded it into the bundle (window.__importedCampaign),
+      // prefer that as the initial document so imports persist across builds.
+      if (typeof window !== 'undefined' && window.__importedCampaign) {
+        try {
+          doc = migrateDocument(window.__importedCampaign);
+          persist();
+          localStorage.setItem(MIGRATED_FLAG, new Date().toISOString());
+        } catch (e) {
+          doc = defaultCampaign();
+          persist();
+        }
+      } else {
+        doc = defaultCampaign();
+        persist();
+      }
     }
     notify();
     return doc;
@@ -94,7 +108,7 @@ function createStore() {
   async function bindFile() {
     if (!supportsFileBinding()) throw new Error('File binding unsupported in this browser.');
     boundFileHandle = await window.showSaveFilePicker({
-      suggestedName: 'saga-atlas-campaign.json',
+      suggestedName: 'gmatlas-campaign.json',
       types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
     });
     await saveBoundFile();

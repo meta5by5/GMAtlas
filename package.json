@@ -1,5 +1,5 @@
 {
-  "name": "saga-atlas",
+  "name": "gmatlas",
   "version": "0.1.0-phase0",
   "description": "A campaign operating system for solo and GM-run sci-fi tabletop play. Static, local-first, installable PWA.",
   "type": "module",
