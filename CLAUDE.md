@@ -270,6 +270,20 @@ those in too and failed on unrelated missing dependencies. If `npm test`
 ever mysteriously starts failing on tests you don't recognize, this is the
 first thing to check — don't debug someone else's test suite by mistake.
 
+`npm test` also has a `pretest` script (`node scripts/build.js`) — not
+redundant with the explicit build step below, it's there because
+`domain/documents.js` imports `data/docsManifest.js`, a **gitignored,
+build-generated** file (the Reference Library manifest, scanned from
+`assets/docs/`). On a genuinely fresh checkout (a new clone, CI) that file
+doesn't exist yet, so `tests/domain.test.js` fails to even load with
+`ERR_MODULE_NOT_FOUND` — this is exactly what broke the GitHub Pages
+deploy (the workflow's "Run tests" step failed before "Build bundle" ever
+ran, so nothing after it — including the deploy — happened; verified via
+the Actions API and a clean `git clone` reproduction, 2026-07-04). `pretest`
+makes `npm test` self-sufficient regardless of what ran before it or what
+order a workflow calls things in — don't remove it as looking redundant
+with `npm run build`.
+
 Then, for anything touching the UI, a manual or scripted browser smoke test
 against `index.html` (`file://` at minimum) is worth doing before calling a
 change done — check the console for errors and confirm state persists
@@ -373,3 +387,17 @@ Summary instead, so there's exactly one place this drifts from reality.
   worked example. Not every feature needs one — a new drawer or domain
   module following existing patterns doesn't; a new cross-cutting
   mechanism (e.g. the Event Bus, if it's ever built) does.
+- **No two docs get to disagree about current reality.** Design principles
+  and requirements accumulated over many sessions; when a newer one
+  conflicts with an older one, the newer one wins outright — it replaces
+  the old claim, it doesn't sit alongside it as a second "valid" option.
+  This applies to everything: the `requirements/design-principles/` corpus
+  vs. an ADR (the ADR wins — see the two-point caveat under "The Design
+  Constitution" above), one ADR vs. a later one (say so explicitly in the
+  older ADR's Status line, the way `0003` points at `0004`), or a design
+  doc's prose vs. what the code actually does now (the code wins; fix the
+  prose, don't leave a stale description standing — e.g. `DESIGN-NEW-
+  FUNCTIONALITY.md`'s attribute-field history flags its own superseded
+  step for exactly this reason). If you find a conflict while working —
+  don't just work around it, correct the losing side or flag it inline as
+  superseded so the next reader doesn't re-discover the same ambiguity.
