@@ -34,7 +34,7 @@ export function renderDrawer(id, doc, ui = {}) {
     case 'party': return party(doc);
     case 'colony': return colony(doc);
     case 'guide': return guide(doc);
-    case 'settings': return settings(doc);
+    case 'settings': return settings(doc, ui);
     case 'graph': return graph(doc);
     case 'documents': return documents(doc, ui);
     default: return `<p class="ws-placeholder">Drawer “${esc(id)}”.</p>`;
@@ -558,7 +558,8 @@ function oracleGroupRow(doc, node, forceOpen, expanded, editorOpen) {
     </div>`;
 }
 
-function settings(doc) {
+function settings(doc, ui = {}) {
+  const info = ui.storageInfo || { campaignBytes: 0, hasBackup: false, backupBytes: 0 };
   return `
     <div class="settings-group">
       <h3>Campaign</h3>
@@ -575,6 +576,9 @@ function settings(doc) {
         <button class="btn ghost" data-bind-file>Bind Save File / OneDrive</button>
         <button class="btn ghost" data-new-campaign>New Campaign</button>
       </div>
+      <p class="dim small storage-usage">Campaign size: ${formatBytes(info.campaignBytes)}${info.hasBackup ? ` · backup: ${formatBytes(info.backupBytes)}` : ' · no backup saved yet'}</p>
+      ${info.hasBackup ? `<button class="btn ghost" data-restore-backup title="Replaces the current campaign with the last save that persisted before this one">↺ Restore last backup</button>` : ''}
+      <p class="dim small">A browser's storage for this app is commonly 5-10MB total. Large uploaded documents are the usual reason this fills up — move big rulebooks into <code>assets/docs/</code> (via a rebuild) instead, which has no such limit.</p>
     </div>
     <div class="settings-group">
       <h3>Genre lens</h3>

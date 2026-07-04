@@ -135,6 +135,42 @@ function createStore() {
     return doc;
   }
 
+  // --- storage visibility + recovery (ADR 0005 follow-up) ----------------
+  // Byte counts via Blob (UTF-8) rather than .length (UTF-16 code units) —
+  // meaningfully different once a campaign has any non-ASCII text (accented
+  // names, curly quotes from a pasted document, etc.), and this number
+  // exists specifically so a GM can judge it against a real quota.
+  function byteSize(str) { return str ? new Blob([str]).size : 0; }
+
+  function storageInfo() {
+    let backupRaw = null;
+    try { backupRaw = localStorage.getItem(BACKUP_KEY); } catch { /* ignore */ }
+    return {
+      campaignBytes: byteSize(JSON.stringify(doc)),
+      hasBackup: !!backupRaw,
+      backupBytes: byteSize(backupRaw),
+    };
+  }
+
+  // Restore the one-slot backup as the active campaign — the counterpart
+  // to persist()'s backup write that nothing previously read from. Same
+  // "never show a change as there when it didn't really happen" posture as
+  // update(): a bad/missing backup rolls back to whatever was current
+  // rather than leaving doc half-replaced.
+  function restoreBackup() {
+    const prevDoc = doc;
+    let backupRaw = null;
+    try { backupRaw = localStorage.getItem(BACKUP_KEY); } catch { /* ignore */ }
+    if (!backupRaw) return { ok: false, error: new Error('No backup available.') };
+    const parsed = safeParse(backupRaw);
+    if (!parsed) return { ok: false, error: new Error('Backup is corrupt or unreadable.') };
+    doc = importCampaign(parsed);
+    const result = persist();
+    if (!result.ok) { doc = prevDoc; notify(); return result; }
+    notify();
+    return { ok: true };
+  }
+
   // --- optional File System Access binding (OneDrive-synced folder) -----
   function supportsFileBinding() { return typeof window !== 'undefined' && 'showSaveFilePicker' in window; }
   async function bindFile() {
@@ -156,6 +192,7 @@ function createStore() {
     load, get, update, subscribe,
     export: exportDocument, import: importDocument, newCampaign,
     supportsFileBinding, bindFile, saveBoundFile,
+    storageInfo, restoreBackup,
     STORAGE_KEY, BACKUP_KEY, LEGACY_KEYS,
   };
 }

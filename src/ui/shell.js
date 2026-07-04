@@ -526,6 +526,11 @@ function onClick(ev) {
     return;
   }
   if (hit('[data-bind-file]')) return store.bindFile().then(() => toast('Save file bound')).catch(() => {});
+  if (hit('[data-restore-backup]')) {
+    if (!window.confirm('Restore the last backup? This replaces the current campaign with the previous save — export the current one first if you want to keep it.')) return;
+    const result = store.restoreBackup();
+    return toast(result.ok ? 'Restored last backup' : `Couldn't restore backup — ${result.error && result.error.message}`);
+  }
 }
 
 // Executes a statblock field's configured dice model (see ROLL_METHODS in
@@ -927,7 +932,7 @@ function renderDrawerBody() {
   if (body) {
     body.innerHTML = openDrawer ? renderDrawer(openDrawer, doc, {
       oracleFilter, expandedOracleGroups, oracleEditorOpen, docFilter, docTagFilters, docTagEditorOpen, statblockAddOpen, recapOpen, castListCollapsed,
-      entitySearch, entityTypeFilter,
+      entitySearch, entityTypeFilter, storageInfo: store.storageInfo(),
     }) : '';
   }
 }
