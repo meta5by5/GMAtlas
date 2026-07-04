@@ -55,6 +55,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -103,7 +105,19 @@ jobs:
             echo "::error::$BUNDLE_URL returned $code (expected 200) — the app would show a black screen"
             exit 1
           fi
-          echo "Deploy verified: $URL loads and app.bundle.js is reachable (HTTP $code)."
+          # LFS-tracked files (assets/docs/*.pdf) must be the real content, not
+          # a pointer file — checkout needs `lfs: true` for this to hold; a
+          # forgotten flag here served pointer text as "the PDF" once already.
+          PDF_URL="${URL%/}/assets/docs/Hostile%20setting.pdf"
+          if ! curl -sf "$PDF_URL" -o /tmp/live-sample.pdf; then
+            echo "::error::$PDF_URL did not download"
+            exit 1
+          fi
+          if ! head -c 4 /tmp/live-sample.pdf | grep -q '%PDF'; then
+            echo "::error::$PDF_URL is not a real PDF (likely an unresolved Git LFS pointer — checkout needs lfs: true)"
+            exit 1
+          fi
+          echo "Deploy verified: $URL loads, app.bundle.js is reachable, and an LFS-tracked PDF resolves to real content (HTTP $code)."
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
