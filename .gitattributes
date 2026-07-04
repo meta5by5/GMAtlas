@@ -1,2 +1,9 @@
 *.zip filter=lfs diff=lfs merge=lfs -text
+# The Reference Library's rulebook PDFs (assets/docs/) are the actual bulk
+# of this repo (~445MB tracked) — .zip alone wasn't covering the files that
+# matter. This only affects NEW commits of matching files; it does not
+# retroactively shrink the ~323MB already in .git's history from PDFs
+# committed before this rule existed. That needs `git lfs migrate import`,
+# which rewrites commit history and requires a force-push — deliberately
+# not done as part of this change; ask before running it.
 *.pdf filter=lfs diff=lfs merge=lfs -text
