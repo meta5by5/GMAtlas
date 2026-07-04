@@ -192,7 +192,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .drawer-tab-close { border-radius: 3px; padding: 0 3px; }
 .drawer-tab-close:hover { background: var(--bg-inset); color: var(--text); }
 
-/* --- Responsive: mobile keeps the same regions, restacked ----------- */
+/* --- Responsive: three tiers (phone / tablet / desktop), per the founding
+   brief's §3.5 spec — "Co-Pilot becomes a tablet edge-tab, a phone
+   bottom-sheet". Same single-column region restack below 1024px either
+   way; what differs is HOW the Co-Pilot is summoned (2026-07-04 design
+   review: the single-breakpoint collapse was flagged as worth
+   confirming — this replaces it with the three-way split). ------------ */
+
+/* Shared by phone + tablet: single-column stack, breadcrumb folded away
+   (no grid area for it in this layout — same as before the three-way
+   split; revisit if tablet's extra width earns it back later). */
 @media (max-width: 1023px) {
   .cockpit {
     grid-template-rows: var(--header-h) var(--strip-h) 1fr;
@@ -203,8 +212,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
       "work";
     padding-right: var(--edge-w);
   }
-  .mc-breadcrumb { display: none; } /* folded into workspace on small screens */
-  /* Co-Pilot becomes a bottom sheet, summoned from an edge tab. */
+  .mc-breadcrumb { display: none; }
+}
+
+/* Phone (<768px): Co-Pilot is a bottom sheet, summoned from an edge tab. */
+@media (max-width: 767px) {
   .mc-copilot {
     position: fixed; left: 0; right: var(--edge-w); bottom: 0;
     max-height: 55vh; border-left: none; border-top: 1px solid var(--border-strong);
@@ -215,8 +227,25 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .mc-q { min-width: 5.5rem; }
 }
 
+/* Tablet (768-1023px): enough width for a bottom sheet to feel cramped
+   against a landscape-ish aspect ratio, so the Co-Pilot instead slides in
+   from the right like a drawer ("edge-tab") — same summon/dismiss
+   mechanism (data-toggle-copilot, copilotOpen) as phone, just a different
+   transform axis and a fixed side-panel width instead of a viewport-height
+   cap. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .mc-copilot {
+    position: fixed; top: var(--header-h); right: var(--edge-w); bottom: 0; left: auto;
+    width: min(24rem, 88vw); max-height: none;
+    border-left: 1px solid var(--border-strong); border-top: none;
+    transform: translateX(100%); transition: transform 0.2s ease; z-index: 15;
+    visibility: hidden; pointer-events: none;
+  }
+  .mc-copilot[data-open="true"] { transform: translateX(0); visibility: visible; pointer-events: auto; }
+}
+
 @media (min-width: 1024px) {
-  /* Co-Pilot is a permanent region on desktop — never a sheet. */
+  /* Co-Pilot is a permanent region on desktop — never a sheet/edge-tab. */
   .mc-copilot { transform: none; }
 }
 
