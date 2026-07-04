@@ -28,5 +28,11 @@ export function renderCopilot(doc) {
       <h3>What did I overlook?</h3>
       <p class="dim small">Gone quiet — worth a scene, or explicitly marking Dormant/Archived if it's meant to fade:</p>
       <div class="entity-chips">${a.overlooked.map((name) => `<span class="chip sm">${esc(name)}</span>`).join('')}</div>
+    </div>` : ''}
+    ${a.flaggedRelationships && a.flaggedRelationships.length ? `
+    <div class="copilot-card copilot-overlooked">
+      <h3>Relationships to review</h3>
+      <p class="dim small">A typed link whose target's type no longer matches — nothing was changed, just worth a look:</p>
+      <div class="entity-chips">${a.flaggedRelationships.map((r) => `<span class="chip sm">⚠ ${esc(r)}</span>`).join('')}</div>
     </div>` : ''}`;
 }

@@ -6,13 +6,14 @@
 import { store } from '../core/store.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { contextSummary } from '../domain/context.js';
-import { continueStory, applyStoryShift, rollOracle, addNote, patchContext, editContextText, logRoll } from '../domain/session.js';
+import { continueStory, applyStoryShift, rollOracle, addNote, patchContext, editContextText, logRoll, generateNpc } from '../domain/session.js';
+import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable } from '../domain/oracles.js';
 import { addThread, advanceThread, removeThread, setThreadStatus, setThreadPriority } from '../domain/threads.js';
 import { rollAction, formatRollText, rollFlat, formatFlatRollText, rollTraveller, formatTravellerRollText } from '../domain/dice.js';
 import {
   createEntity, updateEntity, addEntityTag, removeEntityTag, removeEntity, setActiveEntity, addRelationship, removeRelationship,
   getEntity, addEntityStatblockGroup, removeEntityStatblockGroup, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
-  setEntityStatblockTrackValue, setEntityStatblockAttributeValue, updateRelationshipLabel,
+  setEntityStatblockTrackValue, setEntityStatblockAttributeValue, updateRelationshipLabel, updateRelationshipType, updateRelationshipStrength,
 } from '../domain/entities.js';
 import {
   addDocument, updateDocument, removeDocument, getDocument, addDocumentTag, removeDocumentTag, renameDocument,
@@ -24,9 +25,11 @@ import { setColonyField, addCrewRow, updateCrewRow, removeCrewRow } from '../dom
 import { setGuideText } from '../domain/guide.js';
 import { buildSessionRecap, formatSessionRecap } from '../domain/recap.js';
 import { addTemplateSystem, addTemplateField, updateTemplateField, removeTemplateField, moveTemplateField } from '../domain/statblockTemplates.js';
+import { universalSearch } from '../domain/search.js';
 import { renderWorkspace } from './workspace/index.js';
 import { renderCopilot } from './copilotPanel.js';
 import { renderDrawer, formatBytes } from './drawers/index.js';
+import { renderSearchPanel } from './searchPanel.js';
 
 const QUESTION_LABELS = { who: 'WHO', where: 'WHERE', what: 'WHAT', why: 'WHY', how: 'HOW' };
 // localStorage's shared per-origin quota is commonly 5-10MB for the WHOLE
@@ -58,6 +61,12 @@ let docTagFilters = new Set();
 let docTagEditorOpen = new Set(); // ephemeral — which doc/ref cards' tag editors are expanded
 let statblockAddOpen = false; // ephemeral — collapses the "+ Add a statblock" chip row behind a gear icon
 let recapOpen = false; // ephemeral — collapses the "Previously on..." session recap panel
+let castListCollapsed = false; // ephemeral — hides the Cast drawer's entity list, leaving just the active entity's inspector
+let searchOpen = false; // ephemeral — Universal Search overlay
+let searchQuery = '';
+let oracleEditorOpen = new Set(); // ephemeral — which oracle tables' entry editors are expanded
+let entitySearch = ''; // ephemeral — Cast drawer name/tag search
+let entityTypeFilter = ''; // ephemeral — Cast drawer type filter ('' = all)
 
 export function mountShell(el) {
   root = el;
@@ -66,6 +75,7 @@ export function mountShell(el) {
       <header class="mc-header">
         <div class="brand"><h1>GMAtlas</h1><span class="tagline">Frictionless Empowerment</span></div>
         <div class="header-actions">
+          <button class="btn ghost sm" data-search-toggle title="Search everything (Cast, Journal, Oracle, Documents, Party, Colony)">🔍 Search</button>
           <span class="campaign-title" data-open-settings title="Campaign settings"></span>
           <button class="btn ghost sm" data-continue-story title="Generate the next scene">▶ Scene</button>
         </div>
@@ -79,6 +89,15 @@ export function mountShell(el) {
         <div class="doc-viewer-empty" data-doc-viewer-empty hidden></div>
         <iframe data-doc-viewer-frame title="Document viewer"></iframe>
       </div>
+      <div class="mc-search-overlay" data-search-overlay hidden aria-label="Universal Search">
+        <div class="search-panel">
+          <div class="search-panel-head">
+            <input type="text" class="search-input" data-search-input placeholder="Search everything…" autocomplete="off">
+            <button class="icon-btn" data-search-close aria-label="Close search">✕</button>
+          </div>
+          <div class="search-results" data-search-results></div>
+        </div>
+      </div>
       <nav class="mc-edge" aria-label="Drawers" data-edge></nav>
       <aside class="mc-drawer" data-drawer aria-label="Drawer">
         <div class="drawer-head"><h2 data-drawer-title>Drawer</h2><button class="icon-btn" data-close-drawer aria-label="Close">✕</button></div>
@@ -87,10 +106,10 @@ export function mountShell(el) {
     </div>
     <div class="toast" data-toast hidden></div>`;
 
-  el.addEventListener('click', onClick);
-  el.addEventListener('dblclick', onDblClick);
-  el.addEventListener('change', onChange);
-  el.addEventListener('input', onInput);
+  el.addEventListener('click', guarded(onClick));
+  el.addEventListener('dblclick', guarded(onDblClick));
+  el.addEventListener('change', guarded(onChange));
+  el.addEventListener('input', guarded(onInput));
   el.addEventListener('dragstart', onDragStart);
   el.addEventListener('dragover', onDragOver);
   el.addEventListener('dragleave', onDragLeave);
@@ -128,6 +147,36 @@ function onClick(ev) {
   if (hit('[data-toggle-copilot]')) { copilotOpen = !copilotOpen; return render(); }
   if (hit('[data-open-settings]')) return toggleDrawer('settings');
 
+  // --- Universal Search (Phase 8) ---
+  if (hit('[data-search-toggle]')) {
+    searchOpen = !searchOpen;
+    if (!searchOpen) { searchQuery = ''; const inp = root.querySelector('[data-search-input]'); if (inp) inp.value = ''; }
+    renderSearchOverlay();
+    if (searchOpen) { const inp = root.querySelector('[data-search-input]'); if (inp) inp.focus(); }
+    return;
+  }
+  if (hit('[data-search-close]')) {
+    searchOpen = false; searchQuery = '';
+    const inp = root.querySelector('[data-search-input]'); if (inp) inp.value = '';
+    return renderSearchOverlay();
+  }
+  const searchResult = hit('[data-search-result]');
+  if (searchResult) {
+    const idx = Number(searchResult.dataset.searchResult);
+    const item = universalSearch(store.get(), searchQuery)[idx];
+    searchOpen = false; searchQuery = '';
+    const inp = root.querySelector('[data-search-input]'); if (inp) inp.value = '';
+    if (item && item.target) {
+      const target = item.target;
+      openDrawer = target.drawer;
+      if (target.drawer === 'oracle') oracleFilter = target.oracleFilterText || '';
+      if (target.entityId) store.update((d) => setActiveEntity(d, target.entityId));
+      else if (target.docTabKey) store.update((d) => openDocumentTab(d, target.docTabKey));
+      else render();
+    } else render();
+    return;
+  }
+
   if (hit('[data-continue-story]') || hit('[data-what-next]')) {
     store.update((d) => continueStory(d));
     return toast('Scene generated → Journal');
@@ -162,6 +211,9 @@ function onClick(ev) {
   if (del) return store.update((d) => { d.journal = d.journal.filter((j) => j.id !== del.dataset.journalDel); return d; });
 
   if (hit('[data-recap-toggle]')) { recapOpen = !recapOpen; return renderDrawerBody(); }
+  if (hit('[data-cast-list-toggle]')) { castListCollapsed = !castListCollapsed; return renderDrawerBody(); }
+  const typeFilterBtn = hit('[data-entity-type-filter]');
+  if (typeFilterBtn) { entityTypeFilter = typeFilterBtn.dataset.entityTypeFilter; return renderDrawerBody(); }
   if (hit('[data-recap-save]')) {
     store.update((d) => addNote(d, formatSessionRecap(buildSessionRecap(d)), 'Session Recap'));
     return toast('Recap saved to Journal');
@@ -176,6 +228,12 @@ function onClick(ev) {
   if (openEnt) { openDrawer = 'entities'; store.update((d) => setActiveEntity(d, openEnt.dataset.openEntity)); return; }
   const addEnt = hit('[data-entity-add]');
   if (addEnt) { openDrawer = 'entities'; store.update((d) => createEntity(d, { type: addEnt.dataset.entityAdd }).campaign); toast('Entity added'); return; }
+  if (hit('[data-generate-npc]')) {
+    openDrawer = 'entities';
+    let name = '';
+    store.update((d) => { const r = generateNpc(d); name = r.id && getEntity(r.campaign, r.id) ? getEntity(r.campaign, r.id).name : ''; return r.campaign; });
+    return toast(name ? `Generated ${name}` : 'NPC generated');
+  }
   const selEnt = hit('[data-entity-select]');
   if (selEnt) return store.update((d) => setActiveEntity(d, selEnt.dataset.entitySelect));
   const delEnt = hit('[data-entity-del]');
@@ -197,7 +255,8 @@ function onClick(ev) {
     const active = store.get().entities.activeId;
     const target = root.querySelector('[data-entity-link-target]');
     const label = root.querySelector('[data-entity-link-label]');
-    if (active && target && target.value) { store.update((d) => addRelationship(d, active, target.value, (label && label.value.trim()) || 'linked')); toast('Linked'); }
+    const type = root.querySelector('[data-entity-link-type]');
+    if (active && target && target.value) { store.update((d) => addRelationship(d, active, target.value, (label && label.value.trim()) || 'linked', type && type.value)); toast('Linked'); }
     return;
   }
 
@@ -269,6 +328,34 @@ function onClick(ev) {
     return toast('🎲 ' + text.split('\n').slice(-1)[0]);
   }
 
+  // --- oracle: table entry editor (Phase 8) --------------------------------
+  const oracleEditToggle = hit('[data-oracle-edit-toggle]');
+  if (oracleEditToggle) {
+    const key = oracleEditToggle.dataset.oracleEditToggle;
+    if (oracleEditorOpen.has(key)) oracleEditorOpen.delete(key); else oracleEditorOpen.add(key);
+    return renderDrawerBody();
+  }
+  const oracleEntryRemove = hit('[data-oracle-entry-remove]');
+  if (oracleEntryRemove) {
+    const [key, idx] = oracleEntryRemove.dataset.oracleEntryRemove.split('::');
+    store.update((d) => removeOracleEntry(d, key.split('>'), Number(idx)));
+    return renderDrawerBody();
+  }
+  const oracleEntryAdd = hit('[data-oracle-entry-add]');
+  if (oracleEntryAdd) {
+    const key = oracleEntryAdd.dataset.oracleEntryAdd;
+    const input = oracleEntryAdd.previousElementSibling; // the sibling <input data-oracle-entry-new>
+    const value = input && input.matches('[data-oracle-entry-new]') ? input.value.trim() : '';
+    if (value) store.update((d) => addOracleEntry(d, key.split('>'), value));
+    return renderDrawerBody();
+  }
+  const oracleReset = hit('[data-oracle-reset]');
+  if (oracleReset) {
+    const key = oracleReset.dataset.oracleReset;
+    store.update((d) => resetOracleTable(d, key.split('>')));
+    return renderDrawerBody();
+  }
+
   // --- party ---
   if (hit('[data-party-tracker-add]')) {
     const name = window.prompt('Tracker name (e.g. "Credits", "Supply"):', '');
@@ -300,7 +387,8 @@ function onClick(ev) {
       const entry = getDocument(store.get(), docOpen.dataset.docOpen.slice(4));
       if (entry && entry.kind !== 'file') { toast('Text notes open inline below — not a PDF file.'); return; }
     }
-    store.update((d) => openDocumentTab(d, docOpen.dataset.docOpen));
+    const page = docOpen.dataset.docOpenPage ? Number(docOpen.dataset.docOpenPage) : undefined;
+    store.update((d) => openDocumentTab(d, docOpen.dataset.docOpen, page));
     return;
   }
   const tabClose = hit('[data-doc-viewer-tab-close]');
@@ -504,6 +592,18 @@ function onChange(ev) {
   const relLabel = t.closest('[data-entity-rel-label]');
   if (relLabel) { const active = store.get().entities.activeId; return store.update((d) => updateRelationshipLabel(d, active, relLabel.dataset.entityRelLabel, t.value)); }
 
+  const relType = t.closest('[data-entity-rel-type]');
+  if (relType) { const active = store.get().entities.activeId; return store.update((d) => updateRelationshipType(d, active, relType.dataset.entityRelType, t.value)); }
+
+  const relStrength = t.closest('[data-entity-rel-strength]');
+  if (relStrength) { const active = store.get().entities.activeId; return store.update((d) => updateRelationshipStrength(d, active, relStrength.dataset.entityRelStrength, t.value)); }
+
+  const oev = t.closest('[data-oracle-entry-value]');
+  if (oev) {
+    const [key, idx] = oev.dataset.oracleEntryValue.split('::');
+    return store.update((d) => updateOracleEntry(d, key.split('>'), Number(idx), t.value));
+  }
+
   const sval = t.closest('[data-statblock-val]');
   if (sval) {
     const [gi, fi] = sval.dataset.statblockVal.split('::').map(Number);
@@ -617,7 +717,16 @@ function onInput(ev) {
   if (of) { oracleFilter = t.value; renderDrawerBody(); restoreFocus('[data-oracle-filter]'); return; }
 
   const df = t.closest('[data-doc-filter]');
-  if (df) { docFilter = t.value; renderDrawerBody(); restoreFocus('[data-doc-filter]'); }
+  if (df) { docFilter = t.value; renderDrawerBody(); restoreFocus('[data-doc-filter]'); return; }
+
+  const esrch = t.closest('[data-entity-search]');
+  if (esrch) { entitySearch = t.value; renderDrawerBody(); restoreFocus('[data-entity-search]'); return; }
+
+  // The search input lives in the static header skeleton, not inside a
+  // drawer body that gets replaced wholesale — only its results list needs
+  // updating, so focus/caret never needs restoring in the first place.
+  const si = t.closest('[data-search-input]');
+  if (si) { searchQuery = t.value; renderSearchOverlay(); }
 }
 
 function toggleDrawer(id) { openDrawer = openDrawer === id ? null : id; if (openDrawer === 'oracle') oracleFilter = ''; if (openDrawer === 'documents') { docFilter = ''; docTagFilters = new Set(); docTagEditorOpen = new Set(); } render(); }
@@ -789,6 +898,19 @@ function render() {
         : 'This document is no longer available.';
     }
   }
+
+  renderSearchOverlay();
+}
+
+// Lives outside the drawer/workspace update paths above since it's a
+// header-level overlay, not a drawer — same "static skeleton, targeted
+// update" approach as the doc viewer just above.
+function renderSearchOverlay() {
+  const overlay = root && root.querySelector('[data-search-overlay]');
+  if (!overlay) return;
+  overlay.hidden = !searchOpen;
+  const resultsEl = overlay.querySelector('[data-search-results]');
+  if (resultsEl) resultsEl.innerHTML = searchOpen ? renderSearchPanel(store.get(), searchQuery) : '';
 }
 
 function renderDrawerBody() {
@@ -796,9 +918,31 @@ function renderDrawerBody() {
   const body = root && root.querySelector('[data-drawer-body]');
   if (body) {
     body.innerHTML = openDrawer ? renderDrawer(openDrawer, doc, {
-      oracleFilter, expandedOracleGroups, docFilter, docTagFilters, docTagEditorOpen, statblockAddOpen, recapOpen,
+      oracleFilter, expandedOracleGroups, oracleEditorOpen, docFilter, docTagFilters, docTagEditorOpen, statblockAddOpen, recapOpen, castListCollapsed,
+      entitySearch, entityTypeFilter,
     }) : '';
   }
+}
+
+// A store.update() that fails to persist (most commonly localStorage quota
+// exceeded — see store.js's persist()) rolls back and throws, by design
+// (Article VIII: never show a change as "there" when it silently failed to
+// save). But every delegated handler above calls store.update() bare, with
+// no try/catch — an uncaught throw there used to mean the interaction just
+// silently did nothing (the state visibly reverted via the rollback
+// render(), and the actual error only ever reached the browser console,
+// which most GMs never open). Wrapping dispatch here means ANY handler
+// failure — not just this one cause — surfaces as a toast instead of a
+// click that appears to do nothing. This is the single choke point every
+// interaction already passes through (rule 4: one delegated listener per
+// event type), so it's one wrapper, not one try/catch per call site.
+function guarded(fn) {
+  return function guardedHandler(ev) {
+    try { return fn(ev); } catch (err) {
+      console.error('Interaction failed:', err);
+      toast(`Couldn't save — ${err && err.message ? err.message : 'an error occurred'}. Storage may be full; try exporting your campaign as a backup.`);
+    }
+  };
 }
 
 // ---- helpers ------------------------------------------------------------

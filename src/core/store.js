@@ -90,11 +90,26 @@ function createStore() {
   function subscribe(fn) { subs.add(fn); return () => subs.delete(fn); }
 
   function persist() {
+    const json = JSON.stringify(doc);
+    // Keep the previous good copy as a one-slot backup before overwriting —
+    // but best-effort only. Writing it needs quota for BOTH the outgoing and
+    // incoming campaign copies at once; once a campaign (commonly one with
+    // large embedded document uploads) grows past half of localStorage's
+    // quota, that momentary double-copy is what fails, not the actual save —
+    // and unconditionally treating the backup write as fatal meant EVERY
+    // future save silently failed forever after, not just the backup
+    // (real report: clicking to select a Cast entity "did nothing" once a
+    // campaign crossed this line — see git history for the guarded()
+    // wrapper that surfaced the previously-silent failure this uncovered).
+    // The backup itself has no restore UI wired to it yet, so a skipped
+    // backup costs nothing today; a failed real save costs everything.
     try {
-      const json = JSON.stringify(doc);
-      // Keep the previous good copy as a one-slot backup before overwriting.
       const prev = localStorage.getItem(STORAGE_KEY);
       if (prev) localStorage.setItem(BACKUP_KEY, prev);
+    } catch (e) {
+      console.warn('backup write skipped (quota?)', e);
+    }
+    try {
       localStorage.setItem(STORAGE_KEY, json);
       return { ok: true };
     } catch (e) {

@@ -691,6 +691,11 @@ export const SCENE_TABLES = {
       "curious and talkative",
       "polite but obstructive",
       "angry at the wrong target"
+    ],
+    "Name": [
+      "Reyes Okafor", "Talia Vance", "Cole Ibarra", "Ninka Solberg", "Emory Duarte",
+      "Priya Larsen", "Marcus Fen", "Adaeze Thorn", "Yusuf Callan", "Sable Whitfield",
+      "Denny Achebe", "Lior Marsh", "Wren Castellan", "Osei Nakamura", "Frida Quintero"
     ]
   },
   "Creatures": {
@@ -1046,6 +1051,42 @@ export const SCENE_TABLES = {
       "4: faction, environment, or creature cuts off an option",
       "5: direct confrontation, forced choice, or irreversible cost",
       "6: aftermath reveals the next larger problem"
+    ],
+    "Patron Benefit": [
+      "pays above market rate, no questions asked",
+      "grants access to restricted supply lines",
+      "clears an old debt or citation",
+      "offers a standing introduction to a useful contact",
+      "throws in equipment the crew actually needs",
+      "guarantees a return contract if this goes well",
+      "shares intelligence the crew couldn't get elsewhere",
+      "covers repair costs regardless of outcome",
+      "puts in a good word with a wary faction",
+      "quietly overlooks the crew's other business"
+    ],
+    "Patron Hazard": [
+      "isn't authorized to make this offer",
+      "is being watched by someone dangerous",
+      "has already burned the last crew who took this job",
+      "wants something the contract doesn't mention",
+      "is lying about how simple this will be",
+      "has a rival who will retaliate against whoever takes it",
+      "can't actually deliver the promised reward",
+      "is using the crew to settle a personal score",
+      "will deny hiring the crew if it goes wrong",
+      "is more desperate than the contract lets on"
+    ],
+    "Danger Pay Reason": [
+      "the target is actively hostile, not just difficult",
+      "the window to act is dangerously short",
+      "no rescue or backup is available out here",
+      "the job requires breaking a law to succeed",
+      "the last team sent didn't come back",
+      "the environment alone could kill an unprepared crew",
+      "success requires crossing a faction that will remember",
+      "the cargo or target fights back",
+      "secrecy is worth more than safety to the patron",
+      "there's no way to verify the danger until it's too late"
     ]
   },
   "Conflict Architecture": {
@@ -1768,6 +1809,68 @@ Object.assign(SCENE_TABLES, {
     "Recovery Need": [
       "repair hull scoring", "replace filters", "treat stress injuries", "debrief witnesses", "refuel under scrutiny", "hide contraband evidence",
       "update maps", "calm crew conflict", "renegotiate contract", "file a careful report", "test samples", "pay port fees"
+    ]
+  },
+  // Genre-neutral mission-framing template (2026-07-03 ruleset review) — a
+  // Dilemma/Objective/NPCs/Map skeleton for building a scenario around a
+  // moral question instead of a straightforward job, plus five ready-made
+  // sample dilemmas. Original content in this project's own voice, not a
+  // transcription of any sourcebook's specific entries.
+  "Scenario Framing": {
+    "Dilemma": [
+      "saving everyone means trusting the person who caused this",
+      "the fastest fix is also the one that erases the evidence",
+      "the only working solution belongs to someone who shouldn't have it",
+      "helping this settlement means hurting one that trusted the crew first",
+      "the truth would help no one currently alive"
+    ],
+    "Objective": [
+      "recover something before someone else does",
+      "get everyone out before the deadline",
+      "prove what actually happened",
+      "keep two sides from finding out about each other",
+      "hold a position until help arrives",
+      "make a broken system work one more time",
+      "choose who gets the only working resource",
+      "decide what the record will say"
+    ],
+    "Framing NPCs": [
+      "an authority whose orders don't fit the situation",
+      "a witness who benefits from a specific version of events",
+      "someone the crew already owes a favor",
+      "a specialist who knows more than they're saying",
+      "a bystander whose safety complicates every option",
+      "a rival with the same objective and fewer scruples"
+    ],
+    "Map Feature": [
+      "a single chokepoint everyone has to pass through",
+      "two areas connected by a route no one controls",
+      "a vantage point worth fighting to hold",
+      "a resource that's only safe to use once",
+      "a barrier that protects and traps in equal measure",
+      "a hidden route only some of the NPCs know about"
+    ]
+  },
+  // Genre-neutral environmental hazard glossary + a companion "what went
+  // wrong with this survey" table (2026-07-03 ruleset review) — original
+  // content, not a transcription of any sourcebook.
+  "Environmental Hazards": {
+    "Environmental Event": [
+      "sudden pressure drop in a sealed area", "toxic runoff from an upstream process", "electrical storm disables unshielded electronics",
+      "ground subsidence opens without warning", "flash flooding through a dry channel", "extreme temperature swing outpaces gear ratings",
+      "dust storm cuts visibility to arm's length", "corrosive atmosphere degrades exposed seals", "unstable footing gives way under load",
+      "radiation spike from a nearby source", "wildlife swarm triggered by vibration or heat", "toxic spores released by disturbed growth",
+      "ice shelf cracks under distributed weight", "methane pocket ignites near a heat source", "solar flare disrupts communications",
+      "gravity anomaly affects equipment calibration", "acid rain damages unprotected surfaces", "underground vibration signals a larger collapse",
+      "biofilm makes surfaces unexpectedly slick", "low-oxygen pocket goes undetected until symptoms appear", "static buildup risks arc flash near fuel",
+      "migratory pattern brings dangerous fauna through the area", "seasonal thaw destabilizes previously solid ground",
+      "airborne contaminant triggers false alarms", "geothermal vent shifts location without warning"
+    ],
+    "Survey Problem": [
+      "equipment reads impossible values", "the map disagrees with what's actually here", "a marked safe route no longer is one",
+      "samples degrade before they can be analyzed", "a previous team's data was quietly falsified", "the area is bigger than the survey window allows for",
+      "local guides won't go past a certain point", "instruments interfere with each other", "the terrain has changed since the last survey",
+      "something here isn't on any official record"
     ]
   }
 });

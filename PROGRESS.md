@@ -14,16 +14,39 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
-**Phases 0–6: done. Phase 7 (Context Graph depth): in progress** (tag
-dropdowns shipped; relationships/`@`-doc-pointers/Faction template still
-open). Feature-by-feature detail lives in `DESIGN-NEW-FUNCTIONALITY.md`'s
-"Already built" and "Proposed next" sections — this file doesn't keep a
-second copy.
+**Phases 0–8: done.** Phase 8 (Unified Discovery) closed out with Universal
+Search, an oracle table entry editor (plus two ready-made content additions),
+a Cast drawer type filter + search, and an NPC-generation oracle chain with
+a one-click "Generate NPC" action. Feature-by-feature detail lives in
+`DESIGN-NEW-FUNCTIONALITY.md`'s "Already built" and "Proposed next"
+sections — this file doesn't keep a second copy.
 
-Two real bugs were found and fixed along the way (an unblurred field losing
-its edit on refresh; a large document upload silently failing past
-localStorage's quota) — both recorded in `CLAUDE.md`'s "Known non-issues"
-so they don't get relitigated; root-cause writeups are in the archive.
+Also fixed while working the Cast drawer: entity rows were both the click
+target and the drag source, so a real mouse's jitter between mousedown/
+mouseup could trigger a native drag instead of a click, making selection
+feel broken — dragging now happens from a small dedicated grip.
+
+**A real, previously-undiagnosed data-safety bug was found and fixed**
+(2026-07-04): `store.js`'s one-slot backup write (kept *before* every real
+save, as a safety net nothing currently restores from) needed quota for
+two full copies of the campaign at once — once a campaign crossed roughly
+half of `localStorage`'s quota (typically from several embedded document
+uploads), the backup write started failing and, being treated as fatal,
+silently blocked *every* subsequent save, not just the backup — including
+something as simple as clicking to select a Cast entity. Root-caused from
+a live user report and confirmed via a deterministic repro; the backup
+write is now best-effort (skipped, not fatal, if it can't fit) — see
+`docs/adr/0005-best-effort-backup-write.md`. A related fix landed
+alongside it: `ui/shell.js`'s delegated handlers now catch any failure and
+show a toast instead of a click silently doing nothing, so a future
+storage-adjacent failure (or any other handler exception) is visible
+instead of looking like an unresponsive UI.
+
+Two other real bugs were found and fixed earlier (an unblurred field
+losing its edit on refresh; a large *single* document upload silently
+failing past localStorage's quota) — both recorded in `CLAUDE.md`'s
+"Known non-issues" so they don't get relitigated; root-cause writeups are
+in the archive.
 
 **Design-only, not yet built:** Trade & Logistics / Merchant Rules Lens
 (`docs/adr/0003`, `docs/adr/0004`) — Phase 10. Ten ruleset-review design
@@ -44,16 +67,17 @@ estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
 - **Phase 6** — complete; one candidate reopened: a **Stress/Tension**
   narrative dial (Hostile's horror-design material), same shape as
   Resources/Reputation. *Low effort.*
-- **Phase 7 (in progress)** — `@` pointers into documents; typed/weighted
-  relationships (incl. a Bond strength/stage weight); "flag, don't delete"
-  invalid relationships; a Faction card template.
-- **Phase 8** — Universal Search across entities/journal/oracles/documents/
-  Party/Colony; an oracle table entry editor (two ready-made content
-  additions — Scenario Dilemma, Environmental Hazard — don't need to wait
-  for it); Cast drawer entity-type filter + search; an NPC-generation oracle
-  chain plus a one-click "Generate NPC" action.
-- **Phase 9** — HOW workspace becomes Activity → Rules Lens driven instead
-  of free text; genre packs.
+- **Phase 7** — complete: `@` pointers into documents, typed/weighted
+  relationships (incl. a Bond strength/stage weight), "flag, don't delete"
+  invalid relationships, tag dropdowns, and a Faction card template.
+- **Phase 8** — complete: Universal Search across entities/journal/oracles/
+  documents/Party/Colony; an oracle table entry editor plus two content
+  additions (Scenario Framing, Environmental Hazards); Cast drawer
+  entity-type filter + search; an NPC-generation oracle chain plus a
+  one-click "Generate NPC" action (and the 5PFH Patron Benefit/Hazard/
+  Danger Pay job-offer tables).
+- **Phase 9 (next)** — HOW workspace becomes Activity → Rules Lens driven
+  instead of free text; genre packs.
 - **Phase 10 (lowest priority — new features)** — Trade & Logistics /
   Merchant Rules Lens (contracts as the primary loop, `docs/adr/0003` +
   `0004`); a Mission/Job generator (`domain/missions.js`, payout scaled by

@@ -2,13 +2,19 @@
 // Graph, Documents, Settings). Each is a pure render(doc) -> html string;
 // interactions are handled by the shell's delegated event handlers.
 
-import { SCENE_TABLES, buildGroupedOracleTree, filterOracleTree } from '../../domain/oracles.js';
-import { listEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, findByName, parseMentions, listTagVocabulary } from '../../domain/entities.js';
+import {
+  SCENE_TABLES, buildGroupedOracleTree, filterOracleTree, tablesWithOverrides,
+  hasOracleOverride,
+} from '../../domain/oracles.js';
+import {
+  listEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, findByName, parseMentions, listTagVocabulary,
+  RELATIONSHIP_TYPES, RELATIONSHIP_TYPE_LABEL, isRelationshipFlagged,
+} from '../../domain/entities.js';
 import { parseStatsString, sortStatblockGroups } from '../../domain/statblocks.js';
 import { listTemplates } from '../../domain/statblockTemplates.js';
 import { buildGraph, computeLayout, nodeColor } from '../../domain/graph.js';
 import { BUILD } from '../../core/buildInfo.js';
-import { getDocument, listDocuments, listDocumentMentions, parseDocumentMentions, allDocumentTags, filterDocuments, listReferenceDocuments } from '../../domain/documents.js';
+import { getDocument, listDocuments, listDocumentMentions, parseDocumentMentionRefs, findDocumentTabByTitle, allDocumentTags, filterDocuments, listReferenceDocuments } from '../../domain/documents.js';
 import { listPartyMembers, listPartyTrackers } from '../../domain/party.js';
 import { COLONY_FIELDS, getColonyFields, listCrewRows, listLifeformEncounters } from '../../domain/colony.js';
 import { getGuideText } from '../../domain/guide.js';
@@ -36,34 +42,57 @@ export function renderDrawer(id, doc, ui = {}) {
 }
 
 function entities(doc, ui) {
-  const items = listEntities(doc);
+  const allItems = listEntities(doc);
+  const typeFilter = ui.entityTypeFilter || '';
+  const search = (ui.entitySearch || '').trim().toLowerCase();
+  const items = allItems.filter((e) => {
+    if (typeFilter && e.type !== typeFilter) return false;
+    if (!search) return true;
+    return [e.name, ...(e.tags || [])].join(' ').toLowerCase().includes(search);
+  });
   const active = getEntity(doc, doc.entities && doc.entities.activeId);
+  const collapsed = !!ui.castListCollapsed;
+  const typeChips = ['', ...ENTITY_TYPES].map((t) => `
+    <button class="chip sm ${typeFilter === t ? 'active' : ''}" data-entity-type-filter="${t}">${t ? TYPE_LABEL[t] : 'All'}</button>`).join('');
   return `
     <div class="entity-add-row">
       ${ENTITY_TYPES.map((t) => `<button class="chip" data-entity-add="${t}">＋ ${TYPE_LABEL[t]}</button>`).join('')}
+      <button class="chip" data-generate-npc title="Roll the Characters oracle chain (Role, Goal, Aspect, Disposition, Name) into a new NPC">🎲 Generate NPC</button>
     </div>
     <div class="entity-cols">
+      <div class="entity-list-head">
+        <button class="icon-btn" data-cast-list-toggle title="${collapsed ? 'Show the Cast list' : 'Hide the Cast list'}" aria-expanded="${!collapsed}">${collapsed ? '▸' : '▾'}</button>
+        <span class="dim small">Cast — ${items.length}${items.length !== allItems.length ? ` of ${allItems.length}` : ''} entit${items.length === 1 ? 'y' : 'ies'}${collapsed && active ? ` · editing ${esc(active.name) || 'Unnamed'}` : ''}</span>
+      </div>
+      ${collapsed ? '' : `
+      <input class="drawer-search" data-entity-search value="${esc(ui.entitySearch || '')}" placeholder="Search Cast by name or tag…">
+      <div class="entity-type-filter-row">${typeChips}</div>
       <div class="entity-list">
         ${items.length ? items.map((e) => `
-          <button class="entity-list-row ${active && active.id === e.id ? 'sel' : ''}" draggable="true" data-drag-entity="${esc(e.id)}" data-drop-entity="${esc(e.id)}" data-entity-select="${esc(e.id)}" title="Drag onto another entity to link them, or onto Journal/context fields to mention them">
+          <button class="entity-list-row ${active && active.id === e.id ? 'sel' : ''}" data-drop-entity="${esc(e.id)}" data-entity-select="${esc(e.id)}" title="Click to select · drag the ⠿ handle to link with another entity">
+            <span class="entity-drag-handle" draggable="true" data-drag-entity="${esc(e.id)}" title="Drag onto another entity to link, or onto Journal/context fields to mention" aria-label="Drag to link or mention">⠿</span>
             <span class="entity-type-tag">${TYPE_LABEL[e.type] || 'Entity'}</span>
             <span class="entity-list-name">${esc(e.name) || '<em>Unnamed</em>'}</span>
             ${e.relationships && e.relationships.length ? `<span class="dim">🔗${e.relationships.length}</span>` : ''}
           </button>`).join('')
-          : '<p class="ws-placeholder">No entities yet. Add one above, or type @Name in a note or situation to create one automatically.</p>'}
-      </div>
+          : (allItems.length ? '<p class="ws-placeholder">No entities match that search/filter.</p>' : '<p class="ws-placeholder">No entities yet. Add one above, or type @Name in a note or situation to create one automatically.</p>')}
+      </div>`}
       <div class="entity-inspector">${active ? inspector(doc, active, ui) : '<p class="dim small">Select an entity to edit.</p>'}</div>
     </div>`;
 }
 
 function inspector(doc, e, ui) {
   const others = listEntities(doc).filter((x) => x.id !== e.id);
+  const relTypeOptions = (selected) => RELATIONSHIP_TYPES.map((t) => `<option value="${t}" ${t === selected ? 'selected' : ''}>${RELATIONSHIP_TYPE_LABEL[t]}</option>`).join('');
   const rels = (e.relationships || []).map((r) => {
     const other = getEntity(doc, r.to);
     if (!other) return '';
-    return `<span class="rel-chip">${esc(other.name) || 'Unnamed'}
+    const flagged = isRelationshipFlagged(doc, r);
+    return `<span class="rel-chip ${flagged ? 'rel-flagged' : ''}">${flagged ? `<span class="rel-flag" title="Flagged: ${RELATIONSHIP_TYPE_LABEL[r.type]} expects ${(other.type)} to be a different type — nothing changed, just worth a review">⚠</span>` : ''}${esc(other.name) || 'Unnamed'}
+      <select class="rel-type-select" data-entity-rel-type="${esc(r.to)}" title="Relationship type">${relTypeOptions(r.type)}</select>
       <input class="rel-label-input" data-entity-rel-label="${esc(r.to)}" value="${esc(r.label)}" placeholder="note (ally, rival…)" title="Edit this relationship's note">
-      <button class="icon-btn" data-entity-unlink="${esc(r.to)}" title="Unlink">✕</button></span>`;
+      <input type="number" class="rel-strength-input" data-entity-rel-strength="${esc(r.to)}" min="0" max="10" value="${Number(r.strength) || 0}" title="Strength/weight 0-10 — e.g. a Bond's progress">
+      <button class="icon-btn" data-entity-unlink="${esc(r.to)}" title="Remove link" aria-label="Remove link">✕</button></span>`;
   }).join('');
   return `
     <div class="inspector-head">
@@ -80,16 +109,39 @@ function inspector(doc, e, ui) {
     <label class="field-label">Revealed / hidden (GM)
       <textarea data-entity-field="revealed" rows="2" placeholder="Secrets, twists, true motives.">${esc(e.revealed)}</textarea>
     </label>
+    ${factionSection(e)}
     ${statblockSection(e, doc, ui)}
     <div class="rel-block">
       <h4>Relationships</h4>
-      <p class="dim small">Drag another entity onto this one (or vice versa) to link them.</p>
+      <p class="dim small">Drag another entity's ⠿ handle onto this one (or vice versa), or pick one below, to link them.</p>
       <div class="rel-chips">${rels || '<span class="dim small">None yet.</span>'}</div>
       ${others.length ? `<div class="rel-add">
         <select data-entity-link-target>${others.map((o) => `<option value="${esc(o.id)}">${esc(o.name) || 'Unnamed'}</option>`).join('')}</select>
+        <select data-entity-link-type>${relTypeOptions('linked')}</select>
         <input data-entity-link-label placeholder="label (ally, rival…)">
-        <button class="btn sm" data-entity-link-add>Link</button>
+        <button class="btn sm" data-entity-link-add title="Link" aria-label="Link">🔗 Link</button>
       </div>` : '<p class="dim small">Add another entity to create relationships.</p>'}
+    </div>`;
+}
+
+// Faction card template (2026-07-03 ruleset review) — HQ/leadership/a
+// scenario-seed hook, shown only for faction-type entities (the fields
+// still exist harmlessly if an entity is retyped away from faction, same as
+// statblocks aren't stripped on a type change).
+function factionSection(e) {
+  if (e.type !== 'faction') return '';
+  return `
+    <div class="faction-card">
+      <h4>Faction card</h4>
+      <label class="field-label">HQ
+        <input data-entity-field="hq" value="${esc(e.hq)}" placeholder="Where they operate from">
+      </label>
+      <label class="field-label">Leadership
+        <input data-entity-field="leadership" value="${esc(e.leadership)}" placeholder="Who's in charge">
+      </label>
+      <label class="field-label">Scenario seed
+        <textarea data-entity-field="scenarioSeed" rows="2" placeholder="A one-paragraph hook this faction can drop into a session.">${esc(e.scenarioSeed)}</textarea>
+      </label>
     </div>`;
 }
 
@@ -436,12 +488,14 @@ function journal(doc, ui = {}) {
 // would otherwise reset native <details> open/closed state).
 function oracle(doc, ui) {
   const filter = ui.oracleFilter || '';
-  const tree = buildGroupedOracleTree(SCENE_TABLES);
+  const tables = tablesWithOverrides(doc.oracles && doc.oracles.overrides);
+  const tree = buildGroupedOracleTree(tables);
   const filtered = filterOracleTree(tree, filter);
   const forceOpen = !!filter.trim();
   const expanded = ui.expandedOracleGroups || new Set();
+  const editorOpen = ui.oracleEditorOpen || new Set();
 
-  const rows = filtered.map((cat) => oracleGroupRow(cat, forceOpen, expanded)).join('');
+  const rows = filtered.map((cat) => oracleGroupRow(doc, cat, forceOpen, expanded, editorOpen)).join('');
   return `
     <div class="oracle-toolbar">
       <input class="drawer-search" data-oracle-filter value="${esc(filter)}" placeholder="Search oracle tables…">
@@ -452,17 +506,45 @@ function oracle(doc, ui) {
     </div>`;
 }
 
-function oracleGroupRow(node, forceOpen, expanded) {
+// Each table row's own entries editor (Phase 8, "oracle table editor") is
+// collapsed behind an ✎ toggle by default, same footprint-saving pattern as
+// the statblock "+ Add" row and Documents' tag editor — most tables are
+// looked at to roll, not to edit, so the row stays compact until asked.
+function oracleTableEditor(doc, node, key) {
+  const entries = node.values;
+  const rows = entries.map((v, i) => `
+    <div class="oracle-entry-row">
+      <input class="oracle-entry-input" data-oracle-entry-value="${esc(key)}::${i}" value="${esc(v)}">
+      <button class="icon-btn" data-oracle-entry-remove="${esc(key)}::${i}" title="Remove entry">✕</button>
+    </div>`).join('');
+  const overridden = hasOracleOverride(doc, node.path);
+  return `
+    <div class="oracle-editor">
+      ${rows}
+      <div class="oracle-entry-add">
+        <input class="oracle-entry-input" data-oracle-entry-new="${esc(key)}" placeholder="Add an entry…">
+        <button class="icon-btn" data-oracle-entry-add="${esc(key)}" title="Add entry">＋</button>
+      </div>
+      ${overridden ? `<button class="btn ghost sm" data-oracle-reset="${esc(key)}">↺ Reset to default</button>` : ''}
+    </div>`;
+}
+
+function oracleGroupRow(doc, node, forceOpen, expanded, editorOpen) {
   const key = node.path ? node.path.join('>') : node.label;
   const open = forceOpen || expanded.has(key);
   if (node.kind === 'table') {
+    const editing = editorOpen.has(key);
     return `
-      <div class="oracle-row">
-        <span class="oracle-label">${esc(node.label)} <span class="dim">(${node.values.length})</span></span>
-        <button class="icon-btn" data-roll="${esc(key)}" title="Roll" aria-label="Roll">🎲</button>
+      <div class="oracle-row-wrap">
+        <div class="oracle-row">
+          <span class="oracle-label">${esc(node.label)} <span class="dim">(${node.values.length})</span></span>
+          <button class="icon-btn" data-oracle-edit-toggle="${esc(key)}" title="${editing ? 'Close editor' : 'Edit entries'}" aria-label="Edit entries">✎</button>
+          <button class="icon-btn" data-roll="${esc(key)}" title="Roll" aria-label="Roll">🎲</button>
+        </div>
+        ${editing ? oracleTableEditor(doc, node, key) : ''}
       </div>`;
   }
-  const childRows = node.children.map((c) => oracleGroupRow(c, forceOpen, expanded)).join('');
+  const childRows = node.children.map((c) => oracleGroupRow(doc, c, forceOpen, expanded, editorOpen)).join('');
   const rollGroupBtn = node.kind === 'group'
     ? `<button class="icon-btn" data-roll-group="${esc(key)}" title="Roll every table in this group" aria-label="Roll group">🎲🎲</button>` : '';
   return `
@@ -724,15 +806,14 @@ function colony(doc) {
 function guide(doc) {
   const text = getGuideText(doc);
   const mentions = parseMentions(text);
-  const docMentions = parseDocumentMentions(text);
   return `
-    <p class="dim small">A table of contents for the campaign — <code>@Name</code> links a Cast entity, <code>@[Doc Name]</code> references a document.</p>
-    <textarea class="guide-editor" data-guide-input rows="16" placeholder="Colony Builder — see @[5PFH Planetfall] for the turn sheet.&#10;Meet @Captain Reyes in Docking Bay 3.">${esc(text)}</textarea>
+    <p class="dim small">A table of contents for the campaign — <code>@Name</code> links a Cast entity, <code>@[Doc Name]</code> references a document (<code>@[Doc Name#12]</code> or <code>@[Doc Name p.12]</code> jumps to a page).</p>
+    <textarea class="guide-editor" data-guide-input rows="16" placeholder="Colony Builder — see @[5PFH Planetfall p.12] for the turn sheet.&#10;Meet @Captain Reyes in Docking Bay 3.">${esc(text)}</textarea>
     <div class="drawer-note-actions"><button class="btn" data-guide-save>Save</button></div>
-    ${mentions.length || docMentions.length ? `<div class="document-badges" style="margin-top: var(--sp-3);">
+    ${mentions.length ? `<div class="document-badges" style="margin-top: var(--sp-3);">
       ${mentions.map((m) => `<span class="doc-badge">☷ ${esc(m)}</span>`).join('')}
-      ${docMentions.map((m) => `<span class="doc-badge">📄 ${esc(m)}</span>`).join('')}
-    </div>` : ''}`;
+    </div>` : ''}
+    ${documentBadges(doc, text)}`;
 }
 
 function graph(doc) {
@@ -773,13 +854,26 @@ function graph(doc) {
     </svg>`;
 }
 
+// Each ref (a mention's title + optional page anchor) resolves against both
+// the uploaded/text library and the Reference Library — a PDF match (either
+// kind) renders as a clickable badge that opens the viewer via the same
+// data-doc-open handler as the Documents drawer, jumping to the page when
+// one was given; anything else (a text-note document, or no match at all)
+// stays a plain, non-clickable badge like before.
 function documentBadges(doc, text) {
-  const names = parseDocumentMentions(text || '');
-  if (!names.length) return '';
-  const library = (doc.documents && doc.documents.library) || [];
-  const badges = names.map((name) => {
-    const entry = library.find((d) => String(d.title || '').trim().toLowerCase() === String(name || '').trim().toLowerCase());
-    return entry ? `<div class="doc-badge">📄 ${esc(entry.title)}</div>` : '';
+  const refs = parseDocumentMentionRefs(text || '');
+  if (!refs.length) return '';
+  const seen = new Set();
+  const badges = refs.map(({ name, page }) => {
+    const dedupeKey = name + '#' + (page || '');
+    if (seen.has(dedupeKey)) return '';
+    seen.add(dedupeKey);
+    const found = findDocumentTabByTitle(doc, name);
+    const title = found ? found.title : name;
+    const label = `📄 ${esc(title)}${page ? ' p.' + page : ''}`;
+    if (!found) return `<div class="doc-badge">${label}</div>`;
+    if (!found.openable) return `<div class="doc-badge" title="Text note — open it from the Documents drawer">${label}</div>`;
+    return `<button type="button" class="doc-badge" data-doc-open="${esc(found.tabKey)}" ${page ? `data-doc-open-page="${page}"` : ''} title="Open${page ? ' at page ' + page : ''}">${label}</button>`;
   }).filter(Boolean);
   return badges.length ? `<div class="document-badges">${badges.join('')}</div>` : '';
 }

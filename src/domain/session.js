@@ -5,8 +5,8 @@
 
 import { applyShift } from './context.js';
 import { generateScene } from './scenes.js';
-import { tablesWithOverrides, rollTable, rollGroup, formatRoll } from './oracles.js';
-import { linkMentions, parseMentions } from './entities.js';
+import { tablesWithOverrides, rollTable, rollGroup, formatRoll, pick } from './oracles.js';
+import { linkMentions, parseMentions, createEntity, updateEntity } from './entities.js';
 import { linkDocumentMentions, parseDocumentMentions } from './documents.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
@@ -95,6 +95,36 @@ export function patchContext(campaign, key, patch) {
   const next = clone(campaign);
   next.context[key] = { ...next.context[key], ...patch };
   return next;
+}
+
+/** Roll the Characters oracle chain (Role → Goal → Revealed Aspect →
+ *  Disposition → Name — Starforged's Character oracle pattern, rulebook
+ *  pp.170-175) and create an NPC entity from the result in one action, the
+ *  "Generate NPC" button (Phase 8). Pure/RNG-injectable like every other
+ *  roll here; only tests pass a seeded rng. `overview` (shared) gets the
+ *  role/disposition/first-look composite; `revealed` (GM-only) gets the
+ *  rolled Revealed Aspect, matching the field's existing purpose. */
+export function generateNpc(campaign, { rng = Math.random } = {}) {
+  const next = clone(campaign);
+  const tables = tablesWithOverrides(next.oracles?.overrides);
+  const chars = (tables && tables.Characters) || {};
+  const roll = (key) => (Array.isArray(chars[key]) && chars[key].length ? pick(chars[key], rng) : '');
+
+  const name = roll('Name') || 'Unnamed';
+  const role = roll('Role');
+  const goal = roll('Goal');
+  const aspect = roll('Revealed Aspect');
+  const disposition = roll('Disposition');
+  const firstLook = roll('First Look');
+  const overview = [
+    role, disposition && `Disposition: ${disposition}.`,
+    firstLook && `First impression: ${firstLook}.`, goal && `Goal: ${goal}.`,
+  ].filter(Boolean).join(' ');
+
+  const created = createEntity(next, { type: 'npc', name });
+  const withFields = updateEntity(created.campaign, created.id, { overview, revealed: aspect });
+  addJournal(withFields, `Generated NPC: ${name}${overview ? ' — ' + overview : ''}`, 'Oracle');
+  return { campaign: withFields, id: created.id };
 }
 
 /** Edit a free-text context field and auto-link any @mentions it contains.

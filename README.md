@@ -38,8 +38,9 @@ Open the served URL. On first launch the store migrates any legacy data, then re
 - [x] Phase 4 — Document Library, ruleset-driven Character Sheets
 - [x] Phase 5 — Party/Colony/Guide drawers, Bestiary templates, Oracle tree, Document upload/tags/PDF viewer
 - [x] Phase 6 — Campaign Continuity (Session Recap, Thread lifecycle, Narrative Trackers, Co-Pilot "what did I overlook?")
-- [ ] Phase 7 (in progress) — Context Graph depth (tag dropdowns done; relationships/`@`-doc-pointers open)
-- [ ] Phase 8+ (future) — Universal Search, Activity-driven HOW workspace, Trade & Logistics, sync adapter
+- [x] Phase 7 — Context Graph depth (tag dropdowns, `@`-doc-pointers-with-page-anchors, typed/weighted relationships, "flag don't delete", Faction card template)
+- [x] Phase 8 — Unified Discovery (Universal Search, Oracle table editor, Cast filter/search, NPC-generation oracle chain)
+- [ ] Phase 9+ (future) — Activity-driven HOW workspace, genre packs, Trade & Logistics, sync adapter
 
 Each phase's actual feature list, plus what's still open per phase, is in
 `DESIGN-NEW-FUNCTIONALITY.md` — not repeated here to avoid two copies

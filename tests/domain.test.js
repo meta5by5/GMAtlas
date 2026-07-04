@@ -163,7 +163,10 @@ import {
   listThreads, setThreadStatus, setThreadPriority, overlookedThreads, THREAD_STATUSES,
 } from '../src/domain/threads.js';
 import { advise } from '../src/domain/copilot.js';
-import { addDocument, updateDocument, removeDocument, parseDocumentMentions, linkDocumentMentions, listDocumentMentions } from '../src/domain/documents.js';
+import {
+  addDocument, updateDocument, removeDocument, parseDocumentMentions, parseDocumentMentionRefs, linkDocumentMentions, listDocumentMentions,
+  findDocumentTabByTitle, openDocumentTab, closeDocumentTab, resolveDocumentTab,
+} from '../src/domain/documents.js';
 
 test('threads: add, advance (clamped), complete, remove', () => {
   let camp = defaultCampaign();
@@ -361,6 +364,56 @@ test('document mentions are parsed and linked to the library', () => {
   assert.deepEqual(parseDocumentMentions('See @Station Manual and @[Shipyard Guide]'), ['Station Manual', 'Shipyard Guide']);
   assert.equal(listDocumentMentions(camp).length, 2);
   assert.equal(listDocumentMentions(camp)[0].documentId, camp.documents.library[0].id);
+});
+
+test('parseDocumentMentionRefs extracts a page anchor from @[Title#12] and @[Title p.12]', () => {
+  assert.deepEqual(parseDocumentMentionRefs('See @[Station Manual#12] and @[Shipyard Guide p.7] and @[Field Guide p3]'), [
+    { name: 'Station Manual', page: 12 },
+    { name: 'Shipyard Guide', page: 7 },
+    { name: 'Field Guide', page: 3 },
+  ]);
+  assert.deepEqual(parseDocumentMentionRefs('@[Plain Doc] and @Station'), [
+    { name: 'Plain Doc', page: null },
+    { name: 'Station', page: null },
+  ]);
+});
+
+test('findDocumentTabByTitle resolves a library file as openable and a text note as not', () => {
+  let camp = defaultCampaign();
+  camp = addDocument(camp, { title: 'Station Manual', content: 'Docking procedures' });
+  camp = addDocument(camp, { kind: 'file', title: 'Crew Manifest.pdf', fileName: 'Crew Manifest.pdf', mimeType: 'application/pdf', dataUrl: 'data:application/pdf;base64,AAAA' });
+
+  const note = findDocumentTabByTitle(camp, 'Station Manual');
+  assert.equal(note.openable, false);
+
+  const pdf = findDocumentTabByTitle(camp, 'Crew Manifest.pdf');
+  assert.equal(pdf.openable, true);
+  assert.equal(pdf.tabKey, 'lib:' + camp.documents.library[1].id);
+
+  assert.equal(findDocumentTabByTitle(camp, 'Nonexistent'), null);
+});
+
+test('opening a document tab at a page anchors the resolved src with #page=N', () => {
+  let camp = defaultCampaign();
+  camp = addDocument(camp, { kind: 'file', title: 'Crew Manifest.pdf', fileName: 'Crew Manifest.pdf', mimeType: 'application/pdf', dataUrl: 'data:application/pdf;base64,AAAA' });
+  const tabKey = 'lib:' + camp.documents.library[0].id;
+
+  camp = openDocumentTab(camp, tabKey, 12);
+  let resolved = resolveDocumentTab(camp, tabKey);
+  assert.equal(resolved.src, 'data:application/pdf;base64,AAAA#page=12');
+
+  // Re-focusing the same tab without a page keeps the one already recorded.
+  camp = openDocumentTab(camp, tabKey);
+  resolved = resolveDocumentTab(camp, tabKey);
+  assert.equal(resolved.page, 12);
+
+  // Jumping to a different page re-anchors instead of stacking fragments.
+  camp = openDocumentTab(camp, tabKey, 30);
+  resolved = resolveDocumentTab(camp, tabKey);
+  assert.equal(resolved.src, 'data:application/pdf;base64,AAAA#page=30');
+
+  camp = closeDocumentTab(camp, tabKey);
+  assert.equal(camp.documents.tabPages[tabKey], undefined);
 });
 
 // --- entities + auto-linking (Phase 3A) -----------------------------------
@@ -987,6 +1040,97 @@ test('filterOracleTree keeps a whole group when its name matches, else only matc
   assert.equal(empty.length, 0);
 });
 
+// --- oracle table entry editor (Phase 8) ------------------------------------
+import {
+  currentTableEntries, hasOracleOverride, addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable,
+} from '../src/domain/oracles.js';
+
+test('currentTableEntries reads the shipped default until an override is saved', () => {
+  const camp = defaultCampaign();
+  const path = ['Missions', 'Patron Benefit'];
+  const defaults = currentTableEntries(camp, path);
+  assert.ok(defaults.length > 0);
+  assert.equal(hasOracleOverride(camp, path), false);
+});
+
+test('addOracleEntry/updateOracleEntry/removeOracleEntry mutate a table via override, without touching SCENE_TABLES', () => {
+  let camp = defaultCampaign();
+  const path = ['Missions', 'Patron Benefit'];
+  const before = currentTableEntries(camp, path);
+
+  camp = addOracleEntry(camp, path, 'a custom benefit');
+  assert.equal(hasOracleOverride(camp, path), true);
+  let entries = currentTableEntries(camp, path);
+  assert.equal(entries.length, before.length + 1);
+  assert.equal(entries[entries.length - 1], 'a custom benefit');
+
+  camp = updateOracleEntry(camp, path, 0, 'edited first entry');
+  assert.equal(currentTableEntries(camp, path)[0], 'edited first entry');
+
+  camp = removeOracleEntry(camp, path, 0);
+  entries = currentTableEntries(camp, path);
+  assert.equal(entries.length, before.length);
+  assert.ok(!entries.includes('edited first entry'));
+
+  // SCENE_TABLES itself is never mutated by any of this.
+  assert.equal(SCENE_TABLES.Missions['Patron Benefit'].length, before.length);
+});
+
+test('resetOracleTable discards the override and reverts to the shipped default', () => {
+  let camp = defaultCampaign();
+  const path = ['Missions', 'Patron Hazard'];
+  const before = currentTableEntries(camp, path);
+  camp = addOracleEntry(camp, path, 'temporary entry');
+  assert.equal(hasOracleOverride(camp, path), true);
+  camp = resetOracleTable(camp, path);
+  assert.equal(hasOracleOverride(camp, path), false);
+  assert.deepEqual(currentTableEntries(camp, path), before);
+});
+
+test('the Characters oracle group carries a Name table alongside Role/Goal/Disposition (NPC generation chain)', () => {
+  const chars = SCENE_TABLES.Characters;
+  for (const key of ['Role', 'Goal', 'Revealed Aspect', 'Disposition', 'Name']) {
+    assert.ok(Array.isArray(chars[key]) && chars[key].length > 0, `Characters.${key} should be a non-empty table`);
+  }
+});
+
+test('Missions carries a Patron Benefit/Hazard/Danger Pay job-offer set (5PFH-style Patron table)', () => {
+  for (const key of ['Patron Benefit', 'Patron Hazard', 'Danger Pay Reason']) {
+    assert.ok(Array.isArray(SCENE_TABLES.Missions[key]) && SCENE_TABLES.Missions[key].length > 0, `Missions.${key} should be a non-empty table`);
+  }
+});
+
+test('Scenario Framing and Environmental Hazards oracle content shipped and are reachable via the grouped tree', () => {
+  assert.ok(Array.isArray(SCENE_TABLES['Scenario Framing'].Dilemma) && SCENE_TABLES['Scenario Framing'].Dilemma.length === 5);
+  assert.ok(Array.isArray(SCENE_TABLES['Environmental Hazards']['Environmental Event']));
+  assert.ok(SCENE_TABLES['Environmental Hazards']['Environmental Event'].length >= 20);
+  const tree = buildGroupedOracleTree(SCENE_TABLES);
+  const allKeys = new Set();
+  for (const cat of tree) for (const group of cat.children) allKeys.add(group.label);
+  assert.ok(allKeys.has('Scenario Framing'));
+  assert.ok(allKeys.has('Environmental Hazards'));
+});
+
+// --- Generate NPC (Phase 8 NPC-generation oracle chain) ---------------------
+import { generateNpc } from '../src/domain/session.js';
+
+test('generateNpc rolls the Characters chain into a new NPC entity, seeded and reproducible', () => {
+  let camp = defaultCampaign();
+  const { campaign: next, id } = generateNpc(camp, { rng: makeRng(42) });
+  const npc = getEntity(next, id);
+  assert.ok(npc);
+  assert.equal(npc.type, 'npc');
+  assert.ok(npc.name && npc.name !== 'Unnamed');
+  assert.ok(npc.overview.length > 0);
+  assert.ok(npc.revealed.length > 0);
+  assert.equal(next.journal[next.journal.length - 1].source, 'Oracle');
+  assert.match(next.journal[next.journal.length - 1].text, /Generated NPC/);
+
+  // Same seed -> same result (deterministic, like every other roll here).
+  const again = generateNpc(camp, { rng: makeRng(42) });
+  assert.equal(getEntity(again.campaign, again.id).name, npc.name);
+});
+
 // --- documents: tags, search, rename ----------------------------------------
 import { addDocumentTag, removeDocumentTag, allDocumentTags, filterDocuments, renameDocument } from '../src/domain/documents.js';
 
@@ -1030,7 +1174,10 @@ test('renameDocument changes only the display title, never the underlying file',
 });
 
 // --- entities: editable relationship note/label -----------------------------
-import { updateRelationshipLabel } from '../src/domain/entities.js';
+import {
+  updateRelationshipLabel, updateRelationshipType, updateRelationshipStrength,
+  isRelationshipFlagged, listFlaggedRelationships, RELATIONSHIP_TYPES,
+} from '../src/domain/entities.js';
 
 test('updateRelationshipLabel edits the note on an existing relationship without touching the mirrored side\'s id', () => {
   let camp = defaultCampaign();
@@ -1044,6 +1191,132 @@ test('updateRelationshipLabel edits the note on an existing relationship without
   // the mirrored side is untouched — labels are per-direction notes
   const b = getEntity(camp, bId);
   assert.equal(b.relationships.find((r) => r.to === aId).label, 'linked');
+});
+
+// --- entities: typed/weighted relationships (Phase 7) -----------------------
+test('a new relationship defaults to type "linked" and strength 0 on both sides', () => {
+  let camp = defaultCampaign();
+  let aId, bId;
+  ({ campaign: camp, id: aId } = createEntity(camp, { type: 'npc', name: 'A' }));
+  ({ campaign: camp, id: bId } = createEntity(camp, { type: 'npc', name: 'B' }));
+  camp = addRelationship(camp, aId, bId, 'linked');
+  const a = getEntity(camp, aId), b = getEntity(camp, bId);
+  assert.equal(a.relationships[0].type, 'linked');
+  assert.equal(a.relationships[0].strength, 0);
+  assert.equal(b.relationships[0].type, 'linked');
+});
+
+test('addRelationship accepts an explicit type, falling back to "linked" for an unrecognized one', () => {
+  let camp = defaultCampaign();
+  let aId, bId, cId;
+  ({ campaign: camp, id: aId } = createEntity(camp, { type: 'npc', name: 'A' }));
+  ({ campaign: camp, id: bId } = createEntity(camp, { type: 'faction', name: 'B' }));
+  ({ campaign: camp, id: cId } = createEntity(camp, { type: 'npc', name: 'C' }));
+  camp = addRelationship(camp, aId, bId, 'rank and file', 'member_of');
+  camp = addRelationship(camp, aId, cId, 'note', 'not_a_real_type');
+  assert.equal(getEntity(camp, aId).relationships.find((r) => r.to === bId).type, 'member_of');
+  assert.equal(getEntity(camp, aId).relationships.find((r) => r.to === cId).type, 'linked');
+});
+
+test('updateRelationshipType/Strength edit only the requested side, and strength clamps to 0-10', () => {
+  let camp = defaultCampaign();
+  let aId, bId;
+  ({ campaign: camp, id: aId } = createEntity(camp, { type: 'npc', name: 'A' }));
+  ({ campaign: camp, id: bId } = createEntity(camp, { type: 'npc', name: 'B' }));
+  camp = addRelationship(camp, aId, bId, 'linked');
+  camp = updateRelationshipType(camp, aId, bId, 'bond');
+  camp = updateRelationshipStrength(camp, aId, bId, 15);
+  const a = getEntity(camp, aId), b = getEntity(camp, bId);
+  assert.equal(a.relationships.find((r) => r.to === bId).type, 'bond');
+  assert.equal(a.relationships.find((r) => r.to === bId).strength, 10);
+  assert.equal(b.relationships.find((r) => r.to === aId).type, 'linked');
+  camp = updateRelationshipStrength(camp, aId, bId, -5);
+  assert.equal(getEntity(camp, aId).relationships.find((r) => r.to === bId).strength, 0);
+});
+
+test('a pre-Phase-7 relationship with no type/strength normalizes to "linked"/0 on read', () => {
+  let camp = defaultCampaign();
+  let aId, bId;
+  ({ campaign: camp, id: aId } = createEntity(camp, { type: 'npc', name: 'A' }));
+  ({ campaign: camp, id: bId } = createEntity(camp, { type: 'npc', name: 'B' }));
+  const a = getEntity(camp, aId);
+  a.relationships.push({ to: bId, label: 'old-style link' }); // no type/strength, like data saved before this shipped
+  camp = updateRelationshipLabel(camp, aId, bId, 'old-style link'); // any mutator runs ensure()
+  const rel = getEntity(camp, aId).relationships.find((r) => r.to === bId);
+  assert.equal(rel.type, 'linked');
+  assert.equal(rel.strength, 0);
+});
+
+// --- entities: "flag, don't delete" invalid relationships (pack 9) ----------
+test('a typed relationship is flagged when its target no longer matches the type it implies', () => {
+  let camp = defaultCampaign();
+  let aId, bId;
+  ({ campaign: camp, id: aId } = createEntity(camp, { type: 'npc', name: 'Voss' }));
+  ({ campaign: camp, id: bId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
+  camp = addRelationship(camp, aId, bId, 'rank and file', 'member_of');
+  assert.equal(isRelationshipFlagged(camp, getEntity(camp, aId).relationships[0]), false);
+
+  // The target's type changes out from under the relationship.
+  camp = updateEntity(camp, bId, { type: 'location' });
+  assert.equal(isRelationshipFlagged(camp, getEntity(camp, aId).relationships[0]), true);
+  assert.equal(getEntity(camp, aId).relationships.length, 1); // nothing was removed
+
+  const flagged = listFlaggedRelationships(camp);
+  assert.equal(flagged.length, 1);
+  assert.equal(flagged[0].entityName, 'Voss');
+  assert.equal(flagged[0].toName, 'Sable Cartel');
+});
+
+test('an untyped ("linked"/allied_with/rival_of/bond) relationship is never flagged, regardless of target type', () => {
+  let camp = defaultCampaign();
+  let aId, bId;
+  ({ campaign: camp, id: aId } = createEntity(camp, { type: 'npc', name: 'A' }));
+  ({ campaign: camp, id: bId } = createEntity(camp, { type: 'location', name: 'B' }));
+  camp = addRelationship(camp, aId, bId, 'note', 'bond');
+  assert.equal(isRelationshipFlagged(camp, getEntity(camp, aId).relationships[0]), false);
+});
+
+test('RELATIONSHIP_TYPES includes the Constitution-named taxonomy plus the legacy "linked" fallback', () => {
+  for (const t of ['linked', 'member_of', 'owns', 'controls', 'located_at', 'allied_with', 'rival_of', 'bond']) {
+    assert.ok(RELATIONSHIP_TYPES.includes(t));
+  }
+});
+
+// --- entities: Faction card template (2026-07-03 ruleset review) -----------
+test('a faction entity gains hq/leadership/scenarioSeed fields at creation', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
+  const e = getEntity(camp, id);
+  assert.equal(e.hq, '');
+  assert.equal(e.leadership, '');
+  assert.equal(e.scenarioSeed, '');
+});
+
+test('faction fields appear when an entity is retyped to faction, and can be edited', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Mystery Org' }));
+  assert.equal(getEntity(camp, id).hq, undefined);
+  camp = updateEntity(camp, id, { type: 'faction' });
+  assert.equal(getEntity(camp, id).hq, '');
+  camp = updateEntity(camp, id, { hq: 'Orbital Station 4', leadership: 'The Quiet Council', scenarioSeed: 'They want the artifact back.' });
+  const e = getEntity(camp, id);
+  assert.equal(e.hq, 'Orbital Station 4');
+  assert.equal(e.leadership, 'The Quiet Council');
+  assert.equal(e.scenarioSeed, 'They want the artifact back.');
+});
+
+// --- copilot: flagged-relationship review card -----------------------------
+test('advise() surfaces flagged relationships without altering them', () => {
+  let camp = defaultCampaign();
+  let aId, bId;
+  ({ campaign: camp, id: aId } = createEntity(camp, { type: 'npc', name: 'Voss' }));
+  ({ campaign: camp, id: bId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
+  camp = addRelationship(camp, aId, bId, 'rank and file', 'member_of');
+  camp = updateEntity(camp, bId, { type: 'location' });
+  const a = advise(camp);
+  assert.equal(a.flaggedRelationships.length, 1);
+  assert.match(a.flaggedRelationships[0], /Voss/);
+  assert.match(a.flaggedRelationships[0], /Sable Cartel/);
 });
 
 // --- statblock Bestiary templates (per-system, Settings-editable) ----------
@@ -1169,4 +1442,58 @@ test('every provider referenced in GAMEPLAY_AREAS is a registered RULES_PROVIDER
 test('providerLabel resolves a known id and falls back to the id itself for an unknown one', () => {
   assert.equal(providerLabel('starforged'), 'Starforged');
   assert.equal(providerLabel('nonexistent'), 'nonexistent');
+});
+
+// --- Universal Search (Phase 8, pack 23) ------------------------------------
+import { universalSearch } from '../src/domain/search.js';
+
+test('universalSearch returns no results for an empty query', () => {
+  const camp = defaultCampaign();
+  assert.deepEqual(universalSearch(camp, ''), []);
+  assert.deepEqual(universalSearch(camp, '   '), []);
+});
+
+test('universalSearch matches an entity by name and by tag, targeting the entities drawer', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Voss Calder' }));
+  camp = setEntityTags(camp, id, 'smuggler, veteran');
+  const byName = universalSearch(camp, 'calder');
+  assert.equal(byName.length, 1);
+  assert.equal(byName[0].category, 'Cast');
+  assert.deepEqual(byName[0].target, { drawer: 'entities', entityId: id });
+
+  const byTag = universalSearch(camp, 'smuggler').filter((r) => r.category === 'Cast');
+  assert.equal(byTag.length, 1);
+  assert.equal(byTag[0].id, id);
+});
+
+test('universalSearch matches journal text and oracle table names/entries', () => {
+  let camp = defaultCampaign();
+  camp = addNote(camp, 'The derelict beacon pulses every six seconds.', 'Note');
+  const journalHits = universalSearch(camp, 'derelict beacon');
+  assert.ok(journalHits.some((r) => r.category === 'Journal'));
+
+  const tableNameHits = universalSearch(camp, 'patron benefit');
+  assert.ok(tableNameHits.some((r) => r.category === 'Oracle' && r.label === 'Missions > Patron Benefit'));
+
+  const entryHits = universalSearch(camp, 'rival'); // matches individual table entries, not a table name
+  assert.ok(entryHits.some((r) => r.category === 'Oracle'));
+});
+
+test('universalSearch matches documents (library + Reference Library), Party trackers, and Colony fields', () => {
+  let camp = defaultCampaign();
+  camp = addDocument(camp, { kind: 'file', title: 'Crew Manifest Alpha', fileName: 'x.pdf', mimeType: 'application/pdf', dataUrl: 'data:application/pdf;base64,AA==' });
+  camp = addPartyTracker(camp, { name: 'Emergency Credits' });
+  camp = setColonyField(camp, 'notes', 'The reactor needs a new coolant line.');
+
+  const docHit = universalSearch(camp, 'manifest alpha');
+  assert.equal(docHit.length, 1);
+  assert.equal(docHit[0].category, 'Documents');
+  assert.equal(docHit[0].target.docTabKey, 'lib:' + camp.documents.library[0].id);
+
+  const partyHit = universalSearch(camp, 'emergency credits');
+  assert.ok(partyHit.some((r) => r.category === 'Party'));
+
+  const colonyHit = universalSearch(camp, 'coolant line');
+  assert.ok(colonyHit.some((r) => r.category === 'Colony'));
 });

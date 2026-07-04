@@ -16,6 +16,10 @@ function ensure(doc) {
   // data, layer a persisted override on top" pattern oracles.overrides
   // already uses for SCENE_TABLES.
   if (!doc.documents.refOverrides || typeof doc.documents.refOverrides !== 'object') doc.documents.refOverrides = {};
+  // Per-tab requested page (PDF viewer jumps to it via a #page=N fragment) —
+  // keyed by the same tab key as openTabs, not persisted per-document since
+  // the same PDF can be opened at different pages from different mentions.
+  if (!doc.documents.tabPages || typeof doc.documents.tabPages !== 'object') doc.documents.tabPages = {};
   return doc.documents;
 }
 
@@ -125,7 +129,21 @@ export function getDocument(campaign, id) {
   return ((campaign.documents && campaign.documents.library) || []).find((entry) => entry && entry.id === id) || null;
 }
 
-export function parseDocumentMentions(text) {
+// A bracketed mention may end in a page anchor — "#12" or "p.12"/"p12" —
+// naming a specific page for the PDF viewer to jump to. Bare @Name mentions
+// (no brackets) never carry one; a page only makes sense for a document, and
+// bare mentions are ambiguous with entity names, which have no page concept.
+function splitPageAnchor(raw) {
+  const m = String(raw || '').trim().match(/^(.*?)\s*(?:#|p\.?)\s*(\d+)$/i);
+  if (m && m[1].trim()) return { name: m[1].trim(), page: Number(m[2]) };
+  return { name: String(raw || '').trim(), page: null };
+}
+
+/** Parse @Name and @[Doc Title] mentions, each as `{name, page}` — `page` is
+ *  the anchor from `@[Doc Title#12]`/`@[Doc Title p.12]`, or null when the
+ *  mention doesn't name one. Order-preserving, not deduplicated (the same
+ *  title mentioned at two different pages is two distinct refs). */
+export function parseDocumentMentionRefs(text) {
   const out = [];
   const source = String(text || '');
   const stopWords = new Set(['and', 'or', 'the', 'a', 'an', 'to', 'for', 'with', 'from', 'in', 'on']);
@@ -139,8 +157,8 @@ export function parseDocumentMentions(text) {
     if (source[at + 1] === '[') {
       const match = source.slice(at).match(/^@\[([^\]]+)\]/);
       if (match) {
-        const name = match[1].trim();
-        if (name) out.push(name);
+        const { name, page } = splitPageAnchor(match[1]);
+        if (name) out.push({ name, page });
         i = at + match[0].length;
         continue;
       }
@@ -164,11 +182,22 @@ export function parseDocumentMentions(text) {
     }
 
     const name = words.join(' ').trim();
-    if (name) out.push(name);
+    if (name) out.push({ name, page: null });
     i = at + 1;
   }
 
-  return Array.from(new Set(out.filter(Boolean)));
+  return out;
+}
+
+/** Just the distinct document titles mentioned in `text` — the form callers
+ *  that don't care about page anchors (auto-linking, existence checks) want. */
+export function parseDocumentMentions(text) {
+  const seen = new Set();
+  const out = [];
+  for (const { name } of parseDocumentMentionRefs(text)) {
+    if (!seen.has(name)) { seen.add(name); out.push(name); }
+  }
+  return out;
 }
 
 export function linkDocumentMentions(campaign, text) {
@@ -193,6 +222,23 @@ export function linkDocumentMentions(campaign, text) {
     }
   }
   return next;
+}
+
+/** Resolve a mentioned title to a document — checking the uploaded/text
+ *  library first, then the auto-scanned Reference Library — so a badge for
+ *  either can become a clickable "open this" link. `openable` is false for
+ *  a text-note library document (nothing for the PDF viewer to show), same
+ *  restriction the Documents drawer's own open link already enforces. */
+export function findDocumentTabByTitle(campaign, name) {
+  const key = String(name || '').trim().toLowerCase();
+  if (!key) return null;
+  const library = (campaign.documents && campaign.documents.library) || [];
+  const libEntry = library.find((d) => String(d.title || '').trim().toLowerCase() === key);
+  if (libEntry) return { tabKey: 'lib:' + libEntry.id, title: libEntry.title, openable: libEntry.kind === 'file' };
+  const refDocs = listReferenceDocuments(campaign);
+  const idx = refDocs.findIndex((r) => String(r.title || '').trim().toLowerCase() === key);
+  if (idx >= 0) return { tabKey: 'ref:' + idx, title: refDocs[idx].title, openable: true };
+  return null;
 }
 
 export function listDocumentMentions(campaign) {
@@ -254,11 +300,16 @@ export function removeRefDocumentTag(campaign, key, tag) {
 // which migrate.js already carries into documents.openTabs; this is that
 // feature rebuilt on the new architecture, not a new idea).
 
-export function openDocumentTab(campaign, tabKey) {
+/** Open (or refocus) a viewer tab, optionally jumping a PDF to `page` — the
+ *  click target for a document mention's page anchor. Omitting `page` leaves
+ *  any page already recorded for this tab alone, so re-focusing a tab you're
+ *  mid-way through reading never resets it back to page 1. */
+export function openDocumentTab(campaign, tabKey, page) {
   const next = clone(campaign);
   const docs = ensure(next);
   if (!docs.openTabs.includes(tabKey)) docs.openTabs.push(tabKey);
   docs.activeTab = tabKey;
+  if (page) docs.tabPages[tabKey] = Number(page);
   return next;
 }
 
@@ -267,6 +318,7 @@ export function closeDocumentTab(campaign, tabKey) {
   const docs = ensure(next);
   const wasActive = docs.activeTab === tabKey;
   docs.openTabs = docs.openTabs.filter((k) => k !== tabKey);
+  delete docs.tabPages[tabKey];
   if (wasActive) docs.activeTab = docs.openTabs[docs.openTabs.length - 1] || null;
   return next;
 }
@@ -286,16 +338,25 @@ export function setActiveDocumentTab(campaign, tabKey) {
  *  back instead of leaving a phantom entry, but old campaigns saved before
  *  that fix could still have one) — callers should show a message, not a
  *  blank iframe, in that case. */
+// PDF viewers (browsers' built-in one included) honor a `#page=N` fragment
+// on the URL, including on a data: URI — strip any existing fragment first
+// so re-anchoring never stacks "#page=3#page=12".
+function withPageAnchor(src, page) {
+  if (!src || !page) return src;
+  return src.split('#')[0] + '#page=' + page;
+}
+
 export function resolveDocumentTab(campaign, tabKey) {
   const [kind, id] = String(tabKey || '').split(':');
+  const page = (campaign.documents && campaign.documents.tabPages && campaign.documents.tabPages[tabKey]) || null;
   if (kind === 'ref') {
     const ref = DOCS_MANIFEST[Number(id)];
     if (!ref) return null;
     const overrides = (campaign.documents && campaign.documents.refOverrides) || {};
     const title = (overrides[ref.file] && overrides[ref.file].title) || ref.title;
-    return { title, src: ref.file, kind: 'ref' };
+    return { title, src: withPageAnchor(ref.file, page), kind: 'ref', page };
   }
   const entry = getDocument(campaign, id);
   if (!entry) return null;
-  return { title: entry.title || entry.fileName, src: entry.dataUrl || '', kind: 'lib' };
+  return { title: entry.title || entry.fileName, src: withPageAnchor(entry.dataUrl || '', page), kind: 'lib', page };
 }

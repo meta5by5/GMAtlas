@@ -5,6 +5,7 @@
 // signature. Phase 0 ships a competent heuristic seeded from the ChatGPT design.
 
 import { overlookedThreads } from './threads.js';
+import { listFlaggedRelationships } from './entities.js';
 
 export function advise(doc) {
   const c = (doc && doc.context && doc.context.what) || { threat: 0, mystery: 0, resources: 5, reputation: 5 };
@@ -68,5 +69,11 @@ export function advise(doc) {
   // auto-advanced or auto-archived here; the GM decides what to do with them.
   const overlooked = overlookedThreads(doc).map((t) => t.name);
 
-  return { observation, consequence, opportunity, suggestedOracle, suggestedOraclePath, quickActions, overlooked };
+  // "Flag, don't delete" invalid relationships (pack 9): a typed
+  // relationship (Member Of, Owns, ...) whose target entity's type no
+  // longer matches what that type implies — surfaced for review, same
+  // observation-only posture as `overlooked` above. Never auto-corrected.
+  const flaggedRelationships = listFlaggedRelationships(doc).map((r) => `${r.entityName} —${r.type}→ ${r.toName}`);
+
+  return { observation, consequence, opportunity, suggestedOracle, suggestedOraclePath, quickActions, overlooked, flaggedRelationships };
 }

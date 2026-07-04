@@ -99,6 +99,75 @@ function structuredCloneSafe(o) {
   try { return structuredClone(o); } catch { return JSON.parse(JSON.stringify(o)); }
 }
 
+// --- Oracle table editor (Phase 8) -----------------------------------------
+// Builds on the override mechanism above rather than adding a second one:
+// editing a table just writes a full replacement array to
+// campaign.oracles.overrides[path.join('>')], the same shape
+// tablesWithOverrides() already reads (and rollOracle() in session.js
+// already rolls against). "Reset" is just deleting that key, reverting to
+// the shipped SCENE_TABLES entries — nothing is migrated or duplicated.
+function ensureOracles(campaign) {
+  if (!campaign.oracles || typeof campaign.oracles !== 'object') campaign.oracles = { overrides: {}, usage: {} };
+  if (!campaign.oracles.overrides || typeof campaign.oracles.overrides !== 'object') campaign.oracles.overrides = {};
+  return campaign.oracles;
+}
+
+/** The entries a table path currently rolls against — the override array if
+ *  one exists, else the shipped default. Path is an array, e.g. ['Missions',
+ *  'Patron']. */
+export function currentTableEntries(campaign, path) {
+  const tables = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides);
+  const values = getTable(tables, ...path);
+  return Array.isArray(values) ? values.slice() : [];
+}
+
+/** Whether a table path has a saved override (vs. still reading the shipped
+ *  default) — powers the editor's "↺ Reset" button, which only makes sense
+ *  to show once something has actually been changed. */
+export function hasOracleOverride(campaign, path) {
+  const overrides = (campaign.oracles && campaign.oracles.overrides) || {};
+  return Object.prototype.hasOwnProperty.call(overrides, path.join('>'));
+}
+
+export function addOracleEntry(campaign, path, value) {
+  const next = structuredCloneSafe(campaign);
+  const oracles = ensureOracles(next);
+  const v = String(value || '').trim();
+  if (!v) return next;
+  const entries = currentTableEntries(next, path);
+  entries.push(v);
+  oracles.overrides[path.join('>')] = entries;
+  return next;
+}
+
+export function updateOracleEntry(campaign, path, index, value) {
+  const next = structuredCloneSafe(campaign);
+  const oracles = ensureOracles(next);
+  const entries = currentTableEntries(next, path);
+  if (index < 0 || index >= entries.length) return next;
+  entries[index] = String(value || '');
+  oracles.overrides[path.join('>')] = entries;
+  return next;
+}
+
+export function removeOracleEntry(campaign, path, index) {
+  const next = structuredCloneSafe(campaign);
+  const oracles = ensureOracles(next);
+  const entries = currentTableEntries(next, path);
+  if (index < 0 || index >= entries.length) return next;
+  entries.splice(index, 1);
+  oracles.overrides[path.join('>')] = entries;
+  return next;
+}
+
+/** Discard a table's override, reverting it to the shipped default entries. */
+export function resetOracleTable(campaign, path) {
+  const next = structuredCloneSafe(campaign);
+  const oracles = ensureOracles(next);
+  delete oracles.overrides[path.join('>')];
+  return next;
+}
+
 // --- grouped/collapsible oracle tree (Oracle drawer) -----------------------
 // A node is either a leaf table ({kind:'table', path, values}) or a group
 // ({kind:'group'|'category', label, children}). `path` on a table node is
