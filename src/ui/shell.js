@@ -51,7 +51,15 @@ const DRAWERS = [
   { id: 'settings', glyph: '⚙', label: 'Settings' },
 ];
 
-let openDrawer = null;
+// Tabbed drawer switching (2026-07-04 design review): multiple drawers can
+// be pinned open at once (openDrawers), with one visible at a time
+// (activeDrawer) — the founding brief wanted "drawers stack side by side";
+// tabs were chosen as the tractable version of that (switch instantly
+// between an already-open Journal and Oracle without losing either's
+// scroll/filter state) without the layout complexity of true multi-pane
+// side-by-side panels competing with the Co-Pilot/doc-viewer regions.
+let openDrawers = [];
+let activeDrawer = null;
 let copilotOpen = false;
 let root = null;
 let oracleFilter = '';
@@ -100,6 +108,7 @@ export function mountShell(el) {
       </div>
       <nav class="mc-edge" aria-label="Drawers" data-edge></nav>
       <aside class="mc-drawer" data-drawer aria-label="Drawer">
+        <div class="drawer-tabs" data-drawer-tabs></div>
         <div class="drawer-head"><h2 data-drawer-title>Drawer</h2><button class="icon-btn" data-close-drawer aria-label="Close">✕</button></div>
         <div class="mc-drawer-body" data-drawer-body></div>
       </aside>
@@ -143,7 +152,14 @@ function onClick(ev) {
 
   const edge = hit('[data-drawer-open]');
   if (edge) return toggleDrawer(edge.dataset.drawerOpen);
-  if (hit('[data-close-drawer]')) return toggleDrawer(null);
+  if (hit('[data-close-drawer]')) return closeDrawerTab(activeDrawer);
+  // Check the nested close ✕ before the tab button it sits inside — both
+  // match `[data-drawer-tab]` via closest() otherwise (the ✕'s parent
+  // button carries that attribute too), so close would never be reachable.
+  const drawerTabClose = hit('[data-drawer-tab-close]');
+  if (drawerTabClose) return closeDrawerTab(drawerTabClose.dataset.drawerTabClose);
+  const drawerTab = hit('[data-drawer-tab]');
+  if (drawerTab) { activeDrawer = drawerTab.dataset.drawerTab; return render(); }
   if (hit('[data-toggle-copilot]')) { copilotOpen = !copilotOpen; return render(); }
   if (hit('[data-open-settings]')) return toggleDrawer('settings');
 
@@ -176,7 +192,7 @@ function onClick(ev) {
     const inp = root.querySelector('[data-search-input]'); if (inp) inp.value = '';
     if (item && item.target) {
       const target = item.target;
-      openDrawer = target.drawer;
+      openDrawerTab(target.drawer);
       if (target.drawer === 'oracle') oracleFilter = target.oracleFilterText || '';
       if (target.entityId) store.update((d) => setActiveEntity(d, target.entityId));
       else if (target.docTabKey) store.update((d) => openDocumentTab(d, target.docTabKey));
@@ -229,15 +245,15 @@ function onClick(ev) {
 
   // --- graph node → open entity inspector ---
   const gNode = hit('[data-graph-node]');
-  if (gNode) { openDrawer = 'entities'; store.update((d) => setActiveEntity(d, gNode.dataset.graphNode)); return; }
+  if (gNode) { openDrawerTab('entities'); store.update((d) => setActiveEntity(d, gNode.dataset.graphNode)); return; }
 
   // --- entities ---
   const openEnt = hit('[data-open-entity]');
-  if (openEnt) { openDrawer = 'entities'; store.update((d) => setActiveEntity(d, openEnt.dataset.openEntity)); return; }
+  if (openEnt) { openDrawerTab('entities'); store.update((d) => setActiveEntity(d, openEnt.dataset.openEntity)); return; }
   const addEnt = hit('[data-entity-add]');
-  if (addEnt) { openDrawer = 'entities'; store.update((d) => createEntity(d, { type: addEnt.dataset.entityAdd }).campaign); toast('Entity added'); return; }
+  if (addEnt) { openDrawerTab('entities'); store.update((d) => createEntity(d, { type: addEnt.dataset.entityAdd }).campaign); toast('Entity added'); return; }
   if (hit('[data-generate-npc]')) {
-    openDrawer = 'entities';
+    openDrawerTab('entities');
     let name = '';
     store.update((d) => { const r = generateNpc(d); name = r.id && getEntity(r.campaign, r.id) ? getEntity(r.campaign, r.id).name : ''; return r.campaign; });
     return toast(name ? `Generated ${name}` : 'NPC generated');
@@ -742,7 +758,31 @@ function onInput(ev) {
   if (si) { searchQuery = t.value; renderSearchOverlay(); }
 }
 
-function toggleDrawer(id) { openDrawer = openDrawer === id ? null : id; if (openDrawer === 'oracle') oracleFilter = ''; if (openDrawer === 'documents') { docFilter = ''; docTagFilters = new Set(); docTagEditorOpen = new Set(); } render(); }
+// Edge-tab click: closes if it's the currently-active tab (matches the old
+// single-drawer toggle behavior for the common case), otherwise opens it as
+// a new tab (or just switches to it if already pinned open) — never resets
+// an already-open tab's own filter state, only a newly-opened one's.
+function toggleDrawer(id) {
+  if (activeDrawer === id) return closeDrawerTab(id);
+  openDrawerTab(id);
+  render();
+}
+
+function openDrawerTab(id) {
+  if (!id) return;
+  if (!openDrawers.includes(id)) {
+    openDrawers = [...openDrawers, id];
+    if (id === 'oracle') oracleFilter = '';
+    if (id === 'documents') { docFilter = ''; docTagFilters = new Set(); docTagEditorOpen = new Set(); }
+  }
+  activeDrawer = id;
+}
+
+function closeDrawerTab(id) {
+  openDrawers = openDrawers.filter((d) => d !== id);
+  if (activeDrawer === id) activeDrawer = openDrawers[openDrawers.length - 1] || null;
+  render();
+}
 
 // ---- drag-and-drop: entity → entity (relate) or entity → text (mention) --
 // Native HTML5 DnD, delegated at the root like everything else. A custom
@@ -858,16 +898,29 @@ function render() {
   const edge = root.querySelector('[data-edge]');
   edge.innerHTML = DRAWERS.map((d) => {
     const badge = badges[d.id] || '';
-    return `<button data-drawer-open="${d.id}" aria-expanded="${openDrawer === d.id}" title="${d.label}">
+    return `<button data-drawer-open="${d.id}" aria-expanded="${activeDrawer === d.id}" title="${d.label}">
       <span class="glyph">${d.glyph}</span><b>${d.label}</b>${badge ? `<span class="badge">${badge}</span>` : ''}
     </button>`;
   }).join('') + `<button data-toggle-copilot title="Co-Pilot"><span class="glyph">💡</span><b>Co-Pilot</b></button>`;
 
   const drawer = root.querySelector('[data-drawer]');
-  drawer.dataset.open = String(!!openDrawer);
-  const meta = DRAWERS.find((d) => d.id === openDrawer);
+  drawer.dataset.open = String(openDrawers.length > 0);
+  const meta = DRAWERS.find((d) => d.id === activeDrawer);
   drawer.querySelector('[data-drawer-title]').textContent = meta ? meta.label : 'Drawer';
-  drawer.style.setProperty('--drawer-w', (doc.drawers.widths[openDrawer] || 420) + 'px');
+  drawer.style.setProperty('--drawer-w', (doc.drawers.widths[activeDrawer] || 420) + 'px');
+  // Tab strip — same pattern as the doc viewer's own tabs below: one pinned
+  // drawer per tab, click to switch, ✕ to close without needing to make it
+  // active first. Hidden entirely when only one (or zero) drawers are open,
+  // so the common case looks identical to the old single-drawer UI.
+  const drawerTabsEl = root.querySelector('[data-drawer-tabs]');
+  drawerTabsEl.hidden = openDrawers.length < 2;
+  drawerTabsEl.innerHTML = openDrawers.length < 2 ? '' : openDrawers.map((id) => {
+    const m = DRAWERS.find((d) => d.id === id);
+    return `<button class="drawer-tab ${id === activeDrawer ? 'active' : ''}" data-drawer-tab="${id}" title="${m ? m.label : id}">
+      <span class="glyph">${m ? m.glyph : ''}</span><span class="drawer-tab-label">${m ? m.label : id}</span>
+      <span class="drawer-tab-close" data-drawer-tab-close="${id}" aria-label="Close ${m ? m.label : id}">✕</span>
+    </button>`;
+  }).join('');
   renderDrawerBody();
 
   const viewer = root.querySelector('[data-doc-viewer]');
@@ -879,7 +932,7 @@ function render() {
   // without this the viewer's own controls (e.g. a tab's close button)
   // render underneath the drawer and become unclickable despite being
   // visible.
-  viewer.style.setProperty('--viewer-overlap', openDrawer ? `${doc.drawers.widths[openDrawer] || 420}px` : '0px');
+  viewer.style.setProperty('--viewer-overlap', activeDrawer ? `${doc.drawers.widths[activeDrawer] || 420}px` : '0px');
   if (openTabs.length) {
     const activeTab = doc.documents.activeTab && openTabs.includes(doc.documents.activeTab)
       ? doc.documents.activeTab : openTabs[openTabs.length - 1];
@@ -930,7 +983,7 @@ function renderDrawerBody() {
   const doc = store.get();
   const body = root && root.querySelector('[data-drawer-body]');
   if (body) {
-    body.innerHTML = openDrawer ? renderDrawer(openDrawer, doc, {
+    body.innerHTML = activeDrawer ? renderDrawer(activeDrawer, doc, {
       oracleFilter, expandedOracleGroups, oracleEditorOpen, docFilter, docTagFilters, docTagEditorOpen, statblockAddOpen, recapOpen, castListCollapsed,
       entitySearch, entityTypeFilter, storageInfo: store.storageInfo(),
     }) : '';

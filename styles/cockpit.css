@@ -174,6 +174,24 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .mc-drawer .drawer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-3); }
 .mc-drawer h2 { margin: 0; font-size: 1rem; }
 
+/* Tabbed drawer switching (2026-07-04) — hidden entirely unless 2+ drawers
+   are pinned open at once, so the common single-drawer case is unchanged.
+   Same tab-strip pattern as the doc viewer's own tabs (.doc-viewer-tab). */
+.drawer-tabs {
+  display: flex; gap: 2px; overflow-x: auto; margin: calc(var(--sp-4) * -1) calc(var(--sp-4) * -1) var(--sp-3);
+  padding: 0 var(--sp-2); background: var(--tier1-bg); border-bottom: 1px solid var(--tier1-border);
+}
+.drawer-tabs[hidden] { display: none; }
+.drawer-tab {
+  display: flex; align-items: center; gap: var(--sp-1); flex: 0 0 auto; max-width: 12rem;
+  padding: var(--sp-2) var(--sp-2); background: none; border: none; border-right: 1px solid var(--tier1-border);
+  font-size: 0.78rem; color: var(--text-dim); cursor: pointer;
+}
+.drawer-tab.active { background: var(--tier3-bg); color: var(--accent); }
+.drawer-tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drawer-tab-close { border-radius: 3px; padding: 0 3px; }
+.drawer-tab-close:hover { background: var(--bg-inset); color: var(--text); }
+
 /* --- Responsive: mobile keeps the same regions, restacked ----------- */
 @media (max-width: 1023px) {
   .cockpit {
