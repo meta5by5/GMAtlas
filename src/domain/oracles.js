@@ -4,6 +4,7 @@
 
 import { SCENE_TABLES } from '../data/tables.js';
 import { ORACLE_GROUPS } from '../data/oracleGroups.js';
+import { findGenrePack } from '../data/genrePacks.js';
 
 export { SCENE_TABLES };
 
@@ -76,12 +77,15 @@ export function formatRoll(roll) {
 }
 
 /**
- * Merge user overrides (campaign.oracles.overrides) onto the base tables.
- * Overrides are keyed by "A>B>C" path → replacement array.
+ * Merge user overrides onto the active genre pack's base tables (Phase 9:
+ * `genrePackId` selects which SCENE_TABLES-shaped set — see
+ * data/genrePacks.js — defaults to 'hostile' so every pre-Phase-9 call
+ * site/campaign keeps working unchanged).
  */
-export function tablesWithOverrides(overrides = {}) {
-  if (!overrides || !Object.keys(overrides).length) return SCENE_TABLES;
-  const clone = structuredCloneSafe(SCENE_TABLES);
+export function tablesWithOverrides(overrides = {}, genrePackId) {
+  const base = findGenrePack(genrePackId).tables;
+  if (!overrides || !Object.keys(overrides).length) return base;
+  const clone = structuredCloneSafe(base);
   for (const [key, values] of Object.entries(overrides)) {
     if (!Array.isArray(values)) continue;
     const path = key.split('>');
@@ -116,7 +120,7 @@ function ensureOracles(campaign) {
  *  one exists, else the shipped default. Path is an array, e.g. ['Missions',
  *  'Patron']. */
 export function currentTableEntries(campaign, path) {
-  const tables = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides);
+  const tables = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides, campaign.settings && campaign.settings.genrePack);
   const values = getTable(tables, ...path);
   return Array.isArray(values) ? values.slice() : [];
 }

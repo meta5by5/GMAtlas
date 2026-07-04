@@ -80,6 +80,12 @@ export function defaultCampaign(now = new Date().toISOString()) {
 
     settings: {
       genre: 'Hostile',  // genre-aware, not genre-locked
+      // Which oracle table set (data/genrePacks.js) is active — separate
+      // from `genre` above, which stays a free-text flavor label a GM can
+      // type anything into. An old campaign with no genrePack reads as
+      // 'hostile' (findGenrePack's own fallback), so this needed no
+      // migration step.
+      genrePack: 'hostile',
       tone: '',
       statRuleset: 'starforged',
       cie: {},           // Campaign Intelligence Engine settings

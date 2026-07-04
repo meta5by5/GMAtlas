@@ -21,6 +21,7 @@ import { getGuideText } from '../../domain/guide.js';
 import { buildSessionRecap } from '../../domain/recap.js';
 import { RULESETS, findRuleset } from '../../data/rulesets.js';
 import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel } from '../../data/rulesConstitution.js';
+import { GENRE_PACKS } from '../../data/genrePacks.js';
 import { DOCS_MANIFEST } from '../../data/docsManifest.js';
 
 const esc = (s) => String(s == null ? '' : s)
@@ -488,7 +489,7 @@ function journal(doc, ui = {}) {
 // would otherwise reset native <details> open/closed state).
 function oracle(doc, ui) {
   const filter = ui.oracleFilter || '';
-  const tables = tablesWithOverrides(doc.oracles && doc.oracles.overrides);
+  const tables = tablesWithOverrides(doc.oracles && doc.oracles.overrides, doc.settings && doc.settings.genrePack);
   const tree = buildGroupedOracleTree(tables);
   const filtered = filterOracleTree(tree, filter);
   const forceOpen = !!filter.trim();
@@ -585,7 +586,13 @@ function settings(doc, ui = {}) {
       <label class="field-label">Setting
         <input data-genre-input value="${esc(doc.settings.genre || '')}" placeholder="Hostile, generic sci-fi, …">
       </label>
-      <p class="dim small">Genre-aware, not genre-locked — the engine is data-driven.</p>
+      <p class="dim small">A free-text flavor label — doesn't change any oracle content.</p>
+      <label class="field-label">Genre Pack
+        <select data-genre-pack-select>
+          ${GENRE_PACKS.map((p) => `<option value="${p.id}" ${p.id === (doc.settings.genrePack || 'hostile') ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}
+        </select>
+      </label>
+      <p class="dim small">Which oracle table set the whole campaign rolls against (Continue Story, Oracle drawer, Generate NPC, Universal Search) — genre-aware, not genre-locked, so this is a data swap, not a different engine.</p>
     </div>
     <div class="settings-group">
       <h3>Stat system</h3>

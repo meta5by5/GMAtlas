@@ -53,7 +53,7 @@ export function universalSearch(campaign, query, { limit = 40 } = {}) {
     }
   }
 
-  const tables = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides);
+  const tables = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides, campaign.settings && campaign.settings.genrePack);
   for (const leaf of flattenKeys(tables)) {
     const pathLabel = leaf.path.join(' > ');
     const nameHit = matches(pathLabel, q);

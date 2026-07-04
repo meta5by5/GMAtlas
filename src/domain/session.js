@@ -32,7 +32,7 @@ function addJournal(campaign, text, source) {
 /** Generate the next scene, log it, and let consequences nudge the context. */
 export function continueStory(campaign, { toJournal = true } = {}) {
   const next = clone(campaign);
-  const tables = tablesWithOverrides(next.oracles?.overrides);
+  const tables = tablesWithOverrides(next.oracles?.overrides, next.settings?.genrePack);
   const scene = generateScene(next, tables);
 
   next.scenes = next.scenes || [];
@@ -60,7 +60,7 @@ export function applyStoryShift(campaign, shiftName, payload) {
 /** Roll an oracle table (path array) and append the result to the journal. */
 export function rollOracle(campaign, path, { group = false, toJournal = true } = {}) {
   const next = clone(campaign);
-  const tables = tablesWithOverrides(next.oracles?.overrides);
+  const tables = tablesWithOverrides(next.oracles?.overrides, next.settings?.genrePack);
   const roll = group ? rollGroup(tables, path) : rollTable(tables, path);
   const text = formatRoll(roll);
 
@@ -106,7 +106,7 @@ export function patchContext(campaign, key, patch) {
  *  rolled Revealed Aspect, matching the field's existing purpose. */
 export function generateNpc(campaign, { rng = Math.random } = {}) {
   const next = clone(campaign);
-  const tables = tablesWithOverrides(next.oracles?.overrides);
+  const tables = tablesWithOverrides(next.oracles?.overrides, next.settings?.genrePack);
   const chars = (tables && tables.Characters) || {};
   const roll = (key) => (Array.isArray(chars[key]) && chars[key].length ? pick(chars[key], rng) : '');
 

@@ -13,12 +13,13 @@ full phase-by-phase roadmap.
 
 ## Where we are
 
-Phases 0–8 done, Phase 9 (Activity-driven gameplay) next. That's the only
-status fact stated here — the feature-by-feature detail this section used
-to restate now lives in exactly one place each: **"Already built as new
-functionality"** below (numbered items 1–12, phases 0 through the Rules
-Constitution) and **"Proposed next"**'s Phase 6/7/8 entries (marked **Done**
-where shipped). Two fixes worth knowing about either way: a field typed
+Phases 0–9 done, Phase 10 (Ecosystem & reach — lowest priority per pack 66)
+next. That's the only status fact stated here — the feature-by-feature
+detail this section used to restate now lives in exactly one place each:
+**"Already built as new functionality"** below (numbered items 1–12,
+phases 0 through the Rules Constitution) and **"Proposed next"**'s Phase
+6/7/8/9 entries (marked **Done** where shipped). Two fixes worth knowing
+about either way: a field typed
 into but never blurred could lose its edit on refresh (fixed,
 `beforeunload`/`visibilitychange` flush — see `CLAUDE.md`'s "Known
 non-issues"), and the 5PFH roll toast now shows the die+modifier breakdown.
@@ -113,9 +114,9 @@ because it's the easiest.
 
 Also fixed as part of this pass: the Cast drawer's entity rows were both the click target (select) and the drag source (`draggable="true"`) — for a real mouse, a few pixels of jitter between mousedown/mouseup was enough to trigger a native drag instead of a click, making selection feel broken. Dragging is now confined to a small ⠿ grip inside each row. The Relationships "Link" button is now icon-labeled (🔗 Link); the Cast drawer's entity list can be collapsed to just a header via a toggle, leaving the full inspector for more room.
 
-### Phase 9 — Activity-driven gameplay (in progress)
+### Phase 9 — Activity-driven gameplay (complete)
 - **HOW workspace becomes Activity-driven** (pack 7/24, sharpened by `requirements/initial design inputs/gameplay-goals.md`'s Rules Constitution — see `docs/adr/0002-rules-constitution.md`). — **Done.** HOW keeps its free-text `summary` field (pacing notes) but gains an `activity` field (`context.how.activity`, `''` on old/fresh campaigns — no migration needed) picked from a new `Activity` <select> (`domain/activities.js`'s `ACTIVITIES`: Explore/Investigate/Negotiate/Travel/Trade/Combat/Faction dealings/Downtime/Horror/World-building). `suggestRulesLens(activityId)` looks up the Activity's gameplay area in the existing `GAMEPLAY_AREAS` table and returns its registered provider(s) — the HOW card renders these as a "Suggested Rules Lens" box (e.g. Combat → Five Parsecs From Home) with a "Use as default ▸" button that sets `settings.statRuleset` (only shown for providers with an actual character ruleset — `RULES_PROVIDERS[id].rulesetId`, new field, joins to `data/rulesets.js`'s ids; Traveller/SWN/Hostile/Planetfall/Saga Atlas itself don't get one). Suggestion only, never automatic — extends the existing per-entity ruleset selector rather than replacing it, exactly as scoped.
-- **Genre packs** (was item D). `SCENE_TABLES` is data and `settings.genre` is a lens; package alternative table sets as selectable genre packs. *Effort: medium.* — still open.
+- **Genre packs** (was item D) — **Done.** `data/genrePacks.js`'s `GENRE_PACKS` registers three selectable oracle table sets — Hostile (sci-fi, the pre-existing default, unchanged), Cyberpunk/Shadowrun (`data/tables-cyberpunk.js`), and Fantasy/D&D-style (`data/tables-fantasy.js`), all original content in this project's own voice. A new Settings → "Genre Pack" dropdown sets `settings.genrePack` (defaults to `'hostile'`, so every pre-Phase-9 campaign is unaffected); `domain/oracles.js`'s `tablesWithOverrides(overrides, genrePackId)` picks the active pack's tables before layering the campaign's own `oracles.overrides` on top exactly as before, and every caller (`continueStory`, `rollOracle`, `generateNpc`, Universal Search, the Oracle drawer's tree and entry editor) now threads `campaign.settings.genrePack` through. The two new packs deliberately reuse the exact category names (`Characters`, `Location Themes`, `Plot Engine`, `Miscellaneous`, `Trade & Cargo`) that `copilot.js`'s suggested-oracle logic and `generateNpc`'s NPC chain reference by hardcoded path, so those features work unchanged regardless of which pack is active — only the content underneath carries genre flavor; genre packs are a data swap, not a new mechanism. Verified end to end in a browser: switching packs changes Generate NPC's name pool, the Oracle drawer's tree content, Continue Story's scene generation, and Universal Search results, all without touching anything else.
 
 ### Phase 10 — Ecosystem & reach (lowest priority per pack 66 — "new features")
 

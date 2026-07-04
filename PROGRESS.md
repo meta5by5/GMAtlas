@@ -14,13 +14,22 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
-**Phases 0–8: done. Phase 9 (Activity-driven gameplay) in progress:** the
-HOW workspace question now has an Activity picker (`domain/activities.js`)
-that looks up `data/rulesConstitution.js`'s registered Rules Lens
-provider(s) for that Activity and offers a one-click "Use as default"
-button (sets `settings.statRuleset`) — the Rules Constitution reference
-table is now a live recommender, not just a read-only Settings page. Genre
-packs (Phase 9's other item) is still open.
+**Phases 0–9: done.** Phase 9 (Activity-driven gameplay) closed out with
+the HOW workspace's Activity picker (`domain/activities.js`, looks up
+`data/rulesConstitution.js`'s registered Rules Lens provider(s) for the
+chosen Activity and offers a one-click "Use as default" that sets
+`settings.statRuleset` — the Rules Constitution reference table is now a
+live recommender, not just a read-only Settings page) and **genre packs**:
+`data/genrePacks.js` registers three selectable oracle table sets —
+Hostile (sci-fi, the pre-existing default), Cyberpunk/Shadowrun, and
+Fantasy (D&D-style) — switchable from a new Settings dropdown
+(`settings.genrePack`, defaults to `'hostile'` so old campaigns are
+unaffected). Every oracle-consuming feature (Continue Story, oracle
+rolls, Generate NPC, Universal Search, the Oracle drawer) threads the
+active pack through `domain/oracles.js`'s `tablesWithOverrides()`; the two
+new packs deliberately reuse the same category names the app's Co-Pilot/
+NPC-generation logic references by hardcoded path, so those features work
+unchanged regardless of which pack is active.
 
 **2026-07-04 reliability + UX pass** (after confirming the Activity picker
 and everything before it via a full test + browser regression sweep):
@@ -126,9 +135,10 @@ estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
   entity-type filter + search; an NPC-generation oracle chain plus a
   one-click "Generate NPC" action (and the 5PFH Patron Benefit/Hazard/
   Danger Pay job-offer tables).
-- **Phase 9 (in progress)** — HOW workspace Activity → Rules Lens
-  recommender: **done** (`domain/activities.js`, wired into the HOW
-  workspace card); genre packs: still open.
+- **Phase 9** — complete: HOW workspace Activity → Rules Lens recommender
+  (`domain/activities.js`, wired into the HOW workspace card); genre packs
+  (`data/genrePacks.js` — Hostile/Cyberpunk-Shadowrun/Fantasy, switchable
+  in Settings).
 - **Phase 10 (lowest priority — new features)** — Trade & Logistics /
   Merchant Rules Lens (contracts as the primary loop, `docs/adr/0003` +
   `0004`); a Mission/Job generator (`domain/missions.js`, payout scaled by

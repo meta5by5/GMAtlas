@@ -1526,3 +1526,66 @@ test('a fresh campaign has no Activity set, and patchContext can set one', () =>
   const next = patchContext(camp, 'how', { activity: 'investigate' });
   assert.equal(next.context.how.activity, 'investigate');
 });
+
+// --- Phase 9: genre packs (data/genrePacks.js) ------------------------------
+import { GENRE_PACKS, findGenrePack } from '../src/data/genrePacks.js';
+import { FANTASY_TABLES } from '../src/data/tables-fantasy.js';
+
+test('every genre pack carries the load-bearing categories copilot.js/generateNpc reference by exact path', () => {
+  for (const pack of GENRE_PACKS) {
+    const t = pack.tables;
+    assert.ok(t.Characters, `${pack.id}: missing Characters`);
+    for (const key of ['Role', 'Goal', 'Revealed Aspect', 'Disposition', 'First Look', 'Name']) {
+      assert.ok(Array.isArray(t.Characters[key]) && t.Characters[key].length > 0, `${pack.id}: Characters.${key} should be a non-empty table`);
+    }
+    assert.ok(Array.isArray(t['Location Themes']?.['Sensory Detail']) && t['Location Themes']['Sensory Detail'].length > 0, `${pack.id}: missing Location Themes > Sensory Detail`);
+    assert.ok(Array.isArray(t['Plot Engine']?.['Plot Target']) && t['Plot Engine']['Plot Target'].length > 0, `${pack.id}: missing Plot Engine > Plot Target`);
+    assert.ok(Array.isArray(t['Plot Engine']?.['Scene Driver']) && t['Plot Engine']['Scene Driver'].length > 0, `${pack.id}: missing Plot Engine > Scene Driver`);
+    assert.ok(Array.isArray(t.Miscellaneous?.['Story Complication']) && t.Miscellaneous['Story Complication'].length > 0, `${pack.id}: missing Miscellaneous > Story Complication`);
+    assert.ok(Array.isArray(t.Miscellaneous?.['Story Clue']) && t.Miscellaneous['Story Clue'].length > 0, `${pack.id}: missing Miscellaneous > Story Clue`);
+    assert.ok(Array.isArray(t['Trade & Cargo']?.['Cargo Problem']) && t['Trade & Cargo']['Cargo Problem'].length > 0, `${pack.id}: missing Trade & Cargo > Cargo Problem`);
+  }
+});
+
+test('findGenrePack resolves a known id and falls back to hostile (the default) for an unset/unknown one', () => {
+  assert.equal(findGenrePack('cyberpunk').id, 'cyberpunk');
+  assert.equal(findGenrePack('fantasy').id, 'fantasy');
+  assert.equal(findGenrePack('nonexistent').id, 'hostile');
+  assert.equal(findGenrePack(undefined).id, 'hostile');
+});
+
+test('tablesWithOverrides selects the requested genre pack, and defaults to hostile when unset', () => {
+  const hostile = tablesWithOverrides({});
+  const cyberpunk = tablesWithOverrides({}, 'cyberpunk');
+  const fantasy = tablesWithOverrides({}, 'fantasy');
+  assert.ok(hostile.Characters.Name.includes('Reyes Okafor')); // hostile-pack-specific name
+  assert.ok(cyberpunk.Characters.Name.includes('Mireille Okoye')); // cyberpunk-pack-specific name
+  assert.ok(fantasy.Characters.Name.includes('Ysolde Thorne')); // fantasy-pack-specific name
+  assert.notDeepEqual(cyberpunk.Characters.Name, hostile.Characters.Name);
+  assert.notDeepEqual(fantasy.Characters.Name, hostile.Characters.Name);
+});
+
+test('an oracle override still applies correctly on top of a non-default genre pack', () => {
+  let camp = defaultCampaign();
+  camp.settings.genrePack = 'cyberpunk';
+  camp = addOracleEntry(camp, ['Trade & Cargo', 'Cargo Problem'], 'a custom cyberpunk cargo problem');
+  const entries = currentTableEntries(camp, ['Trade & Cargo', 'Cargo Problem']);
+  assert.ok(entries.includes('a custom cyberpunk cargo problem'));
+  // The hostile pack's own Cargo Problem table is untouched.
+  assert.ok(!tablesWithOverrides({}, 'hostile')['Trade & Cargo']['Cargo Problem'].includes('a custom cyberpunk cargo problem'));
+});
+
+test('generateNpc rolls a coherent NPC from a non-default genre pack', () => {
+  let camp = defaultCampaign();
+  camp.settings.genrePack = 'fantasy';
+  const { campaign: next, id } = generateNpc(camp, { rng: makeRng(7) });
+  const npc = getEntity(next, id);
+  assert.ok(npc.name && npc.name !== 'Unnamed');
+  assert.ok(FANTASY_TABLES.Characters.Name.includes(npc.name));
+  assert.ok(npc.overview.length > 0);
+});
+
+test('a fresh campaign defaults settings.genrePack to hostile', () => {
+  const camp = defaultCampaign();
+  assert.equal(camp.settings.genrePack, 'hostile');
+});

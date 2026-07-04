@@ -729,6 +729,10 @@ function onChange(ev) {
 
   if (t.closest('[data-campaign-title-input]')) return store.update((d) => { d.meta.title = t.value; return d; });
   if (t.closest('[data-genre-input]')) return store.update((d) => { d.settings.genre = t.value; return d; });
+  if (t.closest('[data-genre-pack-select]')) {
+    store.update((d) => { d.settings.genrePack = t.value; return d; });
+    return toast(`Genre Pack set to ${t.value}`);
+  }
   if (t.closest('[data-settings-stat-ruleset]')) return store.update((d) => { d.settings.statRuleset = t.value; return d; });
 
   if (t.closest('[data-import-campaign]')) {

@@ -40,7 +40,8 @@ Open the served URL. On first launch the store migrates any legacy data, then re
 - [x] Phase 6 — Campaign Continuity (Session Recap, Thread lifecycle, Narrative Trackers, Co-Pilot "what did I overlook?")
 - [x] Phase 7 — Context Graph depth (tag dropdowns, `@`-doc-pointers-with-page-anchors, typed/weighted relationships, "flag don't delete", Faction card template)
 - [x] Phase 8 — Unified Discovery (Universal Search, Oracle table editor, Cast filter/search, NPC-generation oracle chain)
-- [ ] Phase 9+ (future) — Activity-driven HOW workspace, genre packs, Trade & Logistics, sync adapter
+- [x] Phase 9 — Activity-driven gameplay (HOW → Rules Lens recommender, genre packs: Hostile/Cyberpunk-Shadowrun/Fantasy)
+- [ ] Phase 10+ (future) — Trade & Logistics, sync adapter
 
 Each phase's actual feature list, plus what's still open per phase, is in
 `DESIGN-NEW-FUNCTIONALITY.md` — not repeated here to avoid two copies
