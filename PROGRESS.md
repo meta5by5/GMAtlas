@@ -67,6 +67,16 @@ first place. All three fixed: see
 end to end post-fix: the live site now serves only the intended app files
 and none of the previously-public repo internals.
 
+**The Reference Library's PDFs (~445MB) moved to Git LFS**, including a
+history rewrite of the existing commits (`git lfs migrate import` +
+force-push, backed by a mirror clone taken first and explicit
+confirmation before the rewrite) — `.git/objects` dropped from ~323MB to
+~532KB, verified via a fresh clone. This immediately surfaced a real
+regression (`actions/checkout` doesn't fetch LFS content by default, so
+the deploy briefly served unresolved LFS pointer text instead of real
+PDFs), caught and fixed the same day — see
+`docs/adr/0007-git-lfs-for-reference-library-pdfs.md`.
+
 Two other real bugs were found and fixed earlier (an unblurred field
 losing its edit on refresh; a large *single* document upload silently
 failing past localStorage's quota) — both recorded in `CLAUDE.md`'s
