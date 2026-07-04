@@ -26,6 +26,15 @@ name: Deploy to GitHub Pages
 # _site/dist/app.bundle.js, to rule out any name-anywhere matching), copy
 # in only what index.html/manifest.webmanifest/sw.js actually reference,
 # and patch the two files that hardcode the old ./dist/app.bundle.js path.
+#
+# A third thing, not fixable from this file: this workflow's deploys were
+# silently a no-op for a while because the repo's Settings -> Pages ->
+# "Build and deployment" -> Source was set to "Deploy from a branch"
+# instead of "GitHub Actions" — GitHub was serving the raw main branch tree
+# directly, completely bypassing this workflow's artifact regardless of
+# whether it succeeded. If the live site ever again looks like it's
+# ignoring a change here, check that setting first before re-debugging the
+# script below.
 
 on:
   push:
@@ -64,17 +73,6 @@ jobs:
           sed 's|\./dist/app\.bundle\.js|./app.bundle.js|' index.html > _site/index.html
           sed 's|\./dist/app\.bundle\.js|./app.bundle.js|' sw.js > _site/sw.js
           touch _site/.nojekyll
-          # Unambiguous canary: proves whether THIS run's artifact is what
-          # actually ends up live, independent of any content-matching logic
-          # above — if this file doesn't show the current run/sha shortly
-          # after a "successful" deploy, the problem is upstream of the sed
-          # replacements (artifact/deploy pipeline), not the replacements
-          # themselves.
-          echo "run_id=${{ github.run_id }} sha=${{ github.sha }} built_at=$(date -u +%FT%TZ)" > _site/DEPLOY-CANARY.txt
-          cat _site/index.html
-          echo "--- _site file sizes ---"
-          du -sh _site/* 2>/dev/null || true
-          echo "--- _site contents ---"
           find _site -type f | sort
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

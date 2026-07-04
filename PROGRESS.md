@@ -42,6 +42,23 @@ show a toast instead of a click silently doing nothing, so a future
 storage-adjacent failure (or any other handler exception) is visible
 instead of looking like an unresponsive UI.
 
+**The GitHub Pages deploy was broken in three compounding ways**
+(2026-07-04, all found via direct `curl`/API checks against the live
+site, not from the workflow's own "success" status): the deploy published
+the entire repository publicly (`README.md`, `tests/`, `package.json` all
+served 200); the built `dist/app.bundle.js` never actually reached the
+deployed site because it's gitignored and the Pages artifact upload
+silently excludes gitignored paths, producing a black screen (the
+`<script>` tag 404'd) and a service-worker install that could never
+succeed (stuck retrying — its precache list named the same missing file);
+and — the one that made the first two fixes look like they'd done
+nothing — the repo's Pages source was set to "Deploy from a branch," so
+none of this workflow's output was ever actually being served in the
+first place. All three fixed: see
+`docs/adr/0006-pages-deploy-allowlist-and-actions-source.md`. Verified
+end to end post-fix: the live site now serves only the intended app files
+and none of the previously-public repo internals.
+
 Two other real bugs were found and fixed earlier (an unblurred field
 losing its edit on refresh; a large *single* document upload silently
 failing past localStorage's quota) — both recorded in `CLAUDE.md`'s
