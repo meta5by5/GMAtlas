@@ -1208,5 +1208,9 @@ requirements/sourcecode/saga-atlas_phase3d/tests/fixtures/v053-export.json
 docs/adr/0001-adopt-design-constitution.md
 docs/adr/0002-rules-constitution.md
 docs/adr/0003-trade-logistics.md
+docs/adr/0004-merchant-rules-lens.md
 docs/adr/next-request.md
-tests/domain.test.js
+docs/archive/progress-log-2026-07.md
+PROGRESS.md
+DESIGN-NEW-FUNCTIONALITY.md
+CLAUDE.md

@@ -2,6 +2,10 @@
 
 Context for Claude Code when working in this repo. Read this before making changes.
 
+## CONTEXT ##
+
+Always find ways to reduce the context window usage or context across all files without losing design meaning or requirements. If there is a way to keep the quality while operating the same, but use less context, please optimize and let me know. Once reviewed and incorporated into the design roadmap, ignore re-reading non-essential docs, requirements and samples unless needed.
+
 ## What this is
 
 Saga Atlas is a campaign operating system for solo and GM-run sci-fi tabletop
@@ -9,18 +13,26 @@ play — a static, local-first, installable-as-PWA web app. It's a **clean
 re-architecture** branched from a v0.53 prototype ("Hostile Sci-fi
 Worldbuilder", now rebranded), not an incremental patch of it. The old
 codebase (patch-on-patch scripts, global function reassignment, 15 scattered
-localStorage keys) is kept only as a design reference (`SagaAtlas-ChatGPT.zip`
-under `requirements/`) — it is NOT part of this repo and its patterns are
-exactly what this rewrite exists to avoid.
+localStorage keys) is kept only as a design reference
+(`requirements/sourcecode/SagaAtlas-ChatGPT/`) — it is NOT part of this repo
+and its patterns are exactly what this rewrite exists to avoid. Two other
+reference-only source trees live alongside it under `requirements/sourcecode/`:
+`saga-atlas_phase3d` (an old snapshot of this same project) and
+`Iron-Fellowship_and_Crew-Link-prod` (the real source behind the Crew Link
+companion tool linked from Settings) — neither is built or tested as part of
+this repo; if you ever run a project-wide command (`node --test` with no
+path, an IDE-wide search) and it starts touching either, that's scope
+leakage, not a real failure (see "Testing workflow" below for the concrete
+case this already bit once).
 
 Design philosophy: **Frictionless Empowerment** — a GM should be able to run
-a four-hour session without thinking about the software. Three visual tiers:
-Primary (Mission Control: context strip, Adaptive Workspace, Co-Pilot),
-Secondary (recommendation, breadcrumb timeline, story-shift actions),
-Tertiary (Journal/Oracle/Cast/Party/Colony/Guide/Graph/Documents/Settings —
-edge-tab drawers, zero space until opened). The defining interaction: **the
-workspace changes, not the application** — selecting a context question
-reshapes the center panel, never navigates away.
+a four-hour session without thinking about the software, via three visual
+tiers (Primary/Secondary/Tertiary) and one defining interaction ("the
+workspace changes, not the application"). Full description in `README.md`'s
+"Design philosophy" section — not repeated here; the two things that matter
+for writing code are: a new *interactive control* goes through the
+delegated-listener rules below, and a new *tertiary feature* is a drawer
+(edge-tab, zero space until opened), not a new top-level surface.
 
 Also: **genre-aware, not genre-locked**. Nothing in the domain layer should
 hardcode one ruleset's stat names or tables — statblock fields, oracle
@@ -28,12 +40,22 @@ tables, etc. are data.
 
 ## The Design Constitution (`requirements/`)
 
-`requirements/` holds a 77-document "Saga Atlas Design Constitution"
-(`design-principles-pack-01.md`...`-77.md`, plus a `design-principles-final-summary.md`
+`requirements/` is organized into subfolders:
+`design-principles/` holds the 77-document "Saga Atlas Design Constitution"
+(`design-principles-pack-01.md`...`-77.md`, a `design-principles-final-summary.md`,
 and a condensed `SagaAtlas-Design-Constitution.zip`) — the full long-range
-vision for this product, well beyond what's built today. It was reviewed in
-full and reconciled against this codebase; see
-`docs/adr/0001-adopt-design-constitution.md` for how, and
+vision for this product, well beyond what's built today. `initial design
+inputs/` holds the earlier scoping documents (`GMAtlas-requirements.md`,
+`gameplay-goals.md` — see the Rules Constitution below, `ChatGPT history.md`,
+`SagaAtlas-Design-Recommendations.md`). `rulesystems/` holds source PDFs for
+systems referenced by design docs but not yet fully authored as in-app data
+(currently: three "Intergalactic Space Trader" books, cited as workflow
+inspiration by the Merchant Rules Lens design — see ADR 0004).
+`sourcecode/` holds reference-only old codebases (see above). None of this
+is source for the app itself — see `src/` for that.
+
+The Constitution was reviewed in full and reconciled against this codebase;
+see `docs/adr/0001-adopt-design-constitution.md` for how, and
 `PROGRESS.md` for the resulting roadmap. Two things worth knowing before
 reading it:
 
@@ -80,7 +102,7 @@ the tie-breaker.
 | Universal Search / Knowledge Cards | per-drawer search boxes | not unified yet |
 | Campaign Director, Scenario Engine, Living World Engine | — | not built |
 
-### The Rules Constitution (`requirements/gameplay-goals.md`, ADR 0002)
+### The Rules Constitution (`requirements/initial design inputs/gameplay-goals.md`, ADR 0002)
 
 A sharper, more concrete version of Article III above: **every ruleset is a
 content provider, not the application.** `src/data/rulesConstitution.js`
@@ -183,9 +205,12 @@ scripts/
 dist/
   app.bundle.js    build output, gitignored, regenerate with `npm run build`
 docs/
-  adr/             Architectural Decision Records (see `requirements/` pack 51 for the standard)
-requirements/
-  design-principles-pack-*.md   the 77-pack Design Constitution (reference, not source of truth for current state)
+  adr/             Architectural Decision Records (see pack 51 for the standard);
+                    next-request.md is a standing inbox the user drops new
+                    asks into between sessions — check it if asked to
+                    "process requests" there
+requirements/      reference only, not app source — see "The Design
+                    Constitution" above for the subfolder breakdown
 ```
 
 ## The bundler — why it exists, and the one gotcha
@@ -209,7 +234,8 @@ doesn't recognize, that's the first place to look.
 you want to test both environments (`file://` and real HTTP) — do both when
 in doubt, since they've diverged before (the CORS bug that started the
 bundler was only visible under `file://`, and a stale-service-worker-cache
-bug was only visible under `http://`, see PROGRESS.md's Phase 5 bug list).
+bug was only visible under `http://`, see `docs/archive/progress-log-2026-07.md`'s
+Phase 5 bug list).
 
 ## Environment constraints
 
@@ -231,43 +257,45 @@ bug was only visible under `http://`, see PROGRESS.md's Phase 5 bug list).
 ## Testing workflow (do this after every change)
 
 ```bash
-npm test              # node --test — pure domain logic, must stay green
+npm test              # node --test tests/*.test.js — pure domain logic, must stay green
 node scripts/build.js # rebuild dist/app.bundle.js
 ```
+
+`package.json`'s `test` script deliberately names `tests/domain.test.js
+tests/migrate.test.js` explicitly rather than a bare `node --test` — the
+latter recursively discovers `*.test.*` files from the current directory
+down, and once `requirements/sourcecode/` held real third-party npm
+projects with their own test suites (see above), a bare `node --test` swept
+those in too and failed on unrelated missing dependencies. If `npm test`
+ever mysteriously starts failing on tests you don't recognize, this is the
+first thing to check — don't debug someone else's test suite by mistake.
 
 Then, for anything touching the UI, a manual or scripted browser smoke test
 against `index.html` (`file://` at minimum) is worth doing before calling a
 change done — check the console for errors and confirm state persists
-across a reload. There's precedent for subtle timing bugs in *test scripts*
-(not the app) when scripting sequential field edits — a blur-triggered
-re-render can replace a DOM node out from under a queued `fill()`; add a
-small wait or a `Tab` keypress between sequential edits to sidestep it if
-you hit something that looks like a silently-lost input.
+across a reload (including a reload *without* first tabbing/clicking away
+from whatever field you just edited — see "Known non-issues" below for why
+that specific case matters). There's also precedent for subtle timing bugs
+in *test scripts* (not the app) when scripting sequential field edits — a
+blur-triggered re-render can replace a DOM node out from under a queued
+`fill()`; add a small wait or a `Tab` keypress between sequential edits to
+sidestep it if you hit something that looks like a silently-lost input.
 
-As of the last commit: **96 unit tests, all passing.**
+Test count isn't repeated here on purpose — it changes every session and
+this file is easy to forget to update; run `npm test` for the current
+number (`src/core/buildInfo.js`'s in-app Build panel is the other
+hand-maintained source of truth for phase/version, updated alongside
+`README.md`'s checklist each time a phase-sized chunk lands).
 
-## Current status (see README.md / DESIGN-NEW-FUNCTIONALITY.md for detail)
+## Current status
 
-Phases 0 through 5 are built, and Phase 6 (Campaign Continuity) has begun
-— see `DESIGN-NEW-FUNCTIONALITY.md` for the full per-phase breakdown. Phase
-5 added Party/Colony/Guide drawers, Settings-editable Bestiary statblock
-templates (since revised — see below), a grouped Oracle tree, Document
-Library tags/search/multi-upload/in-app PDF viewer, editable relationship
-notes, and fixes for three reported bugs. A follow-up pass then made
-Bestiary an explicit NPC subtype (statblock add-choices are scoped by
-entity type), redesigned attribute/stat fields as a signed-number +/-
-spinner instead of a 1-5 meter (Starforged/5PFH-accurate), and collapsed
-the statblock "+ Add" row behind a gear icon. Phase 6 itself opened with
-Session Recap ("Previously on...", `domain/recap.js`) in the Journal
-drawer.
-
-**Next up** (see `PROGRESS.md` for the full roadmap reconciled against the
-Design Constitution): the rest of Phase 6 — richer Thread lifecycle and
-Narrative Trackers beyond threat/mystery (both serve "campaign continuity,"
-the Constitution's top-ranked priority — pack 66) — then Context Graph
-depth (typed/weighted relationships, tag-vocabulary dropdowns), then
-Unified Discovery (Universal Search, Cast entity-type filters). Full
-backlog and rationale in `PROGRESS.md`.
+Phases 0–6 built, Phase 7 (Context Graph depth) in progress. This number is
+the only status fact worth duplicating here — for what shipped, what's
+next, and why, read `PROGRESS.md` (short status ledger) or
+`DESIGN-NEW-FUNCTIONALITY.md` (full per-phase detail and rationale); don't
+re-derive either from git log unless neither is current. Don't restate
+phase status here when updating this file — update `PROGRESS.md`'s Status
+Summary instead, so there's exactly one place this drifts from reality.
 
 ## Known non-issues (don't rediscover these as bugs)
 
@@ -306,6 +334,21 @@ backlog and rationale in `PROGRESS.md`.
   compatibility. Only an explicit `'none'` (a Bestiary progress-bar field)
   opts out of the roll button. Don't "fix" old fields to have an explicit
   `rollMethod` — the fallback is intentional.
+- Attribute fields (Edge, Combat, ...) are a directly-editable, validated
+  numeric `<input>` with the field's *label* as the roll trigger — not a
+  1-5 meter, not a +/- spinner (both were tried and replaced). `format`
+  (`sign`/`inches`/`plain`) only changes how the value displays; it's never
+  stored separately or parsed back out. A field with `rollMethod: 'none'`
+  gets a plain, non-clickable label. Four dice models exist
+  (`none`/`action`/`flat`/`traveller` — see `domain/dice.js`); the list is
+  meant to grow (5PFH Planetfall, Stars Without Number) as those systems
+  get authored mechanics, not a closed set.
+- `ui/shell.js`'s `mountShell()` has a `beforeunload`/`visibilitychange`
+  listener that blurs `document.activeElement` before the page unloads —
+  this is a deliberate fix for a real reported bug (a field typed into but
+  never blurred was silently lost on refresh, since every field only
+  commits on `change`), not dead code or an accident. Don't remove it as
+  unused-looking cruft.
 
 ## Style/contribution notes
 

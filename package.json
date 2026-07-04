@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "build": "node scripts/build.js",
-    "test": "node --test",
+    "test": "node --test tests/domain.test.js tests/migrate.test.js",
     "serve": "node scripts/build.js && python3 -m http.server 8080"
   },
   "license": "UNLICENSED"

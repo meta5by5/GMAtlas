@@ -554,7 +554,7 @@ const FIELD_FORMATS = [
 
 // Read-only reference table: which external ruleset (or Saga Atlas itself)
 // is the intended content provider per gameplay area — the "Rules
-// Constitution" (requirements/gameplay-goals.md, docs/adr/0002). Not yet an
+// Constitution" (requirements/initial design inputs/gameplay-goals.md, docs/adr/0002). Not yet an
 // engine (that's Phase 9's Activity -> Rules Lens work); for now this just
 // makes the design principle visible to the GM, the same way the Build
 // panel below makes the changelog visible.

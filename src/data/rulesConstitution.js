@@ -1,6 +1,6 @@
 // rulesConstitution.js — the "Rules Constitution": which external ruleset
 // (or Saga Atlas itself) is the content provider for each gameplay area.
-// Source: requirements/gameplay-goals.md, reconciled in
+// Source: requirements/initial design inputs/gameplay-goals.md, reconciled in
 // docs/adr/0002-rules-constitution.md.
 //
 // This is a REFERENCE, not an engine yet — Phase 9 (Activity-driven

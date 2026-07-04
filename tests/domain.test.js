@@ -1156,7 +1156,7 @@ test('formatSessionRecap renders a readable plain-text block', () => {
   assert.match(text, /Escape the station/);
 });
 
-// --- Rules Constitution (data reference, requirements/gameplay-goals.md) ---
+// --- Rules Constitution (data reference, requirements/initial design inputs/gameplay-goals.md) ---
 import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel } from '../src/data/rulesConstitution.js';
 
 test('every provider referenced in GAMEPLAY_AREAS is a registered RULES_PROVIDERS entry', () => {

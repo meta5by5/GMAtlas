@@ -13,20 +13,15 @@ full phase-by-phase roadmap.
 
 ## Where we are
 
-Phases 0–5 are implemented and tested, Phase 6 is complete, and Phase 7 has begun (116 passing unit tests + browser smoke tests):
-
-- **Phase 0** — single versioned campaign document, one store, lossless migration.
-- **Phase 1** — the v0.53 engine ported into a *pure* domain layer: oracle roll engine, scene generation, context model, and session orchestration. All headlessly testable.
-- **Phase 2** — the cockpit actually runs a session: editable WHO/WHERE/WHAT/WHY/HOW, "Continue Story" scene generation, "Shift Story" manual controls, a searchable Oracle drawer, an auto-populating Journal, a live Co-Pilot, and the breadcrumb timeline — all persisting locally and surviving reload.
-- **Phase 3A** — Entity Inspector + `@mention` auto-linking; WHO/WHERE cards populate from real entities.
-- **Phase 3B** — force-directed relationship graph over entity links.
-- **Phase 3C** — NPC/vehicle statblocks, drag-and-drop entity linking and drag-to-mention into Journal/context fields, a Build/changelog panel in Settings.
-- **Phase 3D** — statblock fields double as Crew-Link-style numeric tracks: click-to-set scale boxes plus double-click-to-roll.
-- **Phase 4** — Document Library (auto-scanned Reference Library + real uploads) and ruleset-driven Character Sheets.
-- **Phase 5** — Party/Colony/Guide drawers, Settings-editable Bestiary statblock templates, a grouped/collapsible/searchable Oracle tree, Document Library tags/search/multi-upload/in-app viewer, editable relationship notes, and three bug fixes (see item 10 below). A follow-up pass (item 11) then made statblocks support multiple simultaneous groups per entity, redesigned attribute fields as a signed +/- spinner, and scoped Bestiary/Character/Vehicle statblock options by entity type.
-- **Phase 6** (complete) — Session Recap ("Previously on...") in the Journal drawer. Attribute fields redesigned again: the +/- spinner from the item-11 follow-up is gone in favor of a directly-editable, validated numeric input with a per-field display format (sign/inches/plain) and the label itself as the roll trigger, across four dice models (none/Starforged/5PFH/Traveller), extensible for systems not yet authored (5PFH Planetfall, Stars Without Number). Thread lifecycle: a 7-state narrative stage (Seeded/Active/Escalating/Dormant/Converging/Resolved/Archived) plus a priority dial, GM-set. Co-Pilot "What did I overlook?": surfaces Dormant/untouched threads as an observation-only card. Narrative Trackers: Resources and Reputation dials alongside threat/mystery, with matching Shift actions and Co-Pilot awareness (scarcity/soured-reputation observations, abundance opportunities, a scarcity-flavored oracle suggestion).
-- **Phase 6 fixes** — a field that was typed into but never blurred (e.g. a statblock value, a just-typed tag) could be silently lost on refresh/tab-switch, since every field only commits on `change` (fires on blur); fixed with a `beforeunload`/`visibilitychange` flush in `ui/shell.js`. The 5PFH roll toast now shows the d6+modifier breakdown, not just the combined total, matching the Journal line.
-- **Phase 7** (begun) — tag fields as dropdowns: an entity's tags are now removable chips plus a dropdown of tags already used by other entities of the same type (`listTagVocabulary`), with a "+ New…" freeform option. See "Proposed next" below for the rest of Phase 7.
+Phases 0–6 done, Phase 7 (Context Graph depth) in progress. That's the only
+status fact stated here — the feature-by-feature detail this section used
+to restate now lives in exactly one place each: **"Already built as new
+functionality"** below (numbered items 1–12, phases 0 through the Rules
+Constitution) and **"Proposed next"**'s Phase 6/7 entries (marked **Done**
+where shipped). Two fixes worth knowing about either way: a field typed
+into but never blurred could lose its edit on refresh (fixed,
+`beforeunload`/`visibilitychange` flush — see `CLAUDE.md`'s "Known
+non-issues"), and the 5PFH roll toast now shows the die+modifier breakdown.
 
 The key unlock is that **everything now reads and writes one campaign model through pure functions.** New functionality is no longer a monkey-patch fighting previous layers; it's a new pure module plus a small view. The rest of this document is what that buys us.
 
@@ -65,7 +60,7 @@ Requested directly against the Crew Link Starforged character sheet as a visual/
 `campaign.documents.library` (item A below) is built: `assets/docs/` is scanned at build time (`scripts/build.js` → `src/data/docsManifest.js`, gitignored/regenerated) into a read-only Reference Library section in the Docs drawer, and the library also accepts real file uploads (FileReader → data URL) alongside the existing text-note documents — both distinct from, and shown alongside, the auto-discovered reference PDFs. Separately, statblocks gained a third kind: `makeStatblock('character', rulesetId)` builds a full player-character sheet from ruleset data in `data/rulesets.js` (Starforged: Edge/Heart/Iron/Shadow/Wits + Health/Spirit/Supply/Momentum; 5PFH: Reaction/Speed/Combat/Savvy/Tough + Luck/XP) — every stat and resource is an ordinary click-to-set/roll track, so no new interaction code was needed, only new *data*. Switchable per entity between rulesets from the statblock header (rebuilds the sheet). A Crew Link new-tab link lives in Settings for character-building workflows this app doesn't replicate (item E, partial — no Shipyard link yet).
 
 ### 10. Party, Colony, Guide + Bestiary statblock templates (Phase 5)
-A first real design-review pass (`PROGRESS.md` USER NOTES) asked for six features the old `SagaAtlas-ChatGPT.zip` prototype had that hadn't been rebuilt yet, plus fixes for three reported bugs — all landed together as Phase 5:
+A first real design-review pass (`docs/archive/progress-log-2026-07.md`'s USER NOTES) asked for six features the old `SagaAtlas-ChatGPT.zip` prototype had that hadn't been rebuilt yet, plus fixes for three reported bugs — all landed together as Phase 5:
 - **Party drawer** (`domain/party.js`): the roster is a live filter over NPC entities tagged `#character` (no duplicate data store — matches the old prototype's later, better design), plus `campaign.party.trackers[]` for free-form party-wide resources (credits, supply, custom clocks) that don't belong to any one entity.
 - **Colony drawer** (`domain/colony.js`): a flat 5PFH Planetfall turn-sheet (`COLONY_FIELDS`, ported field-for-field from the old prototype), a crew roster that references character/vehicle entities by id instead of duplicating stats, and a live filter over `#lifeform`-tagged entities for tracked encounters.
 - **Guide drawer** (`domain/guide.js`): one freeform reference document — a table of contents using the existing `@mention`/`@[Doc Name]` conventions, simplified from the old prototype's rich-text+sanitizer version since this repo's mention/badge rendering already does the linking work.
@@ -78,13 +73,13 @@ A first real design-review pass (`PROGRESS.md` USER NOTES) asked for six feature
 ### 11. Statblocks: multi-group, attribute redesign, entity-type scoping (Phase 5 follow-up)
 A follow-up review against a screenshot of the Phase 5 statblock UI asked for three changes, landed together since they touch the same rendering path:
 - **Multiple simultaneous statblock groups**: `entity.statblock` (singular) became `entity.statblocks[]` — a character can carry both a Starforged and a 5PFH sheet, or an NPC two Bestiary templates, at once. Adding one is always additive (a "+ Add" chip row offers whichever rulesets/templates aren't already present); each group removes independently via its own 🗑. Every statblock mutator now takes a `groupIndex` before the field index.
-- **Attribute fields redesigned**: Edge/Heart/Combat/... now render as a single signed number with +/- steppers (`attrRow`, `stepStatblockFieldValue`), not the 1-5 click-to-set meter — matching how Starforged/5PFH sheets actually present a stat (the meter stays for genuine depleting resources like Health/Hull). Character-sheet stat fields (`group:'stat'`) now carry `attribute:true` alongside `track:true` so they route to the same widget as Bestiary attribute-kind fields.
+- **Attribute fields redesigned** (superseded — see Phase 6 below, kept here only as the step this history built on): Edge/Heart/Combat/... moved off the 1-5 click-to-set meter to a single signed number with +/- steppers, matching how Starforged/5PFH sheets present a stat (the meter stays for genuine depleting resources like Health/Hull). The +/- steppers themselves didn't last either — Phase 6 replaced them with a directly-editable input; `stepStatblockFieldValue` no longer exists. Per the "newer wins" rule below, treat Phase 6's description as the only current one. Character-sheet stat fields (`group:'stat'`) carry `attribute:true` alongside `track:true` so they route to the same widget as Bestiary attribute-kind fields — that part is still accurate.
 - **Bestiary is an NPC subtype, like Character**: statblock add-choices are now scoped by entity type — Character Sheet and Bestiary options only for `npc` entities, Vehicle Stats only for `asset` entities; other entity types (Faction, Location, Lore) get no statblock options at all.
 - **Per-field controls removed**: the rename input and the ★ (attribute)/Aa (track)/✕ (remove) buttons are gone from every field row — a field's name and kind are fixed by its template (Settings' Bestiary template editor), not edited per-instance. Ad-hoc "+ Field"/"+ Track" additions are named via a one-time prompt instead of an inline-editable label.
 - **Add row collapsed**: the "+ Add" chip row is now behind a ⚙ gear toggle so it doesn't dominate the inspector once a few groups already exist.
 
 ### 12. Rules Constitution reference (Settings)
-`requirements/gameplay-goals.md` sharpened "genre-aware, not genre-locked" into a concrete claim — every ruleset is a content provider, not the application — backed by a table naming six systems (Starforged, Traveller, Five Parsecs From Home, Hostile, Stars Without Number, Planetfall) as the intended provider for each gameplay area, plus four responsibilities (campaign memory, story continuity, rules switching, recommendations) reserved for Saga Atlas itself. `src/data/rulesConstitution.js` records this as data (`RULES_PROVIDERS`, `GAMEPLAY_AREAS`), each provider honestly status-tagged (`integrated` / `default genre` / `reference only` / `not yet integrated` / `core`) rather than presented as uniformly supported, and a read-only table surfaces it in Settings. See `docs/adr/0002-rules-constitution.md` — this is reference data for Phase 9 to consume, not an engine built ahead of its turn in the priority order.
+`requirements/initial design inputs/gameplay-goals.md` sharpened "genre-aware, not genre-locked" into a concrete claim — every ruleset is a content provider, not the application — backed by a table naming six systems (Starforged, Traveller, Five Parsecs From Home, Hostile, Stars Without Number, Planetfall) as the intended provider for each gameplay area, plus four responsibilities (campaign memory, story continuity, rules switching, recommendations) reserved for Saga Atlas itself. `src/data/rulesConstitution.js` records this as data (`RULES_PROVIDERS`, `GAMEPLAY_AREAS`), each provider honestly status-tagged (`integrated` / `default genre` / `reference only` / `not yet integrated` / `core`) rather than presented as uniformly supported, and a read-only table surfaces it in Settings. See `docs/adr/0002-rules-constitution.md` — this is reference data for Phase 9 to consume, not an engine built ahead of its turn in the priority order.
 
 ---
 
@@ -123,7 +118,10 @@ because it's the easiest.
 ### Phase 10 — Ecosystem & reach (lowest priority per pack 66 — "new features")
 
 - **Trade & Logistics minigame** (user-requested, 2026-07-03; see
-  `docs/adr/0003-trade-logistics.md`). Supply/demand-driven buying, selling,
+  `docs/adr/0003-trade-logistics.md` for the mechanics and **`docs/adr/
+  0004-merchant-rules-lens.md`** for the framing, after three further
+  design documents — `requirements/Saga_Atlas_Merchant_*.txt` — asked to
+  be incorporated and consolidated). Supply/demand-driven buying, selling,
   and transporting of goods across multiple Locations — this is the
   concrete design the old one-line "automated trade" bullet below now
   expands into, promoted to the front of this phase given explicit user
@@ -132,6 +130,15 @@ because it's the easiest.
   recommendations > UX > integrations > new features" ordering, and
   Phase 6's Narrative Trackers item (Reputation/Heat) is a soft dependency
   this design leans on rather than duplicates. *Effort: medium-high.*
+  **ADR 0004 reframes the headline loop as contracts, not commodity
+  speculation** ("Key Innovation: replace buy-low/sell-high with living
+  contracts") — a contract is a Thread with a few extra reference fields
+  (`patronId`/`originId`/`destinationId`/`type`/`payout`), generated by
+  rolling a new "Contract Type" Oracle table (Humanitarian/Corporate/
+  Scientific/Military/Exploration/Diplomatic/Smuggling/Courier/Passenger/
+  Recovery/Colonization/Mining/Research/Emergency/Escort), with `payout`
+  priced by the same `priceAt()` this section already specifies. Everything
+  below is unchanged; the contract layer sits on top of it, not instead.
   - **Data, not an engine**: `data/commodities.js` — a genre-swappable list
     of tradeable goods (Hostile-flavored default: Water, Fuel, Medical
     Supplies, Weapons, Salvage, Luxury Goods, ...), each just `{id, label,
@@ -177,7 +184,7 @@ because it's the easiest.
     Trade to `['traveller', 'hostile']`, but Traveller has zero authored
     mechanics *and no Traveller sourcebook exists anywhere in this repo's
     `assets/docs/` library* — confirmed by the 2026-07-03 ruleset review
-    (see PROGRESS.md). This design is therefore Hostile-flavored and
+    (see `docs/archive/progress-log-2026-07.md`). This design is therefore Hostile-flavored and
     original by necessity, not a transcription of Traveller's trade rules;
     if a Traveller sourcebook is ever added to the library, its trade
     tables become a second, swappable commodity/price data set rather than
@@ -188,7 +195,7 @@ because it's the easiest.
 - **Shipyard companion link** (item E's remainder) — blocked on a known official URL, not effort.
 - **Plugin-style rules-lens registration** — the Constitution's long-horizon "Ecosystem" milestone; not worth building until Phase 9 proves the Activity→Lens pattern with the two rulesets already shipped.
 - **Sync adapter / Crew Log shared database** (was item F). Persistence is one module with a narrow interface, so this stays an *adapter*, not a rewrite, whenever it's prioritized.
-- **Rules Constitution data for Traveller and Stars Without Number** — both are named providers in `rulesConstitution.js` with zero authored content today (`status: 'reference only'` / `'not yet integrated'`), and (per the 2026-07-03 ruleset review) neither has a source PDF in this repo's library at all. Sector generation and faction turns (SWN) and trade/vehicle/NPC tables (Traveller) are genuinely new data-authoring work, not a UI feature — lowest priority per pack 66, and gated on Phase 9 existing first (no point authoring provider data before there's an Activity system to serve it), *and* on the actual sourcebooks being added to `assets/docs/` if the intent is to transcribe them rather than author originals.
+- **Rules Constitution data for Traveller and Stars Without Number** — both are named providers in `rulesConstitution.js` with zero authored content today (both `status: 'not yet integrated'`, updated from the older `'reference only'` wording once the 2026-07-03 ruleset review confirmed neither has a source PDF in this repo's library at all). Sector generation and faction turns (SWN) and trade/vehicle/NPC tables (Traveller) are genuinely new data-authoring work, not a UI feature — lowest priority per pack 66, and gated on Phase 9 existing first (no point authoring provider data before there's an Activity system to serve it), *and* on the actual sourcebooks being added to `assets/docs/` if the intent is to transcribe them rather than author originals.
 - **"Services to automate"** (`requirements/gameplay-goals.md`): faction turns, rumors, and reminders don't have a home yet (automated trade and faction pressure now have concrete designs above) — they map onto the original Constitution's Living World Engine (pack 38) and Scenario Engine (pack 36), both long-horizon. Heat/consequences/timers overlap with Phase 6's Narrative Trackers item instead of needing new scope here.
 
 **Why these aren't all dumped in as one flat list**: the ruleset review produced ten suggestions; only three (missions.js, the faction pressure track, and the Co-Pilot link between them) are genuinely new mechanisms, so only those three sit in this new-features-last phase. The rest were mis-scoped as "new features" on first pass — a faction card template and the relationship/Bond weight are entity-model depth that belongs in Phase 7 (already in progress, ranked above this phase), the NPC oracle chain and two hazard/dilemma tables are pure content additions that don't need to wait for anything (see Phase 8's oracle-editor item), and the Stress/Tension tracker is a same-shaped continuation of a Phase 6 item that was deliberately left open. Sorting by *what a suggestion actually is* (data vs. entity-depth vs. new mechanism), not by which review produced it, is what "against the design constitution" means in practice here — pack 66's ordering is about mechanism/engine work competing for priority, not about content, which this repo has never gated behind phase order (`CLAUDE.md`: "keep statblocks, oracle tables ... data, not code").
