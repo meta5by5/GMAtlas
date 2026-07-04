@@ -1497,3 +1497,32 @@ test('universalSearch matches documents (library + Reference Library), Party tra
   const colonyHit = universalSearch(camp, 'coolant line');
   assert.ok(colonyHit.some((r) => r.category === 'Colony'));
 });
+
+// --- Phase 9: Activity -> Rules Lens recommender --------------------------
+import { ACTIVITIES, findActivity, suggestRulesLens } from '../src/domain/activities.js';
+
+test('every Activity references a real GAMEPLAY_AREAS area', () => {
+  const areas = new Set(GAMEPLAY_AREAS.map((g) => g.area));
+  for (const a of ACTIVITIES) assert.ok(areas.has(a.area), `Activity "${a.id}" references unknown area "${a.area}"`);
+});
+
+test('findActivity resolves a known id and returns null for an unknown one', () => {
+  assert.equal(findActivity('trade').label, 'Trade');
+  assert.equal(findActivity('nonexistent'), null);
+});
+
+test('suggestRulesLens returns the registered provider(s) for an Activity, and null for an unknown Activity', () => {
+  const combat = suggestRulesLens('combat');
+  assert.equal(combat.area, 'Tactical combat');
+  assert.deepEqual(combat.providers.map((p) => p.id), ['fivepfh']);
+  assert.equal(combat.providers[0].rulesetId, '5pfh');
+
+  assert.equal(suggestRulesLens('nonexistent'), null);
+});
+
+test('a fresh campaign has no Activity set, and patchContext can set one', () => {
+  const camp = defaultCampaign();
+  assert.equal(camp.context.how.activity, '');
+  const next = patchContext(camp, 'how', { activity: 'investigate' });
+  assert.equal(next.context.how.activity, 'investigate');
+});

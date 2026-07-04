@@ -4,6 +4,7 @@
 
 import { listShifts } from '../../domain/context.js';
 import { listThreads, THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
+import { ACTIVITIES, suggestRulesLens } from '../../domain/activities.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -85,13 +86,40 @@ const VIEWS = {
   },
 
   how(doc) {
-    return card('HOW it plays', 'Mode and pacing.', `
+    const activity = doc.context.how.activity || '';
+    return card('HOW it plays', 'Mode, pacing, and the Rules Lens it suggests.', `
+      <label class="field-label">Activity
+        <select data-ctx="how.activity">
+          <option value="">— none set —</option>
+          ${ACTIVITIES.map((a) => `<option value="${a.id}" ${a.id === activity ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}
+        </select>
+      </label>
+      ${rulesLensSuggestion(doc, activity)}
       ${summaryField('how', doc.context.how.summary, 'Exploration, combat, social, downtime…')}
       <div class="shift-actions">
         <button class="chip" data-shift="Advance Time">⏱ Advance Time</button>
       </div>`);
   },
 };
+
+function rulesLensSuggestion(doc, activity) {
+  if (!activity) return '';
+  const suggestion = suggestRulesLens(activity);
+  if (!suggestion) return '';
+  const current = doc.settings.statRuleset || 'starforged';
+  const chips = suggestion.providers.map((p) => {
+    const applyBtn = p.rulesetId
+      ? (p.rulesetId === current
+        ? '<span class="dim small">(current)</span>'
+        : `<button class="chip sm" data-apply-ruleset="${esc(p.rulesetId)}" title="${esc(p.note || '')}">Use as default ▸</button>`)
+      : `<span class="dim small" title="${esc(p.note || '')}">(${esc(p.status || 'reference only')})</span>`;
+    return `<span class="rules-lens-row"><span class="chip sm rules-provider-chip">${esc(p.label || p.id)}</span> ${applyBtn}</span>`;
+  }).join('');
+  return `<div class="rules-lens-suggestion">
+    <span class="dim small">Suggested Rules Lens for ${esc(suggestion.area)}:</span>
+    <div class="rules-lens-chips">${chips}</div>
+  </div>`;
+}
 
 function summaryField(key, val, placeholder) {
   return `<label class="field-label">Focus

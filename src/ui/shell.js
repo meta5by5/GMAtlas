@@ -147,6 +147,14 @@ function onClick(ev) {
   if (hit('[data-toggle-copilot]')) { copilotOpen = !copilotOpen; return render(); }
   if (hit('[data-open-settings]')) return toggleDrawer('settings');
 
+  // --- Phase 9: Activity -> Rules Lens suggestion, apply as default ruleset ---
+  const applyRuleset = hit('[data-apply-ruleset]');
+  if (applyRuleset) {
+    const id = applyRuleset.dataset.applyRuleset;
+    store.update((d) => { d.settings.statRuleset = id; return d; });
+    return toast(`Default ruleset set to ${id}`);
+  }
+
   // --- Universal Search (Phase 8) ---
   if (hit('[data-search-toggle]')) {
     searchOpen = !searchOpen;

@@ -326,6 +326,11 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .rules-provider-legend { margin: var(--sp-3) 0 0; padding-left: 1.1rem; font-size: 0.78rem; color: var(--text-dim); }
 .rules-provider-legend li { margin-bottom: var(--sp-1); }
 
+/* Activity -> Rules Lens suggestion (Phase 9, HOW workspace view) */
+.rules-lens-suggestion { margin: var(--sp-2) 0; padding: var(--sp-2); border: 1px solid var(--border); border-radius: 6px; }
+.rules-lens-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-1); align-items: center; }
+.rules-lens-row { display: inline-flex; align-items: center; gap: var(--sp-1); }
+
 /* Document library */
 .doc-list { display: flex; flex-direction: column; gap: var(--sp-3); }
 .doc-card { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--tier2-bg); padding: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2); }

@@ -48,7 +48,10 @@ export function defaultCampaign(now = new Date().toISOString()) {
       // a fresh campaign hasn't already run out of supply or goodwill.
       what:  { situation: '', intent: 'Discovery', threat: 2, mystery: 2, resources: 5, reputation: 5 },
       why:   { summary: '', entityIds: [] },
-      how:   { summary: 'Exploration' },
+      // activity: '' means "not set" — an old campaign predating Phase 9
+      // reads the same as a fresh one that hasn't picked an Activity yet,
+      // no migration needed (same posture as resources/reputation above).
+      how:   { summary: 'Exploration', activity: '' },
     },
 
     entities: { items: [], activeId: null, history: [] },

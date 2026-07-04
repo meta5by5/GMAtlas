@@ -14,7 +14,15 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
-**Phases 0–8: done.** Phase 8 (Unified Discovery) closed out with Universal
+**Phases 0–8: done. Phase 9 (Activity-driven gameplay) in progress:** the
+HOW workspace question now has an Activity picker (`domain/activities.js`)
+that looks up `data/rulesConstitution.js`'s registered Rules Lens
+provider(s) for that Activity and offers a one-click "Use as default"
+button (sets `settings.statRuleset`) — the Rules Constitution reference
+table is now a live recommender, not just a read-only Settings page. Genre
+packs (Phase 9's other item) is still open.
+
+Phase 8 (Unified Discovery) closed out with Universal
 Search, an oracle table entry editor (plus two ready-made content additions),
 a Cast drawer type filter + search, and an NPC-generation oracle chain with
 a one-click "Generate NPC" action. Feature-by-feature detail lives in
@@ -93,8 +101,9 @@ estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
   entity-type filter + search; an NPC-generation oracle chain plus a
   one-click "Generate NPC" action (and the 5PFH Patron Benefit/Hazard/
   Danger Pay job-offer tables).
-- **Phase 9 (next)** — HOW workspace becomes Activity → Rules Lens driven
-  instead of free text; genre packs.
+- **Phase 9 (in progress)** — HOW workspace Activity → Rules Lens
+  recommender: **done** (`domain/activities.js`, wired into the HOW
+  workspace card); genre packs: still open.
 - **Phase 10 (lowest priority — new features)** — Trade & Logistics /
   Merchant Rules Lens (contracts as the primary loop, `docs/adr/0003` +
   `0004`); a Mission/Job generator (`domain/missions.js`, payout scaled by

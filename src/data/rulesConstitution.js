@@ -10,9 +10,14 @@
 // Deliberately data, not code — same "genre-aware, not genre-locked"
 // posture as data/rulesets.js and data/statblockTemplates.js.
 
+// `rulesetId` (where present) is the matching id in data/rulesets.js — the
+// join key the Phase 9 Activity -> Rules Lens recommender uses to offer
+// "apply as default stat ruleset". Only providers with an actual character
+// ruleset built get one; Traveller/SWN/Hostile/Planetfall/Saga Atlas itself
+// don't (see their status notes for why).
 export const RULES_PROVIDERS = {
-  starforged: { label: 'Starforged', status: 'integrated', note: 'Character sheets (Phase 4); its oracle philosophy and Progress Track model shaped domain/oracles.js and domain/threads.js.' },
-  fivepfh: { label: 'Five Parsecs From Home', status: 'integrated', note: 'Character sheets (Phase 4).' },
+  starforged: { label: 'Starforged', status: 'integrated', note: 'Character sheets (Phase 4); its oracle philosophy and Progress Track model shaped domain/oracles.js and domain/threads.js.', rulesetId: 'starforged' },
+  fivepfh: { label: 'Five Parsecs From Home', status: 'integrated', note: 'Character sheets (Phase 4).', rulesetId: '5pfh' },
   traveller: { label: 'Traveller', status: 'not yet integrated', note: 'No sourcebook exists in assets/docs and no mechanics are authored yet (trade, vehicles, NPC generation) — confirmed by the 2026-07-03 ruleset library review; aspirational until a source is added.' },
   hostile: { label: 'Hostile', status: 'default genre', note: 'campaign.settings.genre default; the oracle tables in data/tables.js are Hostile-flavored.' },
   swn: { label: 'Stars Without Number', status: 'not yet integrated', note: 'No data authored yet — sector/faction-turn generation is future work (see roadmap Phase 10+).' },
