@@ -83,7 +83,7 @@ export function mountShell(el) {
       <header class="mc-header">
         <div class="brand"><h1>GMAtlas</h1><span class="tagline">Frictionless Empowerment</span></div>
         <div class="header-actions">
-          <button class="btn ghost sm" data-search-toggle title="Search everything (Cast, Journal, Oracle, Documents, Party, Colony)">🔍 Search</button>
+          <button class="btn ghost sm" data-search-toggle title="Search everything (Cast, Journal, Oracle, Documents, Party, Colony) — Ctrl/Cmd+K">🔍 Search</button>
           <span class="campaign-title" data-open-settings title="Campaign settings"></span>
           <button class="btn ghost sm" data-continue-story title="Generate the next scene">▶ Scene</button>
         </div>
@@ -123,6 +123,13 @@ export function mountShell(el) {
   el.addEventListener('dragover', onDragOver);
   el.addEventListener('dragleave', onDragLeave);
   el.addEventListener('drop', onDrop);
+  // A small, deliberately short set (2026-07-04 review: "add shortcuts when
+  // non-disruptive") — two near-universal conventions rather than a bound
+  // shortcut for every action. On document, not root: Escape/Ctrl+K should
+  // work regardless of what currently has focus, the same way they do in
+  // comparable tools (VSCode, Slack, GitHub, Linear all bind Ctrl/Cmd+K to
+  // search-like actions; Escape universally backs out of an overlay).
+  document.addEventListener('keydown', guarded(onKeydown));
 
   // Safety net, not a new interaction route: every text/number field here
   // only commits on 'change' (fires on blur), so typing a value and then
@@ -574,6 +581,30 @@ function performFieldRoll(f, label) {
   const r = rollAction(Number(f.value) || 0);
   store.update((d) => logRoll(d, formatRollText(label, r)));
   toast(`🎲 ${r.outcomeLabel} — ${r.total} vs ${r.challenge1}, ${r.challenge2}${r.match ? ' (match)' : ''}`);
+}
+
+// Escape: close whatever's topmost (search overlay > active drawer tab >
+// mobile/tablet Co-Pilot sheet), always active even while a field has
+// focus — the whole point is letting you back out of one. Ctrl/Cmd+K:
+// open Universal Search from anywhere, matching the convention comparable
+// tools already use for a search/command action.
+function onKeydown(ev) {
+  if (ev.key === 'Escape') {
+    if (searchOpen) {
+      searchOpen = false; searchQuery = '';
+      const inp = root.querySelector('[data-search-input]'); if (inp) inp.value = '';
+      return renderSearchOverlay();
+    }
+    if (activeDrawer) return closeDrawerTab(activeDrawer);
+    if (copilotOpen) { copilotOpen = false; return render(); }
+    return;
+  }
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') {
+    ev.preventDefault();
+    searchOpen = true;
+    renderSearchOverlay();
+    const inp = root.querySelector('[data-search-input]'); if (inp) inp.focus();
+  }
 }
 
 // Crew-Link-style "double-click a stat to roll" — track fields only
