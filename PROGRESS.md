@@ -22,6 +22,21 @@ button (sets `settings.statRuleset`) — the Rules Constitution reference
 table is now a live recommender, not just a read-only Settings page. Genre
 packs (Phase 9's other item) is still open.
 
+**2026-07-04 reliability + UX pass** (after confirming the Activity picker
+and everything before it via a full test + browser regression sweep):
+storage usage visibility + a restore-from-backup button in Settings; a
+post-deploy smoke check on the Pages workflow; the Reference Library's
+PDFs moved to Git LFS (with a history rewrite, verified via a fresh
+clone); tabbed drawer switching (multiple drawers can stay pinned open);
+three real responsive tiers (tablet gets a Co-Pilot edge-panel, distinct
+from phone's bottom sheet) instead of one; two keyboard shortcuts
+(Escape, Ctrl/Cmd+K); touch drag-and-drop for entity linking/@mentions
+(HTML5 DnD never fires on touch at all) — see
+`docs/mobile-drag-drop-test-cases.md`; and a PWA installability audit via
+Chrome DevTools Protocol (clean — zero errors, offline mode verified by
+actually going offline) that caught one real bug: the app icon still read
+"SA" (pre-rebrand branding), now "GM" in the same style.
+
 Phase 8 (Unified Discovery) closed out with Universal
 Search, an oracle table entry editor (plus two ready-made content additions),
 a Cast drawer type filter + search, and an NPC-generation oracle chain with
