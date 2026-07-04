@@ -54,9 +54,11 @@ Open the served URL. On first launch the store migrates any legacy data, then re
 - [x] **Phase 3D** — Crew-Link-style statblock tracks: any field can be a numeric click-to-set scale (row of boxes), with double-click-to-roll (d6 + value vs 2 challenge dice, filed to the Journal)
 - [x] **Phase 4** — Document Library: auto-scanned Reference Library from `assets/docs/` (rebuilds with the folder) + real file uploads; ruleset-driven Character Sheets (Starforged/5PFH) as rollable stat/resource tracks, switchable per entity; Crew Link new-tab companion link in Settings
 - [ ] **Phase 4 (remaining)** — `@` pointers into documents (page-anchored mention/autocomplete); Shipyard companion link; full responsive polish; retire legacy nav
-- [ ] **Phase 5** — parity cutover
-- [ ] **Phase 6** (future) — optional sync adapter / Crew Log shared database
+- [x] **Phase 5** — design review pass (see PROGRESS.md USER NOTES / ISSUES FINDINGS): Party, Colony, and Guide drawers; Bestiary statblock templates (per-system, Settings-editable, per-NPC template selection); grouped/collapsible/searchable Oracle tree; Document Library multi-upload + tags + search + rename + in-app PDF viewer panel; editable relationship notes; three reported bugs fixed (stale service-worker cache, missing GitHub Pages build, a broken Journal render path)
+- [x] **Phase 6** — Campaign Continuity: Session Recap ("Previously on..."); attribute fields redesigned as directly-editable, format-configurable, label-click-to-roll stats (sign/inches/plain; Starforged/5PFH/Traveller/none dice models); Thread lifecycle (7-state, priority); Co-Pilot "What did I overlook?" (dormant/untouched threads); Narrative Trackers (Resources/Reputation dials alongside threat/mystery, with matching Shift actions and Co-Pilot awareness).
+- [x] **Phase 7 (in progress)** — Context Graph depth: tags are now removable chips + a per-entity-type vocabulary dropdown (was a plain comma-separated text field). Remaining: `@` pointers into documents with page anchors, typed/weighted relationships, "flag don't delete" invalid relationships.
+- [ ] **Phase 8+** (future) — Universal Search/oracle editor, Activity-driven HOW workspace, Shipyard link + sync adapter — see `DESIGN-NEW-FUNCTIONALITY.md`.
 
 See `DESIGN-NEW-FUNCTIONALITY.md` for the full plan and the current build/changelog in-app under Settings → Build.
 
-57 unit tests (`npm test`) cover migration and the domain layer. Run `npm run build` after editing anything under `src/`.
+116 unit tests (`npm test`) cover migration and the domain layer. Run `npm run build` after editing anything under `src/`.

@@ -7,23 +7,42 @@ import { store } from '../core/store.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { contextSummary } from '../domain/context.js';
 import { continueStory, applyStoryShift, rollOracle, addNote, patchContext, editContextText, logRoll } from '../domain/session.js';
-import { addThread, advanceThread, removeThread } from '../domain/threads.js';
-import { rollAction, formatRollText } from '../domain/dice.js';
+import { addThread, advanceThread, removeThread, setThreadStatus, setThreadPriority } from '../domain/threads.js';
+import { rollAction, formatRollText, rollFlat, formatFlatRollText, rollTraveller, formatTravellerRollText } from '../domain/dice.js';
 import {
-  createEntity, updateEntity, setEntityTags, removeEntity, setActiveEntity, addRelationship, removeRelationship,
-  getEntity, setEntityStatblockKind, removeEntityStatblock, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
-  toggleEntityStatblockFieldTrack, setEntityStatblockTrackValue, toggleEntityStatblockFieldAttribute,
+  createEntity, updateEntity, addEntityTag, removeEntityTag, removeEntity, setActiveEntity, addRelationship, removeRelationship,
+  getEntity, addEntityStatblockGroup, removeEntityStatblockGroup, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
+  setEntityStatblockTrackValue, setEntityStatblockAttributeValue, updateRelationshipLabel,
 } from '../domain/entities.js';
-import { addDocument, updateDocument, removeDocument, getDocument } from '../domain/documents.js';
+import {
+  addDocument, updateDocument, removeDocument, getDocument, addDocumentTag, removeDocumentTag, renameDocument,
+  openDocumentTab, closeDocumentTab, setActiveDocumentTab, resolveDocumentTab,
+  listReferenceDocuments, renameRefDocument, addRefDocumentTag, removeRefDocumentTag,
+} from '../domain/documents.js';
+import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker } from '../domain/party.js';
+import { setColonyField, addCrewRow, updateCrewRow, removeCrewRow } from '../domain/colony.js';
+import { setGuideText } from '../domain/guide.js';
+import { buildSessionRecap, formatSessionRecap } from '../domain/recap.js';
+import { addTemplateSystem, addTemplateField, updateTemplateField, removeTemplateField, moveTemplateField } from '../domain/statblockTemplates.js';
 import { renderWorkspace } from './workspace/index.js';
 import { renderCopilot } from './copilotPanel.js';
-import { renderDrawer } from './drawers/index.js';
+import { renderDrawer, formatBytes } from './drawers/index.js';
 
 const QUESTION_LABELS = { who: 'WHO', where: 'WHERE', what: 'WHAT', why: 'WHY', how: 'HOW' };
+// localStorage's shared per-origin quota is commonly 5-10MB for the WHOLE
+// campaign document, not just one file — 5MB of raw file (~6.7MB once
+// base64-encoded) is a conservative line under that, leaving room for the
+// rest of the campaign and any other embedded uploads. Large, static
+// rulebooks (the ones already in assets/docs/, several 20-60MB) belong in
+// the Reference Library instead, which has no such limit.
+const MAX_DOC_UPLOAD_BYTES = 5 * 1024 * 1024;
 const DRAWERS = [
   { id: 'journal', glyph: '📖', label: 'Journal' },
   { id: 'oracle', glyph: '🎲', label: 'Oracle' },
   { id: 'entities', glyph: '☷', label: 'Cast' },
+  { id: 'party', glyph: '👥', label: 'Party' },
+  { id: 'colony', glyph: '🏛', label: 'Colony' },
+  { id: 'guide', glyph: '📘', label: 'Guide' },
   { id: 'graph', glyph: '🔗', label: 'Graph' },
   { id: 'documents', glyph: '📄', label: 'Docs' },
   { id: 'settings', glyph: '⚙', label: 'Settings' },
@@ -32,6 +51,13 @@ const DRAWERS = [
 let openDrawer = null;
 let copilotOpen = false;
 let root = null;
+let oracleFilter = '';
+let expandedOracleGroups = new Set(); // ephemeral UI state — never persisted
+let docFilter = '';
+let docTagFilters = new Set();
+let docTagEditorOpen = new Set(); // ephemeral — which doc/ref cards' tag editors are expanded
+let statblockAddOpen = false; // ephemeral — collapses the "+ Add a statblock" chip row behind a gear icon
+let recapOpen = false; // ephemeral — collapses the "Previously on..." session recap panel
 
 export function mountShell(el) {
   root = el;
@@ -48,6 +74,11 @@ export function mountShell(el) {
       <div class="mc-breadcrumb" data-breadcrumb></div>
       <main class="mc-workspace" data-workspace aria-live="polite"></main>
       <aside class="mc-copilot" data-copilot aria-label="Co-Pilot"><h2>Co-Pilot</h2><div data-copilot-body></div></aside>
+      <div class="mc-doc-viewer" data-doc-viewer hidden>
+        <div class="doc-viewer-tabs" data-doc-viewer-tabs></div>
+        <div class="doc-viewer-empty" data-doc-viewer-empty hidden></div>
+        <iframe data-doc-viewer-frame title="Document viewer"></iframe>
+      </div>
       <nav class="mc-edge" aria-label="Drawers" data-edge></nav>
       <aside class="mc-drawer" data-drawer aria-label="Drawer">
         <div class="drawer-head"><h2 data-drawer-title>Drawer</h2><button class="icon-btn" data-close-drawer aria-label="Close">✕</button></div>
@@ -64,6 +95,20 @@ export function mountShell(el) {
   el.addEventListener('dragover', onDragOver);
   el.addEventListener('dragleave', onDragLeave);
   el.addEventListener('drop', onDrop);
+
+  // Safety net, not a new interaction route: every text/number field here
+  // only commits on 'change' (fires on blur), so typing a value and then
+  // refreshing/closing/switching tabs WITHOUT clicking away first silently
+  // dropped the edit — the exact bug reported for statblock attribute values
+  // and freshly-added statblock groups' fields. Blurring the focused field
+  // fires its pending 'change' synchronously through the existing handler
+  // above, so this reuses that logic rather than adding a second commit path.
+  const flushFocusedField = () => {
+    const el2 = document.activeElement;
+    if (el2 && el2 !== document.body && typeof el2.blur === 'function') el2.blur();
+  };
+  window.addEventListener('beforeunload', flushFocusedField);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushFocusedField(); });
 
   store.subscribe(render);
   render();
@@ -116,6 +161,12 @@ function onClick(ev) {
   const del = hit('[data-journal-del]');
   if (del) return store.update((d) => { d.journal = d.journal.filter((j) => j.id !== del.dataset.journalDel); return d; });
 
+  if (hit('[data-recap-toggle]')) { recapOpen = !recapOpen; return renderDrawerBody(); }
+  if (hit('[data-recap-save]')) {
+    store.update((d) => addNote(d, formatSessionRecap(buildSessionRecap(d)), 'Session Recap'));
+    return toast('Recap saved to Journal');
+  }
+
   // --- graph node → open entity inspector ---
   const gNode = hit('[data-graph-node]');
   if (gNode) { openDrawer = 'entities'; store.update((d) => setActiveEntity(d, gNode.dataset.graphNode)); return; }
@@ -131,6 +182,17 @@ function onClick(ev) {
   if (delEnt) { store.update((d) => removeEntity(d, delEnt.dataset.entityDel)); return toast('Entity removed'); }
   const unlink = hit('[data-entity-unlink]');
   if (unlink) { const active = store.get().entities.activeId; return store.update((d) => removeRelationship(d, active, unlink.dataset.entityUnlink)); }
+  const entTagRemove = hit('[data-entity-tag-remove]');
+  if (entTagRemove) { const active = store.get().entities.activeId; return store.update((d) => removeEntityTag(d, active, entTagRemove.dataset.entityTagRemove)); }
+  const entTagNew = hit('[data-entity-tag-new]');
+  if (entTagNew) {
+    const name = window.prompt('New tag:', '');
+    if (name != null && name.trim()) {
+      const active = store.get().entities.activeId;
+      store.update((d) => addEntityTag(d, active, name.trim()));
+    }
+    return;
+  }
   if (hit('[data-entity-link-add]')) {
     const active = store.get().entities.activeId;
     const target = root.querySelector('[data-entity-link-target]');
@@ -139,33 +201,187 @@ function onClick(ev) {
     return;
   }
 
-  // --- statblocks ---
+  // --- statblocks: add/remove whole groups; a group's own fields are only
+  // ever value-edited from the entity view — shape/name/kind is Settings'
+  // job (see drawers/index.js statblockGroupBlock). ------------------------
   const sbAdd = hit('[data-statblock-add]');
   if (sbAdd) {
     const active = store.get().entities.activeId;
-    const entity = getEntity(store.get(), active);
-    const rebuilding = entity && entity.statblock;
-    if (rebuilding && !window.confirm('Rebuild the statblock from this template? Existing field values will be replaced.')) return;
     const kind = sbAdd.dataset.statblockAdd;
-    const rulesetId = sbAdd.dataset.statblockRuleset;
-    store.update((d) => setEntityStatblockKind(d, active, kind, rulesetId));
-    return toast(rebuilding ? 'Statblock rebuilt' : 'Statblock added');
+    const rulesetOrTemplateId = sbAdd.dataset.statblockRuleset || sbAdd.dataset.statblockTemplate;
+    store.update((d) => addEntityStatblockGroup(d, active, kind, rulesetOrTemplateId));
+    return toast('Statblock added');
   }
-  if (hit('[data-statblock-remove]')) { const active = store.get().entities.activeId; store.update((d) => removeEntityStatblock(d, active)); return toast('Statblock removed'); }
-  if (hit('[data-statblock-add-field]')) { const active = store.get().entities.activeId; return store.update((d) => addEntityStatblockField(d, active)); }
-  if (hit('[data-statblock-add-track-field]')) { const active = store.get().entities.activeId; return store.update((d) => addEntityStatblockField(d, active, { key: 'New Track', value: 0, max: 5, track: true })); }
-  const rmField = hit('[data-statblock-remove-field]');
-  if (rmField) { const active = store.get().entities.activeId; return store.update((d) => removeEntityStatblockField(d, active, Number(rmField.dataset.statblockRemoveField))); }
-  const toggleTrack = hit('[data-statblock-toggle-track]');
-  if (toggleTrack) { const active = store.get().entities.activeId; return store.update((d) => toggleEntityStatblockFieldTrack(d, active, Number(toggleTrack.dataset.statblockToggleTrack))); }
-  const toggleAttr = hit('[data-statblock-toggle-attribute]');
-  if (toggleAttr) { const active = store.get().entities.activeId; return store.update((d) => toggleEntityStatblockFieldAttribute(d, active, Number(toggleAttr.dataset.statblockToggleAttribute))); }
+  const rmGroup = hit('[data-statblock-remove-group]');
+  if (rmGroup) {
+    const active = store.get().entities.activeId;
+    store.update((d) => removeEntityStatblockGroup(d, active, Number(rmGroup.dataset.statblockRemoveGroup)));
+    return toast('Statblock removed');
+  }
+  const sbAddField = hit('[data-statblock-add-field]');
+  if (sbAddField) {
+    const gi = Number(sbAddField.dataset.statblockAddField);
+    const name = window.prompt('Field name:', '');
+    if (name == null) return;
+    const active = store.get().entities.activeId;
+    return store.update((d) => addEntityStatblockField(d, active, gi, { key: name.trim() || 'New Field', value: '' }));
+  }
+  const sbAddTrack = hit('[data-statblock-add-track-field]');
+  if (sbAddTrack) {
+    const gi = Number(sbAddTrack.dataset.statblockAddTrackField);
+    const name = window.prompt('Track name:', '');
+    if (name == null) return;
+    const active = store.get().entities.activeId;
+    return store.update((d) => addEntityStatblockField(d, active, gi, { key: name.trim() || 'New Track', value: 0, max: 5, track: true }));
+  }
   const trackSet = hit('[data-statblock-track-set]');
   if (trackSet) {
     const active = store.get().entities.activeId;
-    const idx = Number(trackSet.dataset.statblockTrackSet);
+    const [gi, fi] = trackSet.dataset.statblockTrackSet.split('::').map(Number);
     const n = Number(trackSet.dataset.trackN);
-    return store.update((d) => setEntityStatblockTrackValue(d, active, idx, n));
+    return store.update((d) => setEntityStatblockTrackValue(d, active, gi, fi, n));
+  }
+  const rollLabel = hit('[data-statblock-roll-label]');
+  if (rollLabel) {
+    const [gi, fi] = rollLabel.dataset.statblockRollLabel.split('::').map(Number);
+    const active = store.get().entities.activeId;
+    const e = getEntity(store.get(), active);
+    const group = e && e.statblocks && e.statblocks[gi];
+    const f = group && group.fields[fi];
+    if (f) performFieldRoll(f, `${e.name || 'Unnamed'} — ${f.key || 'Stat'}`);
+    return;
+  }
+  if (hit('[data-statblock-add-toggle]')) { statblockAddOpen = !statblockAddOpen; return renderDrawerBody(); }
+
+  // --- oracle: collapsible groups + roll-whole-group -----------------------
+  const oracleToggle = hit('[data-oracle-toggle]');
+  if (oracleToggle) {
+    const key = oracleToggle.dataset.oracleToggle;
+    if (expandedOracleGroups.has(key)) expandedOracleGroups.delete(key); else expandedOracleGroups.add(key);
+    return renderDrawerBody();
+  }
+  if (hit('[data-oracle-collapse-all]')) { expandedOracleGroups = new Set(); return renderDrawerBody(); }
+  const rollGroupBtn = hit('[data-roll-group]');
+  if (rollGroupBtn) {
+    const path = rollGroupBtn.dataset.rollGroup.split('>');
+    let text = '';
+    store.update((d) => { const r = rollOracle(d, path, { group: true }); text = r.text; return r.campaign; });
+    return toast('🎲 ' + text.split('\n').slice(-1)[0]);
+  }
+
+  // --- party ---
+  if (hit('[data-party-tracker-add]')) {
+    const name = window.prompt('Tracker name (e.g. "Credits", "Supply"):', '');
+    if (name != null && name.trim()) { store.update((d) => addPartyTracker(d, { name: name.trim() })); toast('Tracker added'); }
+    return;
+  }
+  const trkDel = hit('[data-party-tracker-remove]');
+  if (trkDel) return store.update((d) => removePartyTracker(d, trkDel.dataset.partyTrackerRemove));
+  const trkStep = hit('[data-party-tracker-step]');
+  if (trkStep) return store.update((d) => stepPartyTracker(d, trkStep.dataset.partyTrackerStep, Number(trkStep.dataset.delta)));
+
+  // --- colony ---
+  if (hit('[data-colony-crew-add]')) { store.update((d) => addCrewRow(d, {})); return toast('Crew row added'); }
+  const crewDel = hit('[data-colony-crew-remove]');
+  if (crewDel) return store.update((d) => removeCrewRow(d, crewDel.dataset.colonyCrewRemove));
+
+  // --- guide ---
+  const guideSave = hit('[data-guide-save]');
+  if (guideSave) {
+    const ta = root.querySelector('[data-guide-input]');
+    if (ta) { store.update((d) => setGuideText(d, ta.value)); toast('Guide saved'); }
+    return;
+  }
+
+  // --- documents: open (viewer tabs), rename, tags ---------------------------
+  const docOpen = hit('[data-doc-open]');
+  if (docOpen) {
+    if (docOpen.dataset.docOpen.startsWith('lib:')) {
+      const entry = getDocument(store.get(), docOpen.dataset.docOpen.slice(4));
+      if (entry && entry.kind !== 'file') { toast('Text notes open inline below — not a PDF file.'); return; }
+    }
+    store.update((d) => openDocumentTab(d, docOpen.dataset.docOpen));
+    return;
+  }
+  const tabClose = hit('[data-doc-viewer-tab-close]');
+  if (tabClose) { store.update((d) => closeDocumentTab(d, tabClose.dataset.docViewerTabClose)); return; }
+  const tabSwitch = hit('[data-doc-viewer-tab]');
+  if (tabSwitch) { store.update((d) => setActiveDocumentTab(d, tabSwitch.dataset.docViewerTab)); return; }
+  const docRename = hit('[data-doc-rename]');
+  if (docRename) {
+    const id = docRename.dataset.docRename;
+    const entry = getDocument(store.get(), id);
+    const name = window.prompt('Rename document:', entry ? entry.title : '');
+    if (name != null && name.trim()) { store.update((d) => renameDocument(d, id, name.trim())); toast('Renamed'); }
+    return;
+  }
+  const refRename = hit('[data-ref-rename]');
+  if (refRename) {
+    const key = refRename.dataset.refRename;
+    const current = listReferenceDocuments(store.get()).find((r) => r.key === key);
+    const name = window.prompt('Rename entry (display name only — the file itself is untouched):', current ? current.title : '');
+    if (name != null && name.trim()) { store.update((d) => renameRefDocument(d, key, name.trim())); toast('Renamed'); }
+    return;
+  }
+  const tagToggle = hit('[data-doc-tag-toggle]');
+  if (tagToggle) {
+    const key = tagToggle.dataset.docTagToggle;
+    if (docTagEditorOpen.has(key)) docTagEditorOpen.delete(key); else docTagEditorOpen.add(key);
+    return renderDrawerBody();
+  }
+  const tagAdd = hit('[data-doc-tag-add]');
+  if (tagAdd) {
+    const id = tagAdd.dataset.docTagAdd;
+    const input = root.querySelector(`[data-doc-tag-input="${id}"]`);
+    if (input && input.value.trim()) { store.update((d) => addDocumentTag(d, id, input.value.trim())); input.value = ''; }
+    return;
+  }
+  const tagRemove = hit('[data-doc-tag-remove]');
+  if (tagRemove) {
+    const [id, tag] = tagRemove.dataset.docTagRemove.split('::');
+    return store.update((d) => removeDocumentTag(d, id, tag));
+  }
+  const refTagAdd = hit('[data-ref-tag-add]');
+  if (refTagAdd) {
+    const key = refTagAdd.dataset.refTagAdd;
+    const input = root.querySelector(`[data-ref-tag-input="${key}"]`);
+    if (input && input.value.trim()) { store.update((d) => addRefDocumentTag(d, key, input.value.trim())); input.value = ''; }
+    return;
+  }
+  const refTagRemove = hit('[data-ref-tag-remove]');
+  if (refTagRemove) {
+    const [key, tag] = refTagRemove.dataset.refTagRemove.split('::');
+    return store.update((d) => removeRefDocumentTag(d, key, tag));
+  }
+  const tagFilter = hit('[data-doc-tag-filter]');
+  if (tagFilter) {
+    const tag = tagFilter.dataset.docTagFilter;
+    if (docTagFilters.has(tag)) docTagFilters.delete(tag); else docTagFilters.add(tag);
+    return renderDrawerBody();
+  }
+
+  // --- settings: Bestiary statblock templates -------------------------------
+  if (hit('[data-tpl-system-add]')) {
+    const label = window.prompt('New game system name (e.g. "D&D 5e"):', '');
+    if (label != null && label.trim()) { store.update((d) => addTemplateSystem(d, label.trim(), label.trim())); toast('System added'); }
+    return;
+  }
+  const tplFieldAdd = hit('[data-tpl-field-add]');
+  if (tplFieldAdd) return store.update((d) => addTemplateField(d, tplFieldAdd.dataset.tplFieldAdd));
+  const tplFieldRemove = hit('[data-tpl-field-remove]');
+  if (tplFieldRemove) {
+    const [sys, idx] = tplFieldRemove.dataset.tplFieldRemove.split('::');
+    return store.update((d) => removeTemplateField(d, sys, Number(idx)));
+  }
+  const tplFieldUp = hit('[data-tpl-field-up]');
+  if (tplFieldUp) {
+    const [sys, idx] = tplFieldUp.dataset.tplFieldUp.split('::');
+    return store.update((d) => moveTemplateField(d, sys, Number(idx), -1));
+  }
+  const tplFieldDown = hit('[data-tpl-field-down]');
+  if (tplFieldDown) {
+    const [sys, idx] = tplFieldDown.dataset.tplFieldDown.split('::');
+    return store.update((d) => moveTemplateField(d, sys, Number(idx), 1));
   }
 
   if (hit('[data-thread-add]')) {
@@ -193,13 +409,7 @@ function onClick(ev) {
   if (docSave) {
     const id = docSave.dataset.docSave;
     const ta = root.querySelector(`[data-doc-content="${id}"]`);
-    const titleInput = root.querySelector(`[data-doc-title="${id}"]`);
-    if (titleInput) {
-      const patch = { title: titleInput.value.trim() || 'Untitled document' };
-      if (ta) patch.content = ta.value;
-      store.update((d) => updateDocument(d, id, patch));
-      toast('Document saved');
-    }
+    if (ta) { store.update((d) => updateDocument(d, id, { content: ta.value })); toast('Document saved'); }
     return;
   }
   const docDel = hit('[data-doc-delete]');
@@ -222,21 +432,49 @@ function onClick(ev) {
   if (hit('[data-bind-file]')) return store.bindFile().then(() => toast('Save file bound')).catch(() => {});
 }
 
-// Crew-Link-style "double-click a stat to roll": d6 + the track field's
-// current value vs 2d10, filed to the Journal like any other roll.
+// Executes a statblock field's configured dice model (see ROLL_METHODS in
+// drawers/index.js) and files the result to the Journal — shared by the
+// track badge's double-click-to-roll and the attribute label's click-to-
+// roll, so both entry points resolve identically. A field with
+// rollMethod:'none' is silently a no-op (callers already gate on rollability
+// via their own UI, this is just the last-line guard).
+function performFieldRoll(f, label) {
+  const method = f.rollMethod || 'none';
+  if (method === 'none') return;
+  if (method === 'flat') {
+    const r = rollFlat(Number(f.value) || 0, { target: f.target || 6 });
+    store.update((d) => logRoll(d, formatFlatRollText(label, r)));
+    // 5PFH's d6+attribute breakdown, not just the combined total — a GM
+    // reading the toast should see the die roll and the modifier separately,
+    // the same way the Journal line (formatFlatRollText) already does.
+    return toast(`🎲 d6(${r.die}) + ${r.value} = ${r.total} vs target ${r.target} → ${r.outcomeLabel}`);
+  }
+  if (method === 'traveller') {
+    const r = rollTraveller(Number(f.value) || 0, { target: f.target || 8 });
+    store.update((d) => logRoll(d, formatTravellerRollText(label, r)));
+    return toast(`🎲 ${r.outcomeLabel} — ${r.total} vs target ${r.target}`);
+  }
+  const r = rollAction(Number(f.value) || 0);
+  store.update((d) => logRoll(d, formatRollText(label, r)));
+  toast(`🎲 ${r.outcomeLabel} — ${r.total} vs ${r.challenge1}, ${r.challenge2}${r.match ? ' (match)' : ''}`);
+}
+
+// Crew-Link-style "double-click a stat to roll" — track fields only
+// (attribute fields roll via their label click, see onClick's
+// data-statblock-roll-label handler above). A field with rollMethod:'none'
+// (a plain progress bar, e.g. Health) never gets a roll button in the first
+// place — see trackRow() in drawers/index.js.
 function onDblClick(ev) {
   const rollTarget = ev.target.closest('[data-statblock-roll]');
   if (!rollTarget) return;
   ev.preventDefault();
-  const idx = Number(rollTarget.dataset.statblockRoll);
+  const [gi, fi] = rollTarget.dataset.statblockRoll.split('::').map(Number);
   const active = store.get().entities.activeId;
   const e = getEntity(store.get(), active);
-  const f = e && e.statblock && e.statblock.fields[idx];
+  const group = e && e.statblocks && e.statblocks[gi];
+  const f = group && group.fields[fi];
   if (!f || !f.track) return;
-  const r = rollAction(Number(f.value) || 0);
-  const label = `${e.name || 'Unnamed'} — ${f.key || 'Stat'}`;
-  store.update((d) => logRoll(d, formatRollText(label, r)));
-  toast(`🎲 ${r.outcomeLabel} — ${r.total} vs ${r.challenge1}, ${r.challenge2}${r.match ? ' (match)' : ''}`);
+  performFieldRoll(f, `${e.name || 'Unnamed'} — ${f.key || 'Stat'}`);
 }
 
 function onChange(ev) {
@@ -249,18 +487,73 @@ function onChange(ev) {
     return store.update((d) => patchContext(d, key, { [field]: t.value }));
   }
 
+  const tagSelect = t.closest('[data-entity-tag-select]');
+  if (tagSelect) {
+    if (!t.value) return;
+    const active = store.get().entities.activeId;
+    return store.update((d) => addEntityTag(d, active, t.value));
+  }
+
   const ef = t.closest('[data-entity-field]');
   if (ef) {
     const active = store.get().entities.activeId;
     const field = ef.dataset.entityField;
-    if (field === 'tags') return store.update((d) => setEntityTags(d, active, t.value));
     return store.update((d) => updateEntity(d, active, { [field]: t.value }));
   }
 
-  const skey = t.closest('[data-statblock-key]');
-  if (skey) { const active = store.get().entities.activeId; return store.update((d) => setEntityStatblockField(d, active, Number(skey.dataset.statblockKey), { key: t.value })); }
+  const relLabel = t.closest('[data-entity-rel-label]');
+  if (relLabel) { const active = store.get().entities.activeId; return store.update((d) => updateRelationshipLabel(d, active, relLabel.dataset.entityRelLabel, t.value)); }
+
   const sval = t.closest('[data-statblock-val]');
-  if (sval) { const active = store.get().entities.activeId; return store.update((d) => setEntityStatblockField(d, active, Number(sval.dataset.statblockVal), { value: t.value })); }
+  if (sval) {
+    const [gi, fi] = sval.dataset.statblockVal.split('::').map(Number);
+    const active = store.get().entities.activeId;
+    return store.update((d) => setEntityStatblockField(d, active, gi, fi, { value: t.value }));
+  }
+  const sattr = t.closest('[data-statblock-attr-val]');
+  if (sattr) {
+    const [gi, fi] = sattr.dataset.statblockAttrVal.split('::').map(Number);
+    const active = store.get().entities.activeId;
+    return store.update((d) => setEntityStatblockAttributeValue(d, active, gi, fi, t.value));
+  }
+
+  // --- party trackers ---
+  const trkName = t.closest('[data-party-tracker-name]');
+  if (trkName) return store.update((d) => updatePartyTracker(d, trkName.dataset.partyTrackerName, { name: t.value }));
+  const trkKind = t.closest('[data-party-tracker-kind]');
+  if (trkKind) return store.update((d) => updatePartyTracker(d, trkKind.dataset.partyTrackerKind, { kind: t.value }));
+  const trkValue = t.closest('[data-party-tracker-value]');
+  if (trkValue) return store.update((d) => updatePartyTracker(d, trkValue.dataset.partyTrackerValue, { value: Number(t.value) || 0 }));
+  const trkMax = t.closest('[data-party-tracker-max]');
+  if (trkMax) return store.update((d) => updatePartyTracker(d, trkMax.dataset.partyTrackerMax, { max: Number(t.value) || 1 }));
+
+  // --- colony ---
+  const colonyField = t.closest('[data-colony-field]');
+  if (colonyField) return store.update((d) => setColonyField(d, colonyField.dataset.colonyField, t.value));
+  const crewField = t.closest('[data-colony-crew-field]');
+  if (crewField) {
+    const [id, field] = crewField.dataset.colonyCrewField.split('::');
+    return store.update((d) => updateCrewRow(d, id, { [field]: t.value }));
+  }
+
+  // --- settings: Bestiary statblock template field edits ---
+  const tplKey = t.closest('[data-tpl-field-key]');
+  if (tplKey) { const [sys, idx] = tplKey.dataset.tplFieldKey.split('::'); return store.update((d) => updateTemplateField(d, sys, Number(idx), { key: t.value })); }
+  const tplKind = t.closest('[data-tpl-field-kind]');
+  if (tplKind) { const [sys, idx] = tplKind.dataset.tplFieldKind.split('::'); return store.update((d) => updateTemplateField(d, sys, Number(idx), { kind: t.value })); }
+  const tplRoll = t.closest('[data-tpl-field-rollmethod]');
+  if (tplRoll) { const [sys, idx] = tplRoll.dataset.tplFieldRollmethod.split('::'); return store.update((d) => updateTemplateField(d, sys, Number(idx), { rollMethod: t.value })); }
+  const tplFormat = t.closest('[data-tpl-field-format]');
+  if (tplFormat) { const [sys, idx] = tplFormat.dataset.tplFieldFormat.split('::'); return store.update((d) => updateTemplateField(d, sys, Number(idx), { format: t.value })); }
+
+  const threadStatus = t.closest('[data-thread-status]');
+  if (threadStatus) return store.update((d) => setThreadStatus(d, threadStatus.dataset.threadStatus, t.value));
+  const threadPriority = t.closest('[data-thread-priority]');
+  if (threadPriority) return store.update((d) => setThreadPriority(d, threadPriority.dataset.threadPriority, t.value));
+  const tplMax = t.closest('[data-tpl-field-max]');
+  if (tplMax) { const [sys, idx] = tplMax.dataset.tplFieldMax.split('::'); return store.update((d) => updateTemplateField(d, sys, Number(idx), { max: Number(t.value) || 5 })); }
+  const tplTarget = t.closest('[data-tpl-field-target]');
+  if (tplTarget) { const [sys, idx] = tplTarget.dataset.tplFieldTarget.split('::'); return store.update((d) => updateTemplateField(d, sys, Number(idx), { target: Number(t.value) || 6 })); }
 
   const num = t.closest('[data-ctx-num]');
   if (num) { const [key, field] = num.dataset.ctxNum.split('.'); return store.update((d) => patchContext(d, key, { [field]: Number(t.value) })); }
@@ -279,14 +572,37 @@ function onChange(ev) {
   }
 
   if (t.closest('[data-doc-upload]')) {
-    const file = t.files && t.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      store.update((d) => addDocument(d, { kind: 'file', title: file.name, fileName: file.name, mimeType: file.type, dataUrl: reader.result }));
-      toast(`Uploaded ${file.name}`);
-    };
-    reader.readAsDataURL(file);
+    const files = Array.from(t.files || []);
+    if (!files.length) return;
+    let done = 0;
+    const total = files.length;
+    for (const file of files) {
+      // localStorage's shared per-origin quota (commonly 5-10MB, holding the
+      // WHOLE campaign, not just this file) can't reliably hold a large
+      // rulebook PDF base64-encoded — this used to fail silently (store.js's
+      // persist() only logged a console.warn), so an upload like this could
+      // look like it worked and then be gone on the next reload. Large,
+      // static rulebooks belong in assets/docs/ (rebuilt into the
+      // size-unlimited Reference Library) instead of embedded here.
+      if (file.size > MAX_DOC_UPLOAD_BYTES) {
+        done += 1;
+        toast(`"${file.name}" (${formatBytes(file.size)}) is too big to store this way — add rulebook-sized PDFs to assets/docs/ and rebuild instead.`);
+        continue;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          store.update((d) => addDocument(d, { kind: 'file', title: file.name, fileName: file.name, mimeType: file.type, dataUrl: reader.result }));
+          done += 1;
+          toast(done === total ? `Uploaded ${done} file${done === 1 ? '' : 's'}` : `Uploading… (${done}/${total})`);
+        } catch (e) {
+          done += 1;
+          toast(`"${file.name}" couldn't be saved — browser storage is full. Add large rulebooks to assets/docs/ and rebuild instead.`);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+    t.value = '';
     return;
   }
 }
@@ -298,12 +614,13 @@ function onInput(ev) {
   if (num) { const lbl = num.previousElementSibling || num.parentElement.querySelector('.metric'); if (lbl && lbl.classList.contains('metric')) lbl.textContent = `${t.value}/10`; return; }
 
   const of = t.closest('[data-oracle-filter]');
-  if (of) { oracleFilter = t.value; renderDrawerBody(); restoreFocus('[data-oracle-filter]'); }
+  if (of) { oracleFilter = t.value; renderDrawerBody(); restoreFocus('[data-oracle-filter]'); return; }
+
+  const df = t.closest('[data-doc-filter]');
+  if (df) { docFilter = t.value; renderDrawerBody(); restoreFocus('[data-doc-filter]'); }
 }
 
-let oracleFilter = '';
-
-function toggleDrawer(id) { openDrawer = openDrawer === id ? null : id; if (openDrawer === 'oracle') oracleFilter = ''; render(); }
+function toggleDrawer(id) { openDrawer = openDrawer === id ? null : id; if (openDrawer === 'oracle') oracleFilter = ''; if (openDrawer === 'documents') { docFilter = ''; docTagFilters = new Set(); docTagEditorOpen = new Set(); } render(); }
 
 // ---- drag-and-drop: entity → entity (relate) or entity → text (mention) --
 // Native HTML5 DnD, delegated at the root like everything else. A custom
@@ -412,7 +729,10 @@ function render() {
   root.querySelector('[data-copilot]').dataset.open = String(copilotOpen);
 
   const linkCount = Math.round(((doc.entities.items || []).reduce((s, e) => s + ((e.relationships || []).length), 0)) / 2);
-  const badges = { journal: doc.journal.length || '', entities: (doc.entities.items || []).length || '', graph: linkCount || '' };
+  const badges = {
+    journal: doc.journal.length || '', entities: (doc.entities.items || []).length || '', graph: linkCount || '',
+    party: (doc.party && doc.party.trackers && doc.party.trackers.length) || '',
+  };
   const edge = root.querySelector('[data-edge]');
   edge.innerHTML = DRAWERS.map((d) => {
     const badge = badges[d.id] || '';
@@ -427,12 +747,58 @@ function render() {
   drawer.querySelector('[data-drawer-title]').textContent = meta ? meta.label : 'Drawer';
   drawer.style.setProperty('--drawer-w', (doc.drawers.widths[openDrawer] || 420) + 'px');
   renderDrawerBody();
+
+  const viewer = root.querySelector('[data-doc-viewer]');
+  const openTabs = (doc.documents && doc.documents.openTabs) || [];
+  viewer.hidden = openTabs.length === 0;
+  // Stop the viewer short of whatever drawer is currently open (it's always
+  // the Documents drawer in practice, since that's the only place a
+  // data-doc-open link exists) — the drawer sits at a higher z-index, so
+  // without this the viewer's own controls (e.g. a tab's close button)
+  // render underneath the drawer and become unclickable despite being
+  // visible.
+  viewer.style.setProperty('--viewer-overlap', openDrawer ? `${doc.drawers.widths[openDrawer] || 420}px` : '0px');
+  if (openTabs.length) {
+    const activeTab = doc.documents.activeTab && openTabs.includes(doc.documents.activeTab)
+      ? doc.documents.activeTab : openTabs[openTabs.length - 1];
+    viewer.querySelector('[data-doc-viewer-tabs]').innerHTML = openTabs.map((key) => {
+      const resolved = resolveDocumentTab(doc, key);
+      const title = resolved ? resolved.title : 'Document';
+      return `<button class="doc-viewer-tab ${key === activeTab ? 'active' : ''}" data-doc-viewer-tab="${escapeHtml(key)}" title="${escapeHtml(title)}">
+        <span class="doc-viewer-tab-title">${escapeHtml(title)}</span>
+        <span class="doc-viewer-tab-close" data-doc-viewer-tab-close="${escapeHtml(key)}" aria-label="Close tab">✕</span>
+      </button>`;
+    }).join('');
+
+    const resolvedActive = resolveDocumentTab(doc, activeTab);
+    const frame = viewer.querySelector('[data-doc-viewer-frame]');
+    const empty = viewer.querySelector('[data-doc-viewer-empty]');
+    if (resolvedActive && resolvedActive.src) {
+      frame.hidden = false;
+      empty.hidden = true;
+      if (frame.src !== resolvedActive.src) frame.src = resolvedActive.src;
+    } else {
+      // A resolved 'lib' entry with no dataUrl means the file never actually
+      // saved (e.g. an old campaign that predates store.js's quota-rollback
+      // fix) — show a message instead of a blank iframe.
+      frame.hidden = true;
+      frame.removeAttribute('src');
+      empty.hidden = false;
+      empty.textContent = resolvedActive
+        ? `"${resolvedActive.title}" couldn't be loaded — it may have failed to save (browser storage limits). Try re-adding it, or for large rulebooks add the PDF to assets/docs/ and rebuild.`
+        : 'This document is no longer available.';
+    }
+  }
 }
 
 function renderDrawerBody() {
   const doc = store.get();
   const body = root && root.querySelector('[data-drawer-body]');
-  if (body) body.innerHTML = openDrawer ? renderDrawer(openDrawer, doc, oracleFilter) : '';
+  if (body) {
+    body.innerHTML = openDrawer ? renderDrawer(openDrawer, doc, {
+      oracleFilter, expandedOracleGroups, docFilter, docTagFilters, docTagEditorOpen, statblockAddOpen, recapOpen,
+    }) : '';
+  }
 }
 
 // ---- helpers ------------------------------------------------------------

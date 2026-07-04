@@ -22,5 +22,11 @@ export function renderCopilot(doc) {
       <div class="copilot-quick">
         ${a.quickActions.map((q) => `<button class="chip" data-shift="${esc(q)}">⚡ ${esc(q)}</button>`).join('')}
       </div>
-    </div>`;
+    </div>
+    ${a.overlooked && a.overlooked.length ? `
+    <div class="copilot-card copilot-overlooked">
+      <h3>What did I overlook?</h3>
+      <p class="dim small">Gone quiet — worth a scene, or explicitly marking Dormant/Archived if it's meant to fade:</p>
+      <div class="entity-chips">${a.overlooked.map((name) => `<span class="chip sm">${esc(name)}</span>`).join('')}</div>
+    </div>` : ''}`;
 }

@@ -3,6 +3,7 @@
 // which is what makes it testable.
 
 import { SCENE_TABLES } from '../data/tables.js';
+import { ORACLE_GROUPS } from '../data/oracleGroups.js';
 
 export { SCENE_TABLES };
 
@@ -96,4 +97,57 @@ export function tablesWithOverrides(overrides = {}) {
 
 function structuredCloneSafe(o) {
   try { return structuredClone(o); } catch { return JSON.parse(JSON.stringify(o)); }
+}
+
+// --- grouped/collapsible oracle tree (Oracle drawer) -----------------------
+// A node is either a leaf table ({kind:'table', path, values}) or a group
+// ({kind:'group'|'category', label, children}). `path` on a table node is
+// the breadcrumb used by rollTable/rollGroup (see session.js rollOracle).
+function buildOracleNode(node, path) {
+  return Object.entries(node).map(([key, value]) => {
+    const nodePath = [...path, key];
+    return Array.isArray(value)
+      ? { kind: 'table', label: key, path: nodePath, values: value }
+      : { kind: 'group', label: key, path: nodePath, children: buildOracleNode(value, nodePath) };
+  });
+}
+
+/** The full tree, top-level keys folded into ORACLE_GROUPS categories (any
+ *  key not listed in a category lands under an automatic "Other" bucket). */
+export function buildGroupedOracleTree(tables, groups = ORACLE_GROUPS) {
+  const used = new Set();
+  const categories = groups.map((g) => {
+    const children = g.children.filter((k) => tables[k] && typeof tables[k] === 'object').map((k) => {
+      used.add(k);
+      return { kind: 'group', label: k, path: [k], children: buildOracleNode(tables[k], [k]) };
+    });
+    return { kind: 'category', label: g.label, children };
+  }).filter((g) => g.children.length);
+
+  const leftover = Object.keys(tables).filter((k) => !used.has(k) && typeof tables[k] === 'object');
+  if (leftover.length) {
+    categories.push({
+      kind: 'category', label: '📦 Other',
+      children: leftover.map((k) => ({ kind: 'group', label: k, path: [k], children: buildOracleNode(tables[k], [k]) })),
+    });
+  }
+  return categories;
+}
+
+/** Filter the tree by a case-insensitive substring match against group/table
+ *  names or (for leaf tables) individual entries. A group whose own name
+ *  matches keeps its whole subtree; otherwise only matching descendants
+ *  survive — the caller (UI) force-opens whatever this returns. */
+export function filterOracleTree(nodes, query) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return nodes;
+  const walk = (node) => {
+    if (node.label.toLowerCase().includes(q)) return node;
+    if (node.kind === 'table') {
+      return node.values.some((v) => String(v).toLowerCase().includes(q)) ? node : null;
+    }
+    const children = node.children.map(walk).filter(Boolean);
+    return children.length ? { ...node, children } : null;
+  };
+  return nodes.map(walk).filter(Boolean);
 }

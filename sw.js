@@ -1,8 +1,14 @@
 // sw.js — minimal offline shell cache for the installable PWA.
-// Cache-first for the app shell so a bound campaign works with no network.
-// Bump CACHE when shipping a new build (a bundler will automate this in Phase 4).
-
-const CACHE = 'saga-atlas-v0';
+//
+// Network-first for the app shell (index.html, the bundle, styles): a GM who
+// is online should always get the build that's actually on disk/deployed —
+// never a stale cache from a previous visit. The cache is only a fallback
+// for when the network is unavailable (true offline play). This was changed
+// from cache-first because cache-first + a never-bumped cache name meant a
+// rebuilt bundle could silently keep serving the old one indefinitely (see
+// PROGRESS.md "Bug B" — reported as "content doesn't persist" under a local
+// dev server, actually stale-SW-cache masking real changes).
+const CACHE = 'gmatlas-shell-v1';
 const SHELL = [
   './',
   './index.html',
@@ -28,10 +34,10 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request).then((hit) => hit || fetch(e.request).then((res) => {
+    fetch(e.request).then((res) => {
       const copy = res.clone();
       caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
       return res;
-    }).catch(() => caches.match('./index.html')))
+    }).catch(() => caches.match(e.request).then((hit) => hit || caches.match('./index.html')))
   );
 });

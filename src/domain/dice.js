@@ -39,3 +39,44 @@ export function formatRollText(label, r) {
   const matchPart = r.match ? ' (match)' : '';
   return `🎲 ${label}: ${r.actionDie} + ${r.value}${addsPart} = ${r.total} vs ${r.challenge1}, ${r.challenge2}${matchPart} → ${r.outcomeLabel}`;
 }
+
+/**
+ * Roll a flat d6-vs-target check: d6 + value vs a target number (5PFH-style
+ * "d6+attribute" field type — meet or beat the target to succeed). Same
+ * RNG-injectable posture as rollAction, just a different table's mechanic.
+ */
+export function rollFlat(value = 0, { target = 6, adds = 0, rng = Math.random } = {}) {
+  const die = rollDie(6, rng);
+  const v = Number(value) || 0;
+  const a = Number(adds) || 0;
+  const total = die + v + a;
+  const success = total >= target;
+  return { die, value: v, adds: a, total, target, success, outcome: success ? 'success' : 'fail', outcomeLabel: success ? 'Success' : 'Fail' };
+}
+
+/** Render a flat-roll result as one journal/toast-friendly line. */
+export function formatFlatRollText(label, r) {
+  const addsPart = r.adds ? ` + ${r.adds}` : '';
+  return `🎲 ${label}: ${r.die} + ${r.value}${addsPart} = ${r.total} vs target ${r.target} → ${r.outcomeLabel}`;
+}
+
+/**
+ * Roll a Traveller-style 2d6 check: 2d6 + value vs a target number (classic
+ * Traveller task resolution defaults to an 8+). Same RNG-injectable posture
+ * as rollAction/rollFlat, just a different table's dice and default target.
+ */
+export function rollTraveller(value = 0, { target = 8, adds = 0, rng = Math.random } = {}) {
+  const die1 = rollDie(6, rng);
+  const die2 = rollDie(6, rng);
+  const v = Number(value) || 0;
+  const a = Number(adds) || 0;
+  const total = die1 + die2 + v + a;
+  const success = total >= target;
+  return { die1, die2, value: v, adds: a, total, target, success, outcome: success ? 'success' : 'fail', outcomeLabel: success ? 'Success' : 'Fail' };
+}
+
+/** Render a Traveller-roll result as one journal/toast-friendly line. */
+export function formatTravellerRollText(label, r) {
+  const addsPart = r.adds ? ` + ${r.adds}` : '';
+  return `🎲 ${label}: ${r.die1}+${r.die2} + ${r.value}${addsPart} = ${r.total} vs target ${r.target} → ${r.outcomeLabel}`;
+}

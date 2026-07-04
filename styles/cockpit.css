@@ -234,6 +234,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .field-label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.7rem; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; margin-top: var(--sp-3); }
 .field-label .metric { color: var(--accent); font-size: 0.85rem; }
 .field-row { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: var(--sp-3); align-items: end; }
+/* Narrative Trackers (Resources/Reputation) — a balanced 2-up row, not the
+   3-up Intent/Threat/Mystery layout above. */
+.field-row-2col { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); align-items: end; }
 textarea, select, input[type="text"], input[type="search"], .drawer-search {
   width: 100%; box-sizing: border-box;
   background: var(--bg-inset); color: var(--text);
@@ -289,10 +292,33 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 .journal-entry { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--sp-3); background: var(--tier2-bg); }
 .journal-meta { display: flex; align-items: center; justify-content: space-between; font-size: 0.68rem; color: var(--text-dim); margin-bottom: var(--sp-2); }
 .journal-text { font-size: 0.85rem; white-space: pre-wrap; line-height: 1.45; }
+
+/* Session Recap ("Previously on...", Phase 6) */
+.recap-toggle { width: 100%; text-align: left; margin-bottom: var(--sp-3); }
+.recap-panel {
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--tier2-bg);
+  padding: var(--sp-3); margin-bottom: var(--sp-3);
+}
+.recap-panel h4 { margin: var(--sp-3) 0 var(--sp-1); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+.recap-panel h4:first-child { margin-top: 0; }
+.recap-panel p { margin: 0; font-size: 0.85rem; }
+.recap-list { margin: 0; padding-left: 1.1rem; font-size: 0.85rem; }
+.recap-list li { margin-bottom: 2px; }
+.recap-panel .entity-chips { margin-top: 0; }
+.recap-panel [data-recap-save] { margin-top: var(--sp-3); }
 .settings-group { margin-bottom: var(--sp-6); }
 .settings-group h3 { font-size: 0.85rem; margin: 0 0 var(--sp-2); color: var(--accent); }
 .btn-col { display: flex; flex-direction: column; gap: var(--sp-2); }
 .file-btn { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+
+/* Rules Constitution reference table (Settings) */
+.tablewrap-narrow { overflow-x: auto; margin: var(--sp-2) 0; }
+.rules-constitution-table { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
+.rules-constitution-table th, .rules-constitution-table td { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+.rules-constitution-table th { color: var(--text-dim); font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.rules-provider-chip { display: inline-block; margin: 1px 2px 1px 0; cursor: default; }
+.rules-provider-legend { margin: var(--sp-3) 0 0; padding-left: 1.1rem; font-size: 0.78rem; color: var(--text-dim); }
+.rules-provider-legend li { margin-bottom: var(--sp-1); }
 
 /* Document library */
 .doc-list { display: flex; flex-direction: column; gap: var(--sp-3); }
@@ -301,8 +327,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 .doc-title-input { font-size: 0.92rem; font-weight: 600; }
 .doc-card-actions { display: inline-flex; gap: 2px; align-items: center; }
 .doc-content-input { min-height: 8rem; }
-.ref-doc-card { flex-direction: row; align-items: center; justify-content: space-between; }
-.ref-doc-title { font-size: 0.92rem; font-weight: 600; }
 
 /* Toast */
 .toast {
@@ -315,7 +339,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 @media (max-width: 1023px) {
-  .field-row { grid-template-columns: 1fr; }
+  .field-row, .field-row-2col { grid-template-columns: 1fr; }
   .header-actions .btn.sm { display: none; }
 }
 
@@ -323,13 +347,17 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 .threads { margin-top: var(--sp-4); border-top: 1px solid var(--border); padding-top: var(--sp-3); }
 .threads-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-2); }
 .threads-head h3 { margin: 0; font-size: 0.85rem; color: var(--accent); }
-.thread-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: var(--sp-3); padding: 0.35rem 0; }
+.thread-row { display: grid; grid-template-columns: 1fr auto auto auto auto; align-items: center; gap: var(--sp-2); padding: 0.35rem 0; }
 .thread-row.done .thread-name { text-decoration: line-through; color: var(--text-dim); }
 .thread-name { font-size: 0.88rem; }
 .thread-clock { display: inline-flex; gap: 3px; }
 .pip { width: 0.7rem; height: 0.7rem; border-radius: 50%; border: 1px solid var(--border-strong); background: transparent; }
 .pip.on { background: var(--accent-strong); border-color: var(--accent-strong); }
 .thread-actions { display: inline-flex; gap: 2px; }
+.thread-status-select, .thread-priority-select { font-size: 0.72rem; padding: 1px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-inset); color: var(--text-dim); }
+/* A quiet/settled stage dims the row without the strikethrough .done reserves for a full clock. */
+.thread-row.thread-status-dormant .thread-name, .thread-row.thread-status-archived .thread-name { color: var(--text-dim); }
+.thread-row.thread-priority-high .thread-status-select { border-color: var(--accent-strong); }
 
 /* Entity Inspector (Phase 3A) */
 .entity-add-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-2) 0; }
@@ -349,6 +377,14 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 .rel-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-2); }
 .rel-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--tier2-bg); border: 1px solid var(--border); border-radius: 999px; padding: 0.2rem 0.5rem; font-size: 0.78rem; }
 .rel-add { display: grid; grid-template-columns: 1fr 1fr auto; gap: var(--sp-2); align-items: center; }
+
+/* Tag editor (Phase 7): removable chips + a per-entity-type vocabulary
+   dropdown, same pill/chip language as .rel-chip above. */
+.tag-editor { margin-top: var(--sp-3); }
+.field-label-static { display: block; font-size: 0.7rem; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.25rem; }
+.tag-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+.tag-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--tier2-bg); border: 1px solid var(--border); border-radius: 999px; padding: 0.2rem 0.5rem; font-size: 0.78rem; }
+.tag-add-row { display: grid; grid-template-columns: 1fr auto; gap: var(--sp-2); align-items: center; }
 
 /* clickable entity chips in WHO/WHERE cards */
 .entity-chip { cursor: pointer; }
@@ -371,10 +407,16 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 .statblock-block { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-3); }
 .statblock-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-2); }
 .statblock-head h4 { margin: 0; font-size: 0.8rem; color: var(--accent); }
-.statblock-add-choices { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.statblock-add-choices { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-2); }
 .chip.sm { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
 .statblock-add-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
-.statblock-row { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: var(--sp-2); margin-bottom: 4px; align-items: center; }
+/* Collapsed behind a gear icon so several rulesets/templates worth of "+ Add"
+   chips don't dominate the inspector once a few groups already exist. */
+.statblock-add-toggle-row { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); padding-top: var(--sp-2); border-top: 1px solid var(--border); }
+.statblock-add-toggle-row .icon-btn { font-size: 1rem; }
+/* Label + value only — a field's name/shape/kind is Settings' job (the
+   Bestiary/character templates), not something edited per-instance here. */
+.statblock-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); margin-bottom: 4px; align-items: center; }
 .statblock-key { font-size: 0.8rem; color: var(--text-dim); }
 .statblock-val { font-size: 0.85rem; }
 
@@ -385,7 +427,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 .attr-val { font-size: 1rem; font-weight: 700; color: var(--accent-strong); margin-top: 0.2rem; }
 
 /* Numeric click-to-set / double-click-to-roll tracks (Crew-Link-style) */
-.statblock-row.track-row { grid-template-columns: 1fr 2fr auto auto; }
+.statblock-row.track-row { grid-template-columns: 1fr 2fr; }
 .track-widget { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .track-boxes { display: flex; gap: 2px; }
 .track-box {
@@ -402,6 +444,23 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 .track-value-badge:hover { background: rgba(56,189,248,0.18); }
 .track-value-badge small { font-weight: 400; color: var(--text-dim); margin-left: 1px; }
 
+/* Attribute/stat row — a directly-editable, validated-numeric value
+   (Starforged/5PFH-style: "EDGE +3"), not a 1-5 click-to-set meter (that's
+   trackRow, reserved for depleting resources like Health). The label is the
+   roll trigger when the field has a dice model; format (sign/inches/plain)
+   is rendered as part of the input's own text, not a separate affix
+   element, so it reads as part of the value like a real character sheet. */
+.statblock-key-roll {
+  background: none; border: none; padding: 0; font: inherit; color: var(--accent);
+  cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px;
+}
+.statblock-key-roll:hover { color: var(--accent-strong); }
+.attr-val-input {
+  width: 4rem; min-width: 0; text-align: center; border: 1px solid var(--accent-strong); background: rgba(56,189,248,0.08); color: var(--accent);
+  border-radius: 4px; padding: 2px 6px; font-size: 0.85rem; font-weight: 700;
+}
+.attr-val-input:focus { outline: 2px solid var(--accent-strong); outline-offset: 1px; }
+
 /* Character sheet (ruleset-driven stats + resource meters) */
 .character-sheet-stats {
   display: flex; flex-wrap: wrap; gap: var(--sp-3);
@@ -413,14 +472,149 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
   width: 6rem; margin-bottom: 0; padding: var(--sp-2);
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset);
 }
-.track-row-compact .statblock-key { width: 100%; text-align: center; border: none; background: transparent; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.65rem; }
+.track-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.65rem; }
 .track-row-compact .track-widget { flex-direction: column-reverse; align-items: center; }
 .track-row-compact .track-boxes { flex-wrap: wrap; justify-content: center; width: 4.5rem; }
 .track-row-compact .track-box { width: 18px; height: 18px; font-size: 0.62rem; }
-.track-row-compact .icon-btn { width: 20px; height: 20px; font-size: 0.6rem; padding: 0; }
 .character-sheet-resources .statblock-row.track-row { margin-bottom: var(--sp-2); }
+
+/* Compact attribute pill (Edge/Heart/... stat row atop a character sheet) —
+   same bordered-pill language as .track-row-compact, single-number spinner
+   instead of boxes. */
+.attr-row-compact {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  width: 6rem; margin-bottom: 0; padding: var(--sp-2);
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset);
+}
+.attr-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.65rem; }
 
 /* Drag-and-drop (entity ↔ entity, entity → text) */
 [data-drag-entity] { cursor: grab; }
 [data-drag-entity]:active { cursor: grabbing; }
 .drop-hover { outline: 2px dashed var(--accent-strong); outline-offset: 2px; background: rgba(56,189,248,0.08); }
+
+/* ============================================================
+   Phase 5 — Party / Colony / Guide / Oracle tree / Documents /
+   Bestiary templates / in-app document viewer
+   ============================================================ */
+
+/* Edge tabs grew from 6 to 9 — let the strip scroll instead of clipping. */
+.mc-edge { overflow-y: auto; }
+
+/* In-app PDF viewer — "over the left and middle sections, adjacent left of
+   the document library window": fills workspace+Co-Pilot, leaves the edge
+   tabs clickable, and stops short of the open drawer (--viewer-overlap, set
+   in shell.js's render() to the current drawer's width) so an open Documents
+   drawer still reads as the library "window" the viewer sits next to —
+   rather than being drawn OVER the viewer's own content/close button. The
+   drawer keeps a higher z-index than the viewer for exactly that reason;
+   without the overlap inset, anything the viewer renders under the drawer's
+   footprint is present but physically unclickable (found via Playwright
+   during the Phase 5 verification pass — the close button reported as
+   "visible" but every click on it was intercepted by the drawer above it). */
+.mc-doc-viewer {
+  position: fixed; top: var(--header-h); left: 0;
+  right: calc(var(--edge-w) + var(--viewer-overlap, 0px)); bottom: 0;
+  background: var(--bg); border-left: 1px solid var(--border-strong);
+  display: flex; flex-direction: column; z-index: 15;
+}
+.mc-doc-viewer[hidden] { display: none; }
+/* Tab strip — one tab per open document, switch by click, close via its own
+   ✕ (no single global close button anymore now that more than one document
+   can be open at once). */
+.doc-viewer-tabs {
+  display: flex; align-items: stretch; gap: 2px; overflow-x: auto;
+  background: var(--tier1-bg); border-bottom: 1px solid var(--tier1-border);
+}
+.doc-viewer-tab {
+  display: flex; align-items: center; gap: var(--sp-2); flex: 0 0 auto; max-width: 16rem;
+  padding: var(--sp-2) var(--sp-3); background: none; border: none; border-right: 1px solid var(--tier1-border);
+  font-size: 0.85rem; color: var(--text-dim); cursor: pointer;
+}
+.doc-viewer-tab.active { background: var(--bg); color: var(--accent); }
+.doc-viewer-tab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-viewer-tab-close { border-radius: 3px; padding: 0 3px; }
+.doc-viewer-tab-close:hover { background: var(--bg-inset); color: var(--text); }
+.doc-viewer-empty {
+  display: flex; align-items: center; justify-content: center; flex: 1;
+  padding: var(--sp-4); text-align: center; color: var(--text-dim); font-size: 0.9rem;
+}
+.doc-viewer-empty[hidden] { display: none; }
+.mc-doc-viewer iframe { flex: 1; border: none; width: 100%; background: #fff; }
+.mc-doc-viewer iframe[hidden] { display: none; }
+
+/* Oracle: grouped, collapsible, searchable tree */
+.oracle-toolbar { display: flex; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-3); }
+.oracle-toolbar .drawer-search { margin-bottom: 0; flex: 1; }
+.oracle-tree { display: flex; flex-direction: column; gap: 2px; }
+.oracle-group { border-radius: var(--radius-sm); }
+.oracle-group-head {
+  display: flex; align-items: center; gap: var(--sp-2); width: 100%; text-align: left;
+  background: none; border: none; color: var(--text); padding: 0.35rem 0.4rem; border-radius: var(--radius-sm);
+}
+.oracle-group-head:hover { background: var(--tier2-bg); }
+.oracle-toggle-caret { color: var(--text-dim); width: 1em; display: inline-block; }
+.oracle-group.category > .oracle-group-head { font-weight: 600; color: var(--accent); }
+.oracle-group.category { margin-top: var(--sp-2); }
+.oracle-group.group { margin-left: var(--sp-3); }
+.oracle-group.group > .oracle-group-head { font-size: 0.88rem; }
+.oracle-group[data-roll-group] { position: relative; }
+.oracle-group > [data-roll-group] { margin-left: calc(var(--sp-3) + 1.4em); margin-top: -0.3rem; }
+.oracle-group-children { margin-left: var(--sp-3); }
+
+/* Party */
+.party-member-list { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin: var(--sp-2) 0 var(--sp-3); }
+.party-member-card {
+  background: var(--tier2-bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: var(--sp-3); min-width: 10rem; cursor: pointer;
+}
+.party-member-card:hover { border-color: var(--accent); }
+.party-member-name { font-weight: 600; margin-bottom: var(--sp-2); }
+.party-tracker-list { display: flex; flex-direction: column; gap: var(--sp-2); }
+.party-tracker-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: var(--sp-2); align-items: center; }
+.party-tracker-name-input { min-width: 0; }
+.party-tracker-meter, .party-tracker-counter { display: inline-flex; align-items: center; gap: var(--sp-1); white-space: nowrap; }
+.party-tracker-max-input, .party-tracker-value-input { width: 3.2rem; text-align: center; }
+
+/* Colony */
+.colony-fields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); margin: var(--sp-2) 0 var(--sp-3); }
+.colony-fields .field-label:has(textarea) { grid-column: 1 / -1; }
+.colony-crew-list { display: flex; flex-direction: column; gap: var(--sp-2); }
+.colony-crew-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: var(--sp-2); align-items: center; }
+
+/* Guide */
+.guide-editor { min-height: 16rem; font-family: var(--font); }
+
+/* Documents: tags, search, link-style name, rename */
+.doc-card-title-link, .doc-card-title-static { font-size: 0.92rem; font-weight: 600; color: var(--text); }
+.doc-card-title-link { color: var(--accent); text-decoration: none; cursor: pointer; }
+.doc-card-title-link:hover { text-decoration: underline; }
+/* Small footprint by design: the tag row only renders at all when its 🏷
+   toggle (left of the ✎ rename icon, data-doc-tag-toggle/data-ref-tag-toggle)
+   is on, and the chips themselves are deliberately smaller than a regular
+   .chip — tighter vertical padding/gap than the rest of the card so a
+   record's tags read as a quiet footnote, not another UI row. */
+.doc-card-tags { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; margin-top: 0.25rem; }
+.doc-tag-chip { display: inline-flex; align-items: center; gap: 2px; background: var(--bg-inset); border: 1px solid var(--border); border-radius: 999px; padding: 0.03rem 0.4rem; font-size: 0.65rem; line-height: 1.4; color: var(--text-dim); }
+.doc-tag-input { width: 7rem; padding: 0.15rem 0.4rem; font-size: 0.65rem; }
+.doc-tag-filter-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.chip.active { border-color: var(--accent); color: var(--accent); background: rgba(56,189,248,0.1); }
+.ref-doc-card { padding: 0.5rem var(--sp-3); }
+.ref-doc-card .doc-card-head { margin-bottom: 0; }
+
+/* Relationship note (editable label) */
+.rel-label-input { width: 8rem; padding: 0.15rem 0.4rem; font-size: 0.72rem; background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-dim); }
+
+/* Non-rollable track badge (Bestiary progress-bar field) */
+.track-value-badge-static { opacity: 0.85; cursor: default; }
+
+/* Settings: Bestiary statblock template editor */
+.tpl-system-list { display: flex; flex-direction: column; gap: var(--sp-2); margin: var(--sp-2) 0; }
+.tpl-system { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--sp-2) var(--sp-3); }
+.tpl-system summary { cursor: pointer; font-size: 0.85rem; color: var(--accent); }
+.tpl-field-list { margin-top: var(--sp-2); display: flex; flex-direction: column; gap: 4px; }
+.tpl-field-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; padding: 0.3rem 0; border-top: 1px solid var(--border); }
+.tpl-field-key-input { width: 8rem; }
+.tpl-field-max { display: inline-flex; align-items: center; gap: 4px; font-size: 0.7rem; color: var(--text-dim); }
+.tpl-field-max input { width: 3.5rem; }
+.tpl-field-actions { margin-left: auto; display: inline-flex; gap: 2px; }

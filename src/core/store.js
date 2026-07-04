@@ -62,12 +62,27 @@ function createStore() {
 
   function get() { return doc; }
 
-  /** Mutate immutably: pass a function that returns a new (or mutated) doc. */
+  /** Mutate immutably: pass a function that returns a new (or mutated) doc.
+   *  If the change can't actually be saved (most commonly a localStorage
+   *  quota error from an oversized embedded upload — see addDocument in
+   *  domain/documents.js), the in-memory doc is rolled back to what's
+   *  really on disk before re-throwing, so the app never shows a change as
+   *  "there" when it silently failed to persist (campaign data is sacred —
+   *  Article VIII — an unpersisted phantom state violates that as much as
+   *  losing data outright). Callers that want to surface a friendly message
+   *  (e.g. the doc-upload handler in ui/shell.js) should wrap this call in
+   *  try/catch; callers that don't care still get a safe, consistent state. */
   function update(mutator) {
+    const prev = doc;
     const next = mutator(structuredCloneSafe(doc));
     doc = next || doc;
     doc.meta.updatedAt = new Date().toISOString();
-    persist();
+    const result = persist();
+    if (!result.ok) {
+      doc = prev;
+      notify();
+      throw result.error;
+    }
     notify();
     return doc;
   }
@@ -81,8 +96,10 @@ function createStore() {
       const prev = localStorage.getItem(STORAGE_KEY);
       if (prev) localStorage.setItem(BACKUP_KEY, prev);
       localStorage.setItem(STORAGE_KEY, json);
+      return { ok: true };
     } catch (e) {
       console.warn('persist failed (quota?)', e);
+      return { ok: false, error: e };
     }
   }
 

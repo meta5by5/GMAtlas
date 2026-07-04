@@ -3,7 +3,7 @@
 // click) so this stays a pure render function.
 
 import { listShifts } from '../../domain/context.js';
-import { listThreads } from '../../domain/threads.js';
+import { listThreads, THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -20,6 +20,8 @@ function card(title, lead, body) {
 const VIEWS = {
   what(doc) {
     const c = doc.context.what;
+    const resources = c.resources == null ? 5 : c.resources;
+    const reputation = c.reputation == null ? 5 : c.reputation;
     return card('WHAT is happening', 'The active situation — your primary workspace.', `
       <label class="field-label">Situation
         <textarea data-ctx="what.situation" rows="4" placeholder="What is unresolved right now?">${esc(c.situation)}</textarea>
@@ -35,6 +37,14 @@ const VIEWS = {
         </label>
         <label class="field-label">Mystery <b class="metric">${c.mystery}/10</b>
           <input type="range" min="0" max="10" value="${c.mystery}" data-ctx-num="what.mystery">
+        </label>
+      </div>
+      <div class="field-row-2col">
+        <label class="field-label">Resources <b class="metric">${resources}/10</b>
+          <input type="range" min="0" max="10" value="${resources}" data-ctx-num="what.resources">
+        </label>
+        <label class="field-label">Reputation <b class="metric">${reputation}/10</b>
+          <input type="range" min="0" max="10" value="${reputation}" data-ctx-num="what.reputation">
         </label>
       </div>
       <div class="action-bar">
@@ -103,9 +113,15 @@ function threadsBlock(doc) {
   const rows = threads.map((t) => {
     const pips = Array.from({ length: t.segments }, (_, i) =>
       `<span class="pip ${i < t.filled ? 'on' : ''}"></span>`).join('');
-    return `<div class="thread-row ${t.done ? 'done' : ''}">
+    return `<div class="thread-row thread-status-${esc(t.status)} thread-priority-${esc(t.priority)} ${t.done ? 'done' : ''}">
       <span class="thread-name">${esc(t.name)}</span>
       <span class="thread-clock" title="${t.filled}/${t.segments}">${pips}</span>
+      <select class="thread-status-select" data-thread-status="${esc(t.id)}" title="Narrative lifecycle stage">
+        ${THREAD_STATUSES.map((s) => `<option value="${s}" ${s === t.status ? 'selected' : ''}>${esc(THREAD_STATUS_LABELS[s])}</option>`).join('')}
+      </select>
+      <select class="thread-priority-select" data-thread-priority="${esc(t.id)}" title="Priority">
+        ${THREAD_PRIORITIES.map((p) => `<option value="${p}" ${p === t.priority ? 'selected' : ''}>${p[0].toUpperCase()}${p.slice(1)}</option>`).join('')}
+      </select>
       <span class="thread-actions">
         <button class="icon-btn" data-thread-adv="${esc(t.id)}" title="Advance">＋</button>
         <button class="icon-btn" data-thread-back="${esc(t.id)}" title="Set back">－</button>

@@ -18,12 +18,23 @@ function ctxClone(context) {
   };
 }
 
+// A campaign saved before Narrative Trackers shipped won't have resources/
+// reputation in its stored context.what at all — default to the neutral
+// midpoint (5), not 0, so an old save doesn't suddenly read as "out of
+// supply"/"reviled." Same "undefined means the old default" posture as
+// statblock fields' rollMethod (see CLAUDE.md Known non-issues).
+const numOr = (v, d) => (v == null ? d : v);
+
 // Each reducer receives a fresh clone and an optional payload.
 export const SHIFTS = {
   'Raise Threat': (c) => { c.what.threat = clamp((c.what.threat || 0) + 1); return `Threat raised to ${c.what.threat}/10`; },
   'Lower Threat': (c) => { c.what.threat = clamp((c.what.threat || 0) - 1); return `Threat lowered to ${c.what.threat}/10`; },
   'Deepen Mystery': (c) => { c.what.mystery = clamp((c.what.mystery || 0) + 1); return `Mystery deepened to ${c.what.mystery}/10`; },
   'Resolve Mystery': (c) => { c.what.mystery = clamp((c.what.mystery || 0) - 1); return `Mystery eased to ${c.what.mystery}/10`; },
+  'Gain Resources': (c) => { c.what.resources = clamp(numOr(c.what.resources, 5) + 1); return `Resources up to ${c.what.resources}/10`; },
+  'Spend Resources': (c) => { c.what.resources = clamp(numOr(c.what.resources, 5) - 1); return `Resources down to ${c.what.resources}/10`; },
+  'Raise Reputation': (c) => { c.what.reputation = clamp(numOr(c.what.reputation, 5) + 1); return `Reputation up to ${c.what.reputation}/10`; },
+  'Lower Reputation': (c) => { c.what.reputation = clamp(numOr(c.what.reputation, 5) - 1); return `Reputation down to ${c.what.reputation}/10`; },
   'Reveal Clue': (c, p) => { c.what.situation = appendNote(c.what.situation, p || 'A clue surfaces that points at the current thread.'); return 'Clue revealed'; },
   'Complicate': (c, p) => { c.what.situation = appendNote(c.what.situation, p || 'A complication forces a harder choice.'); c.what.threat = clamp((c.what.threat || 0) + 1); return 'Complication introduced'; },
   'Reward': (c, p) => { c.what.situation = appendNote(c.what.situation, p || 'The party gains leverage or resources.'); return 'Reward granted'; },

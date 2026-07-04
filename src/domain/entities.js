@@ -6,7 +6,10 @@
 // The data shape (campaign.entities.items) has existed since Phase 0 and the
 // v0.53 migration already fills it; this module gives it behavior.
 
-import { ensureAutoStatblock, makeStatblock, setStatblockField, addStatblockField, removeStatblockField, toggleStatblockFieldTrack, setStatblockTrackValue, toggleStatblockFieldAttribute } from './statblocks.js';
+import {
+  ensureAutoStatblock, addStatblockGroup, removeStatblockGroup, setStatblockField, addStatblockField, removeStatblockField,
+  toggleStatblockFieldTrack, setStatblockTrackValue, toggleStatblockFieldAttribute, setStatblockAttributeValue,
+} from './statblocks.js';
 
 export const ENTITY_TYPES = ['npc', 'location', 'faction', 'asset', 'lore'];
 export const TYPE_LABEL = { npc: 'NPC', location: 'Location', faction: 'Faction', asset: 'Asset', lore: 'Lore' };
@@ -50,7 +53,7 @@ function _create(campaign, { type = 'npc', name = '' } = {}) {
   };
   ents.items.push(rec);
   ents.activeId = rec.id;
-  ensureAutoStatblock(rec);
+  ensureAutoStatblock(rec, campaign.settings);
   return rec;
 }
 
@@ -72,13 +75,51 @@ export function createEntity(campaign, opts) {
 export function updateEntity(campaign, id, patch) {
   const next = clone(campaign);
   const e = getEntity(next, id);
-  if (e) { Object.assign(e, patch); ensureAutoStatblock(e); }
+  if (e) { Object.assign(e, patch); ensureAutoStatblock(e, next.settings); }
   return next;
 }
 
 export function setEntityTags(campaign, id, tagsText) {
   const tags = String(tagsText || '').split(',').map((t) => t.trim()).filter(Boolean);
   return updateEntity(campaign, id, { tags });
+}
+
+/** Add one tag to an entity, case-insensitively deduped against its existing
+ *  tags (adding "Character" when "character" is already present is a no-op).
+ *  Powers the tag dropdown selector's "add existing/new tag" actions. */
+export function addEntityTag(campaign, id, tag) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  const clean = String(tag || '').trim();
+  if (!e || !clean) return next;
+  if (!e.tags.some((t) => t.toLowerCase() === clean.toLowerCase())) e.tags.push(clean);
+  ensureAutoStatblock(e, next.settings);
+  return next;
+}
+
+export function removeEntityTag(campaign, id, tag) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (!e) return next;
+  e.tags = e.tags.filter((t) => t.toLowerCase() !== String(tag || '').toLowerCase());
+  return next;
+}
+
+/** Every tag already used by other entities of `entityType`, excluding ones
+ *  `excludeEntityId` already carries — the per-entity-type vocabulary a tag
+ *  dropdown offers so a GM reuses "veteran"/"hostile" consistently instead of
+ *  retyping near-duplicates. Sorted case-insensitively; first-seen casing
+ *  wins (so "Character" and "character" don't both appear separately). */
+export function listTagVocabulary(campaign, entityType, excludeEntityId) {
+  const own = new Set((getEntity(campaign, excludeEntityId)?.tags || []).map((t) => t.toLowerCase()));
+  const seen = new Map(); // lowercase -> first-seen original casing
+  for (const e of listEntities(campaign, [entityType])) {
+    for (const t of e.tags || []) {
+      const low = t.toLowerCase();
+      if (!own.has(low) && !seen.has(low)) seen.set(low, t);
+    }
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
 }
 
 export function removeEntity(campaign, id) {
@@ -150,64 +191,91 @@ export function relationshipCount(entity) {
   return entity && Array.isArray(entity.relationships) ? entity.relationships.length : 0;
 }
 
-// --- statblocks (manual add/remove; auto-attach happens in create/update) --
-// `rulesetId` only matters for kind === 'character'; it defaults to the
-// campaign's Settings > Stat system choice, so entities pick up whichever
-// ruleset is active unless a specific one is passed (e.g. to rebuild a
-// character sheet against a different ruleset — see data-statblock-ruleset).
-export function setEntityStatblockKind(campaign, id, kind, rulesetId) {
+// --- statblocks: an entity can hold several groups at once (a character
+// with both a Starforged and a 5PFH sheet, a Bestiary NPC with two active
+// templates) — adding one never replaces or "toggles off" another; removing
+// one is a separate, explicit action targeting that group's index. Auto-
+// attach (on create/type/tag change) happens in ensureAutoStatblock.
+// `rulesetOrTemplateId` is a ruleset id for kind === 'character', a Bestiary
+// template id for kind === 'npc', and ignored for kind === 'vehicle'.
+export function addEntityStatblockGroup(campaign, id, kind, rulesetOrTemplateId) {
   const next = clone(campaign);
   const e = getEntity(next, id);
-  if (e) e.statblock = makeStatblock(kind, rulesetId || next.settings.statRuleset);
+  if (!e) return next;
+  if (!Array.isArray(e.statblocks)) e.statblocks = [];
+  const rulesetId = kind === 'character' ? (rulesetOrTemplateId || next.settings.statRuleset) : null;
+  const templateId = kind === 'npc' ? rulesetOrTemplateId : (kind === 'vehicle' ? 'vehicle' : undefined);
+  const alreadyPresent = e.statblocks.some((g) => g.kind === kind
+    && (kind !== 'character' || g.ruleset === rulesetId)
+    && (kind !== 'npc' || g.templateId === templateId));
+  if (alreadyPresent) return next;
+  addStatblockGroup(e, kind, kind === 'character' ? rulesetId : templateId, next.settings);
   return next;
 }
 
-export function removeEntityStatblock(campaign, id) {
+export function removeEntityStatblockGroup(campaign, id, groupIndex) {
   const next = clone(campaign);
   const e = getEntity(next, id);
-  if (e) delete e.statblock;
+  if (e) removeStatblockGroup(e, groupIndex);
   return next;
 }
 
-export function setEntityStatblockField(campaign, id, index, patch) {
+/** Set/replace the free-text note on one side of a relationship (the label
+ *  shown on the chip — "ally", "rival", or any longer description). */
+export function updateRelationshipLabel(campaign, aId, bId, label) {
   const next = clone(campaign);
-  const e = getEntity(next, id);
-  if (e) setStatblockField(e, index, patch);
+  const a = getEntity(next, aId);
+  const r = a && a.relationships.find((rel) => rel.to === bId);
+  if (r) r.label = label;
   return next;
 }
 
-export function addEntityStatblockField(campaign, id, opts) {
+export function setEntityStatblockField(campaign, id, groupIndex, fieldIndex, patch) {
   const next = clone(campaign);
   const e = getEntity(next, id);
-  if (e) addStatblockField(e, opts);
+  if (e) setStatblockField(e, groupIndex, fieldIndex, patch);
   return next;
 }
 
-export function removeEntityStatblockField(campaign, id, index) {
+export function addEntityStatblockField(campaign, id, groupIndex, opts) {
   const next = clone(campaign);
   const e = getEntity(next, id);
-  if (e) removeStatblockField(e, index);
+  if (e) addStatblockField(e, groupIndex, opts);
   return next;
 }
 
-export function toggleEntityStatblockFieldTrack(campaign, id, index) {
+export function removeEntityStatblockField(campaign, id, groupIndex, fieldIndex) {
   const next = clone(campaign);
   const e = getEntity(next, id);
-  if (e) toggleStatblockFieldTrack(e, index);
+  if (e) removeStatblockField(e, groupIndex, fieldIndex);
   return next;
 }
 
-export function setEntityStatblockTrackValue(campaign, id, index, n) {
+export function toggleEntityStatblockFieldTrack(campaign, id, groupIndex, fieldIndex) {
   const next = clone(campaign);
   const e = getEntity(next, id);
-  if (e) setStatblockTrackValue(e, index, n);
+  if (e) toggleStatblockFieldTrack(e, groupIndex, fieldIndex);
   return next;
 }
 
-export function toggleEntityStatblockFieldAttribute(campaign, id, index) {
+export function setEntityStatblockTrackValue(campaign, id, groupIndex, fieldIndex, n) {
   const next = clone(campaign);
   const e = getEntity(next, id);
-  if (e) toggleStatblockFieldAttribute(e, index);
+  if (e) setStatblockTrackValue(e, groupIndex, fieldIndex, n);
+  return next;
+}
+
+export function setEntityStatblockAttributeValue(campaign, id, groupIndex, fieldIndex, rawValue) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (e) setStatblockAttributeValue(e, groupIndex, fieldIndex, rawValue);
+  return next;
+}
+
+export function toggleEntityStatblockFieldAttribute(campaign, id, groupIndex, fieldIndex) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (e) toggleStatblockFieldAttribute(e, groupIndex, fieldIndex);
   return next;
 }
 
