@@ -566,6 +566,18 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 [data-drag-entity] { cursor: grab; }
 [data-drag-entity]:active { cursor: grabbing; }
 .drop-hover { outline: 2px dashed var(--accent-strong); outline-offset: 2px; background: rgba(56,189,248,0.08); }
+/* Touch drag ghost — HTML5 DnD has a native drag image for free on desktop;
+   touch has nothing equivalent, so this floating pill follows the finger
+   instead. pointer-events: none is load-bearing, not decorative: without
+   it, document.elementFromPoint(touch.x, touch.y) in onTouchMove would hit
+   this element itself (it's positioned exactly at the touch point) instead
+   of whatever's actually underneath it. */
+.touch-drag-ghost {
+  position: fixed; z-index: 50; transform: translate(-50%, -150%);
+  padding: 0.35rem 0.6rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600;
+  background: var(--accent-strong); color: #06121f; box-shadow: var(--shadow);
+  pointer-events: none; white-space: nowrap;
+}
 
 /* ============================================================
    Phase 5 — Party / Colony / Guide / Oracle tree / Documents /

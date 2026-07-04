@@ -123,6 +123,15 @@ export function mountShell(el) {
   el.addEventListener('dragover', onDragOver);
   el.addEventListener('dragleave', onDragLeave);
   el.addEventListener('drop', onDrop);
+  // Touch equivalent of the drag-and-drop above (see onTouchStart's comment)
+  // — touchmove is NOT passive because it conditionally calls
+  // preventDefault() once a drag actually engages, to stop the page from
+  // scrolling under the finger while mid-drag; before that threshold, nothing
+  // is prevented and an ordinary scroll/tap behaves exactly as it always did.
+  el.addEventListener('touchstart', onTouchStart, { passive: true });
+  el.addEventListener('touchmove', onTouchMove, { passive: false });
+  el.addEventListener('touchend', onTouchEnd);
+  el.addEventListener('touchcancel', onTouchEnd);
   // A small, deliberately short set (2026-07-04 review: "add shortcuts when
   // non-disruptive") — two near-universal conventions rather than a bound
   // shortcut for every action. On document, not root: Escape/Ctrl+K should
@@ -852,30 +861,34 @@ function onDrop(ev) {
   const entityId = ev.dataTransfer.getData(ENTITY_DRAG_TYPE);
   const documentId = ev.dataTransfer.getData(DOCUMENT_DRAG_TYPE);
   if (!entityId && !documentId) return;
+  const target = ev.target.closest('[data-drop-entity], [data-journal-input], textarea[data-ctx]');
+  if (!target) return;
+  ev.preventDefault();
+  target.classList.remove('drop-hover');
+  completeDrop(target, { entityId, documentId });
+}
 
-  const dropEnt = ev.target.closest('[data-drop-entity]');
+// Shared by the mouse path (onDrop, native HTML5 DnD) and the touch path
+// (onTouchEnd, below) — exactly one place decides what a drop actually
+// does, so the two input methods can never quietly diverge.
+function completeDrop(target, { entityId, documentId }) {
+  const dropEnt = target.closest('[data-drop-entity]');
   if (dropEnt && entityId) {
-    ev.preventDefault();
-    dropEnt.classList.remove('drop-hover');
     const targetId = dropEnt.dataset.dropEntity;
     if (targetId && targetId !== entityId) { store.update((d) => addRelationship(d, entityId, targetId, 'linked')); toast('Linked'); }
     return;
   }
-
-  const dropText = ev.target.closest('[data-journal-input], textarea[data-ctx]');
+  const dropText = target.closest('[data-journal-input], textarea[data-ctx]');
   if (dropText) {
-    ev.preventDefault();
-    dropText.classList.remove('drop-hover');
     if (documentId) {
-      const doc = getDocument(store.get(), documentId);
-      if (doc) {
-        const title = doc.title || 'Untitled document';
+      const docEntry = getDocument(store.get(), documentId);
+      if (docEntry) {
+        const title = docEntry.title || 'Untitled document';
         insertAtCursor(dropText, (/\s/.test(title) ? `@[${title}] ` : `@${title} `));
         dropText.dispatchEvent(new Event('change', { bubbles: true }));
         return toast(`Referenced ${title}`);
       }
     }
-
     if (entityId) {
       const ent = getEntity(store.get(), entityId);
       if (ent) {
@@ -886,6 +899,71 @@ function onDrop(ev) {
       }
     }
   }
+}
+
+// ---- touch equivalent of the drag-and-drop above --------------------------
+// HTML5 drag-and-drop's dragstart/dragover/drop events never fire for touch
+// gestures on real mobile browsers (a well-known gap, not a bug in the code
+// above) — so linking entities or mentioning one in a note has had no
+// touch path at all until now. This recognizes the same gesture (press a
+// data-drag-entity/data-drag-document handle, move, release over a
+// data-drop-entity/text-field target) and feeds the exact same
+// completeDrop() the mouse path uses, rather than a second interaction
+// model with its own chance to drift out of sync.
+const TOUCH_DRAG_THRESHOLD = 10; // px of finger movement before a touch counts as a drag, not a tap/scroll
+let touchDrag = null;
+
+function onTouchStart(ev) {
+  const t = ev.target;
+  const entitySrc = t.closest('[data-drag-entity]');
+  const docSrc = !entitySrc && t.closest('[data-drag-document]');
+  if (!entitySrc && !docSrc) return;
+  const touch = ev.touches[0];
+  touchDrag = {
+    entityId: entitySrc ? entitySrc.dataset.dragEntity : null,
+    documentId: docSrc ? docSrc.dataset.dragDocument : null,
+    startX: touch.clientX, startY: touch.clientY,
+    engaged: false, lastTarget: null, ghostEl: null,
+  };
+}
+
+function onTouchMove(ev) {
+  if (!touchDrag) return;
+  const touch = ev.touches[0];
+  const dx = touch.clientX - touchDrag.startX, dy = touch.clientY - touchDrag.startY;
+  if (!touchDrag.engaged) {
+    if (Math.hypot(dx, dy) < TOUCH_DRAG_THRESHOLD) return; // could still be a tap or a page scroll
+    touchDrag.engaged = true;
+    touchDrag.ghostEl = makeTouchDragGhost(touchDrag);
+  }
+  ev.preventDefault(); // only once actually dragging — a plain tap/scroll is never blocked
+  if (touchDrag.ghostEl) { touchDrag.ghostEl.style.left = touch.clientX + 'px'; touchDrag.ghostEl.style.top = touch.clientY + 'px'; }
+  const under = document.elementFromPoint(touch.clientX, touch.clientY);
+  const dropTarget = under && under.closest('[data-drop-entity], [data-journal-input], textarea[data-ctx]');
+  if (dropTarget !== touchDrag.lastTarget) {
+    if (touchDrag.lastTarget) touchDrag.lastTarget.classList.remove('drop-hover');
+    if (dropTarget) dropTarget.classList.add('drop-hover');
+    touchDrag.lastTarget = dropTarget || null;
+  }
+}
+
+function onTouchEnd() {
+  if (!touchDrag) return;
+  const drag = touchDrag;
+  touchDrag = null;
+  if (drag.ghostEl) drag.ghostEl.remove();
+  if (drag.lastTarget) drag.lastTarget.classList.remove('drop-hover');
+  if (!drag.engaged || !drag.lastTarget) return; // a tap, or released off any valid target
+  completeDrop(drag.lastTarget, drag);
+}
+
+function makeTouchDragGhost(drag) {
+  const label = drag.entityId ? (getEntity(store.get(), drag.entityId) || {}).name : (getDocument(store.get(), drag.documentId) || {}).title;
+  const el = document.createElement('div');
+  el.className = 'touch-drag-ghost';
+  el.textContent = label || (drag.entityId ? 'Entity' : 'Document');
+  document.body.appendChild(el);
+  return el;
 }
 
 function insertAtCursor(field, text) {
