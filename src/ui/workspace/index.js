@@ -5,6 +5,7 @@
 import { listShifts } from '../../domain/context.js';
 import { listThreads, THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { ACTIVITIES, suggestRulesLens } from '../../domain/activities.js';
+import { buildMentionEditorHTML } from '../mentionEditor.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -25,7 +26,7 @@ const VIEWS = {
     const reputation = c.reputation == null ? 5 : c.reputation;
     return card('WHAT is happening', 'The active situation — your primary workspace.', `
       <label class="field-label">Situation
-        <textarea data-ctx="what.situation" rows="4" placeholder="What is unresolved right now?">${esc(c.situation)}</textarea>
+        <div class="mention-editor" contenteditable="true" data-ctx="what.situation" data-placeholder="What is unresolved right now?">${buildMentionEditorHTML(doc, c.situation)}</div>
       </label>
       <div class="field-row">
         <label class="field-label">Intent
@@ -60,7 +61,7 @@ const VIEWS = {
 
   who(doc) {
     return card('WHO is here', 'People and factions in play.', `
-      ${summaryField('who', doc.context.who.summary, 'Party, NPCs, factions present…')}
+      ${summaryField('who', doc.context.who.summary, 'Party, NPCs, factions present…', doc)}
       <div class="shift-actions">
         <button class="chip" data-shift-prompt="Introduce NPC">＋ Introduce NPC</button>
       </div>
@@ -69,7 +70,7 @@ const VIEWS = {
 
   where(doc) {
     return card('WHERE it happens', 'The place the scene is set.', `
-      ${summaryField('where', doc.context.where.summary, 'Location and immediate surroundings…')}
+      ${summaryField('where', doc.context.where.summary, 'Location and immediate surroundings…', doc)}
       <div class="shift-actions">
         <button class="chip" data-shift-prompt="Change Location">↳ Change Location</button>
       </div>
@@ -78,7 +79,7 @@ const VIEWS = {
 
   why(doc) {
     return card('WHY they are here', 'The objective driving the party, tracked as progress clocks.', `
-      ${summaryField('why', doc.context.why.summary, 'The current goal or stakes…')}
+      ${summaryField('why', doc.context.why.summary, 'The current goal or stakes…', doc)}
       <div class="shift-actions">
         <button class="chip" data-shift-prompt="Set Objective">◎ Set Objective</button>
       </div>
@@ -95,7 +96,7 @@ const VIEWS = {
         </select>
       </label>
       ${rulesLensSuggestion(doc, activity)}
-      ${summaryField('how', doc.context.how.summary, 'Exploration, combat, social, downtime…')}
+      ${summaryField('how', doc.context.how.summary, 'Exploration, combat, social, downtime…', doc)}
       <div class="shift-actions">
         <button class="chip" data-shift="Advance Time">⏱ Advance Time</button>
       </div>`);
@@ -121,9 +122,9 @@ function rulesLensSuggestion(doc, activity) {
   </div>`;
 }
 
-function summaryField(key, val, placeholder) {
+function summaryField(key, val, placeholder, doc) {
   return `<label class="field-label">Focus
-    <textarea data-ctx="${key}.summary" rows="2" placeholder="${esc(placeholder)}">${esc(val)}</textarea>
+    <div class="mention-editor" contenteditable="true" data-ctx="${key}.summary" data-placeholder="${esc(placeholder)}">${buildMentionEditorHTML(doc, val)}</div>
   </label>`;
 }
 

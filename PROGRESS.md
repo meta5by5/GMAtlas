@@ -112,6 +112,21 @@ in the archive.
 suggestions sorted into whichever phase actually fits each — see
 `DESIGN-NEW-FUNCTIONALITY.md`.
 
+**`requirements/design-principles/gameplay-mechanics.md` evaluated and
+reconciled** (`docs/adr/0008-situation-engine.md`): most of what it
+proposes (a "GM Prompt Hierarchy," an "Oracle Prompt Chain" technique,
+"Campaign Momentum") turned out to already be this repo's WHAT card + Shift
+Story reducers, `generateNpc`'s multi-table roll, and Session Recap +
+Co-Pilot, respectively — arrived at independently, now named and
+cross-referenced rather than re-treated as gaps. Four small oracle-content
+additions (Salvage Investigation, Site Survey, Cargo Interest, Anomaly
+Investigation) are unblocked, not gated to Phase 10 — see
+`DESIGN-NEW-FUNCTIONALITY.md`'s new unphased content section. Everything
+else the document proposed (an Expedition four-dial tracker, structured
+Diplomacy fields, a Discovery-classification field, a Noncombat taxonomy, a
+mechanized session-composition budget) is explicitly declined, with
+reasons, in the ADR.
+
 Tests: run `npm test` for the current count — not repeated here, goes
 stale every session.
 
@@ -139,23 +154,28 @@ estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
   (`domain/activities.js`, wired into the HOW workspace card); genre packs
   (`data/genrePacks.js` — Hostile/Cyberpunk-Shadowrun/Fantasy, switchable
   in Settings).
+- **Content addition (unphased)** — four small Situation Engine oracle
+  chains reconciled from `gameplay-mechanics.md` (`docs/adr/0008`): Salvage
+  Investigation (`Derelicts`), Site Survey (`Exploration`), Cargo Interest
+  (`Trade & Cargo`), Anomaly Investigation (`Mysteries & Coverups`). *Low
+  effort* — ordinary tables, no new domain code.
 - **Phase 10 (lowest priority — new features)** — Trade & Logistics /
   Merchant Rules Lens (contracts as the primary loop, `docs/adr/0003` +
   `0004`); a Mission/Job generator (`domain/missions.js`, payout scaled by
   the existing threat tracker); a Faction Pressure Track (extends
-  `threads.js` onto faction entities) plus a Co-Pilot link between it and
-  generated missions; Shipyard companion link (blocked on a known URL, not
-  effort); a sync adapter / shared campaign database; Traveller/Stars
-  Without Number content (both named Rules Constitution providers with zero
-  authored data and no sourcebook in this repo's library); faction-turn/
-  rumor automation.
-- **UI/UX assumptions flagged for explicit confirmation** (not scheduled,
-  each a product decision rather than a bug): only one drawer opens at a
-  time vs. a "drawers stack side by side" brief; one responsive breakpoint
-  instead of a three-way desktop/tablet/phone split; no keyboard shortcuts
-  or command palette; no in-session undo beyond a one-slot backup; toasts
-  are single-slot and can clobber each other during multi-file upload;
-  drag-and-drop (the primary linking interaction) has no confirmed touch
-  equivalent; icon-only buttons rely on hover tooltips that don't fire on
-  touch; PWA installability hasn't been checked against a concrete
-  checklist since Phase 0.
+  `threads.js` onto faction entities — kept as a single clock per
+  `docs/adr/0008`, not split into four dials) plus a Co-Pilot link between
+  it and generated missions; Shipyard companion link (blocked on a known
+  URL, not effort); a sync adapter / shared campaign database; Traveller/
+  Stars Without Number content (both named Rules Constitution providers
+  with zero authored data and no sourcebook in this repo's library);
+  faction-turn/rumor automation.
+- **UI/UX assumptions, resolved in the 2026-07-04 pass** (see Status
+  Summary above): tabbed drawer switching replaced "only one drawer open at
+  a time"; three real responsive tiers replaced one breakpoint; Escape and
+  Ctrl/Cmd+K shortcuts landed; touch drag-and-drop covers the
+  mobile/tablet gap (`docs/mobile-drag-drop-test-cases.md`); PWA
+  installability was audited clean. **Still open**: no in-session undo
+  beyond the one-slot backup; toasts are single-slot and can clobber each
+  other during multi-file upload; icon-only buttons still rely on hover
+  tooltips that don't fire on touch.

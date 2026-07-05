@@ -7,17 +7,18 @@ import {
   hasOracleOverride,
 } from '../../domain/oracles.js';
 import {
-  listEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, findByName, parseMentions, listTagVocabulary,
+  listEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, listTagVocabulary,
   RELATIONSHIP_TYPES, RELATIONSHIP_TYPE_LABEL, isRelationshipFlagged,
 } from '../../domain/entities.js';
 import { parseStatsString, sortStatblockGroups } from '../../domain/statblocks.js';
 import { listTemplates } from '../../domain/statblockTemplates.js';
 import { buildGraph, computeLayout, nodeColor } from '../../domain/graph.js';
 import { BUILD } from '../../core/buildInfo.js';
-import { getDocument, listDocuments, listDocumentMentions, parseDocumentMentionRefs, findDocumentTabByTitle, allDocumentTags, filterDocuments, listReferenceDocuments } from '../../domain/documents.js';
+import { getDocument, listDocuments, listDocumentMentions, allDocumentTags, filterDocuments, listReferenceDocuments } from '../../domain/documents.js';
 import { listPartyMembers, listPartyTrackers } from '../../domain/party.js';
 import { COLONY_FIELDS, getColonyFields, listCrewRows, listLifeformEncounters } from '../../domain/colony.js';
 import { getGuideText } from '../../domain/guide.js';
+import { buildMentionEditorHTML } from '../mentionEditor.js';
 import { buildSessionRecap } from '../../domain/recap.js';
 import { RULESETS, findRuleset } from '../../data/rulesets.js';
 import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel } from '../../data/rulesConstitution.js';
@@ -27,22 +28,39 @@ import { DOCS_MANIFEST } from '../../data/docsManifest.js';
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+// "a Faction" / "an NPC" / "an Asset" — for the relationship-flag tooltip below.
+const withArticle = (word) => (/^[aeiou]/i.test(word) ? `an ${word}` : `a ${word}`);
+
 export function renderDrawer(id, doc, ui = {}) {
   switch (id) {
     case 'journal': return journal(doc, ui);
     case 'oracle': return oracle(doc, ui);
-    case 'entities': return entities(doc, ui);
+    case 'entity-detail': return entityDetail(doc, ui);
     case 'party': return party(doc);
     case 'colony': return colony(doc);
-    case 'guide': return guide(doc);
+    case 'guide': return guide(doc, ui);
     case 'settings': return settings(doc, ui);
-    case 'graph': return graph(doc);
+    case 'graph': return graph(doc, ui);
     case 'documents': return documents(doc, ui);
     default: return `<p class="ws-placeholder">Drawer “${esc(id)}”.</p>`;
   }
 }
 
-function entities(doc, ui) {
+// Sorted by label (Asset/Faction/Location/Lore/NPC), not ENTITY_TYPES'
+// declaration order — that order still governs "+ Add" button placement and
+// statblock-add-choices elsewhere, just not this filter row.
+const ENTITY_TYPES_BY_LABEL = [...ENTITY_TYPES].sort((a, b) => TYPE_LABEL[a].localeCompare(TYPE_LABEL[b]));
+
+// The Cast panel (2026-07-05 restructure): list-only now — search, type
+// filter, add-entity buttons, draggable/clickable rows. No inline inspector
+// (that moved to its own "Entity Detail" tab, entityDetail() below) — Cast
+// is a Co-Pilot-style independent panel (shell.js's entityPopoutOpen), not
+// a drawer tab, so it can stay open alongside Journal/Guide/whatever else
+// is active instead of competing with them for the one active-drawer slot.
+// Clicking a row opens Entity Detail (data-open-entity, same as a mention
+// link or a relationship chip); dragging one (from anywhere on the row, not
+// just the ⠿ handle — see the CSS) still links/mentions same as always.
+export function entities(doc, ui) {
   const allItems = listEntities(doc);
   const typeFilter = ui.entityTypeFilter || '';
   const search = (ui.entitySearch || '').trim().toLowerCase();
@@ -52,34 +70,57 @@ function entities(doc, ui) {
     return [e.name, ...(e.tags || [])].join(' ').toLowerCase().includes(search);
   });
   const active = getEntity(doc, doc.entities && doc.entities.activeId);
-  const collapsed = !!ui.castListCollapsed;
-  const typeChips = ['', ...ENTITY_TYPES].map((t) => `
+  const typeChips = ['', ...ENTITY_TYPES_BY_LABEL].map((t) => `
     <button class="chip sm ${typeFilter === t ? 'active' : ''}" data-entity-type-filter="${t}">${t ? TYPE_LABEL[t] : 'All'}</button>`).join('');
   return `
     <div class="entity-add-row">
       ${ENTITY_TYPES.map((t) => `<button class="chip" data-entity-add="${t}">＋ ${TYPE_LABEL[t]}</button>`).join('')}
       <button class="chip" data-generate-npc title="Roll the Characters oracle chain (Role, Goal, Aspect, Disposition, Name) into a new NPC">🎲 Generate NPC</button>
     </div>
-    <div class="entity-cols">
-      <div class="entity-list-head">
-        <button class="icon-btn" data-cast-list-toggle title="${collapsed ? 'Show the Cast list' : 'Hide the Cast list'}" aria-expanded="${!collapsed}">${collapsed ? '▸' : '▾'}</button>
-        <span class="dim small">Cast — ${items.length}${items.length !== allItems.length ? ` of ${allItems.length}` : ''} entit${items.length === 1 ? 'y' : 'ies'}${collapsed && active ? ` · editing ${esc(active.name) || 'Unnamed'}` : ''}</span>
-      </div>
-      ${collapsed ? '' : `
-      <input class="drawer-search" data-entity-search value="${esc(ui.entitySearch || '')}" placeholder="Search Cast by name or tag…">
-      <div class="entity-type-filter-row">${typeChips}</div>
-      <div class="entity-list">
-        ${items.length ? items.map((e) => `
-          <button class="entity-list-row ${active && active.id === e.id ? 'sel' : ''}" data-drop-entity="${esc(e.id)}" data-entity-select="${esc(e.id)}" title="Click to select · drag the ⠿ handle to link with another entity">
-            <span class="entity-drag-handle" draggable="true" data-drag-entity="${esc(e.id)}" title="Drag onto another entity to link, or onto Journal/context fields to mention" aria-label="Drag to link or mention">⠿</span>
-            <span class="entity-type-tag">${TYPE_LABEL[e.type] || 'Entity'}</span>
-            <span class="entity-list-name">${esc(e.name) || '<em>Unnamed</em>'}</span>
-            ${e.relationships && e.relationships.length ? `<span class="dim">🔗${e.relationships.length}</span>` : ''}
-          </button>`).join('')
-          : (allItems.length ? '<p class="ws-placeholder">No entities match that search/filter.</p>' : '<p class="ws-placeholder">No entities yet. Add one above, or type @Name in a note or situation to create one automatically.</p>')}
-      </div>`}
-      <div class="entity-inspector">${active ? inspector(doc, active, ui) : '<p class="dim small">Select an entity to edit.</p>'}</div>
+    <input class="drawer-search" data-entity-search value="${esc(ui.entitySearch || '')}" placeholder="Search Cast by name or tag…">
+    <div class="entity-type-filter-row">${typeChips}</div>
+    <div class="entity-list">
+      ${items.length ? items.map((e) => `
+        <button class="entity-list-row ${active && active.id === e.id ? 'sel' : ''}" draggable="true" data-drag-entity="${esc(e.id)}" data-drop-entity="${esc(e.id)}" data-open-entity="${esc(e.id)}" title="Click to open · drag anywhere on the row to link with another entity, or onto Journal/context fields to mention">
+          <span class="entity-drag-handle" aria-hidden="true">⠿</span>
+          <span class="entity-type-tag">${TYPE_LABEL[e.type] || 'Entity'}</span>
+          <span class="entity-list-name">${esc(e.name) || '<em>Unnamed</em>'}</span>
+          ${e.relationships && e.relationships.length ? `<span class="dim">🔗${e.relationships.length}</span>` : ''}
+        </button>`).join('')
+        : (allItems.length ? '<p class="ws-placeholder">No entities match that search/filter.</p>' : '<p class="ws-placeholder">No entities yet. Add one above, or type @Name in a note or situation to create one automatically.</p>')}
     </div>`;
+}
+
+// Entity Detail (2026-07-05 restructure): the name/type/tags/overview/
+// statblocks/relationships form Cast used to show inline, now its own tab —
+// opened only by clicking an entity somewhere (never picked from the edge
+// nav directly; see shell.js's DRAWER_META/openDrawerTab('entity-detail')).
+function entityDetail(doc, ui) {
+  const active = getEntity(doc, doc.entities && doc.entities.activeId);
+  if (!active) return '<p class="dim small">Click an entity anywhere (Cast, a mention, a relationship, the graph, ...) to see it here.</p>';
+  // The whole editor is a relationship drop target, not just the
+  // Relationships section specifically — dragging an entity from Cast (or
+  // anywhere else draggable, e.g. a WHO/WHERE chip) and dropping it
+  // anywhere over this tab links it to whichever entity is currently open,
+  // the same addRelationship() an explicit drop on a Cast row already used.
+  return `<div class="entity-inspector" data-drop-entity="${esc(active.id)}">${inspector(doc, active, ui)}</div>`;
+}
+
+// Finds the "Bond: <otherName>" track field entities.js's ensureBondTrack
+// auto-creates on a Starforged character sheet, if this entity has one —
+// {gi, field}, gi being the statblock group's index (for the "view in
+// Character Sheet" jump button below), or null if no such track exists
+// (no Starforged sheet, or this bond predates one being added).
+function bondFieldFor(e, otherName) {
+  if (!Array.isArray(e.statblocks)) return null;
+  const key = `Bond: ${otherName}`;
+  for (let gi = 0; gi < e.statblocks.length; gi++) {
+    const g = e.statblocks[gi];
+    if (g.kind !== 'character' || g.ruleset !== 'starforged') continue;
+    const field = g.fields.find((f) => f.key === key);
+    if (field) return { gi, field };
+  }
+  return null;
 }
 
 function inspector(doc, e, ui) {
@@ -88,11 +129,30 @@ function inspector(doc, e, ui) {
   const rels = (e.relationships || []).map((r) => {
     const other = getEntity(doc, r.to);
     if (!other) return '';
-    const flagged = isRelationshipFlagged(doc, r);
-    return `<span class="rel-chip ${flagged ? 'rel-flagged' : ''}">${flagged ? `<span class="rel-flag" title="Flagged: ${RELATIONSHIP_TYPE_LABEL[r.type]} expects ${(other.type)} to be a different type — nothing changed, just worth a review">⚠</span>` : ''}${esc(other.name) || 'Unnamed'}
+    const flagged = isRelationshipFlagged(doc, r, e.type);
+    // Strength/weight (and the Bond progress it can stand in for) is a
+    // measure of an evolving social bond — it only makes sense between the
+    // "actor" entity types (NPC/Faction, same pair RELATIONSHIP_TYPE_MUTUAL
+    // already restricts allied_with/rival_of/bond to); a Location, some
+    // Lore, or an Asset can be OWNED, LOCATED AT, etc., but doesn't have a
+    // "how strong is this" dial of its own, so the control doesn't render
+    // at all for those rather than showing a number that means nothing.
+    const isActorType = (t) => t === 'npc' || t === 'faction';
+    const showStrength = isActorType(e.type) && isActorType(other.type);
+    // A Bond's progress lives on the character sheet's own track field, not
+    // this relationship (see entities.js's ensureBondTrack) — a read-only
+    // value plus a jump button replaces the generic strength input for
+    // exactly the bond that field belongs to, so there's one source of
+    // truth for the number, not two independently-editable ones.
+    const bond = showStrength && r.type === 'bond' ? bondFieldFor(e, other.name) : null;
+    const strengthOrBond = !showStrength ? '' : (bond
+      ? `<span class="rel-bond-value" title="Bond progress — tracked on the Character Sheet below, not editable here">${bond.field.value}<small>/${bond.field.max}</small></span>
+         <button type="button" class="icon-btn" data-view-bond-track="${bond.gi}" title="View in Character Sheet">↧</button>`
+      : `<input type="number" class="rel-strength-input" data-entity-rel-strength="${esc(r.to)}" min="0" max="10" value="${Number(r.strength) || 0}" title="Strength/weight 0-10">`);
+    return `<span class="rel-chip ${flagged ? 'rel-flagged' : ''}">${flagged ? `<span class="rel-flag" title="Flagged: ${RELATIONSHIP_TYPE_LABEL[r.type]} doesn't usually apply between ${withArticle(TYPE_LABEL[e.type] || e.type)} entity and ${withArticle(TYPE_LABEL[other.type] || other.type)} entity — nothing changed, just worth a review">⚠</span>` : ''}<button type="button" class="rel-chip-name" data-open-entity="${esc(other.id)}" title="Open ${esc(other.name) || 'Unnamed'}">${esc(other.name) || 'Unnamed'}</button>
       <select class="rel-type-select" data-entity-rel-type="${esc(r.to)}" title="Relationship type">${relTypeOptions(r.type)}</select>
       <input class="rel-label-input" data-entity-rel-label="${esc(r.to)}" value="${esc(r.label)}" placeholder="note (ally, rival…)" title="Edit this relationship's note">
-      <input type="number" class="rel-strength-input" data-entity-rel-strength="${esc(r.to)}" min="0" max="10" value="${Number(r.strength) || 0}" title="Strength/weight 0-10 — e.g. a Bond's progress">
+      ${strengthOrBond}
       <button class="icon-btn" data-entity-unlink="${esc(r.to)}" title="Remove link" aria-label="Remove link">✕</button></span>`;
   }).join('');
   return `
@@ -146,12 +206,15 @@ function factionSection(e) {
     </div>`;
 }
 
-// Tags as removable chips + a dropdown of tags already used by other
-// entities of the same type (Phase 7's "tag fields as dropdowns" — a
-// freeform tag typed for the first time joins that vocabulary for next
-// time, via listTagVocabulary reading it live off existing entities rather
-// than a separately-stored list). "+ New…" still takes a one-time freeform
-// name via prompt, same ad-hoc-naming pattern as "+ Field"/"+ Track" above.
+// Tags as removable chips + a single auto-committing input (Phase 7's "tag
+// fields as dropdowns", unified 2026-07-04 with the Documents drawer's tag
+// UX — that one input+datalist pattern is now the one tag-entry design used
+// everywhere: picking a suggestion from the datalist or typing a new one and
+// tabbing/Enter-ing away both commit immediately, no separate "+ Add"/"+
+// New…" click required). The datalist is scoped to this entity's own type
+// (listTagVocabulary reads it live off existing entities of that type, not
+// a separately-stored list) — a freeform tag typed for the first time joins
+// that vocabulary for next time.
 function tagEditor(doc, e) {
   const tags = e.tags || [];
   const chips = tags.map((t) => `
@@ -162,14 +225,9 @@ function tagEditor(doc, e) {
   return `
     <div class="tag-editor">
       <span class="field-label-static">Tags</span>
+      <datalist id="entity-tag-list">${vocab.map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
       <div class="tag-chips">${chips || '<span class="dim small">None yet.</span>'}</div>
-      <div class="tag-add-row">
-        <select data-entity-tag-select>
-          <option value="">+ Add tag…</option>
-          ${vocab.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}
-        </select>
-        <button class="btn sm" data-entity-tag-new>+ New…</button>
-      </div>
+      <input class="doc-tag-input" data-entity-tag-input list="entity-tag-list" placeholder="add tag… (Enter/Tab to commit)">
     </div>`;
 }
 
@@ -184,7 +242,7 @@ function tagEditor(doc, e) {
 function statblockSection(e, doc, ui = {}) {
   const groups = e.statblocks || [];
   const sorted = sortStatblockGroups(groups, doc.settings);
-  const rows = sorted.map(({ group, index }) => statblockGroupBlock(e, group, index, doc)).join('');
+  const rows = sorted.map(({ group, index }) => statblockGroupBlock(e, group, index, doc, ui)).join('');
   const addChoices = statblockAddChoices(e, groups, doc);
   const open = !!ui.statblockAddOpen;
   const toggle = addChoices
@@ -197,22 +255,26 @@ function statblockSection(e, doc, ui = {}) {
   return `${rows}${toggle}`;
 }
 
-function statblockGroupBlock(e, group, gi, doc) {
-  if (group.kind === 'character') return characterSheetGroupBlock(group, gi, doc);
+function statblockGroupBlock(e, group, gi, doc, ui = {}) {
+  if (group.kind === 'character') return characterSheetGroupBlock(e, group, gi, doc, ui);
+  const key = `${e.id}::${gi}`;
+  const collapsed = !!(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
   const rows = group.fields.map((f, fi) => statblockFieldRow(f, gi, fi)).join('');
   // Bestiary is a subtype of NPC (like Character) — its label reflects that.
   const label = group.kind === 'vehicle' ? 'Vehicle Statblock' : `Bestiary (NPC) · ${esc(templateLabel(group.templateId, doc.settings))}`;
   return `<div class="statblock-block">
     <div class="statblock-head">
+      <button class="icon-btn statblock-collapse-toggle" data-statblock-group-toggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button>
       <h4>${label}</h4>
       <button class="icon-btn" data-statblock-remove-group="${gi}" title="Remove this statblock">🗑</button>
     </div>
+    ${collapsed ? '' : `
     ${attributeBadges(group.fields)}
     ${rows}
     <div class="statblock-add-row">
       <button class="chip" data-statblock-add-field="${gi}">＋ Field</button>
       <button class="chip" data-statblock-add-track-field="${gi}">＋ Track</button>
-    </div>
+    </div>`}
   </div>`;
 }
 
@@ -252,22 +314,26 @@ function statblockAddChoices(e, groups, doc) {
 // (Health, Spirit, Supply, ...) — purely a rendering split; stats are
 // attribute fields, resources are track fields, both rollable the same way
 // (double-click the value).
-function characterSheetGroupBlock(group, gi, doc) {
+function characterSheetGroupBlock(e, group, gi, doc, ui = {}) {
+  const key = `${e.id}::${gi}`;
+  const collapsed = !!(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
   const ruleset = findRuleset(group.ruleset);
   const indexed = group.fields.map((f, fi) => ({ f, fi }));
   const stats = indexed.filter(({ f }) => f.group === 'stat');
   const resources = indexed.filter(({ f }) => f.group !== 'stat');
-  return `<div class="statblock-block character-sheet">
+  return `<div class="statblock-block character-sheet" data-statblock-group="${gi}">
     <div class="statblock-head">
+      <button class="icon-btn statblock-collapse-toggle" data-statblock-group-toggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button>
       <h4>Character Sheet · ${esc(ruleset.label)}</h4>
       <button class="icon-btn" data-statblock-remove-group="${gi}" title="Remove this statblock">🗑</button>
     </div>
+    ${collapsed ? '' : `
     ${stats.length ? `<div class="character-sheet-stats">${stats.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { compact: true })).join('')}</div>` : ''}
     ${resources.length ? `<div class="character-sheet-resources">${resources.map(({ f, fi }) => statblockFieldRow(f, gi, fi)).join('')}</div>` : ''}
     <div class="statblock-add-row">
       <button class="chip" data-statblock-add-field="${gi}">＋ Field</button>
       <button class="chip" data-statblock-add-track-field="${gi}">＋ Track</button>
-    </div>
+    </div>`}
   </div>`;
 }
 
@@ -455,7 +521,7 @@ function journal(doc, ui = {}) {
     <button class="btn ghost recap-toggle" data-recap-toggle>${recapOpen ? '▾' : '▸'} Previously on…</button>
     ${recapOpen ? recapPanel(doc) : ''}
     <div class="drawer-note">
-      <textarea data-journal-input rows="3" placeholder="Add a note, ruling, or clue… (drag an entity here to @mention it)"></textarea>
+      <div class="mention-editor" contenteditable="true" data-journal-input data-placeholder="Add a note, ruling, or clue… (drag an entity here, or type @, to mention it)"></div>
       <div class="drawer-note-actions">
         <button class="btn" data-journal-add>Add note</button>
         <button class="btn ghost" data-export-journal>Export</button>
@@ -467,16 +533,7 @@ function journal(doc, ui = {}) {
           <div class="journal-meta">${new Date(e.createdAt).toLocaleString()} · ${esc(e.source || 'Journal')}
                 <button class="icon-btn" data-journal-del="${esc(e.id)}" title="Delete" aria-label="Delete">✕</button>
               </div>
-              ${(() => {
-                const mentions = parseMentions(e.text || '');
-                const badges = mentions.map((m) => {
-                  const ent = findByName(doc, m);
-                  return ent ? attributeBadges(flattenStatblockFields(ent)) : '';
-                }).filter(Boolean).join('');
-                return badges ? `<div class="journal-entity-badges">${badges}</div>` : '';
-              })()}
-    ${documentBadges(doc, e.text)}
-              <div class="journal-text">${e.isHtml ? e.text : esc(e.text).replace(/\n/g, '<br>')}</div>
+              <div class="journal-text mention-text">${e.isHtml ? e.text : buildMentionEditorHTML(doc, e.text)}</div>
         </div>`).join('')
         : '<p class="ws-placeholder">No entries yet. Scenes and oracle rolls land here automatically.</p>'}
     </div>`;
@@ -816,18 +873,17 @@ function colony(doc) {
 // --- Guide: one freeform reference document (table of contents) ------------
 function guide(doc) {
   const text = getGuideText(doc);
-  const mentions = parseMentions(text);
   return `
-    <p class="dim small">A table of contents for the campaign — <code>@Name</code> links a Cast entity, <code>@[Doc Name]</code> references a document (<code>@[Doc Name#12]</code> or <code>@[Doc Name p.12]</code> jumps to a page).</p>
-    <textarea class="guide-editor" data-guide-input rows="16" placeholder="Colony Builder — see @[5PFH Planetfall p.12] for the turn sheet.&#10;Meet @Captain Reyes in Docking Bay 3.">${esc(text)}</textarea>
-    <div class="drawer-note-actions"><button class="btn" data-guide-save>Save</button></div>
-    ${mentions.length ? `<div class="document-badges" style="margin-top: var(--sp-3);">
-      ${mentions.map((m) => `<span class="doc-badge">☷ ${esc(m)}</span>`).join('')}
-    </div>` : ''}
-    ${documentBadges(doc, text)}`;
+    <p class="dim small">A table of contents for the campaign — <code>@Name</code> links a Cast entity, <code>@[Doc Name]</code> references a document (<code>@[Doc Name#12]</code> or <code>@[Doc Name p.12]</code> jumps to a page). Click a mention to open it; arrow-key the cursor into it to edit its label. Saves automatically.</p>
+    <div class="mention-editor guide-editor" contenteditable="true" data-guide-input data-placeholder="Colony Builder — see @[5PFH Planetfall p.12] for the turn sheet.&#10;Meet @Captain Reyes in Docking Bay 3.">${buildMentionEditorHTML(doc, text)}</div>`;
 }
 
-function graph(doc) {
+// Fixed layout coordinate space (matches computeLayout's default) — a large
+// campaign's graph can have far more links than fit legibly at 1:1, so the
+// SVG's viewBox (not these dimensions) is what actually zooms/pans; see
+// shell.js's GRAPH_W/GRAPH_H (kept in sync with these two numbers), onWheel,
+// onGraphMouseDown/Move/Up, and the data-graph-zoom buttons below.
+function graph(doc, ui = {}) {
   const g = buildGraph(doc);
   if (!g.nodes.length) {
     return '<p class="ws-placeholder">No entities yet. Add a cast (or type @Name in a note) and their relationships appear here as a graph.</p>';
@@ -835,6 +891,8 @@ function graph(doc) {
   const W = 600, H = 520;
   const pos = computeLayout(g, { width: W, height: H });
   const active = doc.entities && doc.entities.activeId;
+  const view = ui.graphView || { scale: 1, x: 0, y: 0 };
+  const viewBox = `${view.x.toFixed(1)} ${view.y.toFixed(1)} ${(W / view.scale).toFixed(1)} ${(H / view.scale).toFixed(1)}`;
 
   const edges = g.edges.map((e) => {
     const a = pos.get(e.a), b = pos.get(e.b);
@@ -859,34 +917,16 @@ function graph(doc) {
   return `
     <p class="dim small">${g.nodes.length} entit${g.nodes.length === 1 ? 'y' : 'ies'} · ${g.edges.length} link${g.edges.length === 1 ? '' : 's'}. Click a node to open it.</p>
     <div class="graph-legend">${legend}</div>
-    <svg class="graph-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Relationship graph">
+    <div class="graph-toolbar">
+      <button class="icon-btn" data-graph-zoom="in" title="Zoom in">＋</button>
+      <button class="icon-btn" data-graph-zoom="out" title="Zoom out">－</button>
+      <button class="icon-btn" data-graph-zoom="reset" title="Reset zoom/pan">⟲</button>
+      <span class="dim small">Scroll to zoom, drag to pan — useful once a campaign has a lot of links.</span>
+    </div>
+    <svg class="graph-svg" viewBox="${viewBox}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Relationship graph — scroll to zoom, drag to pan">
       <g class="graph-edges">${edges}</g>
       <g class="graph-nodes">${nodes}</g>
     </svg>`;
-}
-
-// Each ref (a mention's title + optional page anchor) resolves against both
-// the uploaded/text library and the Reference Library — a PDF match (either
-// kind) renders as a clickable badge that opens the viewer via the same
-// data-doc-open handler as the Documents drawer, jumping to the page when
-// one was given; anything else (a text-note document, or no match at all)
-// stays a plain, non-clickable badge like before.
-function documentBadges(doc, text) {
-  const refs = parseDocumentMentionRefs(text || '');
-  if (!refs.length) return '';
-  const seen = new Set();
-  const badges = refs.map(({ name, page }) => {
-    const dedupeKey = name + '#' + (page || '');
-    if (seen.has(dedupeKey)) return '';
-    seen.add(dedupeKey);
-    const found = findDocumentTabByTitle(doc, name);
-    const title = found ? found.title : name;
-    const label = `📄 ${esc(title)}${page ? ' p.' + page : ''}`;
-    if (!found) return `<div class="doc-badge">${label}</div>`;
-    if (!found.openable) return `<div class="doc-badge" title="Text note — open it from the Documents drawer">${label}</div>`;
-    return `<button type="button" class="doc-badge" data-doc-open="${esc(found.tabKey)}" ${page ? `data-doc-open-page="${page}"` : ''} title="Open${page ? ' at page ' + page : ''}">${label}</button>`;
-  }).filter(Boolean);
-  return badges.length ? `<div class="document-badges">${badges.join('')}</div>` : '';
 }
 
 function clip(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
@@ -900,15 +940,18 @@ export function formatBytes(n) {
 
 // Tag editor is collapsed behind the 🏷 toggle by default (small-footprint
 // ask) — chips render smaller than a regular chip (.doc-tag-chip) when it's
-// open; see the sizing in cockpit.css rather than here.
+// open; see the sizing in cockpit.css rather than here. The input commits on
+// its own (shell.js's onChange/onKeydown) — picking a suggestion from the
+// datalist or typing a new tag and tabbing/Enter-ing away both add it, no
+// separate "+" click needed (Settings' entity tag editor already worked this
+// way; this brings docs in line with it).
 function docTagEditor(d) {
   const chips = (d.tags || []).map((t) => `
     <span class="doc-tag-chip">#${esc(t)} <button class="icon-btn" data-doc-tag-remove="${esc(d.id)}::${esc(t)}" title="Remove tag">✕</button></span>`).join('');
   return `
     <div class="doc-card-tags">
       ${chips}
-      <input class="doc-tag-input" data-doc-tag-input="${esc(d.id)}" list="doc-tag-list" placeholder="add tag…">
-      <button class="icon-btn" data-doc-tag-add="${esc(d.id)}" title="Add tag">＋</button>
+      <input class="doc-tag-input" data-doc-tag-input="${esc(d.id)}" list="doc-tag-list" placeholder="add tag… (Enter/Tab to commit)">
     </div>`;
 }
 
@@ -922,8 +965,7 @@ function refTagEditor(r) {
   return `
     <div class="doc-card-tags">
       ${chips}
-      <input class="doc-tag-input" data-ref-tag-input="${esc(r.key)}" list="doc-tag-list" placeholder="add tag…">
-      <button class="icon-btn" data-ref-tag-add="${esc(r.key)}" title="Add tag">＋</button>
+      <input class="doc-tag-input" data-ref-tag-input="${esc(r.key)}" list="doc-tag-list" placeholder="add tag… (Enter/Tab to commit)">
     </div>`;
 }
 
@@ -939,22 +981,37 @@ function documents(doc, ui = {}) {
   const search = ui.docFilter || '';
   const activeTags = ui.docTagFilters || new Set();
   const tagEditorOpen = ui.docTagEditorOpen || new Set();
+  const renameOpen = ui.docRenameOpen || new Set();
+  const tagListOpen = !!ui.docTagListOpen;
   const items = filterDocuments(doc, { search, tags: [...activeTags] });
   const mentions = listDocumentMentions(doc);
   const allTags = allDocumentTags(doc);
-  const refDocs = listReferenceDocuments(doc);
+  // The Reference Library shares the same search box + tag-filter chips as
+  // the uploaded/note library above it (one search, one set of filters, two
+  // lists) — it was rendered unconditionally before, so typing in the search
+  // box visibly filtered the top list but silently left every reference doc
+  // on screen.
+  const requiredTags = [...activeTags].map((t) => t.toLowerCase());
+  const q = search.trim().toLowerCase();
+  const refDocs = listReferenceDocuments(doc).filter((r) => {
+    if (requiredTags.length && !requiredTags.every((t) => (r.tags || []).includes(t))) return false;
+    if (!q) return true;
+    return [r.title, ...(r.tags || [])].join(' ').toLowerCase().includes(q);
+  });
 
   const rows = items.map((d) => {
-    const titleLink = d.kind === 'file'
-      ? `<a href="#" class="doc-card-title-link" data-doc-open="lib:${esc(d.id)}" data-drag-document="${esc(d.id)}" draggable="true" title="Open in viewer">${esc(d.title || d.fileName)}</a>`
-      : `<span class="doc-card-title-static" data-drag-document="${esc(d.id)}" draggable="true" title="Drag into a note or context field to insert a @ pointer">${esc(d.title || 'Untitled document')}</span>`;
+    const titleEl = renameOpen.has(d.id)
+      ? `<input class="doc-rename-input" data-doc-rename-input="${esc(d.id)}" value="${esc(d.title)}" placeholder="Untitled document" autofocus>`
+      : (d.kind === 'file'
+        ? `<a href="#" class="doc-card-title-link" data-doc-open="lib:${esc(d.id)}" data-drag-document="lib:${esc(d.id)}" draggable="true" title="Open in viewer">${esc(d.title || d.fileName)}</a>`
+        : `<span class="doc-card-title-static" data-drag-document="lib:${esc(d.id)}" draggable="true" title="Drag into a note or context field to insert a @ pointer">${esc(d.title || 'Untitled document')}</span>`);
     return `
     <div class="doc-card">
       <div class="doc-card-head">
-        ${titleLink}
+        ${titleEl}
         <div class="doc-card-actions">
           <button class="icon-btn" data-doc-tag-toggle="${esc(d.id)}" title="Tags">🏷</button>
-          <button class="icon-btn" data-doc-rename="${esc(d.id)}" title="Rename entry">✎</button>
+          <button class="icon-btn" data-doc-rename="${esc(d.id)}" title="${renameOpen.has(d.id) ? 'Save' : 'Rename entry'}">${renameOpen.has(d.id) ? '💾' : '✎'}</button>
           <button class="icon-btn" data-doc-delete="${esc(d.id)}" title="Delete document">✕</button>
         </div>
       </div>
@@ -966,13 +1023,16 @@ function documents(doc, ui = {}) {
   }).join('');
   const mentionSummary = mentions.length ? `<p class="dim small">Mentioned in notes: ${mentions.map((m) => esc(m.name)).join(', ')}</p>` : '';
 
-  const refRows = refDocs.map((r, i) => `
+  const refRows = refDocs.map((r) => `
     <div class="doc-card ref-doc-card">
       <div class="doc-card-head">
-        <a href="#" class="doc-card-title-link" data-doc-open="ref:${i}" title="${esc(r.ext.toUpperCase())} · ${formatBytes(r.sizeBytes)} — open in viewer">${esc(r.title)}</a>
+        ${renameOpen.has(r.key)
+          ? `<input class="doc-rename-input" data-ref-rename-input="${esc(r.key)}" value="${esc(r.title)}" placeholder="Untitled document" autofocus>`
+          : `<a href="#" class="doc-card-title-link" data-doc-open="ref:${esc(r.key)}" data-drag-document="ref:${esc(r.key)}" draggable="true" title="${esc(r.ext.toUpperCase())} · ${formatBytes(r.sizeBytes)} — open in viewer, or drag into a note or context field to insert a @ pointer">${esc(r.title)}</a>`}
         <div class="doc-card-actions">
           <button class="icon-btn" data-doc-tag-toggle="${esc(r.key)}" title="Tags">🏷</button>
-          <button class="icon-btn" data-ref-rename="${esc(r.key)}" title="Rename entry">✎</button>
+          <button class="icon-btn" data-ref-rename="${esc(r.key)}" title="${renameOpen.has(r.key) ? 'Save' : 'Rename entry'}">${renameOpen.has(r.key) ? '💾' : '✎'}</button>
+          <button class="icon-btn" data-ref-delete="${esc(r.key)}" title="Remove from Reference Library">✕</button>
         </div>
       </div>
       ${tagEditorOpen.has(r.key) ? refTagEditor(r) : ''}
@@ -981,17 +1041,18 @@ function documents(doc, ui = {}) {
   return `
     <datalist id="doc-tag-list">${allTags.map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
     <div class="drawer-note">
-      <button class="btn" data-doc-add>Add note</button>
       <label class="btn ghost file-btn">Upload file(s)<input type="file" data-doc-upload multiple hidden></label>
       <p class="dim small">Drag a document into a note or context field to insert a @ pointer.</p>
     </div>
     <input class="drawer-search" data-doc-filter value="${esc(search)}" placeholder="Search by name or tag…">
-    ${allTags.length ? `<div class="doc-tag-filter-chips">
+    ${allTags.length ? `
+    <button class="btn ghost sm" data-doc-tag-list-toggle>${tagListOpen ? '▾' : '▸'} Tags (${allTags.length})</button>
+    ${tagListOpen ? `<div class="doc-tag-filter-chips">
       ${allTags.map((t) => `<button class="chip sm ${activeTags.has(t) ? 'active' : ''}" data-doc-tag-filter="${esc(t)}">#${esc(t)}</button>`).join('')}
-    </div>` : ''}
+    </div>` : ''}` : ''}
     ${mentionSummary}
     <div class="doc-list">
-      ${rows || '<p class="ws-placeholder">No documents match. Add a note, upload a file, or clear your search/tag filters.</p>'}
+      ${rows}
     </div>
     ${refDocs.length ? `
     <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Reference Library</h4></div>

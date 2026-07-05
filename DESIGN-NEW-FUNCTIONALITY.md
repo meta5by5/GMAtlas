@@ -34,10 +34,10 @@ The key unlock is that **everything now reads and writes one campaign model thro
 In v0.53, scene generation, oracle rolls, journaling, and the cockpit were separate surfaces stitched together. Here, **Continue Story** generates a scene from the *current context*, escalates threat/mystery when the consequence warrants it, drops a breadcrumb, and files the scene to the Journal — in one action. The GM never leaves the workspace.
 
 ### 2. Story-shift reducers (the manual control layer)
-The design chat asked for deliberate controls to "change WHO/WHERE/WHAT/WHY/HOW without hunting through tabs." Delivered as named, pure reducers — *Reveal Clue, Complicate, Reward, Raise/Lower Threat, Advance Time, Change Location, Introduce NPC, Set Objective* — each recorded on the timeline. The same reducers power the workspace chips **and** the Co-Pilot's Quick-Apply, because they're just functions.
+The design chat asked for deliberate controls to "change WHO/WHERE/WHAT/WHY/HOW without hunting through tabs." Delivered as named, pure reducers — *Reveal Clue, Complicate, Reward, Raise/Lower Threat, Advance Time, Change Location, Introduce NPC, Set Objective* — each recorded on the timeline. The same reducers power the workspace chips **and** the Co-Pilot's Quick-Apply, because they're just functions. **Retroactively, this is this repo's "Situation Engine"**: `requirements/design-principles/gameplay-mechanics.md` proposes a State → Pressure → Choice → Consequence pattern and a GM Prompt Hierarchy (Situation/Complication/Decision/Consequence) that this card + these reducers already implement, arrived at independently — see `docs/adr/0008-situation-engine.md`.
 
 ### 3. A Co-Pilot that acts, not just talks
-`advise(campaign)` is a pure function returning an observation, a consequence, an opportunity, a **clickable** suggested oracle (adapts to the active question and pressure), and quick-apply shifts. Because it's UI-free, it is independently testable today and swappable for an LLM-backed advisor later behind the exact same signature — no UI change.
+`advise(campaign)` is a pure function returning an observation, a consequence, an opportunity, a **clickable** suggested oracle (adapts to the active question and pressure), and quick-apply shifts. Because it's UI-free, it is independently testable today and swappable for an LLM-backed advisor later behind the exact same signature — no UI change. This observation/consequence/opportunity shape, plus Session Recap (item 10 below), is also what `gameplay-mechanics.md` calls "Campaign Momentum" (a session should surface a new ally/rival/knowledge/opportunity) — already built, see `docs/adr/0008`.
 
 ### 4. Threads (progress clocks)
 v0.53 had a single free-text "current thread." This branch adds first-class **progress clocks**: named threads with fillable segments, tracked in the WHY view, advanced/retired with one click, and — crucially — **read by the Co-Pilot**, which flags the clock nearest completion ("*'Escape the station' is 3/4 — one more push resolves it*"). This is the kind of at-a-glance decision support that makes the cockpit feel like an operating system rather than a generator. (The Design Constitution's pack 77 describes a much richer 7-state Thread lifecycle — see Phase 6 below.)
@@ -118,6 +118,40 @@ Also fixed as part of this pass: the Cast drawer's entity rows were both the cli
 - **HOW workspace becomes Activity-driven** (pack 7/24, sharpened by `requirements/initial design inputs/gameplay-goals.md`'s Rules Constitution — see `docs/adr/0002-rules-constitution.md`). — **Done.** HOW keeps its free-text `summary` field (pacing notes) but gains an `activity` field (`context.how.activity`, `''` on old/fresh campaigns — no migration needed) picked from a new `Activity` <select> (`domain/activities.js`'s `ACTIVITIES`: Explore/Investigate/Negotiate/Travel/Trade/Combat/Faction dealings/Downtime/Horror/World-building). `suggestRulesLens(activityId)` looks up the Activity's gameplay area in the existing `GAMEPLAY_AREAS` table and returns its registered provider(s) — the HOW card renders these as a "Suggested Rules Lens" box (e.g. Combat → Five Parsecs From Home) with a "Use as default ▸" button that sets `settings.statRuleset` (only shown for providers with an actual character ruleset — `RULES_PROVIDERS[id].rulesetId`, new field, joins to `data/rulesets.js`'s ids; Traveller/SWN/Hostile/Planetfall/Saga Atlas itself don't get one). Suggestion only, never automatic — extends the existing per-entity ruleset selector rather than replacing it, exactly as scoped.
 - **Genre packs** (was item D) — **Done.** `data/genrePacks.js`'s `GENRE_PACKS` registers three selectable oracle table sets — Hostile (sci-fi, the pre-existing default, unchanged), Cyberpunk/Shadowrun (`data/tables-cyberpunk.js`), and Fantasy/D&D-style (`data/tables-fantasy.js`), all original content in this project's own voice. A new Settings → "Genre Pack" dropdown sets `settings.genrePack` (defaults to `'hostile'`, so every pre-Phase-9 campaign is unaffected); `domain/oracles.js`'s `tablesWithOverrides(overrides, genrePackId)` picks the active pack's tables before layering the campaign's own `oracles.overrides` on top exactly as before, and every caller (`continueStory`, `rollOracle`, `generateNpc`, Universal Search, the Oracle drawer's tree and entry editor) now threads `campaign.settings.genrePack` through. The two new packs deliberately reuse the exact category names (`Characters`, `Location Themes`, `Plot Engine`, `Miscellaneous`, `Trade & Cargo`) that `copilot.js`'s suggested-oracle logic and `generateNpc`'s NPC chain reference by hardcoded path, so those features work unchanged regardless of which pack is active — only the content underneath carries genre flavor; genre packs are a data swap, not a new mechanism. Verified end to end in a browser: switching packs changes Generate NPC's name pool, the Oracle drawer's tree content, Continue Story's scene generation, and Universal Search results, all without touching anything else.
 
+### Content addition (unphased) — Situation Engine oracle chains
+
+`requirements/design-principles/gameplay-mechanics.md`, reconciled in
+`docs/adr/0008-situation-engine.md`, turned out to already describe most of
+what this repo built in Phases 2/6/8 (a GM Prompt Hierarchy = the WHAT card
++ Shift Story reducers; an "Oracle Prompt Chain" = `generateNpc`'s existing
+five-table roll; "Campaign Momentum" = Session Recap + the Co-Pilot). What's
+left is four small oracle-content additions — data, not a new mechanism, so
+(per the same reasoning that already unblocked Phase 8's NPC chain and
+hazard tables from waiting on phase order) these ship whenever authored,
+not gated behind Phase 10:
+- **"Salvage Investigation" chain** (`Derelicts` oracle group) — *What
+  Happened* / *What Remains* / *Still Changing*, three tables turning the
+  group's existing flavor tables into an actual mystery generator.
+- **"Site Survey" chain** (`Exploration` oracle group) — *What's Normal* /
+  *What's Strange* / *What's Dangerous* / *What's Valuable* / *What's
+  Beautiful*, deliberately discovery-first (only one of five questions
+  involves danger).
+- **"Cargo Interest" table** (`Trade & Cargo` oracle group) — who
+  unexpectedly wants this cargo and why; the concrete table ADR 0003
+  gestured at ("advancing a transport Thread is a natural trigger for an
+  Oracle roll") but never named.
+- **"Anomaly Investigation" chain** (`Mysteries & Coverups` oracle group) —
+  *Observation* / *Hypothesis* / *Contradiction* / *Discovery*.
+
+*Effort: low* — ordinary tables rolled in sequence in the Oracle drawer,
+same as most of this app's 100+ existing tables; no new domain code. A
+one-click "Generate Salvage Site"-style composite action (mirroring
+`generateNpc`) is a plausible low-effort follow-on once the tables exist,
+not a prerequisite. See ADR 0008 for what this reconciliation explicitly
+declined (an Expedition four-dial tracker, structured Diplomacy fields, a
+Discovery-classification field, a Noncombat-approach taxonomy, and a
+mechanized session-composition budget) and why.
+
 ### Phase 10 — Ecosystem & reach (lowest priority per pack 66 — "new features")
 
 - **Trade & Logistics minigame** (user-requested, 2026-07-03; see
@@ -142,6 +176,10 @@ Also fixed as part of this pass: the Cast drawer's entity rows were both the cli
   Recovery/Colonization/Mining/Research/Emergency/Escort), with `payout`
   priced by the same `priceAt()` this section already specifies. Everything
   below is unchanged; the contract layer sits on top of it, not instead.
+  **A concrete complication hook for that contract layer** — the "Cargo
+  Interest" oracle table (who unexpectedly wants this cargo, and why) —
+  landed as one of the unphased Situation Engine content additions above
+  (ADR 0008), rather than waiting for this phase.
   - **Data, not an engine**: `data/commodities.js` — a genre-swappable list
     of tradeable goods (Hostile-flavored default: Water, Fuel, Medical
     Supplies, Weapons, Salvage, Luxury Goods, ...), each just `{id, label,
@@ -193,7 +231,7 @@ Also fixed as part of this pass: the Cast drawer's entity rows were both the cli
     tables become a second, swappable commodity/price data set rather than
     a redesign.
 - **Mission/Job generator — new `domain/missions.js`** (2026-07-03 ruleset review; user priority: "robust missions with balanced risk vs reward"). The single best-supported gap the review found — nothing in `src/domain/` currently generates a job/contract with payout math. Borrows Hostile Crew Expendable's cargo-job formula (pp.20-24, 37-39: destination distance × a 2D6 payout-modifier table, explicit damage/lateness penalties) and 5PFH's danger-tier-scaled Deployment Conditions (pp.88-89): `generateMission(campaign, { danger })` returns `{payout, complications, deadline, penalties}`, with `danger` sourced from the existing `context.what.threat` Narrative Tracker so higher ambient threat produces higher-stakes, higher-payout missions automatically — risk and reward move together instead of being hand-tuned per mission. *Effort: medium* — new domain module, same "new feature" bucket as Trade above, not reordered ahead of it.
-- **Faction Pressure Track — extend `domain/threads.js`'s clock onto faction entities** (2026-07-03 ruleset review; user priority: "deep faction... creation"). Hostile Colony Builder's Stability/Instability escalation ladder (pp.74-78: a quarterly roll against accumulating Instability, ending in a named consequence tier) and 5PFH Compendium's Power/Influence/Faction Activity table (pp.110-115) both reduce to the same shape Threads already model — a filling clock with GM-set state, not a live simulation. A faction entity gains a `pressure` clock (reusing `threads.js`'s existing segments/status machinery rather than a second implementation) plus a free-text `goal`/`agenda` field and an activity-table roll analogous to 5PFH's D100 table. *Effort: low-medium* — mostly wiring an existing mechanic onto a new entity type.
+- **Faction Pressure Track — extend `domain/threads.js`'s clock onto faction entities** (2026-07-03 ruleset review; user priority: "deep faction... creation"). Hostile Colony Builder's Stability/Instability escalation ladder (pp.74-78: a quarterly roll against accumulating Instability, ending in a named consequence tier) and 5PFH Compendium's Power/Influence/Faction Activity table (pp.110-115) both reduce to the same shape Threads already model — a filling clock with GM-set state, not a live simulation. A faction entity gains a `pressure` clock (reusing `threads.js`'s existing segments/status machinery rather than a second implementation) plus a free-text `goal`/`agenda` field and an activity-table roll analogous to 5PFH's D100 table. *Effort: low-medium* — mostly wiring an existing mechanic onto a new entity type. **Reconciled against `gameplay-mechanics.md`'s four-dial Influence/Resources/Patience/Agenda-Progress proposal (ADR 0008)**: kept the single-clock design — no concrete mechanic yet distinguishes the four named dials from one pressure clock, and splitting speculatively repeats the "premature field" mistake ADR 0004 already declined for colony richness. Split later if something actually needs the distinction.
 - **Faction Rumor → Mission seed link in `copilot.js`** (2026-07-03 ruleset review) — depends on both items above existing first. Starforged frames Faction Rumors explicitly as vow/mission seeds (reference guide p.79); once a faction has a pressure clock and missions can be generated, `advise()` crossing a faction's pressure threshold into "a mission tied to them would land now" is the natural link, the same way `copilot.js` already links `threadUnderPressure()` into its `observation` field. This is what turns faction depth and mission depth into a loop instead of two static features — the concrete answer to wanting both at once.
 - **Shipyard companion link** (item E's remainder) — blocked on a known official URL, not effort.
 - **Plugin-style rules-lens registration** — the Constitution's long-horizon "Ecosystem" milestone; not worth building until Phase 9 proves the Activity→Lens pattern with the two rulesets already shipped.

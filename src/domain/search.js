@@ -37,7 +37,7 @@ export function universalSearch(campaign, query, { limit = 40 } = {}) {
       out.push({
         category: 'Cast', id: e.id, label: e.name || 'Unnamed',
         sublabel: (e.tags || []).join(', ') || e.type,
-        target: { drawer: 'entities', entityId: e.id },
+        target: { drawer: 'entity-detail', entityId: e.id },
       });
     }
   }
@@ -78,12 +78,12 @@ export function universalSearch(campaign, query, { limit = 40 } = {}) {
     }
   }
   const refDocs = listReferenceDocuments(campaign);
-  refDocs.forEach((r, i) => {
+  refDocs.forEach((r) => {
     const haystack = [r.title, ...(r.tags || [])].join(' ');
     if (matches(haystack, q)) {
       out.push({
         category: 'Documents', id: r.key, label: r.title, sublabel: 'reference library',
-        target: { drawer: 'documents', docTabKey: 'ref:' + i },
+        target: { drawer: 'documents', docTabKey: 'ref:' + r.key },
       });
     }
   });

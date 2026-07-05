@@ -1,6 +1,7 @@
 // documents.js — pure document-library helpers for the GMAtlas docs drawer.
 
 import { DOCS_MANIFEST } from '../data/docsManifest.js';
+import { findByName } from './entities.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 
@@ -139,11 +140,27 @@ function splitPageAnchor(raw) {
   return { name: String(raw || '').trim(), page: null };
 }
 
-/** Parse @Name and @[Doc Title] mentions, each as `{name, page}` — `page` is
- *  the anchor from `@[Doc Title#12]`/`@[Doc Title p.12]`, or null when the
- *  mention doesn't name one. Order-preserving, not deduplicated (the same
- *  title mentioned at two different pages is two distinct refs). */
-export function parseDocumentMentionRefs(text) {
+// A bracketed mention may also carry a custom display label ahead of the
+// actual name/target, separated by "|" — @[Colony rules|5PFH Planetfall p.12]
+// shows "Colony rules" but still resolves/links/opens the actual document
+// (or entity — this same bracket syntax is shared by both, see
+// documentBadges' comment), or @[old friend|Captain Reyes] for an entity.
+// Bare @Name mentions can never carry a label (no delimiter-safe way to fit
+// one in a single unbroken word) or a page.
+function splitLabel(raw) {
+  const s = String(raw || '');
+  const i = s.indexOf('|');
+  if (i < 0) return { label: null, target: s };
+  return { label: s.slice(0, i).trim() || null, target: s.slice(i + 1).trim() };
+}
+
+/** Scan every @Name/@[Name]/@[Label|Name] mention in `text`, each as
+ *  `{name, page, label, start, end}` — `start`/`end` are the source string
+ *  indices of the whole mention (including the leading @), for callers that
+ *  need to slice around it (see scanMentionSpans/ui/mentionEditor.js).
+ *  Order-preserving, not deduplicated (the same title mentioned twice, or at
+ *  two different pages, is two distinct refs). */
+function scanMentions(text) {
   const out = [];
   const source = String(text || '');
   const stopWords = new Set(['and', 'or', 'the', 'a', 'an', 'to', 'for', 'with', 'from', 'in', 'on']);
@@ -157,8 +174,9 @@ export function parseDocumentMentionRefs(text) {
     if (source[at + 1] === '[') {
       const match = source.slice(at).match(/^@\[([^\]]+)\]/);
       if (match) {
-        const { name, page } = splitPageAnchor(match[1]);
-        if (name) out.push({ name, page });
+        const { label, target } = splitLabel(match[1]);
+        const { name, page } = splitPageAnchor(target);
+        if (name) out.push({ name, page, label, start: at, end: at + match[0].length });
         i = at + match[0].length;
         continue;
       }
@@ -166,6 +184,7 @@ export function parseDocumentMentionRefs(text) {
 
     const words = [];
     let j = at + 1;
+    let nameEnd = j;
     while (j < source.length) {
       if (source[j] === '@') break;
       if (/[.,;:!?]/.test(source[j])) break;
@@ -179,14 +198,39 @@ export function parseDocumentMentionRefs(text) {
       if (stopWords.has(token.toLowerCase())) break;
       words.push(token);
       j += token.length;
+      // Only the position right after the last word actually INCLUDED in
+      // the name counts as its end — `j` alone would also swallow the
+      // trailing whitespace this loop skips over while probing whether the
+      // next word continues the name (a caller slicing text around this
+      // range, e.g. the mention-link editor, would otherwise eat a real
+      // space from the text).
+      nameEnd = j;
     }
 
     const name = words.join(' ').trim();
-    if (name) out.push({ name, page: null });
+    if (name) out.push({ name, page: null, label: null, start: at, end: nameEnd });
     i = at + 1;
   }
 
   return out;
+}
+
+/** Parse @Name and @[Doc Title] mentions, each as `{name, page, label}` —
+ *  `page` is the anchor from `@[Doc Title#12]`/`@[Doc Title p.12]`, `label`
+ *  is the custom display text from `@[Label|Doc Title]`, either or both
+ *  null when the mention doesn't carry one. Order-preserving, not
+ *  deduplicated (the same title mentioned at two different pages is two
+ *  distinct refs). */
+export function parseDocumentMentionRefs(text) {
+  return scanMentions(text).map(({ name, page, label }) => ({ name, page, label }));
+}
+
+/** Same scan as parseDocumentMentionRefs, but keeps each mention's `start`/
+ *  `end` source-string indices — the inline mention-link editor (see
+ *  ui/mentionEditor.js) needs these to slice the plain-text segments between
+ *  mentions when first building its rich DOM from stored text. */
+export function scanMentionSpans(text) {
+  return scanMentions(text);
 }
 
 /** Just the distinct document titles mentioned in `text` — the form callers
@@ -200,6 +244,19 @@ export function parseDocumentMentions(text) {
   return out;
 }
 
+// Bare @Name and bracketed @[Name] mentions share the exact same syntax
+// (brackets only exist to let a multi-word name survive the parser — see
+// parseDocumentMentionRefs/parseMentions in entities.js, which both accept
+// either form identically), so a mention can't be told apart as "meant for a
+// document" vs "meant for an entity" by its punctuation alone. Journal/
+// context-field editing (session.js's addNote/editContextText) runs entity
+// auto-linking FIRST, so by the time this runs, `next` already has a real
+// entity for every name that didn't already exist. Skipping those here is
+// what stops e.g. "@Sakura Combine" (an NPC/faction mention) from ALSO
+// spawning a same-named phantom "document" with an empty note body — a real
+// reported bug (stray entity-named entries cluttering the Documents drawer).
+// A name that resolves to neither an existing document nor an existing
+// entity still gets auto-created as a document, same as before.
 export function linkDocumentMentions(campaign, text) {
   const names = parseDocumentMentions(text);
   if (!names.length) return campaign;
@@ -209,36 +266,66 @@ export function linkDocumentMentions(campaign, text) {
   const byTitle = new Map(library.map((entry) => [String(entry.title || '').trim().toLowerCase(), entry]));
   for (const name of names) {
     const key = name.trim().toLowerCase();
-    if (!byTitle.has(key)) {
-      const created = {
-        id: 'doc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-        title: name.trim(),
-        content: '',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      library.push(created);
-      byTitle.set(key, created);
-    }
+    if (byTitle.has(key)) continue;
+    if (findByName(next, name)) continue;
+    // Also skip a name that already matches a Reference Library doc (a
+    // build artifact, never something to "create") — missing this let a
+    // phantom same-titled text note get created anyway, which then
+    // permanently shadowed the real PDF for every future mention of that
+    // title (see findDocumentTabByTitle's openable-preference fix below —
+    // this stops a NEW phantom from being created; that fix un-shadows any
+    // that already exist in a saved campaign).
+    if (findDocumentTabByTitle(next, name)) continue;
+    const created = {
+      id: 'doc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      title: name.trim(),
+      content: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    library.push(created);
+    byTitle.set(key, created);
   }
   return next;
 }
 
-/** Resolve a mentioned title to a document — checking the uploaded/text
- *  library first, then the auto-scanned Reference Library — so a badge for
- *  either can become a clickable "open this" link. `openable` is false for
- *  a text-note library document (nothing for the PDF viewer to show), same
- *  restriction the Documents drawer's own open link already enforces. */
+/** Resolve a mentioned title to a document — an OPENABLE match (an uploaded
+ *  PDF, or a Reference Library entry — always a real PDF) wins over a
+ *  same-titled uploaded TEXT NOTE, not just whichever list happens to be
+ *  checked first. Without that preference, a stray phantom note sharing a
+ *  Reference Library PDF's exact title (see linkDocumentMentions above —
+ *  this used to be possible to create) would permanently shadow the real
+ *  PDF: every future @[Same Title] mention would resolve to the note and
+ *  show "not a PDF file" instead of ever reaching the actual document
+ *  again. `openable` is false only when nothing openable matched at all. */
 export function findDocumentTabByTitle(campaign, name) {
   const key = String(name || '').trim().toLowerCase();
   if (!key) return null;
   const library = (campaign.documents && campaign.documents.library) || [];
   const libEntry = library.find((d) => String(d.title || '').trim().toLowerCase() === key);
-  if (libEntry) return { tabKey: 'lib:' + libEntry.id, title: libEntry.title, openable: libEntry.kind === 'file' };
+  if (libEntry && libEntry.kind === 'file') return { tabKey: 'lib:' + libEntry.id, title: libEntry.title, openable: true };
   const refDocs = listReferenceDocuments(campaign);
-  const idx = refDocs.findIndex((r) => String(r.title || '').trim().toLowerCase() === key);
-  if (idx >= 0) return { tabKey: 'ref:' + idx, title: refDocs[idx].title, openable: true };
+  const ref = refDocs.find((r) => String(r.title || '').trim().toLowerCase() === key);
+  if (ref) return { tabKey: 'ref:' + ref.key, title: ref.title, openable: true };
+  if (libEntry) return { tabKey: 'lib:' + libEntry.id, title: libEntry.title, openable: false };
   return null;
+}
+
+/** Every distinct name in `text`'s @mentions that already resolves to a real
+ *  document (uploaded library OR Reference Library) — lowercased, for
+ *  entities.js's linkMentions to exclude via its `skip` option. Without
+ *  this, mentioning an existing document (e.g. after the @-suggestion
+ *  popup's "which page?" prompt inserts @[Title#12]) would still pass
+ *  through linkMentions unfiltered and spawn a same-named phantom NPC,
+ *  since linkMentions has no idea the document library exists at all — a
+ *  real reported bug ("asking for a page... creates a new NPC entity named
+ *  filename#pagenumber" instead of linking the document). */
+export function resolvedDocumentMentionNames(campaign, text) {
+  const out = new Set();
+  for (const name of parseDocumentMentions(text)) {
+    if (findDocumentTabByTitle(campaign, name)) out.add(name.trim().toLowerCase());
+  }
+  return out;
 }
 
 export function listDocumentMentions(campaign) {
@@ -253,13 +340,24 @@ export function listDocumentMentions(campaign) {
 // manifest's stable `file` path, never mutating DOCS_MANIFEST itself.
 
 /** DOCS_MANIFEST entries merged with any persisted title/tag overrides —
- *  what the Documents drawer's "Reference Library" section actually renders. */
+ *  what the Documents drawer's "Reference Library" section actually renders.
+ *  A hidden entry (see hideRefDocument) is a bundled build artifact still
+ *  sitting in assets/docs/, not actually deleted — hiding is the closest a
+ *  per-campaign override can get to "delete" without touching the repo. */
 export function listReferenceDocuments(campaign) {
   const overrides = (campaign.documents && campaign.documents.refOverrides) || {};
   return DOCS_MANIFEST.map((r) => {
     const o = overrides[r.file] || {};
-    return { ...r, key: r.file, title: (o.title || r.title), tags: Array.isArray(o.tags) ? o.tags : [] };
-  });
+    return { ...r, key: r.file, title: (o.title || r.title), tags: Array.isArray(o.tags) ? o.tags : [], hidden: !!o.hidden };
+  }).filter((r) => !r.hidden);
+}
+
+export function hideRefDocument(campaign, key) {
+  const next = clone(campaign);
+  const docs = ensure(next);
+  if (!docs.refOverrides[key]) docs.refOverrides[key] = {};
+  docs.refOverrides[key].hidden = true;
+  return next;
 }
 
 export function renameRefDocument(campaign, key, title) {
@@ -292,8 +390,11 @@ export function removeRefDocumentTag(campaign, key, tag) {
 }
 
 // --- Document viewer tabs -----------------------------------------------
-// A tab key is "ref:<DOCS_MANIFEST index>" (a bundled reference PDF) or
-// "lib:<document id>" (an uploaded/library file) — the same shape the
+// A tab key is "ref:<manifest file path>" (a bundled reference PDF — the
+// manifest's stable `file` path, not an array index: the Reference Library
+// list is searchable/hideable, so a rendered row's position can't be
+// trusted as a stable id) or "lib:<document id>" (an uploaded/library
+// file) — the same shape the
 // existing data-doc-open dataset value already used for a single viewer,
 // now persisted as a list so more than one can be open at once (see
 // docs/adr — old v0.53 had this via a legacy `sagaAtlasPdfOpenTabs` key,
@@ -350,7 +451,7 @@ export function resolveDocumentTab(campaign, tabKey) {
   const [kind, id] = String(tabKey || '').split(':');
   const page = (campaign.documents && campaign.documents.tabPages && campaign.documents.tabPages[tabKey]) || null;
   if (kind === 'ref') {
-    const ref = DOCS_MANIFEST[Number(id)];
+    const ref = DOCS_MANIFEST.find((m) => m.file === id);
     if (!ref) return null;
     const overrides = (campaign.documents && campaign.documents.refOverrides) || {};
     const title = (overrides[ref.file] && overrides[ref.file].title) || ref.title;

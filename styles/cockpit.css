@@ -131,6 +131,28 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .copilot-card h3 { margin: 0 0 var(--sp-1); font-size: 0.72rem; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; }
 .copilot-card p { margin: 0; font-size: 0.85rem; }
 
+/* --- Cast panel (2026-07-05 restructure): the full Cast list — search,
+   type filter, add-entity buttons, draggable/clickable rows — as its own
+   independent panel instead of a drawer tab (same "always in the DOM, own
+   toggle" pattern as Co-Pilot above), so it can sit beside whichever drawer
+   IS active (specifically Journal or Guide, to drag an entity into either)
+   without losing sight of it, which the single-active-drawer-body model
+   otherwise makes impossible. Docks immediately left of the open drawer
+   (--popout-drawer-w, same trick as --viewer-overlap below uses for the doc
+   viewer) or right at the edge tabs when no drawer is open. */
+.mc-entity-popout {
+  position: fixed; top: var(--header-h); right: calc(var(--edge-w) + var(--popout-drawer-w, 0px)); bottom: 0;
+  width: min(22rem, 88vw); padding: var(--sp-3);
+  background: var(--tier3-bg); border-left: 1px solid var(--border-strong); box-shadow: var(--shadow);
+  overflow: auto; transform: translateX(100%); transition: transform 0.2s ease;
+  z-index: 19; visibility: hidden; pointer-events: none;
+}
+.mc-entity-popout[data-open="true"] { transform: translateX(0); visibility: visible; pointer-events: auto; }
+.mc-entity-popout .drawer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-3); }
+.mc-entity-popout h2 { margin: 0; font-size: 0.95rem; }
+.mc-entity-popout .entity-list { max-height: none; margin-top: var(--sp-2); }
+.mc-entity-popout .entity-list-row { cursor: grab; }
+
 /* --- Edge tabs → tertiary drawers ----------------------------------- */
 .mc-edge {
   position: fixed; top: var(--header-h); right: 0; bottom: 0;
@@ -173,15 +195,22 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .mc-drawer[data-open="true"] { transform: translateX(0); visibility: visible; pointer-events: auto; }
 .mc-drawer .drawer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-3); }
 .mc-drawer h2 { margin: 0; font-size: 1rem; }
+/* Cast drawer only (see render()'s [data-drawer-title] handling in shell.js)
+   — the drawer's own title doubles as the Cast-list collapse toggle, so
+   there's one "Cast" label instead of the title plus a second collapsible
+   header row underneath it. */
+.mc-drawer h2.drawer-title-toggle { cursor: pointer; user-select: none; }
+.mc-drawer h2.drawer-title-toggle:hover { color: var(--accent); }
 
 /* Tabbed drawer switching (2026-07-04) — hidden entirely unless 2+ drawers
    are pinned open at once, so the common single-drawer case is unchanged.
    Same tab-strip pattern as the doc viewer's own tabs (.doc-viewer-tab). */
 .drawer-tabs {
-  display: flex; gap: 2px; overflow-x: auto; margin: calc(var(--sp-4) * -1) calc(var(--sp-4) * -1) var(--sp-3);
-  padding: 0 var(--sp-2); background: var(--tier1-bg); border-bottom: 1px solid var(--tier1-border);
+  display: flex; align-items: stretch; margin: calc(var(--sp-4) * -1) calc(var(--sp-4) * -1) var(--sp-3);
+  background: var(--tier1-bg); border-bottom: 1px solid var(--tier1-border);
 }
 .drawer-tabs[hidden] { display: none; }
+.drawer-tabs-scroll { display: flex; gap: 2px; overflow-x: auto; flex: 1 1 auto; min-width: 0; padding: 0 var(--sp-2); }
 .drawer-tab {
   display: flex; align-items: center; gap: var(--sp-1); flex: 0 0 auto; max-width: 12rem;
   padding: var(--sp-2) var(--sp-2); background: none; border: none; border-right: 1px solid var(--tier1-border);
@@ -191,6 +220,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .drawer-tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .drawer-tab-close { border-radius: 3px; padding: 0 3px; }
 .drawer-tab-close:hover { background: var(--bg-inset); color: var(--text); }
+/* "Close all" — separate from a single tab's own ✕, pinned to the strip's
+   right corner outside the scrollable tab list, so it's always reachable
+   regardless of how many tabs are open. */
+.drawer-tabs-close-all {
+  flex: 0 0 auto; display: flex; align-items: center; padding: 0 var(--sp-3);
+  background: none; border: none; border-left: 1px solid var(--tier1-border);
+  color: var(--text-dim); cursor: pointer; font-size: 0.85rem;
+}
+.drawer-tabs-close-all:hover { background: var(--bg-inset); color: var(--accent); }
 
 /* --- Responsive: three tiers (phone / tablet / desktop), per the founding
    brief's §3.5 spec — "Co-Pilot becomes a tablet edge-tab, a phone
@@ -215,33 +253,39 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .mc-breadcrumb { display: none; }
 }
 
-/* Phone (<768px): Co-Pilot is a bottom sheet, summoned from an edge tab. */
+/* Phone (<768px): Co-Pilot AND Cast are both bottom sheets, summoned from an
+   edge tab — Cast has no other way to open at all now (no drawer-tab
+   fallback, see the 2026-07-05 restructure note above .mc-entity-popout),
+   so unlike the old entity-popout-as-bonus-feature version, it can't just
+   be hidden here the way it briefly was. */
 @media (max-width: 767px) {
-  .mc-copilot {
+  .mc-copilot, .mc-entity-popout {
     position: fixed; left: 0; right: var(--edge-w); bottom: 0;
     max-height: 55vh; border-left: none; border-top: 1px solid var(--border-strong);
     transform: translateY(100%); transition: transform 0.2s ease; z-index: 15;
     visibility: hidden; pointer-events: none;
   }
-  .mc-copilot[data-open="true"] { transform: translateY(0); visibility: visible; pointer-events: auto; }
+  .mc-copilot[data-open="true"], .mc-entity-popout[data-open="true"] { transform: translateY(0); visibility: visible; pointer-events: auto; }
   .mc-q { min-width: 5.5rem; }
 }
 
 /* Tablet (768-1023px): enough width for a bottom sheet to feel cramped
-   against a landscape-ish aspect ratio, so the Co-Pilot instead slides in
-   from the right like a drawer ("edge-tab") — same summon/dismiss
-   mechanism (data-toggle-copilot, copilotOpen) as phone, just a different
-   transform axis and a fixed side-panel width instead of a viewport-height
-   cap. */
+   against a landscape-ish aspect ratio, so Co-Pilot and Cast instead slide
+   in from the right like a drawer ("edge-tab") — same summon/dismiss
+   mechanism (data-toggle-copilot/data-toggle-cast) as phone, just a
+   different transform axis and a fixed side-panel width instead of a
+   viewport-height cap. Both docked at the same edge is an acceptable rare
+   overlap (stacking one atop the other) rather than a reason to build a
+   fourth layout variant just for "both open at once, on a tablet." */
 @media (min-width: 768px) and (max-width: 1023px) {
-  .mc-copilot {
+  .mc-copilot, .mc-entity-popout {
     position: fixed; top: var(--header-h); right: var(--edge-w); bottom: 0; left: auto;
     width: min(24rem, 88vw); max-height: none;
     border-left: 1px solid var(--border-strong); border-top: none;
     transform: translateX(100%); transition: transform 0.2s ease; z-index: 15;
     visibility: hidden; pointer-events: none;
   }
-  .mc-copilot[data-open="true"] { transform: translateX(0); visibility: visible; pointer-events: auto; }
+  .mc-copilot[data-open="true"], .mc-entity-popout[data-open="true"] { transform: translateX(0); visibility: visible; pointer-events: auto; }
 }
 
 @media (min-width: 1024px) {
@@ -293,6 +337,47 @@ textarea, select, input[type="text"], input[type="search"], .drawer-search {
 textarea { resize: vertical; }
 textarea:focus, select:focus, input:focus, .drawer-search:focus { outline: none; border-color: var(--accent); }
 input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
+
+/* Mention editor — a contenteditable standing in for what used to be a
+   plain <textarea>, everywhere an @mention can appear (Journal, Guide,
+   WHO/WHERE/WHAT/WHY/HOW). A mention renders as real inline text here (see
+   .mention-link below), not a chip in a row underneath the field — the
+   point of this whole rewrite (2026-07-05) was making an @mention read like
+   a hyperlink inline in the sentence, the way it would in a web page or a
+   Word document, with the label editable in place by clicking into it and
+   typing, same as Word's own editable-hyperlink convention. */
+.mention-editor {
+  width: 100%; box-sizing: border-box; min-height: 4.5rem; max-height: 40vh; overflow-y: auto;
+  background: var(--bg-inset); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 0.5rem 0.6rem; font: inherit; font-size: 0.9rem;
+  /* WHO/WHERE/WHAT/WHY/HOW wrap this in a <label class="field-label">,
+     which sets text-transform: uppercase for its own small caption text —
+     a real reported bug: without an explicit override here, that inherited
+     onto the field's actual content too (entity/doc names in @mentions
+     included), shouting every WHO/WHERE/etc. field in caps while Journal
+     (wrapped in .drawer-note, no such rule) and Guide (no wrapper at all)
+     were unaffected. */
+  text-transform: none;
+  white-space: pre-wrap; word-break: break-word;
+}
+.mention-editor:focus { outline: none; border-color: var(--accent); }
+.mention-editor:empty::before { content: attr(data-placeholder); color: var(--text-dim); pointer-events: none; }
+.mention-text.mention-editor, .mention-text { min-height: 0; border: none; background: none; padding: 0; }
+
+/* An inline mention — a real hyperlink-like span living in the text, not a
+   badge below it. mention-link-active means it resolved to a real entity
+   or document (data-open-entity/data-doc-open present, so Ctrl/Cmd+Click —
+   see shell.js's onClick guard — opens it); an unresolved mention (matches
+   neither) gets the plain, undecorated variant so it visibly reads as "not
+   linked yet" rather than a broken-looking link. */
+.mention-link {
+  border-bottom: 1px dotted var(--text-dim);
+}
+.mention-link.mention-link-active {
+  color: var(--accent); border-bottom-color: var(--accent); cursor: pointer;
+}
+.mention-link.mention-link-active:hover { color: var(--accent-strong); border-bottom-color: var(--accent-strong); }
 
 .action-bar { display: flex; gap: var(--sp-3); margin-top: var(--sp-4); flex-wrap: wrap; }
 .shift-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-3); flex-wrap: wrap; }
@@ -419,21 +504,23 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 
 /* Entity Inspector (Phase 3A) */
 .entity-add-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-2) 0; }
-.entity-cols { display: flex; flex-direction: column; gap: var(--sp-3); }
-.entity-list-head { display: flex; align-items: center; gap: var(--sp-2); }
 .entity-list { display: flex; flex-direction: column; gap: 2px; max-height: 32vh; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--sp-2); }
 .entity-list-row { display: flex; align-items: center; gap: var(--sp-2); text-align: left; background: none; border: none; color: var(--text); padding: 0.35rem 0.4rem; border-radius: var(--radius-sm); }
 .entity-list-row:hover { background: var(--tier2-bg); }
 .entity-list-row.sel { background: var(--tier1-bg); outline: 1px solid var(--accent); }
-/* A dedicated grip is the only draggable="true" surface in the row — making
-   the WHOLE row draggable (as it used to be) meant any real mouse's tiny
-   jitter between mousedown/mouseup could get interpreted as a native drag
-   gesture, which suppresses the click entirely and made "select an entity"
-   feel broken. Dropping still works anywhere on the row (data-drop-entity
-   needs no draggable attribute) — only dragging FROM a row is now confined
-   to this handle. */
-.entity-drag-handle { cursor: grab; color: var(--text-dim); padding: 0 0.2rem; flex-shrink: 0; }
-.entity-drag-handle:active { cursor: grabbing; }
+/* The whole row is draggable="true" (2026-07-04, reverted from a
+   grip-only restriction — a real mouse's tiny jitter between mousedown/
+   mouseup can occasionally get read as a drag instead of a click on a
+   draggable row; explicitly accepted in exchange for "grab it anywhere"
+   being more discoverable than a small icon at the left edge). The ⠿ is
+   now a purely decorative affordance icon, not a separate draggable target.
+   cursor: grab lives on the row itself for the same reason. */
+.entity-list-row { cursor: grab; }
+.entity-list-row:active { cursor: grabbing; }
+.entity-drag-handle {
+  color: var(--text-dim); flex-shrink: 0;
+  font-size: 1rem; line-height: 1; padding: 0.15rem 0.3rem; margin-left: -0.15rem;
+}
 .entity-type-tag { font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--border); border-radius: 999px; padding: 0.05rem 0.4rem; }
 .entity-list-name { flex: 1; font-size: 0.85rem; }
 .entity-inspector { border-top: 1px solid var(--border); padding-top: var(--sp-3); }
@@ -444,21 +531,28 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .rel-block h4 { margin: 0 0 var(--sp-2); font-size: 0.8rem; color: var(--accent); }
 .rel-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-2); }
 .rel-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--tier2-bg); border: 1px solid var(--border); border-radius: 999px; padding: 0.2rem 0.5rem; font-size: 0.78rem; flex-wrap: wrap; }
+.rel-chip-name { background: none; border: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
+.rel-chip-name:hover { color: var(--accent-strong); }
 .rel-chip.rel-flagged { border-color: var(--warn); }
 .rel-flag { color: var(--warn); }
 .rel-type-select { max-width: 6.5rem; padding: 0.15rem 0.3rem; font-size: 0.72rem; background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-dim); }
 .rel-strength-input { width: 2.6rem; padding: 0.15rem 0.25rem; font-size: 0.72rem; background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-dim); text-align: center; }
+/* Read-only Bond progress (entities.js's ensureBondTrack) — replaces the
+   generic strength input for exactly the bond that has a matching
+   Character Sheet track, so there's one editable number, not two. */
+.rel-bond-value { font-size: 0.72rem; font-weight: 600; color: var(--accent); white-space: nowrap; }
+.rel-bond-value small { font-weight: 400; color: var(--text-dim); }
 .rel-add { display: grid; grid-template-columns: 1fr auto 1fr auto; gap: var(--sp-2); align-items: center; }
 .faction-card { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-3); }
 .faction-card h4 { margin: 0 0 var(--sp-2); font-size: 0.8rem; color: var(--accent); }
 
-/* Tag editor (Phase 7): removable chips + a per-entity-type vocabulary
-   dropdown, same pill/chip language as .rel-chip above. */
+/* Tag editor (Phase 7, unified 2026-07-04 with the Documents drawer's tag
+   UX): removable chips + a single auto-committing input, same pill/chip
+   language as .rel-chip above. */
 .tag-editor { margin-top: var(--sp-3); }
 .field-label-static { display: block; font-size: 0.7rem; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.25rem; }
 .tag-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-2); }
 .tag-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--tier2-bg); border: 1px solid var(--border); border-radius: 999px; padding: 0.2rem 0.5rem; font-size: 0.78rem; }
-.tag-add-row { display: grid; grid-template-columns: 1fr auto; gap: var(--sp-2); align-items: center; }
 
 /* clickable entity chips in WHO/WHERE cards */
 .entity-chip { cursor: pointer; }
@@ -468,7 +562,9 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .graph-legend { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-2); font-size: 0.72rem; color: var(--text-dim); }
 .graph-legend-item { display: inline-flex; align-items: center; gap: 4px; }
 .graph-legend-item .dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; display: inline-block; }
-.graph-svg { width: 100%; height: auto; background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.graph-toolbar { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+.graph-svg { width: 100%; height: auto; background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: grab; }
+.graph-svg:active { cursor: grabbing; }
 .graph-edge { stroke: rgba(148,163,184,0.45); stroke-width: 1.2; }
 .graph-edge-label { fill: var(--text-dim); font-size: 9px; text-anchor: middle; pointer-events: none; }
 .graph-node { cursor: pointer; }
@@ -479,8 +575,9 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 
 /* Statblocks (Phase 3C) */
 .statblock-block { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-3); }
-.statblock-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-2); }
-.statblock-head h4 { margin: 0; font-size: 0.8rem; color: var(--accent); }
+.statblock-head { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+.statblock-head h4 { flex: 1; margin: 0; font-size: 0.8rem; color: var(--accent); }
+.statblock-collapse-toggle { font-size: 0.7rem; color: var(--text-dim); }
 .statblock-add-choices { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-2); }
 .chip.sm { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
 .statblock-add-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
@@ -494,11 +591,17 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .statblock-key { font-size: 0.8rem; color: var(--text-dim); }
 .statblock-val { font-size: 0.85rem; }
 
-/* Attribute badges (Phase 3D preview) */
-.attribute-badges, .journal-entity-badges { display: flex; gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap: wrap; }
-.attr-badge { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 60px; min-height: 56px; border-radius: 12px; background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.22); padding: 0.5rem 0.6rem; }
-.attr-key { font-size: 0.68rem; color: var(--text-dim); letter-spacing: 0.12em; text-transform: uppercase; }
-.attr-val { font-size: 1rem; font-weight: 700; color: var(--accent-strong); margin-top: 0.2rem; }
+/* Attribute badges (Phase 3D preview) — read-only summary badges (entity
+   inspector's top-of-statblock Stats row, Journal entity-mention badges,
+   Party member cards). Narrowed 2026-07-04 alongside the character-sheet
+   compact rows (.attr-row-compact/.track-row-compact) for the same reason:
+   these wrap onto their own line(s) fine inside a drawer's fixed width, but
+   a Party member card has no width cap of its own, so a run of 5+ full-size
+   badges just kept the card growing wider instead of wrapping. */
+.attribute-badges, .journal-entity-badges { display: flex; gap: 4px; margin-bottom: var(--sp-2); flex-wrap: wrap; }
+.attr-badge { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 44px; min-height: 40px; border-radius: 8px; background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.22); padding: 0.3rem 0.35rem; }
+.attr-key { font-size: 0.6rem; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; }
+.attr-val { font-size: 0.82rem; font-weight: 700; color: var(--accent-strong); margin-top: 0.15rem; }
 
 /* Numeric click-to-set / double-click-to-roll tracks (Crew-Link-style) */
 .statblock-row.track-row { grid-template-columns: 1fr 2fr; }
@@ -535,32 +638,38 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 }
 .attr-val-input:focus { outline: 2px solid var(--accent-strong); outline-offset: 1px; }
 
-/* Character sheet (ruleset-driven stats + resource meters) */
+/* Character sheet (ruleset-driven stats + resource meters). Narrow +
+   nowrap-with-scroll (not wrap) so a ruleset's whole stat row (5 stats for
+   both Starforged and 5PFH today — see data/rulesets.js) reads as one
+   scannable line in the ~388px drawer content width instead of spilling to
+   a second row; overflow-x is the escape valve if a custom ruleset/added
+   field ever pushes past that. */
 .character-sheet-stats {
-  display: flex; flex-wrap: wrap; gap: var(--sp-3);
-  padding: var(--sp-3); margin-bottom: var(--sp-3);
+  display: flex; flex-wrap: nowrap; overflow-x: auto; gap: var(--sp-1);
+  padding: var(--sp-2); margin-bottom: var(--sp-3);
   background: var(--tier2-bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
 .track-row-compact {
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  width: 6rem; margin-bottom: 0; padding: var(--sp-2);
+  display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 0 auto;
+  width: 4.4rem; margin-bottom: 0; padding: 0.35rem;
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset);
 }
-.track-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.65rem; }
+.track-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.6rem; }
 .track-row-compact .track-widget { flex-direction: column-reverse; align-items: center; }
-.track-row-compact .track-boxes { flex-wrap: wrap; justify-content: center; width: 4.5rem; }
-.track-row-compact .track-box { width: 18px; height: 18px; font-size: 0.62rem; }
+.track-row-compact .track-boxes { flex-wrap: wrap; justify-content: center; width: 3.6rem; }
+.track-row-compact .track-box { width: 15px; height: 15px; font-size: 0.56rem; }
 .character-sheet-resources .statblock-row.track-row { margin-bottom: var(--sp-2); }
 
 /* Compact attribute pill (Edge/Heart/... stat row atop a character sheet) —
    same bordered-pill language as .track-row-compact, single-number spinner
    instead of boxes. */
 .attr-row-compact {
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  width: 6rem; margin-bottom: 0; padding: var(--sp-2);
+  display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 0 auto;
+  width: 4.4rem; margin-bottom: 0; padding: 0.35rem;
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset);
 }
-.attr-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.65rem; }
+.attr-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.6rem; }
+.attr-row-compact .attr-val-input { width: 100%; padding: 2px 4px; font-size: 0.78rem; }
 
 /* Drag-and-drop (entity ↔ entity, entity → text) */
 [data-drag-entity] { cursor: grab; }
@@ -578,6 +687,22 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
   background: var(--accent-strong); color: #06121f; box-shadow: var(--shadow);
   pointer-events: none; white-space: nowrap;
 }
+
+/* @-mention autocomplete popup — a single reusable floating element (same
+   pattern as .touch-drag-ghost above), repositioned under whichever field
+   is being typed into rather than one per field. */
+.mention-suggest {
+  position: fixed; z-index: 60; max-height: 14rem; overflow-y: auto;
+  background: var(--tier3-bg); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+}
+.mention-suggest-item {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  width: 100%; text-align: left; padding: 0.4rem 0.6rem; background: none; border: none; color: var(--text);
+  font-size: 0.82rem; cursor: pointer;
+}
+.mention-suggest-item.active, .mention-suggest-item:hover { background: var(--tier2-bg); }
+.mention-suggest-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ============================================================
    Phase 5 — Party / Colony / Guide / Oracle tree / Documents /
@@ -684,7 +809,7 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .party-member-list { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin: var(--sp-2) 0 var(--sp-3); }
 .party-member-card {
   background: var(--tier2-bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: var(--sp-3); min-width: 10rem; cursor: pointer;
+  padding: var(--sp-3); min-width: 10rem; max-width: 13rem; cursor: pointer;
 }
 .party-member-card:hover { border-color: var(--accent); }
 .party-member-name { font-weight: 600; margin-bottom: var(--sp-2); }

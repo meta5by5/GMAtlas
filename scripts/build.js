@@ -10,20 +10,25 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, posix, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { titleFromFilename } from '../src/domain/titleCase.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ENTRY = 'src/main.js';
 
 // Scan assets/docs/ so the Docs drawer's Reference Library always reflects
 // whatever is actually in the folder — drop a PDF in, rebuild, it shows up.
-// Generated file, not committed (see .gitignore), same as dist/.
+// Generated file, not committed (see .gitignore), same as dist/. Title
+// derivation (extension/hyphen stripping + proper-casing any ALL-CAPS
+// filename segments — assets/docs/ naming isn't consistent, see
+// "HOSTILE SHORTS 001GhostShip" vs. "Hostile marine sheet") is shared with
+// the Documents drawer's own file-upload handler, see titleCase.js.
 const DOCS_DIR = join(ROOT, 'assets', 'docs');
 const docsManifest = existsSync(DOCS_DIR)
   ? readdirSync(DOCS_DIR)
       .filter((name) => statSync(join(DOCS_DIR, name)).isFile())
       .map((name) => ({
         file: `assets/docs/${name}`,
-        title: name.replace(extname(name), '').replace(/[-_]+/g, ' ').trim(),
+        title: titleFromFilename(name),
         ext: extname(name).slice(1).toLowerCase(),
         sizeBytes: statSync(join(DOCS_DIR, name)).size,
       }))

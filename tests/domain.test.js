@@ -165,8 +165,9 @@ import {
 import { advise } from '../src/domain/copilot.js';
 import {
   addDocument, updateDocument, removeDocument, parseDocumentMentions, parseDocumentMentionRefs, linkDocumentMentions, listDocumentMentions,
-  findDocumentTabByTitle, openDocumentTab, closeDocumentTab, resolveDocumentTab,
+  findDocumentTabByTitle, openDocumentTab, closeDocumentTab, resolveDocumentTab, resolvedDocumentMentionNames, listReferenceDocuments,
 } from '../src/domain/documents.js';
+import { titleFromFilename } from '../src/domain/titleCase.js';
 
 test('threads: add, advance (clamped), complete, remove', () => {
   let camp = defaultCampaign();
@@ -357,6 +358,13 @@ test('document library supports uploaded files distinctly from text notes', () =
   assert.equal(entry.content, '');
 });
 
+test('titleFromFilename derives a clean, proper-cased display title from a raw filename (shared by the Reference Library build step and the upload handler)', () => {
+  assert.equal(titleFromFilename('HOSTILE-SHORTS-001GhostShip.pdf'), 'Hostile Shorts 001GhostShip');
+  assert.equal(titleFromFilename('Hostile_marine_sheet.pdf'), 'Hostile marine sheet');
+  assert.equal(titleFromFilename('5PFH-Five-Parsecs-From-Home-v3.pdf'), '5PFH Five Parsecs From Home v3');
+  assert.equal(titleFromFilename('Crew Manifest.pdf'), 'Crew Manifest');
+});
+
 test('document mentions are parsed and linked to the library', () => {
   let camp = defaultCampaign();
   camp = addDocument(camp, { title: 'Station Manual', content: 'Docking procedures' });
@@ -366,15 +374,32 @@ test('document mentions are parsed and linked to the library', () => {
   assert.equal(listDocumentMentions(camp)[0].documentId, camp.documents.library[0].id);
 });
 
+test('resolvedDocumentMentionNames only includes names that already resolve to a real document, ignoring page anchors', () => {
+  let camp = defaultCampaign();
+  camp = addDocument(camp, { title: 'Station Manual', content: 'Docking procedures' });
+  const names = resolvedDocumentMentionNames(camp, 'See @[Station Manual#12] and meet @Voss');
+  assert.ok(names.has('station manual'));
+  assert.equal(names.size, 1, 'Voss (not a known document) is excluded');
+});
+
 test('parseDocumentMentionRefs extracts a page anchor from @[Title#12] and @[Title p.12]', () => {
   assert.deepEqual(parseDocumentMentionRefs('See @[Station Manual#12] and @[Shipyard Guide p.7] and @[Field Guide p3]'), [
-    { name: 'Station Manual', page: 12 },
-    { name: 'Shipyard Guide', page: 7 },
-    { name: 'Field Guide', page: 3 },
+    { name: 'Station Manual', page: 12, label: null },
+    { name: 'Shipyard Guide', page: 7, label: null },
+    { name: 'Field Guide', page: 3, label: null },
   ]);
   assert.deepEqual(parseDocumentMentionRefs('@[Plain Doc] and @Station'), [
-    { name: 'Plain Doc', page: null },
-    { name: 'Station', page: null },
+    { name: 'Plain Doc', page: null, label: null },
+    { name: 'Station', page: null, label: null },
+  ]);
+});
+
+test('parseDocumentMentionRefs extracts a custom @[Label|Target] display label, with or without a page anchor', () => {
+  assert.deepEqual(parseDocumentMentionRefs('See @[Colony rules|5PFH Planetfall p.12] for the turn sheet.'), [
+    { name: '5PFH Planetfall', page: 12, label: 'Colony rules' },
+  ]);
+  assert.deepEqual(parseDocumentMentionRefs('@[old friend|Captain Reyes] met us at the bay.'), [
+    { name: 'Captain Reyes', page: null, label: 'old friend' },
   ]);
 });
 
@@ -391,6 +416,25 @@ test('findDocumentTabByTitle resolves a library file as openable and a text note
   assert.equal(pdf.tabKey, 'lib:' + camp.documents.library[1].id);
 
   assert.equal(findDocumentTabByTitle(camp, 'Nonexistent'), null);
+});
+
+test('findDocumentTabByTitle prefers an openable match over a same-titled uploaded text note (regression: a stray phantom note used to permanently shadow a real Reference Library PDF)', () => {
+  let camp = defaultCampaign();
+  const refTitle = listReferenceDocuments(camp)[0].title;
+  // Simulate the exact bug: a phantom text note somehow shares a real
+  // Reference Library doc's title (e.g. created before linkDocumentMentions
+  // checked the Reference Library too).
+  camp = addDocument(camp, { title: refTitle, content: '' });
+  const resolved = findDocumentTabByTitle(camp, refTitle);
+  assert.equal(resolved.openable, true, 'the real PDF is reachable, not shadowed by the phantom note');
+  assert.ok(resolved.tabKey.startsWith('ref:'));
+});
+
+test('linkDocumentMentions does not create a phantom document for a name that already matches a Reference Library doc', () => {
+  let camp = defaultCampaign();
+  const refTitle = listReferenceDocuments(camp)[0].title;
+  camp = linkDocumentMentions(camp, `See @[${refTitle}] for details.`);
+  assert.equal(camp.documents.library.length, 0);
 });
 
 test('opening a document tab at a page anchors the resolved src with #page=N', () => {
@@ -456,6 +500,12 @@ test('deleting an entity strips dangling relationships', () => {
 
 test('parseMentions handles @Name and @[Multi Word]', () => {
   assert.deepEqual(parseMentions('Meet @Voss at @[Dock 3] now'), ['Voss', 'Dock 3']);
+});
+
+test('parseMentions strips a @[Label|Name] custom label, and a page anchor (meaningful only for a document), back to the real name', () => {
+  assert.deepEqual(parseMentions('Meet @[old friend|Captain Reyes] at the bay'), ['Captain Reyes']);
+  assert.deepEqual(parseMentions('See @[Starforged reference guide#12] for rules'), ['Starforged reference guide']);
+  assert.deepEqual(parseMentions('See @[Colony rules|5PFH Planetfall#12] for the turn sheet'), ['5PFH Planetfall']);
 });
 
 // --- tag editor: chips + per-entity-type vocabulary dropdown (Phase 7) -----
@@ -581,12 +631,34 @@ test('linkMentions creates missing entities and links co-mentions', () => {
   assert.ok(medic.relationships.some((r) => r.to === voss.id), 'co-mentioned entities are linked');
 });
 
+test('linkMentions keys off the real name in a @[Label|Name] mention, not the label', () => {
+  let camp = defaultCampaign();
+  camp = linkMentions(camp, 'Met @[old friend|Captain Reyes] at the bay');
+  assert.equal(listEntities(camp).length, 1);
+  assert.equal(listEntities(camp)[0].name, 'Captain Reyes');
+});
+
+test('linkMentions\' skip option excludes a name from auto-create/link entirely', () => {
+  let camp = defaultCampaign();
+  camp = linkMentions(camp, 'See @[Station Manual#12] and meet @Voss', { skip: new Set(['station manual']) });
+  assert.equal(listEntities(camp).length, 1, 'only Voss created — Station Manual was excluded');
+  assert.equal(listEntities(camp)[0].name, 'Voss');
+});
+
 test('addNote auto-links @mentions and keeps existing entities', () => {
   let camp = defaultCampaign();
   ({ campaign: camp } = createEntity(camp, { type: 'npc', name: 'Voss' }));
   camp = addNote(camp, 'Note: @Voss lied about the reactor.');
   assert.equal(listEntities(camp).length, 1, 'existing entity reused, not duplicated');
   assert.equal(camp.journal.length, 1);
+});
+
+test('addNote never spawns a phantom entity for a document mention with a page anchor (regression: @[Title#12] used to auto-create an NPC literally named "Title#12")', () => {
+  let camp = defaultCampaign();
+  camp = addDocument(camp, { title: 'Station Manual', content: 'Docking procedures' });
+  camp = addNote(camp, 'See @[Station Manual#12] for the airlock sequence.');
+  assert.equal(listEntities(camp).length, 0, 'no entity created at all — the mention resolves to the document');
+  assert.equal(camp.documents.library.length, 1, 'the document itself is untouched, not duplicated');
 });
 
 test('editContextText links mentions from the situation field', () => {
@@ -1267,13 +1339,92 @@ test('a typed relationship is flagged when its target no longer matches the type
   assert.equal(flagged[0].toName, 'Sable Cartel');
 });
 
-test('an untyped ("linked"/allied_with/rival_of/bond) relationship is never flagged, regardless of target type', () => {
+test('"linked" is never flagged regardless of either side\'s type — it\'s the untyped fallback with no implied constraint', () => {
   let camp = defaultCampaign();
   let aId, bId;
   ({ campaign: camp, id: aId } = createEntity(camp, { type: 'npc', name: 'A' }));
   ({ campaign: camp, id: bId } = createEntity(camp, { type: 'location', name: 'B' }));
-  camp = addRelationship(camp, aId, bId, 'note', 'bond');
-  assert.equal(isRelationshipFlagged(camp, getEntity(camp, aId).relationships[0]), false);
+  camp = addRelationship(camp, aId, bId, 'note', 'linked');
+  assert.equal(isRelationshipFlagged(camp, getEntity(camp, aId).relationships[0], 'npc'), false);
+});
+
+test('allied_with/rival_of/bond are social relationships — flagged unless BOTH sides are an NPC or a Faction (an Asset/Location/Lore can\'t have a rivalry)', () => {
+  let camp = defaultCampaign();
+  let npcId, factionId, assetId;
+  ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Voss' }));
+  ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
+  ({ campaign: camp, id: assetId } = createEntity(camp, { type: 'asset', name: 'AR-5' }));
+
+  // NPC <-> Faction: valid on both sides, never flagged.
+  camp = addRelationship(camp, npcId, factionId, 'grudge', 'rival_of');
+  const npcRel = getEntity(camp, npcId).relationships.find((r) => r.to === factionId);
+  assert.equal(isRelationshipFlagged(camp, npcRel, 'npc'), false);
+
+  // NPC <-> Asset: the target (Asset) isn't a valid side for a rivalry.
+  camp = addRelationship(camp, npcId, assetId, 'jealous of', 'rival_of');
+  const assetRel = getEntity(camp, npcId).relationships.find((r) => r.to === assetId);
+  assert.equal(isRelationshipFlagged(camp, assetRel, 'npc'), true);
+  assert.equal(getEntity(camp, npcId).relationships.length, 2, 'nothing was removed — flagged, not deleted');
+
+  // Asset <-> Asset: neither side is valid.
+  let asset2Id;
+  ({ campaign: camp, id: asset2Id } = createEntity(camp, { type: 'asset', name: 'AR-6' }));
+  camp = addRelationship(camp, assetId, asset2Id, '', 'allied_with');
+  const assetAssetRel = getEntity(camp, assetId).relationships.find((r) => r.to === asset2Id);
+  assert.equal(isRelationshipFlagged(camp, assetAssetRel, 'asset'), true);
+
+  // Only the side that was actually given the typed relationship is flagged
+  // — _link() mirrors the reverse edge as plain 'linked' (unconstrained)
+  // until the GM deliberately retypes it too, same as directional types.
+  const flagged = listFlaggedRelationships(camp);
+  assert.equal(flagged.length, 2);
+});
+
+test('a bond relationship auto-creates a "Bond: <Name>" track on the source entity\'s Starforged character sheet', () => {
+  let camp = defaultCampaign();
+  let voss, reyes;
+  ({ campaign: camp, id: voss } = createEntity(camp, { type: 'npc', name: 'Voss' }));
+  ({ campaign: camp, id: reyes } = createEntity(camp, { type: 'npc', name: 'Captain Reyes' }));
+  camp = addEntityStatblockGroup(camp, voss, 'character', 'starforged');
+  camp = addRelationship(camp, voss, reyes, '', 'bond');
+
+  const group = findByName(camp, 'Voss').statblocks.find((g) => g.kind === 'character' && g.ruleset === 'starforged');
+  const bondField = group.fields.find((f) => f.key === 'Bond: Captain Reyes');
+  assert.ok(bondField, 'a Bond track field was added');
+  assert.equal(bondField.track, true);
+  assert.equal(bondField.max, 10);
+  assert.equal(bondField.value, 0);
+  // The relationship object itself carries no bond value — "no reference to
+  // the bond is needed in this link."
+  const rel = findByName(camp, 'Voss').relationships.find((r) => r.to === reyes);
+  assert.equal(rel.strength, 0);
+
+  // Doesn't duplicate on a second bond (e.g. retyping back and forth).
+  camp = updateRelationshipType(camp, voss, reyes, 'linked');
+  camp = updateRelationshipType(camp, voss, reyes, 'bond');
+  const fieldsNamed = findByName(camp, 'Voss').statblocks.find((g) => g.ruleset === 'starforged').fields.filter((f) => f.key === 'Bond: Captain Reyes');
+  assert.equal(fieldsNamed.length, 1);
+});
+
+test('a bond relationship does NOT create a track when the source has no Starforged character sheet, or either side is not an NPC/Faction', () => {
+  let camp = defaultCampaign();
+  let voss, reyes, ar5;
+  ({ campaign: camp, id: voss } = createEntity(camp, { type: 'npc', name: 'Voss' }));
+  ({ campaign: camp, id: reyes } = createEntity(camp, { type: 'npc', name: 'Captain Reyes' }));
+  ({ campaign: camp, id: ar5 } = createEntity(camp, { type: 'asset', name: 'AR-5' }));
+
+  // No Starforged character sheet yet (NPCs auto-attach a Bestiary group at
+  // creation — that's a different kind, not a character sheet).
+  camp = addRelationship(camp, voss, reyes, '', 'bond');
+  const noCharGroup = (findByName(camp, 'Voss').statblocks || []).find((g) => g.kind === 'character' && g.ruleset === 'starforged');
+  assert.equal(noCharGroup, undefined);
+
+  // Has a sheet now, but the other side is an Asset, not NPC/Faction.
+  camp = addEntityStatblockGroup(camp, voss, 'character', 'starforged');
+  camp = addRelationship(camp, voss, ar5, '', 'linked');
+  camp = updateRelationshipType(camp, voss, ar5, 'bond');
+  const group = findByName(camp, 'Voss').statblocks.find((g) => g.ruleset === 'starforged');
+  assert.equal(group.fields.some((f) => f.key.startsWith('Bond:')), false);
 });
 
 test('RELATIONSHIP_TYPES includes the Constitution-named taxonomy plus the legacy "linked" fallback', () => {
@@ -1453,14 +1604,14 @@ test('universalSearch returns no results for an empty query', () => {
   assert.deepEqual(universalSearch(camp, '   '), []);
 });
 
-test('universalSearch matches an entity by name and by tag, targeting the entities drawer', () => {
+test('universalSearch matches an entity by name and by tag, targeting the Entity Detail tab', () => {
   let camp = defaultCampaign();
   let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Voss Calder' }));
   camp = setEntityTags(camp, id, 'smuggler, veteran');
   const byName = universalSearch(camp, 'calder');
   assert.equal(byName.length, 1);
   assert.equal(byName[0].category, 'Cast');
-  assert.deepEqual(byName[0].target, { drawer: 'entities', entityId: id });
+  assert.deepEqual(byName[0].target, { drawer: 'entity-detail', entityId: id });
 
   const byTag = universalSearch(camp, 'smuggler').filter((r) => r.category === 'Cast');
   assert.equal(byTag.length, 1);

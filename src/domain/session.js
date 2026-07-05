@@ -7,7 +7,7 @@ import { applyShift } from './context.js';
 import { generateScene } from './scenes.js';
 import { tablesWithOverrides, rollTable, rollGroup, formatRoll, pick } from './oracles.js';
 import { linkMentions, parseMentions, createEntity, updateEntity } from './entities.js';
-import { linkDocumentMentions, parseDocumentMentions } from './documents.js';
+import { linkDocumentMentions, parseDocumentMentions, resolvedDocumentMentionNames } from './documents.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 
@@ -78,7 +78,13 @@ export function rollOracle(campaign, path, { group = false, toJournal = true } =
 export function addNote(campaign, text, source = 'Note') {
   let next = clone(campaign);
   addJournal(next, text, source);
-  if (parseMentions(text).length) next = linkMentions(next, text);
+  // A mention that already resolves to a real document (uploaded or
+  // Reference Library — e.g. @[Title#12] from the "which page?" prompt)
+  // must never also spawn a same-named phantom entity; linkMentions has no
+  // idea the document library exists, so this is computed first and passed
+  // in to exclude it explicitly.
+  const docNames = resolvedDocumentMentionNames(next, text);
+  if (parseMentions(text).length) next = linkMentions(next, text, { skip: docNames });
   if (parseDocumentMentions(text).length) next = linkDocumentMentions(next, text);
   return next;
 }
@@ -132,9 +138,10 @@ export function generateNpc(campaign, { rng = Math.random } = {}) {
  *  WHO → npc, otherwise npc (reclassify in one click in the inspector). */
 export function editContextText(campaign, key, field, value) {
   let next = patchContext(campaign, key, { [field]: value });
+  const docNames = resolvedDocumentMentionNames(next, value);
   if (parseMentions(value).length) {
     const createType = key === 'where' ? 'location' : 'npc';
-    next = linkMentions(next, value, { createType });
+    next = linkMentions(next, value, { createType, skip: docNames });
   }
   if (parseDocumentMentions(value).length) next = linkDocumentMentions(next, value);
   return next;

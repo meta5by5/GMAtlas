@@ -39,6 +39,17 @@ export const RELATIONSHIP_TYPE_LABEL = {
 const RELATIONSHIP_TYPE_TARGETS = {
   member_of: ['faction'], owns: ['asset'], controls: ['faction', 'location', 'asset'], located_at: ['location'],
 };
+// Rival Of/Allied With/Bond aren't directional (no single fixed target type
+// the way Member Of always points at a faction), but they're still social
+// relationships — a Starforged Bond, a rivalry between NPCs/factions (an
+// asset or a location can't have a rivalry) — so BOTH sides are expected to
+// be one of these types, not just the target. Same "flag, don't delete"
+// treatment as RELATIONSHIP_TYPE_TARGETS above: this never blocks the
+// dropdown choice or auto-corrects anything, it only marks the chip ⚠ for
+// review.
+const RELATIONSHIP_TYPE_MUTUAL = {
+  allied_with: ['npc', 'faction'], rival_of: ['npc', 'faction'], bond: ['npc', 'faction'],
+};
 
 function clampStrength(n) {
   const v = Math.round(Number(n));
@@ -121,6 +132,30 @@ function _link(campaign, aId, bId, label = 'linked', type = 'linked') {
   // it from that side.
   if (!a.relationships.some((r) => r.to === bId)) a.relationships.push({ to: bId, label, type: t, strength: 0 });
   if (!b.relationships.some((r) => r.to === aId)) b.relationships.push({ to: aId, label, type: 'linked', strength: 0 });
+  if (t === 'bond') ensureBondTrack(a, b);
+}
+
+// A Starforged Bond (Make a Connection -> Forge a Bond, rulebook pp.163-166/
+// 233) is a 10-segment progress track a GM fills in as the relationship
+// deepens — represented as a real track field on the entity's OWN
+// Starforged character sheet rather than a second progress-track mechanic
+// living on the relationship object itself (the relationship is just a
+// pointer to who the bond is with; "no reference to the bond is needed in
+// this link" — the strength/weight field stays general-purpose, not
+// Bond-specific). Auto-created the moment a relationship becomes 'bond'
+// typed (via _link above, on creation, or updateRelationshipType, on
+// retyping) IF the entity has a Starforged character sheet to attach it to
+// AND both sides are NPC/Faction (mirrors RELATIONSHIP_TYPE_MUTUAL's bond
+// entry — an Asset/Location/Lore can't forge a Bond); does nothing
+// otherwise, and never duplicates an existing track for the same target.
+function ensureBondTrack(entity, other) {
+  if (!entity || !other || !['npc', 'faction'].includes(entity.type) || !['npc', 'faction'].includes(other.type)) return;
+  if (!Array.isArray(entity.statblocks)) return;
+  const group = entity.statblocks.find((g) => g.kind === 'character' && g.ruleset === 'starforged');
+  if (!group) return;
+  const key = `Bond: ${other.name || 'Unnamed'}`;
+  if (group.fields.some((f) => f.key === key)) return;
+  group.fields.push({ key, value: 0, max: 10, track: true, rollMethod: 'none' });
 }
 
 // --- public API (clone once, return new campaign) -------------------------
@@ -211,12 +246,33 @@ export function removeRelationship(campaign, aId, bId) {
   return next;
 }
 
-/** Parse @Name and @[Multi Word] tokens from free text. */
+// A bracketed mention may carry a custom display label ahead of the actual
+// entity name, separated by "|" — @[old friend|Captain Reyes] still links
+// entity "Captain Reyes", it just displays as "old friend" (see
+// documents.js's splitLabel, which parses this same syntax; the two mention
+// kinds share it since @Name/@[Name] is otherwise identical either way) —
+// and/or a trailing page anchor ("#12"/"p.12"/"p12", meaningful only for a
+// document mention, see documents.js's splitPageAnchor). Both are stripped
+// back out so auto-link/auto-create always keys off the real name, never a
+// label or a page number — @[Title#12] must resolve/auto-create "Title", not
+// literally create a new NPC named "Title#12" (a real reported bug: asking
+// a document mention for a page, then having it silently spawn a same-named
+// entity instead of linking the document).
+function stripLabel(raw) {
+  const i = raw.indexOf('|');
+  const target = i < 0 ? raw : raw.slice(i + 1).trim();
+  const m = target.match(/^(.*?)\s*(?:#|p\.?)\s*(\d+)$/i);
+  return (m && m[1].trim()) ? m[1].trim() : target;
+}
+
+/** Parse @Name and @[Multi Word] tokens from free text — just the resolved
+ *  entity names, with any @[Label|Name] label and/or #Page anchor already
+ *  stripped back out. */
 export function parseMentions(text) {
   const out = [];
   const re = /@\[([^\]]+)\]|@([A-Za-z0-9_''-]+)/g;
   let m;
-  while ((m = re.exec(String(text || '')))) out.push((m[1] || m[2]).trim());
+  while ((m = re.exec(String(text || '')))) out.push(stripLabel((m[1] || m[2]).trim()));
   return out;
 }
 
@@ -229,9 +285,17 @@ export function findMentions(campaign, text) {
 /**
  * Ensure every @mention in `text` maps to an entity (creating missing ones),
  * then link co-mentioned entities to each other. Returns a new campaign.
+ * `skip` (a Set of lowercased names) excludes mentions the caller already
+ * knows resolve to a document, not an entity — session.js's addNote/
+ * editContextText pass documents.js's resolvedDocumentMentionNames here so
+ * a mention of an existing document (uploaded or Reference Library) never
+ * spawns a same-named phantom entity just because linkMentions doesn't know
+ * about the document library (a bare @Name/@[Name] is otherwise ambiguous
+ * between the two — see documentBadges' history of this exact ambiguity).
  */
-export function linkMentions(campaign, text, { createType = 'npc', relate = true, label = 'appears with' } = {}) {
-  const names = parseMentions(text);
+export function linkMentions(campaign, text, { createType = 'npc', relate = true, label = 'appears with', skip } = {}) {
+  const skipSet = skip || null;
+  const names = parseMentions(text).filter((n) => !skipSet || !skipSet.has(n.trim().toLowerCase()));
   if (!names.length) return campaign;
   const next = clone(campaign);
   const ids = [];
@@ -306,13 +370,19 @@ export function updateRelationshipType(campaign, aId, bId, type) {
   const next = clone(campaign);
   const a = getEntity(next, aId);
   const r = a && a.relationships.find((rel) => rel.to === bId);
-  if (r) { normalizeRel(r); r.type = RELATIONSHIP_TYPES.includes(type) ? type : 'linked'; }
+  if (r) {
+    normalizeRel(r);
+    r.type = RELATIONSHIP_TYPES.includes(type) ? type : 'linked';
+    if (r.type === 'bond') ensureBondTrack(a, getEntity(next, bId));
+  }
   return next;
 }
 
 /** Set the 0-10 weight on one side of a relationship — general-purpose
- *  (graph-driven recommendations), and specifically what a GM raises to
- *  track a Starforged Bond's progress on a `bond`-typed relationship. */
+ *  (graph-driven recommendations, or any other free-form "how strong is
+ *  this link" note a GM wants). A `bond`-typed relationship's actual
+ *  progress lives on a dedicated statblock track field instead (see
+ *  ensureBondTrack above) — this field is never bond-specific. */
 export function updateRelationshipStrength(campaign, aId, bId, strength) {
   const next = clone(campaign);
   const a = getEntity(next, aId);
@@ -325,15 +395,20 @@ export function updateRelationshipStrength(campaign, aId, bId, strength) {
  *  entity type (Member Of -> Faction, Owns -> Asset, Controls -> Faction/
  *  Location/Asset, Located At -> Location) is flagged when the *current*
  *  target entity no longer matches — almost always because the target's own
- *  type was edited after the link was made. Never auto-corrects or removes
- *  anything; a dangling link (target entity deleted) is a separate,
- *  pre-existing case and isn't flagged here. */
-export function isRelationshipFlagged(campaign, rel) {
-  const validTypes = RELATIONSHIP_TYPE_TARGETS[rel.type];
-  if (!validTypes) return false;
+ *  type was edited after the link was made. Rival Of/Allied With/Bond use
+ *  RELATIONSHIP_TYPE_MUTUAL instead, checking BOTH sides (`sourceType` — the
+ *  type of the entity this relationship belongs to, since a bare `rel` only
+ *  knows its target). Never auto-corrects or removes anything; a dangling
+ *  link (target entity deleted) is a separate, pre-existing case and isn't
+ *  flagged here. */
+export function isRelationshipFlagged(campaign, rel, sourceType) {
   const target = getEntity(campaign, rel.to);
   if (!target) return false;
-  return !validTypes.includes(target.type);
+  const validTargets = RELATIONSHIP_TYPE_TARGETS[rel.type];
+  if (validTargets) return !validTargets.includes(target.type);
+  const mutual = RELATIONSHIP_TYPE_MUTUAL[rel.type];
+  if (mutual) return !mutual.includes(target.type) || (sourceType != null && !mutual.includes(sourceType));
+  return false;
 }
 
 /** Every flagged relationship across the whole campaign, for the Co-Pilot's
@@ -345,11 +420,11 @@ export function listFlaggedRelationships(campaign) {
   const out = [];
   for (const e of listEntities(campaign)) {
     for (const r of e.relationships || []) {
-      if (isRelationshipFlagged(campaign, r)) {
+      if (isRelationshipFlagged(campaign, r, e.type)) {
         const target = getEntity(campaign, r.to);
         out.push({
           entityId: e.id, entityName: e.name, to: r.to, toName: target ? target.name : 'Unknown',
-          type: r.type, label: r.label, expected: RELATIONSHIP_TYPE_TARGETS[r.type],
+          type: r.type, label: r.label, expected: RELATIONSHIP_TYPE_TARGETS[r.type] || RELATIONSHIP_TYPE_MUTUAL[r.type],
         });
       }
     }
