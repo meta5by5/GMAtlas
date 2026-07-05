@@ -152,6 +152,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .mc-entity-popout h2 { margin: 0; font-size: 0.95rem; }
 .mc-entity-popout .entity-list { max-height: none; margin-top: var(--sp-2); }
 .mc-entity-popout .entity-list-row { cursor: grab; }
+/* Cast header's "Generate…" select — deliberately small/unobtrusive (a
+   utility control, not a primary action) so it doesn't compete with the
+   Cast title; sits directly left of the close ✕, both right-aligned by the
+   drawer-head's space-between above. */
+.cast-head-actions { display: flex; align-items: center; gap: var(--sp-2); }
+.entity-generate-select {
+  width: auto; font-size: 0.7rem; padding: 0.1rem 0.35rem; border-radius: var(--radius-sm);
+  background: var(--bg-inset); color: var(--text-dim); border: 1px solid var(--border);
+}
 
 /* --- Edge tabs → tertiary drawers ----------------------------------- */
 .mc-edge {
@@ -504,7 +513,6 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .thread-row.thread-priority-high .thread-status-select { border-color: var(--accent-strong); }
 
 /* Entity Inspector (Phase 3A) */
-.entity-add-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-2) 0; }
 .entity-list { display: flex; flex-direction: column; gap: 2px; max-height: 32vh; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--sp-2); }
 .entity-list-row { display: flex; align-items: center; gap: var(--sp-2); text-align: left; background: none; border: none; color: var(--text); padding: 0.35rem 0.4rem; border-radius: var(--radius-sm); }
 .entity-list-row:hover { background: var(--tier2-bg); }
@@ -551,7 +559,10 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    UX): removable chips + a single auto-committing input, same pill/chip
    language as .rel-chip above. */
 .tag-editor { margin-top: var(--sp-3); }
-.field-label-static { display: block; font-size: 0.7rem; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.25rem; }
+/* Label + add-tag input share one row (right-aligned input) to save the
+   vertical space a separate label-then-input stack used to cost. */
+.tag-editor-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); margin-bottom: 0.35rem; }
+.field-label-static { font-size: 0.7rem; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; }
 .tag-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-2); }
 .tag-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--tier2-bg); border: 1px solid var(--border); border-radius: 999px; padding: 0.2rem 0.5rem; font-size: 0.78rem; }
 
@@ -806,19 +817,43 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .oracle-group > [data-roll-group] { margin-left: calc(var(--sp-3) + 1.4em); margin-top: -0.3rem; }
 .oracle-group-children { margin-left: var(--sp-3); }
 
-/* Party */
-.party-member-list { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin: var(--sp-2) 0 var(--sp-3); }
+/* Party — one full-width card per member (was a wrapping row of ~13rem-cap
+   cards, which forced the per-ruleset stat rows below into their own
+   horizontal scrollbar even though the drawer itself had room to spare).
+   Spanning the drawer's width means a full ruleset's worth of badges
+   usually needs no scrolling at all. */
+.party-member-list { display: flex; flex-direction: column; gap: var(--sp-2); margin: var(--sp-2) 0 var(--sp-3); }
 .party-member-card {
   background: var(--tier2-bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: var(--sp-3); min-width: 10rem; max-width: 13rem; cursor: pointer;
+  padding: var(--sp-3); width: 100%; box-sizing: border-box; cursor: pointer;
 }
 .party-member-card:hover { border-color: var(--accent); }
 .party-member-name { font-weight: 600; margin-bottom: var(--sp-2); }
+/* One row per ruleset/template (partyMemberStatblocks) — small caption
+   above a non-wrapping badge row, same "fit on one line, scroll if it
+   truly can't" fallback the Entity Inspector's character-sheet-stats uses. */
+.party-stat-group { margin-bottom: var(--sp-2); }
+.party-stat-group-label { font-size: 0.6rem; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 2px; }
+.party-stat-group .attribute-badges { flex-wrap: nowrap; overflow-x: auto; margin-bottom: 0; }
+.party-stat-group .attr-badge { min-width: 36px; min-height: 32px; padding: 0.2rem 0.25rem; flex: 0 0 auto; }
+.party-stat-group .attr-key { font-size: 0.52rem; }
+.party-stat-group .attr-val { font-size: 0.7rem; }
 .party-tracker-list { display: flex; flex-direction: column; gap: var(--sp-2); }
 .party-tracker-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: var(--sp-2); align-items: center; }
 .party-tracker-name-input { min-width: 0; }
-.party-tracker-meter, .party-tracker-counter { display: inline-flex; align-items: center; gap: var(--sp-1); white-space: nowrap; }
-.party-tracker-max-input, .party-tracker-value-input { width: 3.2rem; text-align: center; }
+.party-tracker-counter { display: inline-flex; align-items: center; gap: var(--sp-1); white-space: nowrap; }
+.party-tracker-value-input { width: 3.2rem; text-align: center; }
+/* Type is fixed once a tracker exists (see domain/party.js) — a plain
+   caption, not a control, replaces the old per-tracker kind <select>. */
+.party-tracker-kind-label { font-size: 0.7rem; color: var(--text-dim); white-space: nowrap; }
+.party-tracker-boxes { flex-wrap: wrap; max-width: 14rem; }
+/* Inline "+ Tracker" creation form (replaces a window.prompt() popup) — one
+   row: name, type, a type-specific field (meter size / Starforged
+   difficulty), Create, cancel. */
+.party-tracker-add-form { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; margin: var(--sp-2) 0; padding: var(--sp-2); background: var(--tier2-bg); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.party-tracker-add-form .party-tracker-draft-name { flex: 1 1 10rem; min-width: 0; }
+.party-tracker-draft-size { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: 0.7rem; color: var(--text-dim); white-space: nowrap; }
+.party-tracker-draft-max-input { width: 3.2rem; text-align: center; }
 
 /* Colony */
 .colony-fields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); margin: var(--sp-2) 0 var(--sp-3); }

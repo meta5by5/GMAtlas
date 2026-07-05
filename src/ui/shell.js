@@ -14,14 +14,14 @@ import {
   createEntity, updateEntity, addEntityTag, removeEntityTag, removeEntity, setActiveEntity, addRelationship, removeRelationship,
   getEntity, addEntityStatblockGroup, removeEntityStatblockGroup, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
   setEntityStatblockTrackValue, setEntityStatblockAttributeValue, updateRelationshipLabel, updateRelationshipType, updateRelationshipStrength,
-  listEntities, TYPE_LABEL,
+  listEntities, ENTITY_TYPES, TYPE_LABEL,
 } from '../domain/entities.js';
 import {
   addDocument, updateDocument, removeDocument, getDocument, addDocumentTag, removeDocumentTag, renameDocument,
   openDocumentTab, closeDocumentTab, setActiveDocumentTab, resolveDocumentTab,
   listReferenceDocuments, renameRefDocument, addRefDocumentTag, removeRefDocumentTag, hideRefDocument, listDocuments,
 } from '../domain/documents.js';
-import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker } from '../domain/party.js';
+import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue } from '../domain/party.js';
 import { setColonyField, addCrewRow, updateCrewRow, removeCrewRow } from '../domain/colony.js';
 import { setGuideText, getGuideText } from '../domain/guide.js';
 import { titleFromFilename } from '../domain/titleCase.js';
@@ -126,6 +126,9 @@ let searchQuery = '';
 let oracleEditorOpen = new Set(); // ephemeral — which oracle tables' entry editors are expanded
 let entitySearch = ''; // ephemeral — Cast panel name/tag search
 let entityTypeFilter = ''; // ephemeral — Cast panel type filter ('' = all)
+let partyTrackerAddOpen = false; // ephemeral — the inline "+ Tracker" name/type creation form, open or not
+let partyTrackerDraftKind = 'meter'; // ephemeral — the creation form's in-progress type pick, so its size/difficulty sub-field can react before the tracker actually exists
+let partyTrackerDraftName = ''; // ephemeral — mirrors the creation form's name input so a kind-change re-render (which rebuilds that input from scratch) doesn't wipe out whatever the GM already typed
 // Cast (2026-07-05 restructure, "the Cast tab [should] have the popout
 // functionality... move the entity form portion to a separate tab"): the
 // Cast list is now a Co-Pilot-style independent panel, not a drawer tab —
@@ -158,7 +161,17 @@ export function mountShell(el) {
       <main class="mc-workspace" data-workspace aria-live="polite"></main>
       <aside class="mc-copilot" data-copilot aria-label="Co-Pilot"><h2>Co-Pilot</h2><div data-copilot-body></div></aside>
       <aside class="mc-entity-popout" data-entity-popout aria-label="Cast — click an entity to open it, drag one into Journal or Guide">
-        <div class="drawer-head"><h2>☷ Cast</h2><button class="icon-btn" data-toggle-cast aria-label="Close">✕</button></div>
+        <div class="drawer-head">
+          <h2>☷ Cast</h2>
+          <div class="cast-head-actions">
+            <select class="entity-generate-select" data-entity-generate title="Create a new entity of this type">
+              <option value="" selected>Generate…</option>
+              ${ENTITY_TYPES.map((t) => `<option value="${t}">${TYPE_LABEL[t]}</option>`).join('')}
+              <option value="generate-npc">🎲 NPC (rolled)</option>
+            </select>
+            <button class="icon-btn" data-toggle-cast aria-label="Close">✕</button>
+          </div>
+        </div>
         <div data-entity-popout-body></div>
       </aside>
       <div class="mc-doc-viewer" data-doc-viewer hidden>
@@ -395,21 +408,6 @@ function onClick(ev) {
     store.update((d) => setActiveEntity(d, openEnt.dataset.openEntity));
     return;
   }
-  const addEnt = hit('[data-entity-add]');
-  if (addEnt) {
-    openDrawerTab('entity-detail');
-    focusInspectorNameNextRender = true;
-    store.update((d) => createEntity(d, { type: addEnt.dataset.entityAdd }).campaign);
-    toast('Entity added');
-    return;
-  }
-  if (hit('[data-generate-npc]')) {
-    openDrawerTab('entity-detail');
-    focusInspectorNameNextRender = true;
-    let name = '';
-    store.update((d) => { const r = generateNpc(d); name = r.id && getEntity(r.campaign, r.id) ? getEntity(r.campaign, r.id).name : ''; return r.campaign; });
-    return toast(name ? `Generated ${name}` : 'NPC generated');
-  }
   const delEnt = hit('[data-entity-del]');
   if (delEnt) { store.update((d) => removeEntity(d, delEnt.dataset.entityDel)); return toast('Entity removed'); }
   const unlink = hit('[data-entity-unlink]');
@@ -541,16 +539,32 @@ function onClick(ev) {
     return renderDrawerBody();
   }
 
-  // --- party ---
-  if (hit('[data-party-tracker-add]')) {
-    const name = window.prompt('Tracker name (e.g. "Credits", "Supply"):', '');
-    if (name != null && name.trim()) { store.update((d) => addPartyTracker(d, { name: name.trim() })); toast('Tracker added'); }
-    return;
+  // --- party --- (inline creation form, not a window.prompt() popup — see
+  // partyTrackerAddForm in drawers/index.js; name/type are both asked there,
+  // never changeable again once the tracker exists)
+  if (hit('[data-party-tracker-add-toggle]')) { partyTrackerAddOpen = true; partyTrackerDraftKind = 'meter'; partyTrackerDraftName = ''; renderDrawerBody(); restoreFocus('[data-party-tracker-draft-name]'); return; }
+  if (hit('[data-party-tracker-add-cancel]')) { partyTrackerAddOpen = false; partyTrackerDraftName = ''; return renderDrawerBody(); }
+  if (hit('[data-party-tracker-create]')) {
+    const nameInput = root.querySelector('[data-party-tracker-draft-name]');
+    const name = nameInput ? nameInput.value.trim() : '';
+    if (!name) { if (nameInput) nameInput.focus(); return; }
+    const kind = partyTrackerDraftKind;
+    const maxInput = root.querySelector('[data-party-tracker-draft-max]');
+    const diffSelect = root.querySelector('[data-party-tracker-draft-difficulty]');
+    partyTrackerAddOpen = false;
+    store.update((d) => addPartyTracker(d, {
+      name, kind,
+      max: maxInput ? Number(maxInput.value) || 5 : 5,
+      difficulty: diffSelect ? diffSelect.value : '',
+    }));
+    return toast('Tracker added');
   }
   const trkDel = hit('[data-party-tracker-remove]');
   if (trkDel) return store.update((d) => removePartyTracker(d, trkDel.dataset.partyTrackerRemove));
   const trkStep = hit('[data-party-tracker-step]');
   if (trkStep) return store.update((d) => stepPartyTracker(d, trkStep.dataset.partyTrackerStep, Number(trkStep.dataset.delta)));
+  const trkBox = hit('[data-party-tracker-box]');
+  if (trkBox) return store.update((d) => setPartyTrackerValue(d, trkBox.dataset.partyTrackerBox, Number(trkBox.dataset.trackN)));
 
   // --- colony ---
   if (hit('[data-colony-crew-add]')) { store.update((d) => addCrewRow(d, {})); return toast('Crew row added'); }
@@ -754,6 +768,15 @@ function onKeydown(ev) {
   // of duplicating the commit logic.
   const commitOnEnterTarget = ev.target.closest('[data-doc-rename-input], [data-ref-rename-input], [data-doc-tag-input], [data-ref-tag-input], [data-entity-tag-input]');
   if (commitOnEnterTarget && ev.key === 'Enter') { ev.preventDefault(); commitOnEnterTarget.blur(); return; }
+
+  // Party Tracker creation form: Enter in the name field submits (same
+  // click the visible Create button fires), Escape cancels without
+  // creating — the form has no <form> element to give Enter a native effect.
+  const trackerDraftName = ev.target.closest('[data-party-tracker-draft-name]');
+  if (trackerDraftName) {
+    if (ev.key === 'Enter') { ev.preventDefault(); const btn = root.querySelector('[data-party-tracker-create]'); if (btn) btn.click(); return; }
+    if (ev.key === 'Escape') { ev.preventDefault(); partyTrackerAddOpen = false; return renderDrawerBody(); }
+  }
   const renameInput = ev.target.closest('[data-doc-rename-input], [data-ref-rename-input]');
   if (renameInput && ev.key === 'Escape') {
     ev.preventDefault();
@@ -807,6 +830,28 @@ function onChange(ev) {
     // onFocusOut instead. Only how.activity's <select> reaches here today.
     const [key, field] = ctx.dataset.ctx.split('.');
     return store.update((d) => patchContext(d, key, { [field]: t.value }));
+  }
+
+  // Cast header's "Generate…" select (replaces the old row of "+ Type" chips
+  // — a stateless picker, not a bound field, so it's reset back to the
+  // placeholder after every use to fire 'change' again on a repeat pick of
+  // the same type). A plain type creates a blank entity of that type; the
+  // "🎲 NPC (rolled)" option keeps the oracle-chain NPC generator reachable
+  // from the same control instead of a second separate button.
+  const genSelect = t.closest('[data-entity-generate]');
+  if (genSelect) {
+    const value = genSelect.value;
+    genSelect.value = '';
+    if (!value) return;
+    openDrawerTab('entity-detail');
+    focusInspectorNameNextRender = true;
+    if (value === 'generate-npc') {
+      let name = '';
+      store.update((d) => { const r = generateNpc(d); name = r.id && getEntity(r.campaign, r.id) ? getEntity(r.campaign, r.id).name : ''; return r.campaign; });
+      return toast(name ? `Generated ${name}` : 'NPC generated');
+    }
+    store.update((d) => createEntity(d, { type: value }).campaign);
+    return toast('Entity added');
   }
 
   // Entity tag input — same auto-commit-on-change UX as the Documents
@@ -895,15 +940,15 @@ function onChange(ev) {
     return store.update((d) => setEntityStatblockAttributeValue(d, active, gi, fi, t.value));
   }
 
-  // --- party trackers ---
+  // --- party trackers --- (kind/difficulty/max are creation-time-only —
+  // see domain/party.js's updatePartyTracker — so only name and a counter's
+  // raw value are ever patched here after creation)
   const trkName = t.closest('[data-party-tracker-name]');
   if (trkName) return store.update((d) => updatePartyTracker(d, trkName.dataset.partyTrackerName, { name: t.value }));
-  const trkKind = t.closest('[data-party-tracker-kind]');
-  if (trkKind) return store.update((d) => updatePartyTracker(d, trkKind.dataset.partyTrackerKind, { kind: t.value }));
   const trkValue = t.closest('[data-party-tracker-value]');
   if (trkValue) return store.update((d) => updatePartyTracker(d, trkValue.dataset.partyTrackerValue, { value: Number(t.value) || 0 }));
-  const trkMax = t.closest('[data-party-tracker-max]');
-  if (trkMax) return store.update((d) => updatePartyTracker(d, trkMax.dataset.partyTrackerMax, { max: Number(t.value) || 1 }));
+  const trkDraftKind = t.closest('[data-party-tracker-draft-kind]');
+  if (trkDraftKind) { partyTrackerDraftKind = trkDraftKind.value; return renderDrawerBody(); }
 
   // --- colony ---
   const colonyField = t.closest('[data-colony-field]');
@@ -1008,6 +1053,14 @@ function onInput(ev) {
 
   const esrch = t.closest('[data-entity-search]');
   if (esrch) { entitySearch = t.value; renderEntityPopout(); restoreFocus('[data-entity-search]'); return; }
+
+  // Mirrors the Party Tracker creation form's name field into ephemeral
+  // state, not for its own sake (the DOM already shows what was typed) but
+  // so a kind-change 'change' event — which re-renders the whole form,
+  // size/difficulty sub-field and all — rebuilds the name input with
+  // whatever was already typed instead of resetting it to blank.
+  const trkDraftName = t.closest('[data-party-tracker-draft-name]');
+  if (trkDraftName) { partyTrackerDraftName = t.value; return; }
 
   // The search input lives in the static header skeleton, not inside a
   // drawer body that gets replaced wholesale — only its results list needs
@@ -1580,6 +1633,7 @@ function renderDrawerBody() {
     body.innerHTML = activeDrawer ? renderDrawer(activeDrawer, doc, {
       oracleFilter, expandedOracleGroups, oracleEditorOpen, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
       entitySearch, entityTypeFilter, storageInfo: store.storageInfo(),
+      partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     }) : '';
   }
   // Clicking any entity link (inline mention, WHO/WHERE chip, relationship

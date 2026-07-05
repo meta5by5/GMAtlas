@@ -769,6 +769,27 @@ test('computeLayout is deterministic and stays within bounds', () => {
   }
 });
 
+test('computeLayout spreads a busy graph out with no two nodes stacked exactly on top of each other', () => {
+  // A dense-ish graph pushes outer nodes hard against the layout box; before
+  // the per-iteration clamp fix, an end-of-run-only clamp could collapse
+  // several different overshoot amounts onto the exact same boundary
+  // corner, silently stacking distinct entities at an identical point.
+  let camp = defaultCampaign();
+  const ids = [];
+  for (let i = 0; i < 16; i++) { const { campaign, id } = createEntity(camp, { name: `E${i}` }); camp = campaign; ids.push(id); }
+  for (let i = 0; i < ids.length; i++) {
+    for (let j = i + 1; j < ids.length; j++) if ((i * 7 + j * 3) % 5 === 0) camp = addRelationship(camp, ids[i], ids[j], 'linked');
+  }
+  const g = buildGraph(camp);
+  const pos = computeLayout(g, { width: 600, height: 520 });
+  const pts = [...pos.values()];
+  let minDist = Infinity;
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) minDist = Math.min(minDist, Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y));
+  }
+  assert.ok(minDist > 1, `expected no near-exact overlaps, got minimum pairwise distance ${minDist}`);
+});
+
 test('empty graph yields empty layout; nodeColor covers all types', () => {
   const g = buildGraph(defaultCampaign());
   assert.equal(g.nodes.length, 0);
@@ -1071,7 +1092,7 @@ test('formatTravellerRollText includes both dice, the formula, and the target', 
 });
 
 // --- party (Party tab: #character roster + free trackers) ------------------
-import { listPartyMembers, addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, listPartyTrackers } from '../src/domain/party.js';
+import { listPartyMembers, addPartyTracker, updatePartyTracker, stepPartyTracker, setPartyTrackerValue, removePartyTracker, listPartyTrackers } from '../src/domain/party.js';
 
 test('listPartyMembers returns only npc entities tagged #character', () => {
   let camp = defaultCampaign();
@@ -1096,24 +1117,74 @@ test('#character-tagged npc entities gain a full character sheet, alongside (not
   assert.ok(groups.some((g) => g.kind === 'npc'), 'auto-attached Bestiary group is not replaced, just supplemented');
 });
 
-test('party trackers: add, step (clamped for meters), update, remove', () => {
+test('party trackers: add, step (currency), rename, remove', () => {
   let camp = defaultCampaign();
   camp = addPartyTracker(camp, { name: 'Credits', kind: 'currency', value: 100 });
   const t = listPartyTrackers(camp)[0];
   assert.equal(t.name, 'Credits');
+  camp = stepPartyTracker(camp, t.id, 1);
+  assert.equal(listPartyTrackers(camp).find((x) => x.id === t.id).value, 101);
 
-  camp = addPartyTracker(camp, { name: 'Supply', kind: 'meter', value: 3, max: 5 });
-  const meter = listPartyTrackers(camp).find((x) => x.name === 'Supply');
-  camp = stepPartyTracker(camp, meter.id, 1);
-  assert.equal(listPartyTrackers(camp).find((x) => x.id === meter.id).value, 4);
-  camp = stepPartyTracker(camp, meter.id, 10); // clamps at max
-  assert.equal(listPartyTrackers(camp).find((x) => x.id === meter.id).value, 5);
+  camp = updatePartyTracker(camp, t.id, { name: 'Funds' });
+  assert.equal(listPartyTrackers(camp).find((x) => x.id === t.id).name, 'Funds');
 
-  camp = updatePartyTracker(camp, meter.id, { name: 'Fuel' });
-  assert.equal(listPartyTrackers(camp).find((x) => x.id === meter.id).name, 'Fuel');
+  camp = removePartyTracker(camp, t.id);
+  assert.equal(listPartyTrackers(camp).some((x) => x.id === t.id), false);
+});
 
-  camp = removePartyTracker(camp, meter.id);
-  assert.equal(listPartyTrackers(camp).some((x) => x.id === meter.id), false);
+test('a meter tracker is click-to-set (setPartyTrackerValue), clamped to [0, max], clicking the filled box clears down by one; stepPartyTracker is a no-op for meters', () => {
+  let camp = defaultCampaign();
+  camp = addPartyTracker(camp, { name: 'Supply', kind: 'meter', value: 0, max: 5 });
+  const meter = listPartyTrackers(camp)[0];
+  camp = setPartyTrackerValue(camp, meter.id, 4);
+  assert.equal(listPartyTrackers(camp)[0].value, 4);
+  camp = setPartyTrackerValue(camp, meter.id, 10); // clamps at max
+  assert.equal(listPartyTrackers(camp)[0].value, 5);
+  camp = setPartyTrackerValue(camp, meter.id, 5); // clicking the already-filled box clears down by one
+  assert.equal(listPartyTrackers(camp)[0].value, 4);
+  camp = stepPartyTracker(camp, meter.id, 1); // meters don't step
+  assert.equal(listPartyTrackers(camp)[0].value, 4);
+});
+
+test('a meter\'s "size" (max) is set at creation ("usually 5 or 10 in Starforged") and is not editable afterward', () => {
+  let camp = defaultCampaign();
+  camp = addPartyTracker(camp, { name: 'Oxygen', kind: 'meter', max: 10 });
+  const meter = listPartyTrackers(camp)[0];
+  assert.equal(meter.max, 10);
+  camp = updatePartyTracker(camp, meter.id, { max: 3, kind: 'counter' }); // both stripped — creation-time-only
+  const after = listPartyTrackers(camp)[0];
+  assert.equal(after.max, 10);
+  assert.equal(after.kind, 'meter');
+});
+
+test('a Starforged counter can take a difficulty rank (Troublesome..Epic) that steps by that rank\'s tick count instead of +1, clamped to the 40-tick track', () => {
+  let camp = defaultCampaign();
+  camp.settings.statRuleset = 'starforged';
+  camp = addPartyTracker(camp, { name: 'Assault the Compound', kind: 'counter', difficulty: 'dangerous' });
+  const t = listPartyTrackers(camp)[0];
+  assert.equal(t.difficulty, 'dangerous');
+  camp = stepPartyTracker(camp, t.id, 1); // Dangerous = 8 ticks/mark
+  assert.equal(listPartyTrackers(camp)[0].value, 8);
+  camp = stepPartyTracker(camp, t.id, 1);
+  camp = stepPartyTracker(camp, t.id, 1);
+  camp = stepPartyTracker(camp, t.id, 1);
+  camp = stepPartyTracker(camp, t.id, 1);
+  camp = stepPartyTracker(camp, t.id, 1); // 6 marks * 8 = 48, clamps at 40
+  assert.equal(listPartyTrackers(camp)[0].value, 40);
+});
+
+test('a difficulty is only honored for a counter under the Starforged ruleset — ignored for other kinds/rulesets, and a plain counter steps by 1', () => {
+  let camp = defaultCampaign();
+  camp.settings.statRuleset = '5pfh';
+  camp = addPartyTracker(camp, { name: 'Heat', kind: 'counter', difficulty: 'epic' }); // wrong ruleset — ignored
+  assert.equal(listPartyTrackers(camp)[0].difficulty, undefined);
+  camp = stepPartyTracker(camp, listPartyTrackers(camp)[0].id, 1);
+  assert.equal(listPartyTrackers(camp)[0].value, 1); // plain +1, no rank applied
+
+  camp = defaultCampaign();
+  camp.settings.statRuleset = 'starforged';
+  camp = addPartyTracker(camp, { name: 'Cash', kind: 'currency', difficulty: 'epic' }); // wrong kind — ignored
+  assert.equal(listPartyTrackers(camp)[0].difficulty, undefined);
 });
 
 // --- colony (5PFH Planetfall turn sheet + crew + lifeform filter) ----------

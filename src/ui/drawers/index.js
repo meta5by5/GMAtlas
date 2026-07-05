@@ -10,7 +10,7 @@ import {
   listEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, listTagVocabulary,
   RELATIONSHIP_TYPES, RELATIONSHIP_TYPE_LABEL, isRelationshipFlagged,
 } from '../../domain/entities.js';
-import { parseStatsString, sortStatblockGroups } from '../../domain/statblocks.js';
+import { parseStatsString, sortStatblockGroups, getStatblockTemplates } from '../../domain/statblocks.js';
 import { listTemplates } from '../../domain/statblockTemplates.js';
 import { buildGraph, computeLayout, nodeColor } from '../../domain/graph.js';
 import { BUILD } from '../../core/buildInfo.js';
@@ -20,7 +20,7 @@ import { COLONY_FIELDS, getColonyFields, listCrewRows, listLifeformEncounters } 
 import { getGuideText } from '../../domain/guide.js';
 import { buildMentionEditorHTML } from '../mentionEditor.js';
 import { buildSessionRecap } from '../../domain/recap.js';
-import { RULESETS, findRuleset } from '../../data/rulesets.js';
+import { RULESETS, findRuleset, STARFORGED_PROGRESS_DIFFICULTIES, findProgressDifficulty } from '../../data/rulesets.js';
 import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel } from '../../data/rulesConstitution.js';
 import { GENRE_PACKS } from '../../data/genrePacks.js';
 import { DOCS_MANIFEST } from '../../data/docsManifest.js';
@@ -36,7 +36,7 @@ export function renderDrawer(id, doc, ui = {}) {
     case 'journal': return journal(doc, ui);
     case 'oracle': return oracle(doc, ui);
     case 'entity-detail': return entityDetail(doc, ui);
-    case 'party': return party(doc);
+    case 'party': return party(doc, ui);
     case 'colony': return colony(doc);
     case 'guide': return guide(doc, ui);
     case 'settings': return settings(doc, ui);
@@ -73,10 +73,6 @@ export function entities(doc, ui) {
   const typeChips = ['', ...ENTITY_TYPES_BY_LABEL].map((t) => `
     <button class="chip sm ${typeFilter === t ? 'active' : ''}" data-entity-type-filter="${t}">${t ? TYPE_LABEL[t] : 'All'}</button>`).join('');
   return `
-    <div class="entity-add-row">
-      ${ENTITY_TYPES.map((t) => `<button class="chip" data-entity-add="${t}">＋ ${TYPE_LABEL[t]}</button>`).join('')}
-      <button class="chip" data-generate-npc title="Roll the Characters oracle chain (Role, Goal, Aspect, Disposition, Name) into a new NPC">🎲 Generate NPC</button>
-    </div>
     <input class="drawer-search" data-entity-search value="${esc(ui.entitySearch || '')}" placeholder="Search Cast by name or tag…">
     <div class="entity-type-filter-row">${typeChips}</div>
     <div class="entity-list">
@@ -224,10 +220,12 @@ function tagEditor(doc, e) {
   const vocab = listTagVocabulary(doc, e.type, e.id);
   return `
     <div class="tag-editor">
-      <span class="field-label-static">Tags</span>
+      <div class="tag-editor-head">
+        <span class="field-label-static">Tags</span>
+        <input class="doc-tag-input" data-entity-tag-input list="entity-tag-list" placeholder="add tag…">
+      </div>
       <datalist id="entity-tag-list">${vocab.map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
       <div class="tag-chips">${chips || '<span class="dim small">None yet.</span>'}</div>
-      <input class="doc-tag-input" data-entity-tag-input list="entity-tag-list" placeholder="add tag… (Enter/Tab to commit)">
     </div>`;
 }
 
@@ -360,9 +358,10 @@ function formatAttrValue(v, format = 'sign') {
   return (n >= 0 ? '+' : '') + n;
 }
 
-// Takes a flat field list — callers pass one group's fields (per-group
-// display in the inspector) or every group's fields flattened together
-// (Party cards, Journal mention badges — see flattenStatblockFields).
+// Takes one statblock group's fields — the inspector and the Party roster
+// (see partyMemberStatblocks) both render one badge row per group, never
+// flattened across groups, so a two-ruleset character still reads as two
+// distinguishable rows instead of one undifferentiated mass of numbers.
 function attributeBadges(fields) {
   fields = fields || [];
   // If there's a Stats row, parse and render it in the requested order.
@@ -389,13 +388,6 @@ function attributeBadges(fields) {
       <div class="attr-val">${esc(formatAttrValue(f.value, f.format))}</div>
     </div>`).join('');
   return `<div class="attribute-badges">${html}</div>`;
-}
-
-/** Every field across every statblock group an entity has — used where a
- *  caller wants "all this entity's attributes" without caring which group
- *  they came from (Party roster cards, Journal @mention badges). */
-function flattenStatblockFields(e) {
-  return (e.statblocks || []).flatMap((g) => g.fields || []);
 }
 
 // A field's name, kind (track/attribute/text), and existence are template-
@@ -778,37 +770,95 @@ function templateFieldRow(systemId, f, i, count) {
     </div>`;
 }
 
+// A Party roster card shows one row per statblock GROUP, not every group's
+// fields flattened together — a character carrying both a Starforged and a
+// 5PFH sheet otherwise reads as one undifferentiated pile of numbers with
+// no way to tell which system a given stat belongs to. Each row gets a
+// small label naming its ruleset/Bestiary template, mirroring how the
+// Entity Inspector's own character-sheet-stats row already stays on one
+// line per system.
+function partyMemberStatblocks(e, doc) {
+  const sorted = sortStatblockGroups(e.statblocks, doc.settings);
+  const templates = getStatblockTemplates(doc.settings);
+  return sorted.map(({ group }) => {
+    const badges = attributeBadges(group.fields);
+    if (!badges) return '';
+    const label = group.kind === 'character' ? findRuleset(group.ruleset).label
+      : (templates[group.templateId] || {}).label || (group.kind === 'vehicle' ? 'Vehicle' : 'Bestiary');
+    return `<div class="party-stat-group">
+      <div class="party-stat-group-label">${esc(label)}</div>
+      ${badges}
+    </div>`;
+  }).join('');
+}
+
+// A tracker's kind (meter/counter/currency) is fixed for its lifetime (see
+// domain/party.js's addPartyTracker/updatePartyTracker) and never shown as
+// its own label — boxes vs. a +/- number already say which one it is, so
+// naming it again ("Meter"/"Counter") was redundant. A Starforged counter's
+// difficulty rank (also creation-time-only) isn't inferable from the
+// format, so it still gets a small badge — just without the kind word
+// glued onto it.
+function partyTrackerRow(t) {
+  const rank = t.difficulty && findProgressDifficulty(t.difficulty);
+  const body = t.kind === 'meter' ? `
+    <div class="track-boxes party-tracker-boxes">${Array.from({ length: t.max || 5 }, (_, k) => k + 1).map((n) => `
+      <button type="button" class="track-box ${n <= t.value ? 'on' : ''}" data-party-tracker-box="${esc(t.id)}" data-track-n="${n}" aria-label="Set ${n}">${n}</button>`).join('')}</div>` : `
+    <span class="party-tracker-counter">
+      <button class="icon-btn" data-party-tracker-step="${esc(t.id)}" data-delta="-1" title="-1">−</button>
+      <input class="party-tracker-value-input" type="number" data-party-tracker-value="${esc(t.id)}" value="${t.value}">
+      <button class="icon-btn" data-party-tracker-step="${esc(t.id)}" data-delta="1" title="+1">＋</button>
+    </span>`;
+  return `
+    <div class="party-tracker-row">
+      <input class="party-tracker-name-input" data-party-tracker-name="${esc(t.id)}" value="${esc(t.name)}" placeholder="Tracker name">
+      ${rank ? `<span class="party-tracker-kind-label" title="Starforged progress track difficulty — fixed once created">${esc(rank.label)}</span>` : ''}
+      ${body}
+      <button class="icon-btn" data-party-tracker-remove="${esc(t.id)}" title="Remove">✕</button>
+    </div>`;
+}
+
+// The "+ Tracker" creation form — a small inline group (name + type, no
+// popup) that replaces the old window.prompt() flow. The type select's
+// 'change' event re-renders this to swap in whichever type-specific field
+// applies: a box-count for a meter ("usually 5 or 10 in Starforged"), or a
+// Starforged difficulty rank for a counter (only offered when the
+// campaign's stat ruleset is actually Starforged — a Troublesome/Epic rank
+// means nothing under any other system).
+function partyTrackerAddForm(ui, isStarforged) {
+  const kind = ui.partyTrackerDraftKind || 'meter';
+  return `
+    <div class="party-tracker-add-form">
+      <input type="text" class="party-tracker-draft-name" data-party-tracker-draft-name value="${esc(ui.partyTrackerDraftName || '')}" placeholder="Tracker name (e.g. Credits, Supply)">
+      <select data-party-tracker-draft-kind>
+        <option value="meter" ${kind === 'meter' ? 'selected' : ''}>Meter (progress bar)</option>
+        <option value="counter" ${kind === 'counter' ? 'selected' : ''}>Counter</option>
+        <option value="currency" ${kind === 'currency' ? 'selected' : ''}>Currency</option>
+      </select>
+      ${kind === 'meter' ? `
+        <label class="party-tracker-draft-size">Size <input type="number" min="1" max="40" class="party-tracker-draft-max-input" data-party-tracker-draft-max value="5"></label>` : ''}
+      ${kind === 'counter' && isStarforged ? `
+        <select data-party-tracker-draft-difficulty title="Starforged progress track difficulty — steps by this rank's tick count instead of +1">
+          <option value="">No difficulty (plain +1)</option>
+          ${STARFORGED_PROGRESS_DIFFICULTIES.map((d) => `<option value="${d.id}">${d.label}</option>`).join('')}
+        </select>` : ''}
+      <button class="btn sm" data-party-tracker-create>Create</button>
+      <button class="icon-btn" data-party-tracker-add-cancel title="Cancel">✕</button>
+    </div>`;
+}
+
 // --- Party: #character roster (live entity filter) + free-form trackers ----
-function party(doc) {
+function party(doc, ui = {}) {
   const members = listPartyMembers(doc);
   const trackers = listPartyTrackers(doc);
   const memberCards = members.map((e) => `
     <div class="party-member-card" data-open-entity="${esc(e.id)}">
       <div class="party-member-name">${esc(e.name) || '<em>Unnamed</em>'}</div>
-      ${attributeBadges(flattenStatblockFields(e))}
+      ${partyMemberStatblocks(e, doc)}
     </div>`).join('');
 
-  const trackerRows = trackers.map((t) => `
-    <div class="party-tracker-row">
-      <input class="party-tracker-name-input" data-party-tracker-name="${esc(t.id)}" value="${esc(t.name)}" placeholder="Tracker name">
-      <select data-party-tracker-kind="${esc(t.id)}">
-        <option value="meter" ${t.kind === 'meter' ? 'selected' : ''}>Meter</option>
-        <option value="counter" ${t.kind === 'counter' ? 'selected' : ''}>Counter</option>
-        <option value="currency" ${t.kind === 'currency' ? 'selected' : ''}>Currency</option>
-      </select>
-      ${t.kind === 'meter' ? `
-        <span class="party-tracker-meter">
-          <button class="icon-btn" data-party-tracker-step="${esc(t.id)}" data-delta="-1" title="-1">−</button>
-          <b>${t.value}</b>/<input class="party-tracker-max-input" type="number" min="1" data-party-tracker-max="${esc(t.id)}" value="${t.max || 5}">
-          <button class="icon-btn" data-party-tracker-step="${esc(t.id)}" data-delta="1" title="+1">＋</button>
-        </span>` : `
-        <span class="party-tracker-counter">
-          <button class="icon-btn" data-party-tracker-step="${esc(t.id)}" data-delta="-1" title="-1">−</button>
-          <input class="party-tracker-value-input" type="number" data-party-tracker-value="${esc(t.id)}" value="${t.value}">
-          <button class="icon-btn" data-party-tracker-step="${esc(t.id)}" data-delta="1" title="+1">＋</button>
-        </span>`}
-      <button class="icon-btn" data-party-tracker-remove="${esc(t.id)}" title="Remove">✕</button>
-    </div>`).join('');
+  const isStarforged = ((doc.settings && doc.settings.statRuleset) || 'starforged') === 'starforged';
+  const trackerRows = trackers.map(partyTrackerRow).join('');
 
   return `
     <div class="statblock-head"><h4>Party Roster</h4></div>
@@ -816,7 +866,8 @@ function party(doc) {
     <div class="party-member-list">
       ${memberCards || '<p class="ws-placeholder">No party members yet. In Cast, add an NPC and tag it #character.</p>'}
     </div>
-    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Party Trackers</h4><button class="chip" data-party-tracker-add>＋ Tracker</button></div>
+    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Party Trackers</h4>${ui.partyTrackerAddOpen ? '' : '<button class="chip" data-party-tracker-add-toggle>＋ Tracker</button>'}</div>
+    ${ui.partyTrackerAddOpen ? partyTrackerAddForm(ui, isStarforged) : ''}
     <div class="party-tracker-list">
       ${trackerRows || '<p class="ws-placeholder">No trackers yet — add one for credits, supply, or any shared resource.</p>'}
     </div>`;

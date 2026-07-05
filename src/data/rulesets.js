@@ -62,3 +62,24 @@ export function findRuleset(id) {
 export function rulesetLabel(id) {
   return findRuleset(id).label;
 }
+
+// Starforged's Progress Track difficulty ranks (rulebook p.42): a track
+// fills to 40 ticks (10 boxes of 4); the rank sets how many ticks a single
+// mark adds, not the box count — Troublesome resolves in as few as 4 marks,
+// Epic can take 40. Used by a Party Tracker "Counter" when the campaign's
+// stat ruleset is Starforged (see domain/party.js's addPartyTracker/
+// stepPartyTracker) so a party-wide progress clock (a faction's plan, a
+// countdown) steps by the same rank math a Vow/quest would, instead of a
+// plain +1 that means nothing in Starforged terms.
+export const STARFORGED_PROGRESS_DIFFICULTIES = [
+  { id: 'troublesome', label: 'Troublesome', ticks: 12 },
+  { id: 'dangerous', label: 'Dangerous', ticks: 8 },
+  { id: 'formidable', label: 'Formidable', ticks: 4 },
+  { id: 'extreme', label: 'Extreme', ticks: 2 },
+  { id: 'epic', label: 'Epic', ticks: 1 },
+];
+export const STARFORGED_PROGRESS_TRACK_MAX = 40;
+
+export function findProgressDifficulty(id) {
+  return STARFORGED_PROGRESS_DIFFICULTIES.find((d) => d.id === id) || null;
+}

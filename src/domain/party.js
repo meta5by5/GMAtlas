@@ -8,6 +8,7 @@
 
 import { listEntities } from './entities.js';
 import { hasCharacterTag } from './statblocks.js';
+import { findProgressDifficulty, STARFORGED_PROGRESS_TRACK_MAX } from '../data/rulesets.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 
@@ -26,34 +27,74 @@ export function listPartyTrackers(campaign) {
   return ((campaign.party && campaign.party.trackers) || []);
 }
 
-export function addPartyTracker(campaign, { name = 'New Tracker', kind = 'meter', value = 0, max = 5 } = {}) {
+/** A tracker's kind (and, for a Starforged counter, its difficulty) is fixed
+ *  for its lifetime — chosen once at creation, never edited afterward (see
+ *  updatePartyTracker below). `max` (meter box count, "usually 5 or 10 in
+ *  Starforged" but any size the GM wants) and `difficulty` (a counter, only
+ *  when the campaign's stat ruleset is Starforged — one of
+ *  data/rulesets.js's STARFORGED_PROGRESS_DIFFICULTIES) are both
+ *  creation-time-only for the same reason. */
+export function addPartyTracker(campaign, { name = 'New Tracker', kind = 'meter', value = 0, max = 5, difficulty = '' } = {}) {
   const next = clone(campaign);
   const party = ensure(next);
-  party.trackers.push({
+  const validKind = ['meter', 'counter', 'currency'].includes(kind) ? kind : 'meter';
+  const isStarforged = ((next.settings && next.settings.statRuleset) || 'starforged') === 'starforged';
+  const rank = validKind === 'counter' && isStarforged ? findProgressDifficulty(difficulty) : null;
+  const tracker = {
     id: 'ptrk_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    name, kind: ['meter', 'counter', 'currency'].includes(kind) ? kind : 'meter',
+    name, kind: validKind,
     value: Number(value) || 0,
-    max: kind === 'meter' ? (Number(max) || 5) : undefined,
-  });
+  };
+  if (validKind === 'meter') tracker.max = Math.max(1, Number(max) || 5);
+  if (rank) tracker.difficulty = rank.id;
+  party.trackers.push(tracker);
   return next;
 }
 
+/** Rename only — kind/difficulty/max are creation-time-only (see
+ *  addPartyTracker), so they're stripped from any patch here rather than
+ *  trusted to a caller that "shouldn't" send them. */
 export function updatePartyTracker(campaign, id, patch) {
   const next = clone(campaign);
   const party = ensure(next);
   const t = party.trackers.find((x) => x.id === id);
-  if (t) Object.assign(t, patch);
+  if (t) {
+    const { kind, difficulty, max, ...rest } = patch || {};
+    Object.assign(t, rest);
+  }
   return next;
 }
 
-/** Step a meter/counter tracker by delta, clamped to [0, max] for meters. */
+/** Step a counter/currency tracker by delta. A Starforged-difficulty counter
+ *  steps by that rank's tick count (Troublesome=12 ... Epic=1, out of a
+ *  40-tick track — data/rulesets.js's STARFORGED_PROGRESS_DIFFICULTIES/
+ *  STARFORGED_PROGRESS_TRACK_MAX) instead of a plain +1, so it actually
+ *  behaves like the Vow/quest progress track it's standing in for. Meters
+ *  are click-to-set (see setPartyTrackerValue) and don't step. */
 export function stepPartyTracker(campaign, id, delta) {
   const next = clone(campaign);
   const party = ensure(next);
   const t = party.trackers.find((x) => x.id === id);
-  if (!t) return next;
-  const raw = (Number(t.value) || 0) + delta;
-  t.value = t.kind === 'meter' ? Math.max(0, Math.min(t.max || 5, raw)) : Math.max(0, raw);
+  if (!t || t.kind === 'meter') return next;
+  const rank = t.difficulty && findProgressDifficulty(t.difficulty);
+  const step = rank ? rank.ticks : 1;
+  const raw = (Number(t.value) || 0) + delta * step;
+  t.value = rank ? Math.max(0, Math.min(STARFORGED_PROGRESS_TRACK_MAX, raw)) : Math.max(0, raw);
+  return next;
+}
+
+/** Click-to-set a meter tracker's box (clicking the currently-filled box
+ *  clears down by one) — the same interaction as an entity statblock's
+ *  track boxes (see domain/statblocks.js's setStatblockTrackValue), now
+ *  that a Party meter renders as boxes instead of a numeric ratio. */
+export function setPartyTrackerValue(campaign, id, n) {
+  const next = clone(campaign);
+  const party = ensure(next);
+  const t = party.trackers.find((x) => x.id === id);
+  if (!t || t.kind !== 'meter') return next;
+  const max = t.max || 5;
+  const target = t.value === n ? n - 1 : n;
+  t.value = Math.max(0, Math.min(max, target));
   return next;
 }
 

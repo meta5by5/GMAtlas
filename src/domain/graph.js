@@ -60,7 +60,12 @@ export function computeLayout(graph, { width = 600, height = 520, iterations = 3
   });
 
   // Classic Fruchterman-Reingold: fresh displacement each pass, temperature cools.
-  const k = Math.sqrt((width * height) / nodes.length) * 0.8; // ideal edge length
+  // The 1.6 multiplier (was 0.8) is deliberately generous — a bigger ideal
+  // edge length pushes nodes further apart at equilibrium, which is what
+  // actually makes a busy relationship graph's lines/labels legible; nodes
+  // still can't leave the box (finalize() clamps to pad), so this just
+  // spends more of the available canvas instead of clustering at the center.
+  const k = Math.sqrt((width * height) / nodes.length) * 1.6; // ideal edge length
   const adj = edges.map((e) => [e.a, e.b]);
   let temp = width / 6;
   const cool = temp / (iterations + 1);
@@ -94,12 +99,29 @@ export function computeLayout(graph, { width = 600, height = 520, iterations = 3
     }
     // Move each node by its displacement, capped at the current temperature,
     // plus a whisper of gravity so disconnected pieces don't hug the walls.
+    // Clamping to the box HERE (every iteration), not just once at the very
+    // end, matters more than it looks: without it, a busy graph's outer
+    // nodes can overshoot the box by wildly different amounts each pass,
+    // and a single end-of-run clamp then collapses several of them onto the
+    // exact same boundary corner — nodes silently stacking exactly on top
+    // of each other, which is the opposite of "spread out so connections
+    // can be read." Clamping every iteration keeps nodes bouncing off the
+    // wall instead of flying past it, so they settle at distinct positions.
     for (const n of nodes) {
       const p = pos.get(n.id), d = disp.get(n.id);
-      d.x += (cx - p.x) * 0.012; d.y += (cy - p.y) * 0.012;
+      // 10 (was 0.012) — at the bigger ideal-edge-length above, a whisper of
+      // gravity was nowhere near enough to counter repulsion: nodes drifted
+      // to the pad boundary and stayed there regardless of graph size ("not
+      // evenly spaced... pushed to the border"). This value was tuned
+      // empirically (a standalone script sweeping graphs from 2 to 50
+      // nodes) to keep the overwhelming majority of nodes off the border
+      // while still using most of the box, rather than picking a value
+      // that "should" work by the classic FR formula.
+      d.x += (cx - p.x) * 10; d.y += (cy - p.y) * 10;
       const len = Math.hypot(d.x, d.y) || 0.01;
       const step = Math.min(len, temp);
-      p.x += (d.x / len) * step; p.y += (d.y / len) * step;
+      p.x = Math.max(pad, Math.min(width - pad, p.x + (d.x / len) * step));
+      p.y = Math.max(pad, Math.min(height - pad, p.y + (d.y / len) * step));
     }
     temp = Math.max(cool, temp - cool);
   }
