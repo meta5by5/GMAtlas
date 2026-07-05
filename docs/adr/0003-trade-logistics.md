@@ -2,12 +2,18 @@
 
 ## Status
 
-Accepted (design only — not yet built; tracked as a Phase 10 item). The
-*mechanics* below (market dials, pricing, Thread-based transport, Oracle/
-Co-Pilot risk resolution, Vehicle cargo) still stand — **ADR 0004** refines
-the *framing*: a contract-driven primary loop (built on top of the pricing
-engine here) instead of buy-low/sell-high as the headline mechanic. Read
-this ADR for the mechanics, then ADR 0004 for how contracts sit on top.
+**Implemented** (2026-07-05, as ADR 0004 refined it — see that ADR's own
+Status line for exactly what shipped: `data/commodities.js` + `domain/
+trade.js`'s market/`priceAt()`/buy-sell/manifest, plus the Trade drawer).
+The *mechanics* below (market dials, pricing, Oracle/Co-Pilot risk
+resolution, Vehicle cargo) shipped as designed; "Thread-based transport"
+shipped folded into the contract itself (a contract's `originId`/
+`destinationId` already ARE "cargo + origin + destination" — no separate
+free-floating transport Thread was built alongside a contract, since ADR
+0004's contract-Thread already covers that shape). Buy/sell without a
+contract at all still works directly against `priceAt()`, so the
+buy-low/sell-high mechanic this ADR designed is fully present — ADR 0004
+just changed which one is the headline UI verb.
 
 ## Context
 

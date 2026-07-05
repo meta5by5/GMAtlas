@@ -14,7 +14,7 @@ full phase-by-phase roadmap.
 ## Where we are
 
 Phases 0–9 done, Phase 10 (Ecosystem & reach — lowest priority per pack 66)
-next. That's the only status fact stated here — the feature-by-feature
+begun (its first item, the Merchant Rules Lens, is done — see below). That's the only status fact stated here — the feature-by-feature
 detail this section used to restate now lives in exactly one place each:
 **"Already built as new functionality"** below (numbered items 1–12,
 phases 0 through the Rules Constitution) and **"Proposed next"**'s Phase
@@ -154,19 +154,38 @@ mechanized session-composition budget) and why.
 
 ### Phase 10 — Ecosystem & reach (lowest priority per pack 66 — "new features")
 
-- **Trade & Logistics minigame** (user-requested, 2026-07-03; see
-  `docs/adr/0003-trade-logistics.md` for the mechanics and **`docs/adr/
-  0004-merchant-rules-lens.md`** for the framing, after three further
-  design documents — `requirements/Saga_Atlas_Merchant_*.txt` — asked to
-  be incorporated and consolidated). Supply/demand-driven buying, selling,
-  and transporting of goods across multiple Locations — this is the
-  concrete design the old one-line "automated trade" bullet below now
-  expands into, promoted to the front of this phase given explicit user
-  interest, but *not* moved out of Phase 10 itself: it's still new-feature
-  work per pack 66's "continuity > workflow > graph > storage >
-  recommendations > UX > integrations > new features" ordering, and
-  Phase 6's Narrative Trackers item (Reputation/Heat) is a soft dependency
-  this design leans on rather than duplicates. *Effort: medium-high.*
+- **Trade & Logistics minigame / Merchant Rules Lens** (user-requested,
+  2026-07-03; see `docs/adr/0003-trade-logistics.md` for the mechanics and
+  **`docs/adr/0004-merchant-rules-lens.md`** for the framing, after three
+  further design documents — `requirements/Saga_Atlas_Merchant_*.txt` —
+  asked to be incorporated and consolidated). — **Done** (the concrete,
+  buildable slice ADR 0004 scoped — "a contract is a Thread with a patron/
+  type/route/payout, generated from a new Oracle table," not the full
+  Merchant vision). `data/commodities.js` (a flat, genre-swappable goods
+  list) + `domain/trade.js` (a Location's `market` — per-commodity
+  `{supply, demand}` dials — and `priceAt()`, pure and stateless;
+  `buyCommodity()`/`sellCommodity()` move goods into/out of the party's
+  shared cargo manifest and nudge the local supply dial the direction a
+  real transaction would, so two Locations' prices are never forced to
+  agree) is the pricing engine; `createContract()`/`generateContract()` sit
+  on top of it as ADR 0004 specified — a contract is `campaign.threads`'
+  ordinary Thread shape plus `kind: 'contract'`/`type`/`patronId`/
+  `originId`/`destinationId`/`payout`, so every existing thread control
+  (clock, 7-state lifecycle, priority) works on one completely unchanged,
+  with zero new state-machine code. A new "Contract Type" oracle table
+  (Trade & Cargo group, ADR 0004's 15-type taxonomy) is what "🎲 Generate"
+  rolls; payout prices itself from the real gap between two Locations'
+  markets for a chosen commodity when a route is picked (falls back to a
+  flat default otherwise, GM-editable). Cargo capacity is one more field on
+  the existing Vehicle Bestiary template (`data/statblockTemplates.js`),
+  not a new entity concept. UI: a new `trade` drawer tab (between Colony
+  and Docs, following the Party/Colony/Guide precedent exactly) — a market
+  view per selected Location, the cargo manifest, and a Contract board with
+  an inline "+ Contract" name/type/patron/route/payout form (a text field,
+  not a `window.prompt()` popup, matching the convention Party Trackers
+  already established). Everything ADR 0004 explicitly deferred (ships/
+  crew depth, faction politics/espionage, the 19-generator list beyond
+  what's named, GM-less/VTT modes) stays deferred — see the ADR.
   **ADR 0004 reframes the headline loop as contracts, not commodity
   speculation** ("Key Innovation: replace buy-low/sell-high with living
   contracts") — a contract is a Thread with a few extra reference fields

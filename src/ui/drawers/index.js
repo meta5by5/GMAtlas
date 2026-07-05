@@ -17,6 +17,9 @@ import { BUILD } from '../../core/buildInfo.js';
 import { getDocument, listDocuments, listDocumentMentions, allDocumentTags, filterDocuments, listReferenceDocuments } from '../../domain/documents.js';
 import { listPartyMembers, listPartyTrackers } from '../../domain/party.js';
 import { COLONY_FIELDS, getColonyFields, listCrewRows, listLifeformEncounters } from '../../domain/colony.js';
+import { getMarket, priceAt, listCargoManifest, listContracts } from '../../domain/trade.js';
+import { COMMODITIES, findCommodity } from '../../data/commodities.js';
+import { THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { getGuideText } from '../../domain/guide.js';
 import { buildMentionEditorHTML } from '../mentionEditor.js';
 import { buildSessionRecap } from '../../domain/recap.js';
@@ -38,6 +41,7 @@ export function renderDrawer(id, doc, ui = {}) {
     case 'entity-detail': return entityDetail(doc, ui);
     case 'party': return party(doc, ui);
     case 'colony': return colony(doc);
+    case 'trade': return trade(doc, ui);
     case 'guide': return guide(doc, ui);
     case 'settings': return settings(doc, ui);
     case 'graph': return graph(doc, ui);
@@ -918,6 +922,132 @@ function colony(doc) {
     <p class="dim small">Live filter over entities tagged <code>#lifeform</code>.</p>
     <div class="entity-chips">
       ${lifeformRows || '<p class="ws-placeholder">No lifeform encounters tracked yet — tag a Cast entity #lifeform.</p>'}
+    </div>`;
+}
+
+// --- Trade: Merchant Rules Lens (ADR 0003/0004) -----------------------------
+// A market view per selected Location, the party's shared cargo manifest,
+// and a Contracts board — contracts ARE Threads (domain/trade.js's
+// listContracts filters campaign.threads by kind: 'contract'), so their
+// clock/status/priority controls below are the exact same data-thread-*
+// attributes the WHY workspace's own Threads block already wires up in
+// shell.js — no new click handlers needed for those.
+function marketTable(location) {
+  const market = getMarket(location);
+  const rows = COMMODITIES.map((c) => {
+    const m = market[c.id];
+    const price = priceAt(location, c.id);
+    return `<tr>
+      <td>${esc(c.label)}</td>
+      <td><input type="number" min="0" max="100" class="trade-dial-input" data-trade-dial="${esc(location.id)}::${c.id}::supply" value="${m.supply}"></td>
+      <td><input type="number" min="0" max="100" class="trade-dial-input" data-trade-dial="${esc(location.id)}::${c.id}::demand" value="${m.demand}"></td>
+      <td class="trade-price">${price}</td>
+      <td class="trade-buy-sell">
+        <input type="number" min="1" value="1" class="trade-qty-input" data-trade-qty="${c.id}">
+        <button class="chip sm" data-trade-buy="${esc(location.id)}::${c.id}">Buy</button>
+        <button class="chip sm" data-trade-sell="${esc(location.id)}::${c.id}">Sell</button>
+      </td>
+    </tr>`;
+  }).join('');
+  return `<table class="trade-market-table">
+    <thead><tr><th>Commodity</th><th>Supply</th><th>Demand</th><th>Price</th><th>Trade</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+// Inline "+ Contract" creation form (a text field, not a window.prompt()
+// popup — same convention Party Trackers established) — patron/origin/
+// destination are optional entity pickers (a contract can exist before a
+// route is decided; domain/trade.js's estimatePayout falls back to a flat
+// default when they're blank).
+function contractAddForm(locations, npcs) {
+  return `<div class="trade-contract-add-form">
+    <input type="text" class="trade-contract-draft-name" data-trade-contract-draft-name placeholder="Contract name">
+    <input type="text" class="trade-contract-draft-type" data-trade-contract-draft-type placeholder="Type (e.g. Courier)">
+    <select data-trade-contract-draft-patron>
+      <option value="">— Patron (NPC) —</option>
+      ${npcs.map((n) => `<option value="${esc(n.id)}">${esc(n.name) || 'Unnamed'}</option>`).join('')}
+    </select>
+    <select data-trade-contract-draft-origin>
+      <option value="">— Origin —</option>
+      ${locations.map((l) => `<option value="${esc(l.id)}">${esc(l.name) || 'Unnamed'}</option>`).join('')}
+    </select>
+    <select data-trade-contract-draft-destination>
+      <option value="">— Destination —</option>
+      ${locations.map((l) => `<option value="${esc(l.id)}">${esc(l.name) || 'Unnamed'}</option>`).join('')}
+    </select>
+    <input type="number" min="0" class="trade-contract-draft-payout" data-trade-contract-draft-payout placeholder="Payout" value="50">
+    <button class="btn sm" data-trade-contract-create>Create</button>
+    <button class="icon-btn" data-trade-contract-add-cancel title="Cancel">✕</button>
+  </div>`;
+}
+
+function contractRow(doc, c) {
+  const pips = Array.from({ length: c.segments }, (_, i) => `<span class="pip ${i < c.filled ? 'on' : ''}"></span>`).join('');
+  const patron = c.patronId && getEntity(doc, c.patronId);
+  const origin = c.originId && getEntity(doc, c.originId);
+  const destination = c.destinationId && getEntity(doc, c.destinationId);
+  return `<div class="trade-contract-row thread-status-${esc(c.status)} thread-priority-${esc(c.priority)} ${c.done ? 'done' : ''}">
+    <div class="trade-contract-head">
+      <span class="trade-contract-name">${esc(c.name)}</span>
+      ${c.type ? `<span class="chip sm">${esc(c.type)}</span>` : ''}
+      <span class="trade-contract-payout">💰 ${c.payout}</span>
+    </div>
+    <div class="trade-contract-route">
+      ${patron ? `<button class="entity-chip" data-open-entity="${esc(patron.id)}" title="Patron">${esc(patron.name) || 'Unnamed'}</button>` : '<span class="dim small">No patron set</span>'}
+      ${origin || destination ? `<span class="dim small">${origin ? esc(origin.name) || 'Unnamed' : '?'} → ${destination ? esc(destination.name) || 'Unnamed' : '?'}</span>` : ''}
+    </div>
+    <span class="thread-clock" title="${c.filled}/${c.segments}">${pips}</span>
+    <select class="thread-status-select" data-thread-status="${esc(c.id)}" title="Narrative lifecycle stage">
+      ${THREAD_STATUSES.map((s) => `<option value="${s}" ${s === c.status ? 'selected' : ''}>${esc(THREAD_STATUS_LABELS[s])}</option>`).join('')}
+    </select>
+    <select class="thread-priority-select" data-thread-priority="${esc(c.id)}" title="Priority">
+      ${THREAD_PRIORITIES.map((p) => `<option value="${p}" ${p === c.priority ? 'selected' : ''}>${p[0].toUpperCase()}${p.slice(1)}</option>`).join('')}
+    </select>
+    <span class="thread-actions">
+      <button class="icon-btn" data-thread-adv="${esc(c.id)}" title="Advance">＋</button>
+      <button class="icon-btn" data-thread-back="${esc(c.id)}" title="Set back">－</button>
+      <button class="icon-btn" data-thread-del="${esc(c.id)}" title="Remove">✕</button>
+    </span>
+  </div>`;
+}
+
+function trade(doc, ui = {}) {
+  const locations = listEntities(doc, ['location']);
+  const npcs = listEntities(doc, ['npc']);
+  const selectedId = ui.tradeLocationId && locations.some((l) => l.id === ui.tradeLocationId) ? ui.tradeLocationId : '';
+  const selectedLocation = selectedId ? getEntity(doc, selectedId) : null;
+  const manifest = listCargoManifest(doc);
+  const contracts = listContracts(doc);
+
+  return `
+    <div class="statblock-head"><h4>Merchant — Market</h4></div>
+    <p class="dim small">Supply/demand at each Location drive price — buying drains supply and raises the next price there, selling floods it and lowers it, so two Locations never agree.</p>
+    <label class="field-label">Location
+      <select data-trade-location>
+        <option value="">— choose a Location —</option>
+        ${locations.map((l) => `<option value="${esc(l.id)}" ${l.id === selectedId ? 'selected' : ''}>${esc(l.name) || 'Unnamed'}</option>`).join('')}
+      </select>
+    </label>
+    ${selectedLocation ? marketTable(selectedLocation)
+      : (locations.length ? '<p class="ws-placeholder">Pick a Location to see its market.</p>' : '<p class="ws-placeholder">No Locations yet — add one in Cast first.</p>')}
+    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Cargo Manifest</h4></div>
+    <div class="trade-manifest-list">
+      ${manifest.length ? manifest.map((row) => {
+        const c = findCommodity(row.commodityId);
+        return `<div class="trade-manifest-row"><span>${esc(c ? c.label : row.commodityId)}</span><b>${row.qty}</b></div>`;
+      }).join('') : '<p class="ws-placeholder">No cargo yet — buy something from a Location\'s market above.</p>'}
+    </div>
+    <div class="statblock-head" style="margin-top: var(--sp-4);">
+      <h4>Contracts</h4>
+      <div class="trade-contract-head-actions">
+        <button class="chip" data-trade-generate-contract title="Roll the Contract Type oracle table into a new contract">🎲 Generate</button>
+        ${ui.tradeContractAddOpen ? '' : '<button class="chip" data-trade-contract-add-toggle>＋ Contract</button>'}
+      </div>
+    </div>
+    ${ui.tradeContractAddOpen ? contractAddForm(locations, npcs) : ''}
+    <div class="trade-contract-list">
+      ${contracts.length ? contracts.map((c) => contractRow(doc, c)).join('') : '<p class="ws-placeholder">No contracts yet — generate one, or add one manually.</p>'}
     </div>`;
 }
 

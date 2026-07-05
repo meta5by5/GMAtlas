@@ -1877,3 +1877,150 @@ test('a fresh campaign defaults settings.genrePack to hostile', () => {
   const camp = defaultCampaign();
   assert.equal(camp.settings.genrePack, 'hostile');
 });
+
+// --- Phase 10: Merchant Rules Lens (ADR 0003/0004) --------------------------
+import { COMMODITIES, findCommodity } from '../src/data/commodities.js';
+import {
+  getMarket, setMarketDial, priceAt, listCargoManifest, buyCommodity, sellCommodity,
+  listContracts, createContract, updateContract, generateContract,
+} from '../src/domain/trade.js';
+
+test('a fresh Location has no stored market, but getMarket reads every commodity at the neutral 50/50 midpoint', () => {
+  let camp = defaultCampaign();
+  const { campaign, id } = createEntity(camp, { type: 'location', name: 'Prospect Station' });
+  const loc = getEntity(campaign, id);
+  assert.equal(loc.market, undefined);
+  const market = getMarket(loc);
+  for (const c of COMMODITIES) assert.deepEqual(market[c.id], { supply: 50, demand: 50 });
+});
+
+test('priceAt is basePrice at a neutral market, rises with demand, falls with supply, and never drops below 1', () => {
+  let camp = defaultCampaign();
+  let { campaign, id } = createEntity(camp, { type: 'location', name: 'Prospect Station' });
+  camp = campaign;
+  const water = findCommodity('water');
+  assert.equal(priceAt(getEntity(camp, id), 'water'), water.basePrice);
+
+  camp = setMarketDial(camp, id, 'water', 'demand', 100);
+  assert.ok(priceAt(getEntity(camp, id), 'water') > water.basePrice);
+
+  camp = setMarketDial(camp, id, 'water', 'demand', 50);
+  camp = setMarketDial(camp, id, 'water', 'supply', 100);
+  assert.ok(priceAt(getEntity(camp, id), 'water') < water.basePrice);
+
+  camp = setMarketDial(camp, id, 'water', 'supply', 0);
+  camp = setMarketDial(camp, id, 'water', 'demand', 0);
+  assert.ok(priceAt(getEntity(camp, id), 'water') >= 1);
+});
+
+test('setMarketDial clamps to [0, 100] and no-ops on a non-Location entity or unknown commodity', () => {
+  let camp = defaultCampaign();
+  let { campaign, id } = createEntity(camp, { type: 'location', name: 'Depot' });
+  camp = campaign;
+  camp = setMarketDial(camp, id, 'water', 'demand', 500);
+  assert.equal(getMarket(getEntity(camp, id)).water.demand, 100);
+  camp = setMarketDial(camp, id, 'water', 'demand', -50);
+  assert.equal(getMarket(getEntity(camp, id)).water.demand, 0);
+
+  const { campaign: camp2, id: npcId } = createEntity(camp, { type: 'npc', name: 'Not a location' });
+  const before = getEntity(camp2, npcId).market;
+  const after = setMarketDial(camp2, npcId, 'water', 'demand', 90);
+  assert.equal(getEntity(after, npcId).market, before);
+
+  const untouched = setMarketDial(camp, id, 'not-a-real-commodity', 'demand', 90);
+  assert.equal(getEntity(untouched, id).market?.['not-a-real-commodity'], undefined);
+});
+
+test('buyCommodity adds to the party cargo manifest and drains local supply; sellCommodity reverses both, clamped to what the party has', () => {
+  let camp = defaultCampaign();
+  let { campaign, id } = createEntity(camp, { type: 'location', name: 'Prospect Station' });
+  camp = campaign;
+  assert.deepEqual(listCargoManifest(camp), []);
+
+  camp = buyCommodity(camp, id, 'fuel', 10);
+  assert.deepEqual(listCargoManifest(camp), [{ commodityId: 'fuel', qty: 10 }]);
+  assert.equal(getMarket(getEntity(camp, id)).fuel.supply, 40); // drained by 10
+
+  camp = buyCommodity(camp, id, 'fuel', 5);
+  assert.equal(listCargoManifest(camp).find((m) => m.commodityId === 'fuel').qty, 15);
+
+  camp = sellCommodity(camp, id, 'fuel', 100); // clamps to the 15 actually carried
+  assert.deepEqual(listCargoManifest(camp), []); // row removed once qty hits 0
+  assert.equal(getMarket(getEntity(camp, id)).fuel.supply, 50); // 40 + 10 (only 15 sold, but supply clamps at 100 well under that)
+
+  // Selling a commodity the party doesn't carry, or at a non-Location, is a no-op.
+  const before = camp;
+  camp = sellCommodity(camp, id, 'weapons', 1);
+  assert.deepEqual(listCargoManifest(camp), listCargoManifest(before));
+});
+
+test('createContract is a Thread carrying kind: "contract" plus patron/type/route/payout, and every existing thread mutator still works on it unchanged', () => {
+  let camp = defaultCampaign();
+  const { campaign, id } = createContract(camp, { name: 'Deliver medicine', type: 'Humanitarian', patronId: 'ent_patron', originId: 'ent_a', destinationId: 'ent_b', payout: 120, segments: 6 });
+  camp = campaign;
+  const contract = listThreads(camp).find((t) => t.id === id);
+  assert.equal(contract.kind, 'contract');
+  assert.equal(contract.type, 'Humanitarian');
+  assert.equal(contract.patronId, 'ent_patron');
+  assert.equal(contract.payout, 120);
+  assert.equal(contract.segments, 6);
+  assert.equal(contract.status, 'active'); // same lifecycle default as any other thread
+
+  camp = advanceThread(camp, id, 2);
+  assert.equal(listThreads(camp).find((t) => t.id === id).filled, 2);
+  camp = setThreadStatus(camp, id, 'escalating');
+  assert.equal(listThreads(camp).find((t) => t.id === id).status, 'escalating');
+  camp = removeThread(camp, id);
+  assert.equal(listThreads(camp).some((t) => t.id === id), false);
+});
+
+test('listContracts only returns kind: "contract" threads, excluding ordinary WHY-question threads', () => {
+  let camp = defaultCampaign();
+  camp = addThread(camp, 'An unrelated WHY thread');
+  const { campaign: withContract, id } = createContract(camp, { name: 'A contract', type: 'Courier' });
+  camp = withContract;
+  const contracts = listContracts(camp);
+  assert.equal(contracts.length, 1);
+  assert.equal(contracts[0].id, id);
+});
+
+test('updateContract patches trade-specific fields and no-ops on a non-contract thread id', () => {
+  let camp = defaultCampaign();
+  let { campaign, id } = createContract(camp, { name: 'A contract', type: 'Courier', payout: 10 });
+  camp = campaign;
+  camp = updateContract(camp, id, { patronId: 'ent_x', payout: 250 });
+  const contract = listContracts(camp).find((c) => c.id === id);
+  assert.equal(contract.patronId, 'ent_x');
+  assert.equal(contract.payout, 250);
+
+  camp = addThread(camp, 'A plain thread');
+  const plainId = listThreads(camp).find((t) => t.name === 'A plain thread').id;
+  const before = listThreads(camp).find((t) => t.id === plainId);
+  camp = updateContract(camp, plainId, { payout: 999 });
+  assert.deepEqual(listThreads(camp).find((t) => t.id === plainId), before);
+});
+
+test('generateContract rolls the Contract Type oracle table (Trade & Cargo group) and creates a contract from it', () => {
+  let camp = defaultCampaign();
+  const { campaign, id } = generateContract(camp, { rng: makeRng(3) });
+  const contract = listContracts(campaign).find((c) => c.id === id);
+  assert.ok(contract);
+  assert.ok(tablesWithOverrides({}, 'hostile')['Trade & Cargo']['Contract Type'].includes(contract.type));
+  assert.equal(contract.payout, 50); // no route picked — flat default
+});
+
+test('generateContract prices its payout from the real gap between two Locations\' markets for a commodity, not a flat number', () => {
+  let camp = defaultCampaign();
+  let origin, destination;
+  ({ campaign: camp, id: origin } = createEntity(camp, { type: 'location', name: 'Cheap Water World' }));
+  ({ campaign: camp, id: destination } = createEntity(camp, { type: 'location', name: 'Dry World' }));
+  camp = setMarketDial(camp, origin, 'luxury-goods', 'supply', 100); // cheap here
+  camp = setMarketDial(camp, destination, 'luxury-goods', 'demand', 100); // dear here
+  const { campaign: next, id } = generateContract(camp, { rng: makeRng(3), originId: origin, destinationId: destination, commodityId: 'luxury-goods' });
+  const contract = listContracts(next).find((c) => c.id === id);
+  assert.equal(contract.originId, origin);
+  assert.equal(contract.destinationId, destination);
+  const delta = Math.abs(priceAt(getEntity(next, destination), 'luxury-goods') - priceAt(getEntity(next, origin), 'luxury-goods'));
+  assert.equal(contract.payout, Math.max(20, delta * 10));
+  assert.ok(contract.payout > 50); // a real route beats the flat no-route default
+});

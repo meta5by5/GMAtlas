@@ -1755,6 +1755,10 @@ Object.assign(SCENE_TABLES, {
       "a rival crew who lost the original contract", "a corporate auditor building a fraud case", "a religious group who considers it sacred", "a black market broker who overpays no questions asked",
       "the original manufacturer trying to recall a defect quietly", "an insurance investigator suspicious of the manifest", "a smuggler using it as cover for something else", "a scientist who recognizes what it really is",
       "a rival corporation wanting it destroyed, not bought", "a family member of someone who died shipping it", "a government agent flagging it as restricted", "a pirate captain who has very specific orders"
+    ],
+    "Contract Type": [
+      "Humanitarian", "Corporate", "Scientific", "Military", "Exploration", "Diplomatic", "Smuggling",
+      "Courier", "Passenger", "Recovery", "Colonization", "Mining", "Research", "Emergency", "Escort"
     ]
   },
   "Industrial Hazards": {

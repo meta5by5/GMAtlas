@@ -23,6 +23,7 @@ import {
 } from '../domain/documents.js';
 import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue } from '../domain/party.js';
 import { setColonyField, addCrewRow, updateCrewRow, removeCrewRow } from '../domain/colony.js';
+import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract } from '../domain/trade.js';
 import { setGuideText, getGuideText } from '../domain/guide.js';
 import { titleFromFilename } from '../domain/titleCase.js';
 import { buildSessionRecap, formatSessionRecap } from '../domain/recap.js';
@@ -62,6 +63,7 @@ const DRAWERS = [
   { id: 'oracle', glyph: '🎲', label: 'Oracle' },
   { id: 'party', glyph: '👥', label: 'Party' },
   { id: 'colony', glyph: '🏛', label: 'Colony' },
+  { id: 'trade', glyph: '💰', label: 'Trade' },
   { id: 'documents', glyph: '📄', label: 'Docs' },
   { id: 'graph', glyph: '🔗', label: 'Graph' },
   { id: 'settings', glyph: '⚙', label: 'Settings' },
@@ -76,7 +78,7 @@ function drawerMeta(id) { return DRAWERS.find((d) => d.id === id) || DRAWER_META
 // exclusive-tab drawers (see the comment above DRAWERS), so this interleaves
 // their special-cased buttons into the same array DRAWERS.map() used to
 // render alone, rather than always appending them at the very end.
-const EDGE_ORDER = ['guide', 'journal', 'oracle', 'party', 'cast', 'colony', 'documents', 'graph', 'copilot', 'settings'];
+const EDGE_ORDER = ['guide', 'journal', 'oracle', 'party', 'cast', 'colony', 'trade', 'documents', 'graph', 'copilot', 'settings'];
 
 // Tabbed drawer switching (2026-07-04 design review): multiple drawers can
 // be pinned open at once (openDrawers), with one visible at a time
@@ -129,6 +131,8 @@ let entityTypeFilter = ''; // ephemeral — Cast panel type filter ('' = all)
 let partyTrackerAddOpen = false; // ephemeral — the inline "+ Tracker" name/type creation form, open or not
 let partyTrackerDraftKind = 'meter'; // ephemeral — the creation form's in-progress type pick, so its size/difficulty sub-field can react before the tracker actually exists
 let partyTrackerDraftName = ''; // ephemeral — mirrors the creation form's name input so a kind-change re-render (which rebuilds that input from scratch) doesn't wipe out whatever the GM already typed
+let tradeLocationId = ''; // ephemeral — which Location's market the Trade drawer currently shows
+let tradeContractAddOpen = false; // ephemeral — the inline "+ Contract" creation form, open or not
 // Cast (2026-07-05 restructure, "the Cast tab [should] have the popout
 // functionality... move the entity form portion to a separate tab"): the
 // Cast list is now a Co-Pilot-style independent panel, not a drawer tab —
@@ -571,6 +575,43 @@ function onClick(ev) {
   const crewDel = hit('[data-colony-crew-remove]');
   if (crewDel) return store.update((d) => removeCrewRow(d, crewDel.dataset.colonyCrewRemove));
 
+  // --- trade (Merchant Rules Lens, ADR 0003/0004) ---
+  const tradeBuy = hit('[data-trade-buy]');
+  if (tradeBuy) {
+    const [locId, commodityId] = tradeBuy.dataset.tradeBuy.split('::');
+    const qtyInput = tradeBuy.closest('tr')?.querySelector(`[data-trade-qty="${commodityId}"]`);
+    const qty = qtyInput ? Number(qtyInput.value) || 1 : 1;
+    store.update((d) => buyCommodity(d, locId, commodityId, qty));
+    return toast(`Bought ${qty}`);
+  }
+  const tradeSell = hit('[data-trade-sell]');
+  if (tradeSell) {
+    const [locId, commodityId] = tradeSell.dataset.tradeSell.split('::');
+    const qtyInput = tradeSell.closest('tr')?.querySelector(`[data-trade-qty="${commodityId}"]`);
+    const qty = qtyInput ? Number(qtyInput.value) || 1 : 1;
+    store.update((d) => sellCommodity(d, locId, commodityId, qty));
+    return toast(`Sold ${qty}`);
+  }
+  if (hit('[data-trade-generate-contract]')) {
+    let type = '';
+    store.update((d) => { const r = generateContract(d); const c = r.campaign.threads.find((x) => x.id === r.id); type = c ? c.type : ''; return r.campaign; });
+    return toast(type ? `Generated a ${type} contract` : 'Contract generated');
+  }
+  if (hit('[data-trade-contract-add-toggle]')) { tradeContractAddOpen = true; return renderDrawerBody(); }
+  if (hit('[data-trade-contract-add-cancel]')) { tradeContractAddOpen = false; return renderDrawerBody(); }
+  if (hit('[data-trade-contract-create]')) {
+    const nameInput = root.querySelector('[data-trade-contract-draft-name]');
+    const name = nameInput ? nameInput.value.trim() : '';
+    const type = root.querySelector('[data-trade-contract-draft-type]')?.value.trim() || '';
+    const patronId = root.querySelector('[data-trade-contract-draft-patron]')?.value || '';
+    const originId = root.querySelector('[data-trade-contract-draft-origin]')?.value || '';
+    const destinationId = root.querySelector('[data-trade-contract-draft-destination]')?.value || '';
+    const payout = Number(root.querySelector('[data-trade-contract-draft-payout]')?.value) || 0;
+    if (!name && !type) { if (nameInput) nameInput.focus(); return; }
+    tradeContractAddOpen = false;
+    store.update((d) => createContract(d, { name: name || type, type, patronId, originId, destinationId, payout }).campaign);
+    return toast('Contract added');
+  }
 
   // --- documents: open (viewer tabs), rename, tags ---------------------------
   const docOpen = hit('[data-doc-open]');
@@ -957,6 +998,15 @@ function onChange(ev) {
   if (crewField) {
     const [id, field] = crewField.dataset.colonyCrewField.split('::');
     return store.update((d) => updateCrewRow(d, id, { [field]: t.value }));
+  }
+
+  // --- trade ---
+  const tradeLoc = t.closest('[data-trade-location]');
+  if (tradeLoc) { tradeLocationId = tradeLoc.value; return renderDrawerBody(); }
+  const tradeDial = t.closest('[data-trade-dial]');
+  if (tradeDial) {
+    const [locId, commodityId, field] = tradeDial.dataset.tradeDial.split('::');
+    return store.update((d) => setMarketDial(d, locId, commodityId, field, Number(t.value)));
   }
 
   // --- settings: Bestiary statblock template field edits ---
@@ -1634,6 +1684,7 @@ function renderDrawerBody() {
       oracleFilter, expandedOracleGroups, oracleEditorOpen, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
       entitySearch, entityTypeFilter, storageInfo: store.storageInfo(),
       partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
+      tradeLocationId, tradeContractAddOpen,
     }) : '';
   }
   // Clicking any entity link (inline mention, WHO/WHERE chip, relationship

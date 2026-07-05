@@ -14,7 +14,25 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
-**Phases 0–9: done.** Phase 9 (Activity-driven gameplay) closed out with
+**Phases 0–9: done. Phase 10 (Ecosystem & reach) begun** with the Merchant
+Rules Lens (`docs/adr/0003-trade-logistics.md` + `docs/adr/0004-merchant-
+rules-lens.md`): a new `trade` drawer tab (between Colony and Docs) holds a
+per-Location commodity market (`data/commodities.js` + `domain/trade.js`'s
+`priceAt()` — supply/demand dials drive price, buy/sell nudge the local
+dial so two Locations' prices never agree), the party's shared cargo
+manifest, and a Contract board. A contract is a Thread with a few extra
+reference fields (`kind: 'contract'`, `type`, `patronId`/`originId`/
+`destinationId`, `payout`) rather than a new state machine — every existing
+Thread control (clock, status, priority) works on one unchanged. "🎲
+Generate" rolls the new Contract Type oracle table (Trade & Cargo group,
+ADR 0004's 15-type taxonomy) and prices the payout from the real gap
+between two Locations' markets when a route is picked; "+ Contract" opens
+an inline name/type/patron/route/payout form (no popup). Cargo capacity
+rides the existing Vehicle Bestiary template as one more field. Deferred
+per ADR 0004 (ships/crew depth, faction politics, the 19-generator list,
+etc.) — see the ADR for the full list.
+
+Phase 9 (Activity-driven gameplay) closed out with
 the HOW workspace's Activity picker (`domain/activities.js`, looks up
 `data/rulesConstitution.js`'s registered Rules Lens provider(s) for the
 chosen Activity and offers a one-click "Use as default" that sets
@@ -164,17 +182,26 @@ estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
   discovery-first (`Exploration`); Cargo Interest (`Trade & Cargo`);
   Anomaly Investigation — Observation/Hypothesis/Contradiction/Discovery
   (`Mysteries & Coverups`).
-- **Phase 10 (lowest priority — new features)** — Trade & Logistics /
-  Merchant Rules Lens (contracts as the primary loop, `docs/adr/0003` +
-  `0004`); a Mission/Job generator (`domain/missions.js`, payout scaled by
-  the existing threat tracker); a Faction Pressure Track (extends
-  `threads.js` onto faction entities — kept as a single clock per
-  `docs/adr/0008`, not split into four dials) plus a Co-Pilot link between
-  it and generated missions; Shipyard companion link (blocked on a known
-  URL, not effort); a sync adapter / shared campaign database; Traveller/
-  Stars Without Number content (both named Rules Constitution providers
-  with zero authored data and no sourcebook in this repo's library);
-  faction-turn/rumor automation.
+- **Phase 10 (lowest priority — new features), begun:**
+  - **Trade & Logistics / Merchant Rules Lens** — done (the MVP slice ADR
+    0004 scoped): `data/commodities.js`, `domain/trade.js` (market dials,
+    `priceAt()`, buy/sell + cargo manifest, contracts-as-Threads), the
+    Contract Type oracle table, a Cargo Capacity Vehicle-template field, and
+    the `trade` drawer (market/manifest/contracts). Still open, per ADR
+    0004 (deliberately deferred, not forgotten): ships/crew as rich
+    subsystems, a Faction Standing tracker keyed to contract payout/
+    availability, and a Faction Rumor → Contract seed link in `copilot.js`
+    once a Faction Pressure Track exists (see below).
+  - **Remaining, not yet started:** a Mission/Job generator
+    (`domain/missions.js`, payout scaled by the existing threat tracker) —
+    distinct from a Trade contract, aimed at non-trade jobs; a Faction
+    Pressure Track (extends `threads.js` onto faction entities — kept as a
+    single clock per `docs/adr/0008`, not split into four dials) plus a
+    Co-Pilot link between it and generated missions/contracts; Shipyard
+    companion link (blocked on a known URL, not effort); a sync adapter /
+    shared campaign database; Traveller/Stars Without Number content (both
+    named Rules Constitution providers with zero authored data and no
+    sourcebook in this repo's library); faction-turn/rumor automation.
 - **UI/UX assumptions, resolved in the 2026-07-04 pass** (see Status
   Summary above): tabbed drawer switching replaced "only one drawer open at
   a time"; three real responsive tiers replaced one breakpoint; Escape and

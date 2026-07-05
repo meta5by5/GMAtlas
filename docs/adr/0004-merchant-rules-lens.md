@@ -2,13 +2,24 @@
 
 ## Status
 
-Accepted (design only — not yet built; refines the Phase 10 Trade &
-Logistics item ADR 0003 already scoped). Supersedes ADR 0003's *framing*
-(contracts as the primary loop, not buy-low/sell-high); keeps ADR 0003's
-*mechanics* (market dials, pricing, Thread-based transport, Oracle/Co-Pilot
-risk resolution, Vehicle cargo) as the pricing engine underneath the
-contract layer. Consolidates `requirements/Saga_Atlas_Merchant_*.txt`
-(three source documents) into this one place.
+**Implemented** (2026-07-05) — the "concrete, buildable slice" this ADR's
+Consequences section named: "a contract is a Thread with a patron/type/
+route/payout, generated from a new Oracle table." `domain/trade.js`'s
+`createContract()`/`generateContract()`/`updateContract()`/`listContracts()`,
+a new "Contract Type" oracle table (15-type taxonomy, Trade & Cargo group),
+and a `trade` drawer (market view, cargo manifest, Contract board with an
+inline creation form) shipped exactly as decided below — a contract really
+is `{...thread, kind: 'contract', patronId, originId, destinationId, type,
+payout}`, and every existing Thread mutator (`advanceThread`,
+`setThreadStatus`, `setThreadPriority`, `removeThread`) works on one
+completely unchanged, with zero new state-machine code. Everything listed
+under Decision item 5 ("Explicitly deferred, not designed here") is still
+deferred, exactly as decided — this ADR's scope discipline held.
+Supersedes ADR 0003's *framing* (contracts as the primary loop, not
+buy-low/sell-high); keeps ADR 0003's *mechanics* (market dials, pricing,
+Oracle/Co-Pilot risk resolution, Vehicle cargo) as the pricing engine
+underneath the contract layer. Consolidates `requirements/Saga_Atlas_
+Merchant_*.txt` (three source documents) into this one place.
 
 ## Context
 

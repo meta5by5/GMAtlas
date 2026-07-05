@@ -80,6 +80,11 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
       { key: 'Speed', kind: 'text' },
       { key: 'Armament', kind: 'text' },
       { key: 'Crew Capacity', kind: 'text' },
+      // Cargo capacity (ADR 0003 §5) is one more field on the existing
+      // Vehicle Stats kind, not a new entity concept — same free-text
+      // convention as Crew Capacity above, not an enforced limit the Trade
+      // drawer checks a manifest against.
+      { key: 'Cargo Capacity', kind: 'text' },
       { key: 'Condition', kind: 'text' },
     ]),
   },

@@ -861,6 +861,30 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .colony-crew-list { display: flex; flex-direction: column; gap: var(--sp-2); }
 .colony-crew-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: var(--sp-2); align-items: center; }
 
+/* Trade (Merchant Rules Lens, ADR 0003/0004) */
+.trade-market-table { width: 100%; border-collapse: collapse; margin: var(--sp-2) 0 var(--sp-3); font-size: 0.85rem; }
+.trade-market-table th { text-align: left; font-size: 0.7rem; letter-spacing: 0.06em; color: var(--text-dim); text-transform: uppercase; padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--border); }
+.trade-market-table td { padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.trade-dial-input { width: 3.6rem; text-align: center; }
+.trade-price { font-weight: 700; color: var(--accent-strong); }
+.trade-buy-sell { display: flex; align-items: center; gap: var(--sp-1); white-space: nowrap; }
+.trade-qty-input { width: 3rem; text-align: center; }
+.trade-manifest-list { display: flex; flex-direction: column; gap: 2px; margin: var(--sp-2) 0 var(--sp-3); }
+.trade-manifest-row { display: flex; justify-content: space-between; padding: 0.25rem 0.4rem; background: var(--tier2-bg); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.trade-contract-head-actions { display: flex; gap: var(--sp-2); }
+.trade-contract-add-form { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; margin: var(--sp-2) 0; padding: var(--sp-2); background: var(--tier2-bg); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.trade-contract-add-form .trade-contract-draft-name { flex: 1 1 10rem; min-width: 0; }
+.trade-contract-list { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-2); }
+.trade-contract-row {
+  display: grid; grid-template-columns: 1fr auto auto auto auto; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2); background: var(--tier2-bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.trade-contract-row.done .trade-contract-name { text-decoration: line-through; color: var(--text-dim); }
+.trade-contract-head { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--sp-2); }
+.trade-contract-name { font-weight: 600; }
+.trade-contract-payout { margin-left: auto; color: var(--accent-strong); font-weight: 700; }
+.trade-contract-route { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--sp-2); }
+
 /* Guide */
 .guide-editor { min-height: 16rem; font-family: var(--font); }
 
