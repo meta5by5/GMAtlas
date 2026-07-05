@@ -35,6 +35,8 @@ export const SHIFTS = {
   'Spend Resources': (c) => { c.what.resources = clamp(numOr(c.what.resources, 5) - 1); return `Resources down to ${c.what.resources}/10`; },
   'Raise Reputation': (c) => { c.what.reputation = clamp(numOr(c.what.reputation, 5) + 1); return `Reputation up to ${c.what.reputation}/10`; },
   'Lower Reputation': (c) => { c.what.reputation = clamp(numOr(c.what.reputation, 5) - 1); return `Reputation down to ${c.what.reputation}/10`; },
+  'Raise Stress': (c) => { c.what.stress = clamp(numOr(c.what.stress, 5) + 1); return `Stress up to ${c.what.stress}/10`; },
+  'Ease Stress': (c) => { c.what.stress = clamp(numOr(c.what.stress, 5) - 1); return `Stress eased to ${c.what.stress}/10`; },
   'Reveal Clue': (c, p) => { c.what.situation = appendNote(c.what.situation, p || 'A clue surfaces that points at the current thread.'); return 'Clue revealed'; },
   'Complicate': (c, p) => { c.what.situation = appendNote(c.what.situation, p || 'A complication forces a harder choice.'); c.what.threat = clamp((c.what.threat || 0) + 1); return 'Complication introduced'; },
   'Reward': (c, p) => { c.what.situation = appendNote(c.what.situation, p || 'The party gains leverage or resources.'); return 'Reward granted'; },

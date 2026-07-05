@@ -325,9 +325,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .field-label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.7rem; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; margin-top: var(--sp-3); }
 .field-label .metric { color: var(--accent); font-size: 0.85rem; }
 .field-row { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: var(--sp-3); align-items: end; }
-/* Narrative Trackers (Resources/Reputation) — a balanced 2-up row, not the
-   3-up Intent/Threat/Mystery layout above. */
+/* Narrative Trackers (Resources/Reputation/Stress) — a balanced N-up row, not
+   the 3-up Intent/Threat/Mystery layout above. */
 .field-row-2col { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); align-items: end; }
+.field-row-3col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--sp-3); align-items: end; }
 textarea, select, input[type="text"], input[type="search"], .drawer-search {
   width: 100%; box-sizing: border-box;
   background: var(--bg-inset); color: var(--text);
@@ -482,7 +483,7 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 @media (max-width: 1023px) {
-  .field-row, .field-row-2col { grid-template-columns: 1fr; }
+  .field-row, .field-row-2col, .field-row-3col { grid-template-columns: 1fr; }
   .header-actions .btn.sm { display: none; }
 }
 

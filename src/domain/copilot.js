@@ -8,7 +8,7 @@ import { overlookedThreads } from './threads.js';
 import { listFlaggedRelationships } from './entities.js';
 
 export function advise(doc) {
-  const c = (doc && doc.context && doc.context.what) || { threat: 0, mystery: 0, resources: 5, reputation: 5 };
+  const c = (doc && doc.context && doc.context.what) || { threat: 0, mystery: 0, resources: 5, reputation: 5, stress: 5 };
   const threat = c.threat || 0;
   const mystery = c.mystery || 0;
   // Narrative Trackers (pack 18): campaign-level dials, same "GM-set gauge
@@ -16,6 +16,9 @@ export function advise(doc) {
   // reads as the neutral midpoint (5), not 0 ("out of everything").
   const resources = c.resources == null ? 5 : c.resources;
   const reputation = c.reputation == null ? 5 : c.reputation;
+  // Stress/Tension (Hostile Setting pp.211-219: uncertainty/isolation/timing
+  // as the three horror levers) — same neutral-midpoint pattern.
+  const stress = c.stress == null ? 5 : c.stress;
   const active = (doc && doc.context && doc.context.active) || 'what';
 
   // Thread awareness (NEW): a clock nearly full is the most actionable signal.
@@ -25,6 +28,7 @@ export function advise(doc) {
   let observation;
   if (hot && hot.filled / hot.segments >= 0.75) observation = `“${hot.name}” is ${hot.filled}/${hot.segments} — one more push resolves it. Consider paying it off now.`;
   else if (threat >= 7) observation = 'Threat is high — the situation is exposed, watched, or already tipping over.';
+  else if (stress >= 7) observation = 'Stress is high — a scene without combat should follow, or someone breaks.';
   else if (resources <= 2) observation = 'Supplies are critically low — the next scene should address resupply, or someone pays for the shortage.';
   else if (threat >= 4) observation = 'There is enough pressure that lingering here now has a cost.';
   else if (mystery >= 6) observation = 'Something here reads as wrong in a way that invites investigation.';
@@ -34,6 +38,8 @@ export function advise(doc) {
 
   const consequence = threat >= 6
     ? 'Opposition arrives or the deadline lands. A hard choice gets forced on the party.'
+    : stress >= 6
+    ? 'Someone cracks under the pressure — a mistake, a breakdown, or a boundary gets crossed.'
     : resources <= 2
     ? 'A resource shortage bites — someone goes without, or a debt gets called in to cover the gap.'
     : reputation <= 2
@@ -46,6 +52,8 @@ export function advise(doc) {
     ? 'Good standing opens a favor, a discount, or a trusted introduction.'
     : resources >= 8
     ? 'Surplus supply opens room to be generous, or to take a risk that would otherwise cost too much.'
+    : stress <= 2
+    ? 'The calm holds — a quiet scene here costs nothing and can set up the next scare.'
     : 'An alternate route or ally could open if the party spends time or leverage.';
 
   // Suggested oracle adapts to the active question and pressure. Returns a
@@ -54,6 +62,7 @@ export function advise(doc) {
     : active === 'where' ? ['Location Themes', 'Sensory Detail']
     : active === 'why' ? ['Plot Engine', 'Plot Target']
     : threat >= 6 ? ['Miscellaneous', 'Story Complication']
+    : stress >= 6 ? ['Horror Escalation', 'Escalation Beat']
     : resources <= 2 ? ['Trade & Cargo', 'Cargo Problem']
     : mystery >= 5 ? ['Miscellaneous', 'Story Clue']
     : ['Plot Engine', 'Scene Driver'];
@@ -61,6 +70,7 @@ export function advise(doc) {
 
   // Quick-apply shifts most relevant to the current pressure.
   const quickActions = threat >= 6 ? ['Complicate', 'Advance Time']
+    : stress >= 6 ? ['Ease Stress', 'Advance Time']
     : mystery >= 5 ? ['Reveal Clue', 'Raise Threat']
     : ['Reveal Clue', 'Advance Time'];
 

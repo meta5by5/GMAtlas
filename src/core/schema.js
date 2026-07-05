@@ -40,13 +40,13 @@ export function defaultCampaign(now = new Date().toISOString()) {
       active: 'what',
       who:   { summary: '', entityIds: [] },
       where: { summary: '', entityIds: [] },
-      // threat/mystery are scene-immediate pressure; resources/reputation
-      // (Phase 6, pack 18's Narrative Trackers) are slower campaign-level
-      // dials that persist across scenes the same way — nothing here resets
-      // any of the four per scene, they're all just GM-set gauges the
+      // threat/mystery are scene-immediate pressure; resources/reputation/
+      // stress (Phase 6, pack 18's Narrative Trackers) are slower campaign-
+      // level dials that persist across scenes the same way — nothing here
+      // resets any of the five per scene, they're all just GM-set gauges the
       // Co-Pilot reads. Default to a neutral midpoint (5/10), not 0, since
-      // a fresh campaign hasn't already run out of supply or goodwill.
-      what:  { situation: '', intent: 'Discovery', threat: 2, mystery: 2, resources: 5, reputation: 5 },
+      // a fresh campaign hasn't already run out of supply, goodwill, or calm.
+      what:  { situation: '', intent: 'Discovery', threat: 2, mystery: 2, resources: 5, reputation: 5, stress: 5 },
       why:   { summary: '', entityIds: [] },
       // activity: '' means "not set" — an old campaign predating Phase 9
       // reads the same as a fresh one that hasn't picked an Activity yet,

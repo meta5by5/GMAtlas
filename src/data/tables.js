@@ -866,6 +866,45 @@ export const SCENE_TABLES = {
       "machines continuing a pointless task",
       "air full of glittering dust",
       "soft knocking from deeper inside"
+    ],
+    "What Happened": [
+      "reactor breach vented the crew into vacuum",
+      "quarantine protocol locked everyone inside",
+      "mutiny turned the corridors into a battlefield",
+      "cargo shifted and crushed the lower decks",
+      "something got in through an unlogged airlock cycle",
+      "the crew opened fire on their own reflection",
+      "life support was sabotaged for insurance",
+      "starvation set in after the drive failed",
+      "the AI decided rescue would take too long",
+      "a xeno sample got loose in the med bay",
+      "the crew abandoned ship and never made it to the pods"
+    ],
+    "What Remains": [
+      "a logbook with the last entries torn out",
+      "handprints dragging toward an airlock",
+      "personal effects arranged like a shrine",
+      "a locked safe nobody thought worth forcing",
+      "half-eaten rations still on the mess table",
+      "a message recorded but never sent",
+      "tools abandoned mid-repair",
+      "medical restraints cut from the inside",
+      "a countdown scratched into the bulkhead",
+      "uniforms folded neatly with no bodies inside",
+      "a star chart marking somewhere off every map"
+    ],
+    "Still Changing": [
+      "power cycles rebuild themselves after every shutdown",
+      "the biomass grows faster when observed",
+      "doors reseal themselves on a schedule nobody set",
+      "the temperature keeps dropping past what the hull should allow",
+      "something is still transmitting on a dead channel",
+      "the wreck drifts slightly closer to a collision course",
+      "corrosion spreads only where people stand",
+      "the automated systems are learning the crew's habits",
+      "a section repressurizes itself overnight",
+      "structural stress readings climb without cause",
+      "something is moving cargo between compartments"
     ]
   },
   "Vaults / Ruins": {
@@ -1599,6 +1638,31 @@ Object.assign(SCENE_TABLES, {
       "a safer route for future travel", "proof of illegal dumping", "a hidden water or fuel source", "coordinates to an older settlement",
       "a biological clue that explains the hazard", "a salvageable machine part", "a witness hiding off-grid", "evidence that the colony was warned",
       "a map of maintenance spaces", "an artifact that reacts to power", "an abandoned emergency shelter", "a corporate claim marker older than the contract"
+    ],
+    "What's Normal": [
+      "wind patterns match the survey data exactly", "local wildlife keeps a predictable distance", "soil composition is unremarkable", "weather follows the forecast models",
+      "terrain matches the orbital scans", "background radiation sits at expected levels", "water table depth matches predictions", "seismic activity is within tolerance",
+      "day-night cycle behaves as charted", "vegetation growth follows known patterns", "nothing here contradicts the briefing"
+    ],
+    "What's Strange": [
+      "the wildlife goes silent at the same hour every day", "a rock formation repeats too perfectly to be natural", "compasses drift toward one fixed point", "plants grow in deliberate rows",
+      "the wind carries a sound like distant machinery", "shadows fall a few degrees off true", "footprints predate the survey team's arrival", "local minerals hum faintly under scanners",
+      "migratory patterns all point the same direction", "echoes return half a second too late", "a patch of ground stays warm through the night"
+    ],
+    "What's Dangerous": [
+      "loose scree hides a sheer drop", "local fauna is territorial near the water source", "spores trigger respiratory distress", "flash flooding follows the canyon route",
+      "electrical storms build faster than forecast", "ground gives way over a hollow cavity", "predator tracks circle the campsite", "toxic runoff pools where it isn't expected",
+      "temperature swings punish exposed skin", "a nest defends territory the survey didn't map", "unstable ice conceals crevasses"
+    ],
+    "What's Valuable": [
+      "an untapped mineral vein near the surface", "a freshwater source clean enough to bottle", "salvageable tech from an earlier survey", "a natural shelter defensible against weather",
+      "medicinal plants unknown to the colony database", "a clear line of sight ideal for a relay station", "fertile soil suited to the colony's crops", "a fossil bed worth a research grant",
+      "rare crystal formations with industrial use", "an intact cache from a previous expedition", "geothermal activity suited for power generation"
+    ],
+    "What's Beautiful": [
+      "bioluminescent fungus lighting the cave walls", "a sunset refracted through mineral dust", "migratory flocks moving like a single organism", "crystal formations ringing faintly in the wind",
+      "an aurora bent by the local magnetic field", "a canyon carved into impossible symmetry", "wildflowers blooming in a toxic-looking basin", "frost patterns repeating like woven fabric",
+      "a waterfall glowing faintly with minerals", "stars visible in daylight through thin atmosphere", "a valley that echoes birdsong into harmony"
     ]
   },
   "Sector & System Creation": {
@@ -1686,6 +1750,11 @@ Object.assign(SCENE_TABLES, {
       "filters in short supply", "medicine needed after industrial accident", "ore buyer overpaying for speed", "luxury goods wanted by isolated executives",
       "spare parts for obsolete machinery", "seed stock for failing farms", "data cores from a bankrupt surveyor", "prisoner transport under quiet contract",
       "evacuation seats sold through back channels", "black market protein cultures", "construction foam after storm damage", "battery banks before long night"
+    ],
+    "Cargo Interest": [
+      "a rival crew who lost the original contract", "a corporate auditor building a fraud case", "a religious group who considers it sacred", "a black market broker who overpays no questions asked",
+      "the original manufacturer trying to recall a defect quietly", "an insurance investigator suspicious of the manifest", "a smuggler using it as cover for something else", "a scientist who recognizes what it really is",
+      "a rival corporation wanting it destroyed, not bought", "a family member of someone who died shipping it", "a government agent flagging it as restricted", "a pirate captain who has very specific orders"
     ]
   },
   "Industrial Hazards": {
@@ -1765,6 +1834,26 @@ Object.assign(SCENE_TABLES, {
     "Coverup Move": [
       "blame weather", "blame worker error", "move evidence off-world", "promote the witness", "discredit the crew", "invoke proprietary secrecy",
       "declare quarantine", "offer hazard pay", "stage a pirate attack", "alter colony charter", "send a cleanup team", "trigger evacuation to erase context"
+    ],
+    "Observation": [
+      "instruments register an impossible reading", "witnesses report the same anomaly with different details", "the phenomenon only appears on secondary sensors", "recordings show something the naked eye missed",
+      "the effect follows a schedule nobody can explain", "animals react before the instruments do", "the anomaly leaves no trace after it passes", "multiple sites report the same signature",
+      "it only manifests near specific equipment", "the first report was dismissed as sensor error", "official logs contradict what the crew observed"
+    ],
+    "Hypothesis": [
+      "a natural phenomenon nobody's cataloged yet", "a classified experiment gone wrong", "residual xeno-technology reactivating", "a side effect of the colony's own equipment",
+      "psychological contagion, not a physical cause", "an old accident whose evidence was never fully buried", "something alive that mimics environmental effects", "a side effect of faster-than-light travel",
+      "deliberate sabotage disguised as a natural event", "a signal or transmission nobody sent", "a temporal or dimensional anomaly"
+    ],
+    "Contradiction": [
+      "the official record doesn't match the physical evidence", "a key witness changes their story under pressure", "two credible sources report incompatible timelines", "the evidence that would prove it has been removed",
+      "the corporation's explanation conveniently absolves them", "a second incident deepens rather than resolves the mystery", "an expert's analysis is quietly redacted", "the person who reported it first has disappeared",
+      "an eyewitness now denies what they told others", "instruments calibrated to disprove it instead confirm it", "the timeline requires someone to have lied"
+    ],
+    "Discovery": [
+      "the anomaly was a warning, not a threat", "it was caused by something the crew already trusted", "the coverup was worse than the original incident", "the phenomenon is spreading, not isolated",
+      "someone has known the truth from the beginning", "the cause is still active and reacting to the investigation", "the anomaly protects something rather than threatens it", "the truth implicates the crew's own patron",
+      "it's connected to an event thought long resolved", "there's a survivor nobody accounted for", "the real danger is what happens once the truth gets out"
     ]
   },
   "Adventure": {

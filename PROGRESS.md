@@ -118,11 +118,11 @@ proposes (a "GM Prompt Hierarchy," an "Oracle Prompt Chain" technique,
 "Campaign Momentum") turned out to already be this repo's WHAT card + Shift
 Story reducers, `generateNpc`'s multi-table roll, and Session Recap +
 Co-Pilot, respectively — arrived at independently, now named and
-cross-referenced rather than re-treated as gaps. Four small oracle-content
-additions (Salvage Investigation, Site Survey, Cargo Interest, Anomaly
-Investigation) are unblocked, not gated to Phase 10 — see
-`DESIGN-NEW-FUNCTIONALITY.md`'s new unphased content section. Everything
-else the document proposed (an Expedition four-dial tracker, structured
+cross-referenced rather than re-treated as gaps. The four small
+oracle-content additions this reconciliation identified (Salvage
+Investigation, Site Survey, Cargo Interest, Anomaly Investigation) have
+since shipped — see the Content addition entry below, not gated to Phase
+10. Everything else the document proposed (an Expedition four-dial tracker, structured
 Diplomacy fields, a Discovery-classification field, a Noncombat taxonomy, a
 mechanized session-composition budget) is explicitly declined, with
 reasons, in the ADR.
@@ -138,9 +138,10 @@ new features), already adopted in `docs/adr/0001`. Full detail and effort
 estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
 "Proposed next" section — this is the short pointer, not a duplicate.
 
-- **Phase 6** — complete; one candidate reopened: a **Stress/Tension**
-  narrative dial (Hostile's horror-design material), same shape as
-  Resources/Reputation. *Low effort.*
+- **Phase 6** — complete, including the reopened **Stress/Tension** dial
+  (Hostile's horror-design material, `context.what.stress`, same shape as
+  Resources/Reputation — a `Raise Stress`/`Ease Stress` shift pair and a
+  Co-Pilot reaction at both the high and low end).
 - **Phase 7** — complete: `@` pointers into documents, typed/weighted
   relationships (incl. a Bond strength/stage weight), "flag, don't delete"
   invalid relationships, tag dropdowns, and a Faction card template.
@@ -154,11 +155,15 @@ estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
   (`domain/activities.js`, wired into the HOW workspace card); genre packs
   (`data/genrePacks.js` — Hostile/Cyberpunk-Shadowrun/Fantasy, switchable
   in Settings).
-- **Content addition (unphased)** — four small Situation Engine oracle
-  chains reconciled from `gameplay-mechanics.md` (`docs/adr/0008`): Salvage
-  Investigation (`Derelicts`), Site Survey (`Exploration`), Cargo Interest
-  (`Trade & Cargo`), Anomaly Investigation (`Mysteries & Coverups`). *Low
-  effort* — ordinary tables, no new domain code.
+- **Content addition (unphased)** — complete: four small Situation Engine
+  oracle chains reconciled from `gameplay-mechanics.md` (`docs/adr/0008`),
+  added as ordinary tables (no new domain code) within their existing
+  `data/tables.js` groups: Salvage Investigation — What Happened/What
+  Remains/Still Changing (`Derelicts`); Site Survey — What's Normal/What's
+  Strange/What's Dangerous/What's Valuable/What's Beautiful, deliberately
+  discovery-first (`Exploration`); Cargo Interest (`Trade & Cargo`);
+  Anomaly Investigation — Observation/Hypothesis/Contradiction/Discovery
+  (`Mysteries & Coverups`).
 - **Phase 10 (lowest priority — new features)** — Trade & Logistics /
   Merchant Rules Lens (contracts as the primary loop, `docs/adr/0003` +
   `0004`); a Mission/Job generator (`domain/missions.js`, payout scaled by

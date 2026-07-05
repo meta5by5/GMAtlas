@@ -101,6 +101,39 @@ test('Resources/Reputation shifts default an old save missing those fields to th
   assert.equal(ctx.what.reputation, 6); // 5 (default) + 1, not 1
 });
 
+// --- Narrative Trackers: Stress/Tension (Hostile Setting pp.211-219) -------
+test('a fresh campaign defaults Stress to the neutral midpoint (5/10)', () => {
+  const ctx = defaultCampaign().context;
+  assert.equal(ctx.what.stress, 5);
+});
+
+test('Raise/Ease Stress clamp to [0, 10]', () => {
+  let ctx = defaultCampaign().context;
+  ctx.what.stress = 9;
+  ctx = applyShift(ctx, 'Raise Stress').context;
+  ctx = applyShift(ctx, 'Raise Stress').context;
+  assert.equal(ctx.what.stress, 10); // clamps at 10, doesn't overshoot
+  ctx = applyShift(ctx, 'Ease Stress').context;
+  ctx = applyShift(ctx, 'Ease Stress').context;
+  ctx = applyShift(ctx, 'Ease Stress').context;
+  ctx = applyShift(ctx, 'Ease Stress').context;
+  ctx = applyShift(ctx, 'Ease Stress').context;
+  ctx = applyShift(ctx, 'Ease Stress').context;
+  ctx = applyShift(ctx, 'Ease Stress').context;
+  ctx = applyShift(ctx, 'Ease Stress').context;
+  ctx = applyShift(ctx, 'Ease Stress').context;
+  ctx = applyShift(ctx, 'Ease Stress').context;
+  ctx = applyShift(ctx, 'Ease Stress').context;
+  assert.equal(ctx.what.stress, 0); // clamps at 0
+});
+
+test('Stress shifts default an old save missing the field to the neutral midpoint, not 0', () => {
+  let ctx = defaultCampaign().context;
+  delete ctx.what.stress; // simulate a pre-Stress-dial save
+  ctx = applyShift(ctx, 'Ease Stress').context;
+  assert.equal(ctx.what.stress, 4); // 5 (default) - 1, not -1
+});
+
 // --- scenes ---------------------------------------------------------------
 test('generateScene produces numbered, non-empty text', () => {
   const camp = defaultCampaign();
@@ -334,6 +367,39 @@ test('Co-Pilot treats a pre-Narrative-Trackers save (no resources/reputation sto
   delete camp.context.what.reputation;
   const a = advise(camp);
   assert.doesNotMatch(a.observation, /critically low|soured/);
+});
+
+test('Co-Pilot flags high Stress (below Threat, above Resources/Mystery/Reputation in priority) and suggests the Horror Escalation oracle', () => {
+  let camp = defaultCampaign();
+  camp.context.what.threat = 1;
+  camp.context.what.mystery = 1;
+  camp.context.what.resources = 5;
+  camp.context.what.reputation = 5;
+  camp.context.what.stress = 8;
+  const a = advise(camp);
+  assert.match(a.observation, /[Ss]tress is high/);
+  assert.match(a.consequence, /cracks under the pressure/);
+  assert.deepEqual(a.suggestedOraclePath, ['Horror Escalation', 'Escalation Beat']);
+  assert.deepEqual(a.quickActions, ['Ease Stress', 'Advance Time']);
+});
+
+test('Co-Pilot offers a calm-holds opportunity when Stress is very low and nothing else dominates', () => {
+  let camp = defaultCampaign();
+  camp.context.what.mystery = 0;
+  camp.context.what.reputation = 5;
+  camp.context.what.resources = 5;
+  camp.context.what.stress = 1;
+  const a = advise(camp);
+  assert.match(a.opportunity, /calm holds/);
+});
+
+test('Co-Pilot treats a pre-Stress-dial save (no stress stored) as the neutral midpoint, not high tension', () => {
+  let camp = defaultCampaign();
+  camp.context.what.threat = 1;
+  camp.context.what.mystery = 1;
+  delete camp.context.what.stress;
+  const a = advise(camp);
+  assert.doesNotMatch(a.observation, /[Ss]tress is high/);
 });
 
 test('document library adds, edits, and removes entries without mutating the source campaign', () => {

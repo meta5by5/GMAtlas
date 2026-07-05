@@ -24,6 +24,7 @@ const VIEWS = {
     const c = doc.context.what;
     const resources = c.resources == null ? 5 : c.resources;
     const reputation = c.reputation == null ? 5 : c.reputation;
+    const stress = c.stress == null ? 5 : c.stress;
     return card('WHAT is happening', 'The active situation — your primary workspace.', `
       <label class="field-label">Situation
         <div class="mention-editor" contenteditable="true" data-ctx="what.situation" data-placeholder="What is unresolved right now?">${buildMentionEditorHTML(doc, c.situation)}</div>
@@ -41,12 +42,15 @@ const VIEWS = {
           <input type="range" min="0" max="10" value="${c.mystery}" data-ctx-num="what.mystery">
         </label>
       </div>
-      <div class="field-row-2col">
+      <div class="field-row-3col">
         <label class="field-label">Resources <b class="metric">${resources}/10</b>
           <input type="range" min="0" max="10" value="${resources}" data-ctx-num="what.resources">
         </label>
         <label class="field-label">Reputation <b class="metric">${reputation}/10</b>
           <input type="range" min="0" max="10" value="${reputation}" data-ctx-num="what.reputation">
+        </label>
+        <label class="field-label">Stress <b class="metric">${stress}/10</b>
+          <input type="range" min="0" max="10" value="${stress}" data-ctx-num="what.stress">
         </label>
       </div>
       <div class="action-bar">
