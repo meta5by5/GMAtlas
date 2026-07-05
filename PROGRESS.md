@@ -32,6 +32,22 @@ rides the existing Vehicle Bestiary template as one more field. Deferred
 per ADR 0004 (ships/crew depth, faction politics, the 19-generator list,
 etc.) — see the ADR for the full list.
 
+**Phase 10 continued** with the two items ADR 0004 named as depending on
+each other: a **Faction Pressure Track** (`domain/factions.js` — a
+faction's pressure clock is a Thread tagged `kind: 'faction-pressure'`,
+the same "reuse Threads" pattern Contracts already established; opt-in
+per faction, plus an `agenda` field and a Faction Activity oracle table)
+and a **Mission/Job generator** (`domain/missions.js`'s `generateMission()`,
+payout/deadline scaled by `context.what.threat`, rolled into the Journal
+via a new button there) — followed by the **Faction Rumor → Mission seed
+link** in `copilot.js` those two unlock: a faction whose pressure track is
+nearly full now surfaces as "a mission tied to them would land now,"
+ranked just below a hot ordinary thread. Building this also surfaced and
+fixed a real bug: `copilot.js`'s hot-thread check read `campaign.threads`
+unfiltered, so a near-full Contract or Faction Pressure Track (both stored
+in that same array) got flagged with the wrong generic thread phrasing —
+now excludes anything carrying a `kind` tag.
+
 Phase 9 (Activity-driven gameplay) closed out with
 the HOW workspace's Activity picker (`domain/activities.js`, looks up
 `data/rulesConstitution.js`'s registered Rules Lens provider(s) for the
@@ -189,19 +205,43 @@ estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
     Contract Type oracle table, a Cargo Capacity Vehicle-template field, and
     the `trade` drawer (market/manifest/contracts). Still open, per ADR
     0004 (deliberately deferred, not forgotten): ships/crew as rich
-    subsystems, a Faction Standing tracker keyed to contract payout/
-    availability, and a Faction Rumor → Contract seed link in `copilot.js`
-    once a Faction Pressure Track exists (see below).
-  - **Remaining, not yet started:** a Mission/Job generator
-    (`domain/missions.js`, payout scaled by the existing threat tracker) —
-    distinct from a Trade contract, aimed at non-trade jobs; a Faction
-    Pressure Track (extends `threads.js` onto faction entities — kept as a
-    single clock per `docs/adr/0008`, not split into four dials) plus a
-    Co-Pilot link between it and generated missions/contracts; Shipyard
-    companion link (blocked on a known URL, not effort); a sync adapter /
-    shared campaign database; Traveller/Stars Without Number content (both
-    named Rules Constitution providers with zero authored data and no
-    sourcebook in this repo's library); faction-turn/rumor automation.
+    subsystems, and a Faction Standing tracker keyed to contract payout/
+    availability — the Faction Rumor seed link itself has since landed
+    (see Faction Pressure Track below), just pointed at missions rather
+    than contracts specifically.
+  - **Faction Pressure Track** — done: `domain/factions.js`'s
+    `createPressureTrack`/`getPressureTrack`/`factionsUnderPressure` model a
+    faction's pressure clock as a Thread tagged `kind: 'faction-pressure'`
+    plus a `factionId` reference, exactly the pattern Contracts already
+    established — every existing Thread mutator works on one unchanged.
+    Opt-in per faction (a "+ Pressure Track" button in the Faction card, not
+    auto-created). A new `agenda` field (free text) and a "Faction Activity"
+    oracle table (Corporate Powers group) round out the card. Fixed a real
+    bug found while wiring this in: `copilot.js`'s "hot thread" detection
+    read `campaign.threads` unfiltered, so a near-full Contract or Faction
+    Pressure Track (both stored there too) got flagged with the wrong
+    generic thread-name phrasing instead of their own subsystem's message —
+    now excludes any thread carrying a `kind` tag.
+  - **Mission/Job generator** — done: `domain/missions.js`'s
+    `generateMission()` returns `{payout, deadlineDays, complication,
+    penalty}`, `danger` defaulting to `context.what.threat` so higher
+    ambient threat produces higher-stakes, higher-payout missions
+    automatically. The complication rolls from the existing Miscellaneous →
+    Story Complication oracle table — no new table. A "🎲 Generate Mission"
+    button in the Journal drawer rolls one straight into a Journal note
+    (`formatMission()`), distinct from a Trade contract (no route/patron/
+    commodity) since it's aimed at non-trade jobs.
+  - **Faction Rumor → Mission seed link** — done: `copilot.js`'s `advise()`
+    surfaces a faction whose pressure track is ≥75% full ("a mission tied to
+    them would land naturally now"), ranked just below a hot ordinary
+    thread — the same "one more push" signal `threadUnderPressure()` already
+    gives ordinary threads, extended to factions now that both a pressure
+    clock and a mission generator exist.
+  - **Remaining, not yet started:** Shipyard companion link (blocked on a
+    known URL, not effort); a sync adapter / shared campaign database;
+    Traveller/Stars Without Number content (both named Rules Constitution
+    providers with zero authored data and no sourcebook in this repo's
+    library); faction-turn/rumor automation.
 - **UI/UX assumptions, resolved in the 2026-07-04 pass** (see Status
   Summary above): tabbed drawer switching replaced "only one drawer open at
   a time"; three real responsive tiers replaced one breakpoint; Escape and

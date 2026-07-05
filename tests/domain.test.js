@@ -402,6 +402,51 @@ test('Co-Pilot treats a pre-Stress-dial save (no stress stored) as the neutral m
   assert.doesNotMatch(a.observation, /[Ss]tress is high/);
 });
 
+// --- Phase 10: Faction Rumor -> Mission seed link in copilot.js ------------
+// (createPressureTrack/getPressureTrack/factionsUnderPressure are imported
+// further down this file — ES module imports are hoisted regardless of
+// where the `import` statement sits, so they're already in scope here.)
+test('Co-Pilot surfaces a faction whose pressure track is nearly full as a mission seed, ranked just below a hot ordinary thread', () => {
+  let camp = defaultCampaign();
+  camp.context.what.threat = 1;
+  camp.context.what.stress = 1;
+  let factionId;
+  ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
+  camp = createPressureTrack(camp, factionId, 4);
+  const track = listThreads(camp).find((t) => t.kind === 'faction-pressure' && t.factionId === factionId);
+  camp = advanceThread(camp, track.id, 3); // 3/4 = 75%
+  const a = advise(camp);
+  assert.match(a.observation, /Sable Cartel/);
+  assert.match(a.observation, /mission/);
+});
+
+test('Co-Pilot still prioritizes a hot ordinary thread over a pressured faction', () => {
+  let camp = defaultCampaign();
+  camp.context.what.threat = 1;
+  camp.context.what.stress = 1;
+  camp = addThread(camp, 'Escape the station', 4);
+  const hotThread = listThreads(camp)[0];
+  camp = advanceThread(camp, hotThread.id, 3); // 3/4 = 75%
+  let factionId;
+  ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
+  camp = createPressureTrack(camp, factionId, 4);
+  const track = listThreads(camp).find((t) => t.kind === 'faction-pressure' && t.factionId === factionId);
+  camp = advanceThread(camp, track.id, 3);
+  const a = advise(camp);
+  assert.match(a.observation, /Escape the station/);
+});
+
+test('a near-full Trade contract (also stored as a kind-tagged Thread) does not get flagged by the ordinary hot-thread check', () => {
+  let camp = defaultCampaign();
+  camp.context.what.threat = 1;
+  camp.context.what.stress = 1;
+  const { campaign: withContract, id: contractId } = createContract(camp, { name: 'Deliver medicine', segments: 4 });
+  camp = advanceThread(withContract, contractId, 3); // 3/4 = 75% — would trip the old, unfiltered hot check
+  const a = advise(camp);
+  assert.doesNotMatch(a.observation, /Deliver medicine/);
+  assert.doesNotMatch(a.observation, /one more push resolves it/);
+});
+
 test('document library adds, edits, and removes entries without mutating the source campaign', () => {
   let camp = defaultCampaign();
   camp = addDocument(camp, { title: 'Station Manual', content: 'Docking procedures' });
@@ -1597,13 +1642,14 @@ test('RELATIONSHIP_TYPES includes the Constitution-named taxonomy plus the legac
 });
 
 // --- entities: Faction card template (2026-07-03 ruleset review) -----------
-test('a faction entity gains hq/leadership/scenarioSeed fields at creation', () => {
+test('a faction entity gains hq/leadership/scenarioSeed/agenda fields at creation', () => {
   let camp = defaultCampaign();
   let id; ({ campaign: camp, id } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
   const e = getEntity(camp, id);
   assert.equal(e.hq, '');
   assert.equal(e.leadership, '');
   assert.equal(e.scenarioSeed, '');
+  assert.equal(e.agenda, '');
 });
 
 test('faction fields appear when an entity is retyped to faction, and can be edited', () => {
@@ -1612,11 +1658,63 @@ test('faction fields appear when an entity is retyped to faction, and can be edi
   assert.equal(getEntity(camp, id).hq, undefined);
   camp = updateEntity(camp, id, { type: 'faction' });
   assert.equal(getEntity(camp, id).hq, '');
-  camp = updateEntity(camp, id, { hq: 'Orbital Station 4', leadership: 'The Quiet Council', scenarioSeed: 'They want the artifact back.' });
+  camp = updateEntity(camp, id, { hq: 'Orbital Station 4', leadership: 'The Quiet Council', scenarioSeed: 'They want the artifact back.', agenda: 'Consolidate the water contracts.' });
   const e = getEntity(camp, id);
   assert.equal(e.hq, 'Orbital Station 4');
   assert.equal(e.leadership, 'The Quiet Council');
   assert.equal(e.scenarioSeed, 'They want the artifact back.');
+  assert.equal(e.agenda, 'Consolidate the water contracts.');
+});
+
+// --- Phase 10: Faction Pressure Track (a Thread tagged kind: 'faction-pressure') ---
+import { getPressureTrack, createPressureTrack, factionsUnderPressure } from '../src/domain/factions.js';
+
+test('createPressureTrack adds a Thread tagged kind: "faction-pressure" with a factionId, and every existing thread mutator still works on it unchanged', () => {
+  let camp = defaultCampaign();
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
+  assert.equal(getPressureTrack(camp, factionId), null);
+
+  camp = createPressureTrack(camp, factionId, 6);
+  const track = getPressureTrack(camp, factionId);
+  assert.ok(track);
+  assert.equal(track.kind, 'faction-pressure');
+  assert.equal(track.factionId, factionId);
+  assert.equal(track.segments, 6);
+  assert.equal(track.status, 'active');
+
+  camp = advanceThread(camp, track.id, 3);
+  assert.equal(getPressureTrack(camp, factionId).filled, 3);
+  camp = setThreadStatus(camp, track.id, 'escalating');
+  assert.equal(getPressureTrack(camp, factionId).status, 'escalating');
+});
+
+test('createPressureTrack is a no-op on a non-faction entity, or a faction that already has one', () => {
+  let camp = defaultCampaign();
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Not a faction' }));
+  camp = createPressureTrack(camp, npcId);
+  assert.equal(getPressureTrack(camp, npcId), null);
+
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
+  camp = createPressureTrack(camp, factionId);
+  const before = getPressureTrack(camp, factionId);
+  camp = createPressureTrack(camp, factionId); // second call must not create a duplicate
+  const trackCount = listThreads(camp).filter((t) => t.kind === 'faction-pressure' && t.factionId === factionId).length;
+  assert.equal(trackCount, 1);
+  assert.deepEqual(getPressureTrack(camp, factionId), before);
+});
+
+test('factionsUnderPressure surfaces factions whose track is >=75% full and not yet Resolved/Archived, with the faction entity attached', () => {
+  let camp = defaultCampaign();
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
+  camp = createPressureTrack(camp, factionId, 4);
+  const track = getPressureTrack(camp, factionId);
+  camp = advanceThread(camp, track.id, 2); // 2/4 = 50%, not yet surfaced
+  assert.equal(factionsUnderPressure(camp).length, 0);
+  camp = advanceThread(camp, track.id, 1); // 3/4 = 75%
+  const surfaced = factionsUnderPressure(camp);
+  assert.equal(surfaced.length, 1);
+  assert.equal(surfaced[0].faction.id, factionId);
+  assert.equal(surfaced[0].faction.name, 'Sable Cartel');
 });
 
 // --- copilot: flagged-relationship review card -----------------------------
@@ -2075,4 +2173,58 @@ test('generateContract prices its payout from the real gap between two Locations
   const delta = Math.abs(priceAt(getEntity(next, destination), 'luxury-goods') - priceAt(getEntity(next, origin), 'luxury-goods'));
   assert.equal(contract.payout, Math.max(20, delta * 10));
   assert.ok(contract.payout > 50); // a real route beats the flat no-route default
+});
+
+// --- Phase 10: Mission/Job generator ----------------------------------------
+import { generateMission, formatMission } from '../src/domain/missions.js';
+
+test('generateMission defaults danger to context.what.threat, and higher danger raises payout while tightening the deadline', () => {
+  let camp = defaultCampaign();
+  camp.context.what.threat = 0;
+  const low = generateMission(camp, { rng: makeRng(1) });
+  assert.equal(low.danger, 0);
+  assert.equal(low.payout, 100);
+  assert.equal(low.deadlineDays, 7);
+
+  camp.context.what.threat = 10;
+  const high = generateMission(camp, { rng: makeRng(1) });
+  assert.equal(high.danger, 10);
+  assert.equal(high.payout, 300); // 100 * (1 + 10*0.2)
+  assert.equal(high.deadlineDays, 2);
+  assert.ok(high.payout > low.payout);
+  assert.ok(high.deadlineDays < low.deadlineDays);
+});
+
+test('generateMission accepts an explicit danger override instead of reading context.what.threat', () => {
+  let camp = defaultCampaign();
+  camp.context.what.threat = 8;
+  const m = generateMission(camp, { danger: 2, rng: makeRng(1) });
+  assert.equal(m.danger, 2);
+  assert.equal(m.payout, 140); // 100 * (1 + 2*0.2), not threat=8's value
+});
+
+test('generateMission rolls its complication from the existing Miscellaneous > Story Complication oracle table (no new table)', () => {
+  let camp = defaultCampaign();
+  const m = generateMission(camp, { rng: makeRng(5) });
+  assert.ok(tablesWithOverrides({}, 'hostile').Miscellaneous['Story Complication'].includes(m.complication));
+});
+
+test('generateMission\'s penalty escalates with danger', () => {
+  let camp = defaultCampaign();
+  const lowM = generateMission(camp, { danger: 1, rng: makeRng(1) });
+  const midM = generateMission(camp, { danger: 4, rng: makeRng(1) });
+  const highM = generateMission(camp, { danger: 7, rng: makeRng(1) });
+  assert.match(lowM.penalty, /modest penalty/);
+  assert.match(midM.penalty, /halves the payout/);
+  assert.match(highM.penalty, /voids the payout entirely/);
+});
+
+test('formatMission renders a readable multi-line block including payout, deadline, complication, and penalty', () => {
+  const m = { danger: 5, payout: 200, deadlineDays: 4, complication: 'a rescue creates a hostage', penalty: 'Late or damaged delivery halves the payout.' };
+  const text = formatMission(m);
+  assert.match(text, /danger 5\/10/);
+  assert.match(text, /Payout: 200/);
+  assert.match(text, /Deadline: 4 days/);
+  assert.match(text, /a rescue creates a hostage/);
+  assert.match(text, /halves the payout/);
 });

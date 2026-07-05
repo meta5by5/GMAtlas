@@ -87,15 +87,19 @@ export function findByName(campaign, name) {
 // Faction card template (2026-07-03 ruleset review, Hostile's "Agencies &
 // Corporations" pattern, Setting pp.79-111): HQ, leadership, and a one-
 // paragraph scenario-seed hook — structured-lore fields for the existing
-// `faction` entity type, not a new entity subtype or mechanism. Applied at
-// creation and whenever an entity's type changes to 'faction' (e.g. via the
-// inspector's Type select) so the fields are always present once relevant;
-// harmless no-op otherwise.
+// `faction` entity type, not a new entity subtype or mechanism. `agenda`
+// (Phase 10's Faction Pressure Track item) is the free-text "what is this
+// faction actively pursuing right now" companion to its pressure clock
+// (domain/factions.js) — a plain field here, same as the other three, not
+// a new mechanism either. Applied at creation and whenever an entity's
+// type changes to 'faction' (e.g. via the inspector's Type select) so the
+// fields are always present once relevant; harmless no-op otherwise.
 function ensureFactionFields(e) {
   if (e.type !== 'faction') return;
   if (e.hq === undefined) e.hq = '';
   if (e.leadership === undefined) e.leadership = '';
   if (e.scenarioSeed === undefined) e.scenarioSeed = '';
+  if (e.agenda === undefined) e.agenda = '';
 }
 
 // --- internal mutators (operate on an already-cloned campaign) ------------

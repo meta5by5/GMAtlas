@@ -27,6 +27,8 @@ import {
 import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue } from '../domain/party.js';
 import { setColonyField, addCrewRow, updateCrewRow, removeCrewRow } from '../domain/colony.js';
 import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract } from '../domain/trade.js';
+import { createPressureTrack } from '../domain/factions.js';
+import { generateMission, formatMission } from '../domain/missions.js';
 import { setGuideText, getGuideText } from '../domain/guide.js';
 import { titleFromFilename } from '../domain/titleCase.js';
 import { buildSessionRecap, formatSessionRecap } from '../domain/recap.js';
@@ -640,6 +642,13 @@ function onClick(ev) {
     return toast('Contract added');
   }
 
+  // --- factions: Pressure Track (Phase 10) ---
+  const pressureAdd = hit('[data-faction-pressure-add]');
+  if (pressureAdd) {
+    store.update((d) => createPressureTrack(d, pressureAdd.dataset.factionPressureAdd));
+    return toast('Pressure Track added');
+  }
+
   // --- documents: open (viewer tabs), rename, tags ---------------------------
   const docOpen = hit('[data-doc-open]');
   if (docOpen) {
@@ -773,6 +782,10 @@ function onClick(ev) {
 
   if (hit('[data-export-campaign]')) return download(`gmatlas-${stamp()}.json`, store.export());
   if (hit('[data-export-journal]')) return exportJournal();
+  if (hit('[data-generate-mission]')) {
+    store.update((d) => addNote(d, formatMission(generateMission(d)), 'Mission'));
+    return toast('Mission generated');
+  }
   if (hit('[data-new-campaign]')) {
     if (window.confirm('Start a new campaign? Your current one stays exportable but will be replaced in this browser.')) {
       store.newCampaign(); toast('New campaign');

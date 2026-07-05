@@ -6,6 +6,7 @@
 
 import { overlookedThreads } from './threads.js';
 import { listFlaggedRelationships } from './entities.js';
+import { factionsUnderPressure } from './factions.js';
 
 export function advise(doc) {
   const c = (doc && doc.context && doc.context.what) || { threat: 0, mystery: 0, resources: 5, reputation: 5, stress: 5 };
@@ -22,11 +23,28 @@ export function advise(doc) {
   const active = (doc && doc.context && doc.context.active) || 'what';
 
   // Thread awareness (NEW): a clock nearly full is the most actionable signal.
-  const threads = Array.isArray(doc && doc.threads) ? doc.threads.filter((t) => !t.done) : [];
+  // Excludes any thread carrying a `kind` tag (a Trade contract, a faction's
+  // pressure track, ...) — those are ordinary Threads repurposed by another
+  // subsystem (domain/trade.js, domain/factions.js), each with its own
+  // dedicated surfacing below, not a WHY-question thread the GM is tracking
+  // directly; without this, a nearly-full contract or faction pressure
+  // track would get flagged here using the generic thread-name phrasing
+  // instead of its own subsystem's message.
+  const threads = Array.isArray(doc && doc.threads) ? doc.threads.filter((t) => !t.done && !t.kind) : [];
   const hot = threads.slice().sort((a, b) => (b.filled / b.segments) - (a.filled / a.segments))[0];
+
+  // Faction Rumor -> Mission seed link (Phase 10): Starforged frames Faction
+  // Rumors explicitly as vow/mission seeds (reference guide p.79) — once a
+  // faction's own pressure track (domain/factions.js) is nearly full, that's
+  // the same "one more push" signal threadUnderPressure() already surfaces
+  // for ordinary threads, just pointing at a concrete "generate a mission
+  // tied to them now" move instead of "pay off this thread." Observation
+  // only, same as every other signal here — never auto-generates anything.
+  const hotFaction = factionsUnderPressure(doc)[0];
 
   let observation;
   if (hot && hot.filled / hot.segments >= 0.75) observation = `“${hot.name}” is ${hot.filled}/${hot.segments} — one more push resolves it. Consider paying it off now.`;
+  else if (hotFaction) observation = `“${hotFaction.faction.name}” is close to acting on its agenda — a mission tied to them would land naturally now.`;
   else if (threat >= 7) observation = 'Threat is high — the situation is exposed, watched, or already tipping over.';
   else if (stress >= 7) observation = 'Stress is high — a scene without combat should follow, or someone breaks.';
   else if (resources <= 2) observation = 'Supplies are critically low — the next scene should address resupply, or someone pays for the shortage.';

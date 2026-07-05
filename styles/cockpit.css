@@ -561,6 +561,7 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .rel-add { display: grid; grid-template-columns: 1fr auto 1fr auto; gap: var(--sp-2); align-items: center; }
 .faction-card { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-3); }
 .faction-card h4 { margin: 0 0 var(--sp-2); font-size: 0.8rem; color: var(--accent); }
+.faction-pressure-head { display: flex; align-items: center; justify-content: space-between; margin-top: var(--sp-3); margin-bottom: var(--sp-1); }
 
 /* Tag editor (Phase 7, unified 2026-07-04 with the Documents drawer's tag
    UX): removable chips + a single auto-committing input, same pill/chip

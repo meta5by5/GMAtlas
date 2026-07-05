@@ -20,6 +20,7 @@ import { COLONY_FIELDS, getColonyFields, listCrewRows, listLifeformEncounters } 
 import { getMarket, priceAt, listCargoManifest, listContracts } from '../../domain/trade.js';
 import { COMMODITIES, findCommodity } from '../../data/commodities.js';
 import { THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
+import { getPressureTrack } from '../../domain/factions.js';
 import { getGuideText } from '../../domain/guide.js';
 import { buildMentionEditorHTML } from '../mentionEditor.js';
 import { buildSessionRecap } from '../../domain/recap.js';
@@ -172,7 +173,7 @@ function inspector(doc, e, ui) {
     <label class="field-label">Revealed / hidden (GM)
       <textarea data-entity-field="revealed" rows="2" placeholder="Secrets, twists, true motives.">${esc(e.revealed)}</textarea>
     </label>
-    ${factionSection(e)}
+    ${factionSection(doc, e)}
     ${statblockSection(e, doc, ui)}
     <div class="rel-block">
       <h4>Relationships</h4>
@@ -190,9 +191,15 @@ function inspector(doc, e, ui) {
 // Faction card template (2026-07-03 ruleset review) — HQ/leadership/a
 // scenario-seed hook, shown only for faction-type entities (the fields
 // still exist harmlessly if an entity is retyped away from faction, same as
-// statblocks aren't stripped on a type change).
-function factionSection(e) {
+// statblocks aren't stripped on a type change). Phase 10 adds an Agenda
+// field and a Pressure Track (domain/factions.js — a Thread tagged
+// kind: 'faction-pressure', same "reuse Threads instead of a second
+// mechanism" pattern the Trade drawer's Contracts already use) — opt-in
+// per faction, not auto-created, so a faction nobody's tracking doesn't
+// clutter the WHY question's thread list.
+function factionSection(doc, e) {
   if (e.type !== 'faction') return '';
+  const track = getPressureTrack(doc, e.id);
   return `
     <div class="faction-card">
       <h4>Faction card</h4>
@@ -205,6 +212,28 @@ function factionSection(e) {
       <label class="field-label">Scenario seed
         <textarea data-entity-field="scenarioSeed" rows="2" placeholder="A one-paragraph hook this faction can drop into a session.">${esc(e.scenarioSeed)}</textarea>
       </label>
+      <label class="field-label">Agenda
+        <textarea data-entity-field="agenda" rows="2" placeholder="What is this faction actively pursuing right now?">${esc(e.agenda)}</textarea>
+      </label>
+      ${factionPressureHtml(e, track)}
+    </div>`;
+}
+
+function factionPressureHtml(e, track) {
+  const rollBtn = `<button class="icon-btn" data-roll="Corporate Powers>Faction Activity" title="Roll Faction Activity">🎲</button>`;
+  const head = `<div class="faction-pressure-head"><span class="field-label-static">Pressure Track</span>${rollBtn}</div>`;
+  if (!track) return `${head}<button class="chip" data-faction-pressure-add="${esc(e.id)}">＋ Pressure Track</button>`;
+  const pips = Array.from({ length: track.segments }, (_, i) => `<span class="pip ${i < track.filled ? 'on' : ''}"></span>`).join('');
+  return `${head}
+    <div class="thread-row thread-status-${esc(track.status)} thread-priority-${esc(track.priority)} ${track.done ? 'done' : ''}">
+      <span class="thread-clock" title="${track.filled}/${track.segments}">${pips}</span>
+      <select class="thread-status-select" data-thread-status="${esc(track.id)}" title="Narrative lifecycle stage">
+        ${THREAD_STATUSES.map((s) => `<option value="${s}" ${s === track.status ? 'selected' : ''}>${esc(THREAD_STATUS_LABELS[s])}</option>`).join('')}
+      </select>
+      <span class="thread-actions">
+        <button class="icon-btn" data-thread-adv="${esc(track.id)}" title="Advance">＋</button>
+        <button class="icon-btn" data-thread-back="${esc(track.id)}" title="Set back">－</button>
+      </span>
     </div>`;
 }
 
@@ -524,6 +553,7 @@ function journal(doc, ui = {}) {
       <div class="drawer-note-actions">
         <button class="btn" data-journal-add>Add note</button>
         <button class="btn ghost" data-export-journal>Export</button>
+        <button class="btn ghost" data-generate-mission title="Roll a job: payout/deadline scaled by the current Threat, plus a complication">🎲 Generate Mission</button>
       </div>
     </div>
     <div class="journal-list">

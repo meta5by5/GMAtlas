@@ -1699,6 +1699,13 @@ Object.assign(SCENE_TABLES, {
       "protect mineral rights", "weaponize a biological discovery", "avoid liability for a design flaw", "discredit union leadership",
       "recover proprietary android code", "bury evidence of illegal colonization", "secure alien artifacts before regulators arrive", "turn disaster into acquisition leverage",
       "force evacuation to break land claims", "test security doctrine on a live colony", "steal competitor route data", "preserve investor confidence at any cost"
+    ],
+    "Faction Activity": [
+      "quietly buys out a smaller rival", "leaks a damaging rumor about a competitor", "recalls its field agents for a closed-door meeting",
+      "opens a new outpost without local approval", "cuts a backroom deal with a marshal or regulator", "runs a loyalty audit on its own staff",
+      "reassigns its best people to a single urgent problem", "tests a new policy on a population that can't refuse", "quietly funds an opposing faction's rival",
+      "stages a public event to shore up its reputation", "moves a key asset somewhere harder to reach", "cancels a contract without warning",
+      "recruits aggressively in a community it doesn't yet control", "commissions a report that conveniently favors its own interests", "goes quiet — which is its own kind of signal"
     ]
   },
   "Frontier Society": {
