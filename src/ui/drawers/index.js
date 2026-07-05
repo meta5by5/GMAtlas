@@ -25,7 +25,7 @@ import { buildMentionEditorHTML } from '../mentionEditor.js';
 import { buildSessionRecap } from '../../domain/recap.js';
 import { RULESETS, findRuleset, STARFORGED_PROGRESS_DIFFICULTIES, findProgressDifficulty } from '../../data/rulesets.js';
 import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel } from '../../data/rulesConstitution.js';
-import { GENRE_PACKS } from '../../data/genrePacks.js';
+import { GENRE_PACKS, bestiaryTerm } from '../../data/genrePacks.js';
 import { DOCS_MANIFEST } from '../../data/docsManifest.js';
 
 const esc = (s) => String(s == null ? '' : s)
@@ -38,6 +38,7 @@ export function renderDrawer(id, doc, ui = {}) {
   switch (id) {
     case 'journal': return journal(doc, ui);
     case 'oracle': return oracle(doc, ui);
+    case 'cast': return entities(doc, ui);
     case 'entity-detail': return entityDetail(doc, ui);
     case 'party': return party(doc, ui);
     case 'colony': return colony(doc);
@@ -55,12 +56,13 @@ export function renderDrawer(id, doc, ui = {}) {
 // statblock-add-choices elsewhere, just not this filter row.
 const ENTITY_TYPES_BY_LABEL = [...ENTITY_TYPES].sort((a, b) => TYPE_LABEL[a].localeCompare(TYPE_LABEL[b]));
 
-// The Cast panel (2026-07-05 restructure): list-only now — search, type
-// filter, add-entity buttons, draggable/clickable rows. No inline inspector
-// (that moved to its own "Entity Detail" tab, entityDetail() below) — Cast
-// is a Co-Pilot-style independent panel (shell.js's entityPopoutOpen), not
-// a drawer tab, so it can stay open alongside Journal/Guide/whatever else
-// is active instead of competing with them for the one active-drawer slot.
+// The Cast drawer: list-only — search, type filter, "Generate…" (its head,
+// see shell.js's headExtraForDrawer), draggable/clickable rows. No inline
+// inspector (that moved to its own "Entity Detail" tab, entityDetail()
+// below). Cast is a real drawer like any other (2026-07-06 restructure) —
+// openable as a normal tab or anchored beside whichever drawer IS active
+// (anchored by default, via shell.js's toggleCastDrawer, so an entity can
+// still be dragged into Journal/Guide without losing sight of the list).
 // Clicking a row opens Entity Detail (data-open-entity, same as a mention
 // link or a relationship chip); dragging one (from anywhere on the row, not
 // just the ⠿ handle — see the CSS) still links/mentions same as always.
@@ -262,8 +264,9 @@ function statblockGroupBlock(e, group, gi, doc, ui = {}) {
   const key = `${e.id}::${gi}`;
   const collapsed = !!(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
   const rows = group.fields.map((f, fi) => statblockFieldRow(f, gi, fi)).join('');
-  // Bestiary is a subtype of NPC (like Character) — its label reflects that.
-  const label = group.kind === 'vehicle' ? 'Vehicle Statblock' : `Bestiary (NPC) · ${esc(templateLabel(group.templateId, doc.settings))}`;
+  // Bestiary (or LifeForm, genre-dependent — see bestiaryTerm) is a subtype
+  // of NPC (like Character) — its label reflects that.
+  const label = group.kind === 'vehicle' ? 'Vehicle Statblock' : `${bestiaryTerm(doc.settings.genrePack)} (NPC) · ${esc(templateLabel(group.templateId, doc.settings))}`;
   return `<div class="statblock-block">
     <div class="statblock-head">
       <button class="icon-btn statblock-collapse-toggle" data-statblock-group-toggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button>
@@ -302,7 +305,7 @@ function statblockAddChoices(e, groups, doc) {
   const charChips = e.type === 'npc' ? RULESETS.filter((r) => !presentRulesets.has(r.id))
     .map((r) => `<button class="chip" data-statblock-add="character" data-statblock-ruleset="${esc(r.id)}">＋ Character Sheet (${esc(r.label)})</button>`).join('') : '';
   const bestiaryChips = e.type === 'npc' ? listTemplates(doc.settings).filter((t) => t.id !== 'vehicle' && !presentTemplates.has(t.id))
-    .map((t) => `<button class="chip" data-statblock-add="npc" data-statblock-template="${esc(t.id)}">＋ Bestiary: ${esc(t.label)}</button>`).join('') : '';
+    .map((t) => `<button class="chip" data-statblock-add="npc" data-statblock-template="${esc(t.id)}">＋ ${bestiaryTerm(doc.settings.genrePack)}: ${esc(t.label)}</button>`).join('') : '';
   const vehicleChip = e.type === 'asset' && !hasVehicle ? `<button class="chip" data-statblock-add="vehicle">＋ Vehicle Stats</button>` : '';
 
   const any = charChips || bestiaryChips || vehicleChip;
@@ -737,10 +740,11 @@ function statblockTemplateEditor(doc) {
       <button class="chip sm" data-tpl-field-add="${esc(t.id)}">＋ Field</button>
     </details>`).join('');
 
+  const term = bestiaryTerm(doc.settings.genrePack);
   return `
     <div class="settings-group">
-      <h3>Statblock Templates (Bestiary)</h3>
-      <p class="dim small">Per-system NPC/creature field manifests — game system, field kind (attribute badge vs track/progress-bar), roll method, and sort order. An NPC picks one template from its statblock's "Bestiary template" selector.</p>
+      <h3>Statblock Templates (${esc(term)})</h3>
+      <p class="dim small">Per-system NPC/creature field manifests — game system, field kind (attribute badge vs track/progress-bar), roll method, and sort order. An NPC picks one template from its statblock's "${esc(term)} template" selector.</p>
       <div class="tpl-system-list">${systems}</div>
       <button class="btn ghost sm" data-tpl-system-add>＋ Game system</button>
     </div>`;
@@ -788,7 +792,7 @@ function partyMemberStatblocks(e, doc) {
     const badges = attributeBadges(group.fields);
     if (!badges) return '';
     const label = group.kind === 'character' ? findRuleset(group.ruleset).label
-      : (templates[group.templateId] || {}).label || (group.kind === 'vehicle' ? 'Vehicle' : 'Bestiary');
+      : (templates[group.templateId] || {}).label || (group.kind === 'vehicle' ? 'Vehicle' : bestiaryTerm(doc.settings.genrePack));
     return `<div class="party-stat-group">
       <div class="party-stat-group-label">${esc(label)}</div>
       ${badges}

@@ -24,3 +24,14 @@ export const GENRE_PACKS = [
 export function findGenrePack(id) {
   return GENRE_PACKS.find((p) => p.id === id) || GENRE_PACKS[0];
 }
+
+// "Bestiary" is a fantasy-genre term (a monster manual); it reads oddly for
+// Hostile's or Cyberpunk's own creatures/synthetics, which this repo (and
+// most sci-fi/cyberpunk fiction) calls a "LifeForm" instead. The underlying
+// mechanism (data/statblockTemplates.js's NPC field manifests) is unchanged
+// either way — this only ever swaps the label a GM reads in the UI, driven
+// by the same settings.genrePack Phase 9 already introduced.
+const BESTIARY_TERM = { hostile: 'LifeForm', cyberpunk: 'LifeForm', fantasy: 'Bestiary' };
+export function bestiaryTerm(genrePackId) {
+  return BESTIARY_TERM[genrePackId] || 'Bestiary';
+}

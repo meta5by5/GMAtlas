@@ -9,7 +9,10 @@ import { contextSummary } from '../domain/context.js';
 import { continueStory, applyStoryShift, rollOracle, addNote, patchContext, editContextText, logRoll, generateNpc } from '../domain/session.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable } from '../domain/oracles.js';
 import { addThread, advanceThread, removeThread, setThreadStatus, setThreadPriority } from '../domain/threads.js';
-import { rollAction, formatRollText, rollFlat, formatFlatRollText, rollTraveller, formatTravellerRollText } from '../domain/dice.js';
+import {
+  rollAction, formatRollText, formatRollCopyText, rollFlat, formatFlatRollText, formatFlatRollCopyText,
+  rollTraveller, formatTravellerRollText, formatTravellerRollCopyText,
+} from '../domain/dice.js';
 import {
   createEntity, updateEntity, addEntityTag, removeEntityTag, removeEntity, setActiveEntity, addRelationship, removeRelationship,
   getEntity, addEntityStatblockGroup, removeEntityStatblockGroup, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
@@ -31,7 +34,7 @@ import { addTemplateSystem, addTemplateField, updateTemplateField, removeTemplat
 import { universalSearch } from '../domain/search.js';
 import { renderWorkspace } from './workspace/index.js';
 import { renderCopilot } from './copilotPanel.js';
-import { renderDrawer, formatBytes, entities } from './drawers/index.js';
+import { renderDrawer, formatBytes } from './drawers/index.js';
 import { renderSearchPanel } from './searchPanel.js';
 import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
 
@@ -43,25 +46,27 @@ const QUESTION_LABELS = { who: 'WHO', where: 'WHERE', what: 'WHAT', why: 'WHY', 
 // rulebooks (the ones already in assets/docs/, several 20-60MB) belong in
 // the Reference Library instead, which has no such limit.
 const MAX_DOC_UPLOAD_BYTES = 5 * 1024 * 1024;
-// 'entities' (Cast) is deliberately NOT here (2026-07-05 restructure) — it's
-// no longer part of the exclusive single-active-drawer tab stack. It's now
-// a Co-Pilot-style independent panel (see entityPopoutOpen/data-toggle-cast
-// below) so it can stay visible alongside whichever drawer IS active — the
-// entity list and Journal/Guide, say, side by side, which the exclusive
-// tab-stack could never do for entities before. Its own edge button is
-// appended manually after this array, same as Co-Pilot's.
+// 'cast' IS a real drawer (2026-07-06 restructure) — it's a full member of
+// DRAWERS/openDrawers/anchoredDrawer like any other, so "move it back into
+// the tab group" (unanchor) and "close it" both just work via the same
+// generic machinery every other drawer already has. The one thing that
+// stays special-cased is how it's OPENED: toggleCastDrawer() (not the
+// generic toggleDrawer()) opens it into the anchor slot by default rather
+// than the tab stack, since it's most useful sitting beside whichever
+// drawer IS active (to drag an entity into Journal/Guide) rather than
+// replacing it — see toggleCastDrawer below.
 // 'entity-detail' (an entity's actual name/tags/overview/statblocks/
-// relationships form — what "Cast" used to show inline) is ALSO
-// deliberately not here — it has no edge nav button at all, and only ever
-// opens via openDrawerTab('entity-detail') from an entity click anywhere
-// (mention link, Cast row, relationship chip, graph node, ...), never
-// picked from the tab list directly. See DRAWER_META for how the tab strip
-// still labels it despite that.
+// relationships form) is NOT here — it has no edge nav button at all, and
+// only ever opens via openDrawerTab('entity-detail') from an entity click
+// anywhere (mention link, Cast row, relationship chip, graph node, ...),
+// never picked from the tab list directly. See DRAWER_META for how the tab
+// strip still labels it despite that.
 const DRAWERS = [
   { id: 'guide', glyph: '📘', label: 'Guide' },
   { id: 'journal', glyph: '📖', label: 'Journal' },
   { id: 'oracle', glyph: '🎲', label: 'Oracle' },
   { id: 'party', glyph: '👥', label: 'Party' },
+  { id: 'cast', glyph: '☷', label: 'Cast' },
   { id: 'colony', glyph: '🏛', label: 'Colony' },
   { id: 'trade', glyph: '💰', label: 'Trade' },
   { id: 'documents', glyph: '📄', label: 'Docs' },
@@ -74,10 +79,9 @@ const DRAWERS = [
 const DRAWER_META = { 'entity-detail': { id: 'entity-detail', glyph: '👤', label: 'Entity' } };
 function drawerMeta(id) { return DRAWERS.find((d) => d.id === id) || DRAWER_META[id] || null; }
 // Edge nav button order top-down: Guide, Journal, Oracle, Party, Cast,
-// Colony, Docs, Graph, Co-Pilot, Settings — Cast and Co-Pilot aren't
-// exclusive-tab drawers (see the comment above DRAWERS), so this interleaves
-// their special-cased buttons into the same array DRAWERS.map() used to
-// render alone, rather than always appending them at the very end.
+// Colony, Trade, Docs, Graph, Co-Pilot, Settings — Co-Pilot is the one
+// remaining non-drawer button interleaved into the same array DRAWERS.map()
+// used to render alone, rather than always appended at the very end.
 const EDGE_ORDER = ['guide', 'journal', 'oracle', 'party', 'cast', 'colony', 'trade', 'documents', 'graph', 'copilot', 'settings'];
 
 // Tabbed drawer switching (2026-07-04 design review): multiple drawers can
@@ -133,19 +137,19 @@ let partyTrackerDraftKind = 'meter'; // ephemeral — the creation form's in-pro
 let partyTrackerDraftName = ''; // ephemeral — mirrors the creation form's name input so a kind-change re-render (which rebuilds that input from scratch) doesn't wipe out whatever the GM already typed
 let tradeLocationId = ''; // ephemeral — which Location's market the Trade drawer currently shows
 let tradeContractAddOpen = false; // ephemeral — the inline "+ Contract" creation form, open or not
-// Cast (2026-07-05 restructure, "the Cast tab [should] have the popout
-// functionality... move the entity form portion to a separate tab"): the
-// Cast list is now a Co-Pilot-style independent panel, not a drawer tab —
-// same "always in the DOM, toggled by its own button, stays open alongside
-// whichever drawer IS active" pattern Co-Pilot already used — because
-// entities need to be visible next to Journal/Guide to drag into them, and
-// the exclusive single-active-drawer tab stack can't show two tabs at
-// once. Its content is the exact same entities() list drawers/index.js
-// always rendered — the "form" (name/tags/overview/statblocks/
-// relationships) moved out to its own Entity Detail tab (see
-// DRAWER_META/openDrawerTab('entity-detail')), which opens only by
-// clicking an entity somewhere, never from the edge nav directly.
-let entityPopoutOpen = false;
+// A drawer can be pulled out of the normal tab stack (openDrawers/
+// activeDrawer) and "anchored" instead — pinned to its own side panel
+// (.mc-drawer-anchor) immediately left of the main drawer, so two drawers
+// are visible side by side (e.g. Journal anchored left of Oracle while
+// rolling, so a roll's journal entry is visible without switching tabs).
+// Independent of openDrawers — an anchored drawer is deliberately NOT also
+// a tab (see anchorDrawerTab/unanchorDrawerTab below).
+let anchoredDrawer = null;
+// The dice roll window (see renderDiceRollOverlay) — set by performFieldRoll
+// whenever a statblock field is rolled, cleared on close/Escape/backdrop
+// click. Shape: { label, method, r } where method picks which fields of r
+// (rollAction/rollFlat/rollTraveller's return shape) the window renders.
+let diceRollResult = null;
 let focusInspectorNameNextRender = false; // ephemeral — set by clicking any data-open-entity link/chip, so Entity Detail's name field is focused+selected the moment it renders
 
 export function mountShell(el) {
@@ -164,20 +168,6 @@ export function mountShell(el) {
       <div class="mc-breadcrumb" data-breadcrumb></div>
       <main class="mc-workspace" data-workspace aria-live="polite"></main>
       <aside class="mc-copilot" data-copilot aria-label="Co-Pilot"><h2>Co-Pilot</h2><div data-copilot-body></div></aside>
-      <aside class="mc-entity-popout" data-entity-popout aria-label="Cast — click an entity to open it, drag one into Journal or Guide">
-        <div class="drawer-head">
-          <h2>☷ Cast</h2>
-          <div class="cast-head-actions">
-            <select class="entity-generate-select" data-entity-generate title="Create a new entity of this type">
-              <option value="" selected>Generate…</option>
-              ${ENTITY_TYPES.map((t) => `<option value="${t}">${TYPE_LABEL[t]}</option>`).join('')}
-              <option value="generate-npc">🎲 NPC (rolled)</option>
-            </select>
-            <button class="icon-btn" data-toggle-cast aria-label="Close">✕</button>
-          </div>
-        </div>
-        <div data-entity-popout-body></div>
-      </aside>
       <div class="mc-doc-viewer" data-doc-viewer hidden>
         <div class="doc-viewer-tabs" data-doc-viewer-tabs></div>
         <div class="doc-viewer-empty" data-doc-viewer-empty hidden></div>
@@ -193,10 +183,29 @@ export function mountShell(el) {
         </div>
       </div>
       <div class="mention-suggest" data-mention-suggest hidden></div>
+      <div class="dice-roll-overlay" data-dice-roll-overlay data-open="false" aria-label="Dice roll result">
+        <div class="dice-roll-card" data-dice-roll-card></div>
+      </div>
       <nav class="mc-edge" aria-label="Drawers" data-edge></nav>
+      <aside class="mc-drawer-anchor" data-drawer-anchor aria-label="Anchored drawer">
+        <div class="drawer-head">
+          <h2 data-drawer-anchor-title>Drawer</h2>
+          <div class="drawer-head-actions">
+            <div class="drawer-head-extra" data-drawer-anchor-head-extra></div>
+            <button class="icon-btn" data-drawer-anchor-unpin title="Move back into tabs" aria-label="Move back into tabs">▶</button>
+          </div>
+        </div>
+        <div class="mc-drawer-body" data-drawer-anchor-body></div>
+      </aside>
       <aside class="mc-drawer" data-drawer aria-label="Drawer">
         <div class="drawer-tabs" data-drawer-tabs></div>
-        <div class="drawer-head"><h2 data-drawer-title>Drawer</h2><button class="icon-btn" data-close-drawer aria-label="Close">✕</button></div>
+        <div class="drawer-head">
+          <h2 data-drawer-title>Drawer</h2>
+          <div class="drawer-head-actions">
+            <div class="drawer-head-extra" data-drawer-head-extra></div>
+            <button class="icon-btn" data-close-drawer aria-label="Close">✕</button>
+          </div>
+        </div>
         <div class="mc-drawer-body" data-drawer-body></div>
       </aside>
     </div>
@@ -273,16 +282,20 @@ function onClick(ev) {
   const edge = hit('[data-drawer-open]');
   if (edge) return toggleDrawer(edge.dataset.drawerOpen);
   if (hit('[data-close-drawer]')) return closeDrawerTab(activeDrawer);
-  // Check the nested close ✕ before the tab button it sits inside — both
-  // match `[data-drawer-tab]` via closest() otherwise (the ✕'s parent
-  // button carries that attribute too), so close would never be reachable.
+  // Check the nested close ✕ and anchor icon before the tab button they sit
+  // inside — all three match `[data-drawer-tab]` via closest() otherwise
+  // (the tab button itself carries that attribute too), so neither would
+  // ever be reachable on its own.
   const drawerTabClose = hit('[data-drawer-tab-close]');
   if (drawerTabClose) return closeDrawerTab(drawerTabClose.dataset.drawerTabClose);
+  const drawerTabAnchor = hit('[data-drawer-tab-anchor]');
+  if (drawerTabAnchor) return anchorDrawerTab(drawerTabAnchor.dataset.drawerTabAnchor);
   const drawerTab = hit('[data-drawer-tab]');
   if (drawerTab) { activeDrawer = drawerTab.dataset.drawerTab; return render(); }
   if (hit('[data-close-all-drawers]')) return closeAllDrawerTabs();
+  if (hit('[data-drawer-anchor-unpin]')) return unanchorDrawerTab();
   if (hit('[data-toggle-copilot]')) { copilotOpen = !copilotOpen; return render(); }
-  if (hit('[data-toggle-cast]')) { entityPopoutOpen = !entityPopoutOpen; return render(); }
+  if (hit('[data-toggle-cast]')) return toggleCastDrawer();
   if (hit('[data-open-settings]')) return toggleDrawer('settings');
 
   // --- Phase 9: Activity -> Rules Lens suggestion, apply as default ruleset ---
@@ -305,6 +318,18 @@ function onClick(ev) {
     searchOpen = false; searchQuery = '';
     const inp = root.querySelector('[data-search-input]'); if (inp) inp.value = '';
     return renderSearchOverlay();
+  }
+  if (hit('[data-dice-roll-close]')) { diceRollResult = null; return renderDiceRollOverlay(); }
+  if (hit('[data-dice-roll-copy]')) {
+    if (!diceRollResult) return;
+    navigator.clipboard.writeText(diceRollCopyText(diceRollResult)).then(() => toast('Copied'), () => toast('Could not copy'));
+    return;
+  }
+  if (hit('[data-dice-roll-journal]')) {
+    if (!diceRollResult) return;
+    const { label } = diceRollResult;
+    store.update((d) => addNote(d, `${label}\n${diceRollCopyText(diceRollResult)}`, 'Roll'));
+    return toast('Added to Journal');
   }
   const searchResult = hit('[data-search-result]');
   if (searchResult) {
@@ -341,6 +366,7 @@ function onClick(ev) {
 
   const roll = hit('[data-roll]');
   if (roll) {
+    anchorJournalBesideOracleRoll(roll);
     const path = roll.dataset.roll.split('>');
     let text = '';
     store.update((d) => { const r = rollOracle(d, path); text = r.text; return r.campaign; });
@@ -358,7 +384,7 @@ function onClick(ev) {
 
   if (hit('[data-recap-toggle]')) { recapOpen = !recapOpen; return renderDrawerBody(); }
   const typeFilterBtn = hit('[data-entity-type-filter]');
-  if (typeFilterBtn) { entityTypeFilter = typeFilterBtn.dataset.entityTypeFilter; return renderEntityPopout(); }
+  if (typeFilterBtn) { entityTypeFilter = typeFilterBtn.dataset.entityTypeFilter; return renderDrawerBody(); }
   if (hit('[data-recap-save]')) {
     store.update((d) => addNote(d, formatSessionRecap(buildSessionRecap(d)), 'Session Recap'));
     return toast('Recap saved to Journal');
@@ -509,6 +535,7 @@ function onClick(ev) {
   if (hit('[data-oracle-collapse-all]')) { expandedOracleGroups = new Set(); return renderDrawerBody(); }
   const rollGroupBtn = hit('[data-roll-group]');
   if (rollGroupBtn) {
+    anchorJournalBesideOracleRoll(rollGroupBtn);
     const path = rollGroupBtn.dataset.rollGroup.split('>');
     let text = '';
     store.update((d) => { const r = rollOracle(d, path, { group: true }); text = r.text; return r.campaign; });
@@ -772,19 +799,19 @@ function performFieldRoll(f, label) {
   if (method === 'flat') {
     const r = rollFlat(Number(f.value) || 0, { target: f.target || 6 });
     store.update((d) => logRoll(d, formatFlatRollText(label, r)));
-    // 5PFH's d6+attribute breakdown, not just the combined total — a GM
-    // reading the toast should see the die roll and the modifier separately,
-    // the same way the Journal line (formatFlatRollText) already does.
-    return toast(`🎲 d6(${r.die}) + ${r.value} = ${r.total} vs target ${r.target} → ${r.outcomeLabel}`);
+    diceRollResult = { label, method, r };
+    return renderDiceRollOverlay();
   }
   if (method === 'traveller') {
     const r = rollTraveller(Number(f.value) || 0, { target: f.target || 8 });
     store.update((d) => logRoll(d, formatTravellerRollText(label, r)));
-    return toast(`🎲 ${r.outcomeLabel} — ${r.total} vs target ${r.target}`);
+    diceRollResult = { label, method, r };
+    return renderDiceRollOverlay();
   }
   const r = rollAction(Number(f.value) || 0);
   store.update((d) => logRoll(d, formatRollText(label, r)));
-  toast(`🎲 ${r.outcomeLabel} — ${r.total} vs ${r.challenge1}, ${r.challenge2}${r.match ? ' (match)' : ''}`);
+  diceRollResult = { label, method, r };
+  renderDiceRollOverlay();
 }
 
 // Escape: close whatever's topmost (search overlay > active drawer tab >
@@ -827,6 +854,7 @@ function onKeydown(ev) {
   }
 
   if (ev.key === 'Escape') {
+    if (diceRollResult) { diceRollResult = null; return renderDiceRollOverlay(); }
     if (searchOpen) {
       searchOpen = false; searchQuery = '';
       const inp = root.querySelector('[data-search-input]'); if (inp) inp.value = '';
@@ -1102,7 +1130,7 @@ function onInput(ev) {
   if (df) { docFilter = t.value; renderDrawerBody(); restoreFocus('[data-doc-filter]'); return; }
 
   const esrch = t.closest('[data-entity-search]');
-  if (esrch) { entitySearch = t.value; renderEntityPopout(); restoreFocus('[data-entity-search]'); return; }
+  if (esrch) { entitySearch = t.value; renderDrawerBody(); restoreFocus('[data-entity-search]'); return; }
 
   // Mirrors the Party Tracker creation form's name field into ephemeral
   // state, not for its own sake (the DOM already shows what was typed) but
@@ -1134,6 +1162,10 @@ function toggleDrawer(id) {
 
 function openDrawerTab(id) {
   if (!id) return;
+  // Opening a drawer that's currently anchored (e.g. clicking its edge-tab
+  // button directly) restores it to normal tab behavior rather than leaving
+  // it anchored AND also added as a duplicate tab.
+  if (anchoredDrawer === id) anchoredDrawer = null;
   if (!openDrawers.includes(id)) {
     openDrawers = [...openDrawers, id];
     if (id === 'oracle') oracleFilter = '';
@@ -1147,6 +1179,72 @@ function closeDrawerTab(id) {
   openDrawers = openDrawers.filter((d) => d !== id);
   if (activeDrawer === id) activeDrawer = openDrawers[openDrawers.length - 1] || null;
   render();
+}
+
+// Pull a drawer OUT of the tab stack and pin it to the side panel left of
+// the main drawer instead (see anchoredDrawer's doc comment above). Only
+// one drawer can be anchored at a time — anchoring a second one displaces
+// whichever was already there back into the normal tab group (never just
+// discarded; "avoid closing or removing access"), same as
+// unanchorDrawerTab does for the ▶ button. Also works on a drawer that
+// isn't currently a tab at all (Cast's toggleCastDrawer relies on this —
+// it can open straight into the anchor slot without ever touching
+// openDrawers first).
+function anchorDrawerTab(id) {
+  if (!id) return;
+  openDrawers = openDrawers.filter((d) => d !== id);
+  if (activeDrawer === id) activeDrawer = openDrawers[openDrawers.length - 1] || null;
+  if (anchoredDrawer && anchoredDrawer !== id) {
+    const displaced = anchoredDrawer;
+    if (!openDrawers.includes(displaced)) openDrawers = [...openDrawers, displaced];
+    if (!activeDrawer) activeDrawer = displaced;
+  }
+  anchoredDrawer = id;
+  render();
+}
+
+// The anchor panel's own "▶ move back into tabs" button — restores the
+// anchored drawer to the normal tab stack as the active tab.
+function unanchorDrawerTab() {
+  if (!anchoredDrawer) return;
+  const id = anchoredDrawer;
+  anchoredDrawer = null;
+  if (!openDrawers.includes(id)) openDrawers = [...openDrawers, id];
+  activeDrawer = id;
+  render();
+}
+
+// Cast's edge-nav toggle — opens into the anchor slot by default (a
+// draggable, searchable entity list is most useful sitting beside whichever
+// drawer IS active, e.g. to drag an entity into Journal or Guide, rather
+// than replacing it in the tab stack), but once moved into the tab group
+// (its own ⇤/▶ icons, same as any other drawer) it behaves exactly like one
+// from then on — this only special-cases the "currently closed everywhere"
+// case, not Cast's behavior once it's open.
+function toggleCastDrawer() {
+  if (anchoredDrawer === 'cast') { anchoredDrawer = null; return render(); }
+  if (openDrawers.includes('cast')) {
+    if (activeDrawer === 'cast') return closeDrawerTab('cast');
+    activeDrawer = 'cast';
+    return render();
+  }
+  anchorDrawerTab('cast');
+}
+
+// "Open the Journal anchoring it to the left of Oracles when rolling on
+// Oracle tables": rolling FROM the Oracle drawer itself (`.mc-drawer-body`
+// is shared by both the main drawer and the anchor panel, so this fires
+// regardless of which one Oracle happens to be in — but NOT from the
+// Co-Pilot's own quick-roll shortcut, which has no such ancestor) pins
+// Journal into the anchor slot so the entry the roll just logged is
+// visible without switching tabs. No-ops if something is already anchored
+// (including Oracle itself, if the GM anchored Oracle rather than Journal)
+// — this only ever fills an empty anchor slot, never steals one.
+function anchorJournalBesideOracleRoll(el) {
+  if (!el.closest('.mc-drawer-body') || anchoredDrawer) return;
+  openDrawers = openDrawers.filter((d) => d !== 'journal');
+  if (activeDrawer === 'journal') activeDrawer = openDrawers[openDrawers.length - 1] || null;
+  anchoredDrawer = 'journal';
 }
 
 // The tab strip's own "✕ close all" corner button — distinct from a single
@@ -1545,7 +1643,6 @@ function render() {
   root.querySelector('[data-workspace]').innerHTML = renderWorkspace(doc, doc.context.active);
   root.querySelector('[data-copilot-body]').innerHTML = renderCopilot(doc);
   root.querySelector('[data-copilot]').dataset.open = String(copilotOpen);
-  renderEntityPopout();
 
   const linkCount = Math.round(((doc.entities.items || []).reduce((s, e) => s + ((e.relationships || []).length), 0)) / 2);
   const badges = {
@@ -1555,13 +1652,13 @@ function render() {
   const edge = root.querySelector('[data-edge]');
   edge.innerHTML = EDGE_ORDER.map((id) => {
     if (id === 'copilot') return `<button data-toggle-copilot title="Co-Pilot"><span class="glyph">💡</span><b>Co-Pilot</b></button>`;
-    if (id === 'cast') {
-      const badge = badges.cast || '';
-      return `<button data-toggle-cast aria-expanded="${entityPopoutOpen}" title="Cast — a draggable, searchable entity list that stays open alongside Journal/Guide/etc."><span class="glyph">☷</span><b>Cast</b>${badge ? `<span class="badge">${badge}</span>` : ''}</button>`;
-    }
     const d = drawerMeta(id);
     if (!d) return '';
     const badge = badges[d.id] || '';
+    if (id === 'cast') {
+      const isOpen = anchoredDrawer === 'cast' || openDrawers.includes('cast');
+      return `<button data-toggle-cast aria-expanded="${isOpen}" title="Cast — a draggable, searchable entity list; opens anchored beside whichever drawer is active by default"><span class="glyph">${d.glyph}</span><b>${d.label}</b>${badge ? `<span class="badge">${badge}</span>` : ''}</button>`;
+    }
     return `<button data-drawer-open="${d.id}" aria-expanded="${activeDrawer === d.id}" title="${d.label}">
       <span class="glyph">${d.glyph}</span><b>${d.label}</b>${badge ? `<span class="badge">${badge}</span>` : ''}
     </button>`;
@@ -1569,24 +1666,21 @@ function render() {
 
   const drawer = root.querySelector('[data-drawer]');
   drawer.dataset.open = String(openDrawers.length > 0);
-  const meta = drawerMeta(activeDrawer);
   const titleEl = drawer.querySelector('[data-drawer-title]');
-  // Entity Detail's title names whichever entity it's currently showing —
-  // there's only ever the one active entity, so unlike every other drawer
-  // there's no separate list to distinguish it from.
-  if (activeDrawer === 'entity-detail') {
-    const active = getEntity(doc, doc.entities && doc.entities.activeId);
-    titleEl.textContent = active ? `Entity — ${active.name || 'Unnamed'}` : 'Entity';
-  } else {
-    titleEl.textContent = meta ? meta.label : 'Drawer';
-  }
+  titleEl.textContent = titleForDrawer(doc, activeDrawer);
   titleEl.classList.remove('drawer-title-toggle'); // Cast's own collapse-via-title is gone — Cast isn't a drawer tab anymore
   titleEl.title = '';
   drawer.style.setProperty('--drawer-w', (doc.drawers.widths[activeDrawer] || 420) + 'px');
+  const drawerHeadExtra = drawer.querySelector('[data-drawer-head-extra]');
+  if (drawerHeadExtra) drawerHeadExtra.innerHTML = headExtraForDrawer(activeDrawer);
   // Tab strip — same pattern as the doc viewer's own tabs below: one pinned
   // drawer per tab, click to switch, ✕ to close without needing to make it
   // active first. Hidden entirely when only one (or zero) drawers are open,
-  // so the common case looks identical to the old single-drawer UI.
+  // so the common case looks identical to the old single-drawer UI. Each
+  // tab also gets an anchor icon (⇤) that pulls it out of this stack
+  // entirely and pins it to its own side panel left of the main drawer
+  // (see anchorDrawerTab) — e.g. Journal anchored left of Oracle while
+  // rolling, so both stay visible at once.
   const drawerTabsEl = root.querySelector('[data-drawer-tabs]');
   drawerTabsEl.hidden = openDrawers.length < 2;
   drawerTabsEl.innerHTML = openDrawers.length < 2 ? '' : (
@@ -1594,12 +1688,28 @@ function render() {
       const m = drawerMeta(id);
       return `<button class="drawer-tab ${id === activeDrawer ? 'active' : ''}" data-drawer-tab="${id}" title="${m ? m.label : id}">
         <span class="glyph">${m ? m.glyph : ''}</span><span class="drawer-tab-label">${m ? m.label : id}</span>
+        <span class="drawer-tab-anchor" data-drawer-tab-anchor="${id}" title="Anchor beside the main drawer" aria-label="Anchor ${m ? m.label : id} beside the main drawer">⇤</span>
         <span class="drawer-tab-close" data-drawer-tab-close="${id}" aria-label="Close ${m ? m.label : id}">✕</span>
       </button>`;
     }).join('')}</div>
     <button class="drawer-tabs-close-all" data-close-all-drawers title="Close all open tabs" aria-label="Close all open tabs">✕</button>`
   );
   renderDrawerBody();
+
+  // The anchor panel — a second, independent "current drawer" slot pinned
+  // left of the main drawer (see anchoredDrawer's doc comment). Uses the
+  // exact same renderDrawer()/titleForDrawer() the main drawer does; the
+  // two are otherwise unrelated (a drawer is either a normal tab or
+  // anchored, never both — see openDrawerTab/anchorDrawerTab).
+  const anchorPanel = root.querySelector('[data-drawer-anchor]');
+  anchorPanel.dataset.open = String(!!anchoredDrawer);
+  anchorPanel.querySelector('[data-drawer-anchor-title]').textContent = titleForDrawer(doc, anchoredDrawer);
+  const anchorHeadExtra = anchorPanel.querySelector('[data-drawer-anchor-head-extra]');
+  if (anchorHeadExtra) anchorHeadExtra.innerHTML = headExtraForDrawer(anchoredDrawer);
+  const mainDrawerWidthPx = openDrawers.length > 0 ? (doc.drawers.widths[activeDrawer] || 420) : 0;
+  anchorPanel.style.setProperty('--anchor-offset', mainDrawerWidthPx + 'px');
+  anchorPanel.style.setProperty('--anchor-w', (doc.drawers.widths[anchoredDrawer] || 420) + 'px');
+  renderDrawerAnchorBody();
 
   const viewer = root.querySelector('[data-doc-viewer]');
   const openTabs = (doc.documents && doc.documents.openTabs) || [];
@@ -1609,8 +1719,9 @@ function render() {
   // data-doc-open link exists) — the drawer sits at a higher z-index, so
   // without this the viewer's own controls (e.g. a tab's close button)
   // render underneath the drawer and become unclickable despite being
-  // visible.
-  viewer.style.setProperty('--viewer-overlap', activeDrawer ? `${doc.drawers.widths[activeDrawer] || 420}px` : '0px');
+  // visible. Accounts for an anchored drawer too, if one is pinned beside
+  // the main drawer (sidePanelInsetPx below).
+  viewer.style.setProperty('--viewer-overlap', `${sidePanelInsetPx(doc)}px`);
   if (openTabs.length) {
     const activeTab = doc.documents.activeTab && openTabs.includes(doc.documents.activeTab)
       ? doc.documents.activeTab : openTabs[openTabs.length - 1];
@@ -1644,6 +1755,7 @@ function render() {
   }
 
   renderSearchOverlay();
+  renderDiceRollOverlay();
 }
 
 // Lives outside the drawer/workspace update paths above since it's a
@@ -1657,36 +1769,173 @@ function renderSearchOverlay() {
   if (resultsEl) resultsEl.innerHTML = searchOpen ? renderSearchPanel(store.get(), searchQuery) : '';
 }
 
-// Same "static skeleton, targeted update" approach as the search overlay
-// above — docked immediately left of whichever drawer is currently open
-// (--popout-drawer-w mirrors the doc viewer's --viewer-overlap trick just
-// below) so it sits beside Journal/Guide rather than under/over them.
-function renderEntityPopout() {
-  const popout = root && root.querySelector('[data-entity-popout]');
-  if (!popout) return;
-  popout.dataset.open = String(entityPopoutOpen);
-  if (!entityPopoutOpen) return;
-  const doc = store.get();
-  popout.style.setProperty('--popout-drawer-w', activeDrawer ? `${doc.drawers.widths[activeDrawer] || 420}px` : '0px');
-  // The exact same list rendering the old Cast drawer used (search, type
-  // filter, add-entity buttons, drag/click rows) — "the entities popout
-  // should have the same format as the entities section in the Cast tab"
-  // is true by construction now, since this literally is that code.
-  const body = popout.querySelector('[data-entity-popout-body]');
-  if (body) body.innerHTML = entities(doc, { entitySearch, entityTypeFilter });
+// The dice roll window (performFieldRoll's replacement for a plain toast) —
+// a graphical breakdown of the roll: the action/flat/traveller die(s) plus
+// the field's value added up on one row, whatever it's being measured
+// against (2d10 challenge dice for an action roll, a flat target number for
+// flat/traveller) on another, and a big color-coded outcome banner, styled
+// after a real dice-roller app rather than a plain text toast. Docked at
+// the bottom-right corner (like a toast, but persistent until dismissed)
+// rather than a centered, backdrop-dimmed modal, so it doesn't block
+// working in the rest of the app while it's up. Same "static skeleton,
+// targeted update" approach as the search overlay above, using data-open
+// (not [hidden]) so the corner slide-in can actually transition.
+function renderDiceRollOverlay() {
+  const overlay = root && root.querySelector('[data-dice-roll-overlay]');
+  if (!overlay) return;
+  overlay.dataset.open = String(!!diceRollResult);
+  const card = overlay.querySelector('[data-dice-roll-card]');
+  if (!card) return;
+  card.innerHTML = diceRollResult ? diceRollCardHtml(diceRollResult.label, diceRollResult.method, diceRollResult.r) : '';
+}
+
+// A drawn pip-die face (rounded square + dots), not a Unicode ⚀-⚅ glyph —
+// font/platform glyph coverage for that Unicode block is unreliable (it
+// rendered as a blank tofu box in an actual browser check), and an SVG
+// draws identically everywhere with no build-time asset (this app ships as
+// a single bundled script, no image pipeline).
+const DIE_PIP_POSITIONS = {
+  1: [[12, 12]],
+  2: [[7, 7], [17, 17]],
+  3: [[7, 7], [12, 12], [17, 17]],
+  4: [[7, 7], [17, 7], [7, 17], [17, 17]],
+  5: [[7, 7], [17, 7], [12, 12], [7, 17], [17, 17]],
+  6: [[7, 6], [17, 6], [7, 12], [17, 12], [7, 18], [17, 18]],
+};
+function diePipsIcon(n) {
+  const pts = DIE_PIP_POSITIONS[Math.max(1, Math.min(6, n | 0))];
+  const pips = pts.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.8" fill="currentColor" stroke="none"/>`).join('');
+  return `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2" width="20" height="20" rx="4.5"/>${pips}</svg>`;
+}
+
+// Shared by the dice roll window's copy (⧉) and "add to Journal" buttons —
+// both want the exact same plain-text rendering of the result, just sent
+// to a different place.
+function diceRollCopyText({ method, r }) {
+  return method === 'flat' ? formatFlatRollCopyText(r) : method === 'traveller' ? formatTravellerRollCopyText(r) : formatRollCopyText(r);
+}
+
+// An open-book outline, not the 📖 emoji — color-emoji glyph coverage is
+// unreliable here (confirmed by a real browser check: it rendered as a
+// blank box), same issue the die-face SVGs already worked around.
+const JOURNAL_ADD_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 5c2.5-1 5.5-1 8 .5 2.5-1.5 5.5-1.5 8-.5v14c-2.5-1-5.5-1-8 .5-2.5-1.5-5.5-1.5-8-.5Z"/><path d="M12 5.5v14"/></svg>';
+
+// A d10-ish diamond outline — a d10 has no equivalent Unicode/simple-pip
+// convention the way a d6 does, so the challenge/target die gets a plain
+// diamond instead, matching the screenshot's iconography.
+const DICE_DIAMOND_ICON = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2 L22 12 L12 22 L2 12 Z"/></svg>';
+const DICE_TARGET_ICON = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg>';
+
+function diceRollCardHtml(label, method, r) {
+  const addsPart = r.adds ? ` + ${r.adds}` : '';
+  let rows, outcomeLabel, outcomeClass;
+  if (method === 'flat' || method === 'traveller') {
+    const diceIcon = method === 'traveller'
+      ? `<span class="dice-face-pair">${diePipsIcon(r.die1)}${diePipsIcon(r.die2)}</span>`
+      : diePipsIcon(r.die);
+    const dieSum = method === 'traveller' ? `${r.die1} + ${r.die2}` : `${r.die}`;
+    rows = [
+      { icon: diceIcon, label: 'Roll', text: `${dieSum} + ${r.value}${addsPart} = ${r.total}` },
+      { icon: DICE_TARGET_ICON, label: 'Target', text: `${r.target}` },
+    ];
+    outcomeLabel = r.outcomeLabel;
+    outcomeClass = r.outcome; // 'success' | 'fail'
+  } else {
+    rows = [
+      { icon: diePipsIcon(r.actionDie), label: 'Action', text: `${r.actionDie} + ${r.value}${addsPart} = ${r.total}` },
+      { icon: DICE_DIAMOND_ICON, label: 'Challenge', text: `${r.challenge1}, ${r.challenge2}${r.match ? ' (match)' : ''}` },
+    ];
+    outcomeLabel = r.outcomeLabel;
+    outcomeClass = r.outcome; // 'strong-hit' | 'weak-hit' | 'miss'
+  }
+  const rowsHtml = rows.map((row) => `
+    <div class="dice-roll-row" title="${escapeHtml(row.label)}">
+      <span class="dice-roll-icon">${row.icon}</span>
+      <span class="dice-roll-formula">${escapeHtml(row.text)}</span>
+    </div>`).join('');
+  return `
+    <div class="dice-roll-head">
+      <h3 class="dice-roll-label">${escapeHtml(label)}</h3>
+      <div class="dice-roll-head-actions">
+        <button class="icon-btn" data-dice-roll-copy title="Copy result">⧉</button>
+        <button class="icon-btn" data-dice-roll-journal title="Add to Journal">${JOURNAL_ADD_ICON}</button>
+        <button class="icon-btn" data-dice-roll-close aria-label="Close">✕</button>
+      </div>
+    </div>
+    <div class="dice-roll-body">
+      <div class="dice-roll-rows">${rowsHtml}</div>
+      <div class="dice-roll-outcome dice-outcome-${outcomeClass}">${escapeHtml(outcomeLabel.toUpperCase())}</div>
+    </div>`;
+}
+
+// Total horizontal space (in px) the main drawer + an anchored drawer (if
+// pinned) together occupy, immediately left of the edge tabs — what the doc
+// viewer's --viewer-overlap needs to stay clear of, so its own controls
+// (e.g. a tab's close button) don't render underneath (and therefore
+// unclickable behind) either drawer panel.
+function sidePanelInsetPx(doc) {
+  let px = 0;
+  if (openDrawers.length > 0) px += doc.drawers.widths[activeDrawer] || 420;
+  if (anchoredDrawer) px += doc.drawers.widths[anchoredDrawer] || 420;
+  return px;
+}
+
+// Entity Detail's title names whichever entity it's currently showing —
+// there's only ever the one active entity, so unlike every other drawer
+// there's no separate list to distinguish it from. Shared by both the main
+// drawer and the anchor panel, since either can show it.
+function titleForDrawer(doc, id) {
+  if (id === 'entity-detail') {
+    const active = getEntity(doc, doc.entities && doc.entities.activeId);
+    return active ? `Entity — ${active.name || 'Unnamed'}` : 'Entity';
+  }
+  const meta = drawerMeta(id);
+  return meta ? meta.label : 'Drawer';
+}
+
+// Cast's "Generate…" dropdown is the one drawer-specific control that lives
+// in the HEAD (next to the close ✕/unpin ▶) rather than the body — every
+// other drawer's own controls (Party's "+ Tracker", Trade's "+ Contract",
+// ...) stay inside their own body content, but Cast's search/filter/list
+// already fills that space, and the dropdown needs to read "right next to
+// the close button" regardless of whether Cast is the main drawer or
+// anchored. Both head-extra slots call this; it's a no-op ('') for every
+// other drawer id.
+function castGenerateSelectHtml() {
+  return `<select class="entity-generate-select" data-entity-generate title="Create a new entity of this type">
+    <option value="" selected>Generate…</option>
+    ${ENTITY_TYPES.map((t) => `<option value="${t}">${TYPE_LABEL[t]}</option>`).join('')}
+    <option value="generate-npc">🎲 NPC (rolled)</option>
+  </select>`;
+}
+function headExtraForDrawer(id) {
+  if (id === 'cast') return castGenerateSelectHtml();
+  return '';
+}
+
+// Every ephemeral UI flag a drawer template might read, in one place —
+// shared by the main drawer and the anchor panel (renderDrawerAnchorBody
+// below) since either can be asked to render any drawer id.
+function buildDrawerUi() {
+  return {
+    oracleFilter, expandedOracleGroups, oracleEditorOpen, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
+    entitySearch, entityTypeFilter, storageInfo: store.storageInfo(),
+    partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
+    tradeLocationId, tradeContractAddOpen,
+  };
 }
 
 function renderDrawerBody() {
   const doc = store.get();
   const body = root && root.querySelector('[data-drawer-body]');
   if (body) {
-    body.innerHTML = activeDrawer ? renderDrawer(activeDrawer, doc, {
-      oracleFilter, expandedOracleGroups, oracleEditorOpen, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
-      entitySearch, entityTypeFilter, storageInfo: store.storageInfo(),
-      partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
-      tradeLocationId, tradeContractAddOpen,
-    }) : '';
+    body.innerHTML = activeDrawer ? renderDrawer(activeDrawer, doc, buildDrawerUi()) : '';
   }
+  // Every ephemeral UI flag this touches (oracleFilter, recapOpen, ...)
+  // could equally apply to whichever drawer is anchored, not just the main
+  // one — refreshing both here means none of renderDrawerBody's many call
+  // sites need to remember to also call renderDrawerAnchorBody themselves.
+  renderDrawerAnchorBody();
   // Clicking any entity link (inline mention, WHO/WHERE chip, relationship
   // chip, graph node, ...) sets this so the Cast inspector's name field is
   // immediately focused+selected once it renders — "single click opens it
@@ -1696,6 +1945,16 @@ function renderDrawerBody() {
     const nameInput = root && root.querySelector('.inspector-name');
     if (nameInput) { nameInput.focus(); nameInput.select(); }
   }
+}
+
+// The anchor panel's content — same renderDrawer()/buildDrawerUi() the main
+// drawer uses, just targeting the anchor panel's own body element. A drawer
+// is never both anchored AND the active tab at once (see openDrawerTab/
+// anchorDrawerTab), so there's no risk of double-rendering the same id.
+function renderDrawerAnchorBody() {
+  const doc = store.get();
+  const body = root && root.querySelector('[data-drawer-anchor-body]');
+  if (body) body.innerHTML = anchoredDrawer ? renderDrawer(anchoredDrawer, doc, buildDrawerUi()) : '';
 }
 
 // A store.update() that fails to persist (most commonly localStorage quota

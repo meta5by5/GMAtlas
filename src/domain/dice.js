@@ -40,6 +40,20 @@ export function formatRollText(label, r) {
   return `🎲 ${label}: ${r.actionDie} + ${r.value}${addsPart} = ${r.total} vs ${r.challenge1}, ${r.challenge2}${matchPart} → ${r.outcomeLabel}`;
 }
 
+/** Multi-line plain text matching the dice roll window's own layout exactly
+ *  (its copy-to-clipboard button uses this verbatim) — a tab-indented
+ *  "Action: ..." line, a tab-indented "Challenge: ..." line, then the
+ *  outcome on its own line in caps, e.g.:
+ *    	Action: 3 + 2 = 5
+ *    	Challenge: 5, 1
+ *  WEAK HIT
+ */
+export function formatRollCopyText(r) {
+  const addsPart = r.adds ? ` + ${r.adds}` : '';
+  const matchPart = r.match ? ' (match)' : '';
+  return `\tAction: ${r.actionDie} + ${r.value}${addsPart} = ${r.total}\n\tChallenge: ${r.challenge1}, ${r.challenge2}${matchPart}\n${r.outcomeLabel.toUpperCase()}`;
+}
+
 /**
  * Roll a flat d6-vs-target check: d6 + value vs a target number (5PFH-style
  * "d6+attribute" field type — meet or beat the target to succeed). Same
@@ -58,6 +72,13 @@ export function rollFlat(value = 0, { target = 6, adds = 0, rng = Math.random } 
 export function formatFlatRollText(label, r) {
   const addsPart = r.adds ? ` + ${r.adds}` : '';
   return `🎲 ${label}: ${r.die} + ${r.value}${addsPart} = ${r.total} vs target ${r.target} → ${r.outcomeLabel}`;
+}
+
+/** Multi-line copy text for the dice roll window, same shape as
+ *  formatRollCopyText but for a flat (d6-vs-target) check. */
+export function formatFlatRollCopyText(r) {
+  const addsPart = r.adds ? ` + ${r.adds}` : '';
+  return `\tRoll: ${r.die} + ${r.value}${addsPart} = ${r.total}\n\tTarget: ${r.target}\n${r.outcomeLabel.toUpperCase()}`;
 }
 
 /**
@@ -79,4 +100,11 @@ export function rollTraveller(value = 0, { target = 8, adds = 0, rng = Math.rand
 export function formatTravellerRollText(label, r) {
   const addsPart = r.adds ? ` + ${r.adds}` : '';
   return `🎲 ${label}: ${r.die1}+${r.die2} + ${r.value}${addsPart} = ${r.total} vs target ${r.target} → ${r.outcomeLabel}`;
+}
+
+/** Multi-line copy text for the dice roll window, same shape as
+ *  formatRollCopyText but for a Traveller (2d6-vs-target) check. */
+export function formatTravellerRollCopyText(r) {
+  const addsPart = r.adds ? ` + ${r.adds}` : '';
+  return `\tRoll: ${r.die1} + ${r.die2}${addsPart} = ${r.total}\n\tTarget: ${r.target}\n${r.outcomeLabel.toUpperCase()}`;
 }

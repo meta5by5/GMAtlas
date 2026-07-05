@@ -906,7 +906,7 @@ test('addEntityStatblockGroup lets an entity hold both a Bestiary group and a ma
 // --- statblock numeric tracks + double-click-to-roll (Crew-Link-style) -----
 import { toggleStatblockFieldTrack, setStatblockTrackValue, setStatblockAttributeValue } from '../src/domain/statblocks.js';
 import { toggleEntityStatblockFieldTrack, setEntityStatblockTrackValue, setEntityStatblockAttributeValue } from '../src/domain/entities.js';
-import { rollAction, formatRollText } from '../src/domain/dice.js';
+import { rollAction, formatRollText, formatRollCopyText } from '../src/domain/dice.js';
 import { logRoll } from '../src/domain/session.js';
 
 test('npc/vehicle default statblocks carry a Health/Hull track field', () => {
@@ -1042,6 +1042,16 @@ test('formatRollText includes the formula and outcome label', () => {
   assert.match(text, new RegExp(r.outcomeLabel));
 });
 
+test('formatRollCopyText matches the dice roll window\'s own layout: tab-indented Action/Challenge lines, then the outcome in caps on its own line', () => {
+  const r = rollAction(2, { rng: makeRng(7) });
+  const text = formatRollCopyText(r);
+  const lines = text.split('\n');
+  assert.equal(lines.length, 3);
+  assert.equal(lines[0], `\tAction: ${r.actionDie} + 2 = ${r.total}`);
+  assert.equal(lines[1], `\tChallenge: ${r.challenge1}, ${r.challenge2}${r.match ? ' (match)' : ''}`);
+  assert.equal(lines[2], r.outcomeLabel.toUpperCase());
+});
+
 test('logRoll files a roll result to the journal', () => {
   let camp = defaultCampaign();
   const before = camp.journal.length;
@@ -1052,7 +1062,7 @@ test('logRoll files a roll result to the journal', () => {
 });
 
 // --- flat roll (5PFH-style d6 + value vs target) ---------------------------
-import { rollFlat, formatFlatRollText } from '../src/domain/dice.js';
+import { rollFlat, formatFlatRollText, formatFlatRollCopyText } from '../src/domain/dice.js';
 
 test('rollFlat succeeds/fails against a target and is deterministic under a seeded rng', () => {
   const a = rollFlat(3, { target: 6, rng: makeRng(5) });
@@ -1069,8 +1079,16 @@ test('formatFlatRollText includes the formula and target', () => {
   assert.match(text, /vs target 6/);
 });
 
+test('formatFlatRollCopyText matches the dice roll window\'s layout for a flat check', () => {
+  const r = rollFlat(2, { target: 6, rng: makeRng(3) });
+  const lines = formatFlatRollCopyText(r).split('\n');
+  assert.equal(lines[0], `\tRoll: ${r.die} + 2 = ${r.total}`);
+  assert.equal(lines[1], '\tTarget: 6');
+  assert.equal(lines[2], r.outcomeLabel.toUpperCase());
+});
+
 // --- Traveller roll (2d6 + value vs target) --------------------------------
-import { rollTraveller, formatTravellerRollText } from '../src/domain/dice.js';
+import { rollTraveller, formatTravellerRollText, formatTravellerRollCopyText } from '../src/domain/dice.js';
 
 test('rollTraveller succeeds/fails against a target (default 8) and is deterministic under a seeded rng', () => {
   const a = rollTraveller(1, { rng: makeRng(5) });
@@ -1089,6 +1107,14 @@ test('formatTravellerRollText includes both dice, the formula, and the target', 
   assert.match(text, /Pilot — Reaction/);
   assert.match(text, new RegExp(`${r.die1}\\+${r.die2}`));
   assert.match(text, /vs target 8/);
+});
+
+test('formatTravellerRollCopyText matches the dice roll window\'s layout for a Traveller check', () => {
+  const r = rollTraveller(2, { target: 8, rng: makeRng(9) });
+  const lines = formatTravellerRollCopyText(r).split('\n');
+  assert.equal(lines[0], `\tRoll: ${r.die1} + ${r.die2} = ${r.total}`);
+  assert.equal(lines[1], '\tTarget: 8');
+  assert.equal(lines[2], r.outcomeLabel.toUpperCase());
 });
 
 // --- party (Party tab: #character roster + free trackers) ------------------
@@ -1972,6 +1998,32 @@ test('createContract is a Thread carrying kind: "contract" plus patron/type/rout
   assert.equal(listThreads(camp).find((t) => t.id === id).status, 'escalating');
   camp = removeThread(camp, id);
   assert.equal(listThreads(camp).some((t) => t.id === id), false);
+});
+
+test('createContract logs a Journal entry with type/patron/route/payout resolved to entity names, the same way generateNpc/rollOracle already record what they created', () => {
+  let camp = defaultCampaign();
+  let patronId, originId, destinationId;
+  ({ campaign: camp, id: patronId } = createEntity(camp, { type: 'npc', name: 'Patron Reyes' }));
+  ({ campaign: camp, id: originId } = createEntity(camp, { type: 'location', name: 'Prospect Station' }));
+  ({ campaign: camp, id: destinationId } = createEntity(camp, { type: 'location', name: 'Dry World' }));
+  const before = camp.journal.length;
+  const { campaign: next } = createContract(camp, { name: 'Deliver medicine', type: 'Humanitarian', patronId, originId, destinationId, payout: 300 });
+  assert.equal(next.journal.length, before + 1);
+  const entry = next.journal[next.journal.length - 1];
+  assert.equal(entry.source, 'Trade');
+  assert.match(entry.text, /Deliver medicine/);
+  assert.match(entry.text, /Humanitarian/);
+  assert.match(entry.text, /Patron Reyes/);
+  assert.match(entry.text, /Prospect Station.*Dry World/);
+  assert.match(entry.text, /300/);
+});
+
+test('generateContract also logs a Journal entry (createContract does the logging, so every contract-creation path gets one for free)', () => {
+  let camp = defaultCampaign();
+  const before = camp.journal.length;
+  const { campaign: next } = generateContract(camp, { rng: makeRng(3) });
+  assert.equal(next.journal.length, before + 1);
+  assert.equal(next.journal[next.journal.length - 1].source, 'Trade');
 });
 
 test('listContracts only returns kind: "contract" threads, excluding ordinary WHY-question threads', () => {

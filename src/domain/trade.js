@@ -140,6 +140,17 @@ export function listContracts(campaign) {
   return listThreads(campaign).filter((t) => t.kind === 'contract');
 }
 
+function addJournalEntry(campaign, text, source) {
+  if (!Array.isArray(campaign.journal)) campaign.journal = [];
+  campaign.journal.push({
+    id: 'j' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    createdAt: new Date().toISOString(),
+    source: source || 'Trade',
+    text,
+    isHtml: false,
+  });
+}
+
 /** A contract is a Thread with a few extra reference fields (ADR 0004) —
  *  patronId/originId/destinationId point at existing NPC/Location entities
  *  ("reference by id, don't duplicate stats," the same pattern colony.js's
@@ -148,7 +159,12 @@ export function listContracts(campaign) {
  *  Delegates the actual clock/lifecycle creation to addThread — a contract
  *  gets the exact same 7-state lifecycle, priority dial, and Co-Pilot
  *  surfacing as any other thread, then this just patches the trade-specific
- *  fields onto the thread addThread just pushed (always the last one). */
+ *  fields onto the thread addThread just pushed (always the last one).
+ *  Also logs a Journal entry (type/patron/route/payout, resolved to entity
+ *  names where set) the same way generateNpc()/rollOracle() already record
+ *  what they created — a contract is exactly the kind of session event a
+ *  returning GM should see in "Previously on..." without having to dig
+ *  through the Trade drawer's contract board to reconstruct it. */
 export function createContract(campaign, { name = '', type = '', patronId = '', originId = '', destinationId = '', payout = 0, segments = 4 } = {}) {
   const next = addThread(campaign, name || type || 'New contract', segments);
   const t = next.threads[next.threads.length - 1];
@@ -160,6 +176,16 @@ export function createContract(campaign, { name = '', type = '', patronId = '', 
     destinationId: destinationId || '',
     payout: Math.max(0, Math.round(Number(payout)) || 0),
   });
+  const patron = patronId && getEntity(next, patronId);
+  const origin = originId && getEntity(next, originId);
+  const destination = destinationId && getEntity(next, destinationId);
+  const details = [
+    type && `Type: ${type}`,
+    patron && `Patron: ${patron.name || 'Unnamed'}`,
+    (origin || destination) && `Route: ${origin ? (origin.name || 'Unnamed') : '?'} → ${destination ? (destination.name || 'Unnamed') : '?'}`,
+    `Payout: ${t.payout}`,
+  ].filter(Boolean).join(' · ');
+  addJournalEntry(next, `New contract: ${t.name}${details ? ' — ' + details : ''}`, 'Trade');
   return { campaign: next, id: t.id };
 }
 
