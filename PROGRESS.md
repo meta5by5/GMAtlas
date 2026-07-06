@@ -14,6 +14,25 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-06 persistence moved from localStorage to IndexedDB**
+(`docs/adr/0015-indexeddb-persistence.md`), triggered by a real save
+failure (a Suggestion Lens pick threw a localStorage quota-exceeded error —
+a campaign with a few embedded uploaded documents can hit the ~5-10MB
+per-origin ceiling). A full Postgres backend was considered and rejected
+as disproportionate (would require a server, breaking "double-click
+index.html, works offline"); IndexedDB keeps the exact same local-only
+architecture with roughly 1000x the headroom, verified directly under both
+`file://` and `http://` before committing to it. `store.js` stays the only
+persistence module and keeps its synchronous call shape everywhere (~100
+call sites in `ui/shell.js` untouched) via an optimistic-update-then-
+background-persist design; only `import()`/`restoreBackup()`/
+`newCampaign()` became real `async` functions. Existing campaigns migrate
+in losslessly on first load, verified with a real legacy campaign seeded
+into a fresh browser profile. A quick independent stopgap shipped
+alongside it: the Documents drawer now shows each uploaded file's
+estimated size, so a GM can spot the large one without waiting on the
+migration.
+
 **Phases 0–9: done. Phase 10 (Ecosystem & reach) begun** with the Merchant
 Rules Lens (`docs/adr/0003-trade-logistics.md` + `docs/adr/0004-merchant-
 rules-lens.md`): a new `trade` drawer tab (between Colony and Docs) holds a

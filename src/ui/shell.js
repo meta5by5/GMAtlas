@@ -282,6 +282,12 @@ export function mountShell(el) {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushFocusedField(); });
 
   store.subscribe(render);
+  // A background persist failure (docs/adr/0015-indexeddb-persistence.md) —
+  // rare now that IndexedDB's quota is orders of magnitude bigger than
+  // localStorage's was, but not impossible. Same wording guarded() already
+  // uses for a synchronous throw; this is the async counterpart, since
+  // store.update() no longer has a synchronous outcome to throw from.
+  store.onPersistError((err) => toast(`Couldn't save — ${err && err.message ? err.message : 'an error occurred'}. Storage may be full; try exporting your campaign as a backup.`));
   render();
 }
 
@@ -957,15 +963,15 @@ function onClick(ev) {
   }
   if (hit('[data-new-campaign]')) {
     if (window.confirm('Start a new campaign? Your current one stays exportable but will be replaced in this browser.')) {
-      store.newCampaign(); toast('New campaign');
+      store.newCampaign().then(() => toast('New campaign'));
     }
     return;
   }
   if (hit('[data-bind-file]')) return store.bindFile().then(() => toast('Save file bound')).catch(() => {});
   if (hit('[data-restore-backup]')) {
     if (!window.confirm('Restore the last backup? This replaces the current campaign with the previous save — export the current one first if you want to keep it.')) return;
-    const result = store.restoreBackup();
-    return toast(result.ok ? 'Restored last backup' : `Couldn't restore backup — ${result.error && result.error.message}`);
+    store.restoreBackup().then((result) => toast(result.ok ? 'Restored last backup' : `Couldn't restore backup — ${result.error && result.error.message}`));
+    return;
   }
   // --- Game Mechanics Index (docs/adr/0014-mechanics-index-pdfjs.md) ---
   const mechScan = hit('[data-mechanics-scan]');
@@ -1289,7 +1295,10 @@ function onChange(ev) {
     const file = t.files && t.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => { try { store.import(reader.result); toast('Campaign imported'); } catch (e) { toast('Import failed'); } };
+    // store.import() is async (IndexedDB) — an async function's own thrown
+    // errors become a rejected Promise, not a synchronous throw, so this
+    // must await it inside the try, not just call it.
+    reader.onload = async () => { try { await store.import(reader.result); toast('Campaign imported'); } catch (e) { toast('Import failed'); } };
     reader.readAsText(file);
     return;
   }

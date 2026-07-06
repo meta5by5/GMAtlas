@@ -132,10 +132,22 @@ listeners) would be a reasonable first fitness function.
 1. **One versioned campaign document is the single source of truth.**
    `src/core/schema.js` defines it (`defaultCampaign()`, `schemaVersion`).
    Everything reads/writes through it.
-2. **Exactly one module touches `localStorage`**: `src/core/store.js`. It
-   exposes `store.get()`, `store.update(fn)`, `store.subscribe(fn)`,
-   `store.export()`, `store.import()`, `store.newCampaign()`,
-   `store.bindFile()`. Nothing else calls `localStorage` directly.
+2. **Exactly one module touches persistence**: `src/core/store.js`. As of
+   `docs/adr/0015-indexeddb-persistence.md` (2026-07-06) this is IndexedDB,
+   not `localStorage` — `localStorage`'s ~5-10MB per-origin quota was a
+   real ceiling a campaign with a few embedded uploaded documents could
+   hit (a real user report; IndexedDB's quota is a large fraction of free
+   disk space instead, ~3.2GB observed in this environment). A few
+   pre-existing `localStorage` keys are still read once, on first load
+   only, as a lossless migration fallback for campaigns saved before this
+   ADR (never written to again afterward). It exposes `store.get()`
+   (synchronous — always the in-memory doc), `store.update(fn)`
+   (synchronous call shape; persists in the background, rolls back +
+   reports via `store.onPersistError(fn)` on the rare async failure),
+   `store.subscribe(fn)`, `store.onPersistError(fn)`, `store.export()`, and
+   real `async` functions `store.import()`, `store.newCampaign()`,
+   `store.bindFile()`. Nothing else calls `localStorage`/`indexedDB`
+   directly.
 3. **The domain layer (`src/domain/*.js`) is pure and DOM-free.** Every
    mutator takes a campaign object and returns a NEW one (via a local
    `clone()` — `structuredClone` with a `JSON.parse(JSON.stringify())`
@@ -161,7 +173,7 @@ listeners) would be a reasonable first fitness function.
 src/
   core/
     schema.js      defaultCampaign(), schemaVersion, shape of everything
-    store.js       the ONLY localStorage access; pubsub via subscribe()
+    store.js       the ONLY persistence access (IndexedDB); pubsub via subscribe()
     migrate.js     legacy v0.53 key absorption, lossless
     buildInfo.js   hand-maintained phase/version/changelog (Settings → Build)
   data/
