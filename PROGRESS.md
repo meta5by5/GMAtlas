@@ -48,6 +48,56 @@ unfiltered, so a near-full Contract or Faction Pressure Track (both stored
 in that same array) got flagged with the wrong generic thread phrasing —
 now excludes anything carrying a `kind` tag.
 
+**2026-07-06 next-request.md batch** (six small-to-medium asks plus two
+substantial new subsystems, each verified in a real browser before
+committing): Cybernetics renamed to **Enhancements**
+(`src/domain/enhancements.js`, replacing `cybernetics.js`, tolerant legacy
+read of old `entity.cyberware` data) with a per-item `type` dropdown
+(`data/enhancementTypes.js` — Cybernetics/Wetware-Bio-Genetics/Psionics/
+Gene-Modification, always shown since Hostile's own Wetware framing always
+applies), collapsed by default, moved to render under the statblock section,
+and its 🎲 roll now lands in the add-form's name field (overwritten by each
+reroll, not journaled) instead of a toast+Journal entry, until "Install"
+commits it. `deepenNpc`'s Want/Complication now append to Revealed/hidden
+(GM) instead of Overview (Stereotype stays in Overview); Revealed/hidden is
+collapsed by default and persistently stays expanded
+(`entity.revealedOpen`) once a GM opens it for a given entity. Changing an
+entity's Type now confirms via `window.confirm` before applying, reverting
+on cancel. Cast drawer search now matches entity type, not just name/tags.
+Fixed a real, if minor, bug: the Oracle drawer's search couldn't find
+"Creature Concept" (a composite-generator button label, not a literal table
+name) — a small `GROUP_ALIASES` map in `data/oracleGroups.js` fixes this
+and any future same-shaped generator.
+
+Two bigger pieces landed as their own ADRs. **Tag-driven Location economy
+types** (`docs/adr/0013-trade-economy-types.md`, extending ADR 0003/0004):
+`data/economyTypes.js` defines a Hostile-native model and a
+"(Traveller-style)"-labeled model (the copyright-bridge naming convention
+the request asked for), each type carrying `scarcity`/`manufacturing` dials
+(0-10) instead of a literal tech level — a Location's economy type is an
+ordinary tag, not a new field, so `domain/trade.js`'s new `economyBiasAt()`
+checks a Location's tags against BOTH models regardless of which is active
+via `settings.tradeEconomyModel`, meaning switching models mid-campaign
+never orphans an already-tagged Location. **Game Mechanics Index**
+(`docs/adr/0014-mechanics-index-pdfjs.md`): after being asked directly
+whether to build a hand-curated list or real PDF text/page scanning, the
+user chose real scanning — `assets/vendor/pdfjs/` vendors PDF.js's legacy
+UMD build (one explicit, version-pinned exception to the zero-dependency
+policy, loaded as a plain `<script>` tag, not through the ES-module
+bundler) to search the Reference Library's PDFs for curated mechanic terms
+and link each to its page, from a new Settings "🔄 Refresh Mechanics Index"
+button, surfaced as clickable links (reusing the existing document-viewer
+tab mechanism) in the Guide drawer. Verifying this under both `file://` and
+`http://` (mandatory for this feature, not optional) caught a real bug
+before it shipped: Chromium blocks a `file://` page from reading another
+`file://` resource's bytes at all — a different, more fundamental
+restriction than the well-known "no Worker from file://" one — so this one
+feature needs `npm run serve`; every other feature is unaffected, and
+Settings' copy says so plainly. Also fixed a real `scripts/build.js`
+bundler gap found in the process: its export-rewriting regex didn't
+recognize `export async function` (only `export function`/`export const`),
+which this module's `scanMechanicsIndex` was the first to need.
+
 Phase 9 (Activity-driven gameplay) closed out with
 the HOW workspace's Activity picker (`domain/activities.js`, looks up
 `data/rulesConstitution.js`'s registered Rules Lens provider(s) for the
@@ -215,7 +265,13 @@ estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
     subsystems, and a Faction Standing tracker keyed to contract payout/
     availability — the Faction Rumor seed link itself has since landed
     (see Faction Pressure Track below), just pointed at missions rather
-    than contracts specifically.
+    than contracts specifically. Extended 2026-07-06 by **tag-driven
+    Location economy types** (`docs/adr/0013-trade-economy-types.md`): a
+    Location tag can now name an economy type (`data/economyTypes.js` — a
+    Hostile-native model and a "(Traveller-style)"-labeled model, only one
+    active at a time via `settings.tradeEconomyModel`) biasing
+    `priceAt()` via scarcity/manufacturing dials instead of a literal tech
+    level; switching models never orphans an already-tagged Location.
   - **Faction Pressure Track** — done: `domain/factions.js`'s
     `createPressureTrack`/`getPressureTrack`/`factionsUnderPressure` model a
     faction's pressure clock as a Thread tagged `kind: 'faction-pressure'`
@@ -304,7 +360,16 @@ estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
     and a Cybernetics section in the NPC inspector, with an "Augmentation"
     oracle group for flavor — deliberately NOT a new `RULES_PROVIDERS` entry
     (CWN was never one of the six named systems; see the ADR's Alternatives
-    Considered for why that line wasn't crossed).
+    Considered for why that line wasn't crossed). **Renamed to
+    "Enhancements" 2026-07-06** (`domain/enhancements.js`, per
+    `docs/adr/next-request.md`) — see the batch entry in Status Summary
+    above; `domain/cybernetics.js` no longer exists.
+  - **Enhancements rework, Revealed/hidden rework, Cast search, Oracle
+    search alias fix, Game Mechanics Index** — all done 2026-07-06, per
+    `docs/adr/next-request.md`'s batch described in the Status Summary
+    above (not re-detailed here to avoid a third copy); the two
+    substantial pieces have their own ADRs (`docs/adr/0013-trade-economy-
+    types.md`, `docs/adr/0014-mechanics-index-pdfjs.md`).
   - **Remaining, not yet started (each blocked on external input, not
     effort):** Shipyard companion link (needs the tool's actual URL);
     a sync adapter / shared campaign database (needs a decision on what

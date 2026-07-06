@@ -17,22 +17,43 @@ requests in docs/adr/next-request.md" (or similar) to have them picked up.
   a file (it's a judgment call for the user, not a design decision to record).
 -->
 
-## Add 7/5/26
-- Have the entity Cybernetics section collapse and be collapsed by default. When rolling on a cybernetics list, add it to the edit field for installing a new item instad of displaying in a popup window. Each roll just overwrites the field until the install button is clicked. 
-- Also, move Cybernetics under the statblock section. Regarding the Deepening button, have the Wants and Complication moved to Revealed/Hidden textbox. 
-- Also, have the Revealed/Hidden section collapseable so the textbox is hidden initially. Once revealed for the entity, keep it revealed on future loading of the given entity. Also, once entity type is selected, changing it needs to have a popup to confirm Y/N. 
-- Also have the Cast search field be able to search on entity type too. Also, for the Cybernetics reference used throughout the game, rename it to Enhancements and then have a dropdown per item that defines the type of enhancement such as cybernetics, psionics, gene-modification, etc. (whatever the available game systems call it). remove it if no active game systems have rules for enhancements. 
-- Also, include a predetermined or automated creation of the PDF and page number linked in the Guide as a table of contents for all of the game mechanics such as strain, Supply, Momentum, etc. 
-- Add a button in Settings for refreshing the items per active game system so that the new PDFs should be scanned and added to the table of contents.
-- Revise 0004-merchant-rules-lens.md with the ideas below and prioritize these trade economy ideas when conflicts arise.
-- update Trade mechanics to reference different economy types using Location tags derived from either a custom model or from the Traveller system that would be used to determine available commodities, supply and demand. 
-- Considering the Lore, the economy types must be comptable with the worlds in Hostile as determined in the world descriptions found in the Hostile Settings and other Hostile references. If the game system doesn't have an appropriate economy for a certain type of biome, government type, tech level, then create it. However, still maintain the concept that swapping game systems should not break the system.
-- Very important priority that flexibility in game systems to the type of mechanics is critical but cannot break the system if swapped out. The ongoing campaign will just use the new game system mechanics without breaking any historical information.
-- When using Traveller, ensure the tech levels are all appropriate to the worlds in Hostile. Because of the Hostile setting, try to avoid direct reference to tech level and build everything off a simlar tech level but different scarcity and manufacturing capability.
-- The custom Trade engine would be inspired by the game "Intergalactic Space Trader" but be fully compatble with the lore and setting in "Hostile". Strongly prefer Hostile rules and lore if conflicts arise. 
-- Track Location economy types in Settings according to their game system and ensure they are always availabile by default in the Location entity tag list. Remove the tag reference from the list if the source game system for that location type is removed.
-- No copyright conflicts can exist for custom systems or oracles that are built. Where a component is assigned a copywritten game mechanic but then creates a conflict with another custom mechanic if implemented, then create a bridge that prefers the copywritten material to make it clear that functionality aligns to that system. An example might be the trade mechanic conflicts with space ship or travel mechanics. Another example might be to create another oracle with a similar name but lists the game system as a suffix to know when to pick one over another.
-- Only have one Trade exconomy model operating at a time. 
-- Ensure that it is not game breaking to change models during a campaign.
-- Also, the recent Styling creatures mentions "Creature Concept" oracle that doesn't come up in an oracles seach in the latest update. 
-Make a generic cybernetics framework based off CWN that fits the bio-genetic concept in Hostile. Maybe call it Wetware or bio-genetics. It shouldn't conflict with the copyright of the design, but give the option for either or use frameworks if CWN is added as a game engine. 
+<!-- Processed 2026-07-06 (the "Add 7/5/26" batch below):
+- Cybernetics section: collapsed by default, moved under the statblock
+  section, renamed "Enhancements" with a per-item type dropdown (Cybernetics/
+  Wetware-Bio-Genetics/Psionics/Gene-Modification — always shown, since
+  Hostile's own Wetware framing always applies), and its 🎲 roll now lands in
+  the add-form's name field (overwritten by each reroll) instead of a
+  toast+Journal entry, until "Install" commits it. domain/cybernetics.js
+  renamed to domain/enhancements.js (tolerant legacy read of old `cyberware`
+  data). See the 2026-07-06 commits and CLAUDE.md/PROGRESS.md.
+- Deepen's Want/Complication now append to Revealed/hidden (GM) instead of
+  Overview (Stereotype stays in Overview); Revealed/hidden is now collapsed
+  by default and stays expanded (entity.revealedOpen, persisted) once a GM
+  opens it for a given entity.
+- Changing an entity's Type now asks for Y/N confirmation (window.confirm,
+  this app's existing pattern) before applying; canceling reverts the select.
+- Cast drawer search now matches entity type too, not just name/tags.
+- Fixed: the Oracle drawer's search couldn't find "Creature Concept" (a
+  composite-generator button label, not a literal table name) — a small
+  GROUP_ALIASES map in data/oracleGroups.js fixes this and any future
+  same-shaped generator.
+- Trade economy types (docs/adr/0013-trade-economy-types.md): Location tags
+  now double as an economy type (data/economyTypes.js — a Hostile-native
+  model and a "(Traveller-style)"-labeled model, only one active at a time
+  via settings.tradeEconomyModel) biasing domain/trade.js's priceAt() via two
+  dials (scarcity/manufacturing) instead of a literal tech level, exactly as
+  requested. Switching the active model never breaks an already-tagged
+  Location. ADR 0003/0004 updated to point at ADR 0013 for this gap.
+- Game Mechanics Index (docs/adr/0014-mechanics-index-pdfjs.md): a real
+  PDF.js-backed scan (per the user's explicit choice over a hand-curated
+  list) links game-mechanic terms to their page in the Reference Library,
+  from a new Settings "🔄 Refresh Mechanics Index" button, surfaced as
+  clickable links in the Guide drawer. Found and fixed a real bug during
+  verification: this specific feature needs the app served over http(s)
+  (`npm run serve`) — file:// blocks reading a local PDF's bytes entirely;
+  every other feature is unaffected. Also fixed a real scripts/build.js
+  bundler gap (didn't recognize `export async function`).
+- Intergalactic Space Trader PDFs used only as flavor inspiration for the
+  Trade Economy Model above, per the request's explicit priority (Hostile's
+  own lore wins any conflict) — no direct mechanic/table was transcribed.
+-->
