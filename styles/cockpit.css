@@ -489,6 +489,8 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .doc-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
 .doc-title-input { font-size: 0.92rem; font-weight: 600; }
 .doc-card-actions { display: inline-flex; gap: 2px; align-items: center; }
+.doc-card-title-group { display: inline-flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.doc-size-badge { white-space: nowrap; }
 .doc-content-input { min-height: 8rem; }
 
 /* Toast */

@@ -1390,6 +1390,16 @@ export function formatBytes(n) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// Estimated decoded size of a base64 data: URI — good enough for a GM
+// judging which uploaded document is the one to remove/move to assets/docs/
+// when localStorage's quota gets hit (store.js), not meant to be exact.
+function dataUrlBytes(dataUrl) {
+  const base64 = String(dataUrl || '').split(',')[1] || '';
+  if (!base64) return 0;
+  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+  return Math.max(0, Math.floor(base64.length * 0.75) - padding);
+}
+
 // Tag editor is collapsed behind the 🏷 toggle by default (small-footprint
 // ask) — chips render smaller than a regular chip (.doc-tag-chip) when it's
 // open; see the sizing in cockpit.css rather than here. The input commits on
@@ -1452,15 +1462,20 @@ function documents(doc, ui = {}) {
   });
 
   const rows = items.map((d) => {
+    // An uploaded file's dataUrl is embedded directly in campaign.json, the
+    // usual reason localStorage's quota gets hit (see store.js) — showing
+    // its size right here (not just on hover) is what actually lets a GM
+    // spot which upload to remove/move to assets/docs/ when that happens.
+    const sizeBadge = d.kind === 'file' && d.dataUrl ? `<span class="dim small doc-size-badge">${formatBytes(dataUrlBytes(d.dataUrl))}</span>` : '';
     const titleEl = renameOpen.has(d.id)
       ? `<input class="doc-rename-input" data-doc-rename-input="${esc(d.id)}" value="${esc(d.title)}" placeholder="Untitled document" autofocus>`
       : (d.kind === 'file'
-        ? `<a href="#" class="doc-card-title-link" data-doc-open="lib:${esc(d.id)}" data-drag-document="lib:${esc(d.id)}" draggable="true" title="Open in viewer">${esc(d.title || d.fileName)}</a>`
+        ? `<a href="#" class="doc-card-title-link" data-doc-open="lib:${esc(d.id)}" data-drag-document="lib:${esc(d.id)}" draggable="true" title="Open in viewer — ${formatBytes(dataUrlBytes(d.dataUrl))}">${esc(d.title || d.fileName)}</a>`
         : `<span class="doc-card-title-static" data-drag-document="lib:${esc(d.id)}" draggable="true" title="Drag into a note or context field to insert a @ pointer">${esc(d.title || 'Untitled document')}</span>`);
     return `
     <div class="doc-card">
       <div class="doc-card-head">
-        ${titleEl}
+        <span class="doc-card-title-group">${titleEl}${sizeBadge}</span>
         <div class="doc-card-actions">
           <button class="icon-btn" data-doc-tag-toggle="${esc(d.id)}" title="Tags">🏷</button>
           <button class="icon-btn" data-doc-rename="${esc(d.id)}" title="${renameOpen.has(d.id) ? 'Save' : 'Rename entry'}">${renameOpen.has(d.id) ? '💾' : '✎'}</button>
