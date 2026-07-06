@@ -1890,10 +1890,10 @@ test('rollFactionAsset rolls the Faction Asset table (Corporate Powers group) an
   assert.equal(r2.asset, ''); // addFactionAsset no-ops on a non-faction entity
 });
 
-test('deepenNpc rolls Stereotype/Want/Complication into an existing NPC\'s Overview and journals the addition; no-ops on a non-npc entity', () => {
+test('deepenNpc rolls Stereotype into Overview and Want/Complication into Revealed/hidden (GM), and journals the combined addition; no-ops on a non-npc entity', () => {
   let camp = defaultCampaign();
   let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Voss' }));
-  camp = updateEntity(camp, npcId, { overview: 'A dock foreman.' });
+  camp = updateEntity(camp, npcId, { overview: 'A dock foreman.', revealed: 'Owes a debt.' });
   const { campaign: next, added } = deepenNpc(camp, npcId, { rng: makeRng(2) });
   assert.ok(added);
   assert.match(added, /Stereotype:/);
@@ -1901,7 +1901,12 @@ test('deepenNpc rolls Stereotype/Want/Complication into an existing NPC\'s Overv
   assert.match(added, /Complication:/);
   const e = getEntity(next, npcId);
   assert.ok(e.overview.startsWith('A dock foreman.'));
-  assert.ok(e.overview.includes(added));
+  assert.match(e.overview, /Stereotype:/);
+  assert.doesNotMatch(e.overview, /wants:|Complication:/);
+  assert.ok(e.revealed.startsWith('Owes a debt.'));
+  assert.match(e.revealed, /wants:/);
+  assert.match(e.revealed, /Complication:/);
+  assert.doesNotMatch(e.revealed, /Stereotype:/);
   assert.match(next.journal[next.journal.length - 1].text, /Deepened Voss:/);
 
   let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));

@@ -152,15 +152,24 @@ export function deepenNpc(campaign, entityId, { rng = Math.random } = {}) {
   const stereotype = roll('Stereotype');
   const want = roll('Want');
   const complication = roll('Complication');
-  const lines = [
-    stereotype && `Stereotype: ${stereotype}.`,
+  // Stereotype is a character-concept beat, not a secret, so it stays in the
+  // shared Overview as before; Want and Complication are GM-facing hooks
+  // (what they're really after, what's in the way) that read more like
+  // secrets than public knowledge, so they append to `revealed` instead
+  // (docs/adr/next-request.md, 2026-07-06) — the same field generateNpc's
+  // "Revealed Aspect" roll already populates.
+  const overviewLine = stereotype && `Stereotype: ${stereotype}.`;
+  const revealedLines = [
     want && `Right now, wants: ${want}.`,
     complication && `Complication: ${complication}.`,
   ].filter(Boolean);
+  const lines = [overviewLine, ...revealedLines].filter(Boolean);
   if (!lines.length) return { campaign: next, added: null };
   const addition = lines.join(' ');
-  const overview = [entity.overview, addition].filter(Boolean).join(' ');
-  const withFields = updateEntity(next, entityId, { overview });
+  const patch = {};
+  if (overviewLine) patch.overview = [entity.overview, overviewLine].filter(Boolean).join(' ');
+  if (revealedLines.length) patch.revealed = [entity.revealed, revealedLines.join(' ')].filter(Boolean).join(' ');
+  const withFields = updateEntity(next, entityId, patch);
   addJournal(withFields, `Deepened ${entity.name || 'NPC'}: ${addition}`, 'Oracle');
   return { campaign: withFields, added: addition };
 }

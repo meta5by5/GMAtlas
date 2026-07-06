@@ -225,9 +225,10 @@ function inspector(doc, e, ui) {
     <label class="field-label">Overview (shared)
       <textarea data-entity-field="overview" rows="3" placeholder="What the party knows.">${esc(e.overview)}</textarea>
     </label>
-    <label class="field-label">Revealed / hidden (GM)
-      <textarea data-entity-field="revealed" rows="2" placeholder="Secrets, twists, true motives.">${esc(e.revealed)}</textarea>
-    </label>
+    <div class="revealed-block">
+      <button class="btn ghost sm" data-reveal-toggle="${esc(e.id)}">${e.revealedOpen ? '▾' : '▸'} Revealed / hidden (GM)</button>
+      ${e.revealedOpen ? `<textarea data-entity-field="revealed" rows="2" placeholder="Secrets, twists, true motives.">${esc(e.revealed)}</textarea>` : ''}
+    </div>
     ${factionSection(doc, e)}
     ${statblockSection(e, doc, ui)}
     ${enhancementsSection(e, ui)}

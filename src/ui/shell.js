@@ -478,6 +478,13 @@ function onClick(ev) {
   }
   const delEnt = hit('[data-entity-del]');
   if (delEnt) { store.update((d) => removeEntity(d, delEnt.dataset.entityDel)); return toast('Entity removed'); }
+  // Revealed/hidden (GM) starts collapsed on every entity, but once a GM
+  // opens it, docs/adr/next-request.md (2026-07-06) asks that it "stay
+  // revealed on future loading of the given entity" — a real persisted
+  // campaign field (entity.revealedOpen), not ephemeral UI state, since it
+  // needs to survive a reload.
+  const revealToggle = hit('[data-reveal-toggle]');
+  if (revealToggle) { const id = revealToggle.dataset.revealToggle; return store.update((d) => updateEntity(d, id, { revealedOpen: !getEntity(d, id).revealedOpen })); }
   const unlink = hit('[data-entity-unlink]');
   if (unlink) { const active = store.get().entities.activeId; return store.update((d) => removeRelationship(d, active, unlink.dataset.entityUnlink)); }
   const entTagRemove = hit('[data-entity-tag-remove]');
