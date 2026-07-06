@@ -8,6 +8,7 @@ import { generateScene } from './scenes.js';
 import { tablesWithOverrides, rollTable, rollGroup, formatRoll, pick } from './oracles.js';
 import { linkMentions, parseMentions, createEntity, updateEntity, getEntity } from './entities.js';
 import { linkDocumentMentions, parseDocumentMentions, resolvedDocumentMentionNames } from './documents.js';
+import { SUGGESTION_LENSES, findLens, lensOracleCategories } from '../data/suggestionLenses.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 
@@ -45,6 +46,52 @@ export function continueStory(campaign, { toJournal = true } = {}) {
 
   pushTimeline(next, { kind: 'scene', label: `Scene ${scene.number}` });
   if (toJournal) addJournal(next, scene.text, 'Scene');
+  return next;
+}
+
+/** "What Happens Next?"'s lens-picker step (docs/adr/0009-situation-engine-
+ *  revisited.md, Decision item 3): a small random draw across both the
+ *  Discovery and Approach lens lists, offered as chips instead of
+ *  immediately generating — picking one calls suggestNextWithLens below.
+ *  Not deterministic-count in a way that matters narratively (3-4, same
+ *  "not exhaustive" spirit as this app's other small random draws); the GM
+ *  can also just re-open the picker for a different draw if none appeal. */
+export function drawSuggestionLenses(campaign, { rng = Math.random, count = 4 } = {}) {
+  const pool = [...SUGGESTION_LENSES];
+  const drawn = [];
+  const n = Math.min(count, pool.length);
+  for (let i = 0; i < n; i++) {
+    const idx = Math.floor(rng() * pool.length);
+    drawn.push(pool.splice(idx, 1)[0]);
+  }
+  return drawn;
+}
+
+/** "What Happens Next?", lens-filtered — this is Continue Story's own
+ *  generateScene(), just handed the chosen lens's mapped Oracle categories
+ *  so its Driver line pulls from THAT lens's content instead of the
+ *  generic Plot Engine > Scene Driver a lens-less Continue Story always
+ *  uses (see scenes.js's generateScene for exactly what changes). Continue
+ *  Story itself (the other button) is completely untouched by this —
+ *  same no-input, immediate-generation behavior as before this ADR. Falls
+ *  back to ordinary (lens-less) behavior for an unrecognized lensId,
+ *  rather than erroring. */
+export function suggestNextWithLens(campaign, lensId, { toJournal = true, rng = Math.random } = {}) {
+  const next = clone(campaign);
+  const lens = findLens(lensId);
+  const tables = tablesWithOverrides(next.oracles?.overrides, next.settings?.genrePack);
+  const scene = generateScene(next, tables, rng, lens ? lensOracleCategories(lensId) : []);
+
+  next.scenes = next.scenes || [];
+  next.scenes.push(scene);
+
+  const con = String(scene.consequence || '');
+  if (/threat|danger|hostil|attack/i.test(con)) next.context.what.threat = Math.min(10, (next.context.what.threat || 0) + 1);
+  if (/myster|unknown|hidden|strange/i.test(con)) next.context.what.mystery = Math.min(10, (next.context.what.mystery || 0) + 1);
+
+  pushTimeline(next, { kind: 'scene', label: `Scene ${scene.number}` });
+  const text = lens ? `${scene.text}\n\nLens: ${lens.label}` : scene.text;
+  if (toJournal) addJournal(next, text, 'Scene');
   return next;
 }
 

@@ -9,8 +9,15 @@ function safePick(tables, rng, ...path) {
   return Array.isArray(t) && t.length ? pick(t, rng) : null;
 }
 
-/** Generate the next scene from current context. Returns a scene object. */
-export function generateScene(campaign, tables, rng = Math.random) {
+/** Generate the next scene from current context. Returns a scene object.
+ *  `lensCategories` (docs/adr/0009-situation-engine-revisited.md, Decision
+ *  item 3), if given a non-empty array of [group, table] Oracle paths,
+ *  rolls the scene's Driver line from a random one of those categories
+ *  instead of the generic Plot Engine > Scene Driver — the "filtered
+ *  toward the chosen lens's mapped categories" suggestNextWithLens()
+ *  (session.js) needs. Omitted/empty preserves this function's exact
+ *  original behavior (used by the ordinary, lens-less Continue Story). */
+export function generateScene(campaign, tables, rng = Math.random, lensCategories = null) {
   const what = campaign.context.what || {};
   const where = campaign.context.where || {};
   const form = campaign.settings.form || {};
@@ -23,7 +30,9 @@ export function generateScene(campaign, tables, rng = Math.random) {
   const sensory = safePick(tables, rng, 'Location Themes', 'Sensory Detail');
   const clue = safePick(tables, rng, 'Miscellaneous', 'Story Clue');
   const complication = safePick(tables, rng, 'Miscellaneous', 'Story Complication');
-  const sceneDriver = safePick(tables, rng, 'Plot Engine', 'Scene Driver');
+  const sceneDriver = (lensCategories && lensCategories.length)
+    ? safePick(tables, rng, ...lensCategories[Math.floor(rng() * lensCategories.length)])
+    : safePick(tables, rng, 'Plot Engine', 'Scene Driver');
   const consequence = safePick(tables, rng, 'Miscellaneous', 'Pay the Price');
 
   const threat = what.threat || 0;

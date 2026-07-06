@@ -19,8 +19,21 @@ function card(title, lead, body) {
   return `<article class="workspace-card"><h2>${title}</h2><p class="lead">${lead}</p>${body}</article>`;
 }
 
+// Suggestion Lens chip picker (docs/adr/0009-situation-engine-revisited.md,
+// Decision item 3) — "What Happens Next?" opens this instead of generating
+// immediately; ui.lensDraw is the fixed random draw from drawSuggestionLenses
+// (session.js, via shell.js), not recomputed on every render.
+function lensPickerHtml(ui) {
+  if (!ui || !ui.lensPickerOpen) return '';
+  const chips = (ui.lensDraw || []).map((l) => `<button class="chip" data-lens-pick="${esc(l.id)}" title="${l.kind === 'discovery' ? 'Discovery Lens' : 'Approach Lens'}">${esc(l.label)}</button>`).join('');
+  return `<div class="lens-picker">
+    <p class="dim small">Pick a lens to steer what happens next, instead of generating blind:</p>
+    <div class="lens-picker-chips">${chips}</div>
+  </div>`;
+}
+
 const VIEWS = {
-  what(doc) {
+  what(doc, ui) {
     const c = doc.context.what;
     const resources = c.resources == null ? 5 : c.resources;
     const reputation = c.reputation == null ? 5 : c.reputation;
@@ -57,6 +70,7 @@ const VIEWS = {
         <button class="btn primary" data-continue-story>▶ Continue Story</button>
         <button class="btn" data-what-next>What Happens Next?</button>
       </div>
+      ${lensPickerHtml(ui)}
       <div class="shift-actions" aria-label="Shift story">
         ${WHAT_ACTIONS.map((a) => `<button class="chip" data-shift="${esc(a)}">⚡ ${esc(a)}</button>`).join('')}
       </div>
@@ -192,6 +206,6 @@ function lastScene(doc) {
   </details>`;
 }
 
-export function renderWorkspace(doc, active) {
-  return (VIEWS[active] || VIEWS.what)(doc);
+export function renderWorkspace(doc, active, ui) {
+  return (VIEWS[active] || VIEWS.what)(doc, ui);
 }

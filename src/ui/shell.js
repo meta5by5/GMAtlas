@@ -6,7 +6,7 @@
 import { store } from '../core/store.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { contextSummary } from '../domain/context.js';
-import { continueStory, applyStoryShift, rollOracle, addNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc } from '../domain/session.js';
+import { continueStory, applyStoryShift, rollOracle, addNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens } from '../domain/session.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable } from '../domain/oracles.js';
 import { addThread, advanceThread, removeThread, setThreadStatus, setThreadPriority } from '../domain/threads.js';
 import { createExpedition, setExpeditionDial } from '../domain/expeditions.js';
@@ -146,6 +146,8 @@ let catalogPickerOpen = false; // ephemeral — the Cast drawer's "+ Item from c
 let enhancementDraft = {}; // ephemeral — entityId -> name text rolled into the Enhancements add-form's name field, overwritten by each 🎲 roll until "Install" commits it (docs/adr/next-request.md, 2026-07-06)
 let expandedEnhancements = new Set(); // ephemeral — entity ids whose Enhancements section is expanded (collapsed by default)
 let mechanicsScanning = false; // ephemeral — true while scanMechanicsIndex()'s async PDF.js scan is in flight (docs/adr/0014)
+let lensPickerOpen = false; // ephemeral — "What Happens Next?"'s Suggestion Lens chip picker, open or not (docs/adr/0009)
+let lensDraw = []; // ephemeral — the current random draw of lens chips, fixed until re-opened (not redrawn on every unrelated re-render)
 let catalogSearch = ''; // ephemeral — the catalog picker's own name/tag search
 let partyTrackerAddOpen = false; // ephemeral — the inline "+ Tracker" name/type creation form, open or not
 let partyTrackerDraftKind = 'meter'; // ephemeral — the creation form's in-progress type pick, so its size/difficulty sub-field can react before the tracker actually exists
@@ -363,8 +365,24 @@ function onClick(ev) {
     return;
   }
 
-  if (hit('[data-continue-story]') || hit('[data-what-next]')) {
+  if (hit('[data-continue-story]')) {
     store.update((d) => continueStory(d));
+    return toast('Scene generated → Journal');
+  }
+  // "What Happens Next?" (docs/adr/0009-situation-engine-revisited.md,
+  // Decision item 3): no longer an alias for Continue Story — it now opens
+  // a small Suggestion Lens chip picker instead of generating immediately.
+  // Continue Story (above) keeps its original no-input behavior unchanged.
+  if (hit('[data-what-next]')) {
+    lensPickerOpen = !lensPickerOpen;
+    if (lensPickerOpen) lensDraw = drawSuggestionLenses(store.get());
+    return render();
+  }
+  const lensPick = hit('[data-lens-pick]');
+  if (lensPick) {
+    const lensId = lensPick.dataset.lensPick;
+    lensPickerOpen = false;
+    store.update((d) => suggestNextWithLens(d, lensId));
     return toast('Scene generated → Journal');
   }
 
@@ -1853,7 +1871,7 @@ function render() {
   const crumbs = doc.timeline.length ? doc.timeline : [{ label: doc.meta.title }, { label: `Scene ${doc.scenes.length}` }];
   bc.innerHTML = crumbs.map((c, i) => `${i ? '<span class="sep">▸</span>' : ''}<span class="crumb">${escapeHtml(c.label || '')}</span>`).join(' ');
 
-  root.querySelector('[data-workspace]').innerHTML = renderWorkspace(doc, doc.context.active);
+  root.querySelector('[data-workspace]').innerHTML = renderWorkspace(doc, doc.context.active, buildDrawerUi());
   root.querySelector('[data-copilot-body]').innerHTML = renderCopilot(doc);
   root.querySelector('[data-copilot]').dataset.open = String(copilotOpen);
 
@@ -2134,7 +2152,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, mechanicsScanning,
+    enhancementDraft, expandedEnhancements, mechanicsScanning, lensPickerOpen, lensDraw,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,
   };

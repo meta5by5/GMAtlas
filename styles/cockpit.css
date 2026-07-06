@@ -398,6 +398,9 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 
 .action-bar { display: flex; gap: var(--sp-3); margin-top: var(--sp-4); flex-wrap: wrap; }
 .shift-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-3); flex-wrap: wrap; }
+/* Suggestion Lens picker (docs/adr/0009) — "What Happens Next?"'s chip draw. */
+.lens-picker { margin-top: var(--sp-2); }
+.lens-picker-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-1); }
 
 .last-scene { margin-top: var(--sp-4); border-top: 1px solid var(--border); padding-top: var(--sp-3); }
 .last-scene summary { cursor: pointer; font-size: 0.85rem; color: var(--accent); }

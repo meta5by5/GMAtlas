@@ -8,7 +8,8 @@ import assert from 'node:assert/strict';
 import { SCENE_TABLES, makeRng, rollTable, rollGroup, flattenKeys, getTable, tablesWithOverrides } from '../src/domain/oracles.js';
 import { applyShift, listShifts, contextSummary } from '../src/domain/context.js';
 import { generateScene } from '../src/domain/scenes.js';
-import { continueStory, applyStoryShift, rollOracle, patchContext } from '../src/domain/session.js';
+import { continueStory, applyStoryShift, rollOracle, patchContext, drawSuggestionLenses, suggestNextWithLens } from '../src/domain/session.js';
+import { SUGGESTION_LENSES, lensOracleCategories } from '../src/data/suggestionLenses.js';
 import { defaultCampaign } from '../src/core/schema.js';
 import { parseStatsString } from '../src/domain/statblocks.js';
 
@@ -143,6 +144,18 @@ test('generateScene produces numbered, non-empty text', () => {
   assert.ok(scene.text.length > 100);
 });
 
+test('generateScene, given lensCategories, rolls its Driver line from one of those categories instead of Plot Engine > Scene Driver; omitting it is unchanged (docs/adr/0009)', () => {
+  const camp = defaultCampaign();
+  const plain = generateScene(camp, SCENE_TABLES, makeRng(1));
+  const lensed = generateScene(camp, SCENE_TABLES, makeRng(1), [['Conflict', 'Opposition Tactic']]);
+  // Same seed, same everything else up to the Driver roll — but the Driver
+  // line's source table differs, so the two scenes' text should diverge.
+  assert.notEqual(plain.text, lensed.text);
+  const driverTable = SCENE_TABLES['Conflict']['Opposition Tactic'];
+  const driverLine = lensed.text.split('\n').find((l) => l.startsWith('Driver:'));
+  assert.ok(driverTable.some((v) => driverLine.includes(v)));
+});
+
 // --- session orchestration ------------------------------------------------
 test('continueStory appends a scene, a timeline crumb, and a journal entry', () => {
   const camp = defaultCampaign();
@@ -153,6 +166,39 @@ test('continueStory appends a scene, a timeline crumb, and a journal entry', () 
   assert.ok(next.timeline.some((t) => t.kind === 'scene'));
   // Original campaign is untouched (pure).
   assert.equal(camp.scenes.length, 0);
+});
+
+test('drawSuggestionLenses draws the requested count of distinct lenses from both Discovery and Approach lists combined', () => {
+  const camp = defaultCampaign();
+  const drawn = drawSuggestionLenses(camp, { rng: makeRng(3), count: 4 });
+  assert.equal(drawn.length, 4);
+  const ids = new Set(drawn.map((l) => l.id));
+  assert.equal(ids.size, 4); // no duplicates
+});
+
+test('suggestNextWithLens appends a scene, timeline crumb, and journal entry the same as continueStory, with a "Lens:" marker for a recognized lens; falls back gracefully for an unknown one', () => {
+  const camp = defaultCampaign();
+  const next = suggestNextWithLens(camp, 'negotiation', { rng: makeRng(2) });
+  assert.equal(next.scenes.length, 1);
+  assert.equal(next.journal.length, 1);
+  assert.equal(next.journal[0].source, 'Scene');
+  assert.match(next.journal[0].text, /Lens: Negotiation/);
+  assert.ok(next.timeline.some((t) => t.kind === 'scene'));
+
+  const withUnknown = suggestNextWithLens(camp, 'not-a-real-lens', { rng: makeRng(2) });
+  assert.equal(withUnknown.scenes.length, 1);
+  assert.doesNotMatch(withUnknown.journal[0].text, /Lens:/);
+});
+
+test('every Suggestion Lens (docs/adr/0009) maps to at least one real, already-shipped Oracle table — no invented content', () => {
+  for (const lens of SUGGESTION_LENSES) {
+    const categories = lensOracleCategories(lens.id);
+    assert.ok(categories.length > 0, `${lens.id} should map to at least one category`);
+    for (const [group, table] of categories) {
+      const values = getTable(SCENE_TABLES, group, table);
+      assert.ok(Array.isArray(values) && values.length > 0, `${lens.id} -> ${group} > ${table} should be a real, non-empty table`);
+    }
+  }
 });
 
 test('applyStoryShift updates context and logs a breadcrumb', () => {
