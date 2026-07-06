@@ -9,6 +9,7 @@ import { contextSummary } from '../domain/context.js';
 import { continueStory, applyStoryShift, rollOracle, addNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc } from '../domain/session.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable } from '../domain/oracles.js';
 import { addThread, advanceThread, removeThread, setThreadStatus, setThreadPriority } from '../domain/threads.js';
+import { createExpedition, setExpeditionDial } from '../domain/expeditions.js';
 import {
   rollAction, formatRollText, formatRollCopyText, rollFlat, formatFlatRollText, formatFlatRollCopyText,
   rollTraveller, formatTravellerRollText, formatTravellerRollCopyText,
@@ -881,6 +882,11 @@ function onClick(ev) {
     if (name != null && name.trim()) { store.update((d) => addThread(d, name.trim())); toast('Thread added'); }
     return;
   }
+  if (hit('[data-expedition-add]')) {
+    const name = window.prompt('Expedition name (e.g. "Survey the ridge line"):', '');
+    if (name != null && name.trim()) { store.update((d) => createExpedition(d, name.trim())); toast('Expedition added'); }
+    return;
+  }
   const adv = hit('[data-thread-adv]');
   if (adv) return store.update((d) => advanceThread(d, adv.dataset.threadAdv, 1));
   const back = hit('[data-thread-back]');
@@ -1246,6 +1252,9 @@ function onChange(ev) {
   const num = t.closest('[data-ctx-num]');
   if (num) { const [key, field] = num.dataset.ctxNum.split('.'); return store.update((d) => patchContext(d, key, { [field]: Number(t.value) })); }
 
+  const expDial = t.closest('[data-expedition-dial]');
+  if (expDial) { const [threadId, field] = expDial.dataset.expeditionDial.split('::'); return store.update((d) => setExpeditionDial(d, threadId, field, Number(t.value))); }
+
   if (t.closest('[data-campaign-title-input]')) return store.update((d) => { d.meta.title = t.value; return d; });
   if (t.closest('[data-genre-input]')) return store.update((d) => { d.settings.genre = t.value; return d; });
   if (t.closest('[data-genre-pack-select]')) {
@@ -1313,6 +1322,9 @@ function onInput(ev) {
   const t = ev.target;
   const num = t.closest('[data-ctx-num]');
   if (num) { const lbl = num.previousElementSibling || num.parentElement.querySelector('.metric'); if (lbl && lbl.classList.contains('metric')) lbl.textContent = `${t.value}/10`; return; }
+
+  const expDial = t.closest('[data-expedition-dial]');
+  if (expDial) { const lbl = expDial.previousElementSibling; if (lbl && lbl.classList.contains('metric')) lbl.textContent = `${t.value}/10`; return; }
 
   const of = t.closest('[data-oracle-filter]');
   if (of) { oracleFilter = t.value; renderDrawerBody(); restoreFocus('[data-oracle-filter]'); return; }

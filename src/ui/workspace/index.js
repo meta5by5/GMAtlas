@@ -141,6 +141,19 @@ function entityList(doc, types) {
   return `${chips}<div class="entity-add-row">${addBtns}</div>`;
 }
 
+// Expedition trackers (docs/adr/0009-situation-engine-revisited.md,
+// Decision item 1): a compact 3-slider block (Supplies/Exposure/Morale, 0-10,
+// same range/neutral-midpoint as context.what's Resources/Reputation/Stress)
+// on an expedition-tagged Thread's row, next to its clock — the Thread's own
+// clock already IS the fourth ("Progress") dial, so it isn't duplicated here.
+function expeditionDialsHtml(t) {
+  const dial = (field, label) => `
+    <label class="field-label sm">${label} <b class="metric">${t[field]}/10</b>
+      <input type="range" min="0" max="10" value="${t[field]}" data-expedition-dial="${esc(t.id)}::${field}">
+    </label>`;
+  return `<div class="expedition-dials">${dial('supplies', 'Supplies')}${dial('exposure', 'Exposure')}${dial('morale', 'Morale')}</div>`;
+}
+
 function threadsBlock(doc) {
   const threads = listThreads(doc);
   const rows = threads.map((t) => {
@@ -160,10 +173,11 @@ function threadsBlock(doc) {
         <button class="icon-btn" data-thread-back="${esc(t.id)}" title="Set back">－</button>
         <button class="icon-btn" data-thread-del="${esc(t.id)}" title="Remove">✕</button>
       </span>
+      ${t.kind === 'expedition' ? expeditionDialsHtml(t) : ''}
     </div>`;
   }).join('');
   return `<div class="threads">
-    <div class="threads-head"><h3>Threads</h3><button class="chip" data-thread-add>＋ New thread</button></div>
+    <div class="threads-head"><h3>Threads</h3><span class="threads-head-actions"><button class="chip" data-thread-add>＋ New thread</button><button class="chip" data-expedition-add>＋ Expedition</button></span></div>
     ${threads.length ? rows : '<div class="ws-placeholder">No threads yet. Add a clock for each open question or looming danger.</div>'}
   </div>`;
 }

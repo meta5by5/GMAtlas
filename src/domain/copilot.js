@@ -7,6 +7,7 @@
 import { overlookedThreads } from './threads.js';
 import { listFlaggedRelationships } from './entities.js';
 import { factionsUnderPressure } from './factions.js';
+import { expeditionsInDanger } from './expeditions.js';
 
 export function advise(doc) {
   const c = (doc && doc.context && doc.context.what) || { threat: 0, mystery: 0, resources: 5, reputation: 5, stress: 5 };
@@ -42,9 +43,18 @@ export function advise(doc) {
   // only, same as every other signal here — never auto-generates anything.
   const hotFaction = factionsUnderPressure(doc)[0];
 
+  // Expedition trackers (docs/adr/0009-situation-engine-revisited.md,
+  // Decision item 1): a GM-set danger threshold (Supplies <=2 or Exposure
+  // >=8) on any expedition-tagged Thread, surfaced the same "one signal,
+  // one observation" way Stress/Resources thresholds already work below —
+  // just scoped per-expedition instead of campaign-wide, since more than
+  // one could be running in parallel.
+  const hotExpedition = expeditionsInDanger(doc)[0];
+
   let observation;
   if (hot && hot.filled / hot.segments >= 0.75) observation = `“${hot.name}” is ${hot.filled}/${hot.segments} — one more push resolves it. Consider paying it off now.`;
   else if (hotFaction) observation = `“${hotFaction.faction.name}” is close to acting on its agenda — a mission tied to them would land naturally now.`;
+  else if (hotExpedition) observation = `“${hotExpedition.name}” is running low on supplies or dangerously exposed — force a supply-vs-route dilemma next.`;
   else if (threat >= 7) observation = 'Threat is high — the situation is exposed, watched, or already tipping over.';
   else if (stress >= 7) observation = 'Stress is high — a scene without combat should follow, or someone breaks.';
   else if (resources <= 2) observation = 'Supplies are critically low — the next scene should address resupply, or someone pays for the shortage.';

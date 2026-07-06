@@ -436,6 +436,27 @@ test('Co-Pilot still prioritizes a hot ordinary thread over a pressured faction'
   assert.match(a.observation, /Escape the station/);
 });
 
+test('Co-Pilot surfaces an expedition crossing its danger threshold (docs/adr/0009), ranked below a hot faction', () => {
+  let camp = defaultCampaign();
+  camp.context.what.threat = 1;
+  camp.context.what.stress = 1;
+  camp = createExpedition(camp, 'Survey the ridge line');
+  const exp = listExpeditions(camp)[0];
+  camp = setExpeditionDial(camp, exp.id, 'supplies', 1);
+  const a = advise(camp);
+  assert.match(a.observation, /Survey the ridge line/);
+  assert.match(a.observation, /supply/);
+
+  // A hot faction still outranks an expedition in danger.
+  let factionId;
+  ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
+  camp = createPressureTrack(camp, factionId, 4);
+  const track = listThreads(camp).find((t) => t.kind === 'faction-pressure' && t.factionId === factionId);
+  camp = advanceThread(camp, track.id, 3);
+  const a2 = advise(camp);
+  assert.match(a2.observation, /Sable Cartel/);
+});
+
 test('a near-full Trade contract (also stored as a kind-tagged Thread) does not get flagged by the ordinary hot-thread check', () => {
   let camp = defaultCampaign();
   camp.context.what.threat = 1;
@@ -1756,6 +1777,65 @@ test('factionsUnderPressure surfaces factions whose track is >=75% full and not 
   assert.equal(surfaced.length, 1);
   assert.equal(surfaced[0].faction.id, factionId);
   assert.equal(surfaced[0].faction.name, 'Sable Cartel');
+});
+
+// --- docs/adr/0009: Expedition trackers --------------------------------
+import { createExpedition, getExpedition, setExpeditionDial, listExpeditions, expeditionsInDanger, EXPEDITION_DIAL_DEFAULT } from '../src/domain/expeditions.js';
+
+test('createExpedition adds a Thread tagged kind: "expedition" with all three dials at the neutral midpoint (5); every existing Thread mutator still works on it', () => {
+  let camp = defaultCampaign();
+  camp = createExpedition(camp, 'Survey the ridge line', 6);
+  const list = listExpeditions(camp);
+  assert.equal(list.length, 1);
+  const exp = list[0];
+  assert.equal(exp.name, 'Survey the ridge line');
+  assert.equal(exp.segments, 6);
+  assert.equal(exp.supplies, EXPEDITION_DIAL_DEFAULT);
+  assert.equal(exp.exposure, EXPEDITION_DIAL_DEFAULT);
+  assert.equal(exp.morale, EXPEDITION_DIAL_DEFAULT);
+  assert.equal(getExpedition(camp, exp.id).id, exp.id);
+
+  camp = advanceThread(camp, exp.id, 2);
+  assert.equal(getExpedition(camp, exp.id).filled, 2); // the clock IS the Progress dial, unaffected by the other three
+});
+
+test('setExpeditionDial clamps 0-10 and no-ops on an unknown thread id, a non-expedition thread, or an unrecognized field', () => {
+  let camp = defaultCampaign();
+  camp = createExpedition(camp, 'Survey the ridge line');
+  const exp = listExpeditions(camp)[0];
+  camp = setExpeditionDial(camp, exp.id, 'supplies', 1);
+  assert.equal(getExpedition(camp, exp.id).supplies, 1);
+  camp = setExpeditionDial(camp, exp.id, 'exposure', 99);
+  assert.equal(getExpedition(camp, exp.id).exposure, 10); // clamped high
+  camp = setExpeditionDial(camp, exp.id, 'morale', -5);
+  assert.equal(getExpedition(camp, exp.id).morale, 0); // clamped low
+
+  const before = getExpedition(camp, exp.id);
+  camp = setExpeditionDial(camp, exp.id, 'not-a-real-field', 3);
+  assert.deepEqual(getExpedition(camp, exp.id), before);
+
+  camp = addThread(camp, 'An ordinary thread');
+  const ordinary = listThreads(camp).find((t) => t.name === 'An ordinary thread');
+  const campBefore = JSON.stringify(camp);
+  camp = setExpeditionDial(camp, ordinary.id, 'supplies', 1);
+  assert.equal(JSON.stringify(camp), campBefore); // no-op, not an expedition
+});
+
+test('expeditionsInDanger surfaces an open expedition once Supplies <=2 or Exposure >=8, excludes done ones', () => {
+  let camp = defaultCampaign();
+  camp = createExpedition(camp, 'Survey the ridge line');
+  const exp = listExpeditions(camp)[0];
+  assert.equal(expeditionsInDanger(camp).length, 0); // neutral midpoint, not in danger
+
+  camp = setExpeditionDial(camp, exp.id, 'supplies', 2);
+  assert.equal(expeditionsInDanger(camp).length, 1);
+
+  camp = setExpeditionDial(camp, exp.id, 'supplies', 5); // back to safe
+  camp = setExpeditionDial(camp, exp.id, 'exposure', 8);
+  assert.equal(expeditionsInDanger(camp).length, 1);
+
+  camp = advanceThread(camp, exp.id, 999); // fills/marks it done
+  assert.equal(expeditionsInDanger(camp).length, 0);
 });
 
 test('advanceFactionTurns advances every tracked faction\'s pressure by one tick and rolls a Faction Activity rumor for each, skipping factions with no track', () => {
