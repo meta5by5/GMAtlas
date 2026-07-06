@@ -2,7 +2,18 @@
 
 ## Status
 
-Accepted (design only — none of this is built yet). Amends ADR 0008's
+**Implemented** (2026-07-06 — all three of Decision items 1-3 built as
+scoped below; item 4 needed no code, only recording the reconfirmed
+decline). Expedition trackers: `domain/expeditions.js`
+(`createExpedition`/`getExpedition`/`setExpeditionDial`/`expeditionsInDanger`),
+a "+ Expedition" button and 3-slider block in the WHY workspace's Threads
+list, and a `copilot.js` threshold observation. Diplomacy fields: `fear`/
+`need`/`secret` on the Faction card (`entities.js`'s `ensureFactionFields`).
+Suggestion Lenses: `data/suggestionLenses.js`'s Discovery/Approach lens
+lists plus a lens → real-Oracle-table mapping, `session.js`'s
+`drawSuggestionLenses`/`suggestNextWithLens`, and *What Happens Next?* now
+opens a lens-chip picker instead of aliasing Continue Story. Originally
+accepted design-only; amends ADR 0008's
 Decision item 6: **reverses** two of its five declines (Expedition
 Structure, Diplomacy Engine fields), **redirects** two others into a
 different, more specific mechanism than either `gameplay-mechanics.md` or

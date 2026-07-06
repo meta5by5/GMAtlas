@@ -98,6 +98,31 @@ bundler gap found in the process: its export-rewriting regex didn't
 recognize `export async function` (only `export function`/`export const`),
 which this module's `scanMechanicsIndex` was the first to need.
 
+**2026-07-06 `docs/adr/0009-situation-engine-revisited.md` built** (all
+three Decision items, previously design-only): **Expedition trackers**
+(`domain/expeditions.js`) model an expedition as a Thread tagged
+`kind: 'expedition'` — its own clock is the Progress dial — gaining three
+additional 0-10 dials (Supplies/Exposure/Morale, neutral midpoint 5)
+instead of folding into a lifecycle status, per the user's explicit
+correction to ADR 0008's original alternative; a "+ Expedition" button and
+compact 3-slider block live in the WHY workspace's Threads list, and
+`copilot.js` surfaces an observation once Supplies ≤2 or Exposure ≥8, the
+same threshold-signal shape Stress/Resources already use. **Diplomacy
+Engine fields** (`fear`/`need`/`secret`) landed on the Faction card
+alongside hq/leadership/agenda. **Suggestion Lenses** finally give *What
+Happens Next?* its own identity — it was wired to the exact same handler
+as Continue Story despite a separate label; it now opens a small chip
+picker (a random draw of 4 across a new Discovery Lens and Approach Lens
+list, `data/suggestionLenses.js`) instead of generating immediately, and
+picking one calls the new `suggestNextWithLens()` — Continue Story's own
+`generateScene()`, just handed that lens's mapped Oracle categories (every
+mapped path is a real, already-shipped table — no new oracle content) so
+its Driver line pulls different, lens-flavored content instead of the
+generic Plot Engine > Scene Driver. Continue Story itself is unchanged.
+Verified end to end: picking "Economics" produced a scene whose Driver line
+pulled from Corporate Powers/Factions content and journaled with a
+"Lens: Economics" marker.
+
 Phase 9 (Activity-driven gameplay) closed out with
 the HOW workspace's Activity picker (`domain/activities.js`, looks up
 `data/rulesConstitution.js`'s registered Rules Lens provider(s) for the
@@ -310,16 +335,21 @@ estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
     Activity oracle table. A "🎲 Advance Faction Turns" button in the
     Journal drawer rolls a turn for every tracked faction at once and
     journals the results (`formatFactionTurnRumors()`).
-  - **Expedition trackers, Diplomacy fields, Suggestion Lenses** — scoped
-    in `docs/adr/0009-situation-engine-revisited.md`, not yet built. A
-    Thread tagged `kind: 'expedition'` gains three 0–10 dials (`supplies`/
-    `exposure`/`morale`, alongside its own clock as "progress") in a new
-    `domain/expeditions.js`; the Faction card gains `fear`/`need`/`secret`
-    fields; and *What Happens Next?* (currently identical to Continue
-    Story) gains a Suggestion Lens step — a Discovery Lens and an Approach
-    Lens (`gameplay-mechanics.md`'s two eight-item taxonomies) offered as a
-    few clickable chips that filter the next Oracle roll toward a chosen
-    lens's mapped categories, instead of immediately generating.
+  - **Expedition trackers, Diplomacy fields, Suggestion Lenses** — done,
+    per `docs/adr/0009-situation-engine-revisited.md` (all three Decision
+    items). A Thread tagged `kind: 'expedition'` gains three 0–10 dials
+    (`supplies`/`exposure`/`morale`, alongside its own clock as "progress")
+    via `domain/expeditions.js`, with a "+ Expedition" button and a compact
+    3-slider block in the WHY workspace's Threads list, plus a `copilot.js`
+    threshold observation (Supplies ≤2 or Exposure ≥8). The Faction card
+    gains `fear`/`need`/`secret` fields alongside hq/leadership/agenda.
+    *What Happens Next?* (previously identical to Continue Story) now opens
+    a Suggestion Lens chip picker instead — a random draw of 4 across a new
+    Discovery Lens and Approach Lens list (`data/suggestionLenses.js`,
+    `gameplay-mechanics.md`'s two eight-item taxonomies); picking one calls
+    `suggestNextWithLens()`, which rolls the scene's Driver line from that
+    lens's mapped real Oracle categories instead of the generic Plot Engine
+    > Scene Driver. Continue Story itself is unchanged.
   - **Traveller / Stars Without Number content** — done, per
     `docs/adr/0010-traveller-swn-content.md` (which also records reversing
     one specific call from `docs/adr/0002` — giving Traveller a character
