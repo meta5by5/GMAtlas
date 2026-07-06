@@ -2339,6 +2339,60 @@ test('priceAt is basePrice at a neutral market, rises with demand, falls with su
   assert.ok(priceAt(getEntity(camp, id), 'water') >= 1);
 });
 
+// --- docs/adr/0013: tag-driven Location economy types -----------------------
+import { economyBiasAt } from '../src/domain/trade.js';
+import { findEconomyType, economyTypesForModel } from '../src/data/economyTypes.js';
+
+test('economyBiasAt is exactly 1 (no change) for an untagged Location, or a Location tagged with something that isn\'t a recognized economy type', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'Prospect Station' }));
+  assert.equal(economyBiasAt(getEntity(camp, id), 'water'), 1);
+  camp = addEntityTag(camp, id, 'derelict'); // not an economy type
+  assert.equal(economyBiasAt(getEntity(camp, id), 'water'), 1);
+});
+
+test('economyBiasAt prices a raw commodity off scarcity and a manufactured commodity off the inverse of manufacturing, for a Location tagged with a recognized economy type', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'Rustwell' }));
+  const extraction = findEconomyType('extraction');
+  camp = addEntityTag(camp, id, extraction.label);
+  const loc = getEntity(camp, id);
+  // water (raw) prices off scarcity=6 -> 0.6 + 6/10*0.8 = 1.08
+  assert.ok(Math.abs(economyBiasAt(loc, 'water') - 1.08) < 1e-9);
+  // weapons (manufactured) prices off (10 - manufacturing=3)=7 -> 0.6 + 7/10*0.8 = 1.16
+  assert.ok(Math.abs(economyBiasAt(loc, 'weapons') - 1.16) < 1e-9);
+});
+
+test('priceAt multiplies in the economy bias on top of the supply/demand dials, still never dropping below 1', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'Rustwell' }));
+  const corporate = findEconomyType('corporate-enclave'); // scarcity 1, manufacturing 8
+  camp = addEntityTag(camp, id, corporate.label);
+  const loc = getEntity(camp, id);
+  const water = findCommodity('water');
+  const expectedBias = economyBiasAt(loc, 'water');
+  assert.equal(priceAt(loc, 'water'), Math.max(1, Math.round(water.basePrice * expectedBias)));
+});
+
+test('switching settings.tradeEconomyModel never orphans a Location already tagged from the other model — economyBiasAt checks both regardless of which is active', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'Meridian' }));
+  const travellerType = economyTypesForModel('traveller')[0];
+  camp.settings.tradeEconomyModel = 'traveller';
+  camp = addEntityTag(camp, id, travellerType.label);
+  camp.settings.tradeEconomyModel = 'hostile'; // switch away
+  assert.notEqual(economyBiasAt(getEntity(camp, id), 'water'), 1); // the tag still applies
+});
+
+test('a fresh campaign defaults settings.tradeEconomyModel to hostile, and Location tag vocabulary offers only the active model\'s economy types', () => {
+  const camp = defaultCampaign();
+  assert.equal(camp.settings.tradeEconomyModel, 'hostile');
+  let id; let camp2 = camp; ({ campaign: camp2, id } = createEntity(camp2, { type: 'location', name: 'Meridian' }));
+  const vocab = listTagVocabulary(camp2, 'location', id);
+  for (const t of economyTypesForModel('hostile')) assert.ok(vocab.includes(t.label));
+  for (const t of economyTypesForModel('traveller')) assert.ok(!vocab.includes(t.label));
+});
+
 test('setMarketDial clamps to [0, 100] and no-ops on a non-Location entity or unknown commodity', () => {
   let camp = defaultCampaign();
   let { campaign, id } = createEntity(camp, { type: 'location', name: 'Depot' });

@@ -86,6 +86,11 @@ export function defaultCampaign(now = new Date().toISOString()) {
       // 'hostile' (findGenrePack's own fallback), so this needed no
       // migration step.
       genrePack: 'hostile',
+      // Which Location economy-type list (data/economyTypes.js) is active
+      // for the Merchant Rules Lens (docs/adr/0013) — only one model
+      // operates at a time. An old campaign with no tradeEconomyModel reads
+      // as 'hostile', matching genrePack's own fallback convention above.
+      tradeEconomyModel: 'hostile',
       tone: '',
       statRuleset: 'starforged',
       cie: {},           // Campaign Intelligence Engine settings

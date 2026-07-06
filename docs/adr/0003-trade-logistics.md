@@ -13,7 +13,11 @@ free-floating transport Thread was built alongside a contract, since ADR
 0004's contract-Thread already covers that shape). Buy/sell without a
 contract at all still works directly against `priceAt()`, so the
 buy-low/sell-high mechanic this ADR designed is fully present — ADR 0004
-just changed which one is the headline UI verb.
+just changed which one is the headline UI verb. This ADR's own Consequences
+section flagged that Location-to-Location economy differentiation was
+worth revisiting "if a Traveller... sourcebook is ever added" — see
+`docs/adr/0013-trade-economy-types.md` for that: tag-driven economy types
+biasing `priceAt()` per Location.
 
 ## Context
 

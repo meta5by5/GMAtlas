@@ -1240,6 +1240,10 @@ function onChange(ev) {
     return toast(`Genre Pack set to ${t.value}`);
   }
   if (t.closest('[data-settings-stat-ruleset]')) return store.update((d) => { d.settings.statRuleset = t.value; return d; });
+  if (t.closest('[data-trade-economy-model-select]')) {
+    store.update((d) => { d.settings.tradeEconomyModel = t.value; return d; });
+    return toast(`Trade Economy Model set to ${t.value}`);
+  }
 
   if (t.closest('[data-import-campaign]')) {
     const file = t.files && t.files[0];

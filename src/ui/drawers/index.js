@@ -31,6 +31,7 @@ import { GEAR_TEMPLATE_SYSTEMS, findGearTemplate } from '../../data/gearTemplate
 import { GEAR_CATALOG, findCatalogItem } from '../../data/gearCatalog.js';
 import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel } from '../../data/rulesConstitution.js';
 import { GENRE_PACKS, bestiaryTerm } from '../../data/genrePacks.js';
+import { ECONOMY_MODELS, economyTypesForModel } from '../../data/economyTypes.js';
 import { DOCS_MANIFEST } from '../../data/docsManifest.js';
 
 const esc = (s) => String(s == null ? '' : s)
@@ -844,6 +845,7 @@ function settings(doc, ui = {}) {
     </div>
     ${statblockTemplateEditor(doc)}
     ${rulesConstitutionSection()}
+    ${tradeEconomyModelSection(doc)}
     <div class="settings-group">
       <h3>Companion tools</h3>
       <p class="dim small">GMAtlas tracks character sheets in-app, ruleset-aware. For full character-building wizards this app doesn't replicate, the community Crew Link tool is one Ironsworn/Starforged option:</p>
@@ -906,6 +908,33 @@ function rulesConstitutionSection() {
         </table>
       </div>
       <ul class="rules-provider-legend">${legend}</ul>
+    </div>`;
+}
+
+// Trade Economy Model (docs/adr/0013-trade-economy-types.md): a Location's
+// economy type is an ordinary tag (tagEditor above already suggests the
+// active model's labels for Location entities — entities.js's
+// listTagVocabulary), not a new structured field, so this section is just a
+// model switch plus a read-only reference list, the same
+// pattern rulesConstitutionSection above already uses. Only one model is
+// active at a time; switching it changes future tag SUGGESTIONS only — a
+// Location already tagged from the other model keeps working, since
+// trade.js's economyBiasAt checks both models regardless of which is active.
+function tradeEconomyModelSection(doc) {
+  const active = doc.settings.tradeEconomyModel || 'hostile';
+  const types = economyTypesForModel(active);
+  const rows = types.map((t) => `
+    <li><b>${esc(t.label)}</b> — <span class="dim small">scarcity ${t.scarcity}/10, manufacturing ${t.manufacturing}/10.</span> ${esc(t.description)}</li>`).join('');
+  return `
+    <div class="settings-group">
+      <h3>Trade Economy Model</h3>
+      <label class="field-label">Model
+        <select data-trade-economy-model-select>
+          ${ECONOMY_MODELS.map((m) => `<option value="${m.id}" ${m.id === active ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}
+        </select>
+      </label>
+      <p class="dim small">Tag a Location with one of these to bias its market prices beyond the manual supply/demand dials — untagged Locations are unaffected. Only one model is active at a time, but a Location already tagged from the other model keeps working if you switch.</p>
+      <ul class="rules-provider-legend">${rows}</ul>
     </div>`;
 }
 

@@ -10,6 +10,7 @@ import {
   ensureAutoStatblock, addStatblockGroup, removeStatblockGroup, setStatblockField, addStatblockField, removeStatblockField,
   toggleStatblockFieldTrack, setStatblockTrackValue, toggleStatblockFieldAttribute, setStatblockAttributeValue,
 } from './statblocks.js';
+import { economyTypesForModel } from '../data/economyTypes.js';
 
 // `item` (ADR 0012): gear/weapons/armor as first-class entities — tags,
 // @mentions, relationships (`owns` now has a concrete use: "NPC X owns Item
@@ -301,6 +302,19 @@ export function listTagVocabulary(campaign, entityType, excludeEntityId) {
     for (const t of e.tags || []) {
       const low = t.toLowerCase();
       if (!own.has(low) && !seen.has(low)) seen.set(low, t);
+    }
+  }
+  // Location tag suggestions also always offer the active Trade Economy
+  // Model's economy types (docs/adr/0013) — not both models at once, since
+  // only one operates at a time, and switching models changes which labels
+  // are SUGGESTED going forward without touching any Location's tags
+  // already set (economyBiasAt in domain/trade.js checks both models
+  // regardless, so an old tag keeps working).
+  if (entityType === 'location') {
+    const model = (campaign.settings && campaign.settings.tradeEconomyModel) || 'hostile';
+    for (const t of economyTypesForModel(model)) {
+      const low = t.label.toLowerCase();
+      if (!own.has(low) && !seen.has(low)) seen.set(low, t.label);
     }
   }
   return [...seen.values()].sort((a, b) => a.localeCompare(b));

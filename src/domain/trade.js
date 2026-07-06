@@ -25,6 +25,7 @@
 // module (colony.js/party.js's ensure() pattern, threads.js's clock).
 
 import { COMMODITIES, findCommodity } from '../data/commodities.js';
+import { ECONOMY_TYPES } from '../data/economyTypes.js';
 import { getEntity } from './entities.js';
 import { addThread, listThreads } from './threads.js';
 import { tablesWithOverrides, pick } from './oracles.js';
@@ -71,19 +72,47 @@ export function setMarketDial(campaign, locationId, commodityId, field, value) {
   return next;
 }
 
-/** basePrice * demandFactor / supplyFactor — pure and stateless. Both
- *  dials are 0-100 around a neutral midpoint of 50; each maps onto a
- *  0.5x-1.5x multiplier, so a fresh market (50/50) prices at exactly
- *  basePrice. High demand or low supply raises the price; low demand or
- *  high supply lowers it — never below 1 (a price of 0 would make a
- *  commodity worthless to trade, which isn't a state this model needs). */
+/** The economy type a Location's tags name, if any — checked against BOTH
+ *  models regardless of which is currently active (docs/adr/0013), so
+ *  switching settings.tradeEconomyModel never orphans a tag a GM already
+ *  set on an existing Location. A plain tag match (case-insensitive), not
+ *  a separate structured field — Locations already have a freeform tag
+ *  system (entities.js); this reuses it rather than adding a new one. */
+function economyTypeForLocation(location) {
+  const tags = new Set((location && location.tags || []).map((t) => t.toLowerCase()));
+  return ECONOMY_TYPES.find((t) => tags.has(t.label.toLowerCase())) || null;
+}
+
+/** A 0.6x-1.4x price multiplier from a Location's tagged economy type, or
+ *  exactly 1 (no change) if the Location carries no recognized economy-type
+ *  tag — additive to the existing supply/demand dials, never a replacement.
+ *  Raw commodities price off `scarcity` (scarce locally = pricier);
+ *  manufactured commodities price off the inverse of `manufacturing` (weak
+ *  local fabrication = pricier) — two dials instead of a literal tech
+ *  level, per docs/adr/0013. */
+export function economyBiasAt(location, commodityId) {
+  const c = findCommodity(commodityId);
+  const et = economyTypeForLocation(location);
+  if (!c || !et) return 1;
+  const dial = c.category === 'manufactured' ? (10 - et.manufacturing) : et.scarcity;
+  return 0.6 + (Math.max(0, Math.min(10, dial)) / 10) * 0.8;
+}
+
+/** basePrice * demandFactor / supplyFactor * economyBias — pure and
+ *  stateless. The supply/demand dials are 0-100 around a neutral midpoint
+ *  of 50; each maps onto a 0.5x-1.5x multiplier, so a fresh market (50/50)
+ *  with no tagged economy type prices at exactly basePrice. High demand or
+ *  low supply raises the price; low demand or high supply lowers it — never
+ *  below 1 (a price of 0 would make a commodity worthless to trade, which
+ *  isn't a state this model needs). */
 export function priceAt(location, commodityId) {
   const c = findCommodity(commodityId);
   if (!c || !location) return 0;
   const { supply, demand } = getMarket(location)[commodityId];
   const demandFactor = 0.5 + demand / 100;
   const supplyFactor = 0.5 + supply / 100;
-  return Math.max(1, Math.round((c.basePrice * demandFactor) / supplyFactor));
+  const bias = economyBiasAt(location, commodityId);
+  return Math.max(1, Math.round((c.basePrice * demandFactor * bias) / supplyFactor));
 }
 
 /** The party's shared cargo manifest — {commodityId, qty} rows. Not tied

@@ -19,7 +19,11 @@ Supersedes ADR 0003's *framing* (contracts as the primary loop, not
 buy-low/sell-high); keeps ADR 0003's *mechanics* (market dials, pricing,
 Oracle/Co-Pilot risk resolution, Vehicle cargo) as the pricing engine
 underneath the contract layer. Consolidates `requirements/Saga_Atlas_
-Merchant_*.txt` (three source documents) into this one place.
+Merchant_*.txt` (three source documents) into this one place. Decision item
+5's deferred "ships/crew depth" and "Faction Standing tracker" remain
+deferred; Location-level economy differentiation (not listed in item 5, but
+a real gap this ADR's pricing engine had) is now addressed separately in
+`docs/adr/0013-trade-economy-types.md`.
 
 ## Context
 
