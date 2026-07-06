@@ -1667,7 +1667,7 @@ test('faction fields appear when an entity is retyped to faction, and can be edi
 });
 
 // --- Phase 10: Faction Pressure Track (a Thread tagged kind: 'faction-pressure') ---
-import { getPressureTrack, createPressureTrack, factionsUnderPressure } from '../src/domain/factions.js';
+import { getPressureTrack, createPressureTrack, factionsUnderPressure, advanceFactionTurns, formatFactionTurnRumors } from '../src/domain/factions.js';
 
 test('createPressureTrack adds a Thread tagged kind: "faction-pressure" with a factionId, and every existing thread mutator still works on it unchanged', () => {
   let camp = defaultCampaign();
@@ -1715,6 +1715,37 @@ test('factionsUnderPressure surfaces factions whose track is >=75% full and not 
   assert.equal(surfaced.length, 1);
   assert.equal(surfaced[0].faction.id, factionId);
   assert.equal(surfaced[0].faction.name, 'Sable Cartel');
+});
+
+test('advanceFactionTurns advances every tracked faction\'s pressure by one tick and rolls a Faction Activity rumor for each, skipping factions with no track', () => {
+  let camp = defaultCampaign();
+  let trackedId, untrackedId;
+  ({ campaign: camp, id: trackedId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
+  ({ campaign: camp, id: untrackedId } = createEntity(camp, { type: 'faction', name: 'No Track Inc' }));
+  camp = createPressureTrack(camp, trackedId, 6);
+
+  const { campaign: next, rumors } = advanceFactionTurns(camp, { rng: makeRng(3) });
+  assert.equal(getPressureTrack(next, trackedId).filled, 1);
+  assert.equal(getPressureTrack(next, untrackedId), null); // still no track — untouched
+  assert.equal(rumors.length, 1);
+  assert.equal(rumors[0].factionName, 'Sable Cartel');
+  assert.ok(tablesWithOverrides({}, 'hostile')['Corporate Powers']['Faction Activity'].includes(rumors[0].activity));
+});
+
+test('advanceFactionTurns does not mutate the source campaign, and is a no-op (empty rumors) with no tracked factions', () => {
+  let camp = defaultCampaign();
+  const before = JSON.parse(JSON.stringify(camp));
+  const { campaign: next, rumors } = advanceFactionTurns(camp, { rng: makeRng(3) });
+  assert.deepEqual(camp, before);
+  assert.deepEqual(rumors, []);
+  assert.deepEqual(next.threads, camp.threads);
+});
+
+test('formatFactionTurnRumors renders a readable block, or an explanatory message when nothing is tracked', () => {
+  assert.match(formatFactionTurnRumors([]), /no factions are being tracked yet/);
+  const text = formatFactionTurnRumors([{ factionName: 'Sable Cartel', activity: 'quietly buys out a smaller rival' }]);
+  assert.match(text, /^Faction turn:/);
+  assert.match(text, /Sable Cartel quietly buys out a smaller rival\./);
 });
 
 // --- copilot: flagged-relationship review card -----------------------------

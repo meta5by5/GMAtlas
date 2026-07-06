@@ -414,7 +414,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 /* Drawer contents */
 .mc-drawer-body { font-size: 0.88rem; }
 .drawer-note { margin-bottom: var(--sp-3); }
-.drawer-note-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-2); }
+.drawer-note-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
 .doc-card {
   background: var(--tier2-bg);
   border: 1px solid var(--border);

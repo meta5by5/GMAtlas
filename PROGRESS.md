@@ -237,11 +237,23 @@ estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
     thread — the same "one more push" signal `threadUnderPressure()` already
     gives ordinary threads, extended to factions now that both a pressure
     clock and a mission generator exist.
-  - **Remaining, not yet started:** Shipyard companion link (blocked on a
-    known URL, not effort); a sync adapter / shared campaign database;
-    Traveller/Stars Without Number content (both named Rules Constitution
-    providers with zero authored data and no sourcebook in this repo's
-    library); faction-turn/rumor automation.
+  - **Faction-turn/rumor automation** — done, scoped small per the
+    2026-07-06 direction (user chose this over the other three remaining
+    items, each of which needs external input first — see below):
+    `domain/factions.js`'s `advanceFactionTurns()` is a GM-triggered bulk
+    action, not a background scheduler (Article II) — every faction that
+    already has a Pressure Track (skips ones nobody's tracking) advances by
+    one deterministic tick and rolls a "rumor" from the existing Faction
+    Activity oracle table. A "🎲 Advance Faction Turns" button in the
+    Journal drawer rolls a turn for every tracked faction at once and
+    journals the results (`formatFactionTurnRumors()`).
+  - **Remaining, not yet started (each blocked on external input, not
+    effort):** Shipyard companion link (needs the tool's actual URL);
+    a sync adapter / shared campaign database (needs a decision on what
+    backend to sync to); Traveller/Stars Without Number content (both named
+    Rules Constitution providers with zero authored data and no sourcebook
+    in this repo's library — needs a call on original content vs. waiting
+    for the real books).
 - **UI/UX assumptions, resolved in the 2026-07-04 pass** (see Status
   Summary above): tabbed drawer switching replaced "only one drawer open at
   a time"; three real responsive tiers replaced one breakpoint; Escape and

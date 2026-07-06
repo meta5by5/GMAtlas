@@ -554,6 +554,7 @@ function journal(doc, ui = {}) {
         <button class="btn" data-journal-add>Add note</button>
         <button class="btn ghost" data-export-journal>Export</button>
         <button class="btn ghost" data-generate-mission title="Roll a job: payout/deadline scaled by the current Threat, plus a complication">🎲 Generate Mission</button>
+        <button class="btn ghost" data-advance-faction-turns title="Advance every tracked faction's pressure by one tick and roll a rumor for each">🎲 Advance Faction Turns</button>
       </div>
     </div>
     <div class="journal-list">

@@ -27,7 +27,7 @@ import {
 import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue } from '../domain/party.js';
 import { setColonyField, addCrewRow, updateCrewRow, removeCrewRow } from '../domain/colony.js';
 import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract } from '../domain/trade.js';
-import { createPressureTrack } from '../domain/factions.js';
+import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors } from '../domain/factions.js';
 import { generateMission, formatMission } from '../domain/missions.js';
 import { setGuideText, getGuideText } from '../domain/guide.js';
 import { titleFromFilename } from '../domain/titleCase.js';
@@ -785,6 +785,15 @@ function onClick(ev) {
   if (hit('[data-generate-mission]')) {
     store.update((d) => addNote(d, formatMission(generateMission(d)), 'Mission'));
     return toast('Mission generated');
+  }
+  if (hit('[data-advance-faction-turns]')) {
+    let rumorCount = 0;
+    store.update((d) => {
+      const r = advanceFactionTurns(d);
+      rumorCount = r.rumors.length;
+      return addNote(r.campaign, formatFactionTurnRumors(r.rumors), 'Faction Turn');
+    });
+    return toast(rumorCount ? `${rumorCount} faction(s) acted` : 'No factions tracked yet');
   }
   if (hit('[data-new-campaign]')) {
     if (window.confirm('Start a new campaign? Your current one stays exportable but will be replaced in this browser.')) {
