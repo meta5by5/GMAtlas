@@ -246,6 +246,17 @@ Phase 5 bug list).
   throwaway smoke test) is fine; just don't leave it in `package.json`
   unless it earns a permanent place (`npm install --no-save` for one-off
   verification, then remove `node_modules` if it's not staying).
+- **One explicit, version-pinned exception to zero-dependency**:
+  `assets/vendor/pdfjs/` (PDF.js's legacy UMD build, vendored not
+  npm-installed, loaded via a plain `<script>` tag) powers the Guide's Game
+  Mechanics Index PDF text scan — see `docs/adr/0014-mechanics-index-
+  pdfjs.md` for why (user-requested real page scanning, not a hand-curated
+  list) and a real constraint it surfaced: that one feature needs the app
+  served over `http(s)` (`npm run serve`) — Chromium blocks a `file://`
+  page from reading another `file://` resource's bytes at all, a different
+  and more fundamental restriction than the well-known "no Worker from
+  file://" one. Every other feature still works via a plain `file://`
+  double-click; don't assume this carve-out extends to anything else.
 - Playwright browser tests (when used) launch Chromium with
   `args: ['--no-sandbox']` and import as
   `import pw from '.../playwright-core/index.js'; const { chromium } = pw;`

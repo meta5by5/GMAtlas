@@ -21,6 +21,8 @@ import {
 } from '../domain/entities.js';
 import { findCatalogItem } from '../data/gearCatalog.js';
 import { installEnhancement, removeEnhancement } from '../domain/enhancements.js';
+import { getMechanicsIndex } from '../domain/mechanicsIndex.js';
+import { scanMechanicsIndex } from './mechanicsScan.js';
 import { generateCreatureConcept, formatCreatureConcept, generateSiteConcept, formatSiteConcept, generateAdventureSeed, formatAdventureSeed } from '../domain/worldbuilding.js';
 import {
   addDocument, updateDocument, removeDocument, getDocument, addDocumentTag, removeDocumentTag, renameDocument,
@@ -142,6 +144,7 @@ let entityTagListOpen = false; // ephemeral — collapses the tag sub-filter chi
 let catalogPickerOpen = false; // ephemeral — the Cast drawer's "+ Item from catalog" (ADR 0012) inline picker, open or not
 let enhancementDraft = {}; // ephemeral — entityId -> name text rolled into the Enhancements add-form's name field, overwritten by each 🎲 roll until "Install" commits it (docs/adr/next-request.md, 2026-07-06)
 let expandedEnhancements = new Set(); // ephemeral — entity ids whose Enhancements section is expanded (collapsed by default)
+let mechanicsScanning = false; // ephemeral — true while scanMechanicsIndex()'s async PDF.js scan is in flight (docs/adr/0014)
 let catalogSearch = ''; // ephemeral — the catalog picker's own name/tag search
 let partyTrackerAddOpen = false; // ephemeral — the inline "+ Tracker" name/type creation form, open or not
 let partyTrackerDraftKind = 'meter'; // ephemeral — the creation form's in-progress type pick, so its size/difficulty sub-field can react before the tracker actually exists
@@ -939,6 +942,16 @@ function onClick(ev) {
     if (!window.confirm('Restore the last backup? This replaces the current campaign with the previous save — export the current one first if you want to keep it.')) return;
     const result = store.restoreBackup();
     return toast(result.ok ? 'Restored last backup' : `Couldn't restore backup — ${result.error && result.error.message}`);
+  }
+  // --- Game Mechanics Index (docs/adr/0014-mechanics-index-pdfjs.md) ---
+  const mechScan = hit('[data-mechanics-scan]');
+  if (mechScan) {
+    mechanicsScanning = true;
+    renderDrawerBody();
+    scanMechanicsIndex(store)
+      .then((entries) => { mechanicsScanning = false; renderDrawerBody(); toast(`Mechanics Index: ${entries.length} term(s) found`); })
+      .catch((err) => { mechanicsScanning = false; renderDrawerBody(); toast(`Mechanics scan failed — ${err.message}`); });
+    return;
   }
 }
 
@@ -2109,7 +2122,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements,
+    enhancementDraft, expandedEnhancements, mechanicsScanning,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,
   };

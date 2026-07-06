@@ -13,6 +13,13 @@
 </head>
 <body>
   <div id="app"></div>
+  <!-- Vendored PDF.js legacy (UMD) build for the Guide's Game Mechanics
+       Index (docs/adr/0014-mechanics-index-pdfjs.md) — a plain classic
+       script, same reasoning as the bundle below (file:// blocks ES module
+       imports; a UMD build sidesteps that entirely, no bundler involvement
+       needed). Exposes window.pdfjsLib. Must load before the bundle, which
+       reads it lazily (only when a scan actually runs), not eagerly. -->
+  <script src="./assets/vendor/pdfjs/pdf.min.js"></script>
   <!-- Classic script bundle so the app runs by double-clicking index.html
        (browsers block ES module imports over file://). Source of truth lives in
        src/ as ES modules; run `npm run build` to regenerate this bundle. -->

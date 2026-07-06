@@ -22,6 +22,7 @@ import { COMMODITIES, findCommodity } from '../../data/commodities.js';
 import { THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { getPressureTrack } from '../../domain/factions.js';
 import { getEnhancements, strainUsed, strainCapacity, isOverStrained } from '../../domain/enhancements.js';
+import { getMechanicsIndex } from '../../domain/mechanicsIndex.js';
 import { ENHANCEMENT_TYPES } from '../../data/enhancementTypes.js';
 import { getGuideText } from '../../domain/guide.js';
 import { buildMentionEditorHTML } from '../mentionEditor.js';
@@ -846,6 +847,7 @@ function settings(doc, ui = {}) {
     ${statblockTemplateEditor(doc)}
     ${rulesConstitutionSection()}
     ${tradeEconomyModelSection(doc)}
+    ${mechanicsIndexSection(doc, ui)}
     <div class="settings-group">
       <h3>Companion tools</h3>
       <p class="dim small">GMAtlas tracks character sheets in-app, ruleset-aware. For full character-building wizards this app doesn't replicate, the community Crew Link tool is one Ironsworn/Starforged option:</p>
@@ -935,6 +937,24 @@ function tradeEconomyModelSection(doc) {
       </label>
       <p class="dim small">Tag a Location with one of these to bias its market prices beyond the manual supply/demand dials — untagged Locations are unaffected. Only one model is active at a time, but a Location already tagged from the other model keeps working if you switch.</p>
       <ul class="rules-provider-legend">${rows}</ul>
+    </div>`;
+}
+
+// Game Mechanics Index (docs/adr/0014-mechanics-index-pdfjs.md): a Settings
+// trigger for the async PDF.js scan (ui/mechanicsScan.js) that populates
+// the Guide drawer's clickable term -> page list below. Just the button and
+// a status line here — the actual results render in the Guide, alongside
+// the freeform reference text they're meant to accompany.
+function mechanicsIndexSection(doc, ui) {
+  const entries = getMechanicsIndex(doc);
+  const scanning = !!(ui && ui.mechanicsScanning);
+  return `
+    <div class="settings-group">
+      <h3>Game Mechanics Index</h3>
+      <p class="dim small">Scans the Reference Library's PDFs relevant to your active stat ruleset (plus Hostile's own core material) for terms like Strain, Supply, Momentum, and links each to the page it turns up on, in the Guide drawer below.</p>
+      <button class="btn ghost" data-mechanics-scan ${scanning ? 'disabled' : ''}>${scanning ? 'Scanning…' : '🔄 Refresh Mechanics Index'}</button>
+      <p class="dim small">${entries.length ? `${entries.length} term(s) indexed.` : 'Not scanned yet.'}</p>
+      <p class="dim small">Needs the app served over http(s) (<code>npm run serve</code>) — reading local PDFs is blocked when running straight off <code>file://</code>.</p>
     </div>`;
 }
 
@@ -1269,7 +1289,26 @@ function guide(doc) {
   const text = getGuideText(doc);
   return `
     <p class="dim small">A table of contents for the campaign — <code>@Name</code> links a Cast entity, <code>@[Doc Name]</code> references a document (<code>@[Doc Name#12]</code> or <code>@[Doc Name p.12]</code> jumps to a page). Click a mention to open it; arrow-key the cursor into it to edit its label. Saves automatically.</p>
-    <div class="mention-editor guide-editor" contenteditable="true" data-guide-input data-placeholder="Colony Builder — see @[5PFH Planetfall p.12] for the turn sheet.&#10;Meet @Captain Reyes in Docking Bay 3.">${buildMentionEditorHTML(doc, text)}</div>`;
+    <div class="mention-editor guide-editor" contenteditable="true" data-guide-input data-placeholder="Colony Builder — see @[5PFH Planetfall p.12] for the turn sheet.&#10;Meet @Captain Reyes in Docking Bay 3.">${buildMentionEditorHTML(doc, text)}</div>
+    ${mechanicsIndexList(doc)}`;
+}
+
+// Game Mechanics Index (docs/adr/0014-mechanics-index-pdfjs.md) — the
+// results of Settings' "🔄 Refresh Mechanics Index" PDF.js scan, as
+// clickable page-anchored links reusing the SAME document-viewer tab
+// mechanism a Guide/Journal @[Doc Name#12] mention already opens (ref:<file>
+// + a page number) rather than a raw <a href> new-tab link, so a term click
+// opens inline like every other document reference in this app.
+function mechanicsIndexList(doc) {
+  const entries = getMechanicsIndex(doc);
+  if (!entries.length) return '';
+  const rows = entries.map((e) => `
+    <li><a href="#" class="doc-card-title-link" data-doc-open="ref:${esc(e.docFile)}" data-doc-open-page="${e.page}"><b>${esc(e.term)}</b> — ${esc(e.docTitle)} p.${e.page}</a></li>`).join('');
+  return `
+    <div class="guide-mechanics-index">
+      <h4>Game Mechanics Index</h4>
+      <ul class="build-notes">${rows}</ul>
+    </div>`;
 }
 
 // Fixed layout coordinate space (matches computeLayout's default) — a large

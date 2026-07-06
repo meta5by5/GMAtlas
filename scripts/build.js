@@ -74,10 +74,13 @@ while (queue.length) {
     }
   );
 
-  // Rewrite exports: `export function foo` / `export const BAR` → strip keyword,
-  // then re-export by name at the end of the module.
+  // Rewrite exports: `export function foo` / `export async function foo` /
+  // `export const BAR` → strip keyword, then re-export by name at the end
+  // of the module. (`async function` added 2026-07-06 — ui/mechanicsScan.js
+  // was the first module needing an exported async function; before this,
+  // every async export used the `export { name }` aggregate form below.)
   const exported = [];
-  src = src.replace(/^export\s+(function|const)\s+([A-Za-z0-9_$]+)/gm, (_m, kind, name) => {
+  src = src.replace(/^export\s+(async function|function|const)\s+([A-Za-z0-9_$]+)/gm, (_m, kind, name) => {
     exported.push(name);
     return `${kind} ${name}`;
   });

@@ -2393,6 +2393,40 @@ test('a fresh campaign defaults settings.tradeEconomyModel to hostile, and Locat
   for (const t of economyTypesForModel('traveller')) assert.ok(!vocab.includes(t.label));
 });
 
+// --- docs/adr/0014: Game Mechanics Index (pure storage half only — the
+// actual PDF.js scan is async/browser-only, see ui/mechanicsScan.js) -------
+import { getMechanicsIndex, setMechanicsIndex } from '../src/domain/mechanicsIndex.js';
+
+test('a fresh campaign has an empty Mechanics Index; setMechanicsIndex replaces it wholesale', () => {
+  let camp = defaultCampaign();
+  assert.deepEqual(getMechanicsIndex(camp), []);
+  const entries = [{ term: 'Strain', docTitle: 'Cities Without Number', docFile: 'assets/docs/CitiesWithoutNumber_Deluxe.pdf', page: 42 }];
+  camp = setMechanicsIndex(camp, entries);
+  assert.deepEqual(getMechanicsIndex(camp), entries);
+  camp = setMechanicsIndex(camp, []);
+  assert.deepEqual(getMechanicsIndex(camp), []);
+});
+
+test('setMechanicsIndex tolerates a non-array argument, storing an empty index rather than throwing', () => {
+  const camp = setMechanicsIndex(defaultCampaign(), null);
+  assert.deepEqual(getMechanicsIndex(camp), []);
+});
+
+// relevantDocs() itself is a plain, DOM-free filter (no window/PDF.js touch
+// unless a scan actually runs), so it's headlessly testable despite living
+// in ui/ alongside the async scan it scopes.
+import { relevantDocs } from '../src/ui/mechanicsScan.js';
+
+test('relevantDocs always includes Hostile-titled PDFs, plus whichever provider matches the active stat ruleset, falling back to every PDF if nothing matches', () => {
+  const hostileOnly = relevantDocs({ statRuleset: 'no-such-ruleset' });
+  assert.ok(hostileOnly.length > 0);
+  assert.ok(hostileOnly.every((d) => d.title.toLowerCase().includes('hostile')));
+
+  const withTraveller = relevantDocs({ statRuleset: 'traveller' });
+  assert.ok(withTraveller.some((d) => d.title.toLowerCase().includes('traveller')));
+  assert.ok(withTraveller.some((d) => d.title.toLowerCase().includes('hostile')));
+});
+
 test('setMarketDial clamps to [0, 100] and no-ops on a non-Location entity or unknown commodity', () => {
   let camp = defaultCampaign();
   let { campaign, id } = createEntity(camp, { type: 'location', name: 'Depot' });
