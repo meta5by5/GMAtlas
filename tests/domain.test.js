@@ -1820,6 +1820,19 @@ test('a faction entity defaults Force/Cunning/Wealth to 3 and an empty Assets li
   assert.deepEqual(getEntity(camp, npcId), before); // no-op, no force field added
 });
 
+test('a faction entity defaults the Diplomacy Engine fields (fear/need/secret) to empty strings, editable like hq/leadership/agenda', () => {
+  let camp = defaultCampaign();
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
+  let e = getEntity(camp, factionId);
+  assert.equal(e.fear, ''); assert.equal(e.need, ''); assert.equal(e.secret, '');
+
+  camp = updateEntity(camp, factionId, { fear: 'losing its monopoly', need: 'a new supply route', secret: 'is secretly bankrupt' });
+  e = getEntity(camp, factionId);
+  assert.equal(e.fear, 'losing its monopoly');
+  assert.equal(e.need, 'a new supply route');
+  assert.equal(e.secret, 'is secretly bankrupt');
+});
+
 test('addFactionAsset appends a trimmed, non-empty asset; removeFactionAsset removes by index; both no-op on a non-faction entity', () => {
   let camp = defaultCampaign();
   let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));

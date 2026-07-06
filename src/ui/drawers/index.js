@@ -274,9 +274,28 @@ function factionSection(doc, e) {
       <label class="field-label">Agenda
         <textarea data-entity-field="agenda" rows="2" placeholder="What is this faction actively pursuing right now?">${esc(e.agenda)}</textarea>
       </label>
+      ${diplomacyFieldsHtml(e)}
       ${factionStatsHtml(e)}
       ${factionPressureHtml(e, track)}
     </div>`;
+}
+
+// Diplomacy Engine fields (docs/adr/0009-situation-engine-revisited.md,
+// Decision item 2) — three free-text fields alongside HQ/Leadership/Agenda
+// above, same shape and creation-time application (entities.js's
+// ensureFactionFields). A natural HOW-workspace "Negotiate" Co-Pilot hook
+// was named in the ADR as a future follow-on, not committed to here.
+function diplomacyFieldsHtml(e) {
+  return `
+    <label class="field-label">Fear
+      <input data-entity-field="fear" value="${esc(e.fear)}" placeholder="What this faction is afraid of">
+    </label>
+    <label class="field-label">Need
+      <input data-entity-field="need" value="${esc(e.need)}" placeholder="What this faction needs">
+    </label>
+    <label class="field-label">Secret
+      <input data-entity-field="secret" value="${esc(e.secret)}" placeholder="A secret about this faction (GM-facing)">
+    </label>`;
 }
 
 // Force/Cunning/Wealth + Assets (2026-07-06, docs/adr/0011-swn-cwn-content.md):

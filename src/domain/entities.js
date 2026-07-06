@@ -126,6 +126,13 @@ function ensureFactionFields(e) {
   if (e.cunning === undefined) e.cunning = 3;
   if (e.wealth === undefined) e.wealth = 3;
   if (!Array.isArray(e.assets)) e.assets = [];
+  // Diplomacy Engine fields (docs/adr/0009-situation-engine-revisited.md,
+  // Decision item 2) — free text, same shape/creation-time application as
+  // hq/leadership/scenarioSeed above: what this faction fears, what it
+  // needs, and a secret about it a GM can reveal later.
+  if (e.fear === undefined) e.fear = '';
+  if (e.need === undefined) e.need = '';
+  if (e.secret === undefined) e.secret = '';
 }
 
 function clampFactionStat(n) {
