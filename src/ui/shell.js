@@ -669,12 +669,15 @@ function onClick(ev) {
   }
   const oracleTagFilterClear = hit('[data-oracle-tag-filter-clear]');
   if (oracleTagFilterClear) { oracleTagFilter = null; return renderDrawerBody(); }
-  // A field's 🔮 link (jumps here with a tag filter pre-applied)
+  // A field's 🔮 link (docs/adr/0016) — opens Oracle anchored beside
+  // whichever drawer/tab is currently active (e.g. Entity Detail), not on
+  // top of it, so the field being written stays visible next to the
+  // filtered Oracle results — anchorDrawerTab() already renders itself.
   const oracleFieldLink = hit('[data-oracle-field-link]');
   if (oracleFieldLink) {
     const [entityType, field] = oracleFieldLink.dataset.oracleFieldLink.split('.');
     const tags = oracleLinkTagsFor(entityType, field);
-    if (tags) { oracleTagFilter = tags; oracleFilter = ''; openDrawerTab('oracle'); render(); }
+    if (tags) { oracleTagFilter = tags; oracleFilter = ''; anchorDrawerTab('oracle'); }
     return;
   }
 
