@@ -340,6 +340,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* Form fields */
 .field-label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.7rem; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; margin-top: var(--sp-3); }
 .field-label .metric { color: var(--accent); font-size: 0.85rem; }
+/* A field's optional 🔮 "jump to relevant Oracle(s)" link (docs/adr/0016) —
+   right-aligned on the label's own line via margin-left:auto. */
+.field-label-row { display: flex; align-items: center; width: 100%; }
+.field-label-row .icon-btn { margin-left: auto; text-transform: none; letter-spacing: normal; }
 .field-row { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: var(--sp-3); align-items: end; }
 /* Narrative Trackers (Resources/Reputation/Stress) — a balanced N-up row, not
    the 3-up Intent/Threat/Mystery layout above. */
@@ -440,6 +444,12 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .oracle-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: 0.3rem 0.4rem; border-radius: var(--radius-sm); }
 .oracle-row:hover { background: var(--tier2-bg); }
 .oracle-label { font-size: 0.82rem; }
+/* Tag/edit/roll icon cluster, right-aligned as one group (docs/adr/0016). */
+.oracle-row-actions { display: inline-flex; gap: 2px; align-items: center; margin-left: auto; }
+/* Oracle tags (docs/adr/0016) — hidden by default behind the row's 🏷
+   toggle, same footprint-saving posture as the entries editor below. */
+.oracle-tag-editor { margin: 0 0 var(--sp-2) 0.4rem; padding: var(--sp-2); background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.oracle-tag-filter-badge { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); padding: 0.3rem 0.5rem; background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.8rem; color: var(--text-dim); }
 /* Oracle table entry editor (Phase 8) — collapsed behind the row's ✎ toggle */
 .oracle-editor { margin: 0 0 var(--sp-2) 0.4rem; padding: var(--sp-2); background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .oracle-entry-row, .oracle-entry-add { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: 2px; }

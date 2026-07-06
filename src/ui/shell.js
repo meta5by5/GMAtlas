@@ -7,7 +7,8 @@ import { store } from '../core/store.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { contextSummary } from '../domain/context.js';
 import { continueStory, applyStoryShift, rollOracle, addNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens } from '../domain/session.js';
-import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable } from '../domain/oracles.js';
+import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag } from '../domain/oracles.js';
+import { oracleLinkTagsFor } from '../data/entityFieldOracleLinks.js';
 import { addThread, advanceThread, removeThread, setThreadStatus, setThreadPriority } from '../domain/threads.js';
 import { createExpedition, setExpeditionDial } from '../domain/expeditions.js';
 import {
@@ -138,6 +139,8 @@ let recapOpen = false; // ephemeral — collapses the "Previously on..." session
 let searchOpen = false; // ephemeral — Universal Search overlay
 let searchQuery = '';
 let oracleEditorOpen = new Set(); // ephemeral — which oracle tables' entry editors are expanded
+let oracleTagEditorOpen = new Set(); // ephemeral — which oracle tables' TAG editors are expanded (docs/adr/0016), hidden by default
+let oracleTagFilter = null; // ephemeral — array of tags a field's 🔮 link jumped here with, or null for the ordinary text-filtered view (mutually exclusive with oracleFilter)
 let entitySearch = ''; // ephemeral — Cast panel name/tag search
 let entityTypeFilter = ''; // ephemeral — Cast panel type filter ('' = all)
 let entityTagFilters = new Set(); // ephemeral — Cast panel cumulative tag sub-filter (ADR 0012), AND semantics, mirrors docTagFilters
@@ -649,6 +652,32 @@ function onClick(ev) {
     return renderDrawerBody();
   }
 
+  // --- oracle tags (docs/adr/0016-oracle-tags-and-field-links.md) —
+  // hidden by default, revealed via a dedicated 🏷 toggle next to ✎, same
+  // "collapsed until asked" posture as the entries editor above.
+  const oracleTagToggleEditor = hit('[data-oracle-tag-toggle-editor]');
+  if (oracleTagToggleEditor) {
+    const key = oracleTagToggleEditor.dataset.oracleTagToggleEditor;
+    if (oracleTagEditorOpen.has(key)) oracleTagEditorOpen.delete(key); else oracleTagEditorOpen.add(key);
+    return renderDrawerBody();
+  }
+  const oracleTagRemove = hit('[data-oracle-tag-remove]');
+  if (oracleTagRemove) {
+    const [key, tag] = oracleTagRemove.dataset.oracleTagRemove.split('::');
+    store.update((d) => removeOracleTag(d, key.split('>'), tag));
+    return renderDrawerBody();
+  }
+  const oracleTagFilterClear = hit('[data-oracle-tag-filter-clear]');
+  if (oracleTagFilterClear) { oracleTagFilter = null; return renderDrawerBody(); }
+  // A field's 🔮 link (jumps here with a tag filter pre-applied)
+  const oracleFieldLink = hit('[data-oracle-field-link]');
+  if (oracleFieldLink) {
+    const [entityType, field] = oracleFieldLink.dataset.oracleFieldLink.split('.');
+    const tags = oracleLinkTagsFor(entityType, field);
+    if (tags) { oracleTagFilter = tags; oracleFilter = ''; openDrawerTab('oracle'); render(); }
+    return;
+  }
+
   // --- party --- (inline creation form, not a window.prompt() popup — see
   // partyTrackerAddForm in drawers/index.js; name/type are both asked there,
   // never changeable again once the tracker exists)
@@ -1032,7 +1061,7 @@ function onKeydown(ev) {
   // blur (see onChange) — Enter has no native effect on a bare <input>
   // outside a <form>, so it's wired here to trigger that same blur instead
   // of duplicating the commit logic.
-  const commitOnEnterTarget = ev.target.closest('[data-doc-rename-input], [data-ref-rename-input], [data-doc-tag-input], [data-ref-tag-input], [data-entity-tag-input]');
+  const commitOnEnterTarget = ev.target.closest('[data-doc-rename-input], [data-ref-rename-input], [data-doc-tag-input], [data-ref-tag-input], [data-entity-tag-input], [data-oracle-tag-input]');
   if (commitOnEnterTarget && ev.key === 'Enter') { ev.preventDefault(); commitOnEnterTarget.blur(); return; }
 
   // Party Tracker creation form: Enter in the name field submits (same
@@ -1134,6 +1163,16 @@ function onChange(ev) {
     const value = t.value.trim();
     t.value = '';
     if (value) return store.update((d) => addEntityTag(d, active, value));
+    return;
+  }
+
+  // Oracle tag input (docs/adr/0016) — same auto-commit-on-change shape.
+  const oracleTagInput = t.closest('[data-oracle-tag-input]');
+  if (oracleTagInput) {
+    const key = oracleTagInput.dataset.oracleTagInput;
+    const value = t.value.trim();
+    t.value = '';
+    if (value) return store.update((d) => addOracleTag(d, key.split('>'), value));
     return;
   }
 
@@ -1354,7 +1393,7 @@ function onInput(ev) {
   if (expDial) { const lbl = expDial.previousElementSibling; if (lbl && lbl.classList.contains('metric')) lbl.textContent = `${t.value}/10`; return; }
 
   const of = t.closest('[data-oracle-filter]');
-  if (of) { oracleFilter = t.value; renderDrawerBody(); restoreFocus('[data-oracle-filter]'); return; }
+  if (of) { oracleFilter = t.value; oracleTagFilter = null; renderDrawerBody(); restoreFocus('[data-oracle-filter]'); return; }
 
   const df = t.closest('[data-doc-filter]');
   if (df) { docFilter = t.value; renderDrawerBody(); restoreFocus('[data-doc-filter]'); return; }
@@ -2159,7 +2198,7 @@ function headExtraForDrawer(id) {
 // below) since either can be asked to render any drawer id.
 function buildDrawerUi() {
   return {
-    oracleFilter, expandedOracleGroups, oracleEditorOpen, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
+    oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
     enhancementDraft, expandedEnhancements, mechanicsScanning, lensPickerOpen, lensDraw,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,

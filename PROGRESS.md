@@ -14,6 +14,29 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-06 Oracle tags + entity-field "jump to relevant Oracle" links**
+(`docs/adr/0016-oracle-tags-and-field-links.md`): a small reusable tag
+vocabulary (`character`/`secret`/`setting`/`leadership`/`hook`/`agenda`/
+`fear`/`faction`/`trade`/`discovery`) seeded onto real oracle tables
+(`data/oracleTagSeeds.js`), same seed-then-campaign-override shape
+`campaign.oracles.overrides` already used for edited table content. 13
+entity fields across all 6 entity types (Faction's `hq`/`leadership`/
+`scenarioSeed`/`agenda`/`fear`/`need`/`secret`, plus the shared Overview/
+Revealed pair every type has) gained a right-aligned 🔮 icon
+(`data/entityFieldOracleLinks.js`) that jumps to the Oracle drawer
+pre-filtered to every table carrying the field's linked tag(s), with a
+"Filtered by: ..." clear-badge. Oracle drawer table rows gained a 🏷 icon
+(right-aligned alongside the existing ✎/🎲) revealing a hidden-by-default
+tag editor; any tag a field link depends on is locked (shown 🔒, not
+removable) so a GM can't silently break the link via the tag editor.
+Verified end to end in a real browser: Faction's Fear icon jumps to `Fear
+Trigger`/`NPC Secret` (excluding unrelated tables), NPC's Overview icon
+jumps to `First Look`, both icon clusters are pixel-exact right-aligned.
+Caught and fixed a real bug during verification: `openDrawerTab()` never
+re-renders itself — every other call site piggybacked on a subsequent
+`store.update()`'s `notify()`; the new field-link jump has no campaign
+mutation to piggyback on, so it needed its own explicit `render()` call.
+
 **2026-07-06 persistence moved from localStorage to IndexedDB**
 (`docs/adr/0015-indexeddb-persistence.md`), triggered by a real save
 failure (a Suggestion Lens pick threw a localStorage quota-exceeded error —

@@ -4,8 +4,10 @@
 
 import {
   SCENE_TABLES, buildGroupedOracleTree, filterOracleTree, tablesWithOverrides,
-  hasOracleOverride,
+  hasOracleOverride, getOracleTags, isOracleTagLocked, listOracleTagVocabulary,
+  filterOracleTreeByTags,
 } from '../../domain/oracles.js';
+import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import {
   listEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, listTagVocabulary, listEntityTagVocabulary,
   RELATIONSHIP_TYPES, RELATIONSHIP_TYPE_LABEL, isRelationshipFlagged,
@@ -182,6 +184,26 @@ function bondFieldFor(e, otherName) {
   return null;
 }
 
+// A field's 🔮 "jump to relevant Oracle(s)" link (docs/adr/0016-oracle-
+// tags-and-field-links.md) — right-aligned next to the field's label, only
+// rendered when data/entityFieldOracleLinks.js has an entry for this
+// "entityType.field" key. Clicking it (shell.js's data-oracle-field-link
+// handler) opens the Oracle drawer pre-filtered to every table carrying
+// any of the field's linked tags.
+function oracleLinkIcon(entityType, field) {
+  const tags = oracleLinkTagsFor(entityType, field);
+  if (!tags) return '';
+  return `<button class="icon-btn" data-oracle-field-link="${entityType}.${field}" title="Jump to relevant Oracle table(s): ${tags.map((t) => esc(t)).join(', ')}" aria-label="Jump to relevant Oracle tables">🔮</button>`;
+}
+
+// A field label + its optional 🔮 link, right-aligned on the same line —
+// replaces a bare `<label class="field-label">Text ...` opening tag for
+// exactly the fields data/entityFieldOracleLinks.js links; every other
+// field is untouched.
+function fieldLabelRow(text, entityType, field) {
+  return `<span class="field-label-row">${esc(text)}${oracleLinkIcon(entityType, field)}</span>`;
+}
+
 function inspector(doc, e, ui) {
   const others = listEntities(doc).filter((x) => x.id !== e.id);
   const relTypeOptions = (selected) => RELATIONSHIP_TYPES.map((t) => `<option value="${t}" ${t === selected ? 'selected' : ''}>${RELATIONSHIP_TYPE_LABEL[t]}</option>`).join('');
@@ -224,11 +246,12 @@ function inspector(doc, e, ui) {
       <select data-entity-field="type">${ENTITY_TYPES.map((t) => `<option value="${t}" ${t === e.type ? 'selected' : ''}>${TYPE_LABEL[t]}</option>`).join('')}</select>
     </label>
     ${tagEditor(doc, e)}
-    <label class="field-label">Overview (shared)
+    <label class="field-label">${fieldLabelRow('Overview (shared)', e.type, 'overview')}
       <textarea data-entity-field="overview" rows="3" placeholder="What the party knows.">${esc(e.overview)}</textarea>
     </label>
     <div class="revealed-block">
       <button class="btn ghost sm" data-reveal-toggle="${esc(e.id)}">${e.revealedOpen ? '▾' : '▸'} Revealed / hidden (GM)</button>
+      ${oracleLinkIcon(e.type, 'revealed')}
       ${e.revealedOpen ? `<textarea data-entity-field="revealed" rows="2" placeholder="Secrets, twists, true motives.">${esc(e.revealed)}</textarea>` : ''}
     </div>
     ${factionSection(doc, e)}
@@ -262,16 +285,16 @@ function factionSection(doc, e) {
   return `
     <div class="faction-card">
       <h4>Faction card</h4>
-      <label class="field-label">HQ
+      <label class="field-label">${fieldLabelRow('HQ', 'faction', 'hq')}
         <input data-entity-field="hq" value="${esc(e.hq)}" placeholder="Where they operate from">
       </label>
-      <label class="field-label">Leadership
+      <label class="field-label">${fieldLabelRow('Leadership', 'faction', 'leadership')}
         <input data-entity-field="leadership" value="${esc(e.leadership)}" placeholder="Who's in charge">
       </label>
-      <label class="field-label">Scenario seed
+      <label class="field-label">${fieldLabelRow('Scenario seed', 'faction', 'scenarioSeed')}
         <textarea data-entity-field="scenarioSeed" rows="2" placeholder="A one-paragraph hook this faction can drop into a session.">${esc(e.scenarioSeed)}</textarea>
       </label>
-      <label class="field-label">Agenda
+      <label class="field-label">${fieldLabelRow('Agenda', 'faction', 'agenda')}
         <textarea data-entity-field="agenda" rows="2" placeholder="What is this faction actively pursuing right now?">${esc(e.agenda)}</textarea>
       </label>
       ${diplomacyFieldsHtml(e)}
@@ -287,13 +310,13 @@ function factionSection(doc, e) {
 // was named in the ADR as a future follow-on, not committed to here.
 function diplomacyFieldsHtml(e) {
   return `
-    <label class="field-label">Fear
+    <label class="field-label">${fieldLabelRow('Fear', 'faction', 'fear')}
       <input data-entity-field="fear" value="${esc(e.fear)}" placeholder="What this faction is afraid of">
     </label>
-    <label class="field-label">Need
+    <label class="field-label">${fieldLabelRow('Need', 'faction', 'need')}
       <input data-entity-field="need" value="${esc(e.need)}" placeholder="What this faction needs">
     </label>
-    <label class="field-label">Secret
+    <label class="field-label">${fieldLabelRow('Secret', 'faction', 'secret')}
       <input data-entity-field="secret" value="${esc(e.secret)}" placeholder="A secret about this faction (GM-facing)">
     </label>`;
 }
@@ -743,19 +766,29 @@ function journal(doc, ui = {}) {
 // would otherwise reset native <details> open/closed state).
 function oracle(doc, ui) {
   const filter = ui.oracleFilter || '';
+  const tagFilter = ui.oracleTagFilter || null;
   const tables = tablesWithOverrides(doc.oracles && doc.oracles.overrides, doc.settings && doc.settings.genrePack);
   const tree = buildGroupedOracleTree(tables);
-  const filtered = filterOracleTree(tree, filter);
-  const forceOpen = !!filter.trim();
+  // A field's 🔮 link (docs/adr/0016-oracle-tags-and-field-links.md) sets
+  // oracleTagFilter instead of the free-text oracleFilter — the two modes
+  // are mutually exclusive (typing in the search box clears the tag
+  // filter, shell.js), so only one prune pass ever runs.
+  const filtered = (tagFilter && tagFilter.length) ? filterOracleTreeByTags(tree, doc, tagFilter) : filterOracleTree(tree, filter);
+  const forceOpen = !!filter.trim() || !!(tagFilter && tagFilter.length);
   const expanded = ui.expandedOracleGroups || new Set();
   const editorOpen = ui.oracleEditorOpen || new Set();
+  const tagEditorOpen = ui.oracleTagEditorOpen || new Set();
 
-  const rows = filtered.map((cat) => oracleGroupRow(doc, cat, forceOpen, expanded, editorOpen)).join('');
+  const rows = filtered.map((cat) => oracleGroupRow(doc, cat, forceOpen, expanded, editorOpen, tagEditorOpen, tables)).join('');
+  const tagBadge = (tagFilter && tagFilter.length)
+    ? `<div class="oracle-tag-filter-badge">Filtered by: ${tagFilter.map((t) => esc(t)).join(', ')} <button class="icon-btn" data-oracle-tag-filter-clear title="Clear filter">✕</button></div>`
+    : '';
   return `
     <div class="oracle-toolbar">
       <input class="drawer-search" data-oracle-filter value="${esc(filter)}" placeholder="Search oracle tables…">
       <button class="btn ghost sm" data-oracle-collapse-all>Collapse all</button>
     </div>
+    ${tagBadge}
     <div class="oracle-tree">
       ${rows || '<p class="ws-placeholder">No tables match that search.</p>'}
     </div>`;
@@ -784,22 +817,54 @@ function oracleTableEditor(doc, node, key) {
     </div>`;
 }
 
-function oracleGroupRow(doc, node, forceOpen, expanded, editorOpen) {
+// Oracle tags (docs/adr/0016-oracle-tags-and-field-links.md) are hidden by
+// default — revealed only via the 🏷 icon next to ✎, same "collapsed until
+// asked" posture as the entries editor above. Locked tags (referenced by
+// an entity-field link, data/entityFieldOracleLinks.js) show a 🔒 instead
+// of a ✕ — visible, not hidden, so a GM understands why it's stuck rather
+// than wondering where the remove button went (same "flag, don't silently
+// drop" posture Phase 7's relationship-flagging already established).
+function oracleTagEditor(doc, node, key, tables) {
+  const tags = getOracleTags(doc, node.path);
+  const vocab = listOracleTagVocabulary(doc, tables);
+  const chips = tags.map((t) => {
+    const locked = isOracleTagLocked(t);
+    return `<span class="tag-chip">${esc(t)} ${locked
+      ? `<span class="icon-btn" title="Locked — used by an entity field link">🔒</span>`
+      : `<button class="icon-btn" data-oracle-tag-remove="${esc(key)}::${esc(t)}" title="Remove tag">✕</button>`}</span>`;
+  }).join('');
+  return `
+    <div class="tag-editor oracle-tag-editor">
+      <div class="tag-editor-head">
+        <span class="field-label-static">Tags</span>
+        <input class="doc-tag-input" data-oracle-tag-input="${esc(key)}" list="oracle-tag-list" placeholder="add tag…">
+      </div>
+      <datalist id="oracle-tag-list">${vocab.map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
+      <div class="tag-chips">${chips || '<span class="dim small">None yet.</span>'}</div>
+    </div>`;
+}
+
+function oracleGroupRow(doc, node, forceOpen, expanded, editorOpen, tagEditorOpen, tables) {
   const key = node.path ? node.path.join('>') : node.label;
   const open = forceOpen || expanded.has(key);
   if (node.kind === 'table') {
     const editing = editorOpen.has(key);
+    const taggingOpen = tagEditorOpen.has(key);
     return `
       <div class="oracle-row-wrap">
         <div class="oracle-row">
           <span class="oracle-label">${esc(node.label)} <span class="dim">(${node.values.length})</span></span>
-          <button class="icon-btn" data-oracle-edit-toggle="${esc(key)}" title="${editing ? 'Close editor' : 'Edit entries'}" aria-label="Edit entries">✎</button>
-          <button class="icon-btn" data-roll="${esc(key)}" title="Roll" aria-label="Roll">🎲</button>
+          <span class="oracle-row-actions">
+            <button class="icon-btn" data-oracle-tag-toggle-editor="${esc(key)}" title="${taggingOpen ? 'Hide tags' : 'Tags'}" aria-label="Tags">🏷</button>
+            <button class="icon-btn" data-oracle-edit-toggle="${esc(key)}" title="${editing ? 'Close editor' : 'Edit entries'}" aria-label="Edit entries">✎</button>
+            <button class="icon-btn" data-roll="${esc(key)}" title="Roll" aria-label="Roll">🎲</button>
+          </span>
         </div>
+        ${taggingOpen ? oracleTagEditor(doc, node, key, tables) : ''}
         ${editing ? oracleTableEditor(doc, node, key) : ''}
       </div>`;
   }
-  const childRows = node.children.map((c) => oracleGroupRow(doc, c, forceOpen, expanded, editorOpen)).join('');
+  const childRows = node.children.map((c) => oracleGroupRow(doc, c, forceOpen, expanded, editorOpen, tagEditorOpen, tables)).join('');
   const rollGroupBtn = node.kind === 'group'
     ? `<button class="icon-btn" data-roll-group="${esc(key)}" title="Roll every table in this group" aria-label="Roll group">🎲🎲</button>` : '';
   return `

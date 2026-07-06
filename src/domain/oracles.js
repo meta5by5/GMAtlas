@@ -5,6 +5,8 @@
 import { SCENE_TABLES } from '../data/tables.js';
 import { ORACLE_GROUPS, GROUP_ALIASES } from '../data/oracleGroups.js';
 import { findGenrePack } from '../data/genrePacks.js';
+import { ORACLE_TAG_SEEDS } from '../data/oracleTagSeeds.js';
+import { ENTITY_FIELD_ORACLE_LINKS } from '../data/entityFieldOracleLinks.js';
 
 export { SCENE_TABLES };
 
@@ -113,7 +115,74 @@ function structuredCloneSafe(o) {
 function ensureOracles(campaign) {
   if (!campaign.oracles || typeof campaign.oracles !== 'object') campaign.oracles = { overrides: {}, usage: {} };
   if (!campaign.oracles.overrides || typeof campaign.oracles.overrides !== 'object') campaign.oracles.overrides = {};
+  if (!campaign.oracles.tags || typeof campaign.oracles.tags !== 'object') campaign.oracles.tags = {};
   return campaign.oracles;
+}
+
+// --- Oracle tags (docs/adr/0016-oracle-tags-and-field-links.md) -----------
+// Same "seed until overridden" shape as overrides above: an untouched
+// table reads its tags from data/oracleTagSeeds.js; the moment a GM adds or
+// removes one, campaign.oracles.tags[path] becomes the full replacement
+// list going forward — not a diff/patch on top of the seed.
+
+/** A table's current tags — the campaign override if one exists, else the
+ *  shipped seed (data/oracleTagSeeds.js), else empty. Path is an array,
+ *  e.g. ['Crew & NPCs', 'NPC Secret']. */
+export function getOracleTags(campaign, path) {
+  const key = path.join('>');
+  const stored = (campaign.oracles && campaign.oracles.tags) || {};
+  if (Object.prototype.hasOwnProperty.call(stored, key)) return stored[key].slice();
+  return (ORACLE_TAG_SEEDS[key] || []).slice();
+}
+
+/** True if any entity-field link (data/entityFieldOracleLinks.js) depends
+ *  on this tag — such a tag can't be removed from a table via the Oracle
+ *  drawer's tag editor, so a GM can't silently break a field's 🔮 link. */
+export function isOracleTagLocked(tag) {
+  return Object.values(ENTITY_FIELD_ORACLE_LINKS).some((tags) => tags.includes(tag));
+}
+
+export function addOracleTag(campaign, path, tag) {
+  const next = structuredCloneSafe(campaign);
+  const oracles = ensureOracles(next);
+  const clean = String(tag || '').trim();
+  if (!clean) return next;
+  const current = getOracleTags(next, path);
+  if (!current.some((t) => t.toLowerCase() === clean.toLowerCase())) current.push(clean);
+  oracles.tags[path.join('>')] = current;
+  return next;
+}
+
+/** No-ops (returns the campaign unchanged) if `tag` is locked — see
+ *  isOracleTagLocked. */
+export function removeOracleTag(campaign, path, tag) {
+  if (isOracleTagLocked(tag)) return structuredCloneSafe(campaign);
+  const next = structuredCloneSafe(campaign);
+  const oracles = ensureOracles(next);
+  const current = getOracleTags(next, path).filter((t) => t.toLowerCase() !== String(tag || '').toLowerCase());
+  oracles.tags[path.join('>')] = current;
+  return next;
+}
+
+/** Every distinct tag currently in use anywhere (seed ∪ campaign
+ *  overrides), across every leaf table in `tables` — the datalist a GM
+ *  picks from when adding a tag to another table. */
+export function listOracleTagVocabulary(campaign, tables) {
+  const seen = new Set();
+  for (const leaf of flattenKeys(tables)) {
+    for (const t of getOracleTags(campaign, leaf.path)) seen.add(t);
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b));
+}
+
+/** Every leaf table path (in `tables`) carrying any of `wantedTags` — what
+ *  a field's 🔮 link resolves to before filtering the Oracle tree. */
+export function oraclePathsWithAnyTag(campaign, tables, wantedTags) {
+  const wanted = new Set((wantedTags || []).map((t) => t.toLowerCase()));
+  if (!wanted.size) return [];
+  return flattenKeys(tables)
+    .filter((leaf) => getOracleTags(campaign, leaf.path).some((t) => wanted.has(t.toLowerCase())))
+    .map((leaf) => leaf.path);
 }
 
 /** The entries a table path currently rolls against — the override array if
@@ -220,6 +289,25 @@ export function filterOracleTree(nodes, query) {
     if (aliases && aliases.some((a) => a.toLowerCase().includes(q))) return node;
     if (node.kind === 'table') {
       return node.values.some((v) => String(v).toLowerCase().includes(q)) ? node : null;
+    }
+    const children = node.children.map(walk).filter(Boolean);
+    return children.length ? { ...node, children } : null;
+  };
+  return nodes.map(walk).filter(Boolean);
+}
+
+/** Same recursive prune shape as filterOracleTree above, but by tag
+ *  membership instead of text — a leaf table survives if any of its own
+ *  tags (getOracleTags) intersects `wantedTags`; a group survives if any
+ *  descendant does. Powers a field's 🔮 "jump to relevant Oracle(s)" link
+ *  (docs/adr/0016-oracle-tags-and-field-links.md). */
+export function filterOracleTreeByTags(nodes, campaign, wantedTags) {
+  const wanted = new Set((wantedTags || []).map((t) => t.toLowerCase()));
+  if (!wanted.size) return nodes;
+  const walk = (node) => {
+    if (node.kind === 'table') {
+      const tags = getOracleTags(campaign, node.path).map((t) => t.toLowerCase());
+      return tags.some((t) => wanted.has(t)) ? node : null;
     }
     const children = node.children.map(walk).filter(Boolean);
     return children.length ? { ...node, children } : null;

@@ -1415,6 +1415,89 @@ test('filterOracleTree matches a composite generator\'s label via GROUP_ALIASES 
   assert.ok(hasXenobestiary);
 });
 
+// --- docs/adr/0016: Oracle tags + entity-field links -----------------------
+import {
+  getOracleTags, addOracleTag, removeOracleTag, isOracleTagLocked,
+  listOracleTagVocabulary, oraclePathsWithAnyTag, filterOracleTreeByTags,
+} from '../src/domain/oracles.js';
+import { ORACLE_TAG_SEEDS } from '../src/data/oracleTagSeeds.js';
+import { ENTITY_FIELD_ORACLE_LINKS, oracleLinkTagsFor } from '../src/data/entityFieldOracleLinks.js';
+
+test('getOracleTags reads the seed for an untouched table; addOracleTag/removeOracleTag override it going forward', () => {
+  let camp = defaultCampaign();
+  const path = ['Crew & NPCs', 'NPC Secret'];
+  assert.deepEqual(getOracleTags(camp, path), ORACLE_TAG_SEEDS['Crew & NPCs>NPC Secret']);
+
+  camp = addOracleTag(camp, path, 'custom-tag');
+  assert.ok(getOracleTags(camp, path).includes('custom-tag'));
+  assert.ok(getOracleTags(camp, path).includes('secret')); // seed tags survive the override write
+
+  camp = addOracleTag(camp, path, 'Custom-Tag'); // case-insensitive dedup
+  assert.equal(getOracleTags(camp, path).filter((t) => t.toLowerCase() === 'custom-tag').length, 1);
+
+  camp = removeOracleTag(camp, path, 'custom-tag');
+  assert.ok(!getOracleTags(camp, path).includes('custom-tag'));
+});
+
+test('isOracleTagLocked is true for every tag entityFieldOracleLinks.js references; removeOracleTag no-ops on a locked tag', () => {
+  const allLinkedTags = new Set(Object.values(ENTITY_FIELD_ORACLE_LINKS).flat());
+  for (const tag of allLinkedTags) assert.ok(isOracleTagLocked(tag), `${tag} should be locked`);
+  assert.ok(!isOracleTagLocked('definitely-not-a-linked-tag'));
+
+  let camp = defaultCampaign();
+  const path = ['Crew & NPCs', 'NPC Secret']; // seeded with 'secret', a locked tag
+  const before = getOracleTags(camp, path);
+  camp = removeOracleTag(camp, path, 'secret');
+  assert.deepEqual(getOracleTags(camp, path), before); // unchanged — locked
+});
+
+test('listOracleTagVocabulary collects every distinct tag currently in use, seed and campaign-added alike', () => {
+  let camp = defaultCampaign();
+  const vocab = listOracleTagVocabulary(camp, SCENE_TABLES);
+  assert.ok(vocab.includes('secret'));
+  assert.ok(vocab.includes('character'));
+  camp = addOracleTag(camp, ['Core Oracles', 'Action'], 'brand-new-tag');
+  assert.ok(listOracleTagVocabulary(camp, SCENE_TABLES).includes('brand-new-tag'));
+});
+
+test('oraclePathsWithAnyTag resolves every seeded path for a tag; filterOracleTreeByTags prunes the tree to just those', () => {
+  const camp = defaultCampaign();
+  const paths = oraclePathsWithAnyTag(camp, SCENE_TABLES, ['fear']);
+  assert.ok(paths.some((p) => p.join('>') === 'Crew & NPCs>NPC Secret'));
+  assert.ok(paths.some((p) => p.join('>') === 'Fear and Dread>Fear Trigger'));
+
+  const tree = buildGroupedOracleTree(SCENE_TABLES);
+  const filtered = filterOracleTreeByTags(tree, camp, ['fear']);
+  const leafLabels = [];
+  const collect = (nodes) => nodes.forEach((n) => (n.kind === 'table' ? leafLabels.push(n.label) : collect(n.children)));
+  collect(filtered);
+  assert.ok(leafLabels.includes('Fear Trigger'));
+  assert.ok(leafLabels.includes('NPC Secret'));
+  assert.ok(!leafLabels.includes('Action')); // an unrelated table is pruned out
+
+  assert.deepEqual(filterOracleTreeByTags(tree, camp, []), tree); // no tags -> unfiltered
+});
+
+test('every ORACLE_TAG_SEEDS path resolves to a real, non-empty table — no invented content', () => {
+  for (const key of Object.keys(ORACLE_TAG_SEEDS)) {
+    const path = key.split('>');
+    const values = getTable(SCENE_TABLES, ...path);
+    assert.ok(Array.isArray(values) && values.length > 0, `${key} should be a real table`);
+  }
+});
+
+test('every tag entityFieldOracleLinks.js references has at least one seeded table — no field link can ever open to an empty filtered view', () => {
+  const seededTags = new Set(Object.values(ORACLE_TAG_SEEDS).flat());
+  for (const [field, tags] of Object.entries(ENTITY_FIELD_ORACLE_LINKS)) {
+    for (const tag of tags) assert.ok(seededTags.has(tag), `${field} -> "${tag}" should have at least one seeded table`);
+  }
+});
+
+test('oracleLinkTagsFor resolves a known "entityType.field" key and returns null for an unlinked one', () => {
+  assert.deepEqual(oracleLinkTagsFor('faction', 'fear'), ['fear']);
+  assert.equal(oracleLinkTagsFor('npc', 'name'), null);
+});
+
 test('the Stars Without Number oracle group (Faction Action, World Tag — original content, no sourcebook) rolls correctly and is bucketed under Characters & Society, not Other', () => {
   assert.ok(Array.isArray(SCENE_TABLES['Stars Without Number']['Faction Action']));
   assert.ok(Array.isArray(SCENE_TABLES['Stars Without Number']['World Tag']));
