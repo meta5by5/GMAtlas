@@ -1341,6 +1341,13 @@ test('filterOracleTree keeps a whole group when its name matches, else only matc
   assert.equal(empty.length, 0);
 });
 
+test('filterOracleTree matches a composite generator\'s label via GROUP_ALIASES even though it is not a literal table name', () => {
+  const tree = buildGroupedOracleTree(SCENE_TABLES);
+  const filtered = filterOracleTree(tree, 'creature concept');
+  const hasXenobestiary = filtered.some((cat) => cat.children.some((g) => g.label === 'Xenobestiary'));
+  assert.ok(hasXenobestiary);
+});
+
 test('the Stars Without Number oracle group (Faction Action, World Tag — original content, no sourcebook) rolls correctly and is bucketed under Characters & Society, not Other', () => {
   assert.ok(Array.isArray(SCENE_TABLES['Stars Without Number']['Faction Action']));
   assert.ok(Array.isArray(SCENE_TABLES['Stars Without Number']['World Tag']));

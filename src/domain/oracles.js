@@ -3,7 +3,7 @@
 // which is what makes it testable.
 
 import { SCENE_TABLES } from '../data/tables.js';
-import { ORACLE_GROUPS } from '../data/oracleGroups.js';
+import { ORACLE_GROUPS, GROUP_ALIASES } from '../data/oracleGroups.js';
 import { findGenrePack } from '../data/genrePacks.js';
 
 export { SCENE_TABLES };
@@ -216,6 +216,8 @@ export function filterOracleTree(nodes, query) {
   if (!q) return nodes;
   const walk = (node) => {
     if (node.label.toLowerCase().includes(q)) return node;
+    const aliases = GROUP_ALIASES[node.label];
+    if (aliases && aliases.some((a) => a.toLowerCase().includes(q))) return node;
     if (node.kind === 'table') {
       return node.values.some((v) => String(v).toLowerCase().includes(q)) ? node : null;
     }

@@ -1101,6 +1101,15 @@ function onChange(ev) {
   if (ef) {
     const active = store.get().entities.activeId;
     const field = ef.dataset.entityField;
+    if (field === 'type') {
+      const current = getEntity(store.get(), active);
+      const from = current ? (TYPE_LABEL[current.type] || current.type) : '';
+      const to = TYPE_LABEL[t.value] || t.value;
+      if (current && current.type !== t.value && !window.confirm(`Change entity type from ${from} to ${to}?`)) {
+        t.value = current.type;
+        return;
+      }
+    }
     return store.update((d) => updateEntity(d, active, { [field]: t.value }));
   }
 

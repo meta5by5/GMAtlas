@@ -13,3 +13,15 @@ export const ORACLE_GROUPS = [
   { label: '🚀 Space Operations', children: ['Starships', 'Space Encounters', 'Space Operations', 'Trade & Cargo', 'Industrial Hazards', 'Exploration', 'Environmental Hazards'] },
   { label: '👹 Creatures & Xeno', children: ['Creatures', 'Xeno-Biology', 'Xenobestiary'] },
 ];
+
+// A composite Journal generator button (worldbuilding.js) rolls several
+// leaf tables from one group at once and gives the result its own
+// user-facing name — "Creature Concept" for Xenobestiary's four sub-tables,
+// e.g. — which never appears as a literal node label in the Oracle tree, so
+// searching for it found nothing (not a regression; the name simply never
+// existed as searchable data). This maps a group's real name to whatever
+// generator label(s) a GM might search for instead, consulted by
+// filterOracleTree below.
+export const GROUP_ALIASES = {
+  Xenobestiary: ['Creature Concept'],
+};

@@ -80,7 +80,7 @@ export function entities(doc, ui) {
     if (typeFilter && e.type !== typeFilter) return false;
     if (requiredTags.length && !requiredTags.every((t) => (e.tags || []).some((et) => et.toLowerCase() === t))) return false;
     if (!search) return true;
-    return [e.name, ...(e.tags || [])].join(' ').toLowerCase().includes(search);
+    return [e.name, TYPE_LABEL[e.type] || '', e.type, ...(e.tags || [])].join(' ').toLowerCase().includes(search);
   });
   const active = getEntity(doc, doc.entities && doc.entities.activeId);
   const typeChips = ['', ...ENTITY_TYPES_BY_LABEL].map((t) => `
