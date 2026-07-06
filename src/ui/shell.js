@@ -20,7 +20,7 @@ import {
   listEntities, ENTITY_TYPES, TYPE_LABEL, setFactionStat, addFactionAsset, removeFactionAsset, createItemFromCatalog,
 } from '../domain/entities.js';
 import { findCatalogItem } from '../data/gearCatalog.js';
-import { installCyberware, removeCyberware } from '../domain/cybernetics.js';
+import { installEnhancement, removeEnhancement } from '../domain/enhancements.js';
 import { generateCreatureConcept, formatCreatureConcept, generateSiteConcept, formatSiteConcept, generateAdventureSeed, formatAdventureSeed } from '../domain/worldbuilding.js';
 import {
   addDocument, updateDocument, removeDocument, getDocument, addDocumentTag, removeDocumentTag, renameDocument,
@@ -140,6 +140,8 @@ let entityTypeFilter = ''; // ephemeral — Cast panel type filter ('' = all)
 let entityTagFilters = new Set(); // ephemeral — Cast panel cumulative tag sub-filter (ADR 0012), AND semantics, mirrors docTagFilters
 let entityTagListOpen = false; // ephemeral — collapses the tag sub-filter chip row, mirrors docTagListOpen
 let catalogPickerOpen = false; // ephemeral — the Cast drawer's "+ Item from catalog" (ADR 0012) inline picker, open or not
+let enhancementDraft = {}; // ephemeral — entityId -> name text rolled into the Enhancements add-form's name field, overwritten by each 🎲 roll until "Install" commits it (docs/adr/next-request.md, 2026-07-06)
+let expandedEnhancements = new Set(); // ephemeral — entity ids whose Enhancements section is expanded (collapsed by default)
 let catalogSearch = ''; // ephemeral — the catalog picker's own name/tag search
 let partyTrackerAddOpen = false; // ephemeral — the inline "+ Tracker" name/type creation form, open or not
 let partyTrackerDraftKind = 'meter'; // ephemeral — the creation form's in-progress type pick, so its size/difficulty sub-field can react before the tracker actually exists
@@ -540,6 +542,12 @@ function onClick(ev) {
     return;
   }
   if (hit('[data-statblock-add-toggle]')) { statblockAddOpen = !statblockAddOpen; return renderDrawerBody(); }
+  const enhToggle = hit('[data-enhancements-toggle]');
+  if (enhToggle) {
+    const id = enhToggle.dataset.enhancementsToggle;
+    if (expandedEnhancements.has(id)) expandedEnhancements.delete(id); else expandedEnhancements.add(id);
+    return renderDrawerBody();
+  }
   const sbGroupToggle = hit('[data-statblock-group-toggle]');
   if (sbGroupToggle) {
     const key = sbGroupToggle.dataset.statblockGroupToggle;
@@ -716,22 +724,43 @@ function onClick(ev) {
     return toast(added ? 'NPC deepened' : 'Nothing to roll');
   }
 
-  // --- cybernetics (CWN-inspired strain/augmentation, 2026-07-06) ---
-  const cyberInstall = hit('[data-cyberware-install]');
-  if (cyberInstall) {
-    const id = cyberInstall.dataset.cyberwareInstall;
-    const nameInput = root.querySelector(`[data-cyberware-name-input="${id}"]`);
-    const strainInput = root.querySelector(`[data-cyberware-strain-input="${id}"]`);
+  // --- enhancements (CWN-inspired strain/augmentation, renamed from
+  // "Cybernetics" 2026-07-06 — see domain/enhancements.js) ---
+  const enhInstall = hit('[data-enhancement-install]');
+  if (enhInstall) {
+    const id = enhInstall.dataset.enhancementInstall;
+    const nameInput = root.querySelector(`[data-enhancement-name-input="${id}"]`);
+    const typeInput = root.querySelector(`[data-enhancement-type-input="${id}"]`);
+    const strainInput = root.querySelector(`[data-enhancement-strain-input="${id}"]`);
     const name = nameInput ? nameInput.value.trim() : '';
     if (!name) { if (nameInput) nameInput.focus(); return; }
-    store.update((d) => installCyberware(d, id, { name, strain: strainInput ? strainInput.value : 1 }));
-    return toast('Cyberware installed');
+    delete enhancementDraft[id]; // before update(): notify() re-renders synchronously, inside this call
+    store.update((d) => installEnhancement(d, id, { name, type: typeInput ? typeInput.value : undefined, strain: strainInput ? strainInput.value : 1 }));
+    return toast('Enhancement installed');
   }
-  const cyberRemove = hit('[data-cyberware-remove]');
-  if (cyberRemove) {
-    const [entityId, cwId] = cyberRemove.dataset.cyberwareRemove.split('::');
-    store.update((d) => removeCyberware(d, entityId, cwId));
+  const enhRemove = hit('[data-enhancement-remove]');
+  if (enhRemove) {
+    const [entityId, enId] = enhRemove.dataset.enhancementRemove.split('::');
+    store.update((d) => removeEnhancement(d, entityId, enId));
     return;
+  }
+  // The header's 🎲 rolls the Augmentation > Cyberware Concept oracle table
+  // straight into the name draft instead of the generic toast+Journal flow
+  // (docs/adr/next-request.md, 2026-07-06) — each roll overwrites the draft
+  // until "Install" is clicked, same "oracle rolls flavor, the GM commits
+  // the real record" split as before, just landing in the field instead of
+  // requiring a copy/paste from the Journal.
+  const enhRoll = hit('[data-roll-into-enhancement]');
+  if (enhRoll) {
+    const id = enhRoll.dataset.rollIntoEnhancement;
+    // toJournal: false — this is a cheap, repeatable trial roll into the
+    // draft field, not a committed event; only Install leaves a lasting
+    // record, so re-rolling several times before installing doesn't spam
+    // the Journal with rejected drafts.
+    let text = '';
+    store.update((d) => { const r = rollOracle(d, ['Augmentation', 'Cyberware Concept'], { toJournal: false }); text = r.text; return r.campaign; });
+    enhancementDraft[id] = text.split('\n').slice(-1)[0];
+    return renderDrawerBody();
   }
 
   // --- documents: open (viewer tabs), rename, tags ---------------------------
@@ -1280,6 +1309,13 @@ function onInput(ev) {
   // whatever was already typed instead of resetting it to blank.
   const trkDraftName = t.closest('[data-party-tracker-draft-name]');
   if (trkDraftName) { partyTrackerDraftName = t.value; return; }
+
+  // Same reasoning as the Party Tracker draft name above: typing a custom
+  // name (not from a 🎲 roll) must survive any unrelated store.update
+  // triggering a full re-render elsewhere, not just get overwritten back to
+  // the last roll or blanked.
+  const enhDraftName = t.closest('[data-enhancement-name-input]');
+  if (enhDraftName) { enhancementDraft[enhDraftName.dataset.enhancementNameInput] = t.value; return; }
 
   // The search input lives in the static header skeleton, not inside a
   // drawer body that gets replaced wholesale — only its results list needs
@@ -2062,6 +2098,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
+    enhancementDraft, expandedEnhancements,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,
   };

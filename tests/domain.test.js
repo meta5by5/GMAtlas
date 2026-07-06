@@ -1798,9 +1798,9 @@ import {
   generateAdventureSeed, formatAdventureSeed,
 } from '../src/domain/worldbuilding.js';
 import {
-  getCyberware, strainUsed, strainCapacity, isOverStrained, installCyberware, removeCyberware, setStrainCapacity,
-  DEFAULT_STRAIN_CAPACITY,
-} from '../src/domain/cybernetics.js';
+  getEnhancements, strainUsed, strainCapacity, isOverStrained, installEnhancement, removeEnhancement, setStrainCapacity,
+  DEFAULT_STRAIN_CAPACITY, DEFAULT_ENHANCEMENT_TYPE,
+} from '../src/domain/enhancements.js';
 
 test('a faction entity defaults Force/Cunning/Wealth to 3 and an empty Assets list; setFactionStat clamps 0-10 and no-ops on a non-faction entity', () => {
   let camp = defaultCampaign();
@@ -1955,33 +1955,47 @@ test('the Xenobestiary/Site Concept/Adventure Seed/Augmentation oracle groups ar
   assert.ok(byLabel('👥 Characters & Society').children.some((g) => g.label === 'Augmentation'));
 });
 
-test('a fresh entity has no cyberware and the default Strain capacity; is not over-strained', () => {
+test('a fresh entity has no enhancements and the default Strain capacity; is not over-strained', () => {
   let camp = defaultCampaign();
   let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Reyes' }));
   const e = getEntity(camp, id);
-  assert.deepEqual(getCyberware(e), []);
+  assert.deepEqual(getEnhancements(e), []);
   assert.equal(strainUsed(e), 0);
   assert.equal(strainCapacity(e), DEFAULT_STRAIN_CAPACITY);
   assert.equal(isOverStrained(e), false);
 });
 
-test('installCyberware adds an item with a coerced non-negative integer strain (default 1); removeCyberware removes it by id; both round-trip through a real campaign', () => {
+test('installEnhancement adds an item with a coerced non-negative integer strain (default 1) and a type (default cybernetics); removeEnhancement removes it by id; both round-trip through a real campaign', () => {
   let camp = defaultCampaign();
   let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Reyes' }));
-  camp = installCyberware(camp, id, { name: 'Ocular implants', strain: 2, notes: 'sees in the dark' });
-  camp = installCyberware(camp, id, { name: 'Weird one', strain: -5 }); // coerces to default 1
-  camp = installCyberware(camp, id, { name: '  ' }); // blank name, no-op
+  camp = installEnhancement(camp, id, { name: 'Ocular implants', type: 'wetware', strain: 2, notes: 'sees in the dark' });
+  camp = installEnhancement(camp, id, { name: 'Weird one', strain: -5 }); // coerces to default 1 strain, default type
+  camp = installEnhancement(camp, id, { name: '  ' }); // blank name, no-op
   let e = getEntity(camp, id);
-  assert.equal(getCyberware(e).length, 2);
-  assert.equal(e.cyberware[0].strain, 2);
-  assert.equal(e.cyberware[1].strain, 1);
+  assert.equal(getEnhancements(e).length, 2);
+  assert.equal(e.enhancements[0].strain, 2);
+  assert.equal(e.enhancements[0].type, 'wetware');
+  assert.equal(e.enhancements[1].strain, 1);
+  assert.equal(e.enhancements[1].type, DEFAULT_ENHANCEMENT_TYPE);
   assert.equal(strainUsed(e), 3);
 
-  const idToRemove = e.cyberware[0].id;
-  camp = removeCyberware(camp, id, idToRemove);
+  const idToRemove = e.enhancements[0].id;
+  camp = removeEnhancement(camp, id, idToRemove);
   e = getEntity(camp, id);
-  assert.equal(getCyberware(e).length, 1);
-  assert.equal(e.cyberware[0].name, 'Weird one');
+  assert.equal(getEnhancements(e).length, 1);
+  assert.equal(e.enhancements[0].name, 'Weird one');
+});
+
+test('getEnhancements tolerantly reads a pre-rename entity\'s old `cyberware` field, normalizing a missing type to the old default', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Legacy Export' }));
+  const e = getEntity(camp, id);
+  e.cyberware = [{ id: 'cw_old1', name: 'Old-style implant', strain: 3, notes: '' }];
+  const list = getEnhancements(e);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].name, 'Old-style implant');
+  assert.equal(list[0].type, DEFAULT_ENHANCEMENT_TYPE);
+  assert.equal(strainUsed(e), 3);
 });
 
 test('isOverStrained flags once installed Strain exceeds capacity; setStrainCapacity overrides the default, clamped 1-30', () => {
@@ -1989,9 +2003,9 @@ test('isOverStrained flags once installed Strain exceeds capacity; setStrainCapa
   let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Reyes' }));
   camp = setStrainCapacity(camp, id, 2);
   assert.equal(strainCapacity(getEntity(camp, id)), 2);
-  camp = installCyberware(camp, id, { name: 'A', strain: 2 });
+  camp = installEnhancement(camp, id, { name: 'A', strain: 2 });
   assert.equal(isOverStrained(getEntity(camp, id)), false); // exactly at capacity, not over
-  camp = installCyberware(camp, id, { name: 'B', strain: 1 });
+  camp = installEnhancement(camp, id, { name: 'B', strain: 1 });
   assert.equal(isOverStrained(getEntity(camp, id)), true);
 
   camp = setStrainCapacity(camp, id, 999);

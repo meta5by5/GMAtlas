@@ -21,7 +21,8 @@ import { getMarket, priceAt, listCargoManifest, listContracts } from '../../doma
 import { COMMODITIES, findCommodity } from '../../data/commodities.js';
 import { THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { getPressureTrack } from '../../domain/factions.js';
-import { getCyberware, strainUsed, strainCapacity, isOverStrained } from '../../domain/cybernetics.js';
+import { getEnhancements, strainUsed, strainCapacity, isOverStrained } from '../../domain/enhancements.js';
+import { ENHANCEMENT_TYPES } from '../../data/enhancementTypes.js';
 import { getGuideText } from '../../domain/guide.js';
 import { buildMentionEditorHTML } from '../mentionEditor.js';
 import { buildSessionRecap } from '../../domain/recap.js';
@@ -228,8 +229,8 @@ function inspector(doc, e, ui) {
       <textarea data-entity-field="revealed" rows="2" placeholder="Secrets, twists, true motives.">${esc(e.revealed)}</textarea>
     </label>
     ${factionSection(doc, e)}
-    ${cyberneticsSection(e)}
     ${statblockSection(e, doc, ui)}
+    ${enhancementsSection(e, ui)}
     <div class="rel-block">
       <h4>Relationships</h4>
       <p class="dim small">Drag another entity's ⠿ handle onto this one (or vice versa), or pick one below, to link them.</p>
@@ -325,32 +326,46 @@ function factionPressureHtml(e, track) {
     </div>`;
 }
 
-// Cybernetics (2026-07-06, docs/adr/0011-swn-cwn-content.md, Cities Without
-// Number's best-known subsystem — an original re-implementation, see
-// domain/cybernetics.js): NPC-only (a Faction/Location/Asset/Lore entity has
-// no body to augment). A running Strain total against a capacity, an
-// installed-cyberware chip list, and a small inline add form; the 🎲 button
-// rolls the Augmentation > Cyberware Concept oracle table into the Journal
-// for flavor inspiration — the GM types the actual name/Strain cost into
-// the form afterward, same "oracle rolls flavor, the GM commits the real
-// record" split as the Faction Asset roll above.
-function cyberneticsSection(e) {
+// Enhancements (renamed from "Cybernetics" 2026-07-06, docs/adr/next-
+// request.md — originally 2026-07-06, docs/adr/0011-swn-cwn-content.md,
+// Cities Without Number's best-known subsystem, an original
+// re-implementation, see domain/enhancements.js): NPC-only (a
+// Faction/Location/Asset/Lore entity has no body to augment). Collapsed by
+// default (expandedEnhancements, ephemeral — a GM working a busy NPC list
+// doesn't need this open on every card), living under the statblock section
+// now rather than above it. A running Strain total against a capacity, an
+// installed-enhancement chip list each tagged with its type
+// (data/enhancementTypes.js — Cybernetics/Wetware/Psionics/
+// Gene-Modification), and a small inline add form. The 🎲 button rolls the
+// Augmentation > Cyberware Concept oracle table straight into the name
+// draft (ui.enhancementDraft, shell.js) instead of the Journal — each roll
+// overwrites the draft until "Install" commits it, same "oracle rolls
+// flavor, the GM commits the real record" split as the Faction Asset roll,
+// just landing in the field instead of requiring a copy/paste.
+function enhancementsSection(e, ui) {
   if (e.type !== 'npc') return '';
-  const items = getCyberware(e);
+  const items = getEnhancements(e);
   const used = strainUsed(e);
   const cap = strainCapacity(e);
+  const open = (ui.expandedEnhancements || new Set()).has(e.id);
+  const draftName = (ui.enhancementDraft && ui.enhancementDraft[e.id]) || '';
   const chips = items.map((c) => `
-    <span class="chip sm cyberware-chip ${isOverStrained(e) ? 'over-strain' : ''}" title="${esc(c.notes)}">${esc(c.name)} <small>(${c.strain})</small> <button type="button" class="icon-btn" data-cyberware-remove="${esc(e.id)}::${esc(c.id)}" title="Remove">✕</button></span>`).join('');
+    <span class="chip sm enhancement-chip ${isOverStrained(e) ? 'over-strain' : ''}" title="${esc(c.notes)}">${esc(c.name)} <small>(${esc(c.type || 'cybernetics')} · ${c.strain})</small> <button type="button" class="icon-btn" data-enhancement-remove="${esc(e.id)}::${esc(c.id)}" title="Remove">✕</button></span>`).join('');
   return `
-    <div class="cybernetics-card">
-      <h4>Cybernetics <button class="icon-btn" data-roll="Augmentation>Cyberware Concept" title="Roll a Cyberware Concept">🎲</button></h4>
+    <div class="enhancements-card">
+      <h4>
+        <button class="btn ghost sm" data-enhancements-toggle="${esc(e.id)}">${open ? '▾' : '▸'} Enhancements (${items.length})</button>
+        <button class="icon-btn" data-roll-into-enhancement="${esc(e.id)}" title="Roll a Cyberware Concept into the name field below">🎲</button>
+      </h4>
+      ${open ? `
       <p class="dim small ${isOverStrained(e) ? 'over-strain' : ''}">Strain: ${used}/${cap}${isOverStrained(e) ? ' — over capacity' : ''}</p>
-      <div class="cyberware-list">${chips || '<span class="dim small">None installed.</span>'}</div>
-      <div class="cyberware-add">
-        <input data-cyberware-name-input="${esc(e.id)}" placeholder="Cyberware name">
-        <input type="number" min="0" data-cyberware-strain-input="${esc(e.id)}" placeholder="Strain" value="1">
-        <button class="btn sm" data-cyberware-install="${esc(e.id)}">＋ Install</button>
-      </div>
+      <div class="enhancement-list">${chips || '<span class="dim small">None installed.</span>'}</div>
+      <div class="enhancement-add">
+        <input data-enhancement-name-input="${esc(e.id)}" placeholder="Enhancement name" value="${esc(draftName)}">
+        <select data-enhancement-type-input="${esc(e.id)}">${ENHANCEMENT_TYPES.map((t) => `<option value="${t.id}">${esc(t.label)}</option>`).join('')}</select>
+        <input type="number" min="0" data-enhancement-strain-input="${esc(e.id)}" placeholder="Strain" value="1">
+        <button class="btn sm" data-enhancement-install="${esc(e.id)}">＋ Install</button>
+      </div>` : ''}
     </div>`;
 }
 

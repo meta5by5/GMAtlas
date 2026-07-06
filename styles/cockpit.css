@@ -572,15 +572,16 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .faction-asset-list { display: inline-flex; flex-wrap: wrap; gap: var(--sp-1); }
 .faction-asset-chip { display: inline-flex; align-items: center; gap: 4px; }
 
-/* Cybernetics (CWN-inspired strain/augmentation, 2026-07-06) */
-.cybernetics-card { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-3); }
-.cybernetics-card h4 { margin: 0 0 var(--sp-2); font-size: 0.8rem; color: var(--accent); display: flex; align-items: center; gap: var(--sp-1); }
-.cyberware-list { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin: var(--sp-1) 0; }
-.cyberware-chip { display: inline-flex; align-items: center; gap: 4px; }
-.cyberware-chip.over-strain, .over-strain { color: var(--danger); }
-.cyberware-add { display: flex; gap: var(--sp-1); margin-top: var(--sp-1); }
-.cyberware-add input[data-cyberware-name-input] { flex: 1; }
-.cyberware-add input[data-cyberware-strain-input] { width: 4rem; }
+/* Enhancements (CWN-inspired strain/augmentation; renamed from
+   "Cybernetics" 2026-07-06, docs/adr/next-request.md) */
+.enhancements-card { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-3); }
+.enhancements-card h4 { margin: 0 0 var(--sp-2); font-size: 0.8rem; color: var(--accent); display: flex; align-items: center; gap: var(--sp-1); }
+.enhancement-list { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin: var(--sp-1) 0; }
+.enhancement-chip { display: inline-flex; align-items: center; gap: 4px; }
+.enhancement-chip.over-strain, .over-strain { color: var(--danger); }
+.enhancement-add { display: flex; gap: var(--sp-1); margin-top: var(--sp-1); }
+.enhancement-add input[data-enhancement-name-input] { flex: 1; }
+.enhancement-add input[data-enhancement-strain-input] { width: 4rem; }
 
 /* Tag editor (Phase 7, unified 2026-07-04 with the Documents drawer's tag
    UX): removable chips + a single auto-committing input, same pill/chip
