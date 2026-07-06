@@ -657,6 +657,8 @@ test('listTagVocabulary lists tags used by other entities of the same type, excl
   assert.deepEqual(listTagVocabulary(camp, 'npc', a).sort(), ['hostile']);
 });
 
+import { findRuleset } from '../src/data/rulesets.js';
+
 test('default campaign uses the Starforged stat ruleset', () => {
   const camp = defaultCampaign();
   assert.equal(camp.settings.statRuleset, 'starforged');
@@ -696,6 +698,25 @@ test('addEntityStatblockGroup builds a 5PFH character sheet with that ruleset\'s
   assert.equal(byKey.Combat.target, 6);
   assert.equal(byKey.Speed.rollMethod, 'none');
   assert.equal(byKey.Speed.format, 'inches');
+});
+
+test('addEntityStatblockGroup builds a Traveller character sheet (original content, no sourcebook) using the 2d6-vs-8 rollTraveller mechanic', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Scout' }));
+  camp = addEntityStatblockGroup(camp, id, 'character', 'traveller');
+  const e = findByName(camp, 'Scout');
+  const group = e.statblocks.find((g) => g.kind === 'character');
+  assert.equal(group.ruleset, 'traveller');
+  const keys = group.fields.map((f) => f.key);
+  assert.deepEqual(keys, ['STR', 'DEX', 'END', 'INT', 'EDU', 'SOC', 'Stamina']);
+  const byKey = Object.fromEntries(group.fields.map((f) => [f.key, f]));
+  assert.equal(byKey.STR.rollMethod, 'traveller');
+  assert.equal(byKey.STR.target, 8);
+  assert.equal(byKey.STR.format, 'sign');
+  assert.ok(byKey.Stamina.track && byKey.Stamina.max === 8);
+  // findRuleset has no sourcebook PDF for this one — deliberately absent,
+  // not a broken/guessed path.
+  assert.equal(findRuleset('traveller').doc, null);
 });
 
 test('addEntityStatblockGroup defaults the character ruleset to the campaign Settings choice', () => {
@@ -1320,6 +1341,19 @@ test('filterOracleTree keeps a whole group when its name matches, else only matc
   assert.equal(empty.length, 0);
 });
 
+test('the Stars Without Number oracle group (Faction Action, World Tag — original content, no sourcebook) rolls correctly and is bucketed under Characters & Society, not Other', () => {
+  assert.ok(Array.isArray(SCENE_TABLES['Stars Without Number']['Faction Action']));
+  assert.ok(Array.isArray(SCENE_TABLES['Stars Without Number']['World Tag']));
+  const actionRoll = rollTable(SCENE_TABLES, ['Stars Without Number', 'Faction Action'], makeRng(4));
+  assert.ok(SCENE_TABLES['Stars Without Number']['Faction Action'].includes(actionRoll.result));
+  const worldRoll = rollTable(SCENE_TABLES, ['Stars Without Number', 'World Tag'], makeRng(4));
+  assert.ok(SCENE_TABLES['Stars Without Number']['World Tag'].includes(worldRoll.result));
+
+  const tree = buildGroupedOracleTree(SCENE_TABLES);
+  const societyCat = tree.find((cat) => cat.label === '👥 Characters & Society');
+  assert.ok(societyCat.children.some((g) => g.label === 'Stars Without Number'));
+});
+
 // --- oracle table entry editor (Phase 8) ------------------------------------
 import {
   currentTableEntries, hasOracleOverride, addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable,
@@ -1746,6 +1780,217 @@ test('formatFactionTurnRumors renders a readable block, or an explanatory messag
   const text = formatFactionTurnRumors([{ factionName: 'Sable Cartel', activity: 'quietly buys out a smaller rival' }]);
   assert.match(text, /^Faction turn:/);
   assert.match(text, /Sable Cartel quietly buys out a smaller rival\./);
+});
+
+// --- SWN/CWN content (2026-07-06, docs/adr/0011-swn-cwn-content.md) --------
+import { setFactionStat, addFactionAsset, removeFactionAsset } from '../src/domain/entities.js';
+import { resolveFactionTurn, formatFactionTurnResult, rollFactionAsset, FACTION_ACTION_TYPES } from '../src/domain/factions.js';
+import { deepenNpc } from '../src/domain/session.js';
+import {
+  generateCreatureConcept, formatCreatureConcept, generateSiteConcept, formatSiteConcept,
+  generateAdventureSeed, formatAdventureSeed,
+} from '../src/domain/worldbuilding.js';
+import {
+  getCyberware, strainUsed, strainCapacity, isOverStrained, installCyberware, removeCyberware, setStrainCapacity,
+  DEFAULT_STRAIN_CAPACITY,
+} from '../src/domain/cybernetics.js';
+
+test('a faction entity defaults Force/Cunning/Wealth to 3 and an empty Assets list; setFactionStat clamps 0-10 and no-ops on a non-faction entity', () => {
+  let camp = defaultCampaign();
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
+  let e = getEntity(camp, factionId);
+  assert.equal(e.force, 3); assert.equal(e.cunning, 3); assert.equal(e.wealth, 3);
+  assert.deepEqual(e.assets, []);
+
+  camp = setFactionStat(camp, factionId, 'force', 15);
+  assert.equal(getEntity(camp, factionId).force, 10); // clamped high
+  camp = setFactionStat(camp, factionId, 'cunning', -4);
+  assert.equal(getEntity(camp, factionId).cunning, 0); // clamped low
+
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Not a faction' }));
+  const before = getEntity(camp, npcId);
+  camp = setFactionStat(camp, npcId, 'force', 5);
+  assert.deepEqual(getEntity(camp, npcId), before); // no-op, no force field added
+});
+
+test('addFactionAsset appends a trimmed, non-empty asset; removeFactionAsset removes by index; both no-op on a non-faction entity', () => {
+  let camp = defaultCampaign();
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
+  camp = addFactionAsset(camp, factionId, '  an elite enforcer cadre  ');
+  camp = addFactionAsset(camp, factionId, '');
+  assert.deepEqual(getEntity(camp, factionId).assets, ['an elite enforcer cadre']);
+
+  camp = addFactionAsset(camp, factionId, 'a hidden cache');
+  camp = removeFactionAsset(camp, factionId, 0);
+  assert.deepEqual(getEntity(camp, factionId).assets, ['a hidden cache']);
+  camp = removeFactionAsset(camp, factionId, 99); // out of range, no-op
+  assert.deepEqual(getEntity(camp, factionId).assets, ['a hidden cache']);
+
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Not a faction' }));
+  camp = addFactionAsset(camp, npcId, 'should not attach');
+  assert.equal(getEntity(camp, npcId).assets, undefined);
+});
+
+test('resolveFactionTurn rolls d10 + the acting stat against a flat difficulty, deterministically under a seeded rng, and returns null for a non-faction entity', () => {
+  let camp = defaultCampaign();
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
+
+  const setback = resolveFactionTurn(camp, factionId, { rng: makeRng(0) });
+  assert.ok(FACTION_ACTION_TYPES[setback.type]);
+  assert.equal(setback.outcome, 'setback');
+  assert.equal(setback.total, setback.roll + setback.statValue);
+
+  const strong = resolveFactionTurn(camp, factionId, { rng: makeRng(9) });
+  assert.equal(strong.outcome, 'strong success');
+
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Not a faction' }));
+  assert.equal(resolveFactionTurn(camp, npcId, { rng: makeRng(0) }), null);
+});
+
+test('formatFactionTurnResult renders a readable line including the stat check and outcome', () => {
+  const r = { factionName: 'Sable Cartel', type: 'attack', verb: 'moves against a rival with open force', stat: 'force', statValue: 3, roll: 1, total: 4, outcome: 'setback' };
+  const text = formatFactionTurnResult(r);
+  assert.match(text, /Sable Cartel moves against a rival with open force/);
+  assert.match(text, /force 3 \+ d10 1 = 4/);
+  assert.match(text, /setback\.$/);
+});
+
+test('advanceFactionTurns applies a strong success (stat +1) or a setback (an extra Pressure Track tick) from the mechanical turn, on top of the ordinary per-turn advance', () => {
+  let camp = defaultCampaign();
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
+  camp = createPressureTrack(camp, factionId, 10);
+
+  // seed 0: Faction Activity roll then a setback stat check -> pressure advances 1 (ordinary) + 1 (setback) = 2
+  const { campaign: afterSetback } = advanceFactionTurns(camp, { rng: makeRng(0) });
+  assert.equal(getPressureTrack(afterSetback, factionId).filled, 2);
+
+  // seed 7: a strong success -> the acting stat (force, for seed 7) ticks up by 1, ordinary +1 tick only
+  const { campaign: afterStrong } = advanceFactionTurns(camp, { rng: makeRng(7) });
+  assert.equal(getPressureTrack(afterStrong, factionId).filled, 1);
+  assert.equal(getEntity(afterStrong, factionId).force, 4);
+});
+
+test('rollFactionAsset rolls the Faction Asset table (Corporate Powers group) and appends it to the faction, returning the campaign unchanged with an empty asset for a non-faction entity', () => {
+  let camp = defaultCampaign();
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
+  const { campaign: next, asset } = rollFactionAsset(camp, factionId, { rng: makeRng(1) });
+  assert.ok(asset);
+  assert.ok(tablesWithOverrides({}, 'hostile')['Corporate Powers']['Faction Asset'].includes(asset));
+  assert.deepEqual(getEntity(next, factionId).assets, [asset]);
+
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Not a faction' }));
+  const r2 = rollFactionAsset(camp, npcId, { rng: makeRng(1) });
+  assert.equal(r2.asset, ''); // addFactionAsset no-ops on a non-faction entity
+});
+
+test('deepenNpc rolls Stereotype/Want/Complication into an existing NPC\'s Overview and journals the addition; no-ops on a non-npc entity', () => {
+  let camp = defaultCampaign();
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Voss' }));
+  camp = updateEntity(camp, npcId, { overview: 'A dock foreman.' });
+  const { campaign: next, added } = deepenNpc(camp, npcId, { rng: makeRng(2) });
+  assert.ok(added);
+  assert.match(added, /Stereotype:/);
+  assert.match(added, /wants:/);
+  assert.match(added, /Complication:/);
+  const e = getEntity(next, npcId);
+  assert.ok(e.overview.startsWith('A dock foreman.'));
+  assert.ok(e.overview.includes(added));
+  assert.match(next.journal[next.journal.length - 1].text, /Deepened Voss:/);
+
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
+  const r2 = deepenNpc(camp, factionId, { rng: makeRng(2) });
+  assert.equal(r2.added, null);
+});
+
+test('generateCreatureConcept/formatCreatureConcept roll the Xenobestiary tables into a readable block', () => {
+  const camp = defaultCampaign();
+  const c = generateCreatureConcept(camp, { rng: makeRng(4) });
+  const tables = tablesWithOverrides({}, 'hostile');
+  assert.ok(tables.Xenobestiary['Creature Origin'].includes(c.origin));
+  assert.ok(tables.Xenobestiary['Creature Method'].includes(c.method));
+  assert.ok(tables.Xenobestiary['Creature Trait'].includes(c.trait));
+  assert.ok(tables.Xenobestiary['Creature Threat'].includes(c.threat));
+  const text = formatCreatureConcept(c);
+  assert.match(text, /^Creature concept:/);
+  assert.match(text, /Origin:/); assert.match(text, /Gets around by:/); assert.match(text, /trait:/); assert.match(text, /dangerous:/);
+});
+
+test('generateSiteConcept/formatSiteConcept roll the Site Concept tables into a readable block', () => {
+  const camp = defaultCampaign();
+  const s = generateSiteConcept(camp, { rng: makeRng(4) });
+  const tables = tablesWithOverrides({}, 'hostile');
+  assert.ok(tables['Site Concept']['Site Feature'].includes(s.feature));
+  assert.ok(tables['Site Concept']['Site Danger'].includes(s.danger));
+  assert.ok(tables['Site Concept']['Site Wonder'].includes(s.wonder));
+  const text = formatSiteConcept(s);
+  assert.match(text, /^Site concept:/);
+  assert.match(text, /Notable feature:/); assert.match(text, /Worth seeing:/); assert.match(text, /Danger:/);
+});
+
+test('generateAdventureSeed/formatAdventureSeed rolls Hook/Twist plus the existing Story Complication table (no new table for the third leg)', () => {
+  const camp = defaultCampaign();
+  const s = generateAdventureSeed(camp, { rng: makeRng(4) });
+  const tables = tablesWithOverrides({}, 'hostile');
+  assert.ok(tables['Adventure Seed'].Hook.includes(s.hook));
+  assert.ok(tables['Adventure Seed'].Twist.includes(s.twist));
+  assert.ok(tables.Miscellaneous['Story Complication'].includes(s.complication));
+  const text = formatAdventureSeed(s);
+  assert.match(text, /^Adventure seed:/);
+  assert.match(text, /Hook:/); assert.match(text, /Twist:/); assert.match(text, /Complication:/);
+});
+
+test('the Xenobestiary/Site Concept/Adventure Seed/Augmentation oracle groups are bucketed correctly, not left under Other', () => {
+  const tree = buildGroupedOracleTree(SCENE_TABLES);
+  const byLabel = (l) => tree.find((cat) => cat.label === l);
+  assert.ok(byLabel('👹 Creatures & Xeno').children.some((g) => g.label === 'Xenobestiary'));
+  assert.ok(byLabel('🌌 Locations').children.some((g) => g.label === 'Site Concept'));
+  assert.ok(byLabel('📚 Story Beats').children.some((g) => g.label === 'Adventure Seed'));
+  assert.ok(byLabel('👥 Characters & Society').children.some((g) => g.label === 'Augmentation'));
+});
+
+test('a fresh entity has no cyberware and the default Strain capacity; is not over-strained', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Reyes' }));
+  const e = getEntity(camp, id);
+  assert.deepEqual(getCyberware(e), []);
+  assert.equal(strainUsed(e), 0);
+  assert.equal(strainCapacity(e), DEFAULT_STRAIN_CAPACITY);
+  assert.equal(isOverStrained(e), false);
+});
+
+test('installCyberware adds an item with a coerced non-negative integer strain (default 1); removeCyberware removes it by id; both round-trip through a real campaign', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Reyes' }));
+  camp = installCyberware(camp, id, { name: 'Ocular implants', strain: 2, notes: 'sees in the dark' });
+  camp = installCyberware(camp, id, { name: 'Weird one', strain: -5 }); // coerces to default 1
+  camp = installCyberware(camp, id, { name: '  ' }); // blank name, no-op
+  let e = getEntity(camp, id);
+  assert.equal(getCyberware(e).length, 2);
+  assert.equal(e.cyberware[0].strain, 2);
+  assert.equal(e.cyberware[1].strain, 1);
+  assert.equal(strainUsed(e), 3);
+
+  const idToRemove = e.cyberware[0].id;
+  camp = removeCyberware(camp, id, idToRemove);
+  e = getEntity(camp, id);
+  assert.equal(getCyberware(e).length, 1);
+  assert.equal(e.cyberware[0].name, 'Weird one');
+});
+
+test('isOverStrained flags once installed Strain exceeds capacity; setStrainCapacity overrides the default, clamped 1-30', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Reyes' }));
+  camp = setStrainCapacity(camp, id, 2);
+  assert.equal(strainCapacity(getEntity(camp, id)), 2);
+  camp = installCyberware(camp, id, { name: 'A', strain: 2 });
+  assert.equal(isOverStrained(getEntity(camp, id)), false); // exactly at capacity, not over
+  camp = installCyberware(camp, id, { name: 'B', strain: 1 });
+  assert.equal(isOverStrained(getEntity(camp, id)), true);
+
+  camp = setStrainCapacity(camp, id, 999);
+  assert.equal(strainCapacity(getEntity(camp, id)), 30); // clamped high
+  camp = setStrainCapacity(camp, id, -5);
+  assert.equal(strainCapacity(getEntity(camp, id)), 1); // clamped low
 });
 
 // --- copilot: flagged-relationship review card -----------------------------
@@ -2258,4 +2503,115 @@ test('formatMission renders a readable multi-line block including payout, deadli
   assert.match(text, /Deadline: 4 days/);
   assert.match(text, /a rescue creates a hostage/);
   assert.match(text, /halves the payout/);
+});
+
+// --- Gear/Item entity sub-type (ADR 0012) -----------------------------------
+import { createItemFromCatalog, listEntityTagVocabulary } from '../src/domain/entities.js';
+import { GEAR_TEMPLATE_SYSTEMS, findGearTemplate } from '../src/data/gearTemplates.js';
+import { GEAR_CATALOG, findCatalogItem } from '../src/data/gearCatalog.js';
+
+test('"item" is a real entity type and creates like any other', () => {
+  const camp = defaultCampaign();
+  const { campaign, id } = createEntity(camp, { type: 'item', name: 'Multitool' });
+  const e = getEntity(campaign, id);
+  assert.equal(e.type, 'item');
+  assert.equal(e.name, 'Multitool');
+});
+
+test('every DEFAULT_GEAR_TEMPLATES system builds a valid "gear" statblock group via makeStatblock', () => {
+  for (const id of GEAR_TEMPLATE_SYSTEMS) {
+    const group = makeStatblock('gear', id, undefined, {});
+    assert.equal(group.kind, 'gear');
+    assert.equal(group.ruleset, id);
+    assert.ok(group.fields.length > 0, `${id} gear template has no fields`);
+    for (const f of group.fields) assert.equal(typeof f.key, 'string');
+  }
+});
+
+test('makeStatblock falls back to the hostile gear template for an unknown ruleset id', () => {
+  const group = makeStatblock('gear', 'nonexistent-system', undefined, {});
+  assert.equal(group.ruleset, 'hostile');
+  assert.deepEqual(group.fields.map((f) => f.key), findGearTemplate('hostile').fields.map((f) => f.key));
+});
+
+test('an Item entity can carry several gear groups simultaneously (one per system), additive not replacing', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'item', name: 'Snub Pistol' }));
+  camp = addEntityStatblockGroup(camp, id, 'gear', 'starforged');
+  camp = addEntityStatblockGroup(camp, id, 'gear', 'traveller');
+  camp = addEntityStatblockGroup(camp, id, 'gear', 'starforged'); // duplicate — should no-op
+  const e = getEntity(camp, id);
+  const gearGroups = e.statblocks.filter((g) => g.kind === 'gear');
+  assert.equal(gearGroups.length, 2);
+  assert.deepEqual(gearGroups.map((g) => g.ruleset).sort(), ['starforged', 'traveller']);
+});
+
+test('GEAR_CATALOG has a reasonable number of entries, each with an id/name/category/tags/stats', () => {
+  assert.ok(GEAR_CATALOG.length >= 40, `expected an extensive catalog, got ${GEAR_CATALOG.length}`);
+  for (const c of GEAR_CATALOG) {
+    assert.equal(typeof c.id, 'string');
+    assert.equal(typeof c.name, 'string');
+    assert.ok(['weapon', 'armor', 'gear'].includes(c.category), `${c.id} has an invalid category`);
+    assert.ok(Array.isArray(c.tags) && c.tags.length > 0, `${c.id} has no tags`);
+    assert.ok(c.stats && Object.keys(c.stats).length > 0, `${c.id} has no system stats`);
+    for (const sys of Object.keys(c.stats)) assert.ok(GEAR_TEMPLATE_SYSTEMS.includes(sys), `${c.id} references unknown system "${sys}"`);
+  }
+});
+
+test('catalog ids are unique', () => {
+  const ids = GEAR_CATALOG.map((c) => c.id);
+  assert.equal(new Set(ids).size, ids.length);
+});
+
+test('findCatalogItem resolves a known id and returns null for an unknown one', () => {
+  assert.equal(findCatalogItem('medkit').name, 'Medkit / First Aid Kit');
+  assert.equal(findCatalogItem('nonexistent'), null);
+});
+
+test('createItemFromCatalog creates an Item entity with tags and one gear group per system the entry has stats for, pre-filled', () => {
+  const camp = defaultCampaign();
+  const entry = findCatalogItem('sidearm-pistol');
+  const { campaign: next, id } = createItemFromCatalog(camp, entry);
+  const e = getEntity(next, id);
+  assert.equal(e.type, 'item');
+  assert.equal(e.name, 'Sidearm Pistol');
+  assert.deepEqual(e.tags, ['handgun']);
+  const gearGroups = e.statblocks.filter((g) => g.kind === 'gear');
+  assert.deepEqual(gearGroups.map((g) => g.ruleset).sort(), Object.keys(entry.stats).sort());
+  const hostileGroup = gearGroups.find((g) => g.ruleset === 'hostile');
+  const damageField = hostileGroup.fields.find((f) => f.key === 'Damage');
+  assert.equal(damageField.value, entry.stats.hostile.Damage);
+});
+
+test('createItemFromCatalog no-ops (returns the campaign unchanged, null id) for a missing catalog entry', () => {
+  const camp = defaultCampaign();
+  const { campaign: next, id } = createItemFromCatalog(camp, null);
+  assert.equal(id, null);
+  assert.deepEqual(next, camp);
+});
+
+test('listEntityTagVocabulary is cumulative over the current type filter, not a static global list', () => {
+  let camp = defaultCampaign();
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Voss' }));
+  camp = { ...camp, entities: { ...camp.entities, items: camp.entities.items.map((e) => e.id === npcId ? { ...e, tags: ['veteran'] } : e) } };
+  let itemId; ({ campaign: camp, id: itemId } = createItemFromCatalog(camp, findCatalogItem('combat-knife')));
+
+  const npcTags = listEntityTagVocabulary(camp, { types: ['npc'] });
+  assert.deepEqual(npcTags, ['veteran']);
+
+  const itemTags = listEntityTagVocabulary(camp, { types: ['item'] });
+  assert.ok(itemTags.includes('melee') && itemTags.includes('blade'));
+  assert.ok(!itemTags.includes('veteran'));
+
+  const allTags = listEntityTagVocabulary(camp, {});
+  assert.ok(allTags.includes('veteran') && allTags.includes('melee'));
+});
+
+test('listEntityTagVocabulary respects the search filter the same way the entity list itself does', () => {
+  let camp = defaultCampaign();
+  camp = createItemFromCatalog(camp, findCatalogItem('combat-knife')).campaign;
+  camp = createItemFromCatalog(camp, findCatalogItem('medkit')).campaign;
+  const narrowed = listEntityTagVocabulary(camp, { types: ['item'], search: 'knife' });
+  assert.ok(narrowed.includes('blade'));
+  assert.ok(!narrowed.includes('medical-gear'));
 });

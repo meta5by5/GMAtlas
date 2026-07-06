@@ -11,8 +11,15 @@ import {
   toggleStatblockFieldTrack, setStatblockTrackValue, toggleStatblockFieldAttribute, setStatblockAttributeValue,
 } from './statblocks.js';
 
-export const ENTITY_TYPES = ['npc', 'location', 'faction', 'asset', 'lore'];
-export const TYPE_LABEL = { npc: 'NPC', location: 'Location', faction: 'Faction', asset: 'Asset', lore: 'Lore' };
+// `item` (ADR 0012): gear/weapons/armor as first-class entities — tags,
+// @mentions, relationships (`owns` now has a concrete use: "NPC X owns Item
+// Y"), Cast listing, Graph nodes, and Universal Search all apply for free,
+// the same way every other entity type already gets them without special
+// casing. Stats live in `gear`-kind statblock groups (domain/statblocks.js),
+// one per ruleset system, the same "carry several simultaneously" pattern
+// `character` groups already established — see data/gearTemplates.js.
+export const ENTITY_TYPES = ['npc', 'location', 'faction', 'asset', 'lore', 'item'];
+export const TYPE_LABEL = { npc: 'NPC', location: 'Location', faction: 'Faction', asset: 'Asset', lore: 'Lore', item: 'Item' };
 
 // Relationship edge taxonomy (Phase 7, Constitution pack 66's Context Graph
 // depth item): a relationship now carries a semantic `type` alongside its
@@ -94,12 +101,69 @@ export function findByName(campaign, name) {
 // a new mechanism either. Applied at creation and whenever an entity's
 // type changes to 'faction' (e.g. via the inspector's Type select) so the
 // fields are always present once relevant; harmless no-op otherwise.
+//
+// force/cunning/wealth/assets (2026-07-06, docs/adr/0011-swn-cwn-content.md):
+// a faction's three-stat capability profile — original re-implementation of
+// the "a faction is Force/Cunning/Wealth plus a growing list of Assets"
+// concept widely discussed by Stars Without Number's own community and
+// reviewers as its standout subsystem, not a transcription of SWN's actual
+// Asset catalog or faction-action list (which stay proprietary). 0-10 scale
+// (clampFactionStat below), matching every other GM-set dial in this app
+// (Resources/Reputation/Stress/relationship strength); default 3 so a new
+// faction starts capable but unremarkable, not maxed or blank. `assets` is a
+// plain string list the GM curates directly or seeds via the new "Faction
+// Asset" oracle table (Corporate Powers group) — not a bonus-calculating
+// sub-mechanism, matching this app's existing "reuse a plain field/list,
+// don't invent a second state machine" discipline.
 function ensureFactionFields(e) {
   if (e.type !== 'faction') return;
   if (e.hq === undefined) e.hq = '';
   if (e.leadership === undefined) e.leadership = '';
   if (e.scenarioSeed === undefined) e.scenarioSeed = '';
   if (e.agenda === undefined) e.agenda = '';
+  if (e.force === undefined) e.force = 3;
+  if (e.cunning === undefined) e.cunning = 3;
+  if (e.wealth === undefined) e.wealth = 3;
+  if (!Array.isArray(e.assets)) e.assets = [];
+}
+
+function clampFactionStat(n) {
+  const v = Math.round(Number(n));
+  return Number.isFinite(v) ? Math.max(0, Math.min(10, v)) : 0;
+}
+
+/** Set one of a faction's three stats (force/cunning/wealth), clamped 0-10.
+ *  No-op on a non-faction entity or an unrecognized stat name. */
+export function setFactionStat(campaign, id, stat, value) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (!e || e.type !== 'faction' || !['force', 'cunning', 'wealth'].includes(stat)) return next;
+  e[stat] = clampFactionStat(value);
+  return next;
+}
+
+/** Append a free-text Asset to a faction's list. No-op on a non-faction
+ *  entity or an empty/whitespace-only asset. */
+export function addFactionAsset(campaign, id, asset) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  const clean = String(asset || '').trim();
+  if (!e || e.type !== 'faction' || !clean) return next;
+  ensureFactionFields(e);
+  e.assets.push(clean);
+  return next;
+}
+
+/** Remove one Asset by index. No-op on a non-faction entity or an
+ *  out-of-range index. */
+export function removeFactionAsset(campaign, id, index) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (!e || e.type !== 'faction' || !Array.isArray(e.assets)) return next;
+  const i = Number(index);
+  if (!Number.isInteger(i) || i < 0 || i >= e.assets.length) return next;
+  e.assets.splice(i, 1);
+  return next;
 }
 
 // --- internal mutators (operate on an already-cloned campaign) ------------
@@ -169,6 +233,29 @@ export function createEntity(campaign, opts) {
   return { campaign: next, id: rec.id };
 }
 
+/** Create an Item entity from a gear/weapon/armor catalog entry (ADR 0012,
+ *  data/gearCatalog.js): sets name/tags from the entry, then adds one
+ *  `gear` statblock group PER SYSTEM the entry has stats for, pre-filled by
+ *  matching each field's `key` against that system's stats object — additive
+ *  only (never replaces), same posture as every other statblock-group
+ *  creation in this app. No-op (returns the campaign unchanged) if the
+ *  catalog id isn't found. */
+export function createItemFromCatalog(campaign, catalogEntry) {
+  if (!catalogEntry) return { campaign, id: null };
+  let next = clone(campaign);
+  const rec = _create(next, { type: 'item', name: catalogEntry.name });
+  rec.tags = [...(catalogEntry.tags || [])];
+  for (const systemId of Object.keys(catalogEntry.stats || {})) {
+    const values = catalogEntry.stats[systemId];
+    addStatblockGroup(rec, 'gear', systemId, next.settings);
+    const group = rec.statblocks[rec.statblocks.length - 1];
+    for (const field of group.fields) {
+      if (Object.prototype.hasOwnProperty.call(values, field.key)) field.value = values[field.key];
+    }
+  }
+  return { campaign: next, id: rec.id };
+}
+
 export function updateEntity(campaign, id, patch) {
   const next = clone(campaign);
   const e = getEntity(next, id);
@@ -214,6 +301,30 @@ export function listTagVocabulary(campaign, entityType, excludeEntityId) {
     for (const t of e.tags || []) {
       const low = t.toLowerCase();
       if (!own.has(low) && !seen.has(low)) seen.set(low, t);
+    }
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+
+/** The tag vocabulary for the Cast drawer's tag sub-filter (ADR 0012) —
+ *  cumulative and live off whichever entities the type filter/search box
+ *  already narrowed to, not a static global list: filtering by `item` shows
+ *  only tags Item entities actually carry (handgun/rifle/armor/...);
+ *  filtering by `npc` shows NPC tags instead; no type filter (`types` empty/
+ *  omitted) shows the union across every entity. `search` (optional) applies
+ *  the same name/tag substring match the entity list itself uses, so the
+ *  chip row never offers a tag that couldn't possibly narrow the current
+ *  result set any further. Sorted case-insensitively, first-seen casing wins
+ *  — same convention as listTagVocabulary above. */
+export function listEntityTagVocabulary(campaign, { types, search } = {}) {
+  const q = String(search || '').trim().toLowerCase();
+  const pool = listEntities(campaign, types && types.length ? types : undefined);
+  const seen = new Map();
+  for (const e of pool) {
+    if (q && !([e.name, ...(e.tags || [])].join(' ').toLowerCase().includes(q))) continue;
+    for (const t of e.tags || []) {
+      const low = t.toLowerCase();
+      if (!seen.has(low)) seen.set(low, t);
     }
   }
   return [...seen.values()].sort((a, b) => a.localeCompare(b));
@@ -329,13 +440,16 @@ export function addEntityStatblockGroup(campaign, id, kind, rulesetOrTemplateId)
   const e = getEntity(next, id);
   if (!e) return next;
   if (!Array.isArray(e.statblocks)) e.statblocks = [];
-  const rulesetId = kind === 'character' ? (rulesetOrTemplateId || next.settings.statRuleset) : null;
+  // 'gear' groups (ADR 0012, Item entities) are discriminated by `ruleset`
+  // like 'character' — an item can carry several systems' stats at once —
+  // so it shares 'character''s dedup/lookup branch rather than 'npc''s.
+  const rulesetId = (kind === 'character' || kind === 'gear') ? (rulesetOrTemplateId || next.settings.statRuleset) : null;
   const templateId = kind === 'npc' ? rulesetOrTemplateId : (kind === 'vehicle' ? 'vehicle' : undefined);
   const alreadyPresent = e.statblocks.some((g) => g.kind === kind
-    && (kind !== 'character' || g.ruleset === rulesetId)
+    && (kind !== 'character' && kind !== 'gear' || g.ruleset === rulesetId)
     && (kind !== 'npc' || g.templateId === templateId));
   if (alreadyPresent) return next;
-  addStatblockGroup(e, kind, kind === 'character' ? rulesetId : templateId, next.settings);
+  addStatblockGroup(e, kind, (kind === 'character' || kind === 'gear') ? rulesetId : templateId, next.settings);
   return next;
 }
 

@@ -53,6 +53,47 @@ export const RULESETS = [
       ],
     },
   },
+  {
+    // No sourcebook exists in this repo's assets/docs/ (confirmed by the
+    // 2026-07-03 ruleset library review — see rulesConstitution.js's
+    // honesty note) — `doc` is deliberately left unset rather than pointing
+    // at a PDF that isn't here; the Settings drawer shows a plain "no
+    // sourcebook" note instead of a reference link for any ruleset without
+    // one. These stats are original content inspired by classic Traveller's
+    // six characteristics, not a transcription: real Traveller stores each
+    // as a raw 2-12 score and derives a separate small dice modifier (DM)
+    // from it for task checks — using the raw score directly in this app's
+    // 2d6-vs-target formula would make every check trivially easy, so it's
+    // collapsed to the same "small rollable modifier" abstraction every
+    // other ruleset here already uses (Starforged's Edge/Heart, 5PFH's
+    // Reaction/Speed/...), just under the six classic characteristic names
+    // for recognizability. attributeTarget: 8 matches "classic Traveller
+    // task resolution defaults to an 8+" (domain/dice.js's rollTraveller
+    // doc comment) — the mechanic this ruleset was added to actually use.
+    id: 'traveller',
+    label: 'Traveller',
+    doc: null,
+    characterTemplate: {
+      attributeRollMethod: 'traveller', // 2d6 + stat vs target
+      attributeTarget: 8,
+      attributeFormat: 'sign', // "+1"
+      stats: [
+        { key: 'STR', value: 1 },
+        { key: 'DEX', value: 1 },
+        { key: 'END', value: 1 },
+        { key: 'INT', value: 1 },
+        { key: 'EDU', value: 1 },
+        { key: 'SOC', value: 1 },
+      ],
+      tracks: [
+        // Classic Traveller deducts damage from STR/DEX/END directly, with
+        // no separate hit-point pool — replicating three parallel damage
+        // tracks tied back to the stats above is more precision than this
+        // abstraction needs, so it's collapsed to one depleting resource.
+        { key: 'Stamina', value: 8, max: 8 },
+      ],
+    },
+  },
 ];
 
 export function findRuleset(id) {

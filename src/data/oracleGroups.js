@@ -7,9 +7,9 @@
 export const ORACLE_GROUPS = [
   { label: '⭐ Core Solo', children: ['Campaign', 'Core Oracles', 'Core Solo Engine', 'Campaign Intelligence Engine'] },
   { label: '☠ Threats & Conflict', children: ['Conflict', 'Conflict Architecture', 'Danger Situations', 'Fear and Dread', 'Horror Escalation', 'Miscellaneous'] },
-  { label: '📚 Story Beats', children: ['Plot Engine', 'Story', 'Adventure', 'Missions', 'Mission Aftermath', 'Mysteries & Coverups', 'Scenario Framing'] },
-  { label: '👥 Characters & Society', children: ['Characters', 'Factions', 'Frontier Society', 'Corporate Powers', 'Crew & NPCs', 'Law, Marshals & Crime', 'Marines & Security', 'Androids & AI'] },
-  { label: '🌌 Locations', children: ['Planets', 'Settlements', 'Districts', 'Location Themes', 'Sector & System Creation', 'Worlds & Colonies', 'Colonies and Expeditions', 'Vaults / Ruins', 'Derelicts'] },
+  { label: '📚 Story Beats', children: ['Plot Engine', 'Story', 'Adventure', 'Adventure Seed', 'Missions', 'Mission Aftermath', 'Mysteries & Coverups', 'Scenario Framing'] },
+  { label: '👥 Characters & Society', children: ['Characters', 'Factions', 'Frontier Society', 'Corporate Powers', 'Stars Without Number', 'Augmentation', 'Crew & NPCs', 'Law, Marshals & Crime', 'Marines & Security', 'Androids & AI'] },
+  { label: '🌌 Locations', children: ['Planets', 'Settlements', 'Districts', 'Location Themes', 'Site Concept', 'Sector & System Creation', 'Worlds & Colonies', 'Colonies and Expeditions', 'Vaults / Ruins', 'Derelicts'] },
   { label: '🚀 Space Operations', children: ['Starships', 'Space Encounters', 'Space Operations', 'Trade & Cargo', 'Industrial Hazards', 'Exploration', 'Environmental Hazards'] },
-  { label: '👹 Creatures & Xeno', children: ['Creatures', 'Xeno-Biology'] },
+  { label: '👹 Creatures & Xeno', children: ['Creatures', 'Xeno-Biology', 'Xenobestiary'] },
 ];

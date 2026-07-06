@@ -31,7 +31,7 @@
 // defaults (a fresh Health/Hull meter starts at 5/5, not 0/5). Attribute
 // (rollable stat) fields always need an explicit starting value below —
 // "full" isn't a sensible default for a stat.
-function withDefaults(fields) {
+export function withDefaults(fields) {
   return fields.map((f) => {
     const merged = { kind: 'text', rollMethod: 'none', max: 5, target: 6, format: 'sign', ...f };
     if (merged.kind === 'track' && merged.value === undefined) merged.value = merged.max;

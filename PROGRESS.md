@@ -156,10 +156,17 @@ cross-referenced rather than re-treated as gaps. The four small
 oracle-content additions this reconciliation identified (Salvage
 Investigation, Site Survey, Cargo Interest, Anomaly Investigation) have
 since shipped — see the Content addition entry below, not gated to Phase
-10. Everything else the document proposed (an Expedition four-dial tracker, structured
-Diplomacy fields, a Discovery-classification field, a Noncombat taxonomy, a
-mechanized session-composition budget) is explicitly declined, with
-reasons, in the ADR.
+10. ADR 0008 also explicitly declined an Expedition four-dial tracker,
+structured Diplomacy fields, a Discovery-classification field, a Noncombat
+taxonomy, and a mechanized session-composition budget — each was then put
+back to the user individually (non-binding, suggestive), and
+**`docs/adr/0009-situation-engine-revisited.md` reversed or redirected
+four of the five**: Expedition tracking and Diplomacy fields are now
+scoped to be built (design only so far — see the new Phase 10 bullets
+below); Discovery Quality and Noncombat Resolution were redirected into a
+single new mechanism, "Suggestion Lenses" for *What Happens Next?* (which
+today does nothing different from Continue Story — a real gap this also
+fixes). Only the session-composition budget stayed declined.
 
 Tests: run `npm test` for the current count — not repeated here, goes
 stale every session.
@@ -247,13 +254,61 @@ estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
     Activity oracle table. A "🎲 Advance Faction Turns" button in the
     Journal drawer rolls a turn for every tracked faction at once and
     journals the results (`formatFactionTurnRumors()`).
+  - **Expedition trackers, Diplomacy fields, Suggestion Lenses** — scoped
+    in `docs/adr/0009-situation-engine-revisited.md`, not yet built. A
+    Thread tagged `kind: 'expedition'` gains three 0–10 dials (`supplies`/
+    `exposure`/`morale`, alongside its own clock as "progress") in a new
+    `domain/expeditions.js`; the Faction card gains `fear`/`need`/`secret`
+    fields; and *What Happens Next?* (currently identical to Continue
+    Story) gains a Suggestion Lens step — a Discovery Lens and an Approach
+    Lens (`gameplay-mechanics.md`'s two eight-item taxonomies) offered as a
+    few clickable chips that filter the next Oracle roll toward a chosen
+    lens's mapped categories, instead of immediately generating.
+  - **Traveller / Stars Without Number content** — done, per
+    `docs/adr/0010-traveller-swn-content.md` (which also records reversing
+    one specific call from `docs/adr/0002` — giving Traveller a character
+    template — on direct user request). Neither system has a sourcebook in
+    this repo's library, so both are honestly-labeled **original content**,
+    not a transcription: Traveller gets a `data/rulesets.js` character
+    ruleset (STR/DEX/END/INT/EDU/SOC, collapsed to this app's usual small-
+    modifier abstraction) finally giving `domain/dice.js`'s long-unused
+    `rollTraveller` (2d6 vs 8) an actual character sheet to run on; SWN gets
+    a new "Stars Without Number" oracle group (Faction Action, World Tag),
+    with Faction Action reachable as a second 🎲 button on the Faction card
+    alongside the existing Faction Activity roll. `rulesConstitution.js`'s
+    status strings for both providers updated to reflect what's now
+    authored.
+  - **SWN content deepened, CWN cybernetics borrowed** — done, per
+    `docs/adr/0011-swn-cwn-content.md` (extends `docs/adr/0010`, on direct
+    user request, after the actual SWN Revised Deluxe and CWN Deluxe PDFs
+    were added to `assets/docs/`). Still original content, not a
+    transcription — reading the real books informed which CONCEPTS to
+    reimplement, not what text to copy. Faction creation: `force`/`cunning`/
+    `wealth` (0-10) plus a growing Assets list per faction
+    (`entities.js`/`domain/factions.js`), with an original "Faction Asset"
+    oracle table to roll-and-append one. Turn-based mini-game:
+    `resolveFactionTurn` resolves a faction's turn as a d10 + its acting
+    stat vs. a flat difficulty (a strong success raises that stat, a
+    setback adds an extra Pressure Track tick) — wired into both the
+    existing bulk "Advance Faction Turns" action and a new per-faction "▶
+    Turn" button on the Faction card. Deepening NPCs: `domain/session.js`'s
+    `deepenNpc` rolls new Stereotype/Want/Complication tables onto an
+    EXISTING NPC's Overview (a "🎲 Deepen" button in Entity Detail), instead
+    of only building brand-new NPCs. Styling creatures/places/adventure
+    seeds: three new combinatorial oracle groups + `domain/worldbuilding.js`
+    generators — Xenobestiary (Creature Origin/Method/Trait/Threat), Site
+    Concept (Feature/Danger/Wonder), Adventure Seed (Hook/Twist, reusing the
+    existing Story Complication table for its third beat) — each with its
+    own Journal drawer roll button. CWN's cybernetics concept (Strain-vs-
+    capacity augmentation) landed as a new `domain/cybernetics.js` module
+    and a Cybernetics section in the NPC inspector, with an "Augmentation"
+    oracle group for flavor — deliberately NOT a new `RULES_PROVIDERS` entry
+    (CWN was never one of the six named systems; see the ADR's Alternatives
+    Considered for why that line wasn't crossed).
   - **Remaining, not yet started (each blocked on external input, not
     effort):** Shipyard companion link (needs the tool's actual URL);
     a sync adapter / shared campaign database (needs a decision on what
-    backend to sync to); Traveller/Stars Without Number content (both named
-    Rules Constitution providers with zero authored data and no sourcebook
-    in this repo's library — needs a call on original content vs. waiting
-    for the real books).
+    backend to sync to).
 - **UI/UX assumptions, resolved in the 2026-07-04 pass** (see Status
   Summary above): tabbed drawer switching replaced "only one drawer open at
   a time"; three real responsive tiers replaced one breakpoint; Escape and

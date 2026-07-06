@@ -562,6 +562,25 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .faction-card { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-3); }
 .faction-card h4 { margin: 0 0 var(--sp-2); font-size: 0.8rem; color: var(--accent); }
 .faction-pressure-head { display: flex; align-items: center; justify-content: space-between; margin-top: var(--sp-3); margin-bottom: var(--sp-1); }
+.faction-pressure-rolls { display: flex; align-items: center; gap: 2px; }
+
+/* Force/Cunning/Wealth + Assets (SWN-inspired faction depth, 2026-07-06) */
+.faction-stats-row { display: flex; gap: var(--sp-2); margin-top: var(--sp-2); }
+.faction-stat { flex: 1; }
+.faction-stat input { width: 100%; }
+.faction-assets { margin-top: var(--sp-2); display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-1); }
+.faction-asset-list { display: inline-flex; flex-wrap: wrap; gap: var(--sp-1); }
+.faction-asset-chip { display: inline-flex; align-items: center; gap: 4px; }
+
+/* Cybernetics (CWN-inspired strain/augmentation, 2026-07-06) */
+.cybernetics-card { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-3); }
+.cybernetics-card h4 { margin: 0 0 var(--sp-2); font-size: 0.8rem; color: var(--accent); display: flex; align-items: center; gap: var(--sp-1); }
+.cyberware-list { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin: var(--sp-1) 0; }
+.cyberware-chip { display: inline-flex; align-items: center; gap: 4px; }
+.cyberware-chip.over-strain, .over-strain { color: var(--danger); }
+.cyberware-add { display: flex; gap: var(--sp-1); margin-top: var(--sp-1); }
+.cyberware-add input[data-cyberware-name-input] { flex: 1; }
+.cyberware-add input[data-cyberware-strain-input] { width: 4rem; }
 
 /* Tag editor (Phase 7, unified 2026-07-04 with the Documents drawer's tag
    UX): removable chips + a single auto-committing input, same pill/chip
@@ -948,6 +967,18 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .doc-tag-filter-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-3); }
 .chip.active { border-color: var(--accent); color: var(--accent); background: rgba(56,189,248,0.1); }
 .entity-type-filter-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-2) 0; }
+
+/* Cast drawer tag sub-filter + gear catalog picker (ADR 0012) */
+.entity-tag-filter { margin: var(--sp-2) 0; }
+.entity-tag-filter-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
+.catalog-picker { border: 1px solid var(--border); border-radius: var(--radius-sm); margin: var(--sp-2) 0; padding: var(--sp-2); background: var(--bg-inset); }
+.catalog-picker-head { display: flex; gap: var(--sp-2); align-items: center; }
+.catalog-picker-head .drawer-search { flex: 1; }
+.catalog-picker-list { max-height: 16rem; overflow-y: auto; margin-top: var(--sp-2); display: flex; flex-direction: column; gap: 2px; }
+.catalog-item-row { display: flex; align-items: center; gap: var(--sp-2); width: 100%; text-align: left; padding: 0.3rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid transparent; background: none; cursor: pointer; }
+.catalog-item-row:hover { border-color: var(--border); background: var(--bg-raised); }
+.catalog-item-name { font-weight: 600; }
+.catalog-item-tags { display: flex; flex-wrap: wrap; gap: 2px; margin-left: auto; }
 .ref-doc-card { padding: 0.5rem var(--sp-3); }
 .ref-doc-card .doc-card-head { margin-bottom: 0; }
 

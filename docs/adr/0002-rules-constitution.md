@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted. **Partially superseded by `docs/adr/0010-traveller-swn-content.md`** (2026-07-06): this ADR's "Alternatives Considered" rejected giving Traveller a `data/rulesets.js` character template — ADR 0010 reverses that one specific call on direct user request, while keeping everything else here (the area/provider table, the honesty-status requirement, SWN staying a Factions/World-generation-only provider) unchanged.
 
 ## Context
 
@@ -64,18 +64,19 @@ principle is already structurally honored, just not yet made *visible* or
    establishes is what Phase 9 will consume when its turn comes.
 
 3. **Status-tag each provider honestly.** `RULES_PROVIDERS` marks each
-   system's actual integration state (`integrated`, `default genre`,
-   `not yet integrated`, `core`) rather than presenting all six as equally
-   "supported" — Starforged and Five Parsecs From Home have character
-   sheets (Phase 4); Planetfall has the Colony drawer; Hostile is the
-   default genre and oracle-table flavor; Traveller and Stars Without
-   Number have no data authored at all. (Correction, 2026-07-03: this
+   system's actual integration state rather than presenting all six as
+   equally "supported" — Starforged and Five Parsecs From Home have
+   character sheets (Phase 4); Planetfall has the Colony drawer; Hostile is
+   the default genre and oracle-table flavor. (Correction, 2026-07-03: this
    entry originally said "Traveller is reference PDFs only" — the ruleset
    library review that day found no Traveller sourcebook anywhere in
    `assets/docs/`, so its status moved from `'reference only'` to
-   `'not yet integrated'` in `rulesConstitution.js`, matching SWN. Per the
-   "newer wins" rule in `CLAUDE.md`, this is the corrected, current claim —
-   don't reintroduce "reference PDFs only" for Traveller.)
+   `'not yet integrated'` in `rulesConstitution.js`, matching SWN.)
+   (Further correction, 2026-07-06, see `docs/adr/0010`: Traveller and SWN
+   both gained honestly-labeled original content — Traveller a character
+   ruleset, SWN a Factions/World-generation oracle group — neither is
+   "no data authored at all" anymore; `rulesConstitution.js`'s status
+   strings reflect this.)
 
 4. **Fold "services to automate" into the existing roadmap rather than
    inventing a parallel one.** Faction turns, trade, and colony automation
@@ -100,13 +101,15 @@ principle is already structurally honored, just not yet made *visible* or
   integrations > new features), and this document didn't change that
   ordering — it gave Phase 9 better source material, not new urgency.
 - **Add Traveller/SWN as full `data/rulesets.js` entries now** (with
-  character templates like Starforged/5PFH have). Rejected: this document
-  positions Traveller and SWN primarily as *setting/procedural-generation*
-  providers (sector generation, faction turns, trade tables), not
-  character-sheet providers — forcing them into the existing
-  character-template shape would misrepresent what they're actually for.
-  `rulesConstitution.js` records the *intent*; the *data* (sector tables,
-  faction-turn mechanics) is unauthored future work, honestly marked as such.
+  character templates like Starforged/5PFH have). Rejected *at the time* —
+  this document positions Traveller and SWN primarily as
+  *setting/procedural-generation* providers (sector generation, faction
+  turns, trade tables), not character-sheet providers. **Reversed for
+  Traveller specifically on direct user request, 2026-07-06 — see
+  `docs/adr/0010-traveller-swn-content.md`**, which also explains why SWN's
+  own content stayed a Factions/World-generation oracle group rather than
+  a character template (that rejection's actual reasoning still holds for
+  SWN).
 - **Ignore the document as redundant with Article III.** Rejected: the
   concrete area-by-area table and the "reserved to Saga Atlas" list are
   genuinely new information worth keeping queryable, even though the

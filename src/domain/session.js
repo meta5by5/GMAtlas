@@ -6,7 +6,7 @@
 import { applyShift } from './context.js';
 import { generateScene } from './scenes.js';
 import { tablesWithOverrides, rollTable, rollGroup, formatRoll, pick } from './oracles.js';
-import { linkMentions, parseMentions, createEntity, updateEntity } from './entities.js';
+import { linkMentions, parseMentions, createEntity, updateEntity, getEntity } from './entities.js';
 import { linkDocumentMentions, parseDocumentMentions, resolvedDocumentMentionNames } from './documents.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
@@ -131,6 +131,38 @@ export function generateNpc(campaign, { rng = Math.random } = {}) {
   const withFields = updateEntity(created.campaign, created.id, { overview, revealed: aspect });
   addJournal(withFields, `Generated NPC: ${name}${overview ? ' — ' + overview : ''}`, 'Oracle');
   return { campaign: withFields, id: created.id };
+}
+
+/** "Deepening NPCs" (2026-07-06, docs/adr/0011-swn-cwn-content.md): unlike
+ *  generateNpc (which builds a brand-new NPC from scratch), this rolls a
+ *  Stereotype/Want/Complication for an EXISTING npc entity and appends the
+ *  result to its Overview — a quick-prep pass a GM can run on any Cast
+ *  member who's outgrown their first-draft description, the same "roll a
+ *  few tables, append what they add" shape generateNpc already uses, just
+ *  aimed at an entity that already exists instead of a new one. No-op
+ *  (added: null) on a missing entity, a non-npc entity, or if none of the
+ *  three tables have any entries. */
+export function deepenNpc(campaign, entityId, { rng = Math.random } = {}) {
+  const next = clone(campaign);
+  const entity = getEntity(next, entityId);
+  if (!entity || entity.type !== 'npc') return { campaign: next, added: null };
+  const tables = tablesWithOverrides(next.oracles?.overrides, next.settings?.genrePack);
+  const chars = (tables && tables.Characters) || {};
+  const roll = (key) => (Array.isArray(chars[key]) && chars[key].length ? pick(chars[key], rng) : '');
+  const stereotype = roll('Stereotype');
+  const want = roll('Want');
+  const complication = roll('Complication');
+  const lines = [
+    stereotype && `Stereotype: ${stereotype}.`,
+    want && `Right now, wants: ${want}.`,
+    complication && `Complication: ${complication}.`,
+  ].filter(Boolean);
+  if (!lines.length) return { campaign: next, added: null };
+  const addition = lines.join(' ');
+  const overview = [entity.overview, addition].filter(Boolean).join(' ');
+  const withFields = updateEntity(next, entityId, { overview });
+  addJournal(withFields, `Deepened ${entity.name || 'NPC'}: ${addition}`, 'Oracle');
+  return { campaign: withFields, added: addition };
 }
 
 /** Edit a free-text context field and auto-link any @mentions it contains.

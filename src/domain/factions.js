@@ -19,11 +19,100 @@
 // small and deliberately manual: a GM-triggered bulk advance-and-roll-a-
 // rumor action, not a background scheduler or live simulation.
 
-import { getEntity } from './entities.js';
+import { getEntity, setFactionStat, addFactionAsset } from './entities.js';
 import { addThread, listThreads, advanceThread } from './threads.js';
 import { tablesWithOverrides, pick } from './oracles.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
+
+// --- Faction turn mini-game (2026-07-06, docs/adr/0011-swn-cwn-content.md)
+// -------------------------------------------------------------------------
+// A faction's Force/Cunning/Wealth stats (entities.js) drive a small dice
+// resolution instead of pure narration — the concrete "turn-based mini-
+// game" a GM can run for a tracked faction, one stat check at a time,
+// rather than opposed faction-vs-faction combat (which would need a
+// target-faction picker and a second faction's own stats; out of scope for
+// this pass — see the ADR's Alternatives Considered). Each action type is
+// resolved against whichever stat it plays to; a d10 + that stat vs. a
+// flat difficulty (12 for a clean win, 8 to avoid an outright setback)
+// keeps the math identical in shape to this app's existing flat/Traveller
+// checks (domain/dice.js) rather than inventing a new curve.
+export const FACTION_ACTION_TYPES = {
+  attack: { stat: 'force', verb: 'moves against a rival with open force' },
+  scheme: { stat: 'cunning', verb: 'schemes and maneuvers in the shadows' },
+  expand: { stat: 'wealth', verb: 'expands its economic reach' },
+};
+
+/** Pick an action type weighted toward whichever stat is currently
+ *  strongest (a faction plays to its strength more often than not, without
+ *  ever being forced into always the same move). */
+function pickActionType(faction, rng) {
+  const weights = [
+    ['attack', Math.max(1, faction.force || 0)],
+    ['scheme', Math.max(1, faction.cunning || 0)],
+    ['expand', Math.max(1, faction.wealth || 0)],
+  ];
+  const total = weights.reduce((s, [, w]) => s + w, 0);
+  let roll = rng() * total;
+  for (const [type, w] of weights) { if ((roll -= w) <= 0) return type; }
+  return weights[0][0];
+}
+
+/** Resolve one faction's turn as a stat check: d10 + the acting stat vs a
+ *  flat difficulty. >=12 is a strong success (the acting stat ticks up, to
+ *  a max of 10); 8-11 a partial success (no change); <8 a setback (the
+ *  faction's Pressure Track — if it has one — advances an extra tick, on
+ *  top of the ordinary per-turn advance). Pure and RNG-injectable, like
+ *  every other roll in this app. Returns null for a non-faction/missing
+ *  entity. */
+export function resolveFactionTurn(campaign, factionId, { rng = Math.random, actionType } = {}) {
+  const faction = getEntity(campaign, factionId);
+  if (!faction || faction.type !== 'faction') return null;
+  const type = (actionType && FACTION_ACTION_TYPES[actionType]) ? actionType : pickActionType(faction, rng);
+  const { stat, verb } = FACTION_ACTION_TYPES[type];
+  const statValue = faction[stat] || 0;
+  const roll = Math.floor(rng() * 10) + 1;
+  const total = roll + statValue;
+  const outcome = total >= 12 ? 'strong success' : total >= 8 ? 'partial success' : 'setback';
+  return { factionId, factionName: faction.name || 'Unnamed faction', type, verb, stat, statValue, roll, total, outcome };
+}
+
+/** Apply a resolveFactionTurn() result to the campaign: a strong success
+ *  raises the acting stat by 1 (capped 10); a setback advances the
+ *  faction's Pressure Track by one extra tick if it has one (nothing to
+ *  advance otherwise — a faction nobody's tracking just gets the narrative
+ *  result with no numeric consequence). */
+function applyFactionTurnResult(campaign, result) {
+  let next = campaign;
+  if (result.outcome === 'strong success') {
+    next = setFactionStat(next, result.factionId, result.stat, (getEntity(next, result.factionId)[result.stat] || 0) + 1);
+  } else if (result.outcome === 'setback') {
+    const track = getPressureTrack(next, result.factionId);
+    if (track) next = advanceThread(next, track.id, 1);
+  }
+  return next;
+}
+
+/** Render one resolveFactionTurn() result as a Journal-friendly line. */
+export function formatFactionTurnResult(r) {
+  const label = { attack: 'Attack', scheme: 'Scheme', expand: 'Expand' }[r.type] || r.type;
+  return `${r.factionName} ${r.verb} (${label}, ${r.stat} ${r.statValue} + d10 ${r.roll} = ${r.total}) — ${r.outcome}.`;
+}
+
+/** Roll a Faction Asset (Corporate Powers group) and append it directly to
+ *  the faction's Assets list — the "roll and structurally add" action, same
+ *  shape as generateContract/generateMission rolling a table into a
+ *  concrete record instead of just journaling flavor text. No-op (returns
+ *  the campaign unchanged, empty asset) if the entity isn't a faction. */
+export function rollFactionAsset(campaign, factionId, { rng = Math.random } = {}) {
+  const faction = getEntity(campaign, factionId);
+  if (!faction || faction.type !== 'faction') return { campaign, asset: '' };
+  const tables = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides, campaign.settings && campaign.settings.genrePack);
+  const list = (tables && tables['Corporate Powers'] && tables['Corporate Powers']['Faction Asset']) || [];
+  const asset = list.length ? pick(list, rng) : '';
+  if (!asset) return { campaign, asset: '' };
+  return { campaign: addFactionAsset(campaign, factionId, asset), asset };
+}
 
 /** A faction's pressure track, if one has been added — at most one per
  *  faction. Returns null if the faction doesn't exist or has none yet
@@ -62,14 +151,16 @@ export function factionsUnderPressure(campaign) {
  *  authority), the concrete, small-scoped shape "faction-turn automation"
  *  takes here rather than a live simulation: every faction that already
  *  has a pressure track (skips ones nobody's tracking) advances by one
- *  tick, and rolls a "rumor" — a Faction Activity oracle entry (the same
- *  table the Faction card's own 🎲 button rolls) describing what it did.
- *  The numeric advancement itself stays deterministic (+1, matching the
- *  existing per-faction advance button) — only the flavor text is
- *  randomized, the same GM-set-state-plus-oracle-flavor split every other
- *  procedural element in this app already uses. Returns the new campaign
- *  plus the rumors rolled, for the UI to journal (formatFactionTurnRumors
- *  below). */
+ *  tick, rolls a "rumor" — a Faction Activity oracle entry (the same table
+ *  the Faction card's own 🎲 button rolls) describing what it did — and
+ *  (2026-07-06) also resolves one stat-based turn (resolveFactionTurn
+ *  above) against its own Force/Cunning/Wealth, so the mini-game's dice
+ *  outcome is part of the same bulk action rather than a separate click per
+ *  faction. The per-tick advancement itself stays deterministic (+1,
+ *  matching the existing per-faction advance button, plus one more on a
+ *  mechanical setback) — only the flavor text and the stat check are
+ *  randomized. Returns the new campaign plus the rumors rolled, for the UI
+ *  to journal (formatFactionTurnRumors below). */
 export function advanceFactionTurns(campaign, { rng = Math.random } = {}) {
   let next = clone(campaign);
   const tables = tablesWithOverrides(next.oracles && next.oracles.overrides, next.settings && next.settings.genrePack);
@@ -81,13 +172,22 @@ export function advanceFactionTurns(campaign, { rng = Math.random } = {}) {
     if (!faction) continue;
     next = advanceThread(next, track.id, 1);
     const activity = activityTable.length ? pick(activityTable, rng) : '';
-    if (activity) rumors.push({ factionName: faction.name || 'Unnamed faction', activity });
+    const result = resolveFactionTurn(next, track.factionId, { rng });
+    if (result) next = applyFactionTurnResult(next, result);
+    if (activity || result) rumors.push({ factionName: faction.name || 'Unnamed faction', activity, result });
   }
   return { campaign: next, rumors };
 }
 
-/** Render a faction turn's rumors as one Journal-friendly block. */
+/** Render a faction turn's rumors as one Journal-friendly block — each
+ *  faction's flavor rumor on one line, its mechanical turn result on the
+ *  next. */
 export function formatFactionTurnRumors(rumors) {
   if (!rumors.length) return 'Faction turn: no factions are being tracked yet — add a Pressure Track to a faction first.';
-  return ['Faction turn:', ...rumors.map((r) => `${r.factionName} ${r.activity}.`)].join('\n');
+  const lines = ['Faction turn:'];
+  for (const r of rumors) {
+    if (r.activity) lines.push(`${r.factionName} ${r.activity}.`);
+    if (r.result) lines.push(formatFactionTurnResult(r.result));
+  }
+  return lines.join('\n');
 }

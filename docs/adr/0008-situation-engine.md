@@ -11,6 +11,15 @@ tables — see `DESIGN-NEW-FUNCTIONALITY.md`'s "Why these aren't all dumped
 in as one flat list"); (3) everything else, explicitly deferred with
 reasoning (Decision item 6), same discipline as ADR 0004.
 
+**Partially superseded by `docs/adr/0009-situation-engine-revisited.md`**:
+Decision item 6's Expedition Structure and Diplomacy Engine declines were
+put back to the user and reversed; its Discovery Quality and Noncombat
+Resolution declines were redirected into a different mechanism (a
+Suggestion Lens step in *What Happens Next?*, not a stored field or a
+resolution mechanic). Item 6's session-composition-ratio decline and every
+other Decision item here (1–5, and the separate Faction Pressure Track
+reconciliation) are unaffected — see ADR 0009 for exactly what changed.
+
 ## Context
 
 `requirements/design-principles/gameplay-mechanics.md` is a ChatGPT session

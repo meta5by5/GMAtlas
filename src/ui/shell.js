@@ -6,7 +6,7 @@
 import { store } from '../core/store.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { contextSummary } from '../domain/context.js';
-import { continueStory, applyStoryShift, rollOracle, addNote, patchContext, editContextText, logRoll, generateNpc } from '../domain/session.js';
+import { continueStory, applyStoryShift, rollOracle, addNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc } from '../domain/session.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable } from '../domain/oracles.js';
 import { addThread, advanceThread, removeThread, setThreadStatus, setThreadPriority } from '../domain/threads.js';
 import {
@@ -17,8 +17,11 @@ import {
   createEntity, updateEntity, addEntityTag, removeEntityTag, removeEntity, setActiveEntity, addRelationship, removeRelationship,
   getEntity, addEntityStatblockGroup, removeEntityStatblockGroup, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
   setEntityStatblockTrackValue, setEntityStatblockAttributeValue, updateRelationshipLabel, updateRelationshipType, updateRelationshipStrength,
-  listEntities, ENTITY_TYPES, TYPE_LABEL,
+  listEntities, ENTITY_TYPES, TYPE_LABEL, setFactionStat, addFactionAsset, removeFactionAsset, createItemFromCatalog,
 } from '../domain/entities.js';
+import { findCatalogItem } from '../data/gearCatalog.js';
+import { installCyberware, removeCyberware } from '../domain/cybernetics.js';
+import { generateCreatureConcept, formatCreatureConcept, generateSiteConcept, formatSiteConcept, generateAdventureSeed, formatAdventureSeed } from '../domain/worldbuilding.js';
 import {
   addDocument, updateDocument, removeDocument, getDocument, addDocumentTag, removeDocumentTag, renameDocument,
   openDocumentTab, closeDocumentTab, setActiveDocumentTab, resolveDocumentTab,
@@ -27,7 +30,7 @@ import {
 import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue } from '../domain/party.js';
 import { setColonyField, addCrewRow, updateCrewRow, removeCrewRow } from '../domain/colony.js';
 import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract } from '../domain/trade.js';
-import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors } from '../domain/factions.js';
+import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors, resolveFactionTurn, formatFactionTurnResult, rollFactionAsset } from '../domain/factions.js';
 import { generateMission, formatMission } from '../domain/missions.js';
 import { setGuideText, getGuideText } from '../domain/guide.js';
 import { titleFromFilename } from '../domain/titleCase.js';
@@ -134,6 +137,10 @@ let searchQuery = '';
 let oracleEditorOpen = new Set(); // ephemeral — which oracle tables' entry editors are expanded
 let entitySearch = ''; // ephemeral — Cast panel name/tag search
 let entityTypeFilter = ''; // ephemeral — Cast panel type filter ('' = all)
+let entityTagFilters = new Set(); // ephemeral — Cast panel cumulative tag sub-filter (ADR 0012), AND semantics, mirrors docTagFilters
+let entityTagListOpen = false; // ephemeral — collapses the tag sub-filter chip row, mirrors docTagListOpen
+let catalogPickerOpen = false; // ephemeral — the Cast drawer's "+ Item from catalog" (ADR 0012) inline picker, open or not
+let catalogSearch = ''; // ephemeral — the catalog picker's own name/tag search
 let partyTrackerAddOpen = false; // ephemeral — the inline "+ Tracker" name/type creation form, open or not
 let partyTrackerDraftKind = 'meter'; // ephemeral — the creation form's in-progress type pick, so its size/difficulty sub-field can react before the tracker actually exists
 let partyTrackerDraftName = ''; // ephemeral — mirrors the creation form's name input so a kind-change re-render (which rebuilds that input from scratch) doesn't wipe out whatever the GM already typed
@@ -386,7 +393,34 @@ function onClick(ev) {
 
   if (hit('[data-recap-toggle]')) { recapOpen = !recapOpen; return renderDrawerBody(); }
   const typeFilterBtn = hit('[data-entity-type-filter]');
-  if (typeFilterBtn) { entityTypeFilter = typeFilterBtn.dataset.entityTypeFilter; return renderDrawerBody(); }
+  if (typeFilterBtn) {
+    entityTypeFilter = typeFilterBtn.dataset.entityTypeFilter;
+    // A tag valid under the old type filter may not exist under the new
+    // one — same precedent as switching drawers resetting docTagFilters.
+    entityTagFilters = new Set();
+    return renderDrawerBody();
+  }
+  const entityTagFilterBtn = hit('[data-entity-tag-filter]');
+  if (entityTagFilterBtn) {
+    const tag = entityTagFilterBtn.dataset.entityTagFilter;
+    if (entityTagFilters.has(tag)) entityTagFilters.delete(tag); else entityTagFilters.add(tag);
+    return renderDrawerBody();
+  }
+  if (hit('[data-entity-tag-list-toggle]')) { entityTagListOpen = !entityTagListOpen; return renderDrawerBody(); }
+
+  // Gear/weapon/armor catalog picker (ADR 0012) — search/select a
+  // pre-authored item; clicking one creates an Item entity with one `gear`
+  // statblock group per system the catalog entry has stats for, pre-filled.
+  const catalogAdd = hit('[data-catalog-add]');
+  if (catalogAdd) {
+    const id = catalogAdd.dataset.catalogAdd;
+    catalogPickerOpen = false; catalogSearch = '';
+    let name = '';
+    store.update((d) => { const r = createItemFromCatalog(d, findCatalogItem(id)); name = r.id && getEntity(r.campaign, r.id) ? getEntity(r.campaign, r.id).name : ''; return r.campaign; });
+    openDrawerTab('entity-detail');
+    return toast(name ? `Added ${name}` : 'Item added');
+  }
+  if (hit('[data-catalog-picker-close]')) { catalogPickerOpen = false; catalogSearch = ''; return renderDrawerBody(); }
   if (hit('[data-recap-save]')) {
     store.update((d) => addNote(d, formatSessionRecap(buildSessionRecap(d)), 'Session Recap'));
     return toast('Recap saved to Journal');
@@ -649,6 +683,57 @@ function onClick(ev) {
     return toast('Pressure Track added');
   }
 
+  // --- factions: Force/Cunning/Wealth, Assets, turn resolution (SWN-inspired, 2026-07-06) ---
+  const assetRoll = hit('[data-faction-asset-roll]');
+  if (assetRoll) {
+    let asset = '';
+    store.update((d) => { const r = rollFactionAsset(d, assetRoll.dataset.factionAssetRoll); asset = r.asset; return r.campaign; });
+    return toast(asset ? `Asset added: ${asset}` : 'No Faction Asset table entries found');
+  }
+  const assetRemove = hit('[data-faction-asset-remove]');
+  if (assetRemove) {
+    const [factionId, idx] = assetRemove.dataset.factionAssetRemove.split('::');
+    store.update((d) => removeFactionAsset(d, factionId, Number(idx)));
+    return;
+  }
+  const turnResolve = hit('[data-faction-turn-resolve]');
+  if (turnResolve) {
+    let line = '';
+    store.update((d) => {
+      const result = resolveFactionTurn(d, turnResolve.dataset.factionTurnResolve);
+      if (!result) return d;
+      line = formatFactionTurnResult(result);
+      return addNote(d, line, 'Faction Turn');
+    });
+    return toast(line || 'Faction turn resolved');
+  }
+
+  // --- NPC deepening (SWN-inspired stereotype/want/complication, 2026-07-06) ---
+  const deepen = hit('[data-deepen-npc]');
+  if (deepen) {
+    let added = null;
+    store.update((d) => { const r = deepenNpc(d, deepen.dataset.deepenNpc); added = r.added; return r.campaign; });
+    return toast(added ? 'NPC deepened' : 'Nothing to roll');
+  }
+
+  // --- cybernetics (CWN-inspired strain/augmentation, 2026-07-06) ---
+  const cyberInstall = hit('[data-cyberware-install]');
+  if (cyberInstall) {
+    const id = cyberInstall.dataset.cyberwareInstall;
+    const nameInput = root.querySelector(`[data-cyberware-name-input="${id}"]`);
+    const strainInput = root.querySelector(`[data-cyberware-strain-input="${id}"]`);
+    const name = nameInput ? nameInput.value.trim() : '';
+    if (!name) { if (nameInput) nameInput.focus(); return; }
+    store.update((d) => installCyberware(d, id, { name, strain: strainInput ? strainInput.value : 1 }));
+    return toast('Cyberware installed');
+  }
+  const cyberRemove = hit('[data-cyberware-remove]');
+  if (cyberRemove) {
+    const [entityId, cwId] = cyberRemove.dataset.cyberwareRemove.split('::');
+    store.update((d) => removeCyberware(d, entityId, cwId));
+    return;
+  }
+
   // --- documents: open (viewer tabs), rename, tags ---------------------------
   const docOpen = hit('[data-doc-open]');
   if (docOpen) {
@@ -795,6 +880,18 @@ function onClick(ev) {
     });
     return toast(rumorCount ? `${rumorCount} faction(s) acted` : 'No factions tracked yet');
   }
+  if (hit('[data-generate-creature]')) {
+    store.update((d) => addNote(d, formatCreatureConcept(generateCreatureConcept(d)), 'Creature Concept'));
+    return toast('Creature concept generated');
+  }
+  if (hit('[data-generate-site]')) {
+    store.update((d) => addNote(d, formatSiteConcept(generateSiteConcept(d)), 'Site Concept'));
+    return toast('Site concept generated');
+  }
+  if (hit('[data-generate-seed]')) {
+    store.update((d) => addNote(d, formatAdventureSeed(generateAdventureSeed(d)), 'Adventure Seed'));
+    return toast('Adventure seed generated');
+  }
   if (hit('[data-new-campaign]')) {
     if (window.confirm('Start a new campaign? Your current one stays exportable but will be replaced in this browser.')) {
       store.newCampaign(); toast('New campaign');
@@ -934,6 +1031,10 @@ function onChange(ev) {
     const value = genSelect.value;
     genSelect.value = '';
     if (!value) return;
+    if (value === 'catalog-item') {
+      catalogPickerOpen = true;
+      return renderDrawerBody();
+    }
     openDrawerTab('entity-detail');
     focusInspectorNameNextRender = true;
     if (value === 'generate-npc') {
@@ -1011,6 +1112,12 @@ function onChange(ev) {
 
   const relStrength = t.closest('[data-entity-rel-strength]');
   if (relStrength) { const active = store.get().entities.activeId; return store.update((d) => updateRelationshipStrength(d, active, relStrength.dataset.entityRelStrength, t.value)); }
+
+  const factionStat = t.closest('[data-faction-stat]');
+  if (factionStat) {
+    const [factionId, stat] = factionStat.dataset.factionStat.split('::');
+    return store.update((d) => setFactionStat(d, factionId, stat, t.value));
+  }
 
   const oev = t.closest('[data-oracle-entry-value]');
   if (oev) {
@@ -1153,6 +1260,9 @@ function onInput(ev) {
 
   const esrch = t.closest('[data-entity-search]');
   if (esrch) { entitySearch = t.value; renderDrawerBody(); restoreFocus('[data-entity-search]'); return; }
+
+  const catSrch = t.closest('[data-catalog-search]');
+  if (catSrch) { catalogSearch = t.value; renderDrawerBody(); restoreFocus('[data-catalog-search]'); return; }
 
   // Mirrors the Party Tracker creation form's name field into ephemeral
   // state, not for its own sake (the DOM already shows what was typed) but
@@ -1928,6 +2038,7 @@ function castGenerateSelectHtml() {
     <option value="" selected>Generate…</option>
     ${ENTITY_TYPES.map((t) => `<option value="${t}">${TYPE_LABEL[t]}</option>`).join('')}
     <option value="generate-npc">🎲 NPC (rolled)</option>
+    <option value="catalog-item">📦 Item (from catalog)</option>
   </select>`;
 }
 function headExtraForDrawer(id) {
@@ -1941,7 +2052,7 @@ function headExtraForDrawer(id) {
 function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
-    entitySearch, entityTypeFilter, storageInfo: store.storageInfo(),
+    entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,
   };

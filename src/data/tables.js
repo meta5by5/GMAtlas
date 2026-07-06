@@ -696,6 +696,34 @@ export const SCENE_TABLES = {
       "Reyes Okafor", "Talia Vance", "Cole Ibarra", "Ninka Solberg", "Emory Duarte",
       "Priya Larsen", "Marcus Fen", "Adaeze Thorn", "Yusuf Callan", "Sable Whitfield",
       "Denny Achebe", "Lior Marsh", "Wren Castellan", "Osei Nakamura", "Frida Quintero"
+    ],
+    "Stereotype": [
+      "the weary veteran who's seen this exact mistake before", "the ambitious climber who sees everyone as a rung",
+      "the true believer who won't hear a word against the cause", "the reluctant conscript who never wanted any of this",
+      "the fixer who can get anything, for a price", "the burnout who peaked years ago and knows it",
+      "the idealist not yet worn down by the frontier", "the survivor who trusts nothing that looks too easy",
+      "the company loyalist who genuinely believes the handbook", "the outsider who's fluent in everyone's business but their own",
+      "the old hand who trained half the people now giving orders", "the striver working three jobs to buy their way off-world",
+      "the true neutral who profits from every side staying armed", "the haunted one who won't say what they saw out there",
+      "the golden child who has never once been told no"
+    ],
+    "Want": [
+      "enough money to leave and never look back", "one clean job to finally clear an old debt",
+      "someone, anyone, to actually listen", "revenge, carefully and patiently pursued",
+      "a way to undo one specific past decision", "recognition for work everyone else takes credit for",
+      "safety for someone they can't openly protect", "proof of something nobody else believes is real",
+      "a reason to stop running", "one more day without the truth coming out",
+      "a way back into good standing after a fall", "the nerve to finally walk away",
+      "a legacy that outlasts them", "forgiveness they haven't earned yet", "just to be left alone"
+    ],
+    "Complication": [
+      "owes a debt to someone dangerous", "is being quietly investigated", "is in love with the wrong person",
+      "made a promise they can't keep", "is hiding an illness", "was given an order they intend to disobey",
+      "knows a secret that would ruin someone powerful", "is being impersonated, somewhere, by someone",
+      "has a criminal record under a different name", "is slowly losing the trust of people who matter to them",
+      "made an enemy of someone who hasn't acted yet", "is caught between two people they can't afford to disappoint",
+      "took something that wasn't theirs to take", "is running out of time to fix a mistake",
+      "trusts the wrong person completely"
     ]
   },
   "Creatures": {
@@ -1706,6 +1734,139 @@ Object.assign(SCENE_TABLES, {
       "reassigns its best people to a single urgent problem", "tests a new policy on a population that can't refuse", "quietly funds an opposing faction's rival",
       "stages a public event to shore up its reputation", "moves a key asset somewhere harder to reach", "cancels a contract without warning",
       "recruits aggressively in a community it doesn't yet control", "commissions a report that conveniently favors its own interests", "goes quiet — which is its own kind of signal"
+    ],
+    "Faction Asset": [
+      "an elite enforcer cadre, loyal only to the top", "a hidden cache the rest of the faction doesn't know about",
+      "an informant network threaded through a rival's own ranks", "a black-market supply pipeline no customs check catches",
+      "a political patron who owes a favor nobody's called in yet", "an orbital listening post that hears more than it should",
+      "a captive specialist kept comfortable and compliant", "a shell company that launders reputation as easily as money",
+      "a fast, deniable strike team for jobs that can't trace back", "a monopoly contract on something the whole sector needs",
+      "a compromised regulator who looks the other way, for now", "a private security force bigger than it publicly admits",
+      "an archive of leverage on everyone who matters locally", "a fortified redoubt built for a war that hasn't started yet",
+      "a loyal cell embedded inside a rival's own organization"
+    ]
+  },
+  "Stars Without Number": {
+    "Faction Action": [
+      "expands into unclaimed territory before a rival can", "consolidates its hold over an existing asset", "opens quiet diplomatic channels with a former enemy",
+      "moves against a weaker rival while it still can", "exploits a resource before regulators notice", "sabotages a competitor's supply chain",
+      "recruits heavily, thinning the local labor pool", "invests in infrastructure that locks in future control", "cuts a deal trading short-term loss for long-term leverage",
+      "goes to ground, consolidating quietly instead of acting", "tests a rival's resolve with a calculated provocation", "spends heavily to buy loyalty it can't otherwise earn",
+      "reaches for an asset just outside its usual reach", "repositions its assets ahead of a coming conflict", "makes a public move meant to be seen, not just felt"
+    ],
+    "World Tag": [
+      "a world under corporate quarantine, officially for public health", "a world where the ruling class never leaves orbit", "a world built entirely on another era's ruins",
+      "a world where one company owns the only water source", "a world with a colony that shouldn't have survived, but did", "a world where the local wildlife is smarter than reported",
+      "a world that was terraformed wrong and never fixed", "a world run by an AI nobody remembers installing", "a world with a single, enormous, half-finished megastructure",
+      "a world where the last war never officially ended", "a world whose original settlers are long gone, but its systems still run", "a world that exports labor, not goods",
+      "a world under a standing evacuation order nobody enforces", "a world with a black market bigger than its legal economy", "a world where a single family has ruled for generations"
+    ]
+  },
+  "Xenobestiary": {
+    "Creature Origin": [
+      "engineered as a bioweapon that outlived its funding", "evolved in a pressure and radiation regime nothing should survive",
+      "uplifted from a mundane species by an experiment nobody signed off on", "escaped containment during an evacuation nobody logged properly",
+      "brought here as livestock and never fully domesticated", "the accidental byproduct of a terraforming process gone sideways",
+      "native to a wreck's ecosystem, adapted to live in dead machines", "descended from a colony's own abandoned pets, generations feral",
+      "grown from spores that hitched a ride on a survey team's gear", "the result of two unrelated species merging in ways biology can't explain",
+      "bred for a fighting pit and released when the operation folded", "a lab escapee whose original purpose is now classified past recovery",
+      "native to this rock, and resentful of everyone who's shown up since", "cloned from partial remains found in a much older ruin",
+      "the last surviving line of a species everyone assumed extinct"
+    ],
+    "Creature Method": [
+      "skitters low on too many jointed limbs", "glides between structures on a membrane it can also use as armor",
+      "burrows and surfaces without warning, never where you're watching", "moves in a loose, coordinated swarm rather than alone",
+      "clings to walls and ceilings as easily as floors", "drags itself in a slow, deliberate crawl that's faster than it looks",
+      "swims through vents and coolant lines like they're open water", "bounds in short, explosive leaps between cover",
+      "walks upright, unsettlingly close to human", "rolls itself into a shell and lets momentum do the rest",
+      "floats on a gas bladder, silent until it's already close", "moves only when unobserved, freezing dead still otherwise",
+      "travels in a symbiotic pair, one host and one rider", "flows more than walks, changing shape to fit the gap",
+      "hasn't been seen moving at all — nobody knows how it gets around"
+    ],
+    "Creature Trait": [
+      "secretes something that dissolves standard armor coatings", "mimics distress calls perfectly, down to the static",
+      "goes fully invisible to thermal and low-light optics", "regenerates from a wound fast enough to unnerve a medic",
+      "communicates in a frequency that scrambles nearby electronics", "has a second, hidden mouth nobody expects",
+      "can fake its own death convincingly enough to fool an autopsy", "excretes a paralytic that works through sealed suits",
+      "imprints on the first large creature it sees, permanently", "changes color and texture to match whatever it's standing on",
+      "carries a symbiote that survives even after the host is killed", "screams at a frequency that disables unshielded audio pickups",
+      "can wedge itself into gaps that shouldn't fit a body its size", "produces light patterns that hypnotize before an attack",
+      "leaves offspring behind in anything it kills"
+    ],
+    "Creature Threat": [
+      "hunts in coordinated packs that box prey in before striking", "is functionally harmless alone, and lethal in numbers",
+      "targets equipment and life support before it targets people", "is slow but nearly impossible to actually kill with what a crew carries",
+      "only attacks when its territory or brood is threatened", "carries a disease vector nobody's cataloged yet",
+      "is smart enough to learn a crew's patrol routine and exploit it", "is bred for war and doesn't recognize a surrender",
+      "panics under pressure and becomes far more dangerous, not less", "is nearly silent until the moment it commits to an attack",
+      "isn't hostile at all — the danger is what it attracts", "grows measurably stronger with every kill",
+      "can disable a ship system as easily as a person", "hunts by scent long after the trail should have gone cold",
+      "was never the real threat — it's a lookout for something worse"
+    ]
+  },
+  "Site Concept": {
+    "Site Feature": [
+      "a chamber with gravity that doesn't match the rest of the structure", "a corridor lined with murals nobody currently here could have painted",
+      "a control room still cycling through a checklist for an emergency that already happened", "a garden growing in total darkness, thriving anyway",
+      "a section sealed from the inside, not the outside", "machinery still running on a fuel source nobody can identify",
+      "a shrine assembled from parts of the structure itself", "a level where every clock reads a different, wrong time",
+      "walls that are warm to the touch for no logged reason", "a vault door with no matching key anywhere in the records",
+      "an atrium built for a crowd that never arrived", "a single perfectly preserved room in an otherwise ruined structure",
+      "recordings looping in a language the translators can't place", "a structural seam suggesting two very different builders",
+      "a floor that responds, faintly, to being walked on"
+    ],
+    "Site Danger": [
+      "atmosphere that's breathable but slowly, quietly toxic", "structural failure one hard impact away from total collapse",
+      "an automated defense system still technically active", "radiation pooled in one specific, unmarked room",
+      "a predator that treats the whole site as its den", "a trap left by whoever was here last, still armed",
+      "unstable power conduits that arc without warning", "a quarantine seal with a reason nobody wrote down",
+      "gravity or pressure that shifts without any warning", "something still occupying the site that isn't listed on any survey",
+      "a section that's been looted by someone recently, and violently", "systems that actively resist being shut down",
+      "a structural weakness hidden by cosmetic repairs", "an environment hazard that only appears on a delay",
+      "rival scavengers who got here first and don't intend to share"
+    ],
+    "Site Wonder": [
+      "a view impossible to get anywhere else in the system", "a piece of technology decades ahead of anything currently fielded",
+      "proof of a civilization nobody official has ever confirmed", "an artifact that responds to being near people, somehow",
+      "a perfectly intact record of a moment history otherwise lost", "architecture that couldn't have been built with tools anyone recognizes",
+      "a natural formation so improbable it reads as artificial", "evidence that the official history of this place is wrong",
+      "a working example of something everyone assumed was only theoretical", "a message clearly left for whoever found it, addressed to no one in particular",
+      "a scale that makes everyone who enters feel genuinely small", "silence so complete it changes how people speak once inside",
+      "an ecosystem thriving in conditions that should kill it outright", "a single object clearly worth more than the whole expedition's budget",
+      "the unmistakable sense that this place was waiting"
+    ]
+  },
+  "Adventure Seed": {
+    "Hook": [
+      "a distress call that stopped mid-sentence, days ago", "a shipment that arrived early, sealed, and addressed to no one",
+      "a patron who won't say why the job pays this well", "a missing person last seen somewhere they had no reason to be",
+      "a debt suddenly called in by someone who was never owed it", "a discovery reported and then officially retracted",
+      "a rumor that's the same, word for word, from three unconnected sources", "a job posting pulled minutes after it's answered",
+      "an old contact reaching out after years of silence", "a location that stopped responding to routine check-ins",
+      "evidence of a crime nobody with authority wants investigated", "a request for help from someone with no reason to trust the crew",
+      "a map with one location marked and no explanation", "a warning that arrives too vague to act on and too specific to ignore",
+      "a reward posted for something nobody will describe outright"
+    ],
+    "Twist": [
+      "the real client isn't who hired the crew", "the target wants to be found", "the danger already happened; the crew is cleaning up, not preventing",
+      "the job's true purpose is the opposite of what was described", "someone the crew trusts already knows how this ends",
+      "the deadline is fake, meant to force a mistake", "the reward was never going to be paid", "the crew isn't the first to take this job",
+      "what looked like the threat is actually a symptom of a bigger one", "the person who needs rescuing caused the problem",
+      "the information the crew was given is true, but incomplete on purpose", "success and failure lead to the same outcome, by design",
+      "the opposition isn't wrong about what they're protecting", "the crew has met the real antagonist already, without knowing it",
+      "the job was a test, and it's not over"
+    ]
+  },
+  "Augmentation": {
+    "Cyberware Concept": [
+      "a subdermal weave that turns skin bullet-resistant, at a cost to sensation", "ocular implants that see in full dark and tag targets automatically",
+      "a spinal reflex booster that trades caution for raw speed", "lung filters that shrug off toxin and vacuum alike, briefly",
+      "a grafted second heart, redundant and quietly paranoid", "fingertip tools hidden under synthetic skin",
+      "a neural buffer that dulls pain to a distant echo", "limb replacement with servo-assisted strength",
+      "a black-market memory splice that isn't entirely the wearer's own", "jaw-mounted comms no scanner has ever found",
+      "synthetic blood that self-seals most wounds", "adrenal implants wired to a hair-trigger switch",
+      "a socketed spine port for jacking directly into ship systems", "skin that reads as unidentifiable to any known biometric scanner",
+      "a second, hidden set of knuckle-mounted plating"
     ]
   },
   "Frontier Society": {

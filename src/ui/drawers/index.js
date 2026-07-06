@@ -7,7 +7,7 @@ import {
   hasOracleOverride,
 } from '../../domain/oracles.js';
 import {
-  listEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, listTagVocabulary,
+  listEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, listTagVocabulary, listEntityTagVocabulary,
   RELATIONSHIP_TYPES, RELATIONSHIP_TYPE_LABEL, isRelationshipFlagged,
 } from '../../domain/entities.js';
 import { parseStatsString, sortStatblockGroups, getStatblockTemplates } from '../../domain/statblocks.js';
@@ -21,10 +21,13 @@ import { getMarket, priceAt, listCargoManifest, listContracts } from '../../doma
 import { COMMODITIES, findCommodity } from '../../data/commodities.js';
 import { THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { getPressureTrack } from '../../domain/factions.js';
+import { getCyberware, strainUsed, strainCapacity, isOverStrained } from '../../domain/cybernetics.js';
 import { getGuideText } from '../../domain/guide.js';
 import { buildMentionEditorHTML } from '../mentionEditor.js';
 import { buildSessionRecap } from '../../domain/recap.js';
 import { RULESETS, findRuleset, STARFORGED_PROGRESS_DIFFICULTIES, findProgressDifficulty } from '../../data/rulesets.js';
+import { GEAR_TEMPLATE_SYSTEMS, findGearTemplate } from '../../data/gearTemplates.js';
+import { GEAR_CATALOG, findCatalogItem } from '../../data/gearCatalog.js';
 import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel } from '../../data/rulesConstitution.js';
 import { GENRE_PACKS, bestiaryTerm } from '../../data/genrePacks.js';
 import { DOCS_MANIFEST } from '../../data/docsManifest.js';
@@ -71,8 +74,11 @@ export function entities(doc, ui) {
   const allItems = listEntities(doc);
   const typeFilter = ui.entityTypeFilter || '';
   const search = (ui.entitySearch || '').trim().toLowerCase();
+  const activeTags = ui.entityTagFilters || new Set();
+  const requiredTags = [...activeTags].map((t) => t.toLowerCase());
   const items = allItems.filter((e) => {
     if (typeFilter && e.type !== typeFilter) return false;
+    if (requiredTags.length && !requiredTags.every((t) => (e.tags || []).some((et) => et.toLowerCase() === t))) return false;
     if (!search) return true;
     return [e.name, ...(e.tags || [])].join(' ').toLowerCase().includes(search);
   });
@@ -82,6 +88,8 @@ export function entities(doc, ui) {
   return `
     <input class="drawer-search" data-entity-search value="${esc(ui.entitySearch || '')}" placeholder="Search Cast by name or tag…">
     <div class="entity-type-filter-row">${typeChips}</div>
+    ${entityTagFilterRow(doc, ui, typeFilter, search)}
+    ${catalogPickerBlock(ui)}
     <div class="entity-list">
       ${items.length ? items.map((e) => `
         <button class="entity-list-row ${active && active.id === e.id ? 'sel' : ''}" draggable="true" data-drag-entity="${esc(e.id)}" data-drop-entity="${esc(e.id)}" data-open-entity="${esc(e.id)}" title="Click to open · drag anywhere on the row to link with another entity, or onto Journal/context fields to mention">
@@ -92,6 +100,51 @@ export function entities(doc, ui) {
         </button>`).join('')
         : (allItems.length ? '<p class="ws-placeholder">No entities match that search/filter.</p>' : '<p class="ws-placeholder">No entities yet. Add one above, or type @Name in a note or situation to create one automatically.</p>')}
     </div>`;
+}
+
+// Cumulative tag sub-filter (ADR 0012) — mirrors the Documents drawer's
+// docTagFilters/docTagListOpen pattern exactly, generalized from documents
+// to entities: the chip list is whatever tags the CURRENT type filter/search
+// already narrowed to (listEntityTagVocabulary), so it updates live as the
+// type filter changes rather than showing every tag in the campaign at once.
+// AND semantics — picking more tags narrows further, same as Documents.
+function entityTagFilterRow(doc, ui, typeFilter, search) {
+  const vocab = listEntityTagVocabulary(doc, { types: typeFilter ? [typeFilter] : undefined, search });
+  if (!vocab.length) return '';
+  const activeTags = ui.entityTagFilters || new Set();
+  const listOpen = !!ui.entityTagListOpen;
+  const chips = vocab.map((t) => `<button class="chip sm ${activeTags.has(t) ? 'active' : ''}" data-entity-tag-filter="${esc(t)}">#${esc(t)}</button>`).join('');
+  return `<div class="entity-tag-filter">
+    <button class="btn ghost sm" data-entity-tag-list-toggle>${listOpen ? '▾' : '▸'} Tags (${vocab.length})${activeTags.size ? ` · ${activeTags.size} active` : ''}</button>
+    ${listOpen ? `<div class="entity-tag-filter-row">${chips}</div>` : ''}
+  </div>`;
+}
+
+// The "+ Item (from catalog)" inline picker (ADR 0012) — opened via the
+// Cast drawer head's Generate… select (data-entity-generate="catalog-item",
+// shell.js). A search box plus a flat list (not grouped by category — the
+// catalog is small enough that a flat scroll is fine) of matching
+// data/gearCatalog.js entries; clicking one creates the Item entity via
+// createItemFromCatalog and closes the picker.
+function catalogPickerBlock(ui) {
+  if (!ui.catalogPickerOpen) return '';
+  const q = (ui.catalogSearch || '').trim().toLowerCase();
+  const items = GEAR_CATALOG.filter((c) => !q || [c.name, c.category, ...(c.tags || [])].join(' ').toLowerCase().includes(q));
+  const rows = items.map((c) => `
+    <button class="catalog-item-row" data-catalog-add="${esc(c.id)}" title="Add ${esc(c.name)} as a new Item entity">
+      <span class="catalog-item-name">${esc(c.name)}</span>
+      <span class="dim small">${esc(c.category)}</span>
+      <span class="catalog-item-tags">${(c.tags || []).map((t) => `<span class="chip sm">${esc(t)}</span>`).join('')}</span>
+    </button>`).join('');
+  return `<div class="catalog-picker">
+    <div class="catalog-picker-head">
+      <input class="drawer-search" data-catalog-search value="${esc(ui.catalogSearch || '')}" placeholder="Search the gear/weapon/armor catalog…" autofocus>
+      <button class="icon-btn" data-catalog-picker-close title="Close" aria-label="Close">✕</button>
+    </div>
+    <div class="catalog-picker-list">
+      ${rows || '<p class="ws-placeholder">No catalog items match that search.</p>'}
+    </div>
+  </div>`;
 }
 
 // Entity Detail (2026-07-05 restructure): the name/type/tags/overview/
@@ -161,6 +214,7 @@ function inspector(doc, e, ui) {
   return `
     <div class="inspector-head">
       <input class="inspector-name" data-entity-field="name" value="${esc(e.name)}" placeholder="Name">
+      ${e.type === 'npc' ? `<button class="icon-btn" data-deepen-npc="${esc(e.id)}" title="Roll a Stereotype/Want/Complication and add it to this NPC's Overview">🎲 Deepen</button>` : ''}
       <button class="icon-btn" data-entity-del="${esc(e.id)}" title="Delete entity">🗑</button>
     </div>
     <label class="field-label">Type
@@ -174,6 +228,7 @@ function inspector(doc, e, ui) {
       <textarea data-entity-field="revealed" rows="2" placeholder="Secrets, twists, true motives.">${esc(e.revealed)}</textarea>
     </label>
     ${factionSection(doc, e)}
+    ${cyberneticsSection(e)}
     ${statblockSection(e, doc, ui)}
     <div class="rel-block">
       <h4>Relationships</h4>
@@ -215,13 +270,46 @@ function factionSection(doc, e) {
       <label class="field-label">Agenda
         <textarea data-entity-field="agenda" rows="2" placeholder="What is this faction actively pursuing right now?">${esc(e.agenda)}</textarea>
       </label>
+      ${factionStatsHtml(e)}
       ${factionPressureHtml(e, track)}
     </div>`;
 }
 
+// Force/Cunning/Wealth + Assets (2026-07-06, docs/adr/0011-swn-cwn-content.md):
+// an original re-implementation of the three-stat-plus-growing-Assets-list
+// concept Stars Without Number's own faction subsystem is best known for —
+// see entities.js's ensureFactionFields for why these specific stats/scale.
+function factionStatsHtml(e) {
+  const stat = (key, label) => `
+    <label class="field-label faction-stat">${label}
+      <input type="number" min="0" max="10" data-faction-stat="${esc(e.id)}::${key}" value="${Number(e[key]) || 0}">
+    </label>`;
+  const assets = (e.assets || []).map((a, i) => `
+    <span class="chip sm faction-asset-chip">${esc(a)} <button type="button" class="icon-btn" data-faction-asset-remove="${esc(e.id)}::${i}" title="Remove asset">✕</button></span>`).join('');
+  return `
+    <div class="faction-stats-row">${stat('force', 'Force')}${stat('cunning', 'Cunning')}${stat('wealth', 'Wealth')}</div>
+    <div class="faction-assets">
+      <span class="field-label-static">Assets</span>
+      <span class="faction-asset-list">${assets || '<span class="dim small">None yet.</span>'}</span>
+      <button class="icon-btn" data-faction-asset-roll="${esc(e.id)}" title="Roll a Faction Asset and add it">🎲 ＋Asset</button>
+    </div>`;
+}
+
 function factionPressureHtml(e, track) {
-  const rollBtn = `<button class="icon-btn" data-roll="Corporate Powers>Faction Activity" title="Roll Faction Activity">🎲</button>`;
-  const head = `<div class="faction-pressure-head"><span class="field-label-static">Pressure Track</span>${rollBtn}</div>`;
+  // Two rolls, two flavors: Faction Activity (Hostile-flavored corporate
+  // skullduggery, this app's default) and Faction Action (original content
+  // inspired by Stars Without Number's faction-turn convention — a more
+  // strategic/macro move rather than a narrative beat) — both ordinary
+  // oracle tables, not a genre-pack swap, so a GM running any campaign can
+  // reach for whichever fits the moment. "Resolve Turn" (2026-07-06) rolls
+  // the stat-based mini-game (domain/factions.js's resolveFactionTurn)
+  // against this faction's own Force/Cunning/Wealth — a single-faction turn,
+  // distinct from the Journal drawer's bulk "Advance Faction Turns".
+  const rollBtns = `
+    <button class="icon-btn" data-roll="Corporate Powers>Faction Activity" title="Roll Faction Activity">🎲</button>
+    <button class="icon-btn" data-roll="Stars Without Number>Faction Action" title="Roll Faction Action (SWN-inspired)">🎲²</button>
+    <button class="icon-btn" data-faction-turn-resolve="${esc(e.id)}" title="Resolve one stat-based turn for this faction (Force/Cunning/Wealth check)">▶ Turn</button>`;
+  const head = `<div class="faction-pressure-head"><span class="field-label-static">Pressure Track</span><span class="faction-pressure-rolls">${rollBtns}</span></div>`;
   if (!track) return `${head}<button class="chip" data-faction-pressure-add="${esc(e.id)}">＋ Pressure Track</button>`;
   const pips = Array.from({ length: track.segments }, (_, i) => `<span class="pip ${i < track.filled ? 'on' : ''}"></span>`).join('');
   return `${head}
@@ -234,6 +322,35 @@ function factionPressureHtml(e, track) {
         <button class="icon-btn" data-thread-adv="${esc(track.id)}" title="Advance">＋</button>
         <button class="icon-btn" data-thread-back="${esc(track.id)}" title="Set back">－</button>
       </span>
+    </div>`;
+}
+
+// Cybernetics (2026-07-06, docs/adr/0011-swn-cwn-content.md, Cities Without
+// Number's best-known subsystem — an original re-implementation, see
+// domain/cybernetics.js): NPC-only (a Faction/Location/Asset/Lore entity has
+// no body to augment). A running Strain total against a capacity, an
+// installed-cyberware chip list, and a small inline add form; the 🎲 button
+// rolls the Augmentation > Cyberware Concept oracle table into the Journal
+// for flavor inspiration — the GM types the actual name/Strain cost into
+// the form afterward, same "oracle rolls flavor, the GM commits the real
+// record" split as the Faction Asset roll above.
+function cyberneticsSection(e) {
+  if (e.type !== 'npc') return '';
+  const items = getCyberware(e);
+  const used = strainUsed(e);
+  const cap = strainCapacity(e);
+  const chips = items.map((c) => `
+    <span class="chip sm cyberware-chip ${isOverStrained(e) ? 'over-strain' : ''}" title="${esc(c.notes)}">${esc(c.name)} <small>(${c.strain})</small> <button type="button" class="icon-btn" data-cyberware-remove="${esc(e.id)}::${esc(c.id)}" title="Remove">✕</button></span>`).join('');
+  return `
+    <div class="cybernetics-card">
+      <h4>Cybernetics <button class="icon-btn" data-roll="Augmentation>Cyberware Concept" title="Roll a Cyberware Concept">🎲</button></h4>
+      <p class="dim small ${isOverStrained(e) ? 'over-strain' : ''}">Strain: ${used}/${cap}${isOverStrained(e) ? ' — over capacity' : ''}</p>
+      <div class="cyberware-list">${chips || '<span class="dim small">None installed.</span>'}</div>
+      <div class="cyberware-add">
+        <input data-cyberware-name-input="${esc(e.id)}" placeholder="Cyberware name">
+        <input type="number" min="0" data-cyberware-strain-input="${esc(e.id)}" placeholder="Strain" value="1">
+        <button class="btn sm" data-cyberware-install="${esc(e.id)}">＋ Install</button>
+      </div>
     </div>`;
 }
 
@@ -294,8 +411,12 @@ function statblockGroupBlock(e, group, gi, doc, ui = {}) {
   const collapsed = !!(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
   const rows = group.fields.map((f, fi) => statblockFieldRow(f, gi, fi)).join('');
   // Bestiary (or LifeForm, genre-dependent — see bestiaryTerm) is a subtype
-  // of NPC (like Character) — its label reflects that.
-  const label = group.kind === 'vehicle' ? 'Vehicle Statblock' : `${bestiaryTerm(doc.settings.genrePack)} (NPC) · ${esc(templateLabel(group.templateId, doc.settings))}`;
+  // of NPC (like Character) — its label reflects that. Gear (ADR 0012,
+  // Item entities) is discriminated by `ruleset` like Character, not
+  // `templateId` like Bestiary/Vehicle.
+  const label = group.kind === 'vehicle' ? 'Vehicle Statblock'
+    : group.kind === 'gear' ? `Gear Stats · ${esc(findGearTemplate(group.ruleset).label)}`
+    : `${bestiaryTerm(doc.settings.genrePack)} (NPC) · ${esc(templateLabel(group.templateId, doc.settings))}`;
   return `<div class="statblock-block">
     <div class="statblock-head">
       <button class="icon-btn statblock-collapse-toggle" data-statblock-group-toggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button>
@@ -326,9 +447,10 @@ function templateLabel(templateId, settings) {
 // (Faction, Location, Lore) get no statblock options — they aren't stat-
 // blocked concepts.
 function statblockAddChoices(e, groups, doc) {
-  if (e.type !== 'npc' && e.type !== 'asset') return '';
+  if (e.type !== 'npc' && e.type !== 'asset' && e.type !== 'item') return '';
   const presentRulesets = new Set(groups.filter((g) => g.kind === 'character').map((g) => g.ruleset));
   const presentTemplates = new Set(groups.filter((g) => g.kind === 'npc').map((g) => g.templateId));
+  const presentGearSystems = new Set(groups.filter((g) => g.kind === 'gear').map((g) => g.ruleset));
   const hasVehicle = groups.some((g) => g.kind === 'vehicle');
 
   const charChips = e.type === 'npc' ? RULESETS.filter((r) => !presentRulesets.has(r.id))
@@ -336,10 +458,15 @@ function statblockAddChoices(e, groups, doc) {
   const bestiaryChips = e.type === 'npc' ? listTemplates(doc.settings).filter((t) => t.id !== 'vehicle' && !presentTemplates.has(t.id))
     .map((t) => `<button class="chip" data-statblock-add="npc" data-statblock-template="${esc(t.id)}">＋ ${bestiaryTerm(doc.settings.genrePack)}: ${esc(t.label)}</button>`).join('') : '';
   const vehicleChip = e.type === 'asset' && !hasVehicle ? `<button class="chip" data-statblock-add="vehicle">＋ Vehicle Stats</button>` : '';
+  // Gear groups (ADR 0012, Item entities) are discriminated by ruleset like
+  // Character sheets — offer whichever systems aren't already present, so
+  // an item can carry Starforged AND 5PFH AND Traveller stats at once.
+  const gearChips = e.type === 'item' ? GEAR_TEMPLATE_SYSTEMS.filter((id) => !presentGearSystems.has(id))
+    .map((id) => `<button class="chip" data-statblock-add="gear" data-statblock-ruleset="${esc(id)}">＋ Gear Stats (${esc(findGearTemplate(id).label)})</button>`).join('') : '';
 
-  const any = charChips || bestiaryChips || vehicleChip;
+  const any = charChips || bestiaryChips || vehicleChip || gearChips;
   if (!any) return '';
-  return `<div class="statblock-add-choices" style="margin-top: var(--sp-2);">${charChips}${bestiaryChips}${vehicleChip}</div>`;
+  return `<div class="statblock-add-choices" style="margin-top: var(--sp-2);">${charChips}${bestiaryChips}${vehicleChip}${gearChips}</div>`;
 }
 
 // A character sheet groups the same field engine every other statblock uses
@@ -555,6 +682,9 @@ function journal(doc, ui = {}) {
         <button class="btn ghost" data-export-journal>Export</button>
         <button class="btn ghost" data-generate-mission title="Roll a job: payout/deadline scaled by the current Threat, plus a complication">🎲 Generate Mission</button>
         <button class="btn ghost" data-advance-faction-turns title="Advance every tracked faction's pressure by one tick and roll a rumor for each">🎲 Advance Faction Turns</button>
+        <button class="btn ghost" data-generate-creature title="Roll a creature concept: origin, movement, trait, and threat">🎲 Creature Concept</button>
+        <button class="btn ghost" data-generate-site title="Roll a site concept: a feature, a danger, and a wonder">🎲 Site Concept</button>
+        <button class="btn ghost" data-generate-seed title="Roll an adventure seed: a hook, a twist, and a complication">🎲 Adventure Seed</button>
       </div>
     </div>
     <div class="journal-list">
@@ -689,9 +819,12 @@ function settings(doc, ui = {}) {
         </select>
       </label>
       <p class="dim small">Creates entity stat templates aligned to the chosen rule system.</p>
-      <p class="dim small">Reference:
-        <a href="${findRuleset(doc.settings.statRuleset || 'starforged').doc}" target="_blank" rel="noreferrer">${esc(findRuleset(doc.settings.statRuleset || 'starforged').label)} PDF</a>
-      </p>
+      ${(() => {
+        const activeRuleset = findRuleset(doc.settings.statRuleset || 'starforged');
+        return activeRuleset.doc
+          ? `<p class="dim small">Reference: <a href="${activeRuleset.doc}" target="_blank" rel="noreferrer">${esc(activeRuleset.label)} PDF</a></p>`
+          : `<p class="dim small">No sourcebook in this repo's library — ${esc(activeRuleset.label)}'s stats here are original content, not a transcription.</p>`;
+      })()}
     </div>
     ${statblockTemplateEditor(doc)}
     ${rulesConstitutionSection()}

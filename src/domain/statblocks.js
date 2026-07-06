@@ -18,6 +18,7 @@
 // define them, editable in Settings. The entity view only edits values.
 import { findRuleset, RULESETS } from '../data/rulesets.js';
 import { DEFAULT_STATBLOCK_TEMPLATES } from '../data/statblockTemplates.js';
+import { DEFAULT_GEAR_TEMPLATES, GEAR_TEMPLATE_SYSTEMS } from '../data/gearTemplates.js';
 
 const CHARACTER_DEFAULT_RULESET = 'starforged';
 const DEFAULT_BESTIARY_TEMPLATE = 'generic';
@@ -99,17 +100,27 @@ function templateFieldToStatblockField(f) {
   return { key: f.key, value: '' };
 }
 
-/** Build a fresh statblock GROUP for `kind` ('npc' | 'vehicle' | 'character').
- *  A 'character' group is a full player-character sheet built from the
- *  chosen ruleset's template (see data/rulesets.js): stats and resource
- *  tracks are both rendered as click-to-set/roll tracks by the UI — the
- *  `group` tag only decides which section of the sheet they appear in.
+/** Build a fresh statblock GROUP for `kind` ('npc' | 'vehicle' | 'character'
+ *  | 'gear'). A 'character' group is a full player-character sheet built
+ *  from the chosen ruleset's template (see data/rulesets.js): stats and
+ *  resource tracks are both rendered as click-to-set/roll tracks by the UI —
+ *  the `group` tag only decides which section of the sheet they appear in.
  *  An 'npc' (or 'vehicle') group is built from a Bestiary template —
  *  `templateId` picks which one (defaults to 'generic'/'vehicle'); pass
  *  `settings` (campaign.settings) so user-edited templates are honored.
- *  This builds ONE group — an entity can hold several (see
+ *  A 'gear' group (ADR 0012, Item entities) is discriminated by `ruleset`
+ *  like 'character' — an item can carry several simultaneously, one per
+ *  system — but built from a Bestiary-shaped field template (data/
+ *  gearTemplates.js), since gear stats are heterogeneous (mostly descriptive
+ *  text) rather than the homogeneous stats/tracks shape a character sheet
+ *  has. This builds ONE group — an entity can hold several (see
  *  entity.statblocks and addStatblockGroup below). */
 export function makeStatblock(kind, rulesetId, templateId, settings) {
+  if (kind === 'gear') {
+    const tpl = DEFAULT_GEAR_TEMPLATES[rulesetId] || DEFAULT_GEAR_TEMPLATES.hostile;
+    const fields = tpl.fields.map(templateFieldToStatblockField);
+    return { kind: 'gear', ruleset: DEFAULT_GEAR_TEMPLATES[rulesetId] ? rulesetId : 'hostile', fields };
+  }
   if (kind === 'character') {
     const ruleset = findRuleset(rulesetId || CHARACTER_DEFAULT_RULESET);
     const tpl = ruleset.characterTemplate;
@@ -195,7 +206,7 @@ export function ensureAutoStatblock(entity, settings) {
 export function addStatblockGroup(entity, kind, rulesetOrTemplateId, settings) {
   if (!entity) return entity;
   ensureStatblocksArray(entity);
-  const rulesetId = kind === 'character' ? rulesetOrTemplateId : null;
+  const rulesetId = (kind === 'character' || kind === 'gear') ? rulesetOrTemplateId : null;
   const templateId = kind === 'vehicle' ? 'vehicle' : (kind === 'npc' ? rulesetOrTemplateId : undefined);
   entity.statblocks.push(makeStatblock(kind, rulesetId, templateId, settings));
   return entity;
