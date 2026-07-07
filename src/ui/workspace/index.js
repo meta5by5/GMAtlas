@@ -5,7 +5,7 @@
 import { listShifts } from '../../domain/context.js';
 import { listThreads, THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { ACTIVITIES, suggestRulesLens } from '../../domain/activities.js';
-import { listTagVocabulary, getEntity } from '../../domain/entities.js';
+import { listTagVocabulary } from '../../domain/entities.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { buildMentionEditorHTML, richToolbarHTML } from '../mentionEditor.js';
 
@@ -148,12 +148,16 @@ function summaryField(key, val, placeholder, doc) {
 
 // WHERE tab redesign ("USER CHANGES" batch): a Location tag listbox (not
 // chips, per direct user request) filters a candidate panel of matching
-// Locations; picking one adds it to context.where.entityIds — a schema
-// field that already existed (schema.js) but was dead in the UI until now
-// (the only prior reader was recap.js's "relevant entities" union). This
-// replaces entityList(doc, ['location'])'s old "show literally every
-// Location in the campaign" behavior; WHO's view (still entityList) is
-// untouched — only WHERE was asked for.
+// Locations. Per direct follow-up feedback, the earlier "Present Here"
+// curated list (context.where.entityIds) was duplicative of the Focus
+// field — a Location already belongs to the scene once it's mentioned in
+// Focus text, so a second, separate present-here list was redundant
+// bookkeeping. Picking a candidate now inserts a real @mention into Focus
+// directly (data-insert-where-mention, handled in shell.js via
+// insertMentionNode/serializeMentionEditor) instead of adding to a list.
+// context.where.entityIds/addContextEntity/removeContextEntity (session.js)
+// still exist (harmless, tested, generic) but are no longer driven from
+// this UI.
 function whereLocationPicker(doc, ui) {
   const tagFilter = ui.whereLocationTagFilter || null;
   const vocab = listTagVocabulary(doc, 'location');
@@ -166,15 +170,9 @@ function whereLocationPicker(doc, ui) {
 
   const allLocations = (doc.entities.items || []).filter((e) => e.type === 'location');
   const candidates = tagFilter ? allLocations.filter((e) => (e.tags || []).includes(tagFilter)) : allLocations;
-  const curatedIds = (doc.context.where && doc.context.where.entityIds) || [];
   const candidatePanel = candidates.length
-    ? `<div class="entity-chips">${candidates.map((e) => `<button type="button" class="entity-chip" data-context-entity-add="where::${esc(e.id)}" title="Add to the present-here list" ${curatedIds.includes(e.id) ? 'disabled' : ''}>${esc(e.name || 'Unnamed')}</button>`).join('')}</div>`
+    ? `<div class="entity-chips">${candidates.map((e) => `<button type="button" class="entity-chip" data-insert-where-mention="${esc(e.id)}" title="Insert @${esc(e.name || 'Unnamed')} into Focus">${esc(e.name || 'Unnamed')}</button>`).join('')}</div>`
     : `<div class="ws-placeholder">${tagFilter ? 'No Locations tagged #' + esc(tagFilter) + '.' : 'No Locations yet.'}</div>`;
-
-  const curated = curatedIds.map((id) => getEntity(doc, id)).filter(Boolean);
-  const curatedList = curated.length
-    ? `<div class="entity-chips">${curated.map((e) => `<span class="entity-chip" draggable="true" data-open-entity="${esc(e.id)}" data-drag-entity="${esc(e.id)}" data-drop-entity="${esc(e.id)}" title="Click to open · drag onto another entity to link, or onto a text field to mention">${esc(e.name || 'Unnamed')}<button type="button" class="icon-btn" data-context-entity-remove="where::${esc(e.id)}" title="Remove from this scene" aria-label="Remove">✕</button></span>`).join('')}</div>`
-    : '<div class="ws-placeholder">No locations added yet — pick a tag to find one.</div>';
 
   return `
     <div class="where-picker">
@@ -182,8 +180,6 @@ function whereLocationPicker(doc, ui) {
         <div class="where-picker-tags"><span class="field-label-static">Location tags</span>${tagListbox}</div>
         <div class="where-picker-candidates"><span class="field-label-static">Matching locations</span>${candidatePanel}</div>
       </div>
-      <span class="field-label-static">Present here</span>
-      ${curatedList}
       <div class="entity-add-row"><button class="chip" data-where-add-location>＋ New Location</button></div>
     </div>`;
 }
@@ -255,12 +251,15 @@ function sceneField(scene, key, label, placeholder) {
   </label>`;
 }
 
-// Latest Scene split fields ("USER CHANGES" batch): sensory/driver/clue/
-// complication are real, individually-editable fields now (domain/
-// scenes.js), each linked to its own Oracle category; the combined `text`
-// blob below is a DERIVED, read-only view recomposed from current field
-// values on every edit (session.js's updateSceneField), not a second,
-// independently-editable copy — editing a field updates it live.
+// Latest Scene split fields: Opening/Driver/Clue/Complication/Likely
+// Consequence are real, individually-editable fields (domain/scenes.js),
+// each linked to its own Oracle category; the combined `text` blob below
+// is a DERIVED, read-only view recomposed from current field values on
+// every edit (session.js's updateSceneField), not a second,
+// independently-editable copy — editing a field updates it live. Opening
+// holds the FULL line's content (not a fragment nested in a fixed
+// template) — editing it directly rewrites what "Opening:" reads in the
+// combined text below.
 function lastScene(doc) {
   const scenes = doc.scenes || [];
   if (!scenes.length) return '<div class="ws-placeholder">No scenes yet. Continue Story to generate the opening beat.</div>';
@@ -268,10 +267,11 @@ function lastScene(doc) {
   return `<details class="last-scene" open>
     <summary>Latest: Scene ${s.number} — ${esc(s.summary)}</summary>
     <div class="scene-fields">
-      ${sceneField(s, 'sensory', 'Opening detail', 'What the party notices first…')}
+      ${sceneField(s, 'opening', 'Opening', 'What the party notices first…')}
       ${sceneField(s, 'driver', 'Driver', "What's pushing this scene forward…")}
       ${sceneField(s, 'clue', 'Clue', 'A detail that connects to the current thread…')}
       ${sceneField(s, 'complication', 'Complication', 'What makes the obvious choice costly…')}
+      ${sceneField(s, 'consequence', 'Likely consequence', 'What happens if nothing changes…')}
     </div>
     <pre class="scene-text">${esc(s.text)}</pre>
   </details>`;

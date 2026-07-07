@@ -40,6 +40,15 @@ export function generateScene(campaign, tables, rng = Math.random, lensCategorie
   const location = where.summary || [form.locationType, form.surroundings].filter(Boolean).join(' — ') || 'the current location';
   const intent = what.intent || 'Discovery';
 
+  // "Opening" is stored as the FULL sentence, computed once here from its
+  // oracle-rolled ingredients (descriptor, sensory detail, a threat/mystery
+  // mood aside) — not re-derived from those pieces on every recompose. A
+  // GM editing the Opening field is editing the actual line shown, not a
+  // fragment nested inside a fixed template (a real gap the first version
+  // of this split left: only the sensory detail was ever editable).
+  const pressure = pressureLine(threat, mystery);
+  const opening = `The scene opens in a ${descriptor ? descriptor.toLowerCase() : 'quiet'} space. First impression — ${sensory || 'a low hum and stale air'}. ${pressure}`;
+
   const scene = {
     id: 'scn_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     number,
@@ -50,21 +59,21 @@ export function generateScene(campaign, tables, rng = Math.random, lensCategorie
     threat,
     mystery,
     spine: { action, theme, descriptor, focus },
-    sensory,
-    driver: sceneDriver,
-    clue,
-    complication,
-    consequence,
+    opening,
+    driver: sceneDriver || 'An unresolved thread pulls the party forward.',
+    clue: clue || 'A detail here connects to the current thread.',
+    complication: complication || 'Something makes the obvious choice costly.',
+    consequence: consequence || 'Pay the price — something is lost or complicated.',
     situationLine: what.situation ? what.situation.split('\n')[0] : '',
   };
   scene.text = recomposeSceneText(scene);
   return scene;
 }
 
-// The "Opening" line's mood aside is computed from Threat/Mystery, not
-// oracle-rolled — recomputed here (not stored as its own field) so an
-// edit to a scene's threat/mystery-independent fields never needs to also
-// carry a stale copy of this around.
+// Threat/Mystery mood aside for a fresh roll's Opening line — a one-time
+// ingredient at generation (see generateScene above), not recomputed on
+// every recompose, since Opening is a real, freely-editable field once
+// rolled, not re-derived from threat/mystery on every edit.
 function pressureLine(threat, mystery) {
   return threat >= 7 ? 'Everything feels exposed, watched, or already too late.'
     : threat >= 4 ? 'There is enough pressure that lingering here has a cost.'
@@ -81,9 +90,8 @@ function pressureLine(threat, mystery) {
  *  updateSceneField calls this after every field edit) — not a second,
  *  independently-editable copy. Pure; safe to call from a UI-driven edit. */
 export function recomposeSceneText(scene) {
-  const { number, intent, memory: location, threat = 0, mystery = 0, spine = {}, sensory, driver, clue, complication, consequence, situationLine } = scene;
+  const { number, intent, memory: location, threat = 0, mystery = 0, spine = {}, opening, driver, clue, complication, consequence, situationLine } = scene;
   const { action, theme, descriptor, focus } = spine;
-  const pressure = pressureLine(threat, mystery);
 
   const lines = [
     `Scene ${number}: ${intent}`,
@@ -93,14 +101,14 @@ export function recomposeSceneText(scene) {
     ``,
     `Oracle spine: Action ${action} / Theme ${theme} / Descriptor ${descriptor} / Focus ${focus}`,
     ``,
-    `Opening: The scene opens in a ${descriptor ? descriptor.toLowerCase() : 'quiet'} space. First impression — ${sensory || 'a low hum and stale air'}. ${pressure}`,
+    `Opening: ${opening}`,
     ``,
-    `Driver: ${driver || 'An unresolved thread pulls the party forward.'}`,
-    `Clue: ${clue || 'A detail here connects to the current thread.'}`,
-    `Complication: ${complication || 'Something makes the obvious choice costly.'}`,
+    `Driver: ${driver}`,
+    `Clue: ${clue}`,
+    `Complication: ${complication}`,
     ``,
     `Decision point: weigh immediate safety, mission progress, and leverage over whoever is behind this.`,
-    `Likely consequence: ${consequence || 'Pay the price — something is lost or complicated.'}`,
+    `Likely consequence: ${consequence}`,
   ];
   if (situationLine) { lines.push('', `Current thread: ${situationLine}`); }
   return lines.join('\n');

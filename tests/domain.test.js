@@ -156,13 +156,16 @@ test('generateScene, given lensCategories, rolls its Driver line from one of tho
   assert.ok(driverTable.some((v) => driverLine.includes(v)));
 });
 
-test('generateScene exposes sensory/driver/clue/complication as real fields, matching what text embeds', () => {
+test('generateScene exposes opening/driver/clue/complication/consequence as real fields, matching what text embeds', () => {
   const camp = defaultCampaign();
   const scene = generateScene(camp, SCENE_TABLES, makeRng(1));
+  assert.ok(scene.opening);
   assert.ok(scene.driver);
+  assert.ok(scene.text.includes(`Opening: ${scene.opening}`));
   assert.ok(scene.text.includes(`Driver: ${scene.driver}`));
   assert.ok(scene.text.includes(`Clue: ${scene.clue}`));
   assert.ok(scene.text.includes(`Complication: ${scene.complication}`));
+  assert.ok(scene.text.includes(`Likely consequence: ${scene.consequence}`));
 });
 
 test('recomposeSceneText rebuilds text from current field values (the Latest Scene split-field edit path)', () => {
@@ -172,6 +175,14 @@ test('recomposeSceneText rebuilds text from current field values (the Latest Sce
   const text = recomposeSceneText(edited);
   assert.ok(text.includes('Driver: A hand-written driver'));
   assert.ok(!text.includes(scene.driver) || scene.driver === 'A hand-written driver');
+});
+
+test('recomposeSceneText treats an edited Opening as the whole line, not a fragment inside a fixed template', () => {
+  const camp = defaultCampaign();
+  const scene = generateScene(camp, SCENE_TABLES, makeRng(1));
+  const edited = { ...scene, opening: 'A hand-written opening line, in full.' };
+  const text = recomposeSceneText(edited);
+  assert.ok(text.includes('Opening: A hand-written opening line, in full.'));
 });
 
 // --- session orchestration ------------------------------------------------

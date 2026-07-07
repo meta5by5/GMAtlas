@@ -8,6 +8,14 @@ same shape of change — a context/scene data field that already existed in
 `schema.js`/`scenes.js` but was either dead or under-exposed in the UI,
 finally put to real use.
 
+**Superseded in part (2026-07-07)** by direct follow-up feedback — see
+"2026-07-07 addendum" below. The WHERE curated "present here" list this ADR
+built (`context.where.entityIds`, `addContextEntity`/`removeContextEntity`
+driven from the WHERE UI) turned out to be duplicative of Focus and was
+removed from the UI; Scene's `sensory` field was replaced by a full
+`opening` field. Read the addendum alongside this ADR's Decision section
+below, which otherwise still describes what shipped 2026-07-06 accurately.
+
 ## Context
 
 **WHERE tab**: `ui/workspace/index.js`'s `where(doc)` rendered a "Change
@@ -111,3 +119,52 @@ entries were added directly to the existing map, and the identical
 this reuses); `docs/adr/0009-situation-engine-revisited.md` (Suggestion
 Lenses, the other place `generateScene()`'s Driver roll is already
 parameterized — untouched by this ADR).
+
+## 2026-07-07 addendum
+
+Direct follow-up feedback on both halves of this ADR, submitted in the same
+eight-item batch as three real UI bugs (header nav visibility, the anchor
+panel's missing close button, a doc-viewer reload guard — none of them
+related to this ADR's subject and not detailed here).
+
+**WHERE's curated list was duplicative.** The "present here" list this
+ADR built (`context.where.entityIds`, populated by clicking a matching
+Location candidate) turned out to be redundant bookkeeping — a Location
+already belongs to the scene once it's mentioned in Focus text, so
+maintaining a second, separate "who/where is present" list duplicated
+that. `whereLocationPicker()` (`ui/workspace/index.js`) no longer renders
+the curated list at all; clicking a candidate now inserts a real
+`@mention` at the end of the Focus field directly
+(`ui/mentionEditor.js`'s `insertMentionNode`, the same path drag-and-drop
+mention insertion already used), committed via
+`editContextText(campaign, 'where', 'summary', ...)`.
+`addContextEntity`/`removeContextEntity` (`domain/session.js`) are
+untouched — still real, tested, generic functions — they're simply no
+longer called from this UI. A real consequence, stated plainly rather
+than silently dropped: `recap.js`'s "relevant entities" union no longer
+picks up WHERE-tagged Locations via this path (it never did for WHO
+either, so this brings WHERE in line with the rest of the app rather than
+introducing a new gap).
+
+**Scene's `sensory` field only ever controlled a fragment.** This ADR's
+`lastScene()` exposed `sensory` as an editable field, but `recomposeSceneText`
+still built the "Opening:" line from a fixed template string with
+`sensory` interpolated into the middle of it — editing the field changed
+one clause, not the whole line the user was actually looking at.
+`generateScene()` now computes the full sentence once, at roll time (the
+same ingredients — descriptor, sensory oracle roll, a threat/mystery mood
+aside via the existing `pressureLine()` — just composed into one string
+immediately) and stores it as `opening`, replacing `sensory` outright.
+`recomposeSceneText` now interpolates `opening` directly, with no
+re-derivation. `consequence` (already a real field this ADR left
+un-rendered) is now shown in `lastScene()`'s field grid too, so all five
+narrative fields (opening/driver/clue/complication/consequence) are
+editable, each still carrying its own 🔮 oracle-jump icon
+(`data/entityFieldOracleLinks.js`'s `'scene.sensory'` key renamed to
+`'scene.opening'`; `'scene.consequence'` added).
+
+**Layout**: these five fields also gained a real CSS grid
+(`.scene-fields { display: grid; grid-template-columns: repeat(auto-fit,
+minmax(9rem, 1fr)); }`, `styles/cockpit.css`) — this ADR's Decision section
+never specified one, so they'd rendered one-per-line despite being
+individually editable since 2026-07-06.

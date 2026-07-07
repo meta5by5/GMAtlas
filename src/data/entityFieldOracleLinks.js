@@ -31,10 +31,11 @@ export const ENTITY_FIELD_ORACLE_LINKS = {
   // key with no validation against ENTITY_TYPES, so reusing it here (and
   // the identical data-oracle-field-link handler in shell.js) needs no new
   // plumbing at all, just more entries.
-  'scene.sensory': ['setting'],
+  'scene.opening': ['setting'],
   'scene.driver': ['hook'],
   'scene.clue': ['discovery'],
   'scene.complication': ['discovery'],
+  'scene.consequence': ['discovery'],
 };
 
 export function oracleLinkTagsFor(entityType, field) {

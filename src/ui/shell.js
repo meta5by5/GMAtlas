@@ -7,7 +7,7 @@ import { store } from '../core/store.js';
 import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { contextSummary } from '../domain/context.js';
-import { continueStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, addContextEntity, removeContextEntity, updateSceneField } from '../domain/session.js';
+import { continueStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, updateSceneField } from '../domain/session.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag } from '../domain/oracles.js';
 import { oracleLinkTagsFor } from '../data/entityFieldOracleLinks.js';
 import { addThread, advanceThread, removeThread, setThreadStatus, setThreadPriority } from '../domain/threads.js';
@@ -195,6 +195,14 @@ let tradeContractAddOpen = false; // ephemeral — the inline "+ Contract" creat
 // Independent of openDrawers — an anchored drawer is deliberately NOT also
 // a tab (see anchorDrawerTab/unanchorDrawerTab below).
 let anchoredDrawer = null;
+// The doc-viewer iframe reload guard (below) can't compare against the live
+// DOM `frame.src` readback — browsers always return that as a normalized
+// ABSOLUTE URL, while resolvedActive.src is a relative path for Reference
+// Library docs, so the two could never match and the guard misfired on
+// EVERY render (any unrelated store.update() elsewhere in the app would
+// reset the iframe to blank mid-load, stranding it white). Tracking "the
+// last src I myself set" sidesteps the mismatch entirely.
+let lastDocViewerSrc = null;
 // The dice roll window (see renderDiceRollOverlay) — set by performFieldRoll
 // whenever a statblock field is rolled, cleared on close/Escape/backdrop
 // click. Shape: { label, method, r } where method picks which fields of r
@@ -260,6 +268,7 @@ export function mountShell(el) {
           <div class="drawer-head-actions">
             <div class="drawer-head-extra" data-drawer-anchor-head-extra></div>
             <button class="icon-btn" data-drawer-anchor-unpin title="Move back into tabs" aria-label="Move back into tabs">▶</button>
+            <button class="icon-btn" data-drawer-anchor-close title="Close" aria-label="Close">✕</button>
           </div>
         </div>
         <div class="mc-drawer-body" data-drawer-anchor-body></div>
@@ -367,6 +376,12 @@ function onClick(ev) {
   if (drawerTab) { activeDrawer = drawerTab.dataset.drawerTab; return render(); }
   if (hit('[data-close-all-drawers]')) return closeAllDrawerTabs();
   if (hit('[data-drawer-anchor-unpin]')) return unanchorDrawerTab();
+  // Distinct from unpin (▶, "merge into tabs"): closes the anchored drawer
+  // outright, with no promote-into-openDrawers step — fixes a real reported
+  // bug where, if the anchor panel was the only thing open, ▶ silently
+  // turned it into the MAIN drawer (which alone had a ✕) instead of closing
+  // it, forcing a confusing second click.
+  if (hit('[data-drawer-anchor-close]')) { anchoredDrawer = null; return render(); }
   if (hit('[data-toggle-copilot]')) { copilotOpen = !copilotOpen; return render(); }
   if (hit('[data-toggle-cast]')) return toggleCastDrawer();
 
@@ -578,28 +593,30 @@ function onClick(ev) {
   // create-a-blank-entity behavior anyway.
   const entAdd = hit('[data-entity-add]');
   if (entAdd) { store.update((d) => createEntity(d, { type: entAdd.dataset.entityAdd }).campaign); return toast('Entity added'); }
-  // WHERE's "+ New Location" also adds the new entity straight to the
-  // curated "present here" list (context.where.entityIds) in one action —
-  // distinct from the generic add above, which has no context to add to.
+  // WHERE's "+ New Location" — same blank-create as the generic "+ Type"
+  // above; the new entity is unnamed until the GM opens Cast and names it,
+  // at which point it becomes a taggable candidate below like any other
+  // Location (no more auto-add to a curated list — that list is gone).
   const whereAddLoc = hit('[data-where-add-location]');
-  if (whereAddLoc) {
-    let id = null;
-    store.update((d) => {
-      const r = createEntity(d, { type: 'location' });
-      id = r.id;
-      return addContextEntity(r.campaign, 'where', id);
-    });
-    return toast('Location added');
-  }
-  const ctxEntAdd = hit('[data-context-entity-add]');
-  if (ctxEntAdd) {
-    const [key, id] = ctxEntAdd.dataset.contextEntityAdd.split('::');
-    return store.update((d) => addContextEntity(d, key, id));
-  }
-  const ctxEntRemove = hit('[data-context-entity-remove]');
-  if (ctxEntRemove) {
-    const [key, id] = ctxEntRemove.dataset.contextEntityRemove.split('::');
-    return store.update((d) => removeContextEntity(d, key, id));
+  if (whereAddLoc) { store.update((d) => createEntity(d, { type: 'location' }).campaign); return toast('Location added — name and tag it in Cast'); }
+  // WHERE's "Present Here" curated list (context.where.entityIds) was
+  // duplicative of Focus — a Location already belongs to the scene once
+  // it's mentioned there. Clicking a matching Location now inserts a real
+  // @mention at the end of Focus directly, same insertMentionNode path the
+  // drag-and-drop mention handler above uses.
+  const insertWhereMention = hit('[data-insert-where-mention]');
+  if (insertWhereMention) {
+    const entityId = insertWhereMention.dataset.insertWhereMention;
+    const ent = getEntity(store.get(), entityId);
+    const field = root.querySelector('[data-ctx="where.summary"]');
+    if (!ent || !field) return;
+    const range = document.createRange();
+    range.selectNodeContents(field);
+    range.collapse(false);
+    insertMentionNode(range, { kind: 'entity', entityId, name: ent.name || 'Unnamed' });
+    field.focus();
+    commitMentionField(field);
+    return toast(`Mentioned ${ent.name || 'Unnamed'} in Focus`);
   }
   // Revealed/hidden (GM) starts collapsed on every entity, but once a GM
   // opens it, docs/adr/next-request.md (2026-07-06) asks that it "stay
@@ -2478,7 +2495,7 @@ function render() {
       const d = drawerMeta(id);
       if (!d) return '';
       const badge = badges[d.id] || '';
-      return `<button class="btn ghost sm" data-drawer-open="${d.id}" aria-expanded="${activeDrawer === d.id}" title="${d.label}">${d.glyph} ${d.label}${badge ? `<span class="badge">${badge}</span>` : ''}</button>`;
+      return `<button class="btn ghost sm" data-drawer-open="${d.id}" aria-expanded="${activeDrawer === d.id}" title="${d.label}"><span class="glyph">${d.glyph}</span> <span class="btn-label">${d.label}</span>${badge ? `<span class="badge">${badge}</span>` : ''}</button>`;
     }).join('');
   }
 
@@ -2570,7 +2587,7 @@ function render() {
     if (resolvedActive && resolvedActive.src) {
       frame.hidden = false;
       empty.hidden = true;
-      if (frame.src !== resolvedActive.src) {
+      if (lastDocViewerSrc !== resolvedActive.src) {
         // Two mentions of the SAME document at different pages (docs/adr's
         // @[Name#12] vs @[Name#45]) resolve to a src differing only in its
         // #page=N fragment — a browser's built-in PDF viewer doesn't
@@ -2582,6 +2599,7 @@ function render() {
         // attribute with no visible effect.
         frame.src = 'about:blank';
         frame.src = resolvedActive.src;
+        lastDocViewerSrc = resolvedActive.src;
       }
     } else {
       // A resolved 'lib' entry with no dataUrl means the file never actually
@@ -2593,6 +2611,7 @@ function render() {
       empty.textContent = resolvedActive
         ? `"${resolvedActive.title}" couldn't be loaded — it may have failed to save (browser storage limits). Try re-adding it, or for large rulebooks add the PDF to assets/docs/ and rebuild.`
         : 'This document is no longer available.';
+      lastDocViewerSrc = null;
     }
   }
 

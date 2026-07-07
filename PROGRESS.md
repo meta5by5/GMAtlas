@@ -14,6 +14,48 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-07 Eight-item follow-up batch** (submitted directly in chat, not
+`docs/adr/next-request.md`): layout density, a Scene-field redesign, a
+WHERE-tab simplification, an icon tweak, and three real regressions found
+and fixed via direct code research. Latest Scene's split fields
+(Opening/Driver/Clue/Complication/Likely consequence) gained a real
+`.scene-fields` CSS grid (`repeat(auto-fit, minmax(9rem, 1fr))` — they'd
+never had one, so five individually-editable fields still rendered
+one-per-line). Scene's "Opening" field now stores the FULL generated
+sentence (`domain/scenes.js`), not just the sensory-detail fragment the
+previous split left editable inside a fixed template; "Likely consequence"
+(already a real field on the scene object) is rendered as a UI field for
+the first time. WHERE's "Present Here" curated list
+(`context.where.entityIds`) was removed as duplicative of Focus — clicking
+a matching Location candidate now inserts a real `@mention` at the end of
+Focus directly (the same `insertMentionNode` path drag-and-drop mentions
+already use); `addContextEntity`/`removeContextEntity` stay in
+`session.js` (harmless, tested, generic) but are no longer driven from
+this UI. The toolbar's small/large-text buttons now read as a small "a"
+and bold "A" instead of plain "S"/"L". Three confirmed bugs: (1) a
+`@media (max-width: 1023px) { .header-actions .btn.sm { display: none; }
+}` rule, written back when "▶ Scene" was the only such button, was
+blanket-hiding Party/Colony/Journal and the ⚙ gear menu on any viewport
+≤1023px once the prior QoL batch put them in the same `.btn.sm` bucket —
+fixed by wrapping each header tab's text in a `.btn-label` span and hiding
+only that at narrow widths, leaving a compact icon-only button that stays
+clickable ("New Campaign should move into the Settings dropdown" turned
+out to already be true — it likely read as broken because this same bug
+made the gear button itself invisible). (2) The anchor panel
+(`.mc-drawer-anchor`) only ever had a ▶ "merge into tabs" button, no ✕ —
+closing it when it was the ONLY thing open silently promoted it into the
+main drawer instead (which alone had a ✕), forcing a confusing second
+click; added a real `data-drawer-anchor-close` ✕ that closes it outright.
+(3) The doc-viewer iframe reload guard compared the live DOM `frame.src`
+(browser-normalized absolute URL) against a locally-computed relative
+path for Reference Library docs — these could never match, so the guard
+misfired on every render, and any unrelated `store.update()` elsewhere in
+the app could reset the iframe to blank mid-load; fixed by tracking
+`lastDocViewerSrc` ("the last src I set") instead of reading it back from
+the DOM. Verified via a jsdom-driven smoke test against the built bundle
+(17 checks covering all eight items) plus the full `npm test` suite
+(297/297 passing).
+
 **2026-07-07 Gallery** (`docs/adr/0021-gallery.md`, Phase 11's first
 built item): a new top-level drawer — per-entity thumbnails (left-aligned
 beside Type/Tags) plus a searchable, taggable image collection. An

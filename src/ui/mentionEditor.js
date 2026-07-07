@@ -210,8 +210,8 @@ export function richToolbarHTML() {
     <button type="button" class="icon-btn" data-rich-cmd="underline" title="Underline (_text_)"><u>U</u></button>
     <button type="button" class="icon-btn" data-rich-cmd="ul" title="Bullet list">☰•</button>
     <button type="button" class="icon-btn" data-rich-cmd="ol" title="Numbered list">☰1.</button>
-    <button type="button" class="icon-btn" data-rich-cmd="small" title="Small text (~text~)"><small>S</small></button>
-    <button type="button" class="icon-btn" data-rich-cmd="large" title="Large text (^text^)">L</button>
+    <button type="button" class="icon-btn" data-rich-cmd="small" title="Small text (~text~)"><small>a</small></button>
+    <button type="button" class="icon-btn" data-rich-cmd="large" title="Large text (^text^)"><b>A</b></button>
     <button type="button" class="icon-btn" data-rich-cmd="table" title="Insert a table — add more rows/columns by typing more | cells |">▦</button>
   </div>`;
 }

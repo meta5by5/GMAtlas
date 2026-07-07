@@ -185,8 +185,9 @@ export function removeContextEntity(campaign, key, entityId) {
   return next;
 }
 
-/** Edits one of the Latest Scene's split fields (sensory/driver/clue/
- *  complication — the "USER CHANGES" batch's Scene-splitting ask) and
+/** Edits one of the Latest Scene's split fields (opening/driver/clue/
+ *  complication/consequence — the "USER CHANGES" batch's Scene-splitting
+ *  ask) and
  *  recomposes `text` from the scene's now-current field values, so the
  *  combined view stays a live, correct derivation instead of a second,
  *  independently-editable copy. No-ops if the scene no longer exists (the
