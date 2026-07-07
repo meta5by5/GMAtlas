@@ -972,8 +972,25 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .trade-contract-payout { margin-left: auto; color: var(--accent-strong); font-weight: 700; }
 .trade-contract-route { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--sp-2); }
 
-/* Guide */
-.guide-editor { min-height: 16rem; font-family: var(--font); }
+/* Guide (docs/adr/0017: multi-doc tree, was one freeform field) */
+.guide-doc-head { margin-top: var(--sp-3); }
+.guide-title-input { width: 100%; box-sizing: border-box; font-size: 1rem; font-weight: 600; padding: 0.35rem 0.5rem; background: var(--bg-inset); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+/* resize:vertical needs overflow non-visible, already true (overflow-y:auto
+   below) — scoped to .guide-editor alone, not every .mention-editor, since
+   WHO/WHERE/etc. context fields shouldn't gain a resize handle. */
+.guide-editor { min-height: 16rem; font-family: var(--font); resize: vertical; overflow-y: auto; }
+.guide-tree-section { margin-top: var(--sp-4); border-top: 1px solid var(--border); padding-top: var(--sp-3); }
+.guide-tree-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-2); }
+.guide-tree-head h4 { margin: 0; font-size: 0.85rem; color: var(--accent); }
+.guide-tree-drop-root { padding: 0.4rem 0.6rem; margin-bottom: var(--sp-2); border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); font-size: 0.8rem; color: var(--text-dim); text-align: center; }
+.guide-tree { display: flex; flex-direction: column; gap: 1px; }
+.guide-tree-row { display: flex; align-items: center; gap: var(--sp-1); padding: 0.3rem 0.4rem; border-radius: var(--radius-sm); cursor: grab; }
+.guide-tree-row:active { cursor: grabbing; }
+.guide-tree-row:hover { background: var(--tier2-bg); }
+.guide-node-caret, .guide-node-caret-spacer { width: 1.1rem; flex: none; background: none; border: none; color: var(--text-dim); text-align: center; padding: 0; }
+.guide-node-title { flex: 1; text-align: left; background: none; border: none; color: var(--text); font-size: 0.88rem; padding: 0.1rem 0.2rem; cursor: pointer; }
+.guide-node-title.sel { color: var(--accent-strong); font-weight: 600; }
+.guide-node-actions { display: inline-flex; gap: 2px; align-items: center; margin-left: auto; }
 
 /* Documents: tags, search, link-style name, rename */
 .doc-card-title-link, .doc-card-title-static { font-size: 0.92rem; font-weight: 600; color: var(--text); }

@@ -1378,14 +1378,126 @@ test('listLifeformEncounters filters entities tagged #lifeform', () => {
   assert.equal(found[0].id, id);
 });
 
-// --- guide (freeform reference document) ------------------------------------
-import { getGuideText, setGuideText } from '../src/domain/guide.js';
+// --- guide (docs/adr/0017: multi-doc tree, was one freeform field) --------
+import {
+  buildGuideTree, getActiveGuideDoc, setActiveGuideId, setGuideDocText, renameGuideDoc,
+  createGuideDoc, countGuideDescendants, removeGuideDoc, moveGuideDoc,
+} from '../src/domain/guide.js';
 
-test('guide text round-trips and does not mutate the source campaign', () => {
+test('a fresh campaign has exactly one root Guide doc, active by default, empty text', () => {
   const camp = defaultCampaign();
-  const next = setGuideText(camp, 'Colony Builder @[Colony Builder] p.44');
-  assert.equal(getGuideText(camp), '');
-  assert.equal(getGuideText(next), 'Colony Builder @[Colony Builder] p.44');
+  const tree = buildGuideTree(camp);
+  assert.equal(tree.length, 1);
+  assert.equal(tree[0].children.length, 0);
+  const active = getActiveGuideDoc(camp);
+  assert.equal(active.id, tree[0].id);
+  assert.equal(active.text, '');
+  assert.equal(active.title, 'Guide');
+});
+
+test('an old campaign\'s single guide.text migrates losslessly into that one root doc, including through schema.js\'s withDefaults deep-merge shape', () => {
+  const camp = defaultCampaign();
+  // withDefaults' deep-merge leaves an old {text} campaign as this exact
+  // hybrid — docs already an empty array from the default, text still
+  // present alongside it — the real shape ensureGuide must recognize
+  // (not just "docs is missing/not an array").
+  camp.guide = { docs: [], activeId: null, text: 'Colony Builder @[Colony Builder] p.44' };
+  const active = getActiveGuideDoc(camp);
+  assert.equal(active.text, 'Colony Builder @[Colony Builder] p.44');
+  const next = setGuideDocText(camp, active.id, active.text); // triggers the real, persisted migration
+  assert.equal(getActiveGuideDoc(next).text, 'Colony Builder @[Colony Builder] p.44');
+  assert.equal(next.guide.text, undefined); // fully absorbed, not left lingering
+});
+
+test('setGuideDocText/renameGuideDoc are pure and scoped to the given id', () => {
+  let camp = defaultCampaign();
+  const rootId = getActiveGuideDoc(camp).id;
+  const next = setGuideDocText(camp, rootId, 'Some notes');
+  assert.equal(getActiveGuideDoc(camp).text, ''); // source untouched
+  assert.equal(getActiveGuideDoc(next).text, 'Some notes');
+  const renamed = renameGuideDoc(next, rootId, 'Colony Builder Notes');
+  assert.equal(getActiveGuideDoc(renamed).title, 'Colony Builder Notes');
+});
+
+test('createGuideDoc adds a child (or top-level) doc, appended after existing siblings, and makes it active', () => {
+  let camp = defaultCampaign();
+  const rootId = getActiveGuideDoc(camp).id;
+  let childId;
+  ({ campaign: camp, id: childId } = createGuideDoc(camp, { title: 'Child One', parentId: rootId }));
+  assert.equal(getActiveGuideDoc(camp).id, childId);
+  let child2Id;
+  ({ campaign: camp, id: child2Id } = createGuideDoc(camp, { title: 'Child Two', parentId: rootId }));
+  const tree = buildGuideTree(camp);
+  const root = tree.find((n) => n.id === rootId);
+  assert.equal(root.children.length, 2);
+  assert.equal(root.children[0].id, childId); // order preserved
+  assert.equal(root.children[1].id, child2Id);
+
+  const { campaign: withTop, id: topId } = createGuideDoc(camp, { title: 'Top Level' });
+  assert.ok(buildGuideTree(withTop).some((n) => n.id === topId));
+});
+
+test('createGuideDoc falls back to top-level for an unresolvable parentId', () => {
+  const camp = defaultCampaign();
+  const { campaign: next, id } = createGuideDoc(camp, { title: 'Orphaned', parentId: 'not-a-real-id' });
+  assert.equal(buildGuideTree(next).some((n) => n.id === id), true);
+});
+
+test('setActiveGuideId only switches to a doc that actually exists', () => {
+  let camp = defaultCampaign();
+  const rootId = getActiveGuideDoc(camp).id;
+  let childId;
+  ({ campaign: camp, id: childId } = createGuideDoc(camp, { title: 'Child', parentId: rootId }));
+  camp = setActiveGuideId(camp, rootId);
+  assert.equal(getActiveGuideDoc(camp).id, rootId);
+  const unchanged = setActiveGuideId(camp, 'not-a-real-id');
+  assert.equal(getActiveGuideDoc(unchanged).id, rootId);
+});
+
+test('countGuideDescendants counts the whole subtree, not just direct children; removeGuideDoc cascades and reassigns activeId if needed', () => {
+  let camp = defaultCampaign();
+  const rootId = getActiveGuideDoc(camp).id;
+  let aId, bId, cId;
+  ({ campaign: camp, id: aId } = createGuideDoc(camp, { title: 'A', parentId: rootId }));
+  ({ campaign: camp, id: bId } = createGuideDoc(camp, { title: 'B', parentId: aId }));
+  ({ campaign: camp, id: cId } = createGuideDoc(camp, { title: 'C', parentId: bId }));
+  assert.equal(countGuideDescendants(camp, aId), 2); // B and C
+  assert.equal(countGuideDescendants(camp, rootId), 3); // A, B, C
+
+  camp = setActiveGuideId(camp, cId);
+  const next = removeGuideDoc(camp, aId);
+  const tree = buildGuideTree(next);
+  assert.equal(tree.find((n) => n.id === rootId).children.length, 0); // A (and B, C) gone
+  assert.equal(getActiveGuideDoc(next).id, rootId); // active was inside the removed subtree, reassigned
+});
+
+test('removeGuideDoc refuses to delete the last remaining doc', () => {
+  const camp = defaultCampaign();
+  const rootId = getActiveGuideDoc(camp).id;
+  const next = removeGuideDoc(camp, rootId);
+  assert.equal(buildGuideTree(next).length, 1); // still exactly one doc
+});
+
+test('moveGuideDoc reparents a doc, appended after the new parent\'s existing children, and refuses a cycle', () => {
+  let camp = defaultCampaign();
+  const rootId = getActiveGuideDoc(camp).id;
+  let aId, bId, cId;
+  ({ campaign: camp, id: aId } = createGuideDoc(camp, { title: 'A', parentId: rootId }));
+  ({ campaign: camp, id: bId } = createGuideDoc(camp, { title: 'B', parentId: rootId }));
+  ({ campaign: camp, id: cId } = createGuideDoc(camp, { title: 'C', parentId: aId }));
+
+  // Move B under A — A should now have C then B (appended after).
+  let next = moveGuideDoc(camp, bId, aId);
+  let a = buildGuideTree(next).find((n) => n.id === rootId).children.find((n) => n.id === aId);
+  assert.deepEqual(a.children.map((n) => n.id), [cId, bId]);
+
+  // Cycle guard: A can't become a child of its own descendant C.
+  const cycleAttempt = moveGuideDoc(next, aId, cId);
+  assert.deepEqual(cycleAttempt, next); // unchanged
+
+  // Un-parenting back to top-level (newParentId null).
+  const unparented = moveGuideDoc(next, bId, null);
+  assert.equal(buildGuideTree(unparented).some((n) => n.id === bId), true);
 });
 
 // --- oracle grouped/collapsible tree -----------------------------------------

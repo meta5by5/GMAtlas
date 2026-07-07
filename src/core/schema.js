@@ -74,9 +74,14 @@ export function defaultCampaign(now = new Date().toISOString()) {
     // entities by id rather than duplicating their stats.
     colony: { fields: {}, crew: [] },
 
-    // A single freeform reference document — a table of contents with
-    // @mentions/@[Doc] pointers into the Cast and Document Library.
-    guide: { text: '' },
+    // A tree of freeform reference documents (docs/adr/0017-multi-doc-
+    // guide-tree.md) — each a table of contents with @mentions/@[Doc]
+    // pointers into the Cast and Document Library. `docs` is populated
+    // lazily by domain/guide.js's ensureGuide() (same seed-then-lazy-init
+    // posture as ensureOracles/ensureFactionFields elsewhere in this repo)
+    // rather than here, so an old campaign's single `{text}` shape
+    // migrates losslessly into the first root doc the first time it's read.
+    guide: { docs: [], activeId: null },
 
     settings: {
       genre: 'Hostile',  // genre-aware, not genre-locked

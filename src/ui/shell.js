@@ -36,7 +36,10 @@ import { setColonyField, addCrewRow, updateCrewRow, removeCrewRow } from '../dom
 import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract } from '../domain/trade.js';
 import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors, resolveFactionTurn, formatFactionTurnResult, rollFactionAsset } from '../domain/factions.js';
 import { generateMission, formatMission } from '../domain/missions.js';
-import { setGuideText, getGuideText } from '../domain/guide.js';
+import {
+  getActiveGuideDoc, setGuideDocText, setActiveGuideId, createGuideDoc, renameGuideDoc,
+  countGuideDescendants, removeGuideDoc, moveGuideDoc,
+} from '../domain/guide.js';
 import { titleFromFilename } from '../domain/titleCase.js';
 import { buildSessionRecap, formatSessionRecap } from '../domain/recap.js';
 import { addTemplateSystem, addTemplateField, updateTemplateField, removeTemplateField, moveTemplateField } from '../domain/statblockTemplates.js';
@@ -141,6 +144,8 @@ let searchQuery = '';
 let oracleEditorOpen = new Set(); // ephemeral — which oracle tables' entry editors are expanded
 let oracleTagEditorOpen = new Set(); // ephemeral — which oracle tables' TAG editors are expanded (docs/adr/0016), hidden by default
 let oracleTagFilter = null; // ephemeral — array of tags a field's 🔮 link jumped here with, or null for the ordinary text-filtered view (mutually exclusive with oracleFilter)
+let expandedGuideNodes = new Set(); // ephemeral — which Guide tree nodes are expanded (docs/adr/0017)
+let guideRenameOpen = new Set(); // ephemeral — which Guide docs (tree row or the active title) are showing an inline rename input
 let entitySearch = ''; // ephemeral — Cast panel name/tag search
 let entityTypeFilter = ''; // ephemeral — Cast panel type filter ('' = all)
 let entityTagFilters = new Set(); // ephemeral — Cast panel cumulative tag sub-filter (ADR 0012), AND semantics, mirrors docTagFilters
@@ -681,6 +686,53 @@ function onClick(ev) {
     return;
   }
 
+  // --- Guide tree (docs/adr/0017-multi-doc-guide-tree.md) ------------------
+  const guideNodeSelect = hit('[data-guide-node-select]');
+  if (guideNodeSelect) { store.update((d) => setActiveGuideId(d, guideNodeSelect.dataset.guideNodeSelect)); return; }
+  const guideNodeToggle = hit('[data-guide-node-toggle]');
+  if (guideNodeToggle) {
+    const id = guideNodeToggle.dataset.guideNodeToggle;
+    if (expandedGuideNodes.has(id)) expandedGuideNodes.delete(id); else expandedGuideNodes.add(id);
+    return renderDrawerBody();
+  }
+  if (hit('[data-guide-add-root]')) { store.update((d) => createGuideDoc(d, { title: 'Untitled' }).campaign); return; }
+  const guideAddChild = hit('[data-guide-node-add-child]');
+  if (guideAddChild) {
+    const parentId = guideAddChild.dataset.guideNodeAddChild;
+    expandedGuideNodes.add(parentId);
+    store.update((d) => createGuideDoc(d, { title: 'Untitled', parentId }).campaign);
+    return;
+  }
+  // Rename toggle/save shares one button (✎ opens the input, 💾 saves it) —
+  // same two-click convention docRename/refRename already use. Handles
+  // both the tree row's own rename AND the active doc's title input above
+  // the editor (data-guide-rename-input carries whichever id is open).
+  const guideNodeRename = hit('[data-guide-node-rename]');
+  if (guideNodeRename) {
+    const id = guideNodeRename.dataset.guideNodeRename;
+    if (guideRenameOpen.has(id)) {
+      const input = root.querySelector(`[data-guide-rename-input="${id}"]`);
+      guideRenameOpen.delete(id);
+      if (input && input.value.trim()) return store.update((d) => renameGuideDoc(d, id, input.value.trim()));
+      return renderDrawerBody();
+    }
+    guideRenameOpen.add(id);
+    return renderDrawerBody();
+  }
+  const guideNodeDelete = hit('[data-guide-node-delete]');
+  if (guideNodeDelete) {
+    const id = guideNodeDelete.dataset.guideNodeDelete;
+    const camp = store.get();
+    const target = (camp.guide && camp.guide.docs || []).find((d) => d.id === id);
+    const count = countGuideDescendants(camp, id);
+    const name = target ? target.title : 'this document';
+    const message = count > 0
+      ? `Delete "${name}" and its ${count} sub-document${count === 1 ? '' : 's'}? This can't be undone.`
+      : `Delete "${name}"? This can't be undone.`;
+    if (window.confirm(message)) store.update((d) => removeGuideDoc(d, id));
+    return;
+  }
+
   // --- party --- (inline creation form, not a window.prompt() popup — see
   // partyTrackerAddForm in drawers/index.js; name/type are both asked there,
   // never changeable again once the tracker exists)
@@ -1064,7 +1116,7 @@ function onKeydown(ev) {
   // blur (see onChange) — Enter has no native effect on a bare <input>
   // outside a <form>, so it's wired here to trigger that same blur instead
   // of duplicating the commit logic.
-  const commitOnEnterTarget = ev.target.closest('[data-doc-rename-input], [data-ref-rename-input], [data-doc-tag-input], [data-ref-tag-input], [data-entity-tag-input], [data-oracle-tag-input]');
+  const commitOnEnterTarget = ev.target.closest('[data-doc-rename-input], [data-ref-rename-input], [data-doc-tag-input], [data-ref-tag-input], [data-entity-tag-input], [data-oracle-tag-input], [data-guide-rename-input], [data-guide-title-input]');
   if (commitOnEnterTarget && ev.key === 'Enter') { ev.preventDefault(); commitOnEnterTarget.blur(); return; }
 
   // Party Tracker creation form: Enter in the name field submits (same
@@ -1080,6 +1132,12 @@ function onKeydown(ev) {
     ev.preventDefault();
     const key = renameInput.dataset.docRenameInput || renameInput.dataset.refRenameInput;
     docRenameOpen.delete(key);
+    return renderDrawerBody();
+  }
+  const guideRenameInputKey = ev.target.closest('[data-guide-rename-input]');
+  if (guideRenameInputKey && ev.key === 'Escape') {
+    ev.preventDefault();
+    guideRenameOpen.delete(guideRenameInputKey.dataset.guideRenameInput);
     return renderDrawerBody();
   }
 
@@ -1187,6 +1245,15 @@ function onChange(ev) {
     const id = docRenameInput.dataset.docRenameInput;
     docRenameOpen.delete(id);
     if (t.value.trim()) return store.update((d) => renameDocument(d, id, t.value.trim()));
+    return renderDrawerBody();
+  }
+  // Guide tree/active-title rename input (docs/adr/0017) — same
+  // commit-on-blur shape as doc-rename-input above.
+  const guideRenameInput = t.closest('[data-guide-rename-input]');
+  if (guideRenameInput) {
+    const id = guideRenameInput.dataset.guideRenameInput;
+    guideRenameOpen.delete(id);
+    if (t.value.trim()) return store.update((d) => renameGuideDoc(d, id, t.value.trim()));
     return renderDrawerBody();
   }
   const refRenameInput = t.closest('[data-ref-rename-input]');
@@ -1322,6 +1389,8 @@ function onChange(ev) {
   if (expDial) { const [threadId, field] = expDial.dataset.expeditionDial.split('::'); return store.update((d) => setExpeditionDial(d, threadId, field, Number(t.value))); }
 
   if (t.closest('[data-campaign-title-input]')) return store.update((d) => { d.meta.title = t.value; return d; });
+  const guideTitleInput = t.closest('[data-guide-title-input]');
+  if (guideTitleInput) { const id = getActiveGuideDoc(store.get()).id; if (t.value.trim()) return store.update((d) => renameGuideDoc(d, id, t.value.trim())); return; }
   if (t.closest('[data-genre-input]')) return store.update((d) => { d.settings.genre = t.value; return d; });
   if (t.closest('[data-genre-pack-select]')) {
     store.update((d) => { d.settings.genrePack = t.value; return d; });
@@ -1599,8 +1668,21 @@ function onGraphMouseUp() { graphPan = null; }
 // MIME type keeps this from reacting to unrelated drags (e.g. file drops).
 const ENTITY_DRAG_TYPE = 'application/x-saga-entity';
 const DOCUMENT_DRAG_TYPE = 'application/x-saga-document';
+// Guide-tree reparenting (docs/adr/0017) — a separate MIME type and target
+// resolution path from the entity/document one above (that one's target
+// resolution is specifically about text-mention insertion; this one's is
+// about tree structure), sharing only the same delegated dragstart/
+// dragover/dragleave/drop listeners (rule 4).
+const GUIDE_NODE_DRAG_TYPE = 'application/x-gmatlas-guide-node';
 
 function onDragStart(ev) {
+  const guideSrc = ev.target.closest('[data-drag-guide-node]');
+  if (guideSrc) {
+    ev.dataTransfer.setData(GUIDE_NODE_DRAG_TYPE, guideSrc.dataset.dragGuideNode);
+    ev.dataTransfer.effectAllowed = 'move';
+    return;
+  }
+
   const entitySrc = ev.target.closest('[data-drag-entity]');
   if (entitySrc) {
     ev.dataTransfer.setData(ENTITY_DRAG_TYPE, entitySrc.dataset.dragEntity);
@@ -1617,6 +1699,11 @@ function onDragStart(ev) {
 
 function onDragOver(ev) {
   const types = ev.dataTransfer.types || [];
+  if (types.includes(GUIDE_NODE_DRAG_TYPE)) {
+    const target = ev.target.closest('[data-drop-guide-node]');
+    if (target) { ev.preventDefault(); target.classList.add('drop-hover'); }
+    return;
+  }
   if (!types.includes(ENTITY_DRAG_TYPE) && !types.includes(DOCUMENT_DRAG_TYPE)) return;
   const target = ev.target.closest(DROP_TARGET_SELECTOR);
   if (target) { ev.preventDefault(); target.classList.add('drop-hover'); }
@@ -1628,6 +1715,12 @@ function onDragLeave(ev) {
 }
 
 function onDrop(ev) {
+  const guideNodeId = ev.dataTransfer.getData(GUIDE_NODE_DRAG_TYPE);
+  if (guideNodeId) {
+    const target = ev.target.closest('[data-drop-guide-node]');
+    if (target) { ev.preventDefault(); target.classList.remove('drop-hover'); completeGuideNodeDrop(target, guideNodeId); }
+    return;
+  }
   const entityId = ev.dataTransfer.getData(ENTITY_DRAG_TYPE);
   const documentId = ev.dataTransfer.getData(DOCUMENT_DRAG_TYPE);
   if (!entityId && !documentId) return;
@@ -1636,6 +1729,16 @@ function onDrop(ev) {
   ev.preventDefault();
   target.classList.remove('drop-hover');
   completeDrop(target, { entityId, documentId }, ev.clientX, ev.clientY);
+}
+
+/** The Guide-tree reparent mutator both the mouse (onDrop) and touch
+ *  (onTouchEnd) paths call — moveGuideDoc itself already no-ops on a
+ *  same-node or cycle-creating drop, so this doesn't need to duplicate
+ *  that guard, just resolve the "__root__" drop-zone sentinel to null. */
+function completeGuideNodeDrop(target, guideNodeId) {
+  const dropId = target.dataset.dropGuideNode;
+  const newParentId = dropId === '__root__' ? null : dropId;
+  store.update((d) => moveGuideDoc(d, guideNodeId, newParentId));
 }
 
 // Shared by the mouse path (onDrop, native HTML5 DnD) and the touch path
@@ -1710,11 +1813,13 @@ let touchDrag = null;
 
 function onTouchStart(ev) {
   const t = ev.target;
-  const entitySrc = t.closest('[data-drag-entity]');
-  const docSrc = !entitySrc && t.closest('[data-drag-document]');
-  if (!entitySrc && !docSrc) return;
+  const guideSrc = t.closest('[data-drag-guide-node]');
+  const entitySrc = !guideSrc && t.closest('[data-drag-entity]');
+  const docSrc = !guideSrc && !entitySrc && t.closest('[data-drag-document]');
+  if (!guideSrc && !entitySrc && !docSrc) return;
   const touch = ev.touches[0];
   touchDrag = {
+    guideNodeId: guideSrc ? guideSrc.dataset.dragGuideNode : null,
     entityId: entitySrc ? entitySrc.dataset.dragEntity : null,
     documentId: docSrc ? docSrc.dataset.dragDocument : null,
     startX: touch.clientX, startY: touch.clientY,
@@ -1734,7 +1839,7 @@ function onTouchMove(ev) {
   ev.preventDefault(); // only once actually dragging — a plain tap/scroll is never blocked
   if (touchDrag.ghostEl) { touchDrag.ghostEl.style.left = touch.clientX + 'px'; touchDrag.ghostEl.style.top = touch.clientY + 'px'; }
   const under = document.elementFromPoint(touch.clientX, touch.clientY);
-  const dropTarget = under && under.closest(DROP_TARGET_SELECTOR);
+  const dropTarget = under && under.closest(touchDrag.guideNodeId ? '[data-drop-guide-node]' : DROP_TARGET_SELECTOR);
   if (dropTarget !== touchDrag.lastTarget) {
     if (touchDrag.lastTarget) touchDrag.lastTarget.classList.remove('drop-hover');
     if (dropTarget) dropTarget.classList.add('drop-hover');
@@ -1751,14 +1856,17 @@ function onTouchEnd() {
   if (drag.ghostEl) drag.ghostEl.remove();
   if (drag.lastTarget) drag.lastTarget.classList.remove('drop-hover');
   if (!drag.engaged || !drag.lastTarget) return; // a tap, or released off any valid target
+  if (drag.guideNodeId) { completeGuideNodeDrop(drag.lastTarget, drag.guideNodeId); return; }
   completeDrop(drag.lastTarget, drag, drag.lastX, drag.lastY);
 }
 
 function makeTouchDragGhost(drag) {
-  const label = drag.entityId ? (getEntity(store.get(), drag.entityId) || {}).name : (resolveDocumentTab(store.get(), drag.documentId) || {}).title;
+  const label = drag.guideNodeId
+    ? (((store.get().guide && store.get().guide.docs) || []).find((d) => d.id === drag.guideNodeId) || {}).title
+    : drag.entityId ? (getEntity(store.get(), drag.entityId) || {}).name : (resolveDocumentTab(store.get(), drag.documentId) || {}).title;
   const el = document.createElement('div');
   el.className = 'touch-drag-ghost';
-  el.textContent = label || (drag.entityId ? 'Entity' : 'Document');
+  el.textContent = label || (drag.guideNodeId ? 'Document' : drag.entityId ? 'Entity' : 'Document');
   document.body.appendChild(el);
   return el;
 }
@@ -1792,10 +1900,16 @@ function onFocusOut(ev) {
   // Guide autosaves on blur too now — no Save button (nothing else in the
   // app uses one; every other field commits on blur/change already, so
   // Guide having a separate explicit-save step was the odd one out).
+  // data-guide-active names which doc this editor instance belongs to (the
+  // one that was active when it rendered) — commits to THAT id, not
+  // whatever's active by the time blur actually fires, in case a re-render
+  // switched the active doc out from under a pending edit.
   const guideField = ev.target.closest('[data-guide-input]');
   if (guideField) {
+    const id = guideField.dataset.guideActive;
     const value = serializeMentionEditor(guideField);
-    if (value !== getGuideText(store.get())) store.update((d) => setGuideText(d, value));
+    const current = getActiveGuideDoc(store.get());
+    if (id && (id !== current.id || value !== current.text)) store.update((d) => setGuideDocText(d, id, value));
   }
 }
 
@@ -2216,6 +2330,7 @@ function buildDrawerUi() {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
     enhancementDraft, expandedEnhancements, mechanicsScanning, lensPickerOpen, lensDraw,
+    expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,
   };

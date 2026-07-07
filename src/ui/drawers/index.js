@@ -26,7 +26,7 @@ import { getPressureTrack } from '../../domain/factions.js';
 import { getEnhancements, strainUsed, strainCapacity, isOverStrained } from '../../domain/enhancements.js';
 import { getMechanicsIndex } from '../../domain/mechanicsIndex.js';
 import { ENHANCEMENT_TYPES } from '../../data/enhancementTypes.js';
-import { getGuideText } from '../../domain/guide.js';
+import { buildGuideTree, getActiveGuideDoc } from '../../domain/guide.js';
 import { buildMentionEditorHTML } from '../mentionEditor.js';
 import { buildSessionRecap } from '../../domain/recap.js';
 import { RULESETS, findRuleset, STARFORGED_PROGRESS_DIFFICULTIES, findProgressDifficulty } from '../../data/rulesets.js';
@@ -1368,13 +1368,56 @@ function trade(doc, ui = {}) {
     </div>`;
 }
 
-// --- Guide: one freeform reference document (table of contents) ------------
-function guide(doc) {
-  const text = getGuideText(doc);
+// --- Guide: a tree of freeform reference documents (docs/adr/0017) --------
+// The active doc's title + editor render above the tree, same "one thing
+// open at a time, pick from the list to switch" shape Entity Detail/Cast
+// already use — the tree itself (below) is just for organizing/navigating,
+// not a second place to edit text.
+function guide(doc, ui = {}) {
+  const active = getActiveGuideDoc(doc);
+  const tree = buildGuideTree(doc);
+  const renameOpen = ui.guideRenameOpen || new Set();
+  const activeRenaming = renameOpen.has(active.id);
+  const titleEl = activeRenaming
+    ? `<input class="doc-rename-input" data-guide-rename-input="${esc(active.id)}" value="${esc(active.title)}" autofocus>`
+    : `<input class="guide-title-input" data-guide-title-input value="${esc(active.title)}" placeholder="Untitled">`;
   return `
-    <p class="dim small">A table of contents for the campaign — <code>@Name</code> links a Cast entity, <code>@[Doc Name]</code> references a document (<code>@[Doc Name#12]</code> or <code>@[Doc Name p.12]</code> jumps to a page). Click a mention to open it; arrow-key the cursor into it to edit its label. Saves automatically.</p>
-    <div class="mention-editor guide-editor" contenteditable="true" data-guide-input data-placeholder="Colony Builder — see @[5PFH Planetfall p.12] for the turn sheet.&#10;Meet @Captain Reyes in Docking Bay 3.">${buildMentionEditorHTML(doc, text)}</div>
-    ${mechanicsIndexList(doc)}`;
+    <p class="dim small">A table of contents for the campaign — <code>@Name</code> links a Cast entity, <code>@[Doc Name]</code> references a document (<code>@[Doc Name#12]</code> or <code>@[Doc Name p.12]</code> jumps to a page). Click a mention to open it; arrow-key the cursor into it to edit its label. Saves automatically. Drag a document below to reorganize the tree.</p>
+    <div class="guide-doc-head">${titleEl}</div>
+    <div class="mention-editor guide-editor" contenteditable="true" data-guide-input data-guide-active="${esc(active.id)}" data-placeholder="Colony Builder — see @[5PFH Planetfall p.12] for the turn sheet.&#10;Meet @Captain Reyes in Docking Bay 3.">${buildMentionEditorHTML(doc, active.text)}</div>
+    ${mechanicsIndexList(doc)}
+    <div class="guide-tree-section">
+      <div class="guide-tree-head">
+        <h4>Guide Documents</h4>
+        <button class="chip" data-guide-add-root title="Add a new top-level Guide document">＋ Root doc</button>
+      </div>
+      <div class="guide-tree-drop-root" data-drop-guide-node="__root__" title="Drag a document here to make it top-level">📄 Top level</div>
+      <div class="guide-tree">${tree.map((node) => guideTreeRow(node, ui, active.id, 0)).join('')}</div>
+    </div>`;
+}
+
+function guideTreeRow(node, ui, activeId, depth) {
+  const expandedSet = ui.expandedGuideNodes || new Set();
+  const renameOpen = ui.guideRenameOpen || new Set();
+  const expanded = expandedSet.has(node.id);
+  const renaming = renameOpen.has(node.id);
+  const hasChildren = node.children.length > 0;
+  const titleEl = renaming
+    ? `<input class="doc-rename-input" data-guide-rename-input="${esc(node.id)}" value="${esc(node.title)}" autofocus>`
+    : `<button type="button" class="guide-node-title ${node.id === activeId ? 'sel' : ''}" data-guide-node-select="${esc(node.id)}">${esc(node.title)}</button>`;
+  const row = `
+    <div class="guide-tree-row" style="padding-left: ${depth * 1.1}rem" draggable="true" data-drag-guide-node="${esc(node.id)}" data-drop-guide-node="${esc(node.id)}">
+      <span class="entity-drag-handle" aria-hidden="true">⠿</span>
+      ${hasChildren ? `<button type="button" class="guide-node-caret" data-guide-node-toggle="${esc(node.id)}">${expanded ? '▾' : '▸'}</button>` : '<span class="guide-node-caret-spacer"></span>'}
+      ${titleEl}
+      <span class="guide-node-actions">
+        <button class="icon-btn" data-guide-node-rename="${esc(node.id)}" title="${renaming ? 'Save' : 'Rename'}" aria-label="Rename">${renaming ? '💾' : '✎'}</button>
+        <button class="icon-btn" data-guide-node-add-child="${esc(node.id)}" title="Add a child document" aria-label="Add child">＋</button>
+        <button class="icon-btn" data-guide-node-delete="${esc(node.id)}" title="Delete" aria-label="Delete">🗑</button>
+      </span>
+    </div>`;
+  const childRows = (hasChildren && expanded) ? node.children.map((c) => guideTreeRow(c, ui, activeId, depth + 1)).join('') : '';
+  return row + childRows;
 }
 
 // Game Mechanics Index (docs/adr/0014-mechanics-index-pdfjs.md) — the

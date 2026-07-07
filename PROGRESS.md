@@ -14,6 +14,36 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-06 Multi-document Guide tree with drag-and-drop reparenting**
+(`docs/adr/0017-multi-doc-guide-tree.md`): the Guide tab grows from one
+freeform field into named, nested documents (`campaign.guide: {docs,
+activeId}`) organized in a tree below the main editor, reorganizable via
+drag-and-drop on both mouse and touch — extending this app's existing
+entity-linking touch-drag system rather than building a second one.
+Create/rename/delete (cascades to descendants, confirmed first, naming the
+doc and count)/reparent (appended after the target's existing children,
+refusing a cycle), plus a "Top level" drop zone to un-parent. A real,
+previously-impossible-to-hit migration-ordering bug was found and fixed
+before it ever shipped: a naive random bootstrap id for the very first
+migration-created root doc would let a pure read (taken before any write
+ever happens) disagree with what a real write's migration later generates
+— fixed with one deterministic fixed id (`'gd_root'`) both the read and
+write paths share, caught by the domain tests before the UI was even
+wired up. `.guide-editor` also gained a resize handle (its scrollbar was
+already there via `overflow-y:auto`, just not obviously so without one).
+Verified end to end: a real legacy single-field campaign seeded into a
+fresh browser profile shows its old content immediately and migrates
+losslessly on first edit; mouse drag reparents and un-parents correctly;
+a simulated touch drag (CDP touch events, not just mouse) reparents too.
+
+Also fixed the same day: a document-viewer bug found while investigating
+this — two mentions of the same document at different pages already
+correctly carried their own distinct page, but clicking a second mention
+to an already-open doc left the viewer stuck on the first page (reassigning
+an iframe's `src` to a URL differing only by its `#page=N` fragment isn't
+reliably treated as a real navigation by a browser's built-in PDF viewer).
+Now forces a real reload whenever the resolved src actually changes.
+
 **2026-07-06 Oracle tags + entity-field "jump to relevant Oracle" links**
 (`docs/adr/0016-oracle-tags-and-field-links.md`): a small reusable tag
 vocabulary (`character`/`secret`/`setting`/`leadership`/`hook`/`agenda`/
