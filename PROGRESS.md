@@ -14,6 +14,27 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-07 WHAT-tab tracker layout + Latest Scene 60/40 split**, a
+direct follow-up on the batch below: the WHAT tab's two tracker rows
+(Intent/Threat/Mystery, Resources/Reputation/Stress) now use
+`repeat(auto-fit, minmax(10rem, 1fr))` instead of a fixed 3-column grid,
+so they reflow to 3/2/1 per row as the window narrows instead of jumping
+straight from 3 columns to 1. Latest Scene's combined text and its split
+fields moved from stacked to a new `.last-scene-body` 60/40 grid (text
+left, fields right — reading the text happens far more often than editing
+a field, so the larger share goes to it), collapsing back to stacked
+below 1023px. Found a real gap while checking that "everything the GM
+sees can be edited": two of the combined text's sections had no field
+behind them at all. "Decision point" was one fixed sentence hardcoded
+into `recomposeSceneText()`, identical on every scene; promoted to a real
+`decisionPoint` field (`domain/scenes.js`) like opening/driver/clue/
+complication, its old wording surviving only as that field's default.
+"Current thread" (`situationLine` — a frozen snapshot of the WHAT tab's
+Situation text taken at scene-generation time) was already a real field
+but had no UI control; it's now the Latest Scene grid's seventh field.
+Verified via a jsdom smoke test (9 checks) plus `npm test` (299/299, two
+new scene tests).
+
 **2026-07-07 Eight-item follow-up batch** (submitted directly in chat, not
 `docs/adr/next-request.md`): layout density, a Scene-field redesign, a
 WHERE-tab simplification, an icon tweak, and three real regressions found

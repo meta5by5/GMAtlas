@@ -156,16 +156,37 @@ test('generateScene, given lensCategories, rolls its Driver line from one of tho
   assert.ok(driverTable.some((v) => driverLine.includes(v)));
 });
 
-test('generateScene exposes opening/driver/clue/complication/consequence as real fields, matching what text embeds', () => {
+test('generateScene exposes opening/driver/clue/complication/decisionPoint/consequence as real fields, matching what text embeds', () => {
   const camp = defaultCampaign();
   const scene = generateScene(camp, SCENE_TABLES, makeRng(1));
   assert.ok(scene.opening);
   assert.ok(scene.driver);
+  assert.ok(scene.decisionPoint);
   assert.ok(scene.text.includes(`Opening: ${scene.opening}`));
   assert.ok(scene.text.includes(`Driver: ${scene.driver}`));
   assert.ok(scene.text.includes(`Clue: ${scene.clue}`));
   assert.ok(scene.text.includes(`Complication: ${scene.complication}`));
+  assert.ok(scene.text.includes(`Decision point: ${scene.decisionPoint}`));
   assert.ok(scene.text.includes(`Likely consequence: ${scene.consequence}`));
+});
+
+test('recomposeSceneText treats an edited Decision point as a real field, not the old fixed sentence baked into the template', () => {
+  const camp = defaultCampaign();
+  const scene = generateScene(camp, SCENE_TABLES, makeRng(1));
+  const edited = { ...scene, decisionPoint: 'Trust the stranger, or leave them behind.' };
+  const text = recomposeSceneText(edited);
+  assert.ok(text.includes('Decision point: Trust the stranger, or leave them behind.'));
+});
+
+test('generateScene captures the WHAT Situation\'s first line as situationLine, and it round-trips as an editable "Current thread" field', () => {
+  const camp = defaultCampaign();
+  camp.context.what.situation = 'A derelict signal repeats every six minutes.';
+  const scene = generateScene(camp, SCENE_TABLES, makeRng(1));
+  assert.equal(scene.situationLine, 'A derelict signal repeats every six minutes.');
+  assert.ok(scene.text.includes('Current thread: A derelict signal repeats every six minutes.'));
+  const edited = { ...scene, situationLine: 'A hand-edited thread.' };
+  const text = recomposeSceneText(edited);
+  assert.ok(text.includes('Current thread: A hand-edited thread.'));
 });
 
 test('recomposeSceneText rebuilds text from current field values (the Latest Scene split-field edit path)', () => {

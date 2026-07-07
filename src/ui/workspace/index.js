@@ -266,14 +266,18 @@ function lastScene(doc) {
   const s = scenes[scenes.length - 1];
   return `<details class="last-scene" open>
     <summary>Latest: Scene ${s.number} — ${esc(s.summary)}</summary>
-    <div class="scene-fields">
-      ${sceneField(s, 'opening', 'Opening', 'What the party notices first…')}
-      ${sceneField(s, 'driver', 'Driver', "What's pushing this scene forward…")}
-      ${sceneField(s, 'clue', 'Clue', 'A detail that connects to the current thread…')}
-      ${sceneField(s, 'complication', 'Complication', 'What makes the obvious choice costly…')}
-      ${sceneField(s, 'consequence', 'Likely consequence', 'What happens if nothing changes…')}
+    <div class="last-scene-body">
+      <pre class="scene-text">${esc(s.text)}</pre>
+      <div class="scene-fields">
+        ${sceneField(s, 'opening', 'Opening', 'What the party notices first…')}
+        ${sceneField(s, 'driver', 'Driver', "What's pushing this scene forward…")}
+        ${sceneField(s, 'clue', 'Clue', 'A detail that connects to the current thread…')}
+        ${sceneField(s, 'complication', 'Complication', 'What makes the obvious choice costly…')}
+        ${sceneField(s, 'decisionPoint', 'Decision point', 'What tradeoff does the party have to weigh…')}
+        ${sceneField(s, 'consequence', 'Likely consequence', 'What happens if nothing changes…')}
+        ${sceneField(s, 'situationLine', 'Current thread', 'The ongoing thread this scene connects to…')}
+      </div>
     </div>
-    <pre class="scene-text">${esc(s.text)}</pre>
   </details>`;
 }
 

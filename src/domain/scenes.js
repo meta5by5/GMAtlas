@@ -63,6 +63,11 @@ export function generateScene(campaign, tables, rng = Math.random, lensCategorie
     driver: sceneDriver || 'An unresolved thread pulls the party forward.',
     clue: clue || 'A detail here connects to the current thread.',
     complication: complication || 'Something makes the obvious choice costly.',
+    // Was a fixed, un-editable sentence baked into recomposeSceneText;
+    // promoted to a real field (like opening/driver/clue/complication)
+    // so a GM can rewrite the actual tradeoff instead of always seeing
+    // this same generic framing.
+    decisionPoint: 'Weigh immediate safety, mission progress, and leverage over whoever is behind this.',
     consequence: consequence || 'Pay the price — something is lost or complicated.',
     situationLine: what.situation ? what.situation.split('\n')[0] : '',
   };
@@ -90,7 +95,7 @@ function pressureLine(threat, mystery) {
  *  updateSceneField calls this after every field edit) — not a second,
  *  independently-editable copy. Pure; safe to call from a UI-driven edit. */
 export function recomposeSceneText(scene) {
-  const { number, intent, memory: location, threat = 0, mystery = 0, spine = {}, opening, driver, clue, complication, consequence, situationLine } = scene;
+  const { number, intent, memory: location, threat = 0, mystery = 0, spine = {}, opening, driver, clue, complication, decisionPoint, consequence, situationLine } = scene;
   const { action, theme, descriptor, focus } = spine;
 
   const lines = [
@@ -107,7 +112,7 @@ export function recomposeSceneText(scene) {
     `Clue: ${clue}`,
     `Complication: ${complication}`,
     ``,
-    `Decision point: weigh immediate safety, mission progress, and leverage over whoever is behind this.`,
+    `Decision point: ${decisionPoint}`,
     `Likely consequence: ${consequence}`,
   ];
   if (situationLine) { lines.push('', `Current thread: ${situationLine}`); }
