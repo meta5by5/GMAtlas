@@ -14,6 +14,23 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-07 Gallery** (`docs/adr/0021-gallery.md`, Phase 11's first
+built item): a new top-level drawer — per-entity thumbnails (left-aligned
+beside Type/Tags) plus a searchable, taggable image collection. An
+upload ≤256px stores as one record; a larger one auto-resizes into a
+linked thumbnail+original pair, both tagged with the entity's type and
+that tag locked from removal (`domain/gallery.js`, a third copy of
+`entities.js`'s plain-tags-array pattern — Oracle's own tag/lock
+mechanism was confirmed hardcoded to oracle tables, not reusable here).
+`ui/imageResize.js` is this app's first pixel-manipulation code — a
+canvas-based client-side resize, no new dependency, mirroring the
+`ui/`-vs-`domain/` split PDF.js scanning already established. Safe to
+store both a full-resolution original and a thumbnail specifically
+because of ADR 0015's IndexedDB migration. Verified end to end in a real
+browser: a small upload creates one record, a large one creates a
+correctly-linked pair, the locked tag genuinely can't be removed, and
+deleting an image from the Gallery clears a dangling entity reference.
+
 **2026-07-07 "USER CHANGES" QoL batch**: five small, independent UI edits
 from `docs/adr/next-request.md` (the same batch's larger "Add to roadmap"
 asks landed separately, as `DESIGN-NEW-FUNCTIONALITY.md`'s new Phase 11
@@ -576,10 +593,12 @@ estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
     roadmap" ask): Gallery (per-entity thumbnails + a tagged image
     collection), a Planetfall Grid Battlemap and Base Builder, an
     Encounter Manager, an Owlbear-Rodeo-style Interactive Maps editor, and
-    external links in rich-text fields. None scoped against real code
-    yet — recorded at the ask's own level of detail, each expected to get
-    its own research/ADR pass before starting, same as every other
-    substantial addition in this file.
+    external links in rich-text fields — recorded at the ask's own level
+    of detail, each expected to get its own research/ADR pass before
+    starting, same as every other substantial addition in this file.
+    **Gallery is now built** (2026-07-07, `docs/adr/0021-gallery.md`, see
+    the Status Summary above) — the dependency-root item per this
+    section's own ordering note; the remaining four are still unscoped.
 - **UI/UX assumptions, resolved in the 2026-07-04 pass** (see Status
   Summary above): tabbed drawer switching replaced "only one drawer open at
   a time"; three real responsive tiers replaced one breakpoint; Escape and

@@ -290,9 +290,30 @@ Create separate text boxes to put each section of the LATEST SCENE into separate
   Phase 11 section and `PROGRESS.md`'s backlog, at the same level of
   detail you gave them (Gallery, Planetfall Grid Battlemap, Planetfall
   Base Builder, Encounter Manager, Interactive Maps, external links in
-  rich-text fields) — none built yet; each is large enough to want its
-  own research/ADR pass first, same as every other substantial addition
-  in that file.
+  rich-text fields) — each large enough to want its own research/ADR pass
+  first, same as every other substantial addition in that file.
+-->
+
+<!-- Processed 2026-07-07 (docs/adr/0021-gallery.md, Phase 11 item 1):
+- Gallery — Done. A new top-level drawer (per-entity thumbnails,
+  left-aligned beside Type/Tags; a tagged, searchable image collection).
+  An upload ≤256px creates one record; a larger one creates a linked
+  resized-thumbnail + full-resolution-original pair, both auto-tagged
+  with the entity's type and that tag locked from removal — both visible
+  in the Gallery grid (thumbnails render circular, originals rectangular).
+  Confirmed the Oracle tag system (isOracleTagLocked etc.) is hardcoded to
+  oracle tables and not reusable as-is; copied entities.js's plain
+  tags-array + vocabulary shape instead (already proven once for
+  Documents' own tags), adding one small piece neither prior copy needed:
+  a single non-removable tag per image. `ui/imageResize.js` is this app's
+  first-ever pixel-manipulation code (canvas-based, browser-only, mirrors
+  the ui/ vs domain/ split PDF.js scanning already established). Storing
+  both an original and a thumbnail is safe specifically because of ADR
+  0015's IndexedDB migration — would have been a real risk under the old
+  localStorage ceiling. Planetfall Grid Battlemap/Base Builder, Encounter
+  Manager, Interactive Maps, and external rich-text links remain
+  unbuilt — Gallery was the dependency-root item, per Phase 11's own
+  ordering note.
 -->
 
 ### QoL edits:

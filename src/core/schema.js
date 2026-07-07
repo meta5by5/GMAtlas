@@ -64,6 +64,12 @@ export function defaultCampaign(now = new Date().toISOString()) {
     oracles: { overrides: {}, usage: {} },
     documents: { library: [], openTabs: [], activeTab: null, refOverrides: {} },
 
+    // Gallery (Phase 11, docs/adr/0021-gallery.md): a tagged image
+    // collection, separate from Documents (rulebooks/notes) — an entity's
+    // thumbnail (entity.thumbnailId, set lazily, not part of the entity
+    // default shape below) points at one of these images.
+    gallery: { images: [] },
+
     // Party-wide resource trackers not tied to any one entity (credits,
     // custom clocks, timers) — the Party tab's member roster is instead a
     // live filter over entities (NPC + #character tag), not stored here.

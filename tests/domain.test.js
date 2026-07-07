@@ -1959,6 +1959,86 @@ test('renameDocument changes only the display title, never the underlying file',
   assert.equal(doc.dataUrl, 'data:application/pdf;base64,AA==');
 });
 
+// --- Gallery (Phase 11, docs/adr/0021-gallery.md) ---------------------------
+import {
+  addGalleryImages, removeGalleryImage, addGalleryTag, removeGalleryTag,
+  listGalleryImages, listGalleryTagVocabulary, setEntityThumbnail, clearEntityThumbnail, getGalleryImage,
+} from '../src/domain/gallery.js';
+
+test('addGalleryImages: an upload that needed no resize creates exactly one thumbnail record and points the entity at it', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Voss' }));
+  const r = addGalleryImages(camp, { entityId: id, lockedTag: 'npc', mimeType: 'image/png', thumbDataUrl: 'data:image/png;base64,AAA=' });
+  camp = r.campaign;
+  assert.equal(camp.gallery.images.length, 1);
+  assert.equal(camp.gallery.images[0].kind, 'thumbnail');
+  assert.equal(camp.gallery.images[0].pairId, null);
+  assert.deepEqual(camp.gallery.images[0].tags, ['npc']);
+  assert.equal(camp.entities.items.find((e) => e.id === id).thumbnailId, r.thumbnailId);
+});
+
+test('addGalleryImages: a resize-triggering upload creates a linked thumbnail+original pair, both entity-type tagged', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'The Hab' }));
+  const r = addGalleryImages(camp, { entityId: id, lockedTag: 'location', mimeType: 'image/jpeg', thumbDataUrl: 'data:image/jpeg;base64,THUMB', originalDataUrl: 'data:image/jpeg;base64,ORIG' });
+  camp = r.campaign;
+  assert.equal(camp.gallery.images.length, 2);
+  const thumb = camp.gallery.images.find((img) => img.id === r.thumbnailId);
+  const orig = camp.gallery.images.find((img) => img.id === r.originalId);
+  assert.equal(thumb.pairId, orig.id);
+  assert.equal(orig.pairId, thumb.id);
+  assert.equal(thumb.kind, 'thumbnail');
+  assert.equal(orig.kind, 'original');
+  assert.deepEqual(orig.tags, ['location']);
+});
+
+test('removeGalleryImage clears a dangling entity.thumbnailId and un-links a surviving paired image', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Voss' }));
+  let r; ({ campaign: camp, ...r } = addGalleryImages(camp, { entityId: id, lockedTag: 'npc', thumbDataUrl: 'a', originalDataUrl: 'b' }));
+  camp = removeGalleryImage(camp, r.thumbnailId);
+  assert.equal(camp.entities.items.find((e) => e.id === id).thumbnailId, null);
+  const orig = getGalleryImage(camp, r.originalId);
+  assert.equal(orig.pairId, null);
+});
+
+test('removeGalleryTag refuses to remove the locked entity-type tag but removes any other tag normally', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'faction', name: 'Sakura Combine' }));
+  let r; ({ campaign: camp, ...r } = addGalleryImages(camp, { entityId: id, lockedTag: 'faction', thumbDataUrl: 'a' }));
+  camp = addGalleryTag(camp, r.thumbnailId, 'logo');
+  camp = removeGalleryTag(camp, r.thumbnailId, 'faction'); // locked — no-op
+  assert.deepEqual(getGalleryImage(camp, r.thumbnailId).tags, ['faction', 'logo']);
+  camp = removeGalleryTag(camp, r.thumbnailId, 'logo');
+  assert.deepEqual(getGalleryImage(camp, r.thumbnailId).tags, ['faction']);
+});
+
+test('listGalleryImages filters by search text and required tags', () => {
+  let camp = defaultCampaign();
+  camp = addGalleryImages(camp, { lockedTag: 'npc', title: 'Captain Reyes', thumbDataUrl: 'a' }).campaign;
+  camp = addGalleryImages(camp, { lockedTag: 'location', title: 'Docking Bay', thumbDataUrl: 'b' }).campaign;
+  assert.equal(listGalleryImages(camp, { search: 'reyes' }).length, 1);
+  assert.equal(listGalleryImages(camp, { tags: ['location'] }).length, 1);
+  assert.equal(listGalleryImages(camp, {}).length, 2);
+});
+
+test('listGalleryTagVocabulary is every distinct tag across the Gallery, sorted', () => {
+  let camp = defaultCampaign();
+  camp = addGalleryImages(camp, { lockedTag: 'npc', thumbDataUrl: 'a' }).campaign;
+  camp = addGalleryImages(camp, { lockedTag: 'location', thumbDataUrl: 'b' }).campaign;
+  assert.deepEqual(listGalleryTagVocabulary(camp), ['location', 'npc']);
+});
+
+test('setEntityThumbnail/clearEntityThumbnail point an entity at a real thumbnail-kind image or clear it', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Voss' }));
+  const r = addGalleryImages(camp, { lockedTag: 'npc', thumbDataUrl: 'a' });
+  camp = setEntityThumbnail(r.campaign, id, r.thumbnailId);
+  assert.equal(camp.entities.items.find((e) => e.id === id).thumbnailId, r.thumbnailId);
+  camp = clearEntityThumbnail(camp, id);
+  assert.equal(camp.entities.items.find((e) => e.id === id).thumbnailId, null);
+});
+
 // --- entities: editable relationship note/label -----------------------------
 import {
   updateRelationshipLabel, updateRelationshipType, updateRelationshipStrength,

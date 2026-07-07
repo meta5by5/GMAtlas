@@ -33,6 +33,7 @@ import { RULESETS, findRuleset, STARFORGED_PROGRESS_DIFFICULTIES, findProgressDi
 import { GEAR_TEMPLATE_SYSTEMS, findGearTemplate } from '../../data/gearTemplates.js';
 import { GEAR_CATALOG, findCatalogItem } from '../../data/gearCatalog.js';
 import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel } from '../../data/rulesConstitution.js';
+import { listGalleryImages, listGalleryTagVocabulary, getGalleryImage } from '../../domain/gallery.js';
 import { GENRE_PACKS, bestiaryTerm } from '../../data/genrePacks.js';
 import { ECONOMY_MODELS, economyTypesForModel } from '../../data/economyTypes.js';
 import { DOCS_MANIFEST } from '../../data/docsManifest.js';
@@ -56,6 +57,7 @@ export function renderDrawer(id, doc, ui = {}) {
     case 'settings': return settings(doc, ui);
     case 'graph': return graph(doc, ui);
     case 'documents': return documents(doc, ui);
+    case 'gallery': return gallery(doc, ui);
     default: return `<p class="ws-placeholder">Drawer “${esc(id)}”.</p>`;
   }
 }
@@ -264,10 +266,15 @@ function inspector(doc, e, ui) {
       ${e.type === 'npc' ? `<button class="icon-btn" data-deepen-npc="${esc(e.id)}" title="Roll a Stereotype/Want/Complication and add it to this NPC's Overview">🎲 Deepen</button>` : ''}
       <button class="icon-btn" data-entity-del="${esc(e.id)}" title="Delete entity">🗑</button>
     </div>
-    <label class="field-label">Type
-      <select data-entity-field="type">${ENTITY_TYPES.map((t) => `<option value="${t}" ${t === e.type ? 'selected' : ''}>${TYPE_LABEL[t]}</option>`).join('')}</select>
-    </label>
-    ${tagEditor(doc, e)}
+    <div class="inspector-photo-row">
+      ${entityPhotoHtml(doc, e)}
+      <div class="inspector-photo-fields">
+        <label class="field-label">Type
+          <select data-entity-field="type">${ENTITY_TYPES.map((t) => `<option value="${t}" ${t === e.type ? 'selected' : ''}>${TYPE_LABEL[t]}</option>`).join('')}</select>
+        </label>
+        ${tagEditor(doc, e)}
+      </div>
+    </div>
     <div class="field-label">${fieldLabelRow('Overview (shared)', e.type, 'overview')}
       <div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-entity-field="overview" data-placeholder="What the party knows.">${buildMentionEditorHTML(doc, e.overview)}</div></div>
     </div>
@@ -434,6 +441,25 @@ function enhancementsSection(e, ui) {
         <button class="btn sm" data-enhancement-install="${esc(e.id)}">＋ Install</button>
       </div>` : ''}
     </div>`;
+}
+
+// An entity's Gallery thumbnail (Phase 11, docs/adr/0021-gallery.md) —
+// left-aligned beside Type/Tags, per the request. Resolves e.thumbnailId
+// through the Gallery (never stores image data on the entity itself, the
+// same "reference by id" shape Colony's crew roster already uses); no
+// thumbnail yet shows a small upload button instead (a hidden file input,
+// same shape Documents' own "Upload file(s)" control already uses).
+function entityPhotoHtml(doc, e) {
+  const img = e.thumbnailId ? getGalleryImage(doc, e.thumbnailId) : null;
+  if (img) {
+    return `<div class="inspector-photo">
+      <img class="gallery-thumb-circle" src="${esc(img.dataUrl)}" alt="${esc(e.name || 'Entity')} thumbnail">
+      <label class="btn ghost sm file-btn">Replace<input type="file" accept="image/*" data-entity-photo-upload="${esc(e.id)}" hidden></label>
+    </div>`;
+  }
+  return `<div class="inspector-photo">
+    <label class="btn ghost sm file-btn">＋ Photo<input type="file" accept="image/*" data-entity-photo-upload="${esc(e.id)}" hidden></label>
+  </div>`;
 }
 
 // Tags as removable chips + a single auto-committing input (Phase 7's "tag
@@ -1698,4 +1724,49 @@ function documents(doc, ui = {}) {
     <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Reference Library</h4>${helpToggle('documents-reflib')}</div>
     ${helpBody('documents-reflib', 'Bundled rulebooks and setting docs from <code>assets/docs/</code> — refreshed on every build.', ui)}
     <div class="doc-list">${refRows}</div>` : ''}`;
+}
+
+// Gallery (Phase 11, docs/adr/0021-gallery.md): a tagged image collection,
+// separate from Documents — search/tag-filter shape copied verbatim from
+// Documents' own (data-doc-filter/data-doc-tag-list-toggle/data-doc-tag-
+// filter above), just with a "gallery" prefix on each data attribute. A
+// 'thumbnail'-kind image renders circular (the common TTRPG look asked
+// for); a 'original'-kind image (only exists when its sibling thumbnail
+// needed resizing) renders as a plain rectangular card, so both halves of
+// a resized pair are visibly distinct without needing a text label.
+function gallery(doc, ui = {}) {
+  const search = ui.galleryFilter || '';
+  const activeTags = ui.galleryTagFilters || new Set();
+  const tagListOpen = !!ui.galleryTagListOpen;
+  const allTags = listGalleryTagVocabulary(doc);
+  const images = listGalleryImages(doc, { search, tags: [...activeTags] });
+
+  const cards = images.map((img) => {
+    const owner = img.entityId ? getEntity(doc, img.entityId) : null;
+    const tagChips = (img.tags || []).map((t) => {
+      const locked = img.lockedTag && t.toLowerCase() === img.lockedTag.toLowerCase();
+      return `<span class="tag-chip ${locked ? 'tag-chip-locked' : ''}">${locked ? '🔒 ' : ''}${esc(t)}${locked ? '' : `<button class="icon-btn" data-gallery-tag-remove="${esc(img.id)}::${esc(t)}" title="Remove tag" aria-label="Remove tag">✕</button>`}</span>`;
+    }).join('');
+    return `
+    <div class="gallery-card">
+      <img class="${img.kind === 'thumbnail' ? 'gallery-thumb-circle' : 'gallery-original-img'}" src="${esc(img.dataUrl)}" alt="${esc(img.title || img.lockedTag || 'Gallery image')}">
+      <div class="gallery-card-meta">
+        <span class="dim small">${img.kind === 'thumbnail' ? 'Thumbnail' : 'Original'}${owner ? ` · ${esc(owner.name || 'Unnamed')}` : ''}</span>
+        <div class="tag-chips">${tagChips}</div>
+      </div>
+      <button class="icon-btn" data-gallery-delete="${esc(img.id)}" title="Delete image" aria-label="Delete image">✕</button>
+    </div>`;
+  }).join('');
+
+  return `
+    <datalist id="gallery-tag-list">${allTags.map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
+    <input class="drawer-search" data-gallery-filter value="${esc(search)}" placeholder="Search by title or tag…">
+    ${allTags.length ? `
+    <button class="btn ghost sm" data-gallery-tag-list-toggle>${tagListOpen ? '▾' : '▸'} Tags (${allTags.length})</button>
+    ${tagListOpen ? `<div class="doc-tag-filter-chips">
+      ${allTags.map((t) => `<button class="chip sm ${activeTags.has(t) ? 'active' : ''}" data-gallery-tag-filter="${esc(t)}">#${esc(t)}</button>`).join('')}
+    </div>` : ''}` : ''}
+    <div class="gallery-grid">
+      ${images.length ? cards : '<p class="ws-placeholder">No images yet — add a photo from any entity\'s inspector.</p>'}
+    </div>`;
 }

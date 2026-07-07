@@ -572,6 +572,15 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .doc-size-badge { white-space: nowrap; }
 .doc-content-input { min-height: 8rem; }
 
+/* Gallery (Phase 11, docs/adr/0021-gallery.md) */
+.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: var(--sp-3); margin-top: var(--sp-3); }
+.gallery-card { position: relative; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--tier2-bg); padding: var(--sp-3); display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); text-align: center; }
+.gallery-card > [data-gallery-delete] { position: absolute; top: 0.3rem; right: 0.3rem; }
+.gallery-card-meta { display: flex; flex-direction: column; gap: var(--sp-1); align-items: center; width: 100%; }
+.gallery-thumb-circle { width: 5rem; height: 5rem; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); background: var(--bg-inset); }
+.gallery-original-img { width: 100%; max-height: 8rem; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+.tag-chip-locked { opacity: 0.85; }
+
 /* Toast */
 .toast {
   position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%) translateY(1rem);
@@ -633,6 +642,13 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .entity-inspector { border-top: 1px solid var(--border); padding-top: var(--sp-3); }
 .inspector-head { display: flex; align-items: center; gap: var(--sp-2); }
 .inspector-name { flex: 1; font-size: 1rem; font-weight: 600; }
+
+/* Entity thumbnail (Phase 11, docs/adr/0021-gallery.md) — left-aligned
+   beside Type/Tags, per the request. */
+.inspector-photo-row { display: flex; gap: var(--sp-3); align-items: flex-start; margin-top: var(--sp-3); }
+.inspector-photo { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); }
+.inspector-photo-fields { flex: 1 1 auto; min-width: 0; }
+.inspector-photo .gallery-thumb-circle { width: 4.5rem; height: 4.5rem; }
 .field-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
 .rel-block { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-3); }
 .rel-block h4 { margin: 0 0 var(--sp-2); font-size: 0.8rem; color: var(--accent); }

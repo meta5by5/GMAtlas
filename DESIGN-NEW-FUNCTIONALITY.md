@@ -284,20 +284,29 @@ pipeline is what Interactive Maps' token art would reuse; the two
 Planetfall tools and Encounter Manager all want a shared "canvas with
 draggable icons" primitive before Interactive Maps generalizes it further).
 
-- **Gallery**: a photo collection per campaign, reusing the Oracle tag-
-  management pattern (`domain/oracles.js`'s tag vocabulary/lock mechanism,
-  ADR 0016) for organizing images instead of inventing a second tagging
-  UI. An entity gains an optional thumbnail (rendered left-aligned at the
-  same position as its type/tags row), auto-resized from an oversized
-  original upload; both the original and the thumbnail carry a locked,
-  entity-type tag and both remain visible/searchable in the Gallery
-  itself. Thumbnails render with a circular border/mask (a common TTRPG
-  convention). Needs: an image-resize approach that stays inside this
-  app's zero-dependency-for-the-shipped-app policy (a `<canvas>`-based
-  client-side resize is the likely answer, no new library) and a storage-
-  size conversation similar to the one that drove ADR 0015 (IndexedDB) —
-  embedded images are exactly the kind of payload that already once hit a
-  quota ceiling here.
+- **Gallery** — **Done** (2026-07-07, `docs/adr/0021-gallery.md`). A new
+  top-level drawer tab, per direct clarification (not folded into Cast or
+  Documents). Reused `entities.js`'s plain `tags`-array + vocabulary
+  shape (already proven once for Documents' own tags), NOT Oracle's tag
+  mechanism — confirmed hardcoded to oracle-table paths/
+  `ENTITY_FIELD_ORACLE_LINKS`, not a generic lock mechanism a different
+  content type could plug into; the one addition neither prior copy
+  needed (a single non-removable `lockedTag` per image) is a five-line
+  inline check in the new `domain/gallery.js`, not a shared mechanism. An
+  entity gains an optional thumbnail (`entity.thumbnailId`, rendered
+  left-aligned beside its Type/Tags row); an upload ≤256px creates one
+  Gallery record, a larger one creates a resized `'thumbnail'` +
+  full-resolution `'original'` pair (linked via `pairId`), both
+  auto-tagged with the entity's type and both visible in the Gallery
+  grid (thumbnails circular, originals rectangular). `ui/imageResize.js`
+  is this app's first-ever pixel-manipulation code — a plain `<canvas>`-
+  based client-side resize, no new dependency, mirroring the `ui/` vs
+  `domain/` split `ui/mechanicsScan.js`/`ui/tocScan.js` already
+  established for their own browser-only work. Storing both a full-res
+  original and a thumbnail is safe specifically because of ADR 0015's
+  IndexedDB migration (~3.2GB observed headroom vs. the old ~5-10MB
+  localStorage ceiling that migration replaced) — would have been a real
+  risk before it, isn't now.
 - **Planetfall Grid Battlemap**: a grid-based battlemap purpose-built for
   5PFH Planetfall's specific rules, not a generic map tool. A resizable
   background image; icons matching Planetfall's own visual language,

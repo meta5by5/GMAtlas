@@ -27,6 +27,8 @@ import { installEnhancement, removeEnhancement } from '../domain/enhancements.js
 import { getMechanicsIndex } from '../domain/mechanicsIndex.js';
 import { scanMechanicsIndex } from './mechanicsScan.js';
 import { scanAndGenerateToc } from './tocScan.js';
+import { loadAndMaybeResize } from './imageResize.js';
+import { addGalleryImages, removeGalleryImage, addGalleryTag, removeGalleryTag } from '../domain/gallery.js';
 import { generateCreatureConcept, formatCreatureConcept, generateSiteConcept, formatSiteConcept, generateAdventureSeed, formatAdventureSeed } from '../domain/worldbuilding.js';
 import {
   addDocument, updateDocument, removeDocument, getDocument, addDocumentTag, removeDocumentTag, renameDocument,
@@ -84,6 +86,7 @@ const DRAWERS = [
   { id: 'colony', glyph: '🏛', label: 'Colony' },
   { id: 'trade', glyph: '💰', label: 'Trade' },
   { id: 'documents', glyph: '📄', label: 'Docs' },
+  { id: 'gallery', glyph: '🖼', label: 'Gallery' },
   { id: 'graph', glyph: '🔗', label: 'Graph' },
   { id: 'settings', glyph: '⚙', label: 'Settings' },
 ];
@@ -100,7 +103,7 @@ function drawerMeta(id) { return DRAWERS.find((d) => d.id === id) || DRAWER_META
 // CHANGES" QoL batch — they're still ordinary drawers otherwise (DRAWERS/
 // drawerMeta above is unchanged, still the source of truth for both groups'
 // glyph/label).
-const EDGE_ORDER = ['guide', 'oracle', 'cast', 'trade', 'documents', 'graph', 'copilot', 'settings'];
+const EDGE_ORDER = ['guide', 'oracle', 'cast', 'trade', 'documents', 'gallery', 'graph', 'copilot', 'settings'];
 // The header's own small drawer-tab group, right-aligned in .header-actions
 // — same data-drawer-open routing as the edge nav (onClick's [data-drawer-
 // open] branch has no idea which container a button lives in), rendered by
@@ -132,6 +135,9 @@ let docRenameOpen = new Set(); // ephemeral — which doc/ref cards are showing 
 let docTagListOpen = false; // ephemeral — collapses the Documents drawer's tag-filter chip row (can get long once many tags exist)
 let journalEditOpen = new Set(); // ephemeral — which journal entries are showing an editable mention-editor instead of their static rendered text
 let whereLocationTagFilter = null; // ephemeral — the Location tag currently selected in the WHERE view's listbox (null = no filter/candidate panel shown)
+let galleryFilter = ''; // ephemeral — Gallery drawer search box
+let galleryTagFilters = new Set(); // ephemeral — Gallery drawer active tag filters
+let galleryTagListOpen = false; // ephemeral — collapses the Gallery drawer's tag-filter chip row, same as Documents' own
 // @-mention autocomplete (Journal input, Guide editor, WHO/WHERE/WHAT/WHY/HOW
 // context fields) — { field, start, end, items, activeIndex } while typing an
 // "@partial" run; start/end are the field.value indices of that run
@@ -1063,6 +1069,25 @@ function onClick(ev) {
   }
   if (hit('[data-doc-tag-list-toggle]')) { docTagListOpen = !docTagListOpen; return renderDrawerBody(); }
 
+  // --- Gallery (Phase 11, docs/adr/0021-gallery.md) — same shape as Documents' tag filter/list/delete just above ---
+  const galleryTagRemove = hit('[data-gallery-tag-remove]');
+  if (galleryTagRemove) {
+    const [id, tag] = galleryTagRemove.dataset.galleryTagRemove.split('::');
+    return store.update((d) => removeGalleryTag(d, id, tag));
+  }
+  const galleryTagFilter = hit('[data-gallery-tag-filter]');
+  if (galleryTagFilter) {
+    const tag = galleryTagFilter.dataset.galleryTagFilter;
+    if (galleryTagFilters.has(tag)) galleryTagFilters.delete(tag); else galleryTagFilters.add(tag);
+    return renderDrawerBody();
+  }
+  if (hit('[data-gallery-tag-list-toggle]')) { galleryTagListOpen = !galleryTagListOpen; return renderDrawerBody(); }
+  const galleryDelete = hit('[data-gallery-delete]');
+  if (galleryDelete) {
+    if (window.confirm('Delete this image? This cannot be undone.')) store.update((d) => removeGalleryImage(d, galleryDelete.dataset.galleryDelete));
+    return;
+  }
+
   // --- settings: Bestiary statblock templates -------------------------------
   if (hit('[data-tpl-system-add]')) {
     const label = window.prompt('New game system name (e.g. "D&D 5e"):', '');
@@ -1552,6 +1577,25 @@ function onChange(ev) {
     return;
   }
 
+  // Entity photo upload (Phase 11, docs/adr/0021-gallery.md) — resizes
+  // client-side (ui/imageResize.js) before ever reaching the store, so a
+  // huge phone photo never gets embedded twice (once as the thumbnail,
+  // once as a redundant "original" identical to it).
+  const photoUpload = t.closest('[data-entity-photo-upload]');
+  if (photoUpload) {
+    const entityId = photoUpload.dataset.entityPhotoUpload;
+    const file = (t.files || [])[0];
+    if (!file) return;
+    const e = getEntity(store.get(), entityId);
+    loadAndMaybeResize(file, 256)
+      .then(({ thumbDataUrl, originalDataUrl }) => {
+        store.update((d) => addGalleryImages(d, { entityId, lockedTag: e ? e.type : null, title: e ? e.name : '', mimeType: file.type, thumbDataUrl, originalDataUrl }).campaign);
+        toast('Photo added');
+      })
+      .catch((err) => toast(`Couldn't add photo — ${err.message}`));
+    return;
+  }
+
   if (t.closest('[data-doc-upload]')) {
     const files = Array.from(t.files || []);
     if (!files.length) return;
@@ -1618,6 +1662,9 @@ function onInput(ev) {
 
   const df = t.closest('[data-doc-filter]');
   if (df) { docFilter = t.value; renderDrawerBody(); restoreFocus('[data-doc-filter]'); return; }
+
+  const gaf = t.closest('[data-gallery-filter]');
+  if (gaf) { galleryFilter = t.value; renderDrawerBody(); restoreFocus('[data-gallery-filter]'); return; }
 
   const gf = t.closest('[data-graph-filter]');
   if (gf) { graphFilter = t.value; renderDrawerBody(); restoreFocus('[data-graph-filter]'); return; }
@@ -2730,6 +2777,7 @@ function buildDrawerUi() {
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,
     journalEditOpen, whereLocationTagFilter, graphFilter, helpOpen, settingsMenuOpen, aboutOpen,
+    galleryFilter, galleryTagFilters, galleryTagListOpen,
   };
 }
 
