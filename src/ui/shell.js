@@ -2022,7 +2022,19 @@ function render() {
     if (resolvedActive && resolvedActive.src) {
       frame.hidden = false;
       empty.hidden = true;
-      if (frame.src !== resolvedActive.src) frame.src = resolvedActive.src;
+      if (frame.src !== resolvedActive.src) {
+        // Two mentions of the SAME document at different pages (docs/adr's
+        // @[Name#12] vs @[Name#45]) resolve to a src differing only in its
+        // #page=N fragment — a browser's built-in PDF viewer doesn't
+        // reliably jump to the new page when an iframe's src is reassigned
+        // to a URL that differs ONLY by fragment (it isn't always treated
+        // as a real navigation the way a differing path/query is). Forcing
+        // a real reload (blank, then the real src) makes clicking the
+        // second mention actually jump, not just silently update the src
+        // attribute with no visible effect.
+        frame.src = 'about:blank';
+        frame.src = resolvedActive.src;
+      }
     } else {
       // A resolved 'lib' entry with no dataUrl means the file never actually
       // saved (e.g. an old campaign that predates store.js's quota-rollback
