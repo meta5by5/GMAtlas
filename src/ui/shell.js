@@ -4,6 +4,7 @@
 // pure domain function via store.update().
 
 import { store } from '../core/store.js';
+import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { contextSummary } from '../domain/context.js';
 import { continueStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, addContextEntity, removeContextEntity, updateSceneField } from '../domain/session.js';
@@ -47,7 +48,7 @@ import { addTemplateSystem, addTemplateField, updateTemplateField, removeTemplat
 import { universalSearch } from '../domain/search.js';
 import { renderWorkspace } from './workspace/index.js';
 import { renderCopilot } from './copilotPanel.js';
-import { renderDrawer, formatBytes } from './drawers/index.js';
+import { renderDrawer, formatBytes, helpToggle } from './drawers/index.js';
 import { renderSearchPanel } from './searchPanel.js';
 import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
 
@@ -91,11 +92,21 @@ const DRAWERS = [
 // come up empty for those.
 const DRAWER_META = { 'entity-detail': { id: 'entity-detail', glyph: '👤', label: 'Entity' } };
 function drawerMeta(id) { return DRAWERS.find((d) => d.id === id) || DRAWER_META[id] || null; }
-// Edge nav button order top-down: Guide, Journal, Oracle, Party, Cast,
-// Colony, Trade, Docs, Graph, Co-Pilot, Settings — Co-Pilot is the one
-// remaining non-drawer button interleaved into the same array DRAWERS.map()
-// used to render alone, rather than always appended at the very end.
-const EDGE_ORDER = ['guide', 'journal', 'oracle', 'party', 'cast', 'colony', 'trade', 'documents', 'graph', 'copilot', 'settings'];
+// Edge nav button order top-down: Guide, Oracle, Cast, Trade, Docs, Graph,
+// Co-Pilot, Settings — Co-Pilot is the one remaining non-drawer button
+// interleaved into the same array DRAWERS.map() used to render alone,
+// rather than always appended at the very end. Party/Colony/Journal moved
+// to the header's own tab group (HEADER_ORDER, below) per the "USER
+// CHANGES" QoL batch — they're still ordinary drawers otherwise (DRAWERS/
+// drawerMeta above is unchanged, still the source of truth for both groups'
+// glyph/label).
+const EDGE_ORDER = ['guide', 'oracle', 'cast', 'trade', 'documents', 'graph', 'copilot', 'settings'];
+// The header's own small drawer-tab group, right-aligned in .header-actions
+// — same data-drawer-open routing as the edge nav (onClick's [data-drawer-
+// open] branch has no idea which container a button lives in), rendered by
+// the separate headerTabButtonHTML() below since the header is a compact
+// horizontal bar, not the edge nav's vertical icon-tile strip.
+const HEADER_ORDER = ['party', 'colony', 'journal'];
 
 // Tabbed drawer switching (2026-07-04 design review): multiple drawers can
 // be pinned open at once (openDrawers), with one visible at a time
@@ -111,6 +122,10 @@ let root = null;
 let oracleFilter = '';
 let expandedOracleGroups = new Set(); // ephemeral UI state — never persisted
 let docFilter = '';
+let graphFilter = ''; // ephemeral — highlights/dims graph-svg nodes by name substring, never removes them
+let helpOpen = new Set(); // ephemeral — which collapsible "?" tip icons are currently expanded, keyed by a stable per-instance string
+let settingsMenuOpen = false; // ephemeral — the header gear's New Campaign/Settings/About dropdown
+let aboutOpen = false; // ephemeral — the About overlay
 let docTagFilters = new Set();
 let docTagEditorOpen = new Set(); // ephemeral — which doc/ref cards' tag editors are expanded
 let docRenameOpen = new Set(); // ephemeral — which doc/ref cards are showing an inline rename input instead of their title link
@@ -189,10 +204,27 @@ export function mountShell(el) {
         <div class="brand"><h1>GMAtlas</h1><span class="tagline">Frictionless Empowerment</span></div>
         <div class="header-actions">
           <button class="btn ghost sm" data-search-toggle title="Search everything (Cast, Journal, Oracle, Documents, Party, Colony) — Ctrl/Cmd+K">🔍 Search</button>
-          <span class="campaign-title" data-open-settings title="Campaign settings"></span>
-          <button class="btn ghost sm" data-continue-story title="Generate the next scene">▶ Scene</button>
+          <span class="campaign-title" title="Campaign name"></span>
+          <div class="settings-menu-wrap">
+            <button class="btn ghost sm" data-settings-menu-toggle title="Menu" aria-label="Menu">⚙</button>
+            <div class="settings-menu" data-settings-menu hidden>
+              <button type="button" data-menu-new-campaign>New Campaign</button>
+              <button type="button" data-menu-open-settings>Settings</button>
+              <button type="button" data-menu-open-about>About</button>
+            </div>
+          </div>
+          <div class="header-drawer-tabs" data-header-drawer-tabs></div>
         </div>
       </header>
+      <div class="mc-about-overlay" data-about-overlay hidden aria-label="About GMAtlas">
+        <div class="mc-about-card">
+          <button class="icon-btn" data-about-close aria-label="Close">✕</button>
+          <h2>GMAtlas</h2>
+          <p class="tagline">Frictionless Empowerment</p>
+          <p class="dim small" data-about-build></p>
+          <p class="dim small">A campaign operating system for solo and GM-run sci-fi tabletop play — local-first, installable as a PWA.</p>
+        </div>
+      </div>
       <nav class="mc-strip" aria-label="Context questions" data-strip role="tablist"></nav>
       <div class="mc-breadcrumb" data-breadcrumb></div>
       <main class="mc-workspace" data-workspace aria-live="polite"></main>
@@ -331,7 +363,16 @@ function onClick(ev) {
   if (hit('[data-drawer-anchor-unpin]')) return unanchorDrawerTab();
   if (hit('[data-toggle-copilot]')) { copilotOpen = !copilotOpen; return render(); }
   if (hit('[data-toggle-cast]')) return toggleCastDrawer();
-  if (hit('[data-open-settings]')) return toggleDrawer('settings');
+
+  // Header gear menu (New Campaign / Settings / About — "USER CHANGES" QoL
+  // batch, replacing the old bare campaign-title-is-the-settings-button).
+  // Matches this app's existing convention (lensPickerOpen etc.): only an
+  // explicit toggle or picking an item closes it, no click-outside handler.
+  if (hit('[data-settings-menu-toggle]')) { settingsMenuOpen = !settingsMenuOpen; return render(); }
+  if (hit('[data-menu-open-settings]')) { settingsMenuOpen = false; toggleDrawer('settings'); return render(); }
+  if (hit('[data-menu-new-campaign]')) { settingsMenuOpen = false; render(); return confirmNewCampaign(); }
+  if (hit('[data-menu-open-about]')) { settingsMenuOpen = false; aboutOpen = true; return render(); }
+  if (hit('[data-about-close]')) { aboutOpen = false; return render(); }
 
   // --- Phase 9: Activity -> Rules Lens suggestion, apply as default ruleset ---
   const applyRuleset = hit('[data-apply-ruleset]');
@@ -714,6 +755,17 @@ function onClick(ev) {
   }
   const oracleTagFilterClear = hit('[data-oracle-tag-filter-clear]');
   if (oracleTagFilterClear) { oracleTagFilter = null; return renderDrawerBody(); }
+  // Collapsible "?" tip icons ("USER CHANGES" QoL batch) — one flat toggle
+  // Set shared by every instance across drawers AND the workspace (the HOW
+  // tab's lens-picker tip lives there, not in a drawer), so this re-renders
+  // both to be safe regardless of which view the clicked icon was in.
+  const helpToggleBtn = hit('[data-help-toggle]');
+  if (helpToggleBtn) {
+    const key = helpToggleBtn.dataset.helpToggle;
+    if (helpOpen.has(key)) helpOpen.delete(key); else helpOpen.add(key);
+    renderDrawerBody();
+    return render();
+  }
   // A field's 🔮 link (docs/adr/0016) — opens Oracle anchored beside
   // whichever drawer/tab is currently active (e.g. Entity Detail), not on
   // top of it, so the field being written stays visible next to the
@@ -1095,12 +1147,7 @@ function onClick(ev) {
     store.update((d) => addNote(d, formatAdventureSeed(generateAdventureSeed(d)), 'Adventure Seed'));
     return toast('Adventure seed generated');
   }
-  if (hit('[data-new-campaign]')) {
-    if (window.confirm('Start a new campaign? Your current one stays exportable but will be replaced in this browser.')) {
-      store.newCampaign().then(() => toast('New campaign'));
-    }
-    return;
-  }
+  if (hit('[data-new-campaign]')) return confirmNewCampaign();
   if (hit('[data-bind-file]')) return store.bindFile().then(() => toast('Save file bound')).catch(() => {});
   if (hit('[data-restore-backup]')) {
     if (!window.confirm('Restore the last backup? This replaces the current campaign with the previous save — export the current one first if you want to keep it.')) return;
@@ -1572,6 +1619,9 @@ function onInput(ev) {
   const df = t.closest('[data-doc-filter]');
   if (df) { docFilter = t.value; renderDrawerBody(); restoreFocus('[data-doc-filter]'); return; }
 
+  const gf = t.closest('[data-graph-filter]');
+  if (gf) { graphFilter = t.value; renderDrawerBody(); restoreFocus('[data-graph-filter]'); return; }
+
   const esrch = t.closest('[data-entity-search]');
   if (esrch) { entitySearch = t.value; renderDrawerBody(); restoreFocus('[data-entity-search]'); return; }
 
@@ -1601,6 +1651,14 @@ function onInput(ev) {
 
   const mf = t.closest(MENTION_FIELD_SELECTOR);
   if (mf) updateMentionSuggest(mf);
+}
+
+// Shared by the Settings drawer's own "New Campaign" button and the header
+// gear menu's identical item — one place owns the confirm text.
+function confirmNewCampaign() {
+  if (window.confirm('Start a new campaign? Your current one stays exportable but will be replaced in this browser.')) {
+    store.newCampaign().then(() => toast('New campaign'));
+  }
 }
 
 // Edge-tab click: closes if it's the currently-active tab (matches the old
@@ -2363,6 +2421,32 @@ function render() {
     </button>`;
   }).join('');
 
+  // Party/Colony/Journal's own small tab group in the header ("USER
+  // CHANGES" QoL batch) — same [data-drawer-open] routing as the edge nav
+  // above (onClick doesn't care which container it lives in), just a
+  // compact horizontal button instead of the edge nav's icon tile.
+  const headerTabs = root.querySelector('[data-header-drawer-tabs]');
+  if (headerTabs) {
+    headerTabs.innerHTML = HEADER_ORDER.map((id) => {
+      const d = drawerMeta(id);
+      if (!d) return '';
+      const badge = badges[d.id] || '';
+      return `<button class="btn ghost sm" data-drawer-open="${d.id}" aria-expanded="${activeDrawer === d.id}" title="${d.label}">${d.glyph} ${d.label}${badge ? `<span class="badge">${badge}</span>` : ''}</button>`;
+    }).join('');
+  }
+
+  const settingsMenuEl = root.querySelector('[data-settings-menu]');
+  if (settingsMenuEl) settingsMenuEl.hidden = !settingsMenuOpen;
+
+  const aboutEl = root.querySelector('[data-about-overlay]');
+  if (aboutEl) {
+    aboutEl.hidden = !aboutOpen;
+    if (aboutOpen) {
+      const buildEl = aboutEl.querySelector('[data-about-build]');
+      if (buildEl) buildEl.textContent = `Phase ${BUILD.phase} · v${BUILD.version} — ${BUILD.label}`;
+    }
+  }
+
   const drawer = root.querySelector('[data-drawer]');
   drawer.dataset.open = String(openDrawers.length > 0);
   const titleEl = drawer.querySelector('[data-drawer-title]');
@@ -2622,6 +2706,15 @@ function castGenerateSelectHtml() {
 }
 function headExtraForDrawer(id) {
   if (id === 'cast') return castGenerateSelectHtml();
+  // Guide/Documents' top-of-drawer intro tips have no in-content header of
+  // their own to sit next to (unlike a Settings group's <h3> or Documents'
+  // own "Reference Library" <h4>, both wrapped directly where they're
+  // rendered) — the drawer's own chrome title fills that role instead, so
+  // the toggle icon lives in its head-extra slot; the tip text itself still
+  // unfolds inside the drawer body (guide()/documents()), reading
+  // ui.helpOpen the same way every other instance does.
+  if (id === 'guide') return helpToggle('guide-intro');
+  if (id === 'documents') return helpToggle('documents-intro');
   return '';
 }
 
@@ -2636,7 +2729,7 @@ function buildDrawerUi() {
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,
-    journalEditOpen, whereLocationTagFilter,
+    journalEditOpen, whereLocationTagFilter, graphFilter, helpOpen, settingsMenuOpen, aboutOpen,
   };
 }
 

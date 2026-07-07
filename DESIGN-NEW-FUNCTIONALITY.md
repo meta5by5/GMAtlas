@@ -269,6 +269,75 @@ Phase 10 items below. Only the session-composition budget stayed declined.
 
 **Why these aren't all dumped in as one flat list**: the ruleset review produced ten suggestions; only three (missions.js, the faction pressure track, and the Co-Pilot link between them) are genuinely new mechanisms, so only those three sit in this new-features-last phase. The rest were mis-scoped as "new features" on first pass — a faction card template and the relationship/Bond weight are entity-model depth that belongs in Phase 7 (already in progress, ranked above this phase), the NPC oracle chain and two hazard/dilemma tables are pure content additions that don't need to wait for anything (see Phase 8's oracle-editor item), and the Stress/Tension tracker is a same-shaped continuation of a Phase 6 item that was deliberately left open. Sorting by *what a suggestion actually is* (data vs. entity-depth vs. new mechanism), not by which review produced it, is what "against the design constitution" means in practice here — pack 66's ordering is about mechanism/engine work competing for priority, not about content, which this repo has never gated behind phase order (`CLAUDE.md`: "keep statblocks, oracle tables ... data, not code").
 
+### Phase 11 — Visual & Tactical Tools (proposed, not started, 2026-07-06 backlog)
+
+User-requested additions dropped into `docs/adr/next-request.md`'s "Add to
+roadmap" section (as opposed to that same batch's "QoL edits," which are
+small enough to build immediately rather than queue) — recorded here at
+the ask's own level of detail, not yet broken into a buildable slice the
+way Phase 10's items were. Each of these is a genuinely large addition
+(a canvas/map editor, an image pipeline, a turn-based combat tracker) —
+expect a dedicated ADR and its own research/planning pass before any of
+them starts, the same discipline every other Phase-10-and-later item here
+already went through. Roughly ordered by dependency (Gallery's thumbnail
+pipeline is what Interactive Maps' token art would reuse; the two
+Planetfall tools and Encounter Manager all want a shared "canvas with
+draggable icons" primitive before Interactive Maps generalizes it further).
+
+- **Gallery**: a photo collection per campaign, reusing the Oracle tag-
+  management pattern (`domain/oracles.js`'s tag vocabulary/lock mechanism,
+  ADR 0016) for organizing images instead of inventing a second tagging
+  UI. An entity gains an optional thumbnail (rendered left-aligned at the
+  same position as its type/tags row), auto-resized from an oversized
+  original upload; both the original and the thumbnail carry a locked,
+  entity-type tag and both remain visible/searchable in the Gallery
+  itself. Thumbnails render with a circular border/mask (a common TTRPG
+  convention). Needs: an image-resize approach that stays inside this
+  app's zero-dependency-for-the-shipped-app policy (a `<canvas>`-based
+  client-side resize is the likely answer, no new library) and a storage-
+  size conversation similar to the one that drove ADR 0015 (IndexedDB) —
+  embedded images are exactly the kind of payload that already once hit a
+  quota ceiling here.
+- **Planetfall Grid Battlemap**: a grid-based battlemap purpose-built for
+  5PFH Planetfall's specific rules, not a generic map tool. A resizable
+  background image; icons matching Planetfall's own visual language,
+  freeform drag-and-drop placement (not grid-locked); text-box annotations
+  represented as icons whose content is entered via a text field but
+  displayed as a hover tooltip.
+- **Planetfall Base Builder**: a second, gridless battlemap for colony/base
+  layout — a resizable background plus a palette of Planetfall's defined
+  assets/buildings, freeform-dragged onto the map. Each placed asset/
+  building creates (or links to) an Asset/Location entity tagged
+  `#colonyname` per the existing Colony worksheet convention
+  (`domain/colony.js`), rather than being purely decorative.
+- **Encounter Manager**: an NPC-from-Cast-drag-in combat tracker following
+  "the most popular formats and methods" GMs already use elsewhere (i.e.
+  a conventional initiative tracker, not a novel mechanic). Combat
+  resolution and initiative math read off `settings.statRuleset`
+  (the existing per-entity/per-campaign Rules Lens selector) so the same
+  tracker UI contextualizes differently per active ruleset instead of
+  hardcoding one system's turn structure.
+- **Interactive Maps**: an Owlbear-Rodeo-inspired map/token editor —
+  deliberately scoped toward "low learning curve and fast setup" over
+  feature parity with a dedicated VTT. Reuses Gallery's entity thumbnails
+  as tokens. Intended flow: Import Map → Add Tokens → Configure Encounter
+  (via the Encounter Manager above) → Play. Wants a click-drag distance
+  ruler with a resizable legend/scale bar (so the same ruler works across
+  wildly different battlemap resolutions), freeform-or-snap-to-grid token
+  placement, and an optional resizable square/hex grid overlay with its
+  own snap-to-grid toggle for OSR-style play.
+- **External links in rich-text fields** (a small, mostly-independent
+  addition — extends ADR 0018's mention/link syntax, not a new subsystem):
+  a textbox link that opens in a new browser tab, restricted to a bare
+  URL with no query string (explicitly to close off using `?params` as an
+  injection/tracking vector) — the one security constraint named
+  alongside the ask.
+
+Sequencing/effort estimates aren't given here on purpose — unlike Phase
+10's items, none of these were scoped against actual code yet; a rough
+"Gallery first, since three later items depend on it" ordering is the only
+claim being made until each gets its own research pass.
+
 ---
 
 ## Explicitly not adopted (see `docs/adr/0001-adopt-design-constitution.md`)

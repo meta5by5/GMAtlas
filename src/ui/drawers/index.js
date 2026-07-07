@@ -204,6 +204,28 @@ function fieldLabelRow(text, entityType, field) {
   return `<span class="field-label-row">${esc(text)}${oracleLinkIcon(entityType, field)}</span>`;
 }
 
+// Collapsible "?" tip icons ("USER CHANGES" QoL batch) — replaces an
+// always-visible `<p class="dim small">` instructional paragraph under a
+// section's title with a collapsed-by-default toggle next to that title,
+// so a returning GM isn't re-reading the same explanatory prose every
+// time. `key` is a stable per-instance string (unique across the whole
+// app, since `ui.helpOpen` is one flat Set) — `helpToggle` renders the
+// icon, `helpBody` renders the same trusted HTML the paragraph always
+// held, shown only once its key is in `ui.helpOpen`.
+export function helpToggle(key) {
+  return `<button type="button" class="icon-btn help-icon" data-help-toggle="${esc(key)}" title="Help" aria-label="Help">?</button>`;
+}
+function helpBody(key, html, ui) {
+  return (ui.helpOpen && ui.helpOpen.has(key)) ? `<p class="dim small help-text">${html}</p>` : '';
+}
+
+// An <h3>/<h4> section title plus its "?" toggle, right-aligned on the
+// same line — the shape every Settings group (and any other section-level
+// header) uses to pair with helpBody below it.
+function sectionHeadRow(tag, title, key) {
+  return `<div class="section-head-row"><${tag}>${esc(title)}</${tag}>${helpToggle(key)}</div>`;
+}
+
 function inspector(doc, e, ui) {
   const others = listEntities(doc).filter((x) => x.id !== e.id);
   const relTypeOptions = (selected) => RELATIONSHIP_TYPES.map((t) => `<option value="${t}" ${t === selected ? 'selected' : ''}>${RELATIONSHIP_TYPE_LABEL[t]}</option>`).join('');
@@ -902,8 +924,8 @@ function settings(doc, ui = {}) {
       </label>
     </div>
     <div class="settings-group">
-      <h3>Data (local-first)</h3>
-      <p class="dim small">Everything is stored in this browser. Export a backup or bind a file in a OneDrive-synced folder.</p>
+      ${sectionHeadRow('h3', 'Data (local-first)', 'settings-data')}
+      ${helpBody('settings-data', "Everything is stored in this browser. Export a backup or bind a file in a OneDrive-synced folder. A browser's storage for this app is commonly 5-10MB total. Large uploaded documents are the usual reason this fills up — move big rulebooks into <code>assets/docs/</code> (via a rebuild) instead, which has no such limit.", ui)}
       <div class="btn-col">
         <button class="btn" data-export-campaign>Export Campaign JSON</button>
         <label class="btn ghost file-btn">Import Campaign JSON<input type="file" accept=".json,application/json" data-import-campaign hidden></label>
@@ -912,29 +934,27 @@ function settings(doc, ui = {}) {
       </div>
       <p class="dim small storage-usage">Campaign size: ${formatBytes(info.campaignBytes)}${info.hasBackup ? ` · backup: ${formatBytes(info.backupBytes)}` : ' · no backup saved yet'}</p>
       ${info.hasBackup ? `<button class="btn ghost" data-restore-backup title="Replaces the current campaign with the last save that persisted before this one">↺ Restore last backup</button>` : ''}
-      <p class="dim small">A browser's storage for this app is commonly 5-10MB total. Large uploaded documents are the usual reason this fills up — move big rulebooks into <code>assets/docs/</code> (via a rebuild) instead, which has no such limit.</p>
     </div>
     <div class="settings-group">
-      <h3>Genre lens</h3>
+      ${sectionHeadRow('h3', 'Genre lens', 'settings-genre')}
+      ${helpBody('settings-genre', "A free-text flavor label — doesn't change any oracle content. The Genre Pack below is which oracle table set the whole campaign rolls against (Continue Story, Oracle drawer, Generate NPC, Universal Search) — genre-aware, not genre-locked, so this is a data swap, not a different engine.", ui)}
       <label class="field-label">Setting
         <input data-genre-input value="${esc(doc.settings.genre || '')}" placeholder="Hostile, generic sci-fi, …">
       </label>
-      <p class="dim small">A free-text flavor label — doesn't change any oracle content.</p>
       <label class="field-label">Genre Pack
         <select data-genre-pack-select>
           ${GENRE_PACKS.map((p) => `<option value="${p.id}" ${p.id === (doc.settings.genrePack || 'hostile') ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}
         </select>
       </label>
-      <p class="dim small">Which oracle table set the whole campaign rolls against (Continue Story, Oracle drawer, Generate NPC, Universal Search) — genre-aware, not genre-locked, so this is a data swap, not a different engine.</p>
     </div>
     <div class="settings-group">
-      <h3>Stat system</h3>
+      ${sectionHeadRow('h3', 'Stat system', 'settings-statsystem')}
+      ${helpBody('settings-statsystem', 'Creates entity stat templates aligned to the chosen rule system.', ui)}
       <label class="field-label">Default ruleset
         <select data-settings-stat-ruleset>
           ${RULESETS.map((r) => `<option value="${r.id}" ${r.id === (doc.settings.statRuleset || 'starforged') ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
         </select>
       </label>
-      <p class="dim small">Creates entity stat templates aligned to the chosen rule system.</p>
       ${(() => {
         const activeRuleset = findRuleset(doc.settings.statRuleset || 'starforged');
         return activeRuleset.doc
@@ -943,13 +963,13 @@ function settings(doc, ui = {}) {
       })()}
     </div>
     ${statblockTemplateEditor(doc)}
-    ${rulesConstitutionSection()}
-    ${tradeEconomyModelSection(doc)}
+    ${rulesConstitutionSection(ui)}
+    ${tradeEconomyModelSection(doc, ui)}
     ${mechanicsIndexSection(doc, ui)}
     ${tocSection(doc, ui)}
     <div class="settings-group">
-      <h3>Companion tools</h3>
-      <p class="dim small">GMAtlas tracks character sheets in-app, ruleset-aware. For full character-building wizards this app doesn't replicate, the community Crew Link tool is one Ironsworn/Starforged option:</p>
+      ${sectionHeadRow('h3', 'Companion tools', 'settings-companion')}
+      ${helpBody('settings-companion', "GMAtlas tracks character sheets in-app, ruleset-aware. For full character-building wizards this app doesn't replicate, the community Crew Link tool is one Ironsworn/Starforged option:", ui)}
       <div class="btn-col">
         <a class="btn ghost" href="https://starforged-crew-link.scottbenton.dev" target="_blank" rel="noreferrer">Open Crew Link ↗</a>
       </div>
@@ -990,7 +1010,7 @@ const FIELD_FORMATS = [
 // engine (that's Phase 9's Activity -> Rules Lens work); for now this just
 // makes the design principle visible to the GM, the same way the Build
 // panel below makes the changelog visible.
-function rulesConstitutionSection() {
+function rulesConstitutionSection(ui) {
   const rows = GAMEPLAY_AREAS.map(({ area, providers }) => `
     <tr>
       <td>${esc(area)}</td>
@@ -1000,8 +1020,8 @@ function rulesConstitutionSection() {
     <li><b>${esc(p.label)}</b> — <span class="dim small">${esc(p.status)}.</span> ${esc(p.note)}</li>`).join('');
   return `
     <div class="settings-group">
-      <h3>Rules Constitution</h3>
-      <p class="dim small">Every ruleset is a content provider, not the application — Saga Atlas owns the campaign; each system contributes only what it does best for a given gameplay area. Reference only today; becomes an Activity → Rules Lens recommender in a future phase.</p>
+      ${sectionHeadRow('h3', 'Rules Constitution', 'settings-rules-constitution')}
+      ${helpBody('settings-rules-constitution', 'Every ruleset is a content provider, not the application — Saga Atlas owns the campaign; each system contributes only what it does best for a given gameplay area. Reference only today; becomes an Activity → Rules Lens recommender in a future phase.', ui)}
       <div class="tablewrap-narrow">
         <table class="rules-constitution-table">
           <thead><tr><th>Gameplay area</th><th>Provider(s)</th></tr></thead>
@@ -1021,20 +1041,20 @@ function rulesConstitutionSection() {
 // active at a time; switching it changes future tag SUGGESTIONS only — a
 // Location already tagged from the other model keeps working, since
 // trade.js's economyBiasAt checks both models regardless of which is active.
-function tradeEconomyModelSection(doc) {
+function tradeEconomyModelSection(doc, ui) {
   const active = doc.settings.tradeEconomyModel || 'hostile';
   const types = economyTypesForModel(active);
   const rows = types.map((t) => `
     <li><b>${esc(t.label)}</b> — <span class="dim small">scarcity ${t.scarcity}/10, manufacturing ${t.manufacturing}/10.</span> ${esc(t.description)}</li>`).join('');
   return `
     <div class="settings-group">
-      <h3>Trade Economy Model</h3>
+      ${sectionHeadRow('h3', 'Trade Economy Model', 'settings-trade-economy')}
+      ${helpBody('settings-trade-economy', 'Tag a Location with one of these to bias its market prices beyond the manual supply/demand dials — untagged Locations are unaffected. Only one model is active at a time, but a Location already tagged from the other model keeps working if you switch.', ui)}
       <label class="field-label">Model
         <select data-trade-economy-model-select>
           ${ECONOMY_MODELS.map((m) => `<option value="${m.id}" ${m.id === active ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}
         </select>
       </label>
-      <p class="dim small">Tag a Location with one of these to bias its market prices beyond the manual supply/demand dials — untagged Locations are unaffected. Only one model is active at a time, but a Location already tagged from the other model keeps working if you switch.</p>
       <ul class="rules-provider-legend">${rows}</ul>
     </div>`;
 }
@@ -1049,8 +1069,8 @@ function mechanicsIndexSection(doc, ui) {
   const scanning = !!(ui && ui.mechanicsScanning);
   return `
     <div class="settings-group">
-      <h3>Game Mechanics Index</h3>
-      <p class="dim small">Scans the Reference Library's PDFs relevant to your active stat ruleset (plus Hostile's own core material) for terms like Strain, Supply, Momentum, and links each to the page it turns up on, in the Guide drawer below.</p>
+      ${sectionHeadRow('h3', 'Game Mechanics Index', 'settings-mechanics-index')}
+      ${helpBody('settings-mechanics-index', "Scans the Reference Library's PDFs relevant to your active stat ruleset (plus Hostile's own core material) for terms like Strain, Supply, Momentum, and links each to the page it turns up on, in the Guide drawer below.", ui)}
       <button class="btn ghost" data-mechanics-scan ${scanning ? 'disabled' : ''}>${scanning ? 'Scanning…' : '🔄 Refresh Mechanics Index'}</button>
       <p class="dim small">${entries.length ? `${entries.length} term(s) indexed.` : 'Not scanned yet.'}</p>
       <p class="dim small">Needs the app served over http(s) (<code>npm run serve</code>) — reading local PDFs is blocked when running straight off <code>file://</code>.</p>
@@ -1068,8 +1088,8 @@ function tocSection(doc, ui) {
   const childCount = tocParent ? (doc.guide.docs || []).filter((d) => d.parentId === tocParent.id).length : 0;
   return `
     <div class="settings-group">
-      <h3>Reference Table of Contents</h3>
-      <p class="dim small">Scans every PDF in your library (Reference Library plus your own uploads) for its real bookmarks and writes a linked table of contents for each into the Guide, under a "Table of Contents" entry.</p>
+      ${sectionHeadRow('h3', 'Reference Table of Contents', 'settings-toc')}
+      ${helpBody('settings-toc', 'Scans every PDF in your library (Reference Library plus your own uploads) for its real bookmarks and writes a linked table of contents for each into the Guide, under a "Table of Contents" entry.', ui)}
       <button class="btn ghost" data-toc-scan ${scanning ? 'disabled' : ''}>${scanning ? 'Scanning…' : '📑 Generate Reference Table of Contents'}</button>
       <p class="dim small">${childCount ? `${childCount} document(s) indexed.` : 'Not generated yet.'}</p>
       <p class="dim small">Needs the app served over http(s) (<code>npm run serve</code>) — reading local PDFs is blocked when running straight off <code>file://</code>.</p>
@@ -1416,7 +1436,7 @@ function guide(doc, ui = {}) {
     ? `<input class="doc-rename-input" data-guide-rename-input="${esc(active.id)}" value="${esc(active.title)}" autofocus>`
     : `<input class="guide-title-input" data-guide-title-input value="${esc(active.title)}" placeholder="Untitled">`;
   return `
-    <p class="dim small">A table of contents for the campaign — <code>@Name</code> links a Cast entity, <code>@[Doc Name]</code> references a document (<code>@[Doc Name#12]</code> or <code>@[Doc Name p.12]</code> jumps to a page). Click a mention to open it; arrow-key the cursor into it to edit its label. Saves automatically. Drag a document below to reorganize the tree.</p>
+    ${helpBody('guide-intro', 'A table of contents for the campaign — <code>@Name</code> links a Cast entity, <code>@[Doc Name]</code> references a document (<code>@[Doc Name#12]</code> or <code>@[Doc Name p.12]</code> jumps to a page). Click a mention to open it; arrow-key the cursor into it to edit its label. Saves automatically. Drag a document below to reorganize the tree.', ui)}
     <div class="guide-doc-head">${titleEl}</div>
     <div class="rich-field">${richToolbarHTML()}<div class="mention-editor guide-editor" contenteditable="true" data-guide-input data-guide-active="${esc(active.id)}" data-placeholder="Colony Builder — see @[5PFH Planetfall p.12] for the turn sheet.&#10;Meet @Captain Reyes in Docking Bay 3.">${buildMentionEditorHTML(doc, active.text)}</div></div>
     ${mechanicsIndexList(doc)}
@@ -1496,10 +1516,19 @@ function graph(doc, ui = {}) {
       ${e.label ? `<text x="${mx.toFixed(1)}" y="${my.toFixed(1)}" class="graph-edge-label">${esc(e.label)}</text>` : ''}`;
   }).join('');
 
+  // Graph filter ("USER CHANGES" QoL batch): highlights/dims rather than
+  // removes matching nodes — a node's position depends on the WHOLE graph
+  // (buildGraph/computeLayout, a force-directed layout), so hiding nodes
+  // would reshuffle everything else on every keystroke; dimming leaves the
+  // layout stable while still making a searched-for entity easy to spot in
+  // a cluster.
+  const filter = (ui.graphFilter || '').trim().toLowerCase();
   const nodes = g.nodes.map((n) => {
     const p = pos.get(n.id); if (!p) return '';
     const r = 9 + Math.min(10, n.degree * 2);
-    return `<g class="graph-node ${active === n.id ? 'sel' : ''}" data-graph-node="${esc(n.id)}" tabindex="0">
+    const matches = filter ? n.name.toLowerCase().includes(filter) : null;
+    const stateClass = matches === null ? '' : matches ? ' graph-node-match' : ' graph-node-dim';
+    return `<g class="graph-node ${active === n.id ? 'sel' : ''}${stateClass}" data-graph-node="${esc(n.id)}" tabindex="0">
       <title>${esc(n.name)} · ${TYPE_LABEL[n.type] || n.type} · ${n.degree} link${n.degree === 1 ? '' : 's'}</title>
       <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" fill="${nodeColor(n.type)}"/>
       <text x="${p.x.toFixed(1)}" y="${(p.y + r + 12).toFixed(1)}" class="graph-node-label">${esc(clip(n.name, 18))}</text>
@@ -1515,8 +1544,10 @@ function graph(doc, ui = {}) {
       <button class="icon-btn" data-graph-zoom="in" title="Zoom in">＋</button>
       <button class="icon-btn" data-graph-zoom="out" title="Zoom out">－</button>
       <button class="icon-btn" data-graph-zoom="reset" title="Reset zoom/pan">⟲</button>
-      <span class="dim small">Scroll to zoom, drag to pan — useful once a campaign has a lot of links.</span>
+      <input class="drawer-search" data-graph-filter value="${esc(ui.graphFilter || '')}" placeholder="Find in graph…">
+      ${helpToggle('graph-toolbar-tip')}
     </div>
+    ${helpBody('graph-toolbar-tip', 'Scroll to zoom, drag to pan — useful once a campaign has a lot of links. Type a name above to highlight it in a busy cluster.', ui)}
     <svg class="graph-svg" viewBox="${viewBox}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Relationship graph — scroll to zoom, drag to pan">
       <g class="graph-edges">${edges}</g>
       <g class="graph-nodes">${nodes}</g>
@@ -1651,7 +1682,7 @@ function documents(doc, ui = {}) {
     <datalist id="doc-tag-list">${allTags.map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
     <div class="drawer-note">
       <label class="btn ghost file-btn">Upload file(s)<input type="file" data-doc-upload multiple hidden></label>
-      <p class="dim small">Drag a document into a note or context field to insert a @ pointer.</p>
+      ${helpBody('documents-intro', 'Drag a document into a note or context field to insert a @ pointer.', ui)}
     </div>
     <input class="drawer-search" data-doc-filter value="${esc(search)}" placeholder="Search by name or tag…">
     ${allTags.length ? `
@@ -1664,7 +1695,7 @@ function documents(doc, ui = {}) {
       ${rows}
     </div>
     ${refDocs.length ? `
-    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Reference Library</h4></div>
-    <p class="dim small">Bundled rulebooks and setting docs from <code>assets/docs/</code> — refreshed on every build.</p>
+    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Reference Library</h4>${helpToggle('documents-reflib')}</div>
+    ${helpBody('documents-reflib', 'Bundled rulebooks and setting docs from <code>assets/docs/</code> — refreshed on every build.', ui)}
     <div class="doc-list">${refRows}</div>` : ''}`;
 }

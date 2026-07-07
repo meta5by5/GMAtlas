@@ -14,6 +14,32 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-07 "USER CHANGES" QoL batch**: five small, independent UI edits
+from `docs/adr/next-request.md` (the same batch's larger "Add to roadmap"
+asks landed separately, as `DESIGN-NEW-FUNCTIONALITY.md`'s new Phase 11
+backlog, not built). A Graph drawer filter highlights/dims matching nodes
+by name instead of removing them (the force-directed layout needs the
+whole node set to stay stable). Party/Colony/Journal moved from the edge
+nav to their own tab group in the header, right-aligned, reusing the
+existing `data-drawer-open` routing verbatim. 12 always-visible
+instructional tips across Guide/Documents/eight Settings groups/the Graph
+toolbar became collapsed-by-default "?" icons (new `helpToggle`/
+`helpBody` helpers) — the HOW tab's transient lens-picker tip was
+deliberately left alone, since it has no adjacent header to anchor an
+icon to. The old click-the-campaign-title convention became a real ⚙
+gear dropdown (New Campaign/Settings/About — About is genuinely new
+content, a small overlay showing the real build version). The header's
+"▶ Scene" button was removed and replaced with two copies: one in the
+WHAT tab next to "What Happens Next?", one in the Co-Pilot panel's Quick
+Apply row (unconditionally present, regardless of whether that panel's
+own dynamic "Advance Time" chip happens to be showing). Two real bugs
+were found and fixed during verification, not just planning: a z-index
+tie between the new dropdown menu and the main drawer let an open drawer
+silently eat clicks meant for the menu; and a missing `helpToggle` import
+in `shell.js` threw inside `render()`, silently breaking the Guide and
+Documents drawers' entire body — caught only by an actual browser check,
+underscoring why this project always does one after a UI change.
+
 **2026-07-06 "USER CHANGES" batch** (`docs/adr/0019-where-tab-and-scene-
 fields.md`, `docs/adr/0020-reference-toc-generation.md`, an addendum on
 `docs/adr/0018`): six follow-ups to the rich-text work below. The five
@@ -545,6 +571,15 @@ estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
     effort):** Shipyard companion link (needs the tool's actual URL);
     a sync adapter / shared campaign database (needs a decision on what
     backend to sync to).
+  - **Phase 11 backlog added 2026-07-06** (`DESIGN-NEW-FUNCTIONALITY.md`'s
+    new Phase 11 section, from `docs/adr/next-request.md`'s "Add to
+    roadmap" ask): Gallery (per-entity thumbnails + a tagged image
+    collection), a Planetfall Grid Battlemap and Base Builder, an
+    Encounter Manager, an Owlbear-Rodeo-style Interactive Maps editor, and
+    external links in rich-text fields. None scoped against real code
+    yet — recorded at the ask's own level of detail, each expected to get
+    its own research/ADR pass before starting, same as every other
+    substantial addition in this file.
 - **UI/UX assumptions, resolved in the 2026-07-04 pass** (see Status
   Summary above): tabbed drawer switching replaced "only one drawer open at
   a time"; three real responsive tiers replaced one breakpoint; Escape and

@@ -21,6 +21,7 @@ export function renderCopilot(doc) {
       <h3>Quick apply</h3>
       <div class="copilot-quick">
         ${a.quickActions.map((q) => `<button class="chip" data-shift="${esc(q)}">⚡ ${esc(q)}</button>`).join('')}
+        <button class="chip" data-continue-story title="Generate the next scene">▶ Scene</button>
       </div>
     </div>
     ${a.overlooked && a.overlooked.length ? `

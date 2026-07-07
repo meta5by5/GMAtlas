@@ -264,3 +264,78 @@ Create separate text boxes to put each section of the LATEST SCENE into separate
 ### TEXT EDITOR
 
 - Include options for a tab indent, bullet points, numbered lists, font sizes, and table editor where tables are aligned left and have thin borders by default.
+
+
+## USER CHANGES
+
+<!-- Processed 2026-07-07:
+- QoL edits — all five built (see core/buildInfo.js's 2026-07-07 changelog
+  entry and PROGRESS.md's Status Summary for full detail): the Graph
+  filter (highlight/dim, not remove, so the force-directed layout stays
+  stable); Party/Colony/Journal moved to a new header tab group,
+  right-aligned; 12 instructional tips became collapsed-by-default "?"
+  icons (the HOW tab's transient lens-picker tip was deliberately left
+  as-is — no adjacent header to anchor an icon to); a real ⚙ gear
+  dropdown (New Campaign/Settings/About, About being genuinely new
+  content) replaced the old click-the-campaign-title convention; the
+  header's "▶ Scene" button was removed and replaced with a copy in the
+  WHAT tab (next to "What Happens Next?") and one in the Co-Pilot panel's
+  Quick Apply row (per your direct clarification: always present there,
+  regardless of whether the panel's own "Advance Time" chip happens to be
+  showing that turn). Two real bugs were found and fixed during browser
+  verification, not just planning: a z-index tie let an open drawer eat
+  clicks meant for the new gear dropdown, and a missing import silently
+  broke the Guide/Documents drawers entirely.
+- "Add to roadmap" items — added to `DESIGN-NEW-FUNCTIONALITY.md`'s new
+  Phase 11 section and `PROGRESS.md`'s backlog, at the same level of
+  detail you gave them (Gallery, Planetfall Grid Battlemap, Planetfall
+  Base Builder, Encounter Manager, Interactive Maps, external links in
+  rich-text fields) — none built yet; each is large enough to want its
+  own research/ADR pass first, same as every other substantial addition
+  in that file.
+-->
+
+### QoL edits:
+- On the Graph tab, add a filter to highlight text to locate items in clustered groups.
+- Move Party, Colony and Journal to teh top nav, right aligned. 
+- Where tips and instruction text are provided below a header, move into a separate collapseable question-mark icon right aligned next to the title/header like the instrucitons for Guide tab, "A table of contents for the campaign — @Name links a Cast entity, @[Doc Name] references a document (@[Doc Name#12] or @[Doc Name p.12] jumps to a page). Click a mention to open it; arrow-key the cursor into it to edit its label. Saves automatically. Drag a document below to reorganize the tree."
+- Create a dropdown using the gear icon that is located in top right corner that includes "New Campaign", Settings and About. 
+- Move the "Scene" button from top nav to the "WHAT is Happening" tab where it is placed to the right of the "What Happens Next?" button. Also add a copy of it to the right of the button "Advance Time" in the Co-Pilot tab.
+
+### Add to roadmap
+#### GALLERY 
+- Add a gallery photo collection that includes the same tag management method used for Oracles. It should show the thumbnails and fullsized images uploaded for entities.
+- Add a thumbnail image to any entity. Place the thumbnail left aligned at the same postion as the type and tags.
+- The thumbnail is a resized version of an original upload graphic file if that file is too big. Both files are autoassigned a tag for the entity type. The tag is locked from edit or delete. Both the original and the thumbnail are visible in the gallery.
+- Thumbnails should be formatted with a circle border common in TTRPG thumbnails online.
+
+#### Planetfall gridmap
+- Grid battlemap that serves the specific rules in 5PFH Planetfall. 
+- It should allow for a resizeable background image.
+- It should use icons that match the appearance defined in the Planetfall rules system. These should be drag-drop into the grid with freeform placement.
+- It should allow for text boxes represented by icons where the text is entered through a textfield but stored and viewed as a tooltip associated to the icon.
+#### Planetfall base builder
+- Open battlemap with no grid controls that can add a background image and has a list of assets/buildings defined in Planetfall which can be dragged onto the map and placed anywhere to simulate creating a colony.
+Each asset/location icon should create a link to an existing or new asset/location entity associated to the Party under #colonyname as defined on the Colony worksheet.
+
+#### Other
+
+- Allow textboxes to have external links that open into a new browser tab. The link cannot have any additions using the ? and after that could be used for hacking).
+
+#### Encounter Manager
+Create an encounter manager using the most popular formats and methods across the internet. NPCs are dragged from the Cast tab. The Rules system should be aligned to the Settings where combat is mapped to a system. The initiative and other mechanics during combat should be contextualized to the designated rules system. 
+
+#### Interactive Maps
+- Add an interactive maps editor that emulates the features of Owlbear Rodeo while maintaining low learning curve and fast setup. 
+- it should leverage the entity thumbnails as tokens.
+- the gameplay experience should be:
+Import Map
+        ↓
+Add Tokens
+        ↓
+Configure Encounter (using the encounter manager design above)
+        ↓
+Play
+- The map should have a distance measure using point-click-drag to get distance. This distance should be a resizeable bar in the legend to allow for different sized battlemaps
+- The map should allow freeform placement of tokens or snap-to-grid if using the grid overlay.
+- The map should have a optional grid overlay in either square or hex that is resizeable to fit the background battlemap grid. This grid would have optional snap-to-grid mechanics to fit OSR games.

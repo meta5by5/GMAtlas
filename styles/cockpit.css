@@ -44,6 +44,39 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .mc-header .tagline { font-size: 0.72rem; color: var(--text-dim); }
 .mc-header .campaign-title { font-size: 0.85rem; color: var(--accent); }
 
+/* Header gear menu (New Campaign / Settings / About — replaces the old
+   click-the-campaign-title-to-open-Settings convention). */
+.settings-menu-wrap { position: relative; }
+.settings-menu {
+  position: absolute; top: 100%; right: 0; margin-top: var(--sp-1); z-index: 25;
+  display: flex; flex-direction: column; min-width: 9rem;
+  background: var(--tier3-bg); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow); overflow: hidden;
+}
+.settings-menu[hidden] { display: none; }
+.settings-menu button { text-align: left; background: none; border: none; color: var(--text); padding: 0.5rem 0.75rem; font-size: 0.85rem; }
+.settings-menu button:hover { background: var(--tier2-bg); }
+
+/* Party/Colony/Journal's header tab group (right-aligned in .header-actions) */
+.header-drawer-tabs { display: flex; gap: var(--sp-2); }
+.header-drawer-tabs .badge { margin-left: 0.3em; }
+
+/* About overlay — same centered-modal shape as .mc-search-overlay, simpler
+   content (no search head/results). */
+.mc-about-overlay {
+  position: fixed; inset: 0; z-index: 30;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex; align-items: center; justify-content: center;
+}
+.mc-about-overlay[hidden] { display: none; }
+.mc-about-card {
+  position: relative; width: min(24rem, 92vw);
+  background: var(--tier3-bg); border: 1px solid var(--border-strong); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: var(--sp-4);
+}
+.mc-about-card .icon-btn { position: absolute; top: var(--sp-2); right: var(--sp-2); }
+.mc-about-card h2 { margin: 0 0 0.2rem; }
+
 /* --- Context strip (WHO/WHERE/WHAT/WHY/HOW) as tabs ----------------- */
 .mc-strip {
   grid-area: strip;
@@ -503,6 +536,15 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .recap-panel [data-recap-save] { margin-top: var(--sp-3); }
 .settings-group { margin-bottom: var(--sp-6); }
 .settings-group h3 { font-size: 0.85rem; margin: 0 0 var(--sp-2); color: var(--accent); }
+
+/* Collapsible "?" tip icons ("USER CHANGES" QoL batch) — a section title
+   plus its toggle, right-aligned on the same line; the h3/h4 keeps its own
+   existing margin, this row just adds the flex layout around it. */
+.section-head-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.section-head-row h3, .section-head-row h4 { margin: 0; flex: 1; }
+.help-icon { border: 1px solid var(--border); border-radius: 50%; width: 1.3rem; height: 1.3rem; line-height: 1; padding: 0; flex: 0 0 auto; }
+.help-icon:hover { color: var(--text); border-color: var(--accent); }
+.help-text { margin-top: var(--sp-1); }
 .btn-col { display: flex; flex-direction: column; gap: var(--sp-2); }
 .file-btn { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 
@@ -661,6 +703,12 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .graph-node:hover circle { stroke: #fff; }
 .graph-node.sel circle { stroke: var(--accent); stroke-width: 3; }
 .graph-node-label { fill: var(--text); font-size: 11px; text-anchor: middle; pointer-events: none; }
+/* Graph filter ("USER CHANGES" QoL batch) — dims non-matches and outlines
+   matches rather than removing nodes, since the force-directed layout
+   (buildGraph/computeLayout) depends on the WHOLE node set to stay stable. */
+.graph-node.graph-node-dim { opacity: 0.25; }
+.graph-node.graph-node-match circle { stroke: var(--accent); stroke-width: 3; }
+.graph-node.graph-node-match .graph-node-label { fill: var(--accent); font-weight: 600; }
 
 /* Statblocks (Phase 3C) */
 .statblock-block { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-3); }

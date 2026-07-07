@@ -71,6 +71,7 @@ const VIEWS = {
       <div class="action-bar">
         <button class="btn primary" data-continue-story>▶ Continue Story</button>
         <button class="btn" data-what-next>What Happens Next?</button>
+        <button class="btn ghost sm" data-continue-story title="Generate the next scene">▶ Scene</button>
       </div>
       ${lensPickerHtml(ui)}
       <div class="shift-actions" aria-label="Shift story">
