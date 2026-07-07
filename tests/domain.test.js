@@ -245,8 +245,75 @@ import { advise } from '../src/domain/copilot.js';
 import {
   addDocument, updateDocument, removeDocument, parseDocumentMentions, parseDocumentMentionRefs, linkDocumentMentions, listDocumentMentions,
   findDocumentTabByTitle, openDocumentTab, closeDocumentTab, resolveDocumentTab, resolvedDocumentMentionNames, listReferenceDocuments,
+  parseTextBlocks, parseInlineNodes,
 } from '../src/domain/documents.js';
 import { titleFromFilename } from '../src/domain/titleCase.js';
+
+// --- lightweight rich text (ADR 0018) --------------------------------------
+test('parseTextBlocks: a plain single-line/multi-line paragraph stays one text block', () => {
+  assert.deepEqual(parseTextBlocks('Hello world'), [{ type: 'text', text: 'Hello world' }]);
+  assert.deepEqual(parseTextBlocks('Line one\nLine two'), [{ type: 'text', text: 'Line one\nLine two' }]);
+});
+
+test('parseTextBlocks: groups consecutive "- " lines into one ul block', () => {
+  const blocks = parseTextBlocks('- first\n- second\n- third');
+  assert.deepEqual(blocks, [{ type: 'ul', items: ['first', 'second', 'third'] }]);
+});
+
+test('parseTextBlocks: groups consecutive "N. " lines into one ol block regardless of the literal digit', () => {
+  const blocks = parseTextBlocks('1. first\n1. second\n1. third');
+  assert.deepEqual(blocks, [{ type: 'ol', items: ['first', 'second', 'third'] }]);
+});
+
+test('parseTextBlocks: preserves order across text/list/text sequences', () => {
+  const blocks = parseTextBlocks('Intro\n- a\n- b\nOutro line one\nOutro line two');
+  assert.deepEqual(blocks, [
+    { type: 'text', text: 'Intro' },
+    { type: 'ul', items: ['a', 'b'] },
+    { type: 'text', text: 'Outro line one\nOutro line two' },
+  ]);
+});
+
+test('parseInlineNodes: plain text with no markup is a single text node', () => {
+  assert.deepEqual(parseInlineNodes('just text'), [{ type: 'text', text: 'just text' }]);
+});
+
+test('parseInlineNodes: bold/italic/underline each wrap their content', () => {
+  assert.deepEqual(parseInlineNodes('a **bold** word'), [
+    { type: 'text', text: 'a ' }, { type: 'bold', children: [{ type: 'text', text: 'bold' }] }, { type: 'text', text: ' word' },
+  ]);
+  assert.deepEqual(parseInlineNodes('*italic*'), [{ type: 'italic', children: [{ type: 'text', text: 'italic' }] }]);
+  assert.deepEqual(parseInlineNodes('_underline_'), [{ type: 'underline', children: [{ type: 'text', text: 'underline' }] }]);
+});
+
+test('parseInlineNodes: a mention survives untouched inside bold text (nesting)', () => {
+  const nodes = parseInlineNodes('**meet @[Captain Reyes] now**');
+  assert.equal(nodes.length, 1);
+  assert.equal(nodes[0].type, 'bold');
+  assert.deepEqual(nodes[0].children, [
+    { type: 'text', text: 'meet ' },
+    { type: 'mention', name: 'Captain Reyes', page: null, label: null },
+    { type: 'text', text: ' now' },
+  ]);
+});
+
+test('parseInlineNodes: an underscore inside a bracketed mention name is not treated as underline', () => {
+  const nodes = parseInlineNodes('@[Some_Name] is here');
+  assert.deepEqual(nodes[0], { type: 'mention', name: 'Some_Name', page: null, label: null });
+});
+
+test('parseInlineNodes: a bracketed mention with a page anchor round-trips its page/label', () => {
+  const nodes = parseInlineNodes('@[Colony rules|5PFH Planetfall#12]');
+  assert.deepEqual(nodes, [{ type: 'mention', name: '5PFH Planetfall', page: 12, label: 'Colony rules' }]);
+});
+
+test('parseInlineNodes: an unclosed delimiter (no matching close) is left as literal text', () => {
+  assert.deepEqual(parseInlineNodes('a **b'), [{ type: 'text', text: 'a **b' }]);
+});
+
+test('parseInlineNodes: a delimiter never matches across a line break', () => {
+  assert.deepEqual(parseInlineNodes('**a\nb**'), [{ type: 'text', text: '**a\nb**' }]);
+});
 
 test('threads: add, advance (clamped), complete, remove', () => {
   let camp = defaultCampaign();

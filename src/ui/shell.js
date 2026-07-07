@@ -127,7 +127,7 @@ let mentionSuggest = null;
 // .mention-editor contenteditable divs now, not <textarea> — the how.activity
 // <select> also carries data-ctx, so this scopes to .mention-editor
 // specifically rather than a bare [data-ctx] to exclude it.
-const MENTION_FIELD_SELECTOR = '[data-journal-input], [data-guide-input], .mention-editor[data-ctx]';
+const MENTION_FIELD_SELECTOR = '[data-journal-input], [data-guide-input], .mention-editor[data-ctx], .mention-editor[data-entity-field]';
 const DROP_TARGET_SELECTOR = `[data-drop-entity], ${MENTION_FIELD_SELECTOR}`;
 // Relationship graph pan/zoom — ephemeral, reset whenever the Graph tab is
 // freshly opened (see openDrawerTab). {scale, x, y} describes the SVG
@@ -886,6 +886,16 @@ function onClick(ev) {
   const docOpen = hit('[data-doc-open]');
   if (docOpen) {
     ev.preventDefault(); // see data-open-entity's identical guard above
+    // Ctrl/Cmd+Click on an inline @mention (not the Documents drawer's own
+    // card links, which share data-doc-open but carry no data-mention-page)
+    // edits the mention's page instead of navigating (ADR 0018) — the
+    // mention's tooltip (mentionEditor.js's mentionTitle) describes exactly
+    // this, fixing the previously-shipped, confirmed-non-functional tooltip
+    // that had the two gestures backwards.
+    if (docOpen.classList.contains('mention-link') && (ev.ctrlKey || ev.metaKey)) {
+      editMentionPage(docOpen);
+      return;
+    }
     if (docOpen.dataset.docOpen.startsWith('lib:')) {
       const entry = getDocument(store.get(), docOpen.dataset.docOpen.slice(4));
       if (entry && entry.kind !== 'file') { toast('Text notes open inline below — not a PDF file.'); return; }
@@ -1645,9 +1655,113 @@ function onMouseDown(ev) {
   // click tried to use it).
   if (ev.target.closest('[data-mention-suggest-item]')) { ev.preventDefault(); return; }
 
+  // Rich-text toolbar (ADR 0018) — same mousedown-not-click reasoning as
+  // above: preventDefault() here stops the button from ever stealing focus
+  // (and therefore the field's current selection/caret) away from the
+  // .mention-editor it's acting on, which a 'click' handler firing after
+  // the field already blurred could never recover.
+  const richCmd = ev.target.closest('[data-rich-cmd]');
+  if (richCmd) {
+    ev.preventDefault();
+    const field = richCmd.closest('.rich-field')?.querySelector('.mention-editor');
+    if (!field) return;
+    const cmd = richCmd.dataset.richCmd;
+    if (cmd === 'bold') wrapSelectionWithMarkup(field, '**', '**');
+    else if (cmd === 'italic') wrapSelectionWithMarkup(field, '*', '*');
+    else if (cmd === 'underline') wrapSelectionWithMarkup(field, '_', '_');
+    else if (cmd === 'ul') toggleLinePrefix(field, '- ');
+    else if (cmd === 'ol') toggleLinePrefix(field, '1. ');
+    return;
+  }
+
   const svg = ev.target.closest('.graph-svg');
   if (!svg || ev.target.closest('[data-graph-node]')) return; // don't hijack a node click into a pan
   graphPan = { svg, startClientX: ev.clientX, startClientY: ev.clientY, startX: graphView.x, startY: graphView.y };
+}
+
+// --- Rich-text toolbar helpers (ADR 0018) ----------------------------------
+// Both operate on the live Selection inside a .mention-editor field and
+// insert literal markup characters as plain text nodes — the field's next
+// blur-commit (onFocusOut) serializes that back to plain text exactly like
+// any other edit, and the NEXT render is what turns it into a real <b>/<ul>
+// etc. (buildMentionEditorHTML). Nothing here talks to the store directly.
+
+function wrapSelectionWithMarkup(field, open, close) {
+  field.focus();
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !field.contains(sel.anchorNode)) return;
+  const range = sel.getRangeAt(0);
+  if (range.collapsed) {
+    const node = document.createTextNode(open + close);
+    range.insertNode(node);
+    const caret = document.createRange();
+    caret.setStart(node, open.length);
+    caret.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(caret);
+  } else {
+    const closeNode = document.createTextNode(close);
+    const endRange = range.cloneRange();
+    endRange.collapse(false);
+    endRange.insertNode(closeNode);
+    const openNode = document.createTextNode(open);
+    const startRange = range.cloneRange();
+    startRange.collapse(true);
+    startRange.insertNode(openNode);
+    const after = document.createRange();
+    after.setStartAfter(closeNode);
+    after.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(after);
+  }
+}
+
+// Toggles a "- "/"1. " marker at the start of the current visual line —
+// Selection.modify('extend','backward','lineboundary') (supported in every
+// engine this app targets — Chromium/WebKit; see "run" skill notes on this
+// project's Playwright-verified environment) finds that boundary without
+// this app needing its own line-break-aware DOM walk across the mixed text-
+// node/<br>/<div> shapes a contenteditable can produce.
+function toggleLinePrefix(field, marker) {
+  field.focus();
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !field.contains(sel.anchorNode) || typeof sel.modify !== 'function') return;
+  const caret = sel.getRangeAt(0).cloneRange();
+  caret.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(caret);
+  sel.modify('extend', 'backward', 'lineboundary');
+  const lineRange = sel.getRangeAt(0);
+  const existing = lineRange.toString().match(/^(-\s|\d+\.\s)/);
+  const lineStart = lineRange.cloneRange();
+  lineStart.collapse(true);
+  const node = lineStart.startContainer;
+  const offset = lineStart.startOffset;
+  if (existing && node.nodeType === Node.TEXT_NODE && offset + existing[0].length <= node.nodeValue.length) {
+    node.nodeValue = node.nodeValue.slice(0, offset) + node.nodeValue.slice(offset + existing[0].length);
+    const after = document.createRange();
+    after.setStart(node, offset);
+    after.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(after);
+  } else if (!existing) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      node.nodeValue = node.nodeValue.slice(0, offset) + marker + node.nodeValue.slice(offset);
+      const after = document.createRange();
+      after.setStart(node, offset + marker.length);
+      after.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(after);
+    } else {
+      const textNode = document.createTextNode(marker);
+      lineStart.insertNode(textNode);
+      const after = document.createRange();
+      after.setStartAfter(textNode);
+      after.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(after);
+    }
+  }
 }
 
 function onGraphMouseMove(ev) {
@@ -1911,6 +2025,45 @@ function onFocusOut(ev) {
     const current = getActiveGuideDoc(store.get());
     if (id && (id !== current.id || value !== current.text)) store.update((d) => setGuideDocText(d, id, value));
   }
+
+  // NPC/Faction/etc. "Overview (shared)" (ADR 0018) is a mention-editor div
+  // now, not a <textarea> — same reason as the ctxField branch above (no
+  // native 'change' event on a contenteditable). Every OTHER data-entity-
+  // field is still a plain input/textarea and stays on onChange's t.value
+  // path (see onChange's data-entity-field branch) — this only fires for
+  // the one field that's actually contenteditable.
+  const overviewField = ev.target.closest('[data-entity-field="overview"]');
+  if (overviewField && overviewField.isContentEditable) {
+    const active = store.get().entities.activeId;
+    const value = serializeMentionEditor(overviewField);
+    const current = getEntity(store.get(), active);
+    if (current && value !== (current.overview || '')) store.update((d) => updateEntity(d, active, { overview: value }));
+  }
+}
+
+// Ctrl/Cmd+Click a document mention's page (ADR 0018) — the page lives in a
+// fixed data-mention-page/data-doc-open-page attribute, not the editable
+// label text, so it needs its own edit path rather than "arrow-key in and
+// type" (which only ever touches the label). Edits the live span directly,
+// then dispatches a synthetic focusout so the enclosing field's own
+// blur-commit (onFocusOut, above) picks it up exactly like any other
+// in-field edit — no separate store-write path to keep in sync.
+function editMentionPage(mentionEl) {
+  const current = mentionEl.dataset.mentionPage || '';
+  const input = window.prompt('Change page to (blank to remove):', current);
+  if (input === null) return;
+  const trimmed = input.trim();
+  if (!trimmed) {
+    mentionEl.dataset.mentionPage = '';
+    delete mentionEl.dataset.docOpenPage;
+  } else {
+    const n = Number(trimmed);
+    if (!Number.isFinite(n) || n <= 0) { toast('Enter a valid page number'); return; }
+    mentionEl.dataset.mentionPage = String(n);
+    mentionEl.dataset.docOpenPage = String(n);
+  }
+  const field = mentionEl.closest('.mention-editor');
+  if (field) field.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
 }
 
 function closeMentionSuggest() {

@@ -14,6 +14,46 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-06 Lightweight rich text + mention page-editing**
+(`docs/adr/0018-lightweight-rich-text.md`): Journal, Guide, WHAT's
+Situation, WHO/WHERE/WHY/HOW's Focus, and the shared "Overview (shared)"
+field all gained a small toolbar (Bold/Italic/Underline/bullet-list/
+numbered-list) that inserts lightweight `**bold**`/`*italic*`/`_underline_`/
+`- `/`1. ` markup — stored as plain text and rendered richly, the same
+model `@mentions` already used, not live `execCommand` formatting (the
+user's explicit choice, given `execCommand`'s cross-browser quirks and its
+mismatch with this app's plain-text storage). Overview converts from a
+plain `<textarea>` to a real mention-editor, gaining `@mention` support for
+the first time. A real bug was found and fixed while wiring this up: a
+`<label>` containing both the new toolbar's `<button>`s (labelable) and a
+mention-editor `<div>` (not labelable) made the browser silently redirect
+every click meant for the field to the label's first labelable descendant
+instead — Chromium's built-in "click label text, focus its control"
+behavior misfiring once the actual intended target (the div) stopped
+qualifying as a real form control. Fixed by dropping the `<label>` wrapper
+for the three affected fields in favor of a plain `<div class="field-
+label">` (same CSS, no label semantics were actually needed). Also fixed,
+per the user's direct testing and clarification: the mention tooltip
+claimed "Ctrl/Cmd+Click to open — click to edit," which was backwards and
+non-functional — a plain click always opened and there was no edit gesture
+at all. Ctrl/Cmd+Click on a document mention now really edits its page
+(`ui/shell.js`'s `editMentionPage`), and the tooltip describes the real
+behavior. `docs/guide-content/5pfh-campaign-turn-sequence.txt` holds the
+fully cross-referenced, correctly-renumbered "5PFH Campaign Turn Sequence"
+content (every page reference converted to a real `@[...]` mention,
+resolved to the correct one of three source books) ready to paste into a
+new Guide document — campaign data lives in each GM's own browser storage,
+not this repo, so this is the durable, versioned, paste-once copy rather
+than a hardcoded-content import button (which would have baked one
+specific ruleset's procedural content into permanent app code). Verified
+end to end via Playwright: all five fields' toolbars persist real
+`<b>/<i>/<u>/<ul>/<ol>` through a save/reload cycle; a numbered list stays
+one continuous 1-8 `<ol>` (not two lists each restarting at "1."); a
+mention nests correctly inside bold text; Ctrl/Cmd+Click edits a mention's
+page while a plain click still navigates; the fixed label bug was
+confirmed broken-then-fixed via direct DOM/focus-event inspection, not
+just a passing high-level check.
+
 **2026-07-06 Multi-document Guide tree with drag-and-drop reparenting**
 (`docs/adr/0017-multi-doc-guide-tree.md`): the Guide tab grows from one
 freeform field into named, nested documents (`campaign.guide: {docs,

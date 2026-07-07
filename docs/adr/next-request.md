@@ -57,3 +57,168 @@ requests in docs/adr/next-request.md" (or similar) to have them picked up.
   Trade Economy Model above, per the request's explicit priority (Hostile's
   own lore wins any conflict) — no direct mechanic/table was transcribed.
 -->
+
+<!-- Processed 2026-07-06 (docs/adr/0018-lightweight-rich-text.md):
+- Journal/Guide/WHAT Situation/WHO-WHERE-WHY-HOW Focus/NPC Overview all
+  gained a lightweight bold/italic/underline/bullet/numbered-list toolbar
+  (plain-text markup, richly rendered — the same model @mentions already
+  use, not live execCommand, per the user's explicit choice). Overview
+  converts from a <textarea> to a real mention-editor (its first @mention
+  support). A real bug found+fixed along the way: a <label> wrapping both
+  the toolbar's buttons and a non-labelable contenteditable div made the
+  browser silently redirect clicks meant for the field to the label's
+  first labelable descendant instead — fixed by dropping the <label> for
+  the three affected fields.
+- Mention page-editing: Ctrl/Cmd+Click a document mention to edit its
+  page (ui/shell.js's editMentionPage) — the user tested the ORIGINAL
+  double-click-based plan's shipped tooltip directly and clarified the
+  real intended gesture is Ctrl/Cmd+Click for editing, plain click for
+  opening; the previously-shipped tooltip had this exactly backwards and
+  didn't work at all. Fixed and verified end to end.
+- The "5PFH Campaign Turn Sequence" Guide content below was authored with
+  corrected sequential numbering (Mission Steps: a real 1-8, with the
+  lettered post-battle sub-steps and deployment sub-considerations pulled
+  into their own labeled lists, since this app's list renderer is
+  intentionally one level deep) and EVERY page reference — including the
+  "(CBH 94)"/"(Core 72)" no-"p." forms, "(p.66,153)" and "(p.120, CBH
+  p.78)" multi-reference parentheticals, "(pp.88-94)" range, and
+  "(p.121, 131+)" open range the first pass missed — converted to a real
+  @[...] mention resolving to the correct one of the three source books.
+  Delivered as docs/guide-content/5pfh-campaign-turn-sequence.txt (ready
+  to paste into a new Guide document) rather than a hardcoded app-code
+  import, since campaign data is the GM's own, not this repo's — see the
+  ADR's Alternatives Considered.
+-->
+
+Revise any large textboxes to use a text editor with the same behaviors as what was in SagaAtlas. This includes the Guide, Journal, Focus fields in Who... example: How tabs, Overview (Shared) in NPC tab.
+Then create a specific page in the Guide tree with this created content and call it 5PFH Campaign Turn Sequence. For each of these page references, please create a link to that document & page as if it were hand assigned in the Guide. Correct the numbering for the items with number filters. The "Core" is the 5PFH rulebook, CBH is the Campaign Builder Bughunt, No reference other than just page# is the Hostile Settings book.  For the outline below, fix the numbering sequence instead of just 1, 1, 1.
+
+Also, if possible to edit the page number in the link, please add an explanation how to edit the link.
+
+Add below here to the Guide page:
+
+# Core 5PFH Campaign Turn Sequence
+
+
+## ***<u>Daily Life Steps</u>***
+
+* Update status (injuries, cargo, heat, rivals, favors, reputation).
+* Assign/resolve crew tasks (Core p.77). 
+* Determine job offers (Core p.83). 
+* Check for Rivals (Core p.85).  
+* Select your Job (Patron, Rival, Quest, Salvage, etc.).
+* Resolve Rumors (Core p.85). 
+* Resolve Mission Steps or Merchant Mission Steps.
+* Story Event/Track if turn without one (Core p.66,153).  
+
+
+## ***<u>Mission Steps</u>***
+
+
+1. Determine the objective (may use Expanded Missions, p.74)  
+1. Mission Selection  
+	1. Salvage Jobs  
+1. Faction Involvement* (unknown during selection; could be a surprise) (CBH, p.110) 
+1. Check for Connections (p.164, or Expanded Connection (CBH, p.80) – Opportunity mission only   
+1. Assign equipment (p.85) 
+1. Deployment – (pp.88-94)  
+	1. Check deployment cond (not Salvage)
+
+	1. Determine notable sights (not Salvage)
+
+	1. Determine the enemy (p.92) 
+
+	1. Set up the battlefield (p.108;  Terrain Generation, CBH 94) 
+
+	1. Setting up  
+		1. e. Place Points of interest and Salvage (Salvage mission only)
+
+1. Battle (go to table top)
+
+1. Resolve Tabletop Post-battle activities
+a. Resolve Rival status (p.119)  
+b. Check for illegal Psionic usage (p.21)  
+c. Resolve Patron status (p.119)  
+d. Roll quest progress (p.120, CBH p.78)   
+e. Get paid (p.120)  
+f. Trade Salvage(p.147 Salvage mission only)  
+g. Battlefield finds (p.121)  
+h. Check for Salvage mission points of interest (CBH, p.139 – Salvage mission only)  
+i. Check for World Event Steps
+j. Check for Settlement Event Steps
+k. Gather the loot (p.121, 131+) 
+l. Determine injuries and recovery (p.121)   
+m. EXP and character upgrades (p.123)  
+n. Invest in advanced training (p.124)
+o. Purchase items (p.125)
+p. Roll for a character event (p.126, 128)  
+q. Resolve Heat check
+
+	1. Setting up 
+
+	1. e. Place Points of interest and Salvage (Salvage mission only)
+
+	1. Battle (go to table top)
+
+	1. 
+
+## ***<u>Travel Steps</u>***
+
+
+	•	Flee invasion (Core p.69).  
+	•	Check for Factions fleeing (CBH p.114).  
+	•	Decide whether to travel (Core p.69).
+	•	Resolve steps, Local Travel / Starship Travel (Core p.70), as applicable.
+	•	Resolve New World Arrival steps (Core 72)
+	•	Check for Shipping Issues (Starship, Planetary, Overland).
+	•	Check for Settlement Event Steps.
+
+
+	## _<u>Settlement Event Steps</u>_
+
+
+	•	Check for invasion (Core p.69).
+	•	Check for Instability (CBH p.148).  
+	•	Roll a Negotiations check.
+	•	Check for Faction Conflict
+	•	Check for Psionic legality status (p.20)  
+	•	Resolve Heat Check.
+
+
+	## _<u>World Event Steps</u>_
+
+
+	* Check for Faction Conflict.
+
+	* Fringe World Strife / Instability  (also  )
+
+	* Roll for a Campaign Event (Core p.126).  
+
+	* Roll for a District Event.
+
+	* Roll for a Faction Event (CBH p.114).  
+
+	* Check for Galactic War progress (Core p.126).  
+
+	* Resolve Heat Check.
+
+END OF CAMPAIGN TURN
+
+## USER CHANGES
+
+- Make all text fields into full featured editors per the markup approach already decided. Then make the Jounral entries have an edit icon that opens it up for modification and save changes. 
+On the "Where it happens" tab: 
+- remove the "Change Location" button since we don't need a popup entry field to add text to the text box.
+- Redesign from the many links of all locations to a list of tags that then show a list of entities in a field to the right which will add the entity to the list when selected. The goal is to show location concepts and narrow down tot he desired entities that would likely be streamlined to fit the concepts through tags.
+
+### DOC MANAGMENT
+- Allow an externally written textblock containing a structured doc link (e.g., @[docname#pgnumber]) to covert to a valid link if it successfully matches a doc in the library.
+
+- Add a button to the Settings to do a onetime extract of tables of content with links to the pages referenced for each doc in the library and generate a Guide entry. Then create the table of contents with page links on each addition of a new document. 
+
+### LATEST SCENE
+Create separate text boxes to put each section of the LATEST SCENE into separate text boxes that should be linked to appropriate oracles. Keep using the full, combined statement updated tot eh Latest Scene textbox, but update the realted text when the separate field is revised. This supports the GM empowerment to craft the story from the generated concept suggestion.
+
+### TEXT EDITOR
+
+- Include options for a tab indent, bullet points, numbered lists, font sizes, and table editor where tables are aligned left and have thin borders by default.

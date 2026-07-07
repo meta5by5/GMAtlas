@@ -27,7 +27,7 @@ import { getEnhancements, strainUsed, strainCapacity, isOverStrained } from '../
 import { getMechanicsIndex } from '../../domain/mechanicsIndex.js';
 import { ENHANCEMENT_TYPES } from '../../data/enhancementTypes.js';
 import { buildGuideTree, getActiveGuideDoc } from '../../domain/guide.js';
-import { buildMentionEditorHTML } from '../mentionEditor.js';
+import { buildMentionEditorHTML, richToolbarHTML } from '../mentionEditor.js';
 import { buildSessionRecap } from '../../domain/recap.js';
 import { RULESETS, findRuleset, STARFORGED_PROGRESS_DIFFICULTIES, findProgressDifficulty } from '../../data/rulesets.js';
 import { GEAR_TEMPLATE_SYSTEMS, findGearTemplate } from '../../data/gearTemplates.js';
@@ -246,9 +246,9 @@ function inspector(doc, e, ui) {
       <select data-entity-field="type">${ENTITY_TYPES.map((t) => `<option value="${t}" ${t === e.type ? 'selected' : ''}>${TYPE_LABEL[t]}</option>`).join('')}</select>
     </label>
     ${tagEditor(doc, e)}
-    <label class="field-label">${fieldLabelRow('Overview (shared)', e.type, 'overview')}
-      <textarea data-entity-field="overview" rows="3" placeholder="What the party knows.">${esc(e.overview)}</textarea>
-    </label>
+    <div class="field-label">${fieldLabelRow('Overview (shared)', e.type, 'overview')}
+      <div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-entity-field="overview" data-placeholder="What the party knows.">${buildMentionEditorHTML(doc, e.overview)}</div></div>
+    </div>
     <div class="revealed-block">
       <button class="btn ghost sm" data-reveal-toggle="${esc(e.id)}">${e.revealedOpen ? '▾' : '▸'} Revealed / hidden (GM)</button>
       ${oracleLinkIcon(e.type, 'revealed')}
@@ -736,7 +736,7 @@ function journal(doc, ui = {}) {
     <button class="btn ghost recap-toggle" data-recap-toggle>${recapOpen ? '▾' : '▸'} Previously on…</button>
     ${recapOpen ? recapPanel(doc) : ''}
     <div class="drawer-note">
-      <div class="mention-editor" contenteditable="true" data-journal-input data-placeholder="Add a note, ruling, or clue… (drag an entity here, or type @, to mention it)"></div>
+      <div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-journal-input data-placeholder="Add a note, ruling, or clue… (drag an entity here, or type @, to mention it)"></div></div>
       <div class="drawer-note-actions">
         <button class="btn" data-journal-add>Add note</button>
         <button class="btn ghost" data-export-journal>Export</button>
@@ -1384,7 +1384,7 @@ function guide(doc, ui = {}) {
   return `
     <p class="dim small">A table of contents for the campaign — <code>@Name</code> links a Cast entity, <code>@[Doc Name]</code> references a document (<code>@[Doc Name#12]</code> or <code>@[Doc Name p.12]</code> jumps to a page). Click a mention to open it; arrow-key the cursor into it to edit its label. Saves automatically. Drag a document below to reorganize the tree.</p>
     <div class="guide-doc-head">${titleEl}</div>
-    <div class="mention-editor guide-editor" contenteditable="true" data-guide-input data-guide-active="${esc(active.id)}" data-placeholder="Colony Builder — see @[5PFH Planetfall p.12] for the turn sheet.&#10;Meet @Captain Reyes in Docking Bay 3.">${buildMentionEditorHTML(doc, active.text)}</div>
+    <div class="rich-field">${richToolbarHTML()}<div class="mention-editor guide-editor" contenteditable="true" data-guide-input data-guide-active="${esc(active.id)}" data-placeholder="Colony Builder — see @[5PFH Planetfall p.12] for the turn sheet.&#10;Meet @Captain Reyes in Docking Bay 3.">${buildMentionEditorHTML(doc, active.text)}</div></div>
     ${mechanicsIndexList(doc)}
     <div class="guide-tree-section">
       <div class="guide-tree-head">

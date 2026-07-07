@@ -447,6 +447,105 @@ function withPageAnchor(src, page) {
   return src.split('#')[0] + '#page=' + page;
 }
 
+// --- Lightweight rich text (bold/italic/underline/lists), ADR 0018 --------
+// Plain text stays the single source of truth — @mentions already prove
+// this "richly rendered, plain-text stored" shape works; this extends it to
+// a handful of Markdown-flavored markers the toolbar in ui/shell.js inserts.
+// Deliberately NOT a full Markdown engine (no headers/quotes/links/tables) —
+// only what that toolbar actually produces.
+
+const BULLET_LINE_RE = /^-\s+(.*)$/;
+const NUMBER_LINE_RE = /^\d+\.\s+(.*)$/;
+
+/** Split `text` into block-level nodes: consecutive `- ` lines become one
+ *  {type:'ul', items:[...]}, consecutive `1. ` (any digit) lines become one
+ *  {type:'ol', items:[...]}, everything else accumulates into
+ *  {type:'text', text} blocks (original newlines preserved within a block,
+ *  so a multi-line paragraph stays one block). Order-preserving. */
+export function parseTextBlocks(text) {
+  const lines = String(text || '').split('\n');
+  const blocks = [];
+  let i = 0;
+  while (i < lines.length) {
+    const bullet = lines[i].match(BULLET_LINE_RE);
+    const number = !bullet && lines[i].match(NUMBER_LINE_RE);
+    if (bullet || number) {
+      const re = bullet ? BULLET_LINE_RE : NUMBER_LINE_RE;
+      const items = [];
+      while (i < lines.length) {
+        const m = lines[i].match(re);
+        if (!m) break;
+        items.push(m[1]);
+        i++;
+      }
+      blocks.push({ type: bullet ? 'ul' : 'ol', items });
+    } else {
+      const start = i;
+      while (i < lines.length && !BULLET_LINE_RE.test(lines[i]) && !NUMBER_LINE_RE.test(lines[i])) i++;
+      blocks.push({ type: 'text', text: lines.slice(start, i).join('\n') });
+    }
+  }
+  return blocks;
+}
+
+/** Parse @mentions plus `**bold**`/`*italic*`/`_underline_` inline markup in
+ *  `text` into a small node tree: {type:'text', text} | {type:'mention',
+ *  name, page, label} | {type:'bold'|'italic'|'underline', children}.
+ *  Mentions are atomic leaves — never split by a formatting boundary — but
+ *  bold/italic/underline content is parsed recursively, so e.g. a mention
+ *  can sit inside bold text. A delimiter never matches across a line break,
+ *  matching common Markdown-lite convention (an unclosed `**` at the end of
+ *  a paragraph just renders as a literal `**`, not a bold run swallowing
+ *  everything after it). Used by ui/mentionEditor.js only — the mention-only
+ *  scan (`scanMentions`/`parseDocumentMentionRefs` and everything built on
+ *  them: linkDocumentMentions, resolvedDocumentMentionNames, ...) is
+ *  untouched, since those only ever care about the @mention shape. */
+export function parseInlineNodes(text) {
+  const source = String(text || '');
+  const mentions = scanMentions(source);
+  let mi = 0;
+
+  function parseRange(start, end) {
+    const nodes = [];
+    let i = start;
+    let textStart = start;
+    const flush = (upto) => { if (upto > textStart) nodes.push({ type: 'text', text: source.slice(textStart, upto) }); };
+
+    while (i < end) {
+      while (mi < mentions.length && mentions[mi].start < i) mi++;
+      if (mi < mentions.length && mentions[mi].start === i && mentions[mi].end <= end) {
+        const m = mentions[mi];
+        flush(i);
+        nodes.push({ type: 'mention', name: m.name, page: m.page, label: m.label });
+        i = m.end; textStart = i; mi++;
+        continue;
+      }
+
+      const two = source.slice(i, i + 2);
+      let delim = null;
+      if (two === '**') delim = { marker: '**', type: 'bold' };
+      else if (source[i] === '*') delim = { marker: '*', type: 'italic' };
+      else if (source[i] === '_') delim = { marker: '_', type: 'underline' };
+
+      if (delim) {
+        const innerStart = i + delim.marker.length;
+        const closeIdx = source.indexOf(delim.marker, innerStart);
+        if (closeIdx !== -1 && closeIdx < end && closeIdx > innerStart && !source.slice(innerStart, closeIdx).includes('\n')) {
+          flush(i);
+          nodes.push({ type: delim.type, children: parseRange(innerStart, closeIdx) });
+          i = closeIdx + delim.marker.length; textStart = i;
+          continue;
+        }
+      }
+      i++;
+    }
+    flush(end);
+    return nodes;
+  }
+
+  return parseRange(0, source.length);
+}
+
 export function resolveDocumentTab(campaign, tabKey) {
   const [kind, id] = String(tabKey || '').split(':');
   const page = (campaign.documents && campaign.documents.tabPages && campaign.documents.tabPages[tabKey]) || null;

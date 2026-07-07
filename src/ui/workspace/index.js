@@ -5,7 +5,7 @@
 import { listShifts } from '../../domain/context.js';
 import { listThreads, THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { ACTIVITIES, suggestRulesLens } from '../../domain/activities.js';
-import { buildMentionEditorHTML } from '../mentionEditor.js';
+import { buildMentionEditorHTML, richToolbarHTML } from '../mentionEditor.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -39,9 +39,9 @@ const VIEWS = {
     const reputation = c.reputation == null ? 5 : c.reputation;
     const stress = c.stress == null ? 5 : c.stress;
     return card('WHAT is happening', 'The active situation — your primary workspace.', `
-      <label class="field-label">Situation
-        <div class="mention-editor" contenteditable="true" data-ctx="what.situation" data-placeholder="What is unresolved right now?">${buildMentionEditorHTML(doc, c.situation)}</div>
-      </label>
+      <div class="field-label">Situation
+        <div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-ctx="what.situation" data-placeholder="What is unresolved right now?">${buildMentionEditorHTML(doc, c.situation)}</div></div>
+      </div>
       <div class="field-row">
         <label class="field-label">Intent
           <select data-ctx="what.intent">
@@ -141,9 +141,9 @@ function rulesLensSuggestion(doc, activity) {
 }
 
 function summaryField(key, val, placeholder, doc) {
-  return `<label class="field-label">Focus
-    <div class="mention-editor" contenteditable="true" data-ctx="${key}.summary" data-placeholder="${esc(placeholder)}">${buildMentionEditorHTML(doc, val)}</div>
-  </label>`;
+  return `<div class="field-label">Focus
+    <div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-ctx="${key}.summary" data-placeholder="${esc(placeholder)}">${buildMentionEditorHTML(doc, val)}</div></div>
+  </div>`;
 }
 
 function entityList(doc, types) {
