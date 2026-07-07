@@ -13,7 +13,7 @@ app already uses) — nothing further to do.
 Every page reference from the original pasted outline is preserved:
 "Core" resolves to 5PFH Five Parsecs From Home v3, "CBH" resolves to 5PFH
 3e Compendium Includes Bug Hunt, and a bare page number (no book prefix)
-resolves to Hostile setting, per the user's explicit rule. The Mission
+resolves to 5PFH Five Parsecs From Home v3, per the user's explicit rule. The Mission
 Steps' numbering is corrected to a real 1-8 sequence (the source's "1., 1.,
 1., ..." was a Markdown auto-numbering artifact, not intentional); its
 lettered post-battle sub-steps (a-q) and deployment sub-considerations are
@@ -27,74 +27,74 @@ a copy-paste artifact, not real content, and are dropped.
 
 **Daily Life Steps**
 - Update status (injuries, cargo, heat, rivals, favors, reputation).
-- Assign/resolve crew tasks (@[Core p.77|5PFH Five Parsecs From Home v3#77]).
-- Determine job offers (@[Core p.83|5PFH Five Parsecs From Home v3#83]).
-- Check for Rivals (@[Core p.85|5PFH Five Parsecs From Home v3#85]).
+- Assign/resolve crew tasks (@[Core p.77|5PFH Five Parsecs From Home v3#79]).
+- Determine job offers (@[Core p.83|5PFH Five Parsecs From Home v3#85]).
+- Check for Rivals (@[Core p.85|5PFH Five Parsecs From Home v3#87]).
 - Select your Job (Patron, Rival, Quest, Salvage, etc.).
-- Resolve Rumors (@[Core p.85|5PFH Five Parsecs From Home v3#85]).
+- Resolve Rumors (@[Core p.85|5PFH Five Parsecs From Home v3#87]).
 - Resolve Mission Steps or Merchant Mission Steps.
-- Story Event/Track if turn without one (@[Core p.66|5PFH Five Parsecs From Home v3#66], @[Core p.153|5PFH Five Parsecs From Home v3#153]).
+- Story Event/Track if turn without one (@[Core p.66|5PFH Five Parsecs From Home v3#68], @[Core p.153|5PFH Five Parsecs From Home v3#155]).
 
 **Mission Steps**
-1. Determine the objective (may use Expanded Missions, @[p.74|Hostile setting#74])
+1. Determine the objective (may use Expanded Missions, @[p.74|5PFH Five Parsecs From Home v3#76])
 2. Mission Selection (Salvage Jobs)
-3. Faction Involvement* (unknown during selection; could be a surprise) (@[CBH p.110|5PFH 3e Compendium Includes Bug Hunt#110])
-4. Check for Connections (@[p.164|Hostile setting#164], or Expanded Connection @[CBH p.80|5PFH 3e Compendium Includes Bug Hunt#80] – Opportunity mission only)
-5. Assign equipment (@[p.85|Hostile setting#85])
-6. Deployment (@[pp.88-94|Hostile setting#88]) — see Deployment considerations below
+3. Faction Involvement* (unknown during selection; could be a surprise) (@[CBH p.110|5PFH 3e Compendium/Bug Hunt#110])
+4. Check for Connections (@[p.164|5PFH Five Parsecs From Home v3#166], or Expanded Connection @[CBH p.80|5PFH 3e Compendium/Bug Hunt#80] – Opportunity mission only)
+5. Assign equipment (@[p.85|5PFH Five Parsecs From Home v3#87])
+6. Deployment (@[pp.88-94|5PFH Five Parsecs From Home v3#90]) — see Deployment considerations below
 7. Battle (go to tabletop)
 8. Resolve Tabletop Post-battle activities — see Post-battle activities below
 
 **Deployment considerations** (step 6)
 - Check deployment conditions (not Salvage)
 - Determine notable sights (not Salvage)
-- Determine the enemy (@[p.92|Hostile setting#92])
-- Set up the battlefield (@[p.108|Hostile setting#108]; Terrain Generation, @[CBH 94|5PFH 3e Compendium Includes Bug Hunt#94])
+- Determine the enemy (@[p.92|5PFH Five Parsecs From Home v3#94])
+- Set up the battlefield (@[p.108|5PFH Five Parsecs From Home v3#108]; Terrain Generation, @[CBH 94|5PFH 3e Compendium/Bug Hunt#94])
 - Set up Points of interest and Salvage (Salvage mission only)
 
 **Post-battle activities** (step 8)
-- a. Resolve Rival status (@[p.119|Hostile setting#119])
-- b. Check for illegal Psionic usage (@[p.21|Hostile setting#21])
-- c. Resolve Patron status (@[p.119|Hostile setting#119])
-- d. Roll quest progress (@[p.120|Hostile setting#120], @[CBH p.78|5PFH 3e Compendium Includes Bug Hunt#78])
-- e. Get paid (@[p.120|Hostile setting#120])
-- f. Trade Salvage (@[p.147|Hostile setting#147] — Salvage mission only)
-- g. Battlefield finds (@[p.121|Hostile setting#121])
-- h. Check for Salvage mission points of interest (@[CBH p.139|5PFH 3e Compendium Includes Bug Hunt#139] — Salvage mission only)
+- a. Resolve Rival status (@[p.119|5PFH Five Parsecs From Home v3#121])
+- b. Check for illegal Psionic usage (@[p.21|5PFH Five Parsecs From Home v3#23])
+- c. Resolve Patron status (@[p.119|5PFH Five Parsecs From Home v3#121])
+- d. Roll quest progress (@[p.120|5PFH Five Parsecs From Home v3#122], @[CBH p.78|5PFH 3e Compendium/Bug Hunt#78])
+- e. Get paid (@[p.120|5PFH Five Parsecs From Home v3#122])
+- f. Trade Salvage (@[p.147|5PFH Five Parsecs From Home v3#147] — Salvage mission only)
+- g. Battlefield finds (@[p.121|5PFH Five Parsecs From Home v3#123])
+- h. Check for Salvage mission points of interest (@[CBH p.139|5PFH 3e Compendium/Bug Hunt#139] — Salvage mission only)
 - i. Check for World Event Steps
 - j. Check for Settlement Event Steps
-- k. Gather the loot (@[p.121|Hostile setting#121], @[p.131+|Hostile setting#131])
-- l. Determine injuries and recovery (@[p.121|Hostile setting#121])
-- m. EXP and character upgrades (@[p.123|Hostile setting#123])
-- n. Invest in advanced training (@[p.124|Hostile setting#124])
-- o. Purchase items (@[p.125|Hostile setting#125])
-- p. Roll for a character event (@[p.126|Hostile setting#126], @[p.128|Hostile setting#128])
+- k. Gather the loot (@[p.121|5PFH Five Parsecs From Home v3#123], @[p.131+|5PFH Five Parsecs From Home v3#133])
+- l. Determine injuries and recovery (@[p.121|5PFH Five Parsecs From Home v3#123])
+- m. EXP and character upgrades (@[p.123|5PFH Five Parsecs From Home v3#125])
+- n. Invest in advanced training (@[p.124|5PFH Five Parsecs From Home v3#126])
+- o. Purchase items (@[p.125|5PFH Five Parsecs From Home v3#127])
+- p. Roll for a character event (@[p.126|5PFH Five Parsecs From Home v3#128], @[p.128|5PFH Five Parsecs From Home v3#130])
 - q. Resolve Heat check
 
 **Travel Steps**
-- Flee invasion (@[Core p.69|5PFH Five Parsecs From Home v3#69]).
-- Check for Factions fleeing (@[CBH p.114|5PFH 3e Compendium Includes Bug Hunt#114]).
-- Decide whether to travel (@[Core p.69|5PFH Five Parsecs From Home v3#69]).
-- Resolve steps, Local Travel / Starship Travel (@[Core p.70|5PFH Five Parsecs From Home v3#70]), as applicable.
-- Resolve New World Arrival steps (@[Core p.72|5PFH Five Parsecs From Home v3#72])
+- Flee invasion (@[Core p.69|5PFH Five Parsecs From Home v3#71]).
+- Check for Factions fleeing (@[CBH p.114|5PFH 3e Compendium/Bug Hunt#114]).
+- Decide whether to travel (@[Core p.69|5PFH Five Parsecs From Home v3#71]).
+- Resolve steps, Local Travel / Starship Travel (@[Core p.70|5PFH Five Parsecs From Home v3#72]), as applicable.
+- Resolve New World Arrival steps (@[Core p.72|5PFH Five Parsecs From Home v3#74])
 - Check for Shipping Issues (Starship, Planetary, Overland).
 - Check for Settlement Event Steps.
 
 **Settlement Event Steps**
-- Check for invasion (@[Core p.69|5PFH Five Parsecs From Home v3#69]).
-- Check for Instability (@[CBH p.148|5PFH 3e Compendium Includes Bug Hunt#148]).
+- Check for invasion (@[Core p.69|5PFH Five Parsecs From Home v3#71]).
+- Check for Instability (@[CBH p.148|5PFH 3e Compendium/Bug Hunt#148]).
 - Roll a Negotiations check.
 - Check for Faction Conflict
-- Check for Psionic legality status (@[p.20|Hostile setting#20])
+- Check for Psionic legality status (@[CBH p.20|5PFH 3e Compendium/Bug Hunt#20])
 - Resolve Heat Check.
 
 **World Event Steps**
 - Check for Faction Conflict.
 - Fringe World Strife / Instability
-- Roll for a Campaign Event (@[Core p.126|5PFH Five Parsecs From Home v3#126]).
+- Roll for a Campaign Event (@[Core p.126|5PFH Five Parsecs From Home v3#128]).
 - Roll for a District Event.
-- Roll for a Faction Event (@[CBH p.114|5PFH 3e Compendium Includes Bug Hunt#114]).
-- Check for Galactic War progress (@[Core p.126|5PFH Five Parsecs From Home v3#126]).
+- Roll for a Faction Event (@[CBH p.114|5PFH 3e Compendium/Bug Hunt#114]).
+- Check for Galactic War progress (@[Core p.126|5PFH Five Parsecs From Home v3#128]).
 - Resolve Heat Check.
 
 END OF CAMPAIGN TURN

@@ -26,6 +26,15 @@ export const ENTITY_FIELD_ORACLE_LINKS = {
   'item.revealed': ['secret'],
   'lore.overview': ['hook'],
   'lore.revealed': ['discovery'],
+  // Latest Scene's split fields ("USER CHANGES" batch) — not an entity
+  // field, but oracleLinkTagsFor()'s lookup is a plain "kind.field" string
+  // key with no validation against ENTITY_TYPES, so reusing it here (and
+  // the identical data-oracle-field-link handler in shell.js) needs no new
+  // plumbing at all, just more entries.
+  'scene.sensory': ['setting'],
+  'scene.driver': ['hook'],
+  'scene.clue': ['discovery'],
+  'scene.complication': ['discovery'],
 };
 
 export function oracleLinkTagsFor(entityType, field) {

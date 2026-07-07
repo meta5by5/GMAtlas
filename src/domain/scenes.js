@@ -40,10 +40,50 @@ export function generateScene(campaign, tables, rng = Math.random, lensCategorie
   const location = where.summary || [form.locationType, form.surroundings].filter(Boolean).join(' — ') || 'the current location';
   const intent = what.intent || 'Discovery';
 
-  const pressure = threat >= 7 ? 'Everything feels exposed, watched, or already too late.'
+  const scene = {
+    id: 'scn_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    number,
+    createdAt: new Date().toISOString(),
+    intent,
+    summary: `${intent} at ${location}`,
+    memory: location,
+    threat,
+    mystery,
+    spine: { action, theme, descriptor, focus },
+    sensory,
+    driver: sceneDriver,
+    clue,
+    complication,
+    consequence,
+    situationLine: what.situation ? what.situation.split('\n')[0] : '',
+  };
+  scene.text = recomposeSceneText(scene);
+  return scene;
+}
+
+// The "Opening" line's mood aside is computed from Threat/Mystery, not
+// oracle-rolled — recomputed here (not stored as its own field) so an
+// edit to a scene's threat/mystery-independent fields never needs to also
+// carry a stale copy of this around.
+function pressureLine(threat, mystery) {
+  return threat >= 7 ? 'Everything feels exposed, watched, or already too late.'
     : threat >= 4 ? 'There is enough pressure that lingering here has a cost.'
     : mystery >= 6 ? 'The scene feels wrong in a way that invites investigation.'
     : 'For now, there is room to observe before danger closes in.';
+}
+
+/** Rebuilds a scene's `text` blob from its CURRENT field values — the same
+ *  line-by-line shape generateScene() originally composed, just driven by
+ *  whatever the fields hold now instead of a fresh oracle roll. This is
+ *  what makes the split Latest Scene fields (ui/workspace/index.js) and the
+ *  combined `text` view stay in sync: fields are the source of truth,
+ *  `text` is a derived, one-directional view of them (session.js's
+ *  updateSceneField calls this after every field edit) — not a second,
+ *  independently-editable copy. Pure; safe to call from a UI-driven edit. */
+export function recomposeSceneText(scene) {
+  const { number, intent, memory: location, threat = 0, mystery = 0, spine = {}, sensory, driver, clue, complication, consequence, situationLine } = scene;
+  const { action, theme, descriptor, focus } = spine;
+  const pressure = pressureLine(threat, mystery);
 
   const lines = [
     `Scene ${number}: ${intent}`,
@@ -55,26 +95,15 @@ export function generateScene(campaign, tables, rng = Math.random, lensCategorie
     ``,
     `Opening: The scene opens in a ${descriptor ? descriptor.toLowerCase() : 'quiet'} space. First impression — ${sensory || 'a low hum and stale air'}. ${pressure}`,
     ``,
-    `Driver: ${sceneDriver || 'An unresolved thread pulls the party forward.'}`,
+    `Driver: ${driver || 'An unresolved thread pulls the party forward.'}`,
     `Clue: ${clue || 'A detail here connects to the current thread.'}`,
     `Complication: ${complication || 'Something makes the obvious choice costly.'}`,
     ``,
     `Decision point: weigh immediate safety, mission progress, and leverage over whoever is behind this.`,
     `Likely consequence: ${consequence || 'Pay the price — something is lost or complicated.'}`,
   ];
-  if (what.situation) { lines.push('', `Current thread: ${what.situation.split('\n')[0]}`); }
-
-  return {
-    id: 'scn_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    number,
-    createdAt: new Date().toISOString(),
-    intent,
-    summary: `${intent} at ${location}`,
-    text: lines.join('\n'),
-    memory: location,
-    spine: { action, theme, descriptor, focus },
-    consequence,
-  };
+  if (situationLine) { lines.push('', `Current thread: ${situationLine}`); }
+  return lines.join('\n');
 }
 
 export function generateMissionSeed(campaign, tables, rng = Math.random) {

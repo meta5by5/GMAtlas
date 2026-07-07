@@ -4,7 +4,7 @@
 // through store.update(); they never touch the store or the DOM themselves.
 
 import { applyShift } from './context.js';
-import { generateScene } from './scenes.js';
+import { generateScene, recomposeSceneText } from './scenes.js';
 import { tablesWithOverrides, rollTable, rollGroup, formatRoll, pick } from './oracles.js';
 import { linkMentions, parseMentions, createEntity, updateEntity, getEntity } from './entities.js';
 import { linkDocumentMentions, parseDocumentMentions, resolvedDocumentMentionNames } from './documents.js';
@@ -136,6 +136,21 @@ export function addNote(campaign, text, source = 'Note') {
   return next;
 }
 
+/** Edit an existing journal entry's text in place (the "USER CHANGES" batch's
+ *  Journal edit icon) — same @mention (re)linking addNote already does, so an
+ *  edit that adds a brand-new @Name still creates/links it, not just the
+ *  original creation. No-ops if the entry no longer exists. */
+export function editNote(campaign, id, text) {
+  let next = clone(campaign);
+  const entry = (next.journal || []).find((j) => j.id === id);
+  if (!entry) return next;
+  entry.text = text;
+  const docNames = resolvedDocumentMentionNames(next, text);
+  if (parseMentions(text).length) next = linkMentions(next, text, { skip: docNames });
+  if (parseDocumentMentions(text).length) next = linkDocumentMentions(next, text);
+  return next;
+}
+
 /** File a dice-roll result (e.g. a statblock double-click-to-roll) to the journal. */
 export function logRoll(campaign, text, source = 'Roll') {
   const next = clone(campaign);
@@ -147,6 +162,41 @@ export function logRoll(campaign, text, source = 'Roll') {
 export function patchContext(campaign, key, patch) {
   const next = clone(campaign);
   next.context[key] = { ...next.context[key], ...patch };
+  return next;
+}
+
+/** Append entityId to context[key].entityIds (deduped) — the WHERE tab's
+ *  tag-filter → pick-a-candidate flow (the "USER CHANGES" batch) is this
+ *  mechanism's first real user; written generically (keyed by `key`, same
+ *  shape entities.js's addEntityTag already uses) so WHO/WHY could reuse it
+ *  later without a second near-identical mutator. */
+export function addContextEntity(campaign, key, entityId) {
+  const next = clone(campaign);
+  const ctx = next.context[key] || (next.context[key] = {});
+  if (!Array.isArray(ctx.entityIds)) ctx.entityIds = [];
+  if (!ctx.entityIds.includes(entityId)) ctx.entityIds.push(entityId);
+  return next;
+}
+
+export function removeContextEntity(campaign, key, entityId) {
+  const next = clone(campaign);
+  const ctx = next.context[key];
+  if (ctx && Array.isArray(ctx.entityIds)) ctx.entityIds = ctx.entityIds.filter((id) => id !== entityId);
+  return next;
+}
+
+/** Edits one of the Latest Scene's split fields (sensory/driver/clue/
+ *  complication — the "USER CHANGES" batch's Scene-splitting ask) and
+ *  recomposes `text` from the scene's now-current field values, so the
+ *  combined view stays a live, correct derivation instead of a second,
+ *  independently-editable copy. No-ops if the scene no longer exists (the
+ *  array only ever grows, so this is mostly a defensive guard). */
+export function updateSceneField(campaign, sceneId, field, value) {
+  const next = clone(campaign);
+  const scene = (next.scenes || []).find((s) => s.id === sceneId);
+  if (!scene) return next;
+  scene[field] = value;
+  scene.text = recomposeSceneText(scene);
   return next;
 }
 

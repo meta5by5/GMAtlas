@@ -5,6 +5,8 @@
 import { listShifts } from '../../domain/context.js';
 import { listThreads, THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { ACTIVITIES, suggestRulesLens } from '../../domain/activities.js';
+import { listTagVocabulary, getEntity } from '../../domain/entities.js';
+import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { buildMentionEditorHTML, richToolbarHTML } from '../mentionEditor.js';
 
 const esc = (s) => String(s == null ? '' : s)
@@ -86,13 +88,10 @@ const VIEWS = {
       ${entityList(doc, ['npc', 'faction'])}`);
   },
 
-  where(doc) {
+  where(doc, ui) {
     return card('WHERE it happens', 'The place the scene is set.', `
       ${summaryField('where', doc.context.where.summary, 'Location and immediate surroundings…', doc)}
-      <div class="shift-actions">
-        <button class="chip" data-shift-prompt="Change Location">↳ Change Location</button>
-      </div>
-      ${entityList(doc, ['location'])}`);
+      ${whereLocationPicker(doc, ui)}`);
   },
 
   why(doc) {
@@ -146,6 +145,48 @@ function summaryField(key, val, placeholder, doc) {
   </div>`;
 }
 
+// WHERE tab redesign ("USER CHANGES" batch): a Location tag listbox (not
+// chips, per direct user request) filters a candidate panel of matching
+// Locations; picking one adds it to context.where.entityIds — a schema
+// field that already existed (schema.js) but was dead in the UI until now
+// (the only prior reader was recap.js's "relevant entities" union). This
+// replaces entityList(doc, ['location'])'s old "show literally every
+// Location in the campaign" behavior; WHO's view (still entityList) is
+// untouched — only WHERE was asked for.
+function whereLocationPicker(doc, ui) {
+  const tagFilter = ui.whereLocationTagFilter || null;
+  const vocab = listTagVocabulary(doc, 'location');
+  const tagListbox = vocab.length
+    ? `<select size="${Math.min(8, Math.max(3, vocab.length))}" data-where-tag-select>
+        <option value="" ${!tagFilter ? 'selected' : ''}>— all tags —</option>
+        ${vocab.map((t) => `<option value="${esc(t)}" ${t === tagFilter ? 'selected' : ''}>#${esc(t)}</option>`).join('')}
+      </select>`
+    : '<p class="ws-placeholder">No Location tags yet — tag a Location in Cast to start filtering.</p>';
+
+  const allLocations = (doc.entities.items || []).filter((e) => e.type === 'location');
+  const candidates = tagFilter ? allLocations.filter((e) => (e.tags || []).includes(tagFilter)) : allLocations;
+  const curatedIds = (doc.context.where && doc.context.where.entityIds) || [];
+  const candidatePanel = candidates.length
+    ? `<div class="entity-chips">${candidates.map((e) => `<button type="button" class="entity-chip" data-context-entity-add="where::${esc(e.id)}" title="Add to the present-here list" ${curatedIds.includes(e.id) ? 'disabled' : ''}>${esc(e.name || 'Unnamed')}</button>`).join('')}</div>`
+    : `<div class="ws-placeholder">${tagFilter ? 'No Locations tagged #' + esc(tagFilter) + '.' : 'No Locations yet.'}</div>`;
+
+  const curated = curatedIds.map((id) => getEntity(doc, id)).filter(Boolean);
+  const curatedList = curated.length
+    ? `<div class="entity-chips">${curated.map((e) => `<span class="entity-chip" draggable="true" data-open-entity="${esc(e.id)}" data-drag-entity="${esc(e.id)}" data-drop-entity="${esc(e.id)}" title="Click to open · drag onto another entity to link, or onto a text field to mention">${esc(e.name || 'Unnamed')}<button type="button" class="icon-btn" data-context-entity-remove="where::${esc(e.id)}" title="Remove from this scene" aria-label="Remove">✕</button></span>`).join('')}</div>`
+    : '<div class="ws-placeholder">No locations added yet — pick a tag to find one.</div>';
+
+  return `
+    <div class="where-picker">
+      <div class="where-picker-row">
+        <div class="where-picker-tags"><span class="field-label-static">Location tags</span>${tagListbox}</div>
+        <div class="where-picker-candidates"><span class="field-label-static">Matching locations</span>${candidatePanel}</div>
+      </div>
+      <span class="field-label-static">Present here</span>
+      ${curatedList}
+      <div class="entity-add-row"><button class="chip" data-where-add-location>＋ New Location</button></div>
+    </div>`;
+}
+
 function entityList(doc, types) {
   const items = (doc.entities.items || []).filter((e) => types.includes(e.type));
   const addBtns = types.map((t) => `<button class="chip" data-entity-add="${t}">＋ ${t.charAt(0).toUpperCase() + t.slice(1)}</button>`).join('');
@@ -196,12 +237,41 @@ function threadsBlock(doc) {
   </div>`;
 }
 
+// A Scene's own 🔮 link — data/entityFieldOracleLinks.js's "scene.<field>"
+// entries (added for this split, see the map's own comment), rendered here
+// rather than importing drawers/index.js's identical-shaped oracleLinkIcon
+// (the two UI modules don't otherwise depend on each other).
+function sceneFieldIcon(field) {
+  const tags = oracleLinkTagsFor('scene', field);
+  if (!tags) return '';
+  return `<button class="icon-btn" data-oracle-field-link="scene.${field}" title="Jump to relevant Oracle table(s): ${tags.map(esc).join(', ')}" aria-label="Jump to relevant Oracle tables">🔮</button>`;
+}
+
+function sceneField(scene, key, label, placeholder) {
+  return `<label class="field-label sm">
+    <span class="field-label-row">${esc(label)}${sceneFieldIcon(key)}</span>
+    <input data-scene-field="${esc(scene.id)}::${key}" value="${esc(scene[key] || '')}" placeholder="${esc(placeholder)}">
+  </label>`;
+}
+
+// Latest Scene split fields ("USER CHANGES" batch): sensory/driver/clue/
+// complication are real, individually-editable fields now (domain/
+// scenes.js), each linked to its own Oracle category; the combined `text`
+// blob below is a DERIVED, read-only view recomposed from current field
+// values on every edit (session.js's updateSceneField), not a second,
+// independently-editable copy — editing a field updates it live.
 function lastScene(doc) {
   const scenes = doc.scenes || [];
   if (!scenes.length) return '<div class="ws-placeholder">No scenes yet. Continue Story to generate the opening beat.</div>';
   const s = scenes[scenes.length - 1];
   return `<details class="last-scene" open>
     <summary>Latest: Scene ${s.number} — ${esc(s.summary)}</summary>
+    <div class="scene-fields">
+      ${sceneField(s, 'sensory', 'Opening detail', 'What the party notices first…')}
+      ${sceneField(s, 'driver', 'Driver', "What's pushing this scene forward…")}
+      ${sceneField(s, 'clue', 'Clue', 'A detail that connects to the current thread…')}
+      ${sceneField(s, 'complication', 'Complication', 'What makes the obvious choice costly…')}
+    </div>
     <pre class="scene-text">${esc(s.text)}</pre>
   </details>`;
 }

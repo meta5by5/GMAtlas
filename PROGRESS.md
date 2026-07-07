@@ -14,6 +14,35 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-06 "USER CHANGES" batch** (`docs/adr/0019-where-tab-and-scene-
+fields.md`, `docs/adr/0020-reference-toc-generation.md`, an addendum on
+`docs/adr/0018`): six follow-ups to the rich-text work below. The five
+text fields ADR 0018 missed (Revealed/hidden, Faction Scenario seed/
+Agenda, Colony's textareas, a Document note's content box) got the same
+toolbar. Journal entries can now be edited in place (a new ✎ icon,
+`domain/session.js`'s `editNote`). The WHERE tab replaced "every Location
+in the campaign" with a Location-tag listbox filtering a candidate panel
+that adds to a new curated "present here" list — finally using
+`context.where.entityIds`, a schema field that existed since Phase 3A but
+was dead in the UI (new `addContextEntity`/`removeContextEntity`); a real
+pre-existing bug was found and fixed alongside it — WHO/WHY's own
+"+ Type" buttons had never had a click handler at all. Verified (no code
+needed) that a hand-typed `@[docname#page]` already becomes a real link.
+A new Reference Library Table of Contents generator (`domain/toc.js`,
+`ui/tocScan.js`) reads a PDF's real bookmarks via PDF.js's `getOutline()`
+(new integration — never called in this app before) and writes a linked
+TOC per document into the Guide, triggered from a Settings button or
+(behind a `window.confirm`) right after an upload — same `file://`
+restriction as the Mechanics Index scan it mirrors. The rich-text toolbar
+gained Tab-indent, small/large text, and a table markup type (a
+toolbar-inserted skeleton, left-aligned/thin-bordered by default, no
+per-row/column UI). Latest Scene's `sensory`/`driver`/`clue`/
+`complication` became real, individually 🔮-linked fields, with the
+combined text view recomposed live from them (`recomposeSceneText`) as a
+one-directional derivation, not a second editable copy. Verified
+end-to-end via Playwright, including a real Reference Library scan
+(15 of 27 PDFs had usable bookmarks) and the upload-time confirm flow.
+
 **2026-07-06 Lightweight rich text + mention page-editing**
 (`docs/adr/0018-lightweight-rich-text.md`): Journal, Guide, WHAT's
 Situation, WHO/WHERE/WHY/HOW's Focus, and the shared "Overview (shared)"

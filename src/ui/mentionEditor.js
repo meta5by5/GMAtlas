@@ -72,15 +72,24 @@ function renderInlineNodes(doc, nodes) {
     else if (node.type === 'bold') html += `<b>${renderInlineNodes(doc, node.children)}</b>`;
     else if (node.type === 'italic') html += `<i>${renderInlineNodes(doc, node.children)}</i>`;
     else if (node.type === 'underline') html += `<u>${renderInlineNodes(doc, node.children)}</u>`;
+    else if (node.type === 'small') html += `<small>${renderInlineNodes(doc, node.children)}</small>`;
+    else if (node.type === 'large') html += `<span class="rt-lg">${renderInlineNodes(doc, node.children)}</span>`;
   }
   return html;
 }
 
+function renderTableBlock(doc, block) {
+  const cell = (tag, text) => `<${tag}>${renderInlineNodes(doc, parseInlineNodes(text))}</${tag}>`;
+  const head = `<tr>${block.headerCells.map((c) => cell('th', c)).join('')}</tr>`;
+  const body = block.rows.map((r) => `<tr>${r.map((c) => cell('td', c)).join('')}</tr>`).join('');
+  return `<table class="rt-table"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+}
+
 /** Build the contenteditable innerHTML for `text` — plain escaped runs,
- *  bold/italic/underline elements, list elements, and inline
- *  <span class="mention-link">s, resolved against entities first (bare
- *  @Name/@[Name] default to entity semantics), then the document library.
- *  An unresolved mention still renders — plain text styling, no
+ *  bold/italic/underline/small/large elements, list/table elements, and
+ *  inline <span class="mention-link">s, resolved against entities first
+ *  (bare @Name/@[Name] default to entity semantics), then the document
+ *  library. An unresolved mention still renders — plain text styling, no
  *  data-open-*, so it's visibly "not linked yet" rather than silently
  *  indistinguishable from plain prose. */
 export function buildMentionEditorHTML(doc, text) {
@@ -90,6 +99,7 @@ export function buildMentionEditorHTML(doc, text) {
   return blocks.map((block) => {
     if (block.type === 'ul') return `<ul>${block.items.map((item) => `<li>${renderInlineNodes(doc, parseInlineNodes(item))}</li>`).join('')}</ul>`;
     if (block.type === 'ol') return `<ol>${block.items.map((item) => `<li>${renderInlineNodes(doc, parseInlineNodes(item))}</li>`).join('')}</ol>`;
+    if (block.type === 'table') return renderTableBlock(doc, block);
     return renderInlineNodes(doc, parseInlineNodes(block.text));
   }).join('\n');
 }
@@ -124,6 +134,8 @@ export function serializeMentionEditor(container) {
     if (node.tagName === 'B' || node.tagName === 'STRONG') { out += '**'; for (const c of node.childNodes) walk(c); out += '**'; return; }
     if (node.tagName === 'I' || node.tagName === 'EM') { out += '*'; for (const c of node.childNodes) walk(c); out += '*'; return; }
     if (node.tagName === 'U') { out += '_'; for (const c of node.childNodes) walk(c); out += '_'; return; }
+    if (node.tagName === 'SMALL') { out += '~'; for (const c of node.childNodes) walk(c); out += '~'; return; }
+    if (node.classList && node.classList.contains('rt-lg')) { out += '^'; for (const c of node.childNodes) walk(c); out += '^'; return; }
     if (node.tagName === 'UL' || node.tagName === 'OL') {
       const marker = node.tagName === 'UL' ? '- ' : '1. ';
       const items = [...node.children].filter((c) => c.tagName === 'LI');
@@ -134,6 +146,7 @@ export function serializeMentionEditor(container) {
       });
       return;
     }
+    if (node.tagName === 'TABLE') { out += serializeTable(node); return; }
     // Some browsers wrap each Enter-key line in a DIV/P instead of a BR —
     // treat entering one (after the first) as a line break.
     if ((node.tagName === 'DIV' || node.tagName === 'P') && out.length && !out.endsWith('\n')) out += '\n';
@@ -141,6 +154,45 @@ export function serializeMentionEditor(container) {
   }
   for (const child of container.childNodes) walk(child);
   return out;
+}
+
+// A table cell's content is serialized independently of the outer walk()
+// above (which appends positionally to one running string) so cells can be
+// joined with " | " — a small, deliberately narrower sibling of walk()
+// supporting only what can actually appear in a lightweight table cell
+// (text, mentions, bold/italic/underline/small/large); no nested
+// lists/tables, consistent with this format's one-level-deep scope.
+function serializeTableCell(node) {
+  let out = '';
+  function walk(n) {
+    if (n.nodeType === Node.TEXT_NODE) { out += n.nodeValue; return; }
+    if (n.nodeType !== Node.ELEMENT_NODE) return;
+    if (n.tagName === 'BR') { out += ' '; return; }
+    if (n.classList && n.classList.contains('mention-link')) {
+      const name = n.dataset.mentionName || '';
+      const page = n.dataset.mentionPage ? Number(n.dataset.mentionPage) : null;
+      const label = n.textContent.trim();
+      const target = name + (page ? '#' + page : '');
+      out += (label && label.toLowerCase() !== name.trim().toLowerCase()) ? `@[${label}|${target}]` : `@[${target}]`;
+      return;
+    }
+    if (n.tagName === 'B' || n.tagName === 'STRONG') { out += '**'; for (const c of n.childNodes) walk(c); out += '**'; return; }
+    if (n.tagName === 'I' || n.tagName === 'EM') { out += '*'; for (const c of n.childNodes) walk(c); out += '*'; return; }
+    if (n.tagName === 'U') { out += '_'; for (const c of n.childNodes) walk(c); out += '_'; return; }
+    if (n.tagName === 'SMALL') { out += '~'; for (const c of n.childNodes) walk(c); out += '~'; return; }
+    if (n.classList && n.classList.contains('rt-lg')) { out += '^'; for (const c of n.childNodes) walk(c); out += '^'; return; }
+    for (const c of n.childNodes) walk(c);
+  }
+  walk(node);
+  return out.trim();
+}
+
+function serializeTable(table) {
+  const headCells = [...table.querySelectorAll('thead th')].map(serializeTableCell);
+  const bodyRows = [...table.querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('td')].map(serializeTableCell));
+  const rowLine = (cells) => `| ${cells.join(' | ')} |`;
+  const sepLine = `| ${headCells.map(() => '---').join(' | ')} |`;
+  return [rowLine(headCells), sepLine, ...bodyRows.map(rowLine)].join('\n');
 }
 
 /** Shared toolbar markup for a rich-text-capable mention-editor field (ADR
@@ -158,6 +210,9 @@ export function richToolbarHTML() {
     <button type="button" class="icon-btn" data-rich-cmd="underline" title="Underline (_text_)"><u>U</u></button>
     <button type="button" class="icon-btn" data-rich-cmd="ul" title="Bullet list">☰•</button>
     <button type="button" class="icon-btn" data-rich-cmd="ol" title="Numbered list">☰1.</button>
+    <button type="button" class="icon-btn" data-rich-cmd="small" title="Small text (~text~)"><small>S</small></button>
+    <button type="button" class="icon-btn" data-rich-cmd="large" title="Large text (^text^)">L</button>
+    <button type="button" class="icon-btn" data-rich-cmd="table" title="Insert a table — add more rows/columns by typing more | cells |">▦</button>
   </div>`;
 }
 

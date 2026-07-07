@@ -26,7 +26,10 @@ import { setMechanicsIndex } from '../domain/mechanicsIndex.js';
 
 let workerConfigured = false;
 
-function configureWorker(pdfjsLib) {
+// Exported so ui/tocScan.js (the "USER CHANGES" batch's Table of Contents
+// generator, a second PDF.js consumer) can share the same one-time worker
+// setup instead of duplicating it.
+export function configureWorker(pdfjsLib) {
   if (workerConfigured) return;
   workerConfigured = true;
   pdfjsLib.GlobalWorkerOptions.workerSrc = './assets/vendor/pdfjs/pdf.worker.min.js';

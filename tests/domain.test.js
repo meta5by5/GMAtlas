@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 
 import { SCENE_TABLES, makeRng, rollTable, rollGroup, flattenKeys, getTable, tablesWithOverrides } from '../src/domain/oracles.js';
 import { applyShift, listShifts, contextSummary } from '../src/domain/context.js';
-import { generateScene } from '../src/domain/scenes.js';
+import { generateScene, recomposeSceneText } from '../src/domain/scenes.js';
 import { continueStory, applyStoryShift, rollOracle, patchContext, drawSuggestionLenses, suggestNextWithLens } from '../src/domain/session.js';
 import { SUGGESTION_LENSES, lensOracleCategories } from '../src/data/suggestionLenses.js';
 import { defaultCampaign } from '../src/core/schema.js';
@@ -156,7 +156,43 @@ test('generateScene, given lensCategories, rolls its Driver line from one of tho
   assert.ok(driverTable.some((v) => driverLine.includes(v)));
 });
 
+test('generateScene exposes sensory/driver/clue/complication as real fields, matching what text embeds', () => {
+  const camp = defaultCampaign();
+  const scene = generateScene(camp, SCENE_TABLES, makeRng(1));
+  assert.ok(scene.driver);
+  assert.ok(scene.text.includes(`Driver: ${scene.driver}`));
+  assert.ok(scene.text.includes(`Clue: ${scene.clue}`));
+  assert.ok(scene.text.includes(`Complication: ${scene.complication}`));
+});
+
+test('recomposeSceneText rebuilds text from current field values (the Latest Scene split-field edit path)', () => {
+  const camp = defaultCampaign();
+  const scene = generateScene(camp, SCENE_TABLES, makeRng(1));
+  const edited = { ...scene, driver: 'A hand-written driver' };
+  const text = recomposeSceneText(edited);
+  assert.ok(text.includes('Driver: A hand-written driver'));
+  assert.ok(!text.includes(scene.driver) || scene.driver === 'A hand-written driver');
+});
+
 // --- session orchestration ------------------------------------------------
+test('updateSceneField edits a split field and recomposes the combined text to match', () => {
+  let camp = defaultCampaign();
+  camp = continueStory(camp);
+  const sceneId = camp.scenes[0].id;
+  camp = updateSceneField(camp, sceneId, 'clue', 'A hand-written clue');
+  const scene = camp.scenes[0];
+  assert.equal(scene.clue, 'A hand-written clue');
+  assert.ok(scene.text.includes('Clue: A hand-written clue'));
+});
+
+test('updateSceneField no-ops for a nonexistent scene id', () => {
+  let camp = defaultCampaign();
+  camp = continueStory(camp);
+  const before = JSON.stringify(camp.scenes);
+  camp = updateSceneField(camp, 'not-a-real-id', 'clue', 'x');
+  assert.equal(JSON.stringify(camp.scenes), before);
+});
+
 test('continueStory appends a scene, a timeline crumb, and a journal entry', () => {
   const camp = defaultCampaign();
   const next = continueStory(camp);
@@ -313,6 +349,77 @@ test('parseInlineNodes: an unclosed delimiter (no matching close) is left as lit
 
 test('parseInlineNodes: a delimiter never matches across a line break', () => {
   assert.deepEqual(parseInlineNodes('**a\nb**'), [{ type: 'text', text: '**a\nb**' }]);
+});
+
+// --- text editor extras ("USER CHANGES" batch): small/large + tables -----
+test('parseInlineNodes: small (~text~) and large (^text^) wrap their content', () => {
+  assert.deepEqual(parseInlineNodes('~fine print~'), [{ type: 'small', children: [{ type: 'text', text: 'fine print' }] }]);
+  assert.deepEqual(parseInlineNodes('^BIG^'), [{ type: 'large', children: [{ type: 'text', text: 'BIG' }] }]);
+});
+
+test('parseTextBlocks: recognizes a pipe table (header + --- separator + rows)', () => {
+  const blocks = parseTextBlocks('| A | B |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |');
+  assert.deepEqual(blocks, [{ type: 'table', headerCells: ['A', 'B'], rows: [['1', '2'], ['3', '4']] }]);
+});
+
+test('parseTextBlocks: a table with no rows after the separator is still a valid (empty-body) table', () => {
+  const blocks = parseTextBlocks('| A | B |\n| --- | --- |');
+  assert.deepEqual(blocks, [{ type: 'table', headerCells: ['A', 'B'], rows: [] }]);
+});
+
+test('parseTextBlocks: a lone pipe-row with no separator line is NOT treated as a table', () => {
+  const blocks = parseTextBlocks('| A | B |\nJust some text');
+  assert.equal(blocks[0].type, 'text');
+});
+
+test('parseTextBlocks: text/table/text sequences preserve order and stop the surrounding text block correctly', () => {
+  const blocks = parseTextBlocks('Intro\n| A | B |\n| --- | --- |\n| 1 | 2 |\nOutro');
+  assert.deepEqual(blocks, [
+    { type: 'text', text: 'Intro' },
+    { type: 'table', headerCells: ['A', 'B'], rows: [['1', '2']] },
+    { type: 'text', text: 'Outro' },
+  ]);
+});
+
+// --- Reference Table of Contents generation (docs/adr/0020) ---------------
+import { buildTocText, generateReferenceToc } from '../src/domain/toc.js';
+
+test('buildTocText turns flat, depth-tagged outline entries into real @[...] mention bullets', () => {
+  const text = buildTocText([
+    { title: 'Chapter 1', page: 10, depth: 0 },
+    { title: 'Section 1.1', page: 12, depth: 1 },
+  ], 'My Rulebook');
+  assert.equal(text, '- @[Chapter 1|My Rulebook#10]\n- — @[Section 1.1|My Rulebook#12]');
+});
+
+test('buildTocText skips entries with no resolved page', () => {
+  const text = buildTocText([{ title: 'No page', page: null, depth: 0 }, { title: 'Has page', page: 5, depth: 0 }], 'Doc');
+  assert.equal(text, '- @[Has page|Doc#5]');
+});
+
+test('generateReferenceToc creates a "Table of Contents" parent doc and one child per document with bookmarks, skipping documents with none', () => {
+  const camp = defaultCampaign();
+  const { campaign: next, generated, skipped } = generateReferenceToc(camp, [
+    { docTitle: 'Book A', entries: [{ title: 'Ch 1', page: 1, depth: 0 }] },
+    { docTitle: 'Book B', entries: [] },
+  ]);
+  assert.equal(generated, 1);
+  assert.equal(skipped, 1);
+  const parent = next.guide.docs.find((d) => d.title === 'Table of Contents' && !d.parentId);
+  assert.ok(parent);
+  const child = next.guide.docs.find((d) => d.title === 'Book A' && d.parentId === parent.id);
+  assert.ok(child);
+  assert.ok(child.text.includes('@[Ch 1|Book A#1]'));
+  assert.ok(!next.guide.docs.some((d) => d.title === 'Book B'));
+});
+
+test('generateReferenceToc re-run updates an existing document\'s TOC child in place rather than duplicating it', () => {
+  const camp = defaultCampaign();
+  const first = generateReferenceToc(camp, [{ docTitle: 'Book A', entries: [{ title: 'Ch 1', page: 1, depth: 0 }] }]);
+  const second = generateReferenceToc(first.campaign, [{ docTitle: 'Book A', entries: [{ title: 'Ch 1 Revised', page: 2, depth: 0 }] }]);
+  const children = second.campaign.guide.docs.filter((d) => d.title === 'Book A');
+  assert.equal(children.length, 1);
+  assert.ok(children[0].text.includes('Ch 1 Revised'));
 });
 
 test('threads: add, advance (clamped), complete, remove', () => {
@@ -707,7 +814,36 @@ test('opening a document tab at a page anchors the resolved src with #page=N', (
 
 // --- entities + auto-linking (Phase 3A) -----------------------------------
 import { createEntity, updateEntity, removeEntity, addRelationship, removeRelationship, findByName, parseMentions, linkMentions, listEntities, addEntityTag, removeEntityTag, listTagVocabulary } from '../src/domain/entities.js';
-import { addNote, editContextText } from '../src/domain/session.js';
+import { addNote, editContextText, editNote, addContextEntity, removeContextEntity, updateSceneField } from '../src/domain/session.js';
+
+test('editNote updates an existing journal entry in place and re-links mentions', () => {
+  let camp = defaultCampaign();
+  camp = addNote(camp, 'Original text', 'Note');
+  const id = camp.journal[0].id;
+  camp = editNote(camp, id, 'Edited text mentioning @NewNPC');
+  assert.equal(camp.journal.length, 1);
+  assert.equal(camp.journal[0].text, 'Edited text mentioning @NewNPC');
+  assert.ok(findByName(camp, 'NewNPC'));
+});
+
+test('editNote no-ops for a nonexistent entry id', () => {
+  let camp = defaultCampaign();
+  camp = addNote(camp, 'Hello', 'Note');
+  const before = JSON.stringify(camp.journal);
+  camp = editNote(camp, 'not-a-real-id', 'changed');
+  assert.equal(JSON.stringify(camp.journal), before);
+});
+
+test('addContextEntity/removeContextEntity append/dedupe/remove from context[key].entityIds', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'The Hab' }));
+  camp = addContextEntity(camp, 'where', id);
+  assert.deepEqual(camp.context.where.entityIds, [id]);
+  camp = addContextEntity(camp, 'where', id); // dedupes
+  assert.deepEqual(camp.context.where.entityIds, [id]);
+  camp = removeContextEntity(camp, 'where', id);
+  assert.deepEqual(camp.context.where.entityIds, []);
+});
 
 test('entity CRUD: create, update, delete', () => {
   let camp = defaultCampaign();

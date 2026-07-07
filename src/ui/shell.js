@@ -6,7 +6,7 @@
 import { store } from '../core/store.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { contextSummary } from '../domain/context.js';
-import { continueStory, applyStoryShift, rollOracle, addNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens } from '../domain/session.js';
+import { continueStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, addContextEntity, removeContextEntity, updateSceneField } from '../domain/session.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag } from '../domain/oracles.js';
 import { oracleLinkTagsFor } from '../data/entityFieldOracleLinks.js';
 import { addThread, advanceThread, removeThread, setThreadStatus, setThreadPriority } from '../domain/threads.js';
@@ -25,6 +25,7 @@ import { findCatalogItem } from '../data/gearCatalog.js';
 import { installEnhancement, removeEnhancement } from '../domain/enhancements.js';
 import { getMechanicsIndex } from '../domain/mechanicsIndex.js';
 import { scanMechanicsIndex } from './mechanicsScan.js';
+import { scanAndGenerateToc } from './tocScan.js';
 import { generateCreatureConcept, formatCreatureConcept, generateSiteConcept, formatSiteConcept, generateAdventureSeed, formatAdventureSeed } from '../domain/worldbuilding.js';
 import {
   addDocument, updateDocument, removeDocument, getDocument, addDocumentTag, removeDocumentTag, renameDocument,
@@ -32,7 +33,7 @@ import {
   listReferenceDocuments, renameRefDocument, addRefDocumentTag, removeRefDocumentTag, hideRefDocument, listDocuments,
 } from '../domain/documents.js';
 import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue } from '../domain/party.js';
-import { setColonyField, addCrewRow, updateCrewRow, removeCrewRow } from '../domain/colony.js';
+import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow } from '../domain/colony.js';
 import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract } from '../domain/trade.js';
 import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors, resolveFactionTurn, formatFactionTurnResult, rollFactionAsset } from '../domain/factions.js';
 import { generateMission, formatMission } from '../domain/missions.js';
@@ -114,6 +115,8 @@ let docTagFilters = new Set();
 let docTagEditorOpen = new Set(); // ephemeral — which doc/ref cards' tag editors are expanded
 let docRenameOpen = new Set(); // ephemeral — which doc/ref cards are showing an inline rename input instead of their title link
 let docTagListOpen = false; // ephemeral — collapses the Documents drawer's tag-filter chip row (can get long once many tags exist)
+let journalEditOpen = new Set(); // ephemeral — which journal entries are showing an editable mention-editor instead of their static rendered text
+let whereLocationTagFilter = null; // ephemeral — the Location tag currently selected in the WHERE view's listbox (null = no filter/candidate panel shown)
 // @-mention autocomplete (Journal input, Guide editor, WHO/WHERE/WHAT/WHY/HOW
 // context fields) — { field, start, end, items, activeIndex } while typing an
 // "@partial" run; start/end are the field.value indices of that run
@@ -154,6 +157,7 @@ let catalogPickerOpen = false; // ephemeral — the Cast drawer's "+ Item from c
 let enhancementDraft = {}; // ephemeral — entityId -> name text rolled into the Enhancements add-form's name field, overwritten by each 🎲 roll until "Install" commits it (docs/adr/next-request.md, 2026-07-06)
 let expandedEnhancements = new Set(); // ephemeral — entity ids whose Enhancements section is expanded (collapsed by default)
 let mechanicsScanning = false; // ephemeral — true while scanMechanicsIndex()'s async PDF.js scan is in flight (docs/adr/0014)
+let tocScanning = false; // ephemeral — true while scanAndGenerateToc()'s async PDF.js outline scan is in flight (docs/adr/0020)
 let lensPickerOpen = false; // ephemeral — "What Happens Next?"'s Suggestion Lens chip picker, open or not (docs/adr/0009)
 let lensDraw = []; // ephemeral — the current random draw of lens chips, fixed until re-opened (not redrawn on every unrelated re-render)
 let catalogSearch = ''; // ephemeral — the catalog picker's own name/tag search
@@ -428,6 +432,12 @@ function onClick(ev) {
   }
   const del = hit('[data-journal-del]');
   if (del) return store.update((d) => { d.journal = d.journal.filter((j) => j.id !== del.dataset.journalDel); return d; });
+  const editToggle = hit('[data-journal-edit-toggle]');
+  if (editToggle) {
+    const id = editToggle.dataset.journalEditToggle;
+    if (journalEditOpen.has(id)) journalEditOpen.delete(id); else journalEditOpen.add(id);
+    return renderDrawerBody();
+  }
 
   if (hit('[data-recap-toggle]')) { recapOpen = !recapOpen; return renderDrawerBody(); }
   const typeFilterBtn = hit('[data-entity-type-filter]');
@@ -514,6 +524,36 @@ function onClick(ev) {
   }
   const delEnt = hit('[data-entity-del]');
   if (delEnt) { store.update((d) => removeEntity(d, delEnt.dataset.entityDel)); return toast('Entity removed'); }
+  // WHO/WHY's entityList() "+ Type" buttons — a real pre-existing gap found
+  // while wiring WHERE's own new "+ New Location" (below): this attribute
+  // was rendered but had no click handler at all, so those buttons did
+  // nothing. Fixed here since WHERE's version needed the identical
+  // create-a-blank-entity behavior anyway.
+  const entAdd = hit('[data-entity-add]');
+  if (entAdd) { store.update((d) => createEntity(d, { type: entAdd.dataset.entityAdd }).campaign); return toast('Entity added'); }
+  // WHERE's "+ New Location" also adds the new entity straight to the
+  // curated "present here" list (context.where.entityIds) in one action —
+  // distinct from the generic add above, which has no context to add to.
+  const whereAddLoc = hit('[data-where-add-location]');
+  if (whereAddLoc) {
+    let id = null;
+    store.update((d) => {
+      const r = createEntity(d, { type: 'location' });
+      id = r.id;
+      return addContextEntity(r.campaign, 'where', id);
+    });
+    return toast('Location added');
+  }
+  const ctxEntAdd = hit('[data-context-entity-add]');
+  if (ctxEntAdd) {
+    const [key, id] = ctxEntAdd.dataset.contextEntityAdd.split('::');
+    return store.update((d) => addContextEntity(d, key, id));
+  }
+  const ctxEntRemove = hit('[data-context-entity-remove]');
+  if (ctxEntRemove) {
+    const [key, id] = ctxEntRemove.dataset.contextEntityRemove.split('::');
+    return store.update((d) => removeContextEntity(d, key, id));
+  }
   // Revealed/hidden (GM) starts collapsed on every entity, but once a GM
   // opens it, docs/adr/next-request.md (2026-07-06) asks that it "stay
   // revealed on future loading of the given entity" — a real persisted
@@ -1016,7 +1056,7 @@ function onClick(ev) {
   if (docSave) {
     const id = docSave.dataset.docSave;
     const ta = root.querySelector(`[data-doc-content="${id}"]`);
-    if (ta) { store.update((d) => updateDocument(d, id, { content: ta.value })); toast('Document saved'); }
+    if (ta) { store.update((d) => updateDocument(d, id, { content: serializeMentionEditor(ta) })); toast('Document saved'); }
     return;
   }
   const docDel = hit('[data-doc-delete]');
@@ -1077,6 +1117,16 @@ function onClick(ev) {
       .catch((err) => { mechanicsScanning = false; renderDrawerBody(); toast(`Mechanics scan failed — ${err.message}`); });
     return;
   }
+  // --- Reference Table of Contents (docs/adr/0020) ---
+  const tocScan = hit('[data-toc-scan]');
+  if (tocScan) {
+    tocScanning = true;
+    renderDrawerBody();
+    scanAndGenerateToc(store)
+      .then(({ generated, skipped }) => { tocScanning = false; renderDrawerBody(); toast(`Table of Contents: ${generated} document(s) generated${skipped ? `, ${skipped} skipped (no bookmarks)` : ''}`); })
+      .catch((err) => { tocScanning = false; renderDrawerBody(); toast(`Table of Contents scan failed — ${err.message}`); });
+    return;
+  }
 }
 
 // Executes a statblock field's configured dice model (see ROLL_METHODS in
@@ -1112,6 +1162,30 @@ function performFieldRoll(f, label) {
 // open Universal Search from anywhere, matching the convention comparable
 // tools already use for a search/command action.
 function onKeydown(ev) {
+  // Tab-indent inside a rich-text field ("USER CHANGES" batch): a
+  // contenteditable's default Tab behavior moves focus to the next control
+  // (unhelpful here — a GM writing an indented list/note wants a literal
+  // tab, the way any real text editor's text area behaves), so it's
+  // overridden the same way the mention-suggest popup below already
+  // overrides Up/Down/Enter/Escape's defaults in this same listener.
+  const tabField = ev.target.closest('.mention-editor');
+  if (tabField && ev.key === 'Tab' && !ev.shiftKey) {
+    ev.preventDefault();
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount) {
+      const range = sel.getRangeAt(0);
+      const node = document.createTextNode('\t');
+      range.deleteContents();
+      range.insertNode(node);
+      const after = document.createRange();
+      after.setStartAfter(node);
+      after.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(after);
+    }
+    return;
+  }
+
   // @-mention suggestion popup: Up/Down move the highlight, Enter picks it,
   // Escape dismisses without inserting anything — takes priority over
   // Escape's other meanings below while the popup for THIS field is open.
@@ -1190,6 +1264,13 @@ function onDblClick(ev) {
 
 function onChange(ev) {
   const t = ev.target;
+  const whereTagSelect = t.closest('[data-where-tag-select]');
+  if (whereTagSelect) { whereLocationTagFilter = whereTagSelect.value || null; return render(); }
+  const sceneField = t.closest('[data-scene-field]');
+  if (sceneField) {
+    const [sceneId, field] = sceneField.dataset.sceneField.split('::');
+    return store.update((d) => updateSceneField(d, sceneId, field, t.value));
+  }
   const ctx = t.closest('[data-ctx]');
   if (ctx) {
     // The free-text fields (situation/summary) are contenteditable now, not
@@ -1450,9 +1531,20 @@ function onChange(ev) {
           // titleCase.js, shared with the Reference Library's own build-time
           // titles) — fileName itself is untouched, still the exact
           // original filename.
-          store.update((d) => addDocument(d, { kind: 'file', title: titleFromFilename(file.name), fileName: file.name, mimeType: file.type, dataUrl: reader.result }));
+          const uploadTitle = titleFromFilename(file.name);
+          store.update((d) => addDocument(d, { kind: 'file', title: uploadTitle, fileName: file.name, mimeType: file.type, dataUrl: reader.result }));
           done += 1;
           toast(done === total ? `Uploaded ${done} file${done === 1 ? '' : 's'}` : `Uploading… (${done}/${total})`);
+          // Reference Table of Contents (docs/adr/0020) — per the user's
+          // explicit choice, this is prompted per upload, not silent/
+          // automatic: a real bookmark scan is real work (and needs
+          // npm run serve, same file:// restriction as Mechanics Index),
+          // so a GM opts in per document rather than it firing unasked.
+          if (file.type === 'application/pdf' && window.confirm(`Generate a Table of Contents entry for "${uploadTitle}"? (scans its PDF bookmarks)`)) {
+            scanAndGenerateToc(store, { onlyDoc: { title: uploadTitle, source: reader.result } })
+              .then(({ generated }) => toast(generated ? `Table of Contents added for "${uploadTitle}"` : `"${uploadTitle}" has no bookmarks — nothing to generate`))
+              .catch((err) => toast(`Table of Contents scan failed — ${err.message}`));
+          }
         } catch (e) {
           done += 1;
           toast(`"${file.name}" couldn't be saved — browser storage is full. Add large rulebooks to assets/docs/ and rebuild instead.`);
@@ -1669,8 +1761,11 @@ function onMouseDown(ev) {
     if (cmd === 'bold') wrapSelectionWithMarkup(field, '**', '**');
     else if (cmd === 'italic') wrapSelectionWithMarkup(field, '*', '*');
     else if (cmd === 'underline') wrapSelectionWithMarkup(field, '_', '_');
+    else if (cmd === 'small') wrapSelectionWithMarkup(field, '~', '~');
+    else if (cmd === 'large') wrapSelectionWithMarkup(field, '^', '^');
     else if (cmd === 'ul') toggleLinePrefix(field, '- ');
     else if (cmd === 'ol') toggleLinePrefix(field, '1. ');
+    else if (cmd === 'table') insertTableSkeleton(field);
     return;
   }
 
@@ -1762,6 +1857,28 @@ function toggleLinePrefix(field, marker) {
       sel.addRange(after);
     }
   }
+}
+
+// Inserts a fixed 2-column/2-row pipe-table skeleton at the caret — per the
+// user's explicit choice, this is the toolbar's entire table feature: no
+// dedicated add/remove-row/column UI, more rows/columns come from typing
+// more "| cell |" syntax by hand, same "toolbar inserts lightweight markup"
+// shape every other button here already uses (domain/documents.js's
+// parseTextBlocks renders it as a real bordered <table> on the next save).
+function insertTableSkeleton(field) {
+  field.focus();
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !field.contains(sel.anchorNode)) return;
+  const range = sel.getRangeAt(0);
+  const skeleton = '\n| Column 1 | Column 2 |\n| --- | --- |\n|  |  |\n';
+  const node = document.createTextNode(skeleton);
+  range.deleteContents();
+  range.insertNode(node);
+  const after = document.createRange();
+  after.setStartAfter(node);
+  after.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(after);
 }
 
 function onGraphMouseMove(ev) {
@@ -2026,19 +2143,52 @@ function onFocusOut(ev) {
     if (id && (id !== current.id || value !== current.text)) store.update((d) => setGuideDocText(d, id, value));
   }
 
-  // NPC/Faction/etc. "Overview (shared)" (ADR 0018) is a mention-editor div
-  // now, not a <textarea> — same reason as the ctxField branch above (no
-  // native 'change' event on a contenteditable). Every OTHER data-entity-
-  // field is still a plain input/textarea and stays on onChange's t.value
-  // path (see onChange's data-entity-field branch) — this only fires for
-  // the one field that's actually contenteditable.
-  const overviewField = ev.target.closest('[data-entity-field="overview"]');
-  if (overviewField && overviewField.isContentEditable) {
+  // Every rich-text-converted entity field (Overview, Revealed/hidden,
+  // Faction's Scenario seed/Agenda — ADR 0018 plus the "USER CHANGES"
+  // follow-up batch) is a mention-editor div, not a <textarea>/<input> —
+  // same reason as the ctxField branch above (no native 'change' event on
+  // a contenteditable). One generic branch keyed off dataset.entityField
+  // covers all of them; every OTHER data-entity-field (name, type, hq,
+  // leadership, fear, need, secret, ...) is still a plain input and stays
+  // on onChange's t.value path (see onChange's data-entity-field branch).
+  const richEntityField = ev.target.closest('[data-entity-field]');
+  if (richEntityField && richEntityField.isContentEditable) {
+    const field = richEntityField.dataset.entityField;
     const active = store.get().entities.activeId;
-    const value = serializeMentionEditor(overviewField);
+    const value = serializeMentionEditor(richEntityField);
     const current = getEntity(store.get(), active);
-    if (current && value !== (current.overview || '')) store.update((d) => updateEntity(d, active, { overview: value }));
+    if (current && value !== (current[field] || '')) store.update((d) => updateEntity(d, active, { [field]: value }));
   }
+
+  // Editing an existing journal entry (the ✎ icon) — auto-saves on blur,
+  // same as every other field here; "✓ Done" (data-journal-edit-toggle)
+  // just closes edit mode afterward, it's not a separate save step.
+  const journalEditField = ev.target.closest('[data-journal-edit]');
+  if (journalEditField) {
+    const id = journalEditField.dataset.journalEdit;
+    const value = serializeMentionEditor(journalEditField);
+    const current = (store.get().journal || []).find((j) => j.id === id);
+    if (current && value !== current.text) store.update((d) => editNote(d, id, value));
+  }
+
+  // Colony's textarea-type fields (data/colonyFields.js) — same reasoning,
+  // converted from <textarea> to a mention-editor div; the number/text
+  // <input>-type Colony fields are untouched and still commit via
+  // onChange's [data-colony-field] branch.
+  const colonyRichField = ev.target.closest('[data-colony-field]');
+  if (colonyRichField && colonyRichField.isContentEditable) {
+    const key = colonyRichField.dataset.colonyField;
+    const value = serializeMentionEditor(colonyRichField);
+    const current = getColonyFields(store.get())[key];
+    if (value !== (current || '')) store.update((d) => setColonyField(d, key, value));
+  }
+
+  // A Document library note's content box — converted from <textarea> to
+  // a mention-editor div; committed the same way its "Save" button always
+  // has (data-doc-save, ui onClick), just reading serializeMentionEditor
+  // instead of .value now — no separate blur-autosave path for this one,
+  // since the explicit Save button is this field's established pattern
+  // (unlike every other field here, which never had one).
 }
 
 // Ctrl/Cmd+Click a document mention's page (ADR 0018) — the page lives in a
@@ -2482,10 +2632,11 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, mechanicsScanning, lensPickerOpen, lensDraw,
+    enhancementDraft, expandedEnhancements, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,
+    journalEditOpen, whereLocationTagFilter,
   };
 }
 

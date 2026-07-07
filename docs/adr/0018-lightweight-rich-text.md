@@ -173,3 +173,30 @@ concept, so they don't get that clause).
 authored into); the `@mention` system this extends
 (`ui/mentionEditor.js`'s original header comment, `domain/documents.js`'s
 `scanMentions`).
+
+## Addendum (2026-07-06) — extended to the rest of "USER CHANGES"
+
+The same next-request.md follow-up batch this ADR's own tooltip fix came
+from ("USER CHANGES") also asked to finish rolling this mechanism out
+everywhere, plus three small format extensions — incremental uses of the
+exact machinery above, not new architecture, so they're recorded here
+rather than as their own ADRs (`docs/adr/0019`/`0020` cover the two
+genuinely new subsystems from that same batch — WHERE/Scene fields and
+Table of Contents generation, respectively):
+
+- **The five fields ADR 0018 missed**: an entity's `revealed` field,
+  Faction's `scenarioSeed`/`agenda`, Colony's textarea-type fields, and a
+  Document library note's content box all gained the same toolbar. Two of
+  them (`scenarioSeed`/`agenda`) needed the identical `<label>`→`<div>`
+  fix Overview already got, for the identical reason (a `fieldLabelRow` 🔮
+  icon inside the same label as a now-non-labelable contenteditable div).
+- **Journal entry editing**: a new ✎ icon per entry swaps its static
+  render for a real mention-editor (`domain/session.js`'s new `editNote`,
+  mirroring `addNote`'s mention-relinking); auto-saves on blur like every
+  other field here.
+- **Tab-indent, small/large text (`~text~`/`^large^`), and a table markup
+  type** (a GFM-style pipe table, rendered left-aligned with thin borders
+  by default; toolbar inserts a fixed skeleton only, no dedicated row/
+  column UI, per explicit user choice) extend `parseTextBlocks`/
+  `parseInlineNodes` and the toolbar with no change to the underlying
+  "plain text markup, richly rendered" model this ADR established.

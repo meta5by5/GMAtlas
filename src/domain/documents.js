@@ -456,10 +456,25 @@ function withPageAnchor(src, page) {
 
 const BULLET_LINE_RE = /^-\s+(.*)$/;
 const NUMBER_LINE_RE = /^\d+\.\s+(.*)$/;
+// A GFM-style pipe table: a `|`-delimited row, a `|---|---|`-style
+// separator row (dashes/colons/spaces only), then more `|`-delimited rows.
+// Cell splitting is plain `.split('|')` — no escaped-pipe support, matching
+// this app's "lightweight, not a full Markdown engine" scope (ADR 0018).
+const TABLE_ROW_RE = /^\|(.+)\|$/;
+const TABLE_SEP_RE = /^\|(?:\s*:?-+:?\s*\|)+$/;
+
+function parseTableRow(line) {
+  return line.slice(1, -1).split('|').map((c) => c.trim());
+}
+
+function isTableStart(lines, i) {
+  return TABLE_ROW_RE.test(lines[i]) && lines[i + 1] !== undefined && TABLE_SEP_RE.test(lines[i + 1]);
+}
 
 /** Split `text` into block-level nodes: consecutive `- ` lines become one
  *  {type:'ul', items:[...]}, consecutive `1. ` (any digit) lines become one
- *  {type:'ol', items:[...]}, everything else accumulates into
+ *  {type:'ol', items:[...]}, a pipe-table (see above) becomes
+ *  {type:'table', headerCells, rows}, everything else accumulates into
  *  {type:'text', text} blocks (original newlines preserved within a block,
  *  so a multi-line paragraph stays one block). Order-preserving. */
 export function parseTextBlocks(text) {
@@ -467,6 +482,14 @@ export function parseTextBlocks(text) {
   const blocks = [];
   let i = 0;
   while (i < lines.length) {
+    if (isTableStart(lines, i)) {
+      const headerCells = parseTableRow(lines[i]);
+      i += 2; // skip the header row and the --- separator row
+      const rows = [];
+      while (i < lines.length && TABLE_ROW_RE.test(lines[i])) { rows.push(parseTableRow(lines[i])); i++; }
+      blocks.push({ type: 'table', headerCells, rows });
+      continue;
+    }
     const bullet = lines[i].match(BULLET_LINE_RE);
     const number = !bullet && lines[i].match(NUMBER_LINE_RE);
     if (bullet || number) {
@@ -481,14 +504,15 @@ export function parseTextBlocks(text) {
       blocks.push({ type: bullet ? 'ul' : 'ol', items });
     } else {
       const start = i;
-      while (i < lines.length && !BULLET_LINE_RE.test(lines[i]) && !NUMBER_LINE_RE.test(lines[i])) i++;
+      while (i < lines.length && !BULLET_LINE_RE.test(lines[i]) && !NUMBER_LINE_RE.test(lines[i]) && !isTableStart(lines, i)) i++;
       blocks.push({ type: 'text', text: lines.slice(start, i).join('\n') });
     }
   }
   return blocks;
 }
 
-/** Parse @mentions plus `**bold**`/`*italic*`/`_underline_` inline markup in
+/** Parse @mentions plus `**bold**`/`*italic*`/`_underline_`/`~small~`/
+ *  `^large^` inline markup in
  *  `text` into a small node tree: {type:'text', text} | {type:'mention',
  *  name, page, label} | {type:'bold'|'italic'|'underline', children}.
  *  Mentions are atomic leaves — never split by a formatting boundary — but
@@ -526,6 +550,8 @@ export function parseInlineNodes(text) {
       if (two === '**') delim = { marker: '**', type: 'bold' };
       else if (source[i] === '*') delim = { marker: '*', type: 'italic' };
       else if (source[i] === '_') delim = { marker: '_', type: 'underline' };
+      else if (source[i] === '~') delim = { marker: '~', type: 'small' };
+      else if (source[i] === '^') delim = { marker: '^', type: 'large' };
 
       if (delim) {
         const innerStart = i + delim.marker.length;

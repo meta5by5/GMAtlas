@@ -252,7 +252,7 @@ function inspector(doc, e, ui) {
     <div class="revealed-block">
       <button class="btn ghost sm" data-reveal-toggle="${esc(e.id)}">${e.revealedOpen ? '▾' : '▸'} Revealed / hidden (GM)</button>
       ${oracleLinkIcon(e.type, 'revealed')}
-      ${e.revealedOpen ? `<textarea data-entity-field="revealed" rows="2" placeholder="Secrets, twists, true motives.">${esc(e.revealed)}</textarea>` : ''}
+      ${e.revealedOpen ? `<div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-entity-field="revealed" data-placeholder="Secrets, twists, true motives.">${buildMentionEditorHTML(doc, e.revealed)}</div></div>` : ''}
     </div>
     ${factionSection(doc, e)}
     ${statblockSection(e, doc, ui)}
@@ -291,12 +291,12 @@ function factionSection(doc, e) {
       <label class="field-label">${fieldLabelRow('Leadership', 'faction', 'leadership')}
         <input data-entity-field="leadership" value="${esc(e.leadership)}" placeholder="Who's in charge">
       </label>
-      <label class="field-label">${fieldLabelRow('Scenario seed', 'faction', 'scenarioSeed')}
-        <textarea data-entity-field="scenarioSeed" rows="2" placeholder="A one-paragraph hook this faction can drop into a session.">${esc(e.scenarioSeed)}</textarea>
-      </label>
-      <label class="field-label">${fieldLabelRow('Agenda', 'faction', 'agenda')}
-        <textarea data-entity-field="agenda" rows="2" placeholder="What is this faction actively pursuing right now?">${esc(e.agenda)}</textarea>
-      </label>
+      <div class="field-label">${fieldLabelRow('Scenario seed', 'faction', 'scenarioSeed')}
+        <div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-entity-field="scenarioSeed" data-placeholder="A one-paragraph hook this faction can drop into a session.">${buildMentionEditorHTML(doc, e.scenarioSeed)}</div></div>
+      </div>
+      <div class="field-label">${fieldLabelRow('Agenda', 'faction', 'agenda')}
+        <div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-entity-field="agenda" data-placeholder="What is this faction actively pursuing right now?">${buildMentionEditorHTML(doc, e.agenda)}</div></div>
+      </div>
       ${diplomacyFieldsHtml(e)}
       ${factionStatsHtml(e)}
       ${factionPressureHtml(e, track)}
@@ -748,15 +748,29 @@ function journal(doc, ui = {}) {
       </div>
     </div>
     <div class="journal-list">
-      ${entries.length ? entries.map((e) => `
-        <div class="journal-entry">
-          <div class="journal-meta">${new Date(e.createdAt).toLocaleString()} · ${esc(e.source || 'Journal')}
-                <button class="icon-btn" data-journal-del="${esc(e.id)}" title="Delete" aria-label="Delete">✕</button>
-              </div>
-              <div class="journal-text mention-text">${e.isHtml ? e.text : buildMentionEditorHTML(doc, e.text)}</div>
-        </div>`).join('')
+      ${entries.length ? entries.map((e) => journalEntryRow(doc, e, ui)).join('')
         : '<p class="ws-placeholder">No entries yet. Scenes and oracle rolls land here automatically.</p>'}
     </div>`;
+}
+
+// A journal entry is read-only display by default; the ✎ icon (next to the
+// existing ✕ delete) swaps it for a real mention-editor, same rich-text/
+// @mention capability every other field in this app has — it auto-saves on
+// blur (onFocusOut's data-journal-edit branch), so "✓ Done" just closes edit
+// mode rather than being a separate save step.
+function journalEntryRow(doc, e, ui) {
+  const editing = (ui.journalEditOpen || new Set()).has(e.id);
+  const body = editing
+    ? `<div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-journal-edit="${esc(e.id)}">${buildMentionEditorHTML(doc, e.text)}</div></div>`
+    : `<div class="journal-text mention-text">${e.isHtml ? e.text : buildMentionEditorHTML(doc, e.text)}</div>`;
+  return `
+        <div class="journal-entry">
+          <div class="journal-meta">${new Date(e.createdAt).toLocaleString()} · ${esc(e.source || 'Journal')}
+                <button class="icon-btn" data-journal-edit-toggle="${esc(e.id)}" title="${editing ? 'Done editing' : 'Edit'}" aria-label="Edit">${editing ? '✓' : '✎'}</button>
+                <button class="icon-btn" data-journal-del="${esc(e.id)}" title="Delete" aria-label="Delete">✕</button>
+              </div>
+              ${body}
+        </div>`;
 }
 
 // Grouped, collapsible, searchable oracle tree — categories and groups
@@ -932,6 +946,7 @@ function settings(doc, ui = {}) {
     ${rulesConstitutionSection()}
     ${tradeEconomyModelSection(doc)}
     ${mechanicsIndexSection(doc, ui)}
+    ${tocSection(doc, ui)}
     <div class="settings-group">
       <h3>Companion tools</h3>
       <p class="dim small">GMAtlas tracks character sheets in-app, ruleset-aware. For full character-building wizards this app doesn't replicate, the community Crew Link tool is one Ironsworn/Starforged option:</p>
@@ -1038,6 +1053,25 @@ function mechanicsIndexSection(doc, ui) {
       <p class="dim small">Scans the Reference Library's PDFs relevant to your active stat ruleset (plus Hostile's own core material) for terms like Strain, Supply, Momentum, and links each to the page it turns up on, in the Guide drawer below.</p>
       <button class="btn ghost" data-mechanics-scan ${scanning ? 'disabled' : ''}>${scanning ? 'Scanning…' : '🔄 Refresh Mechanics Index'}</button>
       <p class="dim small">${entries.length ? `${entries.length} term(s) indexed.` : 'Not scanned yet.'}</p>
+      <p class="dim small">Needs the app served over http(s) (<code>npm run serve</code>) — reading local PDFs is blocked when running straight off <code>file://</code>.</p>
+    </div>`;
+}
+
+// Reference Library Table of Contents generation ("USER CHANGES" batch,
+// docs/adr/0020): a Settings trigger for the async PDF.js outline scan
+// (ui/tocScan.js) that writes a real Guide document per source PDF with
+// bookmarks, nested under a "Table of Contents" parent doc. Same
+// button/status-line shape as Game Mechanics Index just above it.
+function tocSection(doc, ui) {
+  const scanning = !!(ui && ui.tocScanning);
+  const tocParent = ((doc.guide && doc.guide.docs) || []).find((d) => !d.parentId && d.title === 'Table of Contents');
+  const childCount = tocParent ? (doc.guide.docs || []).filter((d) => d.parentId === tocParent.id).length : 0;
+  return `
+    <div class="settings-group">
+      <h3>Reference Table of Contents</h3>
+      <p class="dim small">Scans every PDF in your library (Reference Library plus your own uploads) for its real bookmarks and writes a linked table of contents for each into the Guide, under a "Table of Contents" entry.</p>
+      <button class="btn ghost" data-toc-scan ${scanning ? 'disabled' : ''}>${scanning ? 'Scanning…' : '📑 Generate Reference Table of Contents'}</button>
+      <p class="dim small">${childCount ? `${childCount} document(s) indexed.` : 'Not generated yet.'}</p>
       <p class="dim small">Needs the app served over http(s) (<code>npm run serve</code>) — reading local PDFs is blocked when running straight off <code>file://</code>.</p>
     </div>`;
 }
@@ -1205,7 +1239,7 @@ function colony(doc) {
   const fieldRows = COLONY_FIELDS.map((f) => {
     const v = fields[f.key];
     if (f.type === 'textarea') {
-      return `<label class="field-label">${esc(f.label)}<textarea data-colony-field="${f.key}" rows="2">${esc(v || '')}</textarea></label>`;
+      return `<label class="field-label">${esc(f.label)}<div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-colony-field="${f.key}">${buildMentionEditorHTML(doc, v)}</div></div></label>`;
     }
     return `<label class="field-label">${esc(f.label)}<input type="${f.type === 'number' ? 'number' : 'text'}" data-colony-field="${f.key}" value="${esc(v == null ? '' : v)}"></label>`;
   }).join('');
@@ -1591,7 +1625,7 @@ function documents(doc, ui = {}) {
         </div>
       </div>
       ${d.kind === 'file' ? '' : `
-      <textarea class="doc-content-input" data-doc-content="${esc(d.id)}" rows="6" placeholder="Store notes, references, or handout text here…">${esc(d.content || '')}</textarea>
+      <div class="rich-field">${richToolbarHTML()}<div class="mention-editor doc-content-input" contenteditable="true" data-doc-content="${esc(d.id)}" data-placeholder="Store notes, references, or handout text here…">${buildMentionEditorHTML(doc, d.content)}</div></div>
       <div class="drawer-note-actions"><button class="btn sm" data-doc-save="${esc(d.id)}">Save</button></div>`}
       ${tagEditorOpen.has(d.id) ? docTagEditor(d) : ''}
     </div>`;

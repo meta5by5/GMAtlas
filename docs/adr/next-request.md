@@ -206,6 +206,48 @@ END OF CAMPAIGN TURN
 
 ## USER CHANGES
 
+<!-- Processed 2026-07-06 (docs/adr/0019-where-tab-and-scene-fields.md,
+docs/adr/0020-reference-toc-generation.md, ADR 0018 addendum):
+- All remaining large textboxes (Revealed/hidden, Faction Scenario seed/
+  Agenda, Colony's textarea fields, a Document note's content box) gained
+  the same rich-text toolbar; Journal entries gained an edit icon
+  (domain/session.js's editNote) that swaps an entry for a real
+  mention-editor, auto-saving on blur like every other field.
+- WHERE tab: the "Change Location" button is gone; the old "every
+  Location in the campaign" chip list is replaced by a Location-tag
+  listbox (a native <select>, not chips, per direct clarification) that
+  filters a candidate panel of matching Locations, clicking one adds it
+  to a new curated "present here" list (context.where.entityIds — a
+  schema field that existed since Phase 3A but was dead in the UI until
+  now; new addContextEntity/removeContextEntity mutators, keyed generically
+  so WHO/WHY could reuse them later). Found and fixed a real pre-existing
+  bug along the way: WHO/WHY's own "+ Type" buttons had never had a click
+  handler at all.
+- Doc management: confirmed (no code needed) that a hand-typed
+  @[docname#page] already becomes a real link once it matches a library
+  title, regardless of how it was typed. The Table of Contents ask became
+  domain/toc.js + ui/tocScan.js: a Settings button (full-library rescan)
+  and an upload-time path (gated behind a window.confirm, per your
+  explicit answer) both read a PDF's real bookmarks via PDF.js's
+  getOutline() (new integration — never used in this app before) and
+  write a linked table of contents per document into the Guide, under a
+  "Table of Contents" entry. Needs `npm run serve` (same file://
+  restriction as the Mechanics Index scan it mirrors). Verified against
+  the real Reference Library — 15 of 27 PDFs had usable bookmarks.
+- Latest Scene: sensory/driver/clue/complication are now real,
+  individually-editable fields, each with its own 🔮 oracle-jump icon; the
+  combined text view is recomposed live from them (recomposeSceneText) as
+  a one-directional derivation, not a second editable copy — matches "keep
+  using the full combined statement... update the related text when the
+  separate field is revised" literally.
+- Text editor: added Tab-indent, small/large text (~text~/^large^, per
+  your "Small/Large toggles" answer), and a table markup type (a
+  toolbar-inserted GFM-style pipe-table skeleton, left-aligned/thin-
+  bordered by default, per your "insert markup skeleton" answer — no
+  dedicated row/column UI; more rows/columns come from typing more
+  "| cell |" syntax by hand).
+-->
+
 - Make all text fields into full featured editors per the markup approach already decided. Then make the Jounral entries have an edit icon that opens it up for modification and save changes. 
 On the "Where it happens" tab: 
 - remove the "Change Location" button since we don't need a popup entry field to add text to the text box.

@@ -387,11 +387,20 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 .mention-text.mention-editor, .mention-text { min-height: 0; border: none; background: none; padding: 0; }
 .mention-editor ul, .mention-editor ol { margin: 0.2rem 0; padding-left: 1.4rem; }
 .mention-editor li { margin: 0.1rem 0; }
+.rt-lg { font-size: 1.3em; }
+
+/* A toolbar-inserted table ("USER CHANGES" batch) — left-aligned cells,
+   thin borders, by default, per explicit request; no per-row/column
+   controls (see shell.js's insertTableSkeleton) — more rows/columns come
+   from typing more "| cell |" syntax by hand. */
+.mention-editor table.rt-table { border-collapse: collapse; margin: 0.3rem 0; width: 100%; }
+.rt-table th, .rt-table td { border: 1px solid var(--border); padding: 0.25rem 0.5rem; text-align: left; font-weight: normal; }
+.rt-table th { color: var(--text-dim); font-size: 0.8em; }
 
 /* Lightweight rich-text toolbar (ADR 0018) — one small row of buttons above
    a .mention-editor that insert plain markup characters (see shell.js's
    data-rich-cmd mousedown handler), not live execCommand formatting. */
-.rich-toolbar { display: flex; gap: 0.15rem; margin-bottom: 0.25rem; }
+.rich-toolbar { display: flex; flex-wrap: wrap; gap: 0.15rem; margin-bottom: 0.25rem; }
 .rich-toolbar .icon-btn { border: 1px solid var(--border); border-radius: var(--radius-sm); min-width: 1.6rem; text-align: center; }
 .rich-toolbar .icon-btn:hover { color: var(--text); border-color: var(--accent); }
 
@@ -421,6 +430,15 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 
 .entity-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
 .entity-chip { background: var(--tier2-bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.25rem 0.6rem; font-size: 0.8rem; }
+.entity-chip .icon-btn { margin-left: 0.3rem; padding: 0 0.2rem; }
+
+/* WHERE tab's tag-listbox + candidate-panel redesign ("USER CHANGES"
+   batch, docs/adr/0019) — a listbox (not chips, per explicit request) on
+   one side, matching Locations on the other. */
+.where-picker { margin-top: var(--sp-3); }
+.where-picker-row { display: flex; gap: var(--sp-4); flex-wrap: wrap; }
+.where-picker-tags, .where-picker-candidates { flex: 1 1 12rem; min-width: 10rem; }
+.where-picker-tags select { width: 100%; margin-top: var(--sp-1); }
 
 /* Co-Pilot actions */
 .copilot-action { width: 100%; text-align: left; background: var(--bg-inset); color: var(--accent); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.5rem 0.6rem; font-size: 0.82rem; }
