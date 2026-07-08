@@ -281,9 +281,8 @@ export function mountShell(el) {
       </div>
       <div class="mention-suggest" data-mention-suggest hidden></div>
       <div class="inline-prompt" data-inline-prompt hidden>
-        <label class="inline-prompt-label" data-inline-prompt-label for="inline-prompt-input"></label>
+        <div class="inline-prompt-fields" data-inline-prompt-fields></div>
         <div class="inline-prompt-row">
-          <input type="text" id="inline-prompt-input" class="inline-prompt-input" data-inline-prompt-input autocomplete="off">
           <button type="button" class="icon-btn" data-inline-prompt-submit aria-label="Confirm">✓</button>
           <button type="button" class="icon-btn" data-inline-prompt-cancel aria-label="Cancel">✕</button>
         </div>
@@ -1294,9 +1293,10 @@ function performFieldRoll(f, label) {
 // tools already use for a search/command action.
 function onKeydown(ev) {
   // Generic inline text-entry prompt (see openInlinePrompt et al.): Enter
-  // submits, Escape cancels — it has no <form> element to give Enter a
+  // submits from EITHER field when there are two (Link's description/URL),
+  // Escape cancels from either — it has no <form> element to give Enter a
   // native effect, same reasoning as every other inline-form field below.
-  if (ev.target.closest('[data-inline-prompt-input]')) {
+  if (ev.target.closest('[data-inline-prompt-field]')) {
     if (ev.key === 'Enter') { ev.preventDefault(); commitInlinePrompt(); return; }
     if (ev.key === 'Escape') { ev.preventDefault(); closeInlinePrompt(); return; }
   }
@@ -1955,11 +1955,18 @@ function onMouseDown(ev) {
     else if (cmd === 'link') {
       // Capture the range NOW — by the time the inline prompt below is
       // submitted, focus has moved to its own input, and window.getSelection()
-      // may no longer point at this field at all.
+      // may no longer point at this field at all. Any currently-selected
+      // text becomes the description field's starting value (editable) —
+      // matches the intuitive "select text, then link it" gesture other
+      // editors use, without requiring a selection at all.
       const sel = window.getSelection();
       const range = (sel && sel.rangeCount && field.contains(sel.anchorNode)) ? sel.getRangeAt(0).cloneRange() : null;
+      const selectedText = range ? range.toString() : '';
       openInlinePrompt('ext-link', {
-        label: 'Link to (opens in a new tab)', placeholder: 'https://example.com',
+        fields: [
+          { key: 'label', label: 'Link text', placeholder: 'What should it say?', value: selectedText },
+          { key: 'url', label: 'URL', placeholder: 'https://example.com' },
+        ],
         meta: { field, range }, anchorRect: richCmd.getBoundingClientRect(),
       });
     }
@@ -1978,20 +1985,11 @@ function onMouseDown(ev) {
 // any other edit, and the NEXT render is what turns it into a real <b>/<ul>
 // etc. (buildMentionEditorHTML). Nothing here talks to the store directly.
 
-// explicitRange lets a caller capture the selection at the moment its
-// trigger was clicked and hand it back in later — needed by the Link
-// toolbar button (cmd === 'link'), which now defers to the generic inline
-// prompt for the url instead of a synchronous window.prompt(): by the time
-// the GM submits, the live window.getSelection() may no longer point at
-// the field at all (focus moved to the inline prompt's own input).
-function wrapSelectionWithMarkup(field, open, close, explicitRange) {
+function wrapSelectionWithMarkup(field, open, close) {
   field.focus();
   const sel = window.getSelection();
-  let range = explicitRange;
-  if (!range) {
-    if (!sel || sel.rangeCount === 0 || !field.contains(sel.anchorNode)) return;
-    range = sel.getRangeAt(0);
-  }
+  if (!sel || sel.rangeCount === 0 || !field.contains(sel.anchorNode)) return;
+  const range = sel.getRangeAt(0);
   if (range.collapsed) {
     const node = document.createTextNode(open + close);
     range.insertNode(node);
@@ -2015,6 +2013,34 @@ function wrapSelectionWithMarkup(field, open, close, explicitRange) {
     sel.removeAllRanges();
     sel.addRange(after);
   }
+}
+
+// Inserts a `[label](url)` link at `range` (or, if none was captured — the
+// field never had a live selection to begin with — at the end of `field`'s
+// content), replacing whatever `range` covered. Distinct from
+// wrapSelectionWithMarkup above: that wraps whatever text is ALREADY
+// selected with fixed open/close markers, whereas here the label is a
+// specific string the GM just typed into the inline prompt's own field,
+// which may not match the originally-selected text at all (or there may
+// have been no selection in the first place) — so this always replaces
+// range content with the literal markup, never wraps it.
+function insertExtLinkMarkup(field, range, label, url) {
+  field.focus();
+  const target = range || (() => {
+    const r = document.createRange();
+    r.selectNodeContents(field);
+    r.collapse(false);
+    return r;
+  })();
+  target.deleteContents();
+  const node = document.createTextNode(`[${label}](${url})`);
+  target.insertNode(node);
+  const after = document.createRange();
+  after.setStartAfter(node);
+  after.collapse(true);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(after);
 }
 
 // Toggles a "- "/"1. " marker at the start of the current visual line —
@@ -2440,25 +2466,34 @@ function closeMentionSuggest() {
 }
 
 // --- Generic inline text-entry prompt --------------------------------------
-// Replaces every window.prompt() this app used to show for a single piece
-// of free text — "as a general rule, do not have popup windows for data
-// entry," so every one of them now opens this same small floating field
-// instead, keyed by `kind`. Opening is always the caller's job (pass an
-// anchorRect — usually the trigger element's own getBoundingClientRect());
-// committing/cancelling always goes through here.
+// Replaces every window.prompt() this app used to show for a piece (or, for
+// the Link button, two pieces) of free text — "as a general rule, do not
+// have popup windows for data entry," so every one of them now opens this
+// same small floating field instead, keyed by `kind`. Opening is always the
+// caller's job (pass an anchorRect — usually the trigger element's own
+// getBoundingClientRect()); committing/cancelling always goes through here.
+//
+// Single-field callers (nine of the ten kinds) pass label/placeholder/value
+// flat, same as before this got multi-field support — openInlinePrompt
+// synthesizes a one-item `fields` array from those under a fixed 'value'
+// key, so commitInlinePrompt's existing single-field branches (reading
+// `values.value`) didn't need to change at all. Only a caller that actually
+// needs more than one input (currently just the Link button: description +
+// URL) passes an explicit `fields` array instead.
 
-function openInlinePrompt(kind, { label, placeholder = '', value = '', meta = null, anchorRect }) {
-  inlinePrompt = { kind, label, placeholder, value, meta };
+function openInlinePrompt(kind, { label, placeholder = '', value = '', meta = null, anchorRect, fields }) {
+  inlinePrompt = { kind, meta, fields: fields || [{ key: 'value', label, placeholder, value }] };
   renderInlinePrompt(anchorRect);
 }
 
 function renderInlinePrompt(anchorRect) {
   const el = root && root.querySelector('[data-inline-prompt]');
   if (!el || !inlinePrompt) return;
-  el.querySelector('[data-inline-prompt-label]').textContent = inlinePrompt.label;
-  const input = el.querySelector('[data-inline-prompt-input]');
-  input.value = inlinePrompt.value;
-  input.placeholder = inlinePrompt.placeholder;
+  const fieldsEl = el.querySelector('[data-inline-prompt-fields]');
+  fieldsEl.innerHTML = inlinePrompt.fields.map((f) => `
+    <label class="inline-prompt-label">${escapeHtml(f.label)}
+      <input type="text" class="inline-prompt-input" data-inline-prompt-field="${escapeHtml(f.key)}" value="${escapeHtml(f.value || '')}" placeholder="${escapeHtml(f.placeholder || '')}" autocomplete="off">
+    </label>`).join('');
   if (anchorRect) {
     const top = Math.min(anchorRect.bottom + 4, window.innerHeight - 60);
     const left = Math.min(anchorRect.left, window.innerWidth - 280);
@@ -2466,8 +2501,8 @@ function renderInlinePrompt(anchorRect) {
     el.style.left = Math.max(4, left) + 'px';
   }
   el.hidden = false;
-  input.focus();
-  input.select();
+  const first = fieldsEl.querySelector('[data-inline-prompt-field]');
+  if (first) { first.focus(); first.select(); }
 }
 
 function closeInlinePrompt() {
@@ -2478,11 +2513,13 @@ function closeInlinePrompt() {
 
 // Every former window.prompt() call site's post-input logic lives here now,
 // one branch per `kind` — each is exactly what that site used to do with
-// its prompt's return value, just reading inlinePrompt.value/meta instead.
+// its prompt's return value, just reading `values.value` (or, for a
+// multi-field kind, `values.<key>`) /meta instead.
 function commitInlinePrompt() {
   if (!inlinePrompt) return;
-  const inputEl = root && root.querySelector('[data-inline-prompt-input]');
-  const value = ((inputEl ? inputEl.value : inlinePrompt.value) || '').trim();
+  const values = {};
+  (root ? root.querySelectorAll('[data-inline-prompt-field]') : []).forEach((el) => { values[el.dataset.inlinePromptField] = (el.value || '').trim(); });
+  const value = values.value || ''; // the synthesized single-field key
   const { kind, meta } = inlinePrompt;
   closeInlinePrompt();
 
@@ -2503,9 +2540,10 @@ function commitInlinePrompt() {
   } else if (kind === 'expedition-add') {
     if (value) { store.update((d) => createExpedition(d, value)); toast('Expedition added'); }
   } else if (kind === 'ext-link') {
-    const url = sanitizeExternalLinkUrl(value);
+    const url = sanitizeExternalLinkUrl(values.url);
     if (!url) { toast('Not a valid link — use a plain http(s) address'); return; }
-    wrapSelectionWithMarkup(meta.field, '[', `](${url})`, meta.range);
+    const label = values.label || url;
+    insertExtLinkMarkup(meta.field, meta.range, label, url);
   } else if (kind === 'mention-page') {
     applyMentionPage(meta.mentionEl, value);
   }

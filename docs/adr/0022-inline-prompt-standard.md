@@ -144,3 +144,37 @@ one case that needed it:
 `docs/adr/0018-lightweight-rich-text.md` (the Link button this ADR also
 converts was added as part of the Phase 11 external-links work, in the
 same session, before this rule was stated as a general one).
+
+## 2026-07-08 addendum: optional multi-field support
+
+Direct follow-up: the Link button should ask for a link *description* as
+well as the URL, and display that description — not just clicking "insert"
+with an empty or manually-typed label.
+
+`openInlinePrompt(kind, opts)` gained an optional `opts.fields` array
+(`{key, label, placeholder, value}[]`). Nine of the ten kinds still pass a
+flat `label`/`placeholder`/`value` and get exactly the original one-field
+behavior — `openInlinePrompt` synthesizes a one-item `fields` array under
+a fixed `'value'` key internally, so none of those call sites or
+`commitInlinePrompt`'s existing branches (which read `values.value`)
+needed to change. Only `ext-link` now passes an explicit two-item array
+(`label`, then `url`); `commitInlinePrompt` reads `values.label`/
+`values.url` for that one kind. `renderInlinePrompt` loops the array
+instead of assuming one input; Enter/Escape (`onKeydown`) match on the
+now-plural `[data-inline-prompt-field]` selector so either field submits
+or cancels the whole prompt, not just a first/only one.
+
+Submitting now calls a new `insertExtLinkMarkup(field, range, label, url)`
+instead of reusing `wrapSelectionWithMarkup` — a real, distinct operation,
+not a cosmetic rename: `wrapSelectionWithMarkup` wraps whatever text is
+*already selected* with fixed open/close markers, which only ever worked
+because the old flow had no separate description input (the selection
+itself was the label, or the field opened empty needing a manual inline
+edit). Now that the GM types a description into its own field, that string
+may not match the original selection at all — or a link might be inserted
+with no selection to begin with — so `insertExtLinkMarkup` always replaces
+whatever `range` covered with the literal `[label](url)` text. As a
+convenience default (not a requirement), a real selection's text still
+pre-fills the description field, matching the "select text, then link it"
+gesture other editors use — editable before submit, same as any other
+field's starting value.
