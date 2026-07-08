@@ -244,10 +244,14 @@ function sceneFieldIcon(field) {
   return `<button class="icon-btn" data-oracle-field-link="scene.${field}" title="Jump to relevant Oracle table(s): ${tags.map(esc).join(', ')}" aria-label="Jump to relevant Oracle tables">🔮</button>`;
 }
 
+// A <textarea>, not <input> — these can run to a full sentence or two, and
+// starting at rows="1" then auto-growing (autoGrowSceneField, ui/shell.js,
+// on input and once per render) up to a CSS-capped ~4 rows reads far
+// better than either a cramped single line or a field that's always tall.
 function sceneField(scene, key, label, placeholder) {
   return `<label class="field-label sm">
     <span class="field-label-row">${esc(label)}${sceneFieldIcon(key)}</span>
-    <input data-scene-field="${esc(scene.id)}::${key}" value="${esc(scene[key] || '')}" placeholder="${esc(placeholder)}">
+    <textarea data-scene-field="${esc(scene.id)}::${key}" rows="1" placeholder="${esc(placeholder)}">${esc(scene[key] || '')}</textarea>
   </label>`;
 }
 

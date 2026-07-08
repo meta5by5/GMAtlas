@@ -1666,8 +1666,22 @@ function onChange(ev) {
 }
 
 // Live feedback that must NOT trigger a full re-render (keeps focus/caret).
+// Latest Scene's fields are <textarea rows="1"> that grow with their
+// content instead of staying single-line or a fixed tall box — height is
+// set directly from scrollHeight (not computed from a row count) so it
+// naturally matches whatever the browser actually laid out; the CSS
+// max-height on .scene-fields textarea (~4 rows) is what caps the visible
+// growth and hands off to internal scrolling beyond that, this only ever
+// asks for "as tall as the content wants," never enforces the cap itself.
+function autoGrowSceneField(el) {
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+
 function onInput(ev) {
   const t = ev.target;
+  const sceneFieldInput = t.closest('[data-scene-field]');
+  if (sceneFieldInput) { autoGrowSceneField(sceneFieldInput); return; }
   const num = t.closest('[data-ctx-num]');
   if (num) { const lbl = num.previousElementSibling || num.parentElement.querySelector('.metric'); if (lbl && lbl.classList.contains('metric')) lbl.textContent = `${t.value}/10`; return; }
 
@@ -2462,6 +2476,12 @@ function render() {
   bc.innerHTML = crumbs.map((c, i) => `${i ? '<span class="sep">▸</span>' : ''}<span class="crumb">${escapeHtml(c.label || '')}</span>`).join(' ');
 
   root.querySelector('[data-workspace]').innerHTML = renderWorkspace(doc, doc.context.active, buildDrawerUi());
+  // A freshly-rendered Scene field textarea starts at its rows="1" default
+  // regardless of how much text it holds — only typing into it fires the
+  // 'input' event that would otherwise trigger autoGrowSceneField, so a
+  // field that already holds a long value needs this one-time sizing pass
+  // to open at its real height instead of waiting for the next keystroke.
+  root.querySelectorAll('[data-scene-field]').forEach(autoGrowSceneField);
   root.querySelector('[data-copilot-body]').innerHTML = renderCopilot(doc);
   root.querySelector('[data-copilot]').dataset.open = String(copilotOpen);
 

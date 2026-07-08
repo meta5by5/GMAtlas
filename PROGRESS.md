@@ -14,6 +14,20 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-07 Latest Scene readability follow-up**: the 7 scene fields are
+now single-column `<textarea rows="1">`s (not `<input>`) instead of a
+multi-column grid — full-sentence fields read better in one legible
+column than crammed side by side. Each auto-grows on typing up to a
+CSS-capped ~4 rows (`autoGrowSceneField`, `ui/shell.js`), then scrolls
+internally. The text/fields split moved from 60/40 to 70/30 and switched
+from CSS grid to flex so the text panel could get a real `resize:
+horizontal` handle — dragging it resizes the split by hand instead of
+living with a fixed ratio; narrow viewports still stack and drop the
+manual width. Verified via a jsdom structural smoke test (11 checks) plus
+`npm test` (299/299, unaffected). jsdom has no real layout engine, so the
+resize handle's drag behavior and live auto-grow height weren't visually
+confirmed in an actual window — only the DOM/CSS structure driving them.
+
 **2026-07-07 WHAT-tab tracker layout + Latest Scene 60/40 split**, a
 direct follow-up on the batch below: the WHAT tab's two tracker rows
 (Intent/Threat/Mystery, Resources/Reputation/Stress) now use
