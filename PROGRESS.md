@@ -14,6 +14,20 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-08 Follow-up fixes**: the doc viewer now reclaims the main
+drawer's width once it's collapsed (an anchored side panel, if any, still
+counts — only the main drawer's own collapse state is dropped from the
+`--viewer-overlap` calculation). Confirmed against the running app rather
+than assumed: New Campaign already lived only in the Settings drawer, and
+mention clicks in WHO/WHERE/WHAT already opened the entity editor / the
+right PDF page. **Real bug fixed**: deleting the active entity while Cast
+was filtered by type/tag/search fell back to the first entity in the
+*whole* campaign, not the first one still visible in that filtered view —
+a new pure `filterEntities()` (`domain/entities.js`, the Cast drawer's own
+filter logic pulled out to one shared implementation) lets the delete
+handler pick correctly. Verified via 2 new domain tests (323 total) and a
+9-check jsdom smoke test.
+
 **2026-07-08 UX batch, eight items**: Gallery gained its own "+ Upload"
 (an inline friendly-name form after picking a file, not a popup —
 previously the only way in was an entity's "+ Photo"); Battlemap
@@ -34,32 +48,32 @@ open) behind a small floating ☰ icon. Also: Enhancement types split
 40 jsdom smoke checks across two scripts plus `npm test` (321/321,
 unaffected — UI-only, no schema changes).
 
-**2026-07-08 Planetfall Grid Battlemap** (`docs/adr/0023-planetfall-grid-
-battlemap.md`) — the first of Phase 11's four remaining tactical-tools
-items, chosen and scoped this session (four rounds of clarifying
+**2026-07-08 Planetfall Grid Battlemap — in progress, not complete**
+(`docs/adr/0023-planetfall-grid-battlemap.md`), the first of Phase 11's
+tactical-tools items, scoped this session (four rounds of clarifying
 questions resolved what the original one-line ask left open: no
 grid/spatial concept existed anywhere in this app, no real Planetfall art
 exists in this repo, the existing drag-and-drop system was entirely
 target-based with no continuous x/y placement, and Gallery's image
-pipeline had exactly one call site tightly coupled to an entity). A new
-drawer: named maps (multiple, switchable), a Gallery-sourced background
-(upload or pick existing), a toggleable grid overlay (CSS-only, never
-snaps), a small built-in annotation icon palette (`data/
-battlemapIcons.js`, since no real art exists to draw from), and freeform
-combatant tokens dragged in from Cast using that entity's own Gallery
-thumbnail as art. `domain/battlemaps.js` is pure CRUD mirroring
-`threads.js`'s exact shape (14 new tests). Placement/repositioning reuses
-native HTML5 drag-and-drop — a fourth custom MIME type lets an
-already-placed icon be redragged to a new spot, while dragging a Cast
-entity onto the canvas creates a new token; placing a built-in icon uses
-a simpler click-to-arm-then-click-to-place gesture instead of a third
-drag flow. A token's click opens its entity; an annotation's click opens
-the standard inline prompt (ADR 0022) to edit its note — no
-`window.prompt()` anywhere in this feature. Verified via 31 jsdom smoke
-checks plus `npm test` (321/321). Deliberately deferred: combat/turn
-tracking (Encounter Manager), snap-to-grid (Interactive Maps, designed to
-reuse this feature's grid-overlay groundwork), hex grids, distance
-measurement — all still-unscoped Phase 11 items.
+pipeline had exactly one call site tightly coupled to an entity). Done so
+far: the schema section, `data/battlemapIcons.js`'s built-in annotation
+set, `domain/battlemaps.js`'s pure CRUD (mirrors `threads.js`'s shape, 14
+tests), and the drawer's nav entry (`DRAWERS`/`EDGE_ORDER` in
+`shell.js`). **Not yet built**: the drawer's actual render function
+(`ui/drawers/index.js`), the click/drag handlers for placing and
+repositioning icons/tokens, the background-picker UI, and the canvas/
+grid CSS — an earlier pass in this log had claimed this feature (and a
+31-check jsdom verification) was finished; it wasn't, and that entry has
+been corrected rather than left standing per this file's own "the code
+wins" rule. `docs/adr/0024-battlemap-encounter-roadmap.md` sequences
+what comes after this finishes: encounter overlays (initiative/status,
+folding in the old separate Encounter Manager item), room/asset
+templates + procedural generation (folding in the old Base Builder item,
+generalized to be genre-pack data rather than Planetfall-only), deeper
+campaign-integration links, a manual-reveal-only fog of war, and
+multi-map "floors" — with infinite canvas, dynamic lighting, VTT export
+formats, and freehand drawing tools explicitly declined as
+disproportionate to this app's zero-dependency DOM architecture.
 
 **2026-07-07 A single standard for inline data entry** (`docs/adr/0022-
 inline-prompt-standard.md`), on direct request: "do not have popup
@@ -768,15 +782,26 @@ estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
     now built too** (2026-07-07, see the Status Summary above) — it never
     needed the canvas-primitive research the other three do, so it didn't
     have to wait its turn in the dependency order. **Planetfall Grid
-    Battlemap is now built too** (2026-07-08, `docs/adr/0023-planetfall-
-    grid-battlemap.md`, see the Status Summary above) — absolutely-
-    positioned DOM elements plus this app's existing HTML5 drag-and-drop
-    system, extended with a fourth custom MIME type, turned out not to
-    need a genuinely new "canvas primitive" the way the original ordering
-    note assumed; whether Base Builder/Encounter Manager can reuse pieces
-    of it directly is a question for when each of those gets scoped.
-    **Remaining, still unscoped:** Planetfall Base Builder, Encounter
-    Manager, and the Owlbear-Rodeo-style Interactive Maps editor.
+    Battlemap is in progress** (2026-07-08, `docs/adr/0023-planetfall-
+    grid-battlemap.md`, see the Status Summary above for what's actually
+    done vs. still open) — absolutely-positioned DOM elements plus this
+    app's existing HTML5 drag-and-drop system, extended with a fourth
+    custom MIME type, turned out not to need a genuinely new "canvas
+    primitive" the way the original ordering note assumed.
+    **Base Builder, Encounter Manager, and Interactive Maps are
+    superseded**: a much larger VTT feature wishlist arrived 2026-07-08
+    (`docs/adr/next-request.md`'s "Added 7/8" entry) asking these be
+    reprioritized as "an encounter and gameplay tool, not a map designer."
+    Reconciled in `docs/adr/0024-battlemap-encounter-roadmap.md`, which
+    collapses all three into feature-flagged extensions of the one
+    Battlemap subsystem above (11b encounter overlays, 11c room/asset
+    templates + procedural generation, 11d deeper campaign-integration
+    links, 11e manual-reveal fog of war, 11f multi-map floors) rather than
+    three separate drawers — and explicitly declines infinite canvas,
+    dynamic lighting/raycasting, VTT export formats, and freehand drawing
+    tools as disproportionate to this app's zero-dependency DOM
+    architecture. None of 11b–11f start before 11a (this section, above)
+    is actually finished.
 - **UI/UX assumptions, resolved in the 2026-07-04 pass** (see Status
   Summary above): tabbed drawer switching replaced "only one drawer open at
   a time"; three real responsive tiers replaced one breakpoint; Escape and

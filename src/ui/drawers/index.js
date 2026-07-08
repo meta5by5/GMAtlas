@@ -9,7 +9,7 @@ import {
 } from '../../domain/oracles.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import {
-  listEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, listTagVocabulary, listEntityTagVocabulary,
+  listEntities, filterEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, listTagVocabulary, listEntityTagVocabulary,
   RELATIONSHIP_TYPES, RELATIONSHIP_TYPE_LABEL, isRelationshipFlagged,
 } from '../../domain/entities.js';
 import { parseStatsString, sortStatblockGroups, getStatblockTemplates } from '../../domain/statblocks.js';
@@ -83,15 +83,12 @@ const ENTITY_TYPES_BY_LABEL = [...ENTITY_TYPES].sort((a, b) => TYPE_LABEL[a].loc
 export function entities(doc, ui) {
   const allItems = listEntities(doc);
   const typeFilter = ui.entityTypeFilter || '';
-  const search = (ui.entitySearch || '').trim().toLowerCase();
+  const search = ui.entitySearch || '';
   const activeTags = ui.entityTagFilters || new Set();
-  const requiredTags = [...activeTags].map((t) => t.toLowerCase());
-  const items = allItems.filter((e) => {
-    if (typeFilter && e.type !== typeFilter) return false;
-    if (requiredTags.length && !requiredTags.every((t) => (e.tags || []).some((et) => et.toLowerCase() === t))) return false;
-    if (!search) return true;
-    return [e.name, TYPE_LABEL[e.type] || '', e.type, ...(e.tags || [])].join(' ').toLowerCase().includes(search);
-  });
+  // Pure, shared with shell.js's data-entity-del handler (so deleting the
+  // active entity while Cast is filtered lands on the next entity Cast
+  // ITSELF still shows, not just the first one in the whole campaign).
+  const items = filterEntities(doc, { types: typeFilter ? [typeFilter] : null, search, tags: [...activeTags] });
   const active = getEntity(doc, doc.entities && doc.entities.activeId);
   const typeChips = ['', ...ENTITY_TYPES_BY_LABEL].map((t) => `
     <button class="chip sm ${typeFilter === t ? 'active' : ''}" data-entity-type-filter="${t}">${t ? TYPE_LABEL[t] : 'All'}</button>`).join('');

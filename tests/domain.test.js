@@ -891,7 +891,7 @@ test('opening a document tab at a page anchors the resolved src with #page=N', (
 });
 
 // --- entities + auto-linking (Phase 3A) -----------------------------------
-import { createEntity, updateEntity, removeEntity, addRelationship, removeRelationship, findByName, parseMentions, linkMentions, listEntities, addEntityTag, removeEntityTag, listTagVocabulary } from '../src/domain/entities.js';
+import { createEntity, updateEntity, removeEntity, addRelationship, removeRelationship, findByName, parseMentions, linkMentions, listEntities, filterEntities, addEntityTag, removeEntityTag, listTagVocabulary } from '../src/domain/entities.js';
 import { addNote, editContextText, editNote, addContextEntity, removeContextEntity, updateSceneField } from '../src/domain/session.js';
 
 test('editNote updates an existing journal entry in place and re-links mentions', () => {
@@ -3423,6 +3423,26 @@ test('listEntityTagVocabulary respects the search filter the same way the entity
   const narrowed = listEntityTagVocabulary(camp, { types: ['item'], search: 'knife' });
   assert.ok(narrowed.includes('blade'));
   assert.ok(!narrowed.includes('medical-gear'));
+});
+
+// --- filterEntities (shared by the Cast drawer and the delete-while-
+// filtered fix below) -------------------------------------------------------
+test('filterEntities narrows by type, required tags (AND, case-insensitive), and search (name/type label/raw type/tags)', () => {
+  let camp = defaultCampaign();
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Voss' }));
+  camp = { ...camp, entities: { ...camp.entities, items: camp.entities.items.map((e) => e.id === npcId ? { ...e, tags: ['Veteran', 'hostile'] } : e) } };
+  let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'The Hab' }));
+
+  assert.deepEqual(filterEntities(camp, { types: ['npc'] }).map((e) => e.id), [npcId]);
+  assert.deepEqual(filterEntities(camp, { types: ['npc'], tags: ['veteran', 'HOSTILE'] }).map((e) => e.id), [npcId]);
+  assert.deepEqual(filterEntities(camp, { types: ['npc'], tags: ['veteran', 'friendly'] }), []); // AND semantics — not all required tags present
+  assert.deepEqual(filterEntities(camp, { search: 'hab' }).map((e) => e.id), [locId]);
+  assert.deepEqual(filterEntities(camp, { search: 'NPC' }).map((e) => e.id), [npcId]); // matches the type LABEL, not just the raw id
+  assert.deepEqual(filterEntities(camp, {}).map((e) => e.id).sort(), [npcId, locId].sort()); // no filters — everything
+});
+
+test('filterEntities returns [] rather than throwing on an empty/default campaign', () => {
+  assert.deepEqual(filterEntities(defaultCampaign(), { types: ['npc'], search: 'x', tags: ['y'] }), []);
 });
 
 // --- Planetfall Grid Battlemap (Phase 11, docs/adr/0023) -------------------

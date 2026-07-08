@@ -83,6 +83,26 @@ export function listEntities(campaign, types) {
   return types ? items.filter((e) => types.includes(e.type)) : items;
 }
 
+/** The exact type/tag/search narrowing the Cast drawer's own filter row
+ *  applies (`ui/drawers/index.js`'s `entities()`) — pulled out to a real,
+ *  pure function so anything ELSE that needs to know "what does Cast
+ *  currently show" (e.g. picking which entity becomes active after
+ *  deleting the current one, so it lands on something still visible in a
+ *  filtered view instead of jumping to the first entity in the whole
+ *  campaign) can ask the same question without duplicating the filter
+ *  logic or reaching into ephemeral UI state itself. `tags` are matched
+ *  case-insensitively, ALL required (not any); `search` matches name,
+ *  type label, raw type id, or any tag. */
+export function filterEntities(campaign, { types, search = '', tags = [] } = {}) {
+  const q = String(search || '').trim().toLowerCase();
+  const requiredTags = tags.map((t) => String(t || '').trim().toLowerCase()).filter(Boolean);
+  return listEntities(campaign, types && types.length ? types : null).filter((e) => {
+    if (requiredTags.length && !requiredTags.every((t) => (e.tags || []).some((et) => et.toLowerCase() === t))) return false;
+    if (!q) return true;
+    return [e.name, TYPE_LABEL[e.type] || '', e.type, ...(e.tags || [])].join(' ').toLowerCase().includes(q);
+  });
+}
+
 export function getEntity(campaign, id) {
   return ((campaign.entities && campaign.entities.items) || []).find((e) => e.id === id) || null;
 }

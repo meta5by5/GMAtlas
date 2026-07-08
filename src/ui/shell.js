@@ -17,7 +17,7 @@ import {
   rollTraveller, formatTravellerRollText, formatTravellerRollCopyText,
 } from '../domain/dice.js';
 import {
-  createEntity, updateEntity, addEntityTag, removeEntityTag, removeEntity, setActiveEntity, addRelationship, removeRelationship,
+  createEntity, updateEntity, addEntityTag, removeEntityTag, removeEntity, filterEntities, setActiveEntity, addRelationship, removeRelationship,
   getEntity, addEntityStatblockGroup, removeEntityStatblockGroup, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
   setEntityStatblockTrackValue, setEntityStatblockAttributeValue, updateRelationshipLabel, updateRelationshipType, updateRelationshipStrength,
   listEntities, ENTITY_TYPES, TYPE_LABEL, setFactionStat, addFactionAsset, removeFactionAsset, createItemFromCatalog,
@@ -149,7 +149,7 @@ let expandedOracleGroups = new Set(); // ephemeral UI state — never persisted
 let docFilter = '';
 let graphFilter = ''; // ephemeral — highlights/dims graph-svg nodes by name substring, never removes them
 let helpOpen = new Set(); // ephemeral — which collapsible "?" tip icons are currently expanded, keyed by a stable per-instance string
-let settingsMenuOpen = false; // ephemeral — the header gear's New Campaign/Settings/About dropdown
+let settingsMenuOpen = false; // ephemeral — the header gear's Settings/About dropdown (New Campaign lives only in the Settings drawer now, not this menu)
 let aboutOpen = false; // ephemeral — the About overlay
 let docTagFilters = new Set();
 let docTagEditorOpen = new Set(); // ephemeral — which doc/ref cards' tag editors are expanded
@@ -722,7 +722,24 @@ function onClick(ev) {
     return;
   }
   const delEnt = hit('[data-entity-del]');
-  if (delEnt) { store.update((d) => removeEntity(d, delEnt.dataset.entityDel)); return toast('Entity removed'); }
+  if (delEnt) {
+    const deletedId = delEnt.dataset.entityDel;
+    // removeEntity's own fallback (domain/entities.js) picks the first
+    // entity in the WHOLE campaign, since the pure domain layer has no
+    // idea Cast might currently be filtered to a type/tag/search — if it
+    // is, and that filtered list still has something left once the
+    // deleted entity is excluded, prefer that instead, so deleting the
+    // active NPC while Cast is filtered to "npc" doesn't silently jump
+    // the inspector to some unrelated Location.
+    const filteredNext = filterEntities(store.get(), { types: entityTypeFilter ? [entityTypeFilter] : null, search: entitySearch, tags: [...entityTagFilters] })
+      .find((e) => e.id !== deletedId);
+    store.update((d) => {
+      let next = removeEntity(d, deletedId);
+      if (filteredNext && getEntity(next, filteredNext.id)) next = setActiveEntity(next, filteredNext.id);
+      return next;
+    });
+    return toast('Entity removed');
+  }
   // WHO/WHY's entityList() "+ Type" buttons — a real pre-existing gap found
   // while wiring WHERE's own new "+ New Location" (below): this attribute
   // was rendered but had no click handler at all, so those buttons did
@@ -3174,10 +3191,15 @@ function diceRollCardHtml(label, method, r) {
 // pinned) together occupy, immediately left of the edge tabs — what the doc
 // viewer's --viewer-overlap needs to stay clear of, so its own controls
 // (e.g. a tab's close button) don't render underneath (and therefore
-// unclickable behind) either drawer panel.
+// unclickable behind) either drawer panel. A collapsed main drawer
+// (drawerCollapsed) is visually gone — the viewer should reclaim that
+// space and expand to cover the workspace behind it, the same "see what's
+// underneath" goal the collapse arrow itself exists for — so it drops out
+// of this calculation entirely while collapsed. The anchor panel isn't
+// affected by the main drawer's collapse state, so it still counts.
 function sidePanelInsetPx(doc) {
   let px = 0;
-  if (openDrawers.length > 0) px += doc.drawers.widths[activeDrawer] || 420;
+  if (openDrawers.length > 0 && !drawerCollapsed) px += doc.drawers.widths[activeDrawer] || 420;
   if (anchoredDrawer) px += doc.drawers.widths[anchoredDrawer] || 420;
   return px;
 }

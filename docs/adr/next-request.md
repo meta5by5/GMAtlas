@@ -360,3 +360,334 @@ Play
 - The map should have a distance measure using point-click-drag to get distance. This distance should be a resizeable bar in the legend to allow for different sized battlemaps
 - The map should allow freeform placement of tokens or snap-to-grid if using the grid overlay.
 - The map should have a optional grid overlay in either square or hex that is resizeable to fit the background battlemap grid. This grid would have optional snap-to-grid mechanics to fit OSR games.
+
+<!-- Processed 2026-07-08 (docs/adr/0024-battlemap-encounter-roadmap.md):
+- Reconciled the ChatGPT wishlist below against this app's actual
+  constraints (zero-dependency DOM rendering, "genre-aware not
+  genre-locked," Article IX's "extend via engines, not parallel
+  systems") rather than building it category-by-category. Key finding:
+  the three previously-separate Phase 11 items this wishlist assumed
+  (Planetfall Grid Battlemap, Planetfall Base Builder, Interactive Maps)
+  all need the same underlying data shape once ADR 0023 was actually
+  scoped, so they collapse into ONE Battlemap subsystem with feature
+  flags (gridless = gridEnabled: false, already true) instead of three
+  drawers/domain modules.
+- New sequence (all extending ADR 0023, none started yet): 11b encounter
+  overlays (initiative/status fields on existing tokens, folding in the
+  old separate Encounter Manager ask); 11c room/asset templates +
+  procedural generation (folding in the old Base Builder ask, generalized
+  into per-genre-pack data via data/genrePacks.js rather than
+  Planetfall-only, since a hardcoded asset list would be a genre-lock
+  regression); 11d deeper campaign-integration links (a battlemap note
+  becomes a real @mention field); 11e fog of war, scoped down to
+  manual-reveal only; 11f multi-map "floors" (schema-only, reuses
+  existing multi-map support).
+- Explicitly declined, not silently dropped (see the ADR's own section):
+  infinite/very-large canvas, dynamic lighting/automatic vision
+  reveal/raycasting, VTT export formats (Foundry/Roll20/print), full
+  freehand/vector drawing tools, hex grids — each disproportionate to
+  this app's zero-dependency, DOM/CSS-only architecture for the value
+  they'd add, and (for drawing tools) the wishlist's own ★★★☆☆ ranking
+  agrees.
+- Found and fixed a real documentation bug while doing this: ADR 0023 and
+  PROGRESS.md's 2026-07-08 entry both claimed the Battlemap MVP was
+  "Done"/"Implemented" and verified via 31 jsdom checks — the actual code
+  only has the schema/data/domain layer and tests; the drawer UI, drag
+  handlers, and CSS were never written. Both docs corrected to say "in
+  progress" per this repo's own "the code wins, fix the prose" rule
+  (CLAUDE.md) rather than leaving a false completion claim standing.
+  Finishing that UI is the next real coding task, ahead of anything in
+  this new roadmap.
+-->
+
+#### Added 7/8 1626CST
+BuIld a roadmap and prioritize the following features and design elements as an encounter and gameplay tool (not a map designer):
+
+BEGIN CHATGPT SUGGESTIONS
+a battlemap app should be much more than a drawing program. It should support the entire gameplay loop from map creation through play and campaign persistence.
+
+1. Canvas & Navigation (Foundation)
+
+Everything else depends on this layer.
+
+Infinite or very large canvas
+Square and hex grids
+Adjustable grid size
+Snap to grid
+Layers
+Zoom and pan
+Minimap
+Undo/redo
+Multiple floors
+Fog layer
+Background images
+Dark/light theme
+2. Building Tools
+
+These define the playable space.
+
+Structural
+Walls
+Doors
+Windows
+Airlocks
+Elevators
+Ladders
+Stairways
+Bulkheads
+Secret doors
+Terrain
+Floors
+Water
+Lava
+Ice
+Dirt
+Grass
+Metal plating
+Rock
+Sand
+Rubble
+Hazards
+Radiation
+Vacuum
+Fire
+Smoke
+Acid
+Toxic gas
+Electrical fields
+Low gravity
+Cave-ins
+3. Asset Library
+
+A searchable library with categories.
+
+Furniture
+Beds
+Tables
+Chairs
+Lockers
+Cabinets
+Industrial
+Consoles
+Machinery
+Generators
+Reactors
+Pipes
+Military
+Barricades
+Turrets
+Ammo crates
+Security stations
+Colony
+Hydroponics
+Market stalls
+Cargo
+Warehouses
+Medical
+Operating rooms
+Labs
+Cryo pods
+Ancient
+Altars
+Monoliths
+Statues
+Relics
+Tombs
+Alien
+Organic walls
+Egg chambers
+Hive growth
+Bioluminescence
+4. Token System
+
+Tokens should be first-class objects.
+
+Each token should have:
+
+Name
+Portrait
+Size
+Rotation
+Facing
+Health
+Armor
+Status effects
+Initiative
+Inventory
+Notes
+Hidden/revealed state
+Vision range
+Light source
+Movement history
+5. Encounter Management
+
+Instead of just drawing maps.
+
+Features:
+
+Initiative tracker
+Round tracker
+Turn timer
+Reinforcements
+Spawn zones
+Patrol routes
+Triggers
+Ambush markers
+Objectives
+Victory conditions
+6. Fog of War
+
+One of the most important systems.
+
+Support:
+
+Manual reveal
+Vision reveal
+Dynamic lighting
+Doors blocking vision
+Transparent windows
+Darkness
+Smoke
+Cameras
+Motion sensors
+7. Lighting
+
+Different light types.
+
+Examples:
+
+Flashlight
+Torch
+Emergency lights
+Floodlights
+Neon
+Computer screens
+Reactor glow
+Fire
+8. Measurement
+
+Quick tools.
+
+Distance ruler
+Blast radius
+Cone
+Line
+Circle
+Movement preview
+9. Annotation
+
+Useful during play.
+
+Draw
+Text
+Arrows
+Numbered locations
+GM notes
+Hidden notes
+Player notes
+10. Map Metadata
+
+Every map becomes searchable.
+
+Store:
+
+Planet
+Settlement
+Building
+District
+Environment
+Biome
+Threat Level
+Faction
+Tech Level
+Population
+Gravity
+Atmosphere
+Tags
+11. Procedural Generation
+
+This is where your interests are especially well served.
+
+Instead of drawing everything:
+
+Generate:
+
+Colony
+Space station
+Mine
+Derelict
+Laboratory
+Alien hive
+Ancient temple
+Bunker
+Cargo ship
+Frigate
+Arcology
+
+Each generated map should include:
+
+Logical room connections
+Departments
+Objectives
+Hazards
+NPC placements
+Loot
+Story hooks
+12. Campaign Integration
+
+Since you're building Saga Atlas, maps should link directly into the rest of the campaign.
+
+Each map can reference:
+
+Entity records
+Factions
+NPCs
+Journal entries
+Story Director scenes
+Oracles
+Missions
+Timers
+Progress tracks
+
+Clicking a room could open associated notes, NPCs, or scene information.
+
+13. Search & Organization
+
+As your library grows, retrieval becomes essential.
+
+Support:
+
+Collections
+Favorites
+Tags
+Filters
+Search
+Recent maps
+Templates
+Variants
+14. Export & Sharing
+
+Flexible output options:
+
+PNG
+PDF
+JSON
+VTT formats
+Print layouts
+High-resolution images
+Components I'd Prioritize for Saga Atlas
+
+Given everything we've discussed about your preferred workflow, I'd emphasize these capabilities:
+
+Priority	Component	Why it fits your goals
+★★★★★	Procedural map generation	Minimizes prep and supports surprise during solo play
+★★★★★	Tight integration with Story Director	Maps become part of the narrative, not isolated assets
+★★★★★	Entity-aware rooms	Rooms can contain linked NPCs, factions, clues, and journals
+★★★★★	Reusable room templates	Build libraries of labs, cargo bays, habitats, etc., for rapid assembly
+★★★★☆	Dynamic fog of war	Enhances exploration and discovery
+★★★★☆	Encounter overlays	Place enemies, hazards, and objectives without modifying the base map
+★★★★☆	Multi-level support	Essential for stations, ships, arcologies, and underground complexes
+★★★☆☆	Full drawing tools	Useful, but less important if procedural generation and modular assembly are strong
+
+For Saga Atlas, I would go one step further than most battlemap applications: rather than centering the experience on drawing, I'd make it room-centric. Users would assemble maps from reusable, metadata-rich room modules (e.g., "Medical Bay," "Hydroponics," "Ancient Shrine") that automatically carry appropriate props, encounters, environmental details, and story hooks. This approach aligns well with your preference for reducing cognitive load while preserving exploration, replayability, and emergent storytelling.
+END OF CHATGPT SUGGESTIONS

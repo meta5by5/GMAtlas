@@ -314,8 +314,9 @@ when each of those gets its own scoping pass.
   IndexedDB migration (~3.2GB observed headroom vs. the old ~5-10MB
   localStorage ceiling that migration replaced) — would have been a real
   risk before it, isn't now.
-- **Planetfall Grid Battlemap** — **Done** (2026-07-08, `docs/adr/0023-
-  planetfall-grid-battlemap.md`). Named maps (multiple per campaign), a
+- **Planetfall Grid Battlemap** — **In progress** (2026-07-08, `docs/adr/0023-
+  planetfall-grid-battlemap.md`; schema/data/domain/tests done, drawer UI
+  and CSS not yet wired). Named maps (multiple per campaign), a
   Gallery-sourced background (upload or pick existing), a small built-in
   annotation icon set (no real Planetfall art exists in this repo —
   `data/battlemapIcons.js`), freeform Cast-entity combatant tokens (art
@@ -327,28 +328,25 @@ when each of those gets its own scoping pass.
   placing a built-in icon is a simpler click-to-arm-then-click-to-place
   gesture. `domain/battlemaps.js` is pure CRUD (14 tests) mirroring
   `threads.js`'s shape.
-- **Planetfall Base Builder**: a second, gridless battlemap for colony/base
-  layout — a resizable background plus a palette of Planetfall's defined
-  assets/buildings, freeform-dragged onto the map. Each placed asset/
-  building creates (or links to) an Asset/Location entity tagged
-  `#colonyname` per the existing Colony worksheet convention
-  (`domain/colony.js`), rather than being purely decorative.
-- **Encounter Manager**: an NPC-from-Cast-drag-in combat tracker following
-  "the most popular formats and methods" GMs already use elsewhere (i.e.
-  a conventional initiative tracker, not a novel mechanic). Combat
-  resolution and initiative math read off `settings.statRuleset`
-  (the existing per-entity/per-campaign Rules Lens selector) so the same
-  tracker UI contextualizes differently per active ruleset instead of
-  hardcoding one system's turn structure.
-- **Interactive Maps**: an Owlbear-Rodeo-inspired map/token editor —
-  deliberately scoped toward "low learning curve and fast setup" over
-  feature parity with a dedicated VTT. Reuses Gallery's entity thumbnails
-  as tokens. Intended flow: Import Map → Add Tokens → Configure Encounter
-  (via the Encounter Manager above) → Play. Wants a click-drag distance
-  ruler with a resizable legend/scale bar (so the same ruler works across
-  wildly different battlemap resolutions), freeform-or-snap-to-grid token
-  placement, and an optional resizable square/hex grid overlay with its
-  own snap-to-grid toggle for OSR-style play.
+- **Base Builder / Encounter Manager / Interactive Maps — superseded by
+  `docs/adr/0024-battlemap-encounter-roadmap.md`** (2026-07-08). The
+  2026-07-08 request pasted a much larger ChatGPT-drafted VTT feature
+  wishlist (14 categories: canvas/navigation, building tools, an asset
+  library, a token system, encounter management, fog of war, lighting,
+  measurement, annotation, map metadata, procedural generation, campaign
+  integration, search/organization, export) and asked for it to be
+  prioritized as "an encounter and gameplay tool, not a map designer."
+  Reconciling that against this app's actual constraints (zero-dependency
+  DOM rendering, "genre-aware not genre-locked," Article IX's "extend via
+  engines, not parallel systems") collapsed what were three separate
+  proposed drawers into **one Battlemap subsystem with feature flags**
+  (gridless = `gridEnabled: false`, already true today) — see ADR 0024 for
+  the full sub-phase breakdown (11b–11f) and what's explicitly declined
+  (infinite canvas, dynamic lighting/raycasting, VTT export formats, full
+  freehand drawing tools). ADR 0024 also generalizes the "Planetfall
+  assets"/"Planetfall base builder" framing into a data-driven,
+  per-genre-pack room/asset library, matching `data/genrePacks.js`'s
+  existing convention rather than hardcoding one ruleset's building list.
 - **External links in rich-text fields** — **Done** (2026-07-07). Extends
   ADR 0018's markup with `[label](url)` (`domain/documents.js`'s
   `parseInlineNodes`/new `sanitizeExternalLinkUrl()`, `ui/mentionEditor.js`'s

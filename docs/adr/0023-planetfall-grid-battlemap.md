@@ -2,12 +2,20 @@
 
 ## Status
 
-Implemented (2026-07-08), the first of Phase 11's four remaining Visual &
-Tactical Tools items (`DESIGN-NEW-FUNCTIONALITY.md`, from `docs/adr/
-next-request.md`'s "Add to roadmap" batch) — Gallery (ADR 0021) and
-external links (ADR 0022's addendum context) shipped first; this is the
-next one, per the user's explicit choice this session over the other
-three (Base Builder, Encounter Manager, Interactive Maps).
+In progress (2026-07-08) — schema (`src/core/schema.js`), the built-in
+icon set (`src/data/battlemapIcons.js`), the pure domain module
+(`src/domain/battlemaps.js`, 14 tests), and the drawer's nav entry
+(`DRAWERS`/`EDGE_ORDER` in `shell.js`) are done; the drawer's render
+function (`src/ui/drawers/index.js`), its click/drag handlers
+(`completeBattlemapDrop`, placement/repositioning, the inline-prompt
+branches), and the canvas/grid/icon-marker CSS described below are not
+yet written. The first of Phase 11's Visual & Tactical Tools items
+(`DESIGN-NEW-FUNCTIONALITY.md`, from `docs/adr/next-request.md`'s "Add to
+roadmap" batch) — Gallery (ADR 0021) and external links (ADR 0022's
+addendum context) shipped first; this is the next one, per the user's
+explicit choice this session. See `docs/adr/0024-battlemap-encounter-
+roadmap.md` for how the rest of Phase 11 (Base Builder, Encounter
+Manager, Interactive Maps) has since been resequenced around this one.
 
 ## Context
 
