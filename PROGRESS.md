@@ -48,25 +48,27 @@ open) behind a small floating ☰ icon. Also: Enhancement types split
 40 jsdom smoke checks across two scripts plus `npm test` (321/321,
 unaffected — UI-only, no schema changes).
 
-**2026-07-08 Planetfall Grid Battlemap — in progress, not complete**
-(`docs/adr/0023-planetfall-grid-battlemap.md`), the first of Phase 11's
-tactical-tools items, scoped this session (four rounds of clarifying
-questions resolved what the original one-line ask left open: no
-grid/spatial concept existed anywhere in this app, no real Planetfall art
-exists in this repo, the existing drag-and-drop system was entirely
-target-based with no continuous x/y placement, and Gallery's image
-pipeline had exactly one call site tightly coupled to an entity). Done so
-far: the schema section, `data/battlemapIcons.js`'s built-in annotation
-set, `domain/battlemaps.js`'s pure CRUD (mirrors `threads.js`'s shape, 14
-tests), and the drawer's nav entry (`DRAWERS`/`EDGE_ORDER` in
-`shell.js`). **Not yet built**: the drawer's actual render function
-(`ui/drawers/index.js`), the click/drag handlers for placing and
-repositioning icons/tokens, the background-picker UI, and the canvas/
-grid CSS — an earlier pass in this log had claimed this feature (and a
-31-check jsdom verification) was finished; it wasn't, and that entry has
-been corrected rather than left standing per this file's own "the code
-wins" rule. `docs/adr/0024-battlemap-encounter-roadmap.md` sequences
-what comes after this finishes: encounter overlays (initiative/status,
+**2026-07-08 Planetfall Grid Battlemap** (`docs/adr/0023-planetfall-grid-
+battlemap.md`), the first of Phase 11's tactical-tools items, scoped that
+same session (four rounds of clarifying questions resolved what the
+original one-line ask left open: no grid/spatial concept existed anywhere
+in this app, no real Planetfall art exists in this repo, the existing
+drag-and-drop system was entirely target-based with no continuous x/y
+placement, and Gallery's image pipeline had exactly one call site tightly
+coupled to an entity). **Fully implemented**: the schema section,
+`data/battlemapIcons.js`'s built-in annotation set, `domain/
+battlemaps.js`'s pure CRUD (mirrors `threads.js`'s shape, 14 tests), the
+drawer's nav entry, its render function (`ui/drawers/index.js`'s
+`battlemap()`), the click/drag handlers for placing and repositioning
+icons/tokens (`completeBattlemapDrop` and friends, `ui/shell.js`), the
+background-picker UI, and the canvas/grid CSS — verified via 31 jsdom
+smoke-test checks across two scripts plus the full domain suite. A later
+pass this same day incorrectly logged the UI/handlers/CSS as unbuilt and
+marked this entry "in progress"; re-checked directly against the actual
+source and test run (not assumed) and corrected back, per this file's own
+"the code wins" rule — see ADR 0023's Status section for the fuller
+correction note. `docs/adr/0024-battlemap-encounter-roadmap.md` sequences
+what comes next regardless: encounter overlays (initiative/status,
 folding in the old separate Encounter Manager item), room/asset
 templates + procedural generation (folding in the old Base Builder item,
 generalized to be genre-pack data rather than Planetfall-only), deeper

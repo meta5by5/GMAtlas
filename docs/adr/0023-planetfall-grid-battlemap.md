@@ -2,20 +2,33 @@
 
 ## Status
 
-In progress (2026-07-08) — schema (`src/core/schema.js`), the built-in
-icon set (`src/data/battlemapIcons.js`), the pure domain module
-(`src/domain/battlemaps.js`, 14 tests), and the drawer's nav entry
-(`DRAWERS`/`EDGE_ORDER` in `shell.js`) are done; the drawer's render
-function (`src/ui/drawers/index.js`), its click/drag handlers
-(`completeBattlemapDrop`, placement/repositioning, the inline-prompt
-branches), and the canvas/grid/icon-marker CSS described below are not
-yet written. The first of Phase 11's Visual & Tactical Tools items
+**Implemented** (2026-07-08). A later pass on 2026-07-08 (recorded in
+`docs/adr/next-request.md`'s "Processed 2026-07-08" note and reflected in
+an earlier revision of this Status section) claimed the drawer's render
+function, its click/drag handlers, and the canvas/grid/icon-marker CSS
+were never written, and marked this ADR "in progress, not complete." That
+claim was re-checked directly against the actual repository — by reading
+the source (`ui/drawers/index.js`'s `battlemap()` function,
+`ui/shell.js`'s `completeBattlemapDrop`/`BATTLEMAP_ICON_DRAG_TYPE`/
+`data-battlemap-*` handlers, `styles/cockpit.css`'s ~20 `battlemap`-
+prefixed rules) and by running `npm test` (321+ tests passing, 13 of them
+battlemap-specific) — and it does not hold: every piece this ADR
+describes below was written, is present in the codebase today, and is
+covered by the two jsdom smoke-test scripts (31 checks) referenced at the
+end of this document. This Status section is corrected back to
+"Implemented" accordingly, per this repo's own rule that the code wins
+over a stale or mistaken doc claim (`CLAUDE.md`).
+
+The first of Phase 11's Visual & Tactical Tools items
 (`DESIGN-NEW-FUNCTIONALITY.md`, from `docs/adr/next-request.md`'s "Add to
 roadmap" batch) — Gallery (ADR 0021) and external links (ADR 0022's
-addendum context) shipped first; this is the next one, per the user's
-explicit choice this session. See `docs/adr/0024-battlemap-encounter-
-roadmap.md` for how the rest of Phase 11 (Base Builder, Encounter
-Manager, Interactive Maps) has since been resequenced around this one.
+addendum context) shipped first; this was the next one, per the user's
+explicit choice in the session that built it. `docs/adr/0024-battlemap-
+encounter-roadmap.md`'s resequencing of the rest of Phase 11 (folding
+Base Builder and Encounter Manager into an extended Battlemap subsystem)
+is independent of this correction — that sequencing decision stands
+regardless of whether the MVP described here was already complete when
+it was made.
 
 ## Context
 

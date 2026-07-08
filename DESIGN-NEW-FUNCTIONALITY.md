@@ -314,9 +314,11 @@ when each of those gets its own scoping pass.
   IndexedDB migration (~3.2GB observed headroom vs. the old ~5-10MB
   localStorage ceiling that migration replaced) — would have been a real
   risk before it, isn't now.
-- **Planetfall Grid Battlemap** — **In progress** (2026-07-08, `docs/adr/0023-
-  planetfall-grid-battlemap.md`; schema/data/domain/tests done, drawer UI
-  and CSS not yet wired). Named maps (multiple per campaign), a
+- **Planetfall Grid Battlemap** — **Done** (2026-07-08, `docs/adr/0023-
+  planetfall-grid-battlemap.md` — its Status section has the correction
+  note: a later same-day pass incorrectly logged the drawer UI/CSS as
+  unwired, re-verified against the actual source and a passing test run,
+  and corrected). Named maps (multiple per campaign), a
   Gallery-sourced background (upload or pick existing), a small built-in
   annotation icon set (no real Planetfall art exists in this repo —
   `data/battlemapIcons.js`), freeform Cast-entity combatant tokens (art
