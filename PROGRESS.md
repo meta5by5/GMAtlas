@@ -14,6 +14,33 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-08 Planetfall Grid Battlemap** (`docs/adr/0023-planetfall-grid-
+battlemap.md`) — the first of Phase 11's four remaining tactical-tools
+items, chosen and scoped this session (four rounds of clarifying
+questions resolved what the original one-line ask left open: no
+grid/spatial concept existed anywhere in this app, no real Planetfall art
+exists in this repo, the existing drag-and-drop system was entirely
+target-based with no continuous x/y placement, and Gallery's image
+pipeline had exactly one call site tightly coupled to an entity). A new
+drawer: named maps (multiple, switchable), a Gallery-sourced background
+(upload or pick existing), a toggleable grid overlay (CSS-only, never
+snaps), a small built-in annotation icon palette (`data/
+battlemapIcons.js`, since no real art exists to draw from), and freeform
+combatant tokens dragged in from Cast using that entity's own Gallery
+thumbnail as art. `domain/battlemaps.js` is pure CRUD mirroring
+`threads.js`'s exact shape (14 new tests). Placement/repositioning reuses
+native HTML5 drag-and-drop — a fourth custom MIME type lets an
+already-placed icon be redragged to a new spot, while dragging a Cast
+entity onto the canvas creates a new token; placing a built-in icon uses
+a simpler click-to-arm-then-click-to-place gesture instead of a third
+drag flow. A token's click opens its entity; an annotation's click opens
+the standard inline prompt (ADR 0022) to edit its note — no
+`window.prompt()` anywhere in this feature. Verified via 31 jsdom smoke
+checks plus `npm test` (321/321). Deliberately deferred: combat/turn
+tracking (Encounter Manager), snap-to-grid (Interactive Maps, designed to
+reuse this feature's grid-overlay groundwork), hex grids, distance
+measurement — all still-unscoped Phase 11 items.
+
 **2026-07-07 A single standard for inline data entry** (`docs/adr/0022-
 inline-prompt-standard.md`), on direct request: "do not have popup
 windows for data entry... create a standard approach and assure all
@@ -720,12 +747,16 @@ estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
     section's own ordering note. **External links in rich-text fields is
     now built too** (2026-07-07, see the Status Summary above) — it never
     needed the canvas-primitive research the other three do, so it didn't
-    have to wait its turn in the dependency order. **Remaining, still
-    unscoped:** Planetfall Grid Battlemap, Planetfall Base Builder,
-    Encounter Manager, and the Owlbear-Rodeo-style Interactive Maps editor
-    — each still wants its own research/ADR pass (a shared "canvas with
-    draggable icons" primitive) before starting, per this section's
-    original ordering note.
+    have to wait its turn in the dependency order. **Planetfall Grid
+    Battlemap is now built too** (2026-07-08, `docs/adr/0023-planetfall-
+    grid-battlemap.md`, see the Status Summary above) — absolutely-
+    positioned DOM elements plus this app's existing HTML5 drag-and-drop
+    system, extended with a fourth custom MIME type, turned out not to
+    need a genuinely new "canvas primitive" the way the original ordering
+    note assumed; whether Base Builder/Encounter Manager can reuse pieces
+    of it directly is a question for when each of those gets scoped.
+    **Remaining, still unscoped:** Planetfall Base Builder, Encounter
+    Manager, and the Owlbear-Rodeo-style Interactive Maps editor.
 - **UI/UX assumptions, resolved in the 2026-07-04 pass** (see Status
   Summary above): tabbed drawer switching replaced "only one drawer open at
   a time"; three real responsive tiers replaced one breakpoint; Escape and

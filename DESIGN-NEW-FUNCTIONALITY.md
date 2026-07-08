@@ -280,9 +280,16 @@ way Phase 10's items were. Each of these is a genuinely large addition
 expect a dedicated ADR and its own research/planning pass before any of
 them starts, the same discipline every other Phase-10-and-later item here
 already went through. Roughly ordered by dependency (Gallery's thumbnail
-pipeline is what Interactive Maps' token art would reuse; the two
-Planetfall tools and Encounter Manager all want a shared "canvas with
-draggable icons" primitive before Interactive Maps generalizes it further).
+pipeline is what Interactive Maps' token art would reuse). The original
+assumption here — that the two Planetfall tools and Encounter Manager all
+want a shared "canvas with draggable icons" primitive worth building
+first — turned out not to hold once the Battlemap was actually scoped:
+absolutely-positioned DOM elements plus this app's existing HTML5
+drag-and-drop system (extended with one new MIME type) covered it without
+inventing any new shared primitive at all. Whether Base Builder/Encounter
+Manager end up reusing pieces of `domain/battlemaps.js`/the Battlemap
+drawer's drag wiring directly, or just its pattern, is a question for
+when each of those gets its own scoping pass.
 
 - **Gallery** — **Done** (2026-07-07, `docs/adr/0021-gallery.md`). A new
   top-level drawer tab, per direct clarification (not folded into Cast or
@@ -307,12 +314,19 @@ draggable icons" primitive before Interactive Maps generalizes it further).
   IndexedDB migration (~3.2GB observed headroom vs. the old ~5-10MB
   localStorage ceiling that migration replaced) — would have been a real
   risk before it, isn't now.
-- **Planetfall Grid Battlemap**: a grid-based battlemap purpose-built for
-  5PFH Planetfall's specific rules, not a generic map tool. A resizable
-  background image; icons matching Planetfall's own visual language,
-  freeform drag-and-drop placement (not grid-locked); text-box annotations
-  represented as icons whose content is entered via a text field but
-  displayed as a hover tooltip.
+- **Planetfall Grid Battlemap** — **Done** (2026-07-08, `docs/adr/0023-
+  planetfall-grid-battlemap.md`). Named maps (multiple per campaign), a
+  Gallery-sourced background (upload or pick existing), a small built-in
+  annotation icon set (no real Planetfall art exists in this repo —
+  `data/battlemapIcons.js`), freeform Cast-entity combatant tokens (art
+  from the entity's own Gallery thumbnail), and a toggleable grid overlay
+  (visual reference only, never snaps placement — designed for Interactive
+  Maps below to build its own snap-to-grid on top of). Placement/
+  repositioning reuses this app's existing HTML5 drag-and-drop system (a
+  new custom MIME type, not a new coordinate-tracking input model);
+  placing a built-in icon is a simpler click-to-arm-then-click-to-place
+  gesture. `domain/battlemaps.js` is pure CRUD (14 tests) mirroring
+  `threads.js`'s shape.
 - **Planetfall Base Builder**: a second, gridless battlemap for colony/base
   layout — a resizable background plus a palette of Planetfall's defined
   assets/buildings, freeform-dragged onto the map. Each placed asset/

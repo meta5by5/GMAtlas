@@ -29,6 +29,11 @@ import { scanMechanicsIndex } from './mechanicsScan.js';
 import { scanAndGenerateToc } from './tocScan.js';
 import { loadAndMaybeResize } from './imageResize.js';
 import { addGalleryImages, removeGalleryImage, addGalleryTag, removeGalleryTag } from '../domain/gallery.js';
+import {
+  listBattlemaps, getBattlemap, getActiveBattlemap, createBattlemap, renameBattlemap, removeBattlemap,
+  setActiveBattlemap, setBattlemapBackground, setBattlemapGrid, addBattlemapIcon, moveBattlemapIcon,
+  updateBattlemapIcon, removeBattlemapIcon,
+} from '../domain/battlemaps.js';
 import { generateCreatureConcept, formatCreatureConcept, generateSiteConcept, formatSiteConcept, generateAdventureSeed, formatAdventureSeed } from '../domain/worldbuilding.js';
 import {
   addDocument, updateDocument, removeDocument, getDocument, addDocumentTag, removeDocumentTag, renameDocument,
@@ -88,6 +93,7 @@ const DRAWERS = [
   { id: 'trade', glyph: '💰', label: 'Trade' },
   { id: 'documents', glyph: '📄', label: 'Docs' },
   { id: 'gallery', glyph: '🖼', label: 'Gallery' },
+  { id: 'battlemap', glyph: '🗺', label: 'Battlemap' },
   { id: 'graph', glyph: '🔗', label: 'Graph' },
   { id: 'settings', glyph: '⚙', label: 'Settings' },
 ];
@@ -104,7 +110,7 @@ function drawerMeta(id) { return DRAWERS.find((d) => d.id === id) || DRAWER_META
 // CHANGES" QoL batch — they're still ordinary drawers otherwise (DRAWERS/
 // drawerMeta above is unchanged, still the source of truth for both groups'
 // glyph/label).
-const EDGE_ORDER = ['guide', 'oracle', 'cast', 'trade', 'documents', 'gallery', 'graph', 'copilot', 'settings'];
+const EDGE_ORDER = ['guide', 'oracle', 'cast', 'trade', 'documents', 'gallery', 'battlemap', 'graph', 'copilot', 'settings'];
 // The header's own small drawer-tab group, right-aligned in .header-actions
 // — same data-drawer-open routing as the edge nav (onClick's [data-drawer-
 // open] branch has no idea which container a button lives in), rendered by
@@ -147,6 +153,13 @@ let whereLocationTagFilter = null; // ephemeral — the Location tag currently s
 let galleryFilter = ''; // ephemeral — Gallery drawer search box
 let galleryTagFilters = new Set(); // ephemeral — Gallery drawer active tag filters
 let galleryTagListOpen = false; // ephemeral — collapses the Gallery drawer's tag-filter chip row, same as Documents' own
+// Planetfall Grid Battlemap (docs/adr/0023): the built-in icon key
+// currently "armed" from the palette (null = not placing anything) — a
+// click on the canvas while armed adds one annotation icon there and
+// clears this back to null. Dragging a Cast entity or an already-placed
+// icon onto the canvas is a separate path (native HTML5 DnD, below) that
+// never touches this flag at all.
+let battlemapPlacingIcon = null;
 // @-mention autocomplete (Journal input, Guide editor, WHO/WHERE/WHAT/WHY/HOW
 // context fields) — { field, start, end, items, activeIndex } while typing an
 // "@partial" run; start/end are the field.value indices of that run
@@ -601,6 +614,66 @@ function onClick(ev) {
       graphView = { scale, x: cx - newW / 2, y: cy - newH / 2 };
     }
     updateGraphViewBox();
+    return;
+  }
+
+  // --- Planetfall Grid Battlemap (Phase 11, docs/adr/0023) ------------------
+  // Checked BEFORE data-open-entity below: a placed token icon carries
+  // data-open-entity on its OUTER div (so a plain click opens that entity,
+  // same convention as everywhere else), but its ✕ remove badge is a
+  // DESCENDANT of that same div — without checking the more specific
+  // ✕/edit targets first, closest('[data-open-entity]') would match the
+  // ancestor and open the entity instead of removing the icon.
+  const bmIconRemove = hit('[data-battlemap-icon-remove]');
+  if (bmIconRemove) {
+    const [mapId, iconId] = bmIconRemove.dataset.battlemapIconRemove.split('::');
+    return store.update((d) => removeBattlemapIcon(d, mapId, iconId));
+  }
+  const bmIconEdit = hit('[data-battlemap-icon-edit]');
+  if (bmIconEdit) {
+    const [mapId, iconId] = bmIconEdit.dataset.battlemapIconEdit.split('::');
+    const map = getBattlemap(store.get(), mapId);
+    const icon = map && map.icons.find((i) => i.id === iconId);
+    if (!icon) return;
+    openInlinePrompt('battlemap-icon-note', {
+      label: 'Note (shown as a hover tooltip)', placeholder: 'What does the party see here?', value: icon.note || '',
+      meta: { mapId, iconId }, anchorRect: bmIconEdit.getBoundingClientRect(),
+    });
+    return;
+  }
+  const bmPalettePick = hit('[data-battlemap-palette-pick]');
+  if (bmPalettePick) {
+    const key = bmPalettePick.dataset.battlemapPalettePick;
+    battlemapPlacingIcon = battlemapPlacingIcon === key ? null : key;
+    return renderDrawerBody();
+  }
+  // The canvas itself — only acts if an icon is currently armed from the
+  // palette (battlemapPlacingIcon); a plain click with nothing armed does
+  // nothing (dragging a Cast entity or an existing icon onto it is the
+  // separate native-DnD path, onDrop, not this click handler). Checked
+  // after the icon-specific handlers above for the same reason — a click
+  // on an existing icon INSIDE the canvas must not also register as
+  // "place a new one here."
+  const bmCanvas = hit('[data-battlemap-canvas]');
+  if (bmCanvas && battlemapPlacingIcon) {
+    const mapId = bmCanvas.dataset.battlemapCanvas;
+    const rect = bmCanvas.getBoundingClientRect();
+    const x = rect.width ? (ev.clientX - rect.left) / rect.width : 0.5;
+    const y = rect.height ? (ev.clientY - rect.top) / rect.height : 0.5;
+    const key = battlemapPlacingIcon;
+    battlemapPlacingIcon = null;
+    return store.update((d) => addBattlemapIcon(d, mapId, { kind: 'annotation', iconKey: key, x, y }));
+  }
+  const bmSelect = hit('[data-battlemap-select]');
+  if (bmSelect) return store.update((d) => setActiveBattlemap(d, bmSelect.dataset.battlemapSelect));
+  const bmAdd = hit('[data-battlemap-add]');
+  if (bmAdd) {
+    openInlinePrompt('battlemap-add', { label: 'Map name', placeholder: 'e.g. Docking Bay 3', anchorRect: bmAdd.getBoundingClientRect() });
+    return;
+  }
+  const bmRemove = hit('[data-battlemap-remove]');
+  if (bmRemove) {
+    if (window.confirm('Delete this map? This cannot be undone.')) store.update((d) => removeBattlemap(d, bmRemove.dataset.battlemapRemove));
     return;
   }
 
@@ -1405,6 +1478,37 @@ function onChange(ev) {
   const t = ev.target;
   const whereTagSelect = t.closest('[data-where-tag-select]');
   if (whereTagSelect) { whereLocationTagFilter = whereTagSelect.value || null; return render(); }
+
+  // --- Planetfall Grid Battlemap (Phase 11, docs/adr/0023) ------------------
+  const bmRename = t.closest('[data-battlemap-rename]');
+  if (bmRename) return store.update((d) => renameBattlemap(d, bmRename.dataset.battlemapRename, t.value));
+  const bmBgSelect = t.closest('[data-battlemap-bg-select]');
+  if (bmBgSelect) return store.update((d) => setBattlemapBackground(d, bmBgSelect.dataset.battlemapBgSelect, t.value || null));
+  const bmGridToggle = t.closest('[data-battlemap-grid-toggle]');
+  if (bmGridToggle) return store.update((d) => setBattlemapGrid(d, bmGridToggle.dataset.battlemapGridToggle, { enabled: t.checked }));
+  const bmGridSize = t.closest('[data-battlemap-grid-size]');
+  if (bmGridSize) return store.update((d) => setBattlemapGrid(d, bmGridSize.dataset.battlemapGridSize, { size: Number(t.value) }));
+  // Background upload — the same client-side resize pipeline (ui/imageResize.js)
+  // the entity-photo upload already uses, just a new call site with no
+  // entityId: a battlemap background isn't owned by any one entity. A
+  // larger maxDim (1600, vs. an entity thumbnail's 256) since this is meant
+  // to actually be looked at full-drawer-width, not shown as a small photo.
+  const bmBgUpload = t.closest('[data-battlemap-bg-upload]');
+  if (bmBgUpload) {
+    const mapId = bmBgUpload.dataset.battlemapBgUpload;
+    const file = (t.files || [])[0];
+    if (!file) return;
+    loadAndMaybeResize(file, 1600)
+      .then(({ thumbDataUrl, originalDataUrl }) => {
+        store.update((d) => {
+          const r = addGalleryImages(d, { entityId: null, lockedTag: null, title: file.name, mimeType: file.type, thumbDataUrl, originalDataUrl });
+          return setBattlemapBackground(r.campaign, mapId, r.thumbnailId);
+        });
+        toast('Background added');
+      })
+      .catch((err) => toast(`Couldn't add background — ${err.message}`));
+    return;
+  }
   const sceneField = t.closest('[data-scene-field]');
   if (sceneField) {
     const [sceneId, field] = sceneField.dataset.sceneField.split('::');
@@ -2137,11 +2241,25 @@ const DOCUMENT_DRAG_TYPE = 'application/x-saga-document';
 // about tree structure), sharing only the same delegated dragstart/
 // dragover/dragleave/drop listeners (rule 4).
 const GUIDE_NODE_DRAG_TYPE = 'application/x-gmatlas-guide-node';
+// Repositioning an already-placed Battlemap icon (docs/adr/0023) — a
+// separate MIME type from ENTITY_DRAG_TYPE below since dropping an ENTITY
+// onto the battlemap canvas means something different (place a NEW token)
+// than dropping an EXISTING icon back onto it (move that one icon);
+// carries "mapId::iconId" the same "::"-joined-pair shape every other
+// battlemap data-* attribute here uses.
+const BATTLEMAP_ICON_DRAG_TYPE = 'application/x-gmatlas-battlemap-icon';
 
 function onDragStart(ev) {
   const guideSrc = ev.target.closest('[data-drag-guide-node]');
   if (guideSrc) {
     ev.dataTransfer.setData(GUIDE_NODE_DRAG_TYPE, guideSrc.dataset.dragGuideNode);
+    ev.dataTransfer.effectAllowed = 'move';
+    return;
+  }
+
+  const battlemapIconSrc = ev.target.closest('[data-drag-battlemap-icon]');
+  if (battlemapIconSrc) {
+    ev.dataTransfer.setData(BATTLEMAP_ICON_DRAG_TYPE, battlemapIconSrc.dataset.dragBattlemapIcon);
     ev.dataTransfer.effectAllowed = 'move';
     return;
   }
@@ -2167,6 +2285,10 @@ function onDragOver(ev) {
     if (target) { ev.preventDefault(); target.classList.add('drop-hover'); }
     return;
   }
+  if (types.includes(BATTLEMAP_ICON_DRAG_TYPE) || types.includes(ENTITY_DRAG_TYPE)) {
+    const bmTarget = ev.target.closest('[data-drop-battlemap]');
+    if (bmTarget) { ev.preventDefault(); bmTarget.classList.add('drop-hover'); return; }
+  }
   if (!types.includes(ENTITY_DRAG_TYPE) && !types.includes(DOCUMENT_DRAG_TYPE)) return;
   const target = ev.target.closest(DROP_TARGET_SELECTOR);
   if (target) { ev.preventDefault(); target.classList.add('drop-hover'); }
@@ -2186,12 +2308,42 @@ function onDrop(ev) {
   }
   const entityId = ev.dataTransfer.getData(ENTITY_DRAG_TYPE);
   const documentId = ev.dataTransfer.getData(DOCUMENT_DRAG_TYPE);
+  const battlemapIconRef = ev.dataTransfer.getData(BATTLEMAP_ICON_DRAG_TYPE);
+  const bmTarget = ev.target.closest('[data-drop-battlemap]');
+  if (bmTarget && (entityId || battlemapIconRef)) {
+    ev.preventDefault();
+    bmTarget.classList.remove('drop-hover');
+    completeBattlemapDrop(bmTarget, { entityId, battlemapIconRef }, ev.clientX, ev.clientY);
+    return;
+  }
   if (!entityId && !documentId) return;
   const target = ev.target.closest(DROP_TARGET_SELECTOR);
   if (!target) return;
   ev.preventDefault();
   target.classList.remove('drop-hover');
   completeDrop(target, { entityId, documentId }, ev.clientX, ev.clientY);
+}
+
+// Shared drop target for both placing a NEW token (dragging a Cast entity
+// chip on) and repositioning an EXISTING icon (dragging one of the map's
+// own icons back onto itself) — distinguished by which MIME type carried
+// data, same "one place decides what a drop actually does" posture as
+// completeDrop/completeGuideNodeDrop above.
+function completeBattlemapDrop(target, { entityId, battlemapIconRef }, clientX, clientY) {
+  const mapId = target.dataset.dropBattlemap;
+  const rect = target.getBoundingClientRect();
+  const x = rect.width ? (clientX - rect.left) / rect.width : 0.5;
+  const y = rect.height ? (clientY - rect.top) / rect.height : 0.5;
+  if (battlemapIconRef) {
+    const [srcMapId, iconId] = battlemapIconRef.split('::');
+    if (srcMapId !== mapId) return; // an icon only ever moves within its own map
+    return store.update((d) => moveBattlemapIcon(d, mapId, iconId, x, y));
+  }
+  if (entityId) {
+    const ent = getEntity(store.get(), entityId);
+    store.update((d) => addBattlemapIcon(d, mapId, { kind: 'token', entityId, label: ent ? ent.name || '' : '', x, y }));
+    toast(`${(ent && ent.name) || 'Token'} placed on the map`);
+  }
 }
 
 /** The Guide-tree reparent mutator both the mouse (onDrop) and touch
@@ -2546,6 +2698,10 @@ function commitInlinePrompt() {
     insertExtLinkMarkup(meta.field, meta.range, label, url);
   } else if (kind === 'mention-page') {
     applyMentionPage(meta.mentionEl, value);
+  } else if (kind === 'battlemap-add') {
+    store.update((d) => createBattlemap(d, value).campaign);
+  } else if (kind === 'battlemap-icon-note') {
+    store.update((d) => updateBattlemapIcon(d, meta.mapId, meta.iconId, { note: value }));
   }
 }
 
@@ -3014,6 +3170,7 @@ function buildDrawerUi() {
     tradeLocationId, tradeContractAddOpen,
     journalEditOpen, whereLocationTagFilter, graphFilter, helpOpen, settingsMenuOpen, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen,
+    battlemapPlacingIcon,
   };
 }
 

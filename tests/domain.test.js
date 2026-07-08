@@ -3424,3 +3424,188 @@ test('listEntityTagVocabulary respects the search filter the same way the entity
   assert.ok(narrowed.includes('blade'));
   assert.ok(!narrowed.includes('medical-gear'));
 });
+
+// --- Planetfall Grid Battlemap (Phase 11, docs/adr/0023) -------------------
+import {
+  listBattlemaps, getBattlemap, getActiveBattlemap, createBattlemap, renameBattlemap, removeBattlemap,
+  setActiveBattlemap, setBattlemapBackground, setBattlemapGrid, addBattlemapIcon, moveBattlemapIcon,
+  updateBattlemapIcon, removeBattlemapIcon,
+} from '../src/domain/battlemaps.js';
+
+test('a fresh campaign has no battlemaps; createBattlemap adds one, names it, and makes it active', () => {
+  let camp = defaultCampaign();
+  assert.deepEqual(listBattlemaps(camp), []);
+  assert.equal(getActiveBattlemap(camp), null);
+  let id; ({ campaign: camp, id } = createBattlemap(camp, 'Docking Bay 3'));
+  assert.equal(listBattlemaps(camp).length, 1);
+  const m = getBattlemap(camp, id);
+  assert.equal(m.name, 'Docking Bay 3');
+  assert.equal(m.backgroundImageId, null);
+  assert.equal(m.gridEnabled, false);
+  assert.equal(m.gridSize, 40);
+  assert.deepEqual(m.icons, []);
+  assert.equal(getActiveBattlemap(camp).id, id);
+});
+
+test('createBattlemap falls back to "New Map" for a blank/missing name', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createBattlemap(camp, '   '));
+  assert.equal(getBattlemap(camp, id).name, 'New Map');
+});
+
+test('getActiveBattlemap falls back to the first map when activeId is unset/stale, and to null with no maps', () => {
+  let camp = defaultCampaign();
+  let id1; ({ campaign: camp, id: id1 } = createBattlemap(camp, 'Map One'));
+  let id2; ({ campaign: camp, id: id2 } = createBattlemap(camp, 'Map Two'));
+  assert.equal(getActiveBattlemap(camp).id, id2); // creating a map makes it active
+  camp = removeBattlemap(camp, id2);
+  assert.equal(getActiveBattlemap(camp).id, id1); // falls back once the active one is gone
+  camp = removeBattlemap(camp, id1);
+  assert.equal(getActiveBattlemap(camp), null);
+});
+
+test('renameBattlemap ignores a blank name; removeBattlemap drops the map and re-targets activeId', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createBattlemap(camp, 'Original Name'));
+  camp = renameBattlemap(camp, id, 'Renamed');
+  assert.equal(getBattlemap(camp, id).name, 'Renamed');
+  camp = renameBattlemap(camp, id, '   ');
+  assert.equal(getBattlemap(camp, id).name, 'Renamed');
+  camp = removeBattlemap(camp, id);
+  assert.equal(getBattlemap(camp, id), null);
+  assert.equal(getActiveBattlemap(camp), null);
+});
+
+test('setActiveBattlemap switches the active map, and no-ops for an unknown id', () => {
+  let camp = defaultCampaign();
+  let id1; ({ campaign: camp, id: id1 } = createBattlemap(camp, 'Map One'));
+  let id2; ({ campaign: camp } = createBattlemap(camp, 'Map Two'));
+  camp = setActiveBattlemap(camp, id1);
+  assert.equal(getActiveBattlemap(camp).id, id1);
+  camp = setActiveBattlemap(camp, 'not-a-real-id');
+  assert.equal(getActiveBattlemap(camp).id, id1); // unchanged
+});
+
+test('setBattlemapBackground sets/clears a Gallery image reference', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createBattlemap(camp, 'Map'));
+  camp = setBattlemapBackground(camp, id, 'img_abc123');
+  assert.equal(getBattlemap(camp, id).backgroundImageId, 'img_abc123');
+  camp = setBattlemapBackground(camp, id, null);
+  assert.equal(getBattlemap(camp, id).backgroundImageId, null);
+});
+
+test('setBattlemapGrid toggles enabled and clamps size to [10, 200]', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createBattlemap(camp, 'Map'));
+  camp = setBattlemapGrid(camp, id, { enabled: true, size: 60 });
+  assert.equal(getBattlemap(camp, id).gridEnabled, true);
+  assert.equal(getBattlemap(camp, id).gridSize, 60);
+  camp = setBattlemapGrid(camp, id, { size: 9999 });
+  assert.equal(getBattlemap(camp, id).gridSize, 200);
+  camp = setBattlemapGrid(camp, id, { size: 1 });
+  assert.equal(getBattlemap(camp, id).gridSize, 10);
+  camp = setBattlemapGrid(camp, id, { enabled: false });
+  assert.equal(getBattlemap(camp, id).gridEnabled, false);
+  assert.equal(getBattlemap(camp, id).gridSize, 10); // untouched by the enabled-only call
+});
+
+test('addBattlemapIcon adds an annotation icon with iconKey/note, defaulting position to dead center', () => {
+  let camp = defaultCampaign();
+  let mapId; ({ campaign: camp, id: mapId } = createBattlemap(camp, 'Map'));
+  camp = addBattlemapIcon(camp, mapId, { kind: 'annotation', iconKey: 'hazard', note: 'Radiation leak' });
+  const icons = getBattlemap(camp, mapId).icons;
+  assert.equal(icons.length, 1);
+  assert.equal(icons[0].kind, 'annotation');
+  assert.equal(icons[0].iconKey, 'hazard');
+  assert.equal(icons[0].note, 'Radiation leak');
+  assert.equal(icons[0].entityId, null);
+  assert.equal(icons[0].x, 0.5);
+  assert.equal(icons[0].y, 0.5);
+});
+
+test('addBattlemapIcon adds a token icon linked to an entity, at a given position, clamped to [0,1]', () => {
+  let camp = defaultCampaign();
+  let mapId; ({ campaign: camp, id: mapId } = createBattlemap(camp, 'Map'));
+  let entId; ({ campaign: camp, id: entId } = createEntity(camp, { type: 'npc', name: 'Voss' }));
+  camp = addBattlemapIcon(camp, mapId, { kind: 'token', entityId: entId, x: 1.5, y: -0.5 });
+  const icon = getBattlemap(camp, mapId).icons[0];
+  assert.equal(icon.kind, 'token');
+  assert.equal(icon.entityId, entId);
+  assert.equal(icon.iconKey, '');
+  assert.equal(icon.x, 1); // clamped
+  assert.equal(icon.y, 0); // clamped
+});
+
+test('addBattlemapIcon no-ops for an unknown map or an invalid kind', () => {
+  let camp = defaultCampaign();
+  const before = camp;
+  camp = addBattlemapIcon(camp, 'not-a-real-map', { kind: 'annotation', iconKey: 'hazard' });
+  assert.deepEqual(camp, before);
+  let mapId; ({ campaign: camp, id: mapId } = createBattlemap(camp, 'Map'));
+  camp = addBattlemapIcon(camp, mapId, { kind: 'bogus' });
+  assert.equal(getBattlemap(camp, mapId).icons.length, 0);
+});
+
+test('moveBattlemapIcon updates position and clamps to [0,1]; no-ops for an unknown icon', () => {
+  let camp = defaultCampaign();
+  let mapId; ({ campaign: camp, id: mapId } = createBattlemap(camp, 'Map'));
+  camp = addBattlemapIcon(camp, mapId, { kind: 'annotation', iconKey: 'door' });
+  const iconId = getBattlemap(camp, mapId).icons[0].id;
+  camp = moveBattlemapIcon(camp, mapId, iconId, 0.2, 0.8);
+  assert.equal(getBattlemap(camp, mapId).icons[0].x, 0.2);
+  assert.equal(getBattlemap(camp, mapId).icons[0].y, 0.8);
+  camp = moveBattlemapIcon(camp, mapId, iconId, 5, -5);
+  assert.equal(getBattlemap(camp, mapId).icons[0].x, 1);
+  assert.equal(getBattlemap(camp, mapId).icons[0].y, 0);
+  const before = camp;
+  camp = moveBattlemapIcon(camp, mapId, 'not-a-real-icon', 0.1, 0.1);
+  assert.deepEqual(camp, before);
+});
+
+test('updateBattlemapIcon edits an annotation\'s note or a token\'s label, never the fixed kind/entityId/iconKey', () => {
+  let camp = defaultCampaign();
+  let mapId; ({ campaign: camp, id: mapId } = createBattlemap(camp, 'Map'));
+  camp = addBattlemapIcon(camp, mapId, { kind: 'annotation', iconKey: 'hazard', note: 'Original note' });
+  const annId = getBattlemap(camp, mapId).icons[0].id;
+  camp = updateBattlemapIcon(camp, mapId, annId, { note: 'Updated note' });
+  assert.equal(getBattlemap(camp, mapId).icons[0].note, 'Updated note');
+  assert.equal(getBattlemap(camp, mapId).icons[0].iconKey, 'hazard');
+
+  let entId; ({ campaign: camp, id: entId } = createEntity(camp, { type: 'npc', name: 'Voss' }));
+  camp = addBattlemapIcon(camp, mapId, { kind: 'token', entityId: entId, label: 'Fallback name' });
+  const tokId = getBattlemap(camp, mapId).icons[1].id;
+  camp = updateBattlemapIcon(camp, mapId, tokId, { label: 'New fallback' });
+  assert.equal(getBattlemap(camp, mapId).icons[1].label, 'New fallback');
+  assert.equal(getBattlemap(camp, mapId).icons[1].entityId, entId);
+  // A token's `note` patch is ignored (wrong field for its kind), an annotation's `label` patch is ignored too.
+  camp = updateBattlemapIcon(camp, mapId, tokId, { note: 'should not apply' });
+  assert.equal(getBattlemap(camp, mapId).icons[1].note, '');
+});
+
+test('removeBattlemapIcon drops just that icon, leaving the rest of the map intact', () => {
+  let camp = defaultCampaign();
+  let mapId; ({ campaign: camp, id: mapId } = createBattlemap(camp, 'Map'));
+  camp = addBattlemapIcon(camp, mapId, { kind: 'annotation', iconKey: 'door' });
+  camp = addBattlemapIcon(camp, mapId, { kind: 'annotation', iconKey: 'crate' });
+  const [first, second] = getBattlemap(camp, mapId).icons;
+  camp = removeBattlemapIcon(camp, mapId, first.id);
+  const remaining = getBattlemap(camp, mapId).icons;
+  assert.equal(remaining.length, 1);
+  assert.equal(remaining[0].id, second.id);
+});
+
+test('multiple named maps coexist independently — icons/background/grid on one never affect another', () => {
+  let camp = defaultCampaign();
+  let idA; ({ campaign: camp, id: idA } = createBattlemap(camp, 'Map A'));
+  let idB; ({ campaign: camp, id: idB } = createBattlemap(camp, 'Map B'));
+  camp = setBattlemapBackground(camp, idA, 'img_a');
+  camp = setBattlemapGrid(camp, idB, { enabled: true });
+  camp = addBattlemapIcon(camp, idA, { kind: 'annotation', iconKey: 'hazard' });
+  assert.equal(getBattlemap(camp, idA).backgroundImageId, 'img_a');
+  assert.equal(getBattlemap(camp, idB).backgroundImageId, null);
+  assert.equal(getBattlemap(camp, idA).gridEnabled, false);
+  assert.equal(getBattlemap(camp, idB).gridEnabled, true);
+  assert.equal(getBattlemap(camp, idA).icons.length, 1);
+  assert.equal(getBattlemap(camp, idB).icons.length, 0);
+});

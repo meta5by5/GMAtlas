@@ -70,6 +70,18 @@ export function defaultCampaign(now = new Date().toISOString()) {
     // default shape below) points at one of these images.
     gallery: { images: [] },
 
+    // Planetfall Grid Battlemap (Phase 11, docs/adr/0023-planetfall-grid-
+    // battlemap.md): named maps, each an optional background (a Gallery
+    // image id — see gallery above) plus freeform-placed icons (kind:
+    // 'annotation', from data/battlemapIcons.js, or kind: 'token', linking
+    // a real Party/NPC entity). x/y are 0-1 fractions of the rendered
+    // canvas, not pixels, so a map reads correctly regardless of the
+    // browser window it's opened in. Additive/lazy-init like every other
+    // section here — an old campaign missing this key just gets the
+    // default `{ maps: [], activeId: null }` filled in by withDefaults(),
+    // no migrate.js step needed.
+    battlemaps: { maps: [], activeId: null },
+
     // Party-wide resource trackers not tied to any one entity (credits,
     // custom clocks, timers) — the Party tab's member roster is instead a
     // live filter over entities (NPC + #character tag), not stored here.

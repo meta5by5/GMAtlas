@@ -34,6 +34,8 @@ import { GEAR_TEMPLATE_SYSTEMS, findGearTemplate } from '../../data/gearTemplate
 import { GEAR_CATALOG, findCatalogItem } from '../../data/gearCatalog.js';
 import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel } from '../../data/rulesConstitution.js';
 import { listGalleryImages, listGalleryTagVocabulary, getGalleryImage } from '../../domain/gallery.js';
+import { listBattlemaps, getActiveBattlemap } from '../../domain/battlemaps.js';
+import { BATTLEMAP_ICONS, findBattlemapIcon } from '../../data/battlemapIcons.js';
 import { GENRE_PACKS, bestiaryTerm } from '../../data/genrePacks.js';
 import { ECONOMY_MODELS, economyTypesForModel } from '../../data/economyTypes.js';
 import { DOCS_MANIFEST } from '../../data/docsManifest.js';
@@ -58,6 +60,7 @@ export function renderDrawer(id, doc, ui = {}) {
     case 'graph': return graph(doc, ui);
     case 'documents': return documents(doc, ui);
     case 'gallery': return gallery(doc, ui);
+    case 'battlemap': return battlemap(doc, ui);
     default: return `<p class="ws-placeholder">Drawer “${esc(id)}”.</p>`;
   }
 }
@@ -1768,5 +1771,75 @@ function gallery(doc, ui = {}) {
     </div>` : ''}` : ''}
     <div class="gallery-grid">
       ${images.length ? cards : '<p class="ws-placeholder">No images yet — add a photo from any entity\'s inspector.</p>'}
+    </div>`;
+}
+
+// Planetfall Grid Battlemap (Phase 11, docs/adr/0023-planetfall-grid-
+// battlemap.md): named maps, each an optional Gallery-sourced background
+// plus freeform-placed icons (annotations from the built-in set, or
+// combatant tokens linking a real Cast entity — art from that entity's own
+// Gallery thumbnail). Placement/repositioning is native HTML5 drag-and-drop
+// (shell.js's existing entity-drag system, extended with a new MIME type
+// for repositioning an already-placed icon) plus a click-to-arm-then-
+// click-to-place path for the built-in icon palette — see shell.js's
+// onClick/onDragStart/onDrop for the actual interaction wiring; this
+// function only ever renders the current state.
+function battlemap(doc, ui = {}) {
+  const helpKey = 'battlemap-intro';
+  const maps = listBattlemaps(doc);
+  const active = getActiveBattlemap(doc);
+
+  const head = `${sectionHeadRow('h3', 'Planetfall Grid Battlemap', helpKey)}
+    ${helpBody(helpKey, 'Upload or pick a background image, then place icons (hazards, doors, notes — from the palette below) or drag a Cast entity onto the map to place a combatant token. Drag any placed icon to reposition it; click a token to open its entity, click an annotation to edit its note.', ui)}
+    <div class="battlemap-tabs">
+      ${maps.map((m) => `<button type="button" class="btn ghost sm ${active && active.id === m.id ? 'active' : ''}" data-battlemap-select="${esc(m.id)}">${esc(m.name)}</button>`).join('')}
+      <button type="button" class="chip sm" data-battlemap-add>＋ New Map</button>
+    </div>`;
+
+  if (!active) return `${head}<p class="ws-placeholder">No maps yet — create one to get started.</p>`;
+
+  const bg = active.backgroundImageId ? getGalleryImage(doc, active.backgroundImageId) : null;
+  const pickableImages = listGalleryImages(doc, {}).filter((img) => img.kind === 'thumbnail');
+
+  const palette = BATTLEMAP_ICONS.map((i) => `
+    <button type="button" class="chip sm ${ui.battlemapPlacingIcon === i.key ? 'active' : ''}" data-battlemap-palette-pick="${esc(i.key)}" title="${esc(i.label)}">${i.glyph} ${esc(i.label)}</button>`).join('');
+
+  const markers = active.icons.map((icon) => {
+    const posStyle = `left:${(icon.x * 100).toFixed(2)}%;top:${(icon.y * 100).toFixed(2)}%`;
+    const ref = `${active.id}::${icon.id}`;
+    if (icon.kind === 'annotation') {
+      const def = findBattlemapIcon(icon.iconKey);
+      return `<div class="battlemap-icon" draggable="true" data-drag-battlemap-icon="${esc(ref)}" data-battlemap-icon-edit="${esc(ref)}" style="${posStyle}" title="${esc(icon.note || (def ? def.label : ''))}">
+        <span class="battlemap-icon-glyph">${def ? def.glyph : '❓'}</span>
+        <button type="button" class="icon-btn battlemap-icon-remove" data-battlemap-icon-remove="${esc(ref)}" aria-label="Remove">✕</button>
+      </div>`;
+    }
+    const ent = icon.entityId ? getEntity(doc, icon.entityId) : null;
+    const thumb = ent && ent.thumbnailId ? getGalleryImage(doc, ent.thumbnailId) : null;
+    const name = ent ? (ent.name || 'Unnamed') : (icon.label || 'Unknown');
+    return `<div class="battlemap-icon battlemap-token" draggable="true" data-drag-battlemap-icon="${esc(ref)}" ${ent ? `data-open-entity="${esc(ent.id)}"` : ''} style="${posStyle}" title="${esc(name)}">
+      ${thumb ? `<img class="battlemap-token-img" src="${esc(thumb.dataUrl)}" alt="${esc(name)}">` : `<span class="battlemap-token-fallback">${esc((name[0] || '?').toUpperCase())}</span>`}
+      <button type="button" class="icon-btn battlemap-icon-remove" data-battlemap-icon-remove="${esc(ref)}" aria-label="Remove">✕</button>
+    </div>`;
+  }).join('');
+
+  return `${head}
+    <div class="battlemap-toolbar">
+      <input class="battlemap-name-input" data-battlemap-rename="${esc(active.id)}" value="${esc(active.name)}" placeholder="Map name">
+      <button type="button" class="icon-btn" data-battlemap-remove="${esc(active.id)}" title="Delete this map" aria-label="Delete map">✕</button>
+      <label class="chip sm">🖼 Background<input type="file" accept="image/*" data-battlemap-bg-upload="${esc(active.id)}" hidden></label>
+      ${pickableImages.length ? `<select data-battlemap-bg-select="${esc(active.id)}">
+        <option value="">— pick existing image —</option>
+        ${pickableImages.map((img) => `<option value="${esc(img.id)}" ${active.backgroundImageId === img.id ? 'selected' : ''}>${esc(img.title || img.id)}</option>`).join('')}
+      </select>` : ''}
+      <label class="chip sm"><input type="checkbox" data-battlemap-grid-toggle="${esc(active.id)}" ${active.gridEnabled ? 'checked' : ''}> Grid</label>
+      ${active.gridEnabled ? `<input type="number" class="battlemap-grid-size-input" min="10" max="200" value="${active.gridSize}" data-battlemap-grid-size="${esc(active.id)}" title="Grid cell size (px)">` : ''}
+    </div>
+    <div class="battlemap-palette">${palette}</div>
+    <div class="battlemap-canvas ${ui.battlemapPlacingIcon ? 'placing' : ''}" data-battlemap-canvas="${esc(active.id)}" data-drop-battlemap="${esc(active.id)}"
+      style="${bg ? `background-image:url('${esc(bg.dataUrl)}');` : ''}${active.gridEnabled ? `--battlemap-grid-size:${active.gridSize}px;` : ''}">
+      ${!bg ? '<p class="ws-placeholder battlemap-placeholder">No background set — upload or pick an image above.</p>' : ''}
+      ${active.gridEnabled ? '<div class="battlemap-grid-overlay"></div>' : ''}
+      ${markers}
     </div>`;
 }
