@@ -313,7 +313,7 @@ import { advise } from '../src/domain/copilot.js';
 import {
   addDocument, updateDocument, removeDocument, parseDocumentMentions, parseDocumentMentionRefs, linkDocumentMentions, listDocumentMentions,
   findDocumentTabByTitle, openDocumentTab, closeDocumentTab, resolveDocumentTab, resolvedDocumentMentionNames, listReferenceDocuments,
-  parseTextBlocks, parseInlineNodes,
+  parseTextBlocks, parseInlineNodes, sanitizeExternalLinkUrl,
 } from '../src/domain/documents.js';
 import { titleFromFilename } from '../src/domain/titleCase.js';
 
@@ -387,6 +387,52 @@ test('parseInlineNodes: a delimiter never matches across a line break', () => {
 test('parseInlineNodes: small (~text~) and large (^text^) wrap their content', () => {
   assert.deepEqual(parseInlineNodes('~fine print~'), [{ type: 'small', children: [{ type: 'text', text: 'fine print' }] }]);
   assert.deepEqual(parseInlineNodes('^BIG^'), [{ type: 'large', children: [{ type: 'text', text: 'BIG' }] }]);
+});
+
+// --- external links in rich text (Phase 11 backlog) -----------------------
+test('sanitizeExternalLinkUrl: accepts a plain http(s) URL and normalizes it', () => {
+  assert.equal(sanitizeExternalLinkUrl('https://example.com/rules'), 'https://example.com/rules');
+  assert.equal(sanitizeExternalLinkUrl('http://example.com'), 'http://example.com/');
+});
+
+test('sanitizeExternalLinkUrl: auto-prepends https:// to a bare domain', () => {
+  assert.equal(sanitizeExternalLinkUrl('example.com/rules'), 'https://example.com/rules');
+});
+
+test('sanitizeExternalLinkUrl: strips a query string entirely (the explicit security ask)', () => {
+  assert.equal(sanitizeExternalLinkUrl('https://example.com/page?tracking=123&x=y'), 'https://example.com/page');
+});
+
+test('sanitizeExternalLinkUrl: rejects a non-http(s) scheme (javascript:/data: cannot reach a rendered href)', () => {
+  assert.equal(sanitizeExternalLinkUrl('javascript:alert(1)'), null);
+  assert.equal(sanitizeExternalLinkUrl('data:text/html,<script>1</script>'), null);
+});
+
+test('sanitizeExternalLinkUrl: rejects empty/garbage input instead of throwing', () => {
+  assert.equal(sanitizeExternalLinkUrl(''), null);
+  assert.equal(sanitizeExternalLinkUrl('   '), null);
+  assert.equal(sanitizeExternalLinkUrl('not a url at all'), null);
+});
+
+test('parseInlineNodes: [label](url) becomes a link node with a sanitized url', () => {
+  const nodes = parseInlineNodes('See [the rulebook](https://example.com/rules?ref=abc) for details');
+  assert.deepEqual(nodes, [
+    { type: 'text', text: 'See ' },
+    { type: 'link', url: 'https://example.com/rules', children: [{ type: 'text', text: 'the rulebook' }] },
+    { type: 'text', text: ' for details' },
+  ]);
+});
+
+test('parseInlineNodes: a link label can itself carry bold/italic formatting', () => {
+  const nodes = parseInlineNodes('[**bold label**](https://example.com)');
+  assert.deepEqual(nodes, [
+    { type: 'link', url: 'https://example.com/', children: [{ type: 'bold', children: [{ type: 'text', text: 'bold label' }] }] },
+  ]);
+});
+
+test('parseInlineNodes: a [label](url) whose url is unsafe renders as literal bracket text, not a link', () => {
+  const nodes = parseInlineNodes('[click me](javascript:alert(1))');
+  assert.equal(nodes.some((n) => n.type === 'link'), false);
 });
 
 test('parseTextBlocks: recognizes a pipe table (header + --- separator + rows)', () => {

@@ -14,6 +14,25 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-07 External links in rich-text fields** (Phase 11 backlog): the
+one backlog item small enough to build without the shared canvas-primitive
+research the three tactical-tools items (Battlemap/Base Builder/Encounter
+Manager/Interactive Maps) still need first. Extends ADR 0018's markup with
+`[label](url)`, parsed/rendered/serialized the same "plain text is the
+source of truth" way as bold/italic/underline. `domain/documents.js`'s new
+`sanitizeExternalLinkUrl()` auto-prepends `https://` to a bare domain,
+strips a `?` query string and everything after it entirely (the explicit
+security ask), and rejects anything that isn't a real http(s) URL — a link
+that fails this renders as literal bracket text, never a broken link. A
+new 🔗 toolbar button wraps the current selection like Bold/Italic already
+do; the rendered `<a class="ext-link" target="_blank" rel="noopener
+noreferrer">` needed its own delegated-click handler (`data-ext-link`)
+since a plain click on an anchor inside a contenteditable region only
+places the caret by default. Verified via 8 new `npm test` cases plus
+three angles of DOM-level verification (jsdom's toolbar-insertion flow,
+and direct `buildMentionEditorHTML`/`serializeMentionEditor` calls,
+working around jsdom's lack of `isContentEditable` support).
+
 **2026-07-07 Latest Scene readability follow-up**: the 7 scene fields are
 now single-column `<textarea rows="1">`s (not `<input>`) instead of a
 multi-column grid — full-sentence fields read better in one legible
@@ -675,7 +694,15 @@ estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
     starting, same as every other substantial addition in this file.
     **Gallery is now built** (2026-07-07, `docs/adr/0021-gallery.md`, see
     the Status Summary above) — the dependency-root item per this
-    section's own ordering note; the remaining four are still unscoped.
+    section's own ordering note. **External links in rich-text fields is
+    now built too** (2026-07-07, see the Status Summary above) — it never
+    needed the canvas-primitive research the other three do, so it didn't
+    have to wait its turn in the dependency order. **Remaining, still
+    unscoped:** Planetfall Grid Battlemap, Planetfall Base Builder,
+    Encounter Manager, and the Owlbear-Rodeo-style Interactive Maps editor
+    — each still wants its own research/ADR pass (a shared "canvas with
+    draggable icons" primitive) before starting, per this section's
+    original ordering note.
 - **UI/UX assumptions, resolved in the 2026-07-04 pass** (see Status
   Summary above): tabbed drawer switching replaced "only one drawer open at
   a time"; three real responsive tiers replaced one breakpoint; Escape and

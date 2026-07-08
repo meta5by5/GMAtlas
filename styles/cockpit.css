@@ -478,6 +478,13 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 }
 .mention-link.mention-link-active:hover { color: var(--accent-strong); border-bottom-color: var(--accent-strong); }
 
+/* An external link (Phase 11 backlog: "[label](url)", always a real,
+   already-sanitized href — unlike a mention it can never be "unresolved,"
+   so it's always the solid-underline active style, never the dotted
+   not-yet-linked one above. */
+.ext-link { color: var(--accent); text-decoration: underline; cursor: pointer; }
+.ext-link:hover { color: var(--accent-strong); }
+
 .action-bar { display: flex; gap: var(--sp-3); margin-top: var(--sp-4); flex-wrap: wrap; }
 .shift-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-3); flex-wrap: wrap; }
 /* Suggestion Lens picker (docs/adr/0009) — "What Happens Next?"'s chip draw. */

@@ -74,6 +74,12 @@ function renderInlineNodes(doc, nodes) {
     else if (node.type === 'underline') html += `<u>${renderInlineNodes(doc, node.children)}</u>`;
     else if (node.type === 'small') html += `<small>${renderInlineNodes(doc, node.children)}</small>`;
     else if (node.type === 'large') html += `<span class="rt-lg">${renderInlineNodes(doc, node.children)}</span>`;
+    // node.url already passed sanitizeExternalLinkUrl (documents.js's
+    // parseInlineNodes only ever produces a 'link' node for a url that
+    // did) — target=_blank always pairs with rel=noopener/noreferrer here,
+    // never left off, since this is the one place this app renders a
+    // user-authored href.
+    else if (node.type === 'link') html += `<a class="ext-link" data-ext-link="${escAttr(node.url)}" href="${escAttr(node.url)}" target="_blank" rel="noopener noreferrer" title="Opens in a new tab: ${escAttr(node.url)}">${renderInlineNodes(doc, node.children)}</a>`;
   }
   return html;
 }
@@ -136,6 +142,12 @@ export function serializeMentionEditor(container) {
     if (node.tagName === 'U') { out += '_'; for (const c of node.childNodes) walk(c); out += '_'; return; }
     if (node.tagName === 'SMALL') { out += '~'; for (const c of node.childNodes) walk(c); out += '~'; return; }
     if (node.classList && node.classList.contains('rt-lg')) { out += '^'; for (const c of node.childNodes) walk(c); out += '^'; return; }
+    if (node.tagName === 'A' && node.classList.contains('ext-link')) {
+      out += '[';
+      for (const c of node.childNodes) walk(c);
+      out += `](${node.getAttribute('href') || ''})`;
+      return;
+    }
     if (node.tagName === 'UL' || node.tagName === 'OL') {
       const marker = node.tagName === 'UL' ? '- ' : '1. ';
       const items = [...node.children].filter((c) => c.tagName === 'LI');
@@ -181,6 +193,12 @@ function serializeTableCell(node) {
     if (n.tagName === 'U') { out += '_'; for (const c of n.childNodes) walk(c); out += '_'; return; }
     if (n.tagName === 'SMALL') { out += '~'; for (const c of n.childNodes) walk(c); out += '~'; return; }
     if (n.classList && n.classList.contains('rt-lg')) { out += '^'; for (const c of n.childNodes) walk(c); out += '^'; return; }
+    if (n.tagName === 'A' && n.classList.contains('ext-link')) {
+      out += '[';
+      for (const c of n.childNodes) walk(c);
+      out += `](${n.getAttribute('href') || ''})`;
+      return;
+    }
     for (const c of n.childNodes) walk(c);
   }
   walk(node);
@@ -213,6 +231,7 @@ export function richToolbarHTML() {
     <button type="button" class="icon-btn" data-rich-cmd="small" title="Small text (~text~)"><small>a</small></button>
     <button type="button" class="icon-btn" data-rich-cmd="large" title="Large text (^text^)"><b>A</b></button>
     <button type="button" class="icon-btn" data-rich-cmd="table" title="Insert a table — add more rows/columns by typing more | cells |">▦</button>
+    <button type="button" class="icon-btn" data-rich-cmd="link" title="Insert an external link ([label](url)) — opens in a new tab; any ?query string is stripped">🔗</button>
   </div>`;
 }
 

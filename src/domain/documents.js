@@ -511,19 +511,49 @@ export function parseTextBlocks(text) {
   return blocks;
 }
 
+/** Validates/normalizes a GM-entered external link URL for the rich-text
+ *  toolbar's Link button (Phase 11 backlog item, `docs/adr/next-request.md`:
+ *  "textboxes [can] have external links that open into a new browser tab.
+ *  The link cannot have any additions using the ? and after"). Auto-
+ *  prepends `https://` if no scheme was typed (a bare "example.com" is the
+ *  common case a GM would actually type); strips a query string entirely
+ *  (`?` and everything after) per that explicit security ask — closes off
+ *  `?tracking=...`/injection-via-params as a vector. Returns null (not a
+ *  link at all, never a broken one) for anything that isn't a real http(s)
+ *  URL once normalized — this is also what keeps `javascript:`/`data:`/etc.
+ *  from ever reaching a rendered `href`. Pure — no DOM, so a hand-edited
+ *  export or an old value round-tripping through parseInlineNodes below
+ *  gets the exact same defense as a freshly-typed one. */
+export function sanitizeExternalLinkUrl(raw) {
+  let input = String(raw || '').trim();
+  if (!input) return null;
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(input)) input = 'https://' + input;
+  const stripped = input.split('?')[0];
+  let parsed;
+  try { parsed = new URL(stripped); } catch { return null; }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+  return parsed.href;
+}
+
 /** Parse @mentions plus `**bold**`/`*italic*`/`_underline_`/`~small~`/
- *  `^large^` inline markup in
+ *  `^large^`/`[label](url)` inline markup in
  *  `text` into a small node tree: {type:'text', text} | {type:'mention',
- *  name, page, label} | {type:'bold'|'italic'|'underline', children}.
- *  Mentions are atomic leaves — never split by a formatting boundary — but
- *  bold/italic/underline content is parsed recursively, so e.g. a mention
- *  can sit inside bold text. A delimiter never matches across a line break,
- *  matching common Markdown-lite convention (an unclosed `**` at the end of
- *  a paragraph just renders as a literal `**`, not a bold run swallowing
- *  everything after it). Used by ui/mentionEditor.js only — the mention-only
- *  scan (`scanMentions`/`parseDocumentMentionRefs` and everything built on
- *  them: linkDocumentMentions, resolvedDocumentMentionNames, ...) is
- *  untouched, since those only ever care about the @mention shape. */
+ *  name, page, label} | {type:'bold'|'italic'|'underline', children} |
+ *  {type:'link', url, children}. Mentions are atomic leaves — never split
+ *  by a formatting boundary — but bold/italic/underline/link content is
+ *  parsed recursively, so e.g. a mention can sit inside bold text, or bold
+ *  text inside a link label. A delimiter never matches across a line
+ *  break, matching common Markdown-lite convention (an unclosed `**` at
+ *  the end of a paragraph just renders as a literal `**`, not a bold run
+ *  swallowing everything after it) — `[label](url)` follows the same rule
+ *  for both its bracket pairs. A `[...](...)` whose url doesn't survive
+ *  sanitizeExternalLinkUrl renders as literal bracket text, never a link —
+ *  this is the one delimiter type that can fail to match for a reason
+ *  other than an unclosed pair. Used by ui/mentionEditor.js only — the
+ *  mention-only scan (`scanMentions`/`parseDocumentMentionRefs` and
+ *  everything built on them: linkDocumentMentions,
+ *  resolvedDocumentMentionNames, ...) is untouched, since those only ever
+ *  care about the @mention shape. */
 export function parseInlineNodes(text) {
   const source = String(text || '');
   const mentions = scanMentions(source);
@@ -543,6 +573,29 @@ export function parseInlineNodes(text) {
         nodes.push({ type: 'mention', name: m.name, page: m.page, label: m.label });
         i = m.end; textStart = i; mi++;
         continue;
+      }
+
+      // [label](url) external link — checked before the symmetric-marker
+      // delimiters below since it's a two-part, asymmetric shape they can't
+      // express. A stray '[' that isn't part of a well-formed pair (no ']',
+      // no '(' immediately after, no closing ')', a line break inside
+      // either part, or a url that fails sanitizeExternalLinkUrl) just
+      // falls through to i++ and renders as a literal character, same as
+      // any other unmatched marker.
+      if (source[i] === '[') {
+        const closeBracket = source.indexOf(']', i + 1);
+        if (closeBracket !== -1 && closeBracket < end && !source.slice(i + 1, closeBracket).includes('\n') && source[closeBracket + 1] === '(') {
+          const closeParen = source.indexOf(')', closeBracket + 2);
+          if (closeParen !== -1 && closeParen < end && !source.slice(closeBracket + 2, closeParen).includes('\n')) {
+            const url = sanitizeExternalLinkUrl(source.slice(closeBracket + 2, closeParen));
+            if (url) {
+              flush(i);
+              nodes.push({ type: 'link', url, children: parseRange(i + 1, closeBracket) });
+              i = closeParen + 1; textStart = i;
+              continue;
+            }
+          }
+        }
       }
 
       const two = source.slice(i, i + 2);

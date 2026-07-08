@@ -335,17 +335,27 @@ draggable icons" primitive before Interactive Maps generalizes it further).
   wildly different battlemap resolutions), freeform-or-snap-to-grid token
   placement, and an optional resizable square/hex grid overlay with its
   own snap-to-grid toggle for OSR-style play.
-- **External links in rich-text fields** (a small, mostly-independent
-  addition — extends ADR 0018's mention/link syntax, not a new subsystem):
-  a textbox link that opens in a new browser tab, restricted to a bare
-  URL with no query string (explicitly to close off using `?params` as an
-  injection/tracking vector) — the one security constraint named
-  alongside the ask.
+- **External links in rich-text fields** — **Done** (2026-07-07). Extends
+  ADR 0018's markup with `[label](url)` (`domain/documents.js`'s
+  `parseInlineNodes`/new `sanitizeExternalLinkUrl()`, `ui/mentionEditor.js`'s
+  render/serialize, a new 🔗 toolbar button). Auto-prepends `https://` to a
+  bare domain; strips a `?` query string and everything after it entirely
+  (the named security constraint); rejects anything that isn't a real
+  http(s) URL once normalized — this is also what keeps a `javascript:`/
+  `data:` scheme from ever reaching a rendered `href`. Renders as a real
+  `<a target="_blank" rel="noopener noreferrer">`, opened via its own
+  delegated-click handler (a plain click on an anchor inside a
+  contenteditable region only places the caret by default, in every engine
+  this app targets — the same reason `.mention-link` navigation already
+  needed one). This was the one item on this list small/independent enough
+  to skip the shared canvas-primitive research the other three still want.
 
 Sequencing/effort estimates aren't given here on purpose — unlike Phase
 10's items, none of these were scoped against actual code yet; a rough
 "Gallery first, since three later items depend on it" ordering is the only
-claim being made until each gets its own research pass.
+claim being made until each gets its own research pass. (External links
+was the one exception — small and independent enough not to need that
+ordering at all.)
 
 ---
 

@@ -34,6 +34,7 @@ import {
   addDocument, updateDocument, removeDocument, getDocument, addDocumentTag, removeDocumentTag, renameDocument,
   openDocumentTab, closeDocumentTab, setActiveDocumentTab, resolveDocumentTab,
   listReferenceDocuments, renameRefDocument, addRefDocumentTag, removeRefDocumentTag, hideRefDocument, listDocuments,
+  sanitizeExternalLinkUrl,
 } from '../domain/documents.js';
 import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue } from '../domain/party.js';
 import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow } from '../domain/colony.js';
@@ -357,6 +358,17 @@ function onClick(ev) {
 
   const suggestItem = hit('[data-mention-suggest-item]');
   if (suggestItem) { chooseMentionSuggestItem(Number(suggestItem.dataset.mentionSuggestItem)); return; }
+
+  // External links (Phase 11 backlog) inside a mention-editor field: a
+  // plain click on a real <a> living inside a contenteditable region only
+  // places the caret by default in every engine this app targets (the same
+  // reason .mention-link navigation needs an explicit handler below,
+  // instead of relying on native anchor behavior) — so this opens it
+  // itself rather than letting the click fall through. data-ext-link
+  // (not just the .ext-link class, kept only for styling) matches this
+  // app's data-* delegated-routing convention (rule 4).
+  const extLink = hit('[data-ext-link]');
+  if (extLink) { ev.preventDefault(); window.open(extLink.dataset.extLink, '_blank', 'noopener,noreferrer'); return; }
 
   const q = hit('[data-question]');
   if (q) return store.update((d) => { d.context.active = q.dataset.question; return d; });
@@ -1902,6 +1914,13 @@ function onMouseDown(ev) {
     else if (cmd === 'ul') toggleLinePrefix(field, '- ');
     else if (cmd === 'ol') toggleLinePrefix(field, '1. ');
     else if (cmd === 'table') insertTableSkeleton(field);
+    else if (cmd === 'link') {
+      const raw = window.prompt('Link to (opens in a new tab) — any ?query string will be stripped for safety:', '');
+      if (raw == null) return; // cancelled
+      const url = sanitizeExternalLinkUrl(raw);
+      if (!url) { toast('Not a valid link — use a plain http(s) address'); return; }
+      wrapSelectionWithMarkup(field, '[', `](${url})`);
+    }
     return;
   }
 
