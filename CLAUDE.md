@@ -398,6 +398,18 @@ Summary instead, so there's exactly one place this drifts from reality.
 - Keep statblocks, oracle tables, and similar content **data, not code** —
   the "genre-aware, not genre-locked" principle is load-bearing for future
   genre packs.
+- **Never use `window.prompt()` for data entry** (`docs/adr/0022-inline-
+  prompt-standard.md`) — a button that needs one more piece of free text
+  before it can act opens `ui/shell.js`'s generic inline prompt instead
+  (`openInlinePrompt(kind, opts)` at the trigger, one branch in
+  `commitInlinePrompt()`'s switch for what happens with the typed value —
+  see the ADR for the exact three-line shape and worked examples). A
+  genuinely multi-field form (Party Tracker creation, a Trade contract)
+  still gets its own bespoke inline form, matching that existing
+  established pattern — this rule is specifically about the single-string
+  "click a button, type one line, go" case `window.prompt()` used to
+  cover. `window.confirm()` (delete confirmations) is a different
+  interaction — a yes/no decision, not a value — and is unaffected.
 - Update `src/core/buildInfo.js` (phase/version/changelog) and the relevant
   checkbox in `README.md` when a phase-sized chunk of work lands, so the
   in-app Settings → Build panel stays honest.

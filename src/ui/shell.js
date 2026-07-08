@@ -112,6 +112,14 @@ const EDGE_ORDER = ['guide', 'oracle', 'cast', 'trade', 'documents', 'gallery', 
 // horizontal bar, not the edge nav's vertical icon-tile strip.
 const HEADER_ORDER = ['party', 'colony', 'journal'];
 
+// data-shift-prompt's generic inline-prompt placeholder text, per shift
+// name — a nicety, not a requirement (the fallback `${name}…` reads fine
+// for any future shift this gets wired to without needing an entry here).
+const SHIFT_PROMPT_PLACEHOLDERS = {
+  'Set Objective': 'What is the party trying to accomplish?',
+  'Introduce NPC': "Who's the NPC (name, brief description)?",
+};
+
 // Tabbed drawer switching (2026-07-04 design review): multiple drawers can
 // be pinned open at once (openDrawers), with one visible at a time
 // (activeDrawer) — the founding brief wanted "drawers stack side by side";
@@ -145,6 +153,19 @@ let galleryTagListOpen = false; // ephemeral — collapses the Gallery drawer's 
 // (including the "@"), replaced in place when a suggestion is chosen. null
 // when no suggestion popup is open.
 let mentionSuggest = null;
+// Generic inline text-entry prompt (replaces every former window.prompt()
+// data-entry popup, per direct user request: "as a general rule, do not
+// have popup windows for data entry" — see openInlinePrompt/
+// commitInlinePrompt/closeInlinePrompt below) — a small floating field
+// positioned next to whatever triggered it, the same fixed-position/
+// getBoundingClientRect technique mentionSuggest above already uses.
+// { kind, label, placeholder, value, meta } while open; each `kind`'s
+// actual effect lives in commitInlinePrompt's switch, `meta` carries
+// whatever that kind's case needs (a group index, a live mention span,
+// a captured Selection Range, ...). null when closed. Deliberately no
+// close-on-blur — only Escape/✕/✓ close it, avoiding a focus-race between
+// the input's blur and a click on its own submit/cancel buttons.
+let inlinePrompt = null;
 // Every text field @mentions can be dropped/typed into — Journal's add-note
 // box, the Guide editor (previously missing from the drag-and-drop target
 // list entirely, despite the Guide's own placeholder copy describing
@@ -259,6 +280,14 @@ export function mountShell(el) {
         </div>
       </div>
       <div class="mention-suggest" data-mention-suggest hidden></div>
+      <div class="inline-prompt" data-inline-prompt hidden>
+        <label class="inline-prompt-label" data-inline-prompt-label for="inline-prompt-input"></label>
+        <div class="inline-prompt-row">
+          <input type="text" id="inline-prompt-input" class="inline-prompt-input" data-inline-prompt-input autocomplete="off">
+          <button type="button" class="icon-btn" data-inline-prompt-submit aria-label="Confirm">✓</button>
+          <button type="button" class="icon-btn" data-inline-prompt-cancel aria-label="Cancel">✕</button>
+        </div>
+      </div>
       <div class="dice-roll-overlay" data-dice-roll-overlay data-open="false" aria-label="Dice roll result">
         <div class="dice-roll-card" data-dice-roll-card></div>
       </div>
@@ -369,6 +398,9 @@ function onClick(ev) {
   // app's data-* delegated-routing convention (rule 4).
   const extLink = hit('[data-ext-link]');
   if (extLink) { ev.preventDefault(); window.open(extLink.dataset.extLink, '_blank', 'noopener,noreferrer'); return; }
+
+  if (hit('[data-inline-prompt-submit]')) { commitInlinePrompt(); return; }
+  if (hit('[data-inline-prompt-cancel]')) { closeInlinePrompt(); return; }
 
   const q = hit('[data-question]');
   if (q) return store.update((d) => { d.context.active = q.dataset.question; return d; });
@@ -484,8 +516,10 @@ function onClick(ev) {
   const shiftPrompt = hit('[data-shift-prompt]');
   if (shiftPrompt) {
     const name = shiftPrompt.dataset.shiftPrompt;
-    const val = window.prompt(name + ':', '');
-    if (val != null && val.trim()) { store.update((d) => applyStoryShift(d, name, val.trim())); toast(name); }
+    openInlinePrompt('shift-prompt', {
+      label: name, placeholder: SHIFT_PROMPT_PLACEHOLDERS[name] || `${name}…`,
+      meta: { name }, anchorRect: shiftPrompt.getBoundingClientRect(),
+    });
     return;
   }
 
@@ -670,18 +704,14 @@ function onClick(ev) {
   const sbAddField = hit('[data-statblock-add-field]');
   if (sbAddField) {
     const gi = Number(sbAddField.dataset.statblockAddField);
-    const name = window.prompt('Field name:', '');
-    if (name == null) return;
-    const active = store.get().entities.activeId;
-    return store.update((d) => addEntityStatblockField(d, active, gi, { key: name.trim() || 'New Field', value: '' }));
+    openInlinePrompt('statblock-add-field', { label: 'Field name', placeholder: 'e.g. Callsign', meta: { gi }, anchorRect: sbAddField.getBoundingClientRect() });
+    return;
   }
   const sbAddTrack = hit('[data-statblock-add-track-field]');
   if (sbAddTrack) {
     const gi = Number(sbAddTrack.dataset.statblockAddTrackField);
-    const name = window.prompt('Track name:', '');
-    if (name == null) return;
-    const active = store.get().entities.activeId;
-    return store.update((d) => addEntityStatblockField(d, active, gi, { key: name.trim() || 'New Track', value: 0, max: 5, track: true }));
+    openInlinePrompt('statblock-add-track', { label: 'Track name', placeholder: 'e.g. Ammo', meta: { gi }, anchorRect: sbAddTrack.getBoundingClientRect() });
+    return;
   }
   const trackSet = hit('[data-statblock-track-set]');
   if (trackSet) {
@@ -1118,9 +1148,9 @@ function onClick(ev) {
   }
 
   // --- settings: Bestiary statblock templates -------------------------------
-  if (hit('[data-tpl-system-add]')) {
-    const label = window.prompt('New game system name (e.g. "D&D 5e"):', '');
-    if (label != null && label.trim()) { store.update((d) => addTemplateSystem(d, label.trim(), label.trim())); toast('System added'); }
+  const tplSystemAdd = hit('[data-tpl-system-add]');
+  if (tplSystemAdd) {
+    openInlinePrompt('template-system-add', { label: 'New game system name', placeholder: 'e.g. D&D 5e', anchorRect: tplSystemAdd.getBoundingClientRect() });
     return;
   }
   const tplFieldAdd = hit('[data-tpl-field-add]');
@@ -1141,14 +1171,14 @@ function onClick(ev) {
     return store.update((d) => moveTemplateField(d, sys, Number(idx), 1));
   }
 
-  if (hit('[data-thread-add]')) {
-    const name = window.prompt('Thread name (e.g. "Find the medic"):', '');
-    if (name != null && name.trim()) { store.update((d) => addThread(d, name.trim())); toast('Thread added'); }
+  const threadAdd = hit('[data-thread-add]');
+  if (threadAdd) {
+    openInlinePrompt('thread-add', { label: 'Thread name', placeholder: 'e.g. Find the medic', anchorRect: threadAdd.getBoundingClientRect() });
     return;
   }
-  if (hit('[data-expedition-add]')) {
-    const name = window.prompt('Expedition name (e.g. "Survey the ridge line"):', '');
-    if (name != null && name.trim()) { store.update((d) => createExpedition(d, name.trim())); toast('Expedition added'); }
+  const expeditionAdd = hit('[data-expedition-add]');
+  if (expeditionAdd) {
+    openInlinePrompt('expedition-add', { label: 'Expedition name', placeholder: 'e.g. Survey the ridge line', anchorRect: expeditionAdd.getBoundingClientRect() });
     return;
   }
   const adv = hit('[data-thread-adv]');
@@ -1263,6 +1293,14 @@ function performFieldRoll(f, label) {
 // open Universal Search from anywhere, matching the convention comparable
 // tools already use for a search/command action.
 function onKeydown(ev) {
+  // Generic inline text-entry prompt (see openInlinePrompt et al.): Enter
+  // submits, Escape cancels — it has no <form> element to give Enter a
+  // native effect, same reasoning as every other inline-form field below.
+  if (ev.target.closest('[data-inline-prompt-input]')) {
+    if (ev.key === 'Enter') { ev.preventDefault(); commitInlinePrompt(); return; }
+    if (ev.key === 'Escape') { ev.preventDefault(); closeInlinePrompt(); return; }
+  }
+
   // Tab-indent inside a rich-text field ("USER CHANGES" batch): a
   // contenteditable's default Tab behavior moves focus to the next control
   // (unhelpful here — a GM writing an indented list/note wants a literal
@@ -1915,11 +1953,15 @@ function onMouseDown(ev) {
     else if (cmd === 'ol') toggleLinePrefix(field, '1. ');
     else if (cmd === 'table') insertTableSkeleton(field);
     else if (cmd === 'link') {
-      const raw = window.prompt('Link to (opens in a new tab) — any ?query string will be stripped for safety:', '');
-      if (raw == null) return; // cancelled
-      const url = sanitizeExternalLinkUrl(raw);
-      if (!url) { toast('Not a valid link — use a plain http(s) address'); return; }
-      wrapSelectionWithMarkup(field, '[', `](${url})`);
+      // Capture the range NOW — by the time the inline prompt below is
+      // submitted, focus has moved to its own input, and window.getSelection()
+      // may no longer point at this field at all.
+      const sel = window.getSelection();
+      const range = (sel && sel.rangeCount && field.contains(sel.anchorNode)) ? sel.getRangeAt(0).cloneRange() : null;
+      openInlinePrompt('ext-link', {
+        label: 'Link to (opens in a new tab)', placeholder: 'https://example.com',
+        meta: { field, range }, anchorRect: richCmd.getBoundingClientRect(),
+      });
     }
     return;
   }
@@ -1936,11 +1978,20 @@ function onMouseDown(ev) {
 // any other edit, and the NEXT render is what turns it into a real <b>/<ul>
 // etc. (buildMentionEditorHTML). Nothing here talks to the store directly.
 
-function wrapSelectionWithMarkup(field, open, close) {
+// explicitRange lets a caller capture the selection at the moment its
+// trigger was clicked and hand it back in later — needed by the Link
+// toolbar button (cmd === 'link'), which now defers to the generic inline
+// prompt for the url instead of a synchronous window.prompt(): by the time
+// the GM submits, the live window.getSelection() may no longer point at
+// the field at all (focus moved to the inline prompt's own input).
+function wrapSelectionWithMarkup(field, open, close, explicitRange) {
   field.focus();
   const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0 || !field.contains(sel.anchorNode)) return;
-  const range = sel.getRangeAt(0);
+  let range = explicitRange;
+  if (!range) {
+    if (!sel || sel.rangeCount === 0 || !field.contains(sel.anchorNode)) return;
+    range = sel.getRangeAt(0);
+  }
   if (range.collapsed) {
     const node = document.createTextNode(open + close);
     range.insertNode(node);
@@ -2160,17 +2211,20 @@ function completeDrop(target, { entityId, documentId }, clientX, clientY) {
     const resolved = resolveDocumentTab(store.get(), documentId);
     if (resolved) {
       const title = resolved.title || 'Untitled document';
-      // Asked every drop, not just when a page seems relevant — the point
-      // is the resulting mention opens the viewer at the right spot
-      // without a second manual edit; leaving it blank/cancelling still
-      // inserts a plain (pageless) mention, same as before this ask.
-      const pageInput = window.prompt(`Open "${title}" to which page? (leave blank for none)`, '');
-      const page = pageInput && pageInput.trim() ? Number(pageInput.trim()) : null;
-      const hasPage = page != null && Number.isFinite(page);
-      insertMentionNode(range, { kind: 'doc', tabKey: documentId, tabPage: hasPage ? page : undefined, name: title, page: hasPage ? page : null });
+      // Inserted pageless immediately, then the inline prompt below offers
+      // a page — asked every drop, not just when one seems relevant, same
+      // as before; leaving it blank/cancelling still leaves a plain
+      // (pageless) mention, just reordered (insert now, refine after)
+      // instead of blocking the drop on a window.prompt() beforehand.
+      const span = insertMentionNode(range, { kind: 'doc', tabKey: documentId, name: title });
       dropText.focus();
       commitMentionField(dropText);
-      return toast(`Referenced ${title}${hasPage ? ' p.' + page : ''}`);
+      toast(`Referenced ${title}`);
+      openInlinePrompt('mention-page', {
+        label: `Page in "${title}"? (optional)`, placeholder: 'e.g. 12',
+        meta: { mentionEl: span }, anchorRect: span.getBoundingClientRect(),
+      });
+      return;
     }
   }
   if (entityId) {
@@ -2355,9 +2409,17 @@ function onFocusOut(ev) {
 // in-field edit — no separate store-write path to keep in sync.
 function editMentionPage(mentionEl) {
   const current = mentionEl.dataset.mentionPage || '';
-  const input = window.prompt('Change page to (blank to remove):', current);
-  if (input === null) return;
-  const trimmed = input.trim();
+  openInlinePrompt('mention-page', {
+    label: 'Change page to (blank to remove)', placeholder: 'e.g. 12', value: current,
+    meta: { mentionEl }, anchorRect: mentionEl.getBoundingClientRect(),
+  });
+}
+
+// Shared by editMentionPage (Ctrl/Cmd+Click an existing mention) and the
+// "which page?" inline prompt opened right after a fresh doc-mention
+// insertion (onDrop, chooseMentionSuggestItem) — same commit either way.
+function applyMentionPage(mentionEl, input) {
+  const trimmed = (input || '').trim();
   if (!trimmed) {
     mentionEl.dataset.mentionPage = '';
     delete mentionEl.dataset.docOpenPage;
@@ -2375,6 +2437,78 @@ function closeMentionSuggest() {
   mentionSuggest = null;
   const el = root && root.querySelector('[data-mention-suggest]');
   if (el) { el.hidden = true; el.innerHTML = ''; }
+}
+
+// --- Generic inline text-entry prompt --------------------------------------
+// Replaces every window.prompt() this app used to show for a single piece
+// of free text — "as a general rule, do not have popup windows for data
+// entry," so every one of them now opens this same small floating field
+// instead, keyed by `kind`. Opening is always the caller's job (pass an
+// anchorRect — usually the trigger element's own getBoundingClientRect());
+// committing/cancelling always goes through here.
+
+function openInlinePrompt(kind, { label, placeholder = '', value = '', meta = null, anchorRect }) {
+  inlinePrompt = { kind, label, placeholder, value, meta };
+  renderInlinePrompt(anchorRect);
+}
+
+function renderInlinePrompt(anchorRect) {
+  const el = root && root.querySelector('[data-inline-prompt]');
+  if (!el || !inlinePrompt) return;
+  el.querySelector('[data-inline-prompt-label]').textContent = inlinePrompt.label;
+  const input = el.querySelector('[data-inline-prompt-input]');
+  input.value = inlinePrompt.value;
+  input.placeholder = inlinePrompt.placeholder;
+  if (anchorRect) {
+    const top = Math.min(anchorRect.bottom + 4, window.innerHeight - 60);
+    const left = Math.min(anchorRect.left, window.innerWidth - 280);
+    el.style.top = Math.max(4, top) + 'px';
+    el.style.left = Math.max(4, left) + 'px';
+  }
+  el.hidden = false;
+  input.focus();
+  input.select();
+}
+
+function closeInlinePrompt() {
+  inlinePrompt = null;
+  const el = root && root.querySelector('[data-inline-prompt]');
+  if (el) el.hidden = true;
+}
+
+// Every former window.prompt() call site's post-input logic lives here now,
+// one branch per `kind` — each is exactly what that site used to do with
+// its prompt's return value, just reading inlinePrompt.value/meta instead.
+function commitInlinePrompt() {
+  if (!inlinePrompt) return;
+  const inputEl = root && root.querySelector('[data-inline-prompt-input]');
+  const value = ((inputEl ? inputEl.value : inlinePrompt.value) || '').trim();
+  const { kind, meta } = inlinePrompt;
+  closeInlinePrompt();
+
+  if (kind === 'shift-prompt') {
+    if (value) { store.update((d) => applyStoryShift(d, meta.name, value)); toast(meta.name); }
+  } else if (kind === 'statblock-add-field') {
+    const active = store.get().entities.activeId;
+    store.update((d) => addEntityStatblockField(d, active, meta.gi, { key: value || 'New Field', value: '' }));
+    toast('Field added');
+  } else if (kind === 'statblock-add-track') {
+    const active = store.get().entities.activeId;
+    store.update((d) => addEntityStatblockField(d, active, meta.gi, { key: value || 'New Track', value: 0, max: 5, track: true }));
+    toast('Track added');
+  } else if (kind === 'template-system-add') {
+    if (value) { store.update((d) => addTemplateSystem(d, value, value)); toast('System added'); }
+  } else if (kind === 'thread-add') {
+    if (value) { store.update((d) => addThread(d, value)); toast('Thread added'); }
+  } else if (kind === 'expedition-add') {
+    if (value) { store.update((d) => createExpedition(d, value)); toast('Expedition added'); }
+  } else if (kind === 'ext-link') {
+    const url = sanitizeExternalLinkUrl(value);
+    if (!url) { toast('Not a valid link — use a plain http(s) address'); return; }
+    wrapSelectionWithMarkup(meta.field, '[', `](${url})`, meta.range);
+  } else if (kind === 'mention-page') {
+    applyMentionPage(meta.mentionEl, value);
+  }
 }
 
 // mention-editor fields are contenteditable, not <textarea>/<input> — there's
@@ -2447,14 +2581,20 @@ function chooseMentionSuggestItem(index) {
   closeMentionSuggest();
   if (item.kind === 'entity') {
     insertMentionNode(range, { kind: 'entity', entityId: item.id, name: item.label });
+    field.focus();
+    commitMentionField(field);
   } else {
-    const pageInput = window.prompt(`Open "${item.title}" to which page? (leave blank for none)`, '');
-    const page = pageInput && pageInput.trim() ? Number(pageInput.trim()) : null;
-    const hasPage = page != null && Number.isFinite(page);
-    insertMentionNode(range, { kind: 'doc', tabKey: item.tabKey, tabPage: hasPage ? page : undefined, name: item.title, page: hasPage ? page : null });
+    // Inserted pageless immediately, same reasoning as the drag-and-drop
+    // doc-mention path above: refine with an optional page via the inline
+    // prompt after inserting, instead of blocking on window.prompt() first.
+    const span = insertMentionNode(range, { kind: 'doc', tabKey: item.tabKey, name: item.title });
+    field.focus();
+    commitMentionField(field);
+    openInlinePrompt('mention-page', {
+      label: `Page in "${item.title}"? (optional)`, placeholder: 'e.g. 12',
+      meta: { mentionEl: span }, anchorRect: span.getBoundingClientRect(),
+    });
   }
-  field.focus();
-  commitMentionField(field);
 }
 
 // document.caretRangeFromPoint (Chrome/Safari) / caretPositionFromPoint

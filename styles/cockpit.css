@@ -904,6 +904,19 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .mention-suggest-item.active, .mention-suggest-item:hover { background: var(--tier2-bg); }
 .mention-suggest-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Generic inline text-entry prompt (openInlinePrompt/shell.js) — every
+   former window.prompt() data-entry popup now opens this instead, a small
+   fixed-position field next to whatever triggered it, same technique as
+   .mention-suggest above. */
+.inline-prompt {
+  position: fixed; z-index: 60; width: 260px; padding: var(--sp-2);
+  background: var(--tier3-bg); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+}
+.inline-prompt-label { display: block; font-size: 0.7rem; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.3rem; }
+.inline-prompt-row { display: flex; gap: 0.3rem; align-items: center; }
+.inline-prompt-input { flex: 1 1 auto; min-width: 0; }
+
 /* ============================================================
    Phase 5 — Party / Colony / Guide / Oracle tree / Documents /
    Bestiary templates / in-app document viewer

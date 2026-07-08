@@ -266,4 +266,9 @@ export function insertMentionNode(range, { kind, entityId, tabKey, tabPage, name
   const sel = window.getSelection();
   sel.removeAllRanges();
   sel.addRange(after);
+  // Returned so a caller can immediately follow up on the live node — e.g.
+  // shell.js opening its "which page?" inline prompt anchored to a freshly-
+  // inserted doc mention, now that a page is asked for AFTER inserting
+  // (pageless) rather than via a blocking window.prompt() beforehand.
+  return span;
 }

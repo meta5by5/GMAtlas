@@ -14,6 +14,29 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-07 A single standard for inline data entry** (`docs/adr/0022-
+inline-prompt-standard.md`), on direct request: "do not have popup
+windows for data entry... create a standard approach and assure all
+similar inputs are done the same way" — named via WHY's "Set Objective"
+(and WHO's "Introduce NPC"), which used to `window.prompt()` blindly. One
+generic mechanism, `openInlinePrompt`/`commitInlinePrompt`/
+`closeInlinePrompt` (`ui/shell.js`), now covers every remaining case: a
+small floating field anchored to its trigger via `getBoundingClientRect()`
+(the same technique the `@`-mention popup already used). Nine
+`window.prompt()` sites converted — Introduce NPC/Set Objective, a
+statblock's + Field/+ Track, a custom ruleset name, + Thread/+ Expedition,
+the rich-text Link button (added this same session, needed
+`wrapSelectionWithMarkup` to accept an explicit captured `Range` since
+live selection is gone by submit time), and a document mention's page
+number (three sites, one shared `applyMentionPage()` — a fresh drag-drop
+or `@`-autocomplete pick now inserts the mention pageless immediately and
+offers the page as an optional follow-up, instead of blocking insertion on
+an answer first). No close-on-blur (would race the prompt's own ✓/✕
+buttons) — only Escape/✕/✓ close it. `window.confirm()` is unaffected —
+a different interaction the request didn't name. Verified via two jsdom
+smoke tests (23 checks total) covering all four structurally distinct
+conversion shapes.
+
 **2026-07-07 External links in rich-text fields** (Phase 11 backlog): the
 one backlog item small enough to build without the shared canvas-primitive
 research the three tactical-tools items (Battlemap/Base Builder/Encounter
