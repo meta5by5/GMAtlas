@@ -135,6 +135,13 @@ const SHIFT_PROMPT_PLACEHOLDERS = {
 // side-by-side panels competing with the Co-Pilot/doc-viewer regions.
 let openDrawers = [];
 let activeDrawer = null;
+// Hides the main drawer panel entirely (a floating ☰ icon appears in its
+// place) WITHOUT closing anything in openDrawers — "let me see the
+// workspace behind this for a second" without losing tabs/scroll/filter
+// state. Only reachable via the tab strip's own collapse arrow, which
+// only exists once 2+ tabs are open (data-drawer-tabs' own visibility
+// gate) — a single open drawer already has its own ✕ to close outright.
+let drawerCollapsed = false;
 let copilotOpen = false;
 let root = null;
 let oracleFilter = '';
@@ -150,7 +157,15 @@ let docRenameOpen = new Set(); // ephemeral — which doc/ref cards are showing 
 let docTagListOpen = false; // ephemeral — collapses the Documents drawer's tag-filter chip row (can get long once many tags exist)
 let journalEditOpen = new Set(); // ephemeral — which journal entries are showing an editable mention-editor instead of their static rendered text
 let whereLocationTagFilter = null; // ephemeral — the Location tag currently selected in the WHERE view's listbox (null = no filter/candidate panel shown)
+let whoTagFilter = null; // ephemeral — same as whereLocationTagFilter, for the WHO view's NPC/Faction tag listbox
 let galleryFilter = ''; // ephemeral — Gallery drawer search box
+// Gallery's own "+ Upload" flow (as opposed to an entity's "+ Photo"): the
+// resize already happened (canvas work, ui/imageResize.js) by the time
+// this is set — { thumbDataUrl, originalDataUrl, mimeType, name } — only
+// the addGalleryImages commit itself waits on the GM confirming/editing
+// the friendly name in the inline form this drives. null when no upload
+// is pending.
+let galleryUploadDraft = null;
 let galleryTagFilters = new Set(); // ephemeral — Gallery drawer active tag filters
 let galleryTagListOpen = false; // ephemeral — collapses the Gallery drawer's tag-filter chip row, same as Documents' own
 // Planetfall Grid Battlemap (docs/adr/0023): the built-in icon key
@@ -254,15 +269,14 @@ export function mountShell(el) {
         <div class="header-actions">
           <button class="btn ghost sm" data-search-toggle title="Search everything (Cast, Journal, Oracle, Documents, Party, Colony) — Ctrl/Cmd+K">🔍 Search</button>
           <span class="campaign-title" title="Campaign name"></span>
+          <div class="header-drawer-tabs" data-header-drawer-tabs></div>
           <div class="settings-menu-wrap">
             <button class="btn ghost sm" data-settings-menu-toggle title="Menu" aria-label="Menu">⚙</button>
             <div class="settings-menu" data-settings-menu hidden>
-              <button type="button" data-menu-new-campaign>New Campaign</button>
               <button type="button" data-menu-open-settings>Settings</button>
               <button type="button" data-menu-open-about>About</button>
             </div>
           </div>
-          <div class="header-drawer-tabs" data-header-drawer-tabs></div>
         </div>
       </header>
       <div class="mc-about-overlay" data-about-overlay hidden aria-label="About GMAtlas">
@@ -326,6 +340,7 @@ export function mountShell(el) {
         </div>
         <div class="mc-drawer-body" data-drawer-body></div>
       </aside>
+      <button class="drawer-collapsed-restore" data-drawer-restore hidden title="Restore drawer tabs" aria-label="Restore drawer tabs">☰</button>
     </div>
     <div class="toast" data-toast hidden></div>`;
 
@@ -431,6 +446,8 @@ function onClick(ev) {
   const drawerTab = hit('[data-drawer-tab]');
   if (drawerTab) { activeDrawer = drawerTab.dataset.drawerTab; return render(); }
   if (hit('[data-close-all-drawers]')) return closeAllDrawerTabs();
+  if (hit('[data-drawer-collapse]')) { drawerCollapsed = true; return render(); }
+  if (hit('[data-drawer-restore]')) { drawerCollapsed = false; return render(); }
   if (hit('[data-drawer-anchor-unpin]')) return unanchorDrawerTab();
   // Distinct from unpin (▶, "merge into tabs"): closes the anchored drawer
   // outright, with no promote-into-openDrawers step — fixes a real reported
@@ -441,13 +458,15 @@ function onClick(ev) {
   if (hit('[data-toggle-copilot]')) { copilotOpen = !copilotOpen; return render(); }
   if (hit('[data-toggle-cast]')) return toggleCastDrawer();
 
-  // Header gear menu (New Campaign / Settings / About — "USER CHANGES" QoL
-  // batch, replacing the old bare campaign-title-is-the-settings-button).
-  // Matches this app's existing convention (lensPickerOpen etc.): only an
-  // explicit toggle or picking an item closes it, no click-outside handler.
+  // Header gear menu (Settings / About — "USER CHANGES" QoL batch,
+  // replacing the old bare campaign-title-is-the-settings-button). New
+  // Campaign lives only inside the Settings drawer now (data-new-campaign,
+  // below) — a destructive-adjacent action one menu level deeper than
+  // Settings/About on purpose. Matches this app's existing convention
+  // (lensPickerOpen etc.): only an explicit toggle or picking an item
+  // closes it, no click-outside handler.
   if (hit('[data-settings-menu-toggle]')) { settingsMenuOpen = !settingsMenuOpen; return render(); }
   if (hit('[data-menu-open-settings]')) { settingsMenuOpen = false; toggleDrawer('settings'); return render(); }
-  if (hit('[data-menu-new-campaign]')) { settingsMenuOpen = false; render(); return confirmNewCampaign(); }
   if (hit('[data-menu-open-about]')) { settingsMenuOpen = false; aboutOpen = true; return render(); }
   if (hit('[data-about-close]')) { aboutOpen = false; return render(); }
 
@@ -719,23 +738,15 @@ function onClick(ev) {
   if (whereAddLoc) { store.update((d) => createEntity(d, { type: 'location' }).campaign); return toast('Location added — name and tag it in Cast'); }
   // WHERE's "Present Here" curated list (context.where.entityIds) was
   // duplicative of Focus — a Location already belongs to the scene once
-  // it's mentioned there. Clicking a matching Location now inserts a real
-  // @mention at the end of Focus directly, same insertMentionNode path the
-  // drag-and-drop mention handler above uses.
+  // it's mentioned there. Clicking a matching Location (or, on WHO, a
+  // matching NPC/Faction — same picker pattern, insertContextMention
+  // below is shared by both) now inserts a real @mention at the end of
+  // Focus directly, same insertMentionNode path the drag-and-drop mention
+  // handler above uses.
   const insertWhereMention = hit('[data-insert-where-mention]');
-  if (insertWhereMention) {
-    const entityId = insertWhereMention.dataset.insertWhereMention;
-    const ent = getEntity(store.get(), entityId);
-    const field = root.querySelector('[data-ctx="where.summary"]');
-    if (!ent || !field) return;
-    const range = document.createRange();
-    range.selectNodeContents(field);
-    range.collapse(false);
-    insertMentionNode(range, { kind: 'entity', entityId, name: ent.name || 'Unnamed' });
-    field.focus();
-    commitMentionField(field);
-    return toast(`Mentioned ${ent.name || 'Unnamed'} in Focus`);
-  }
+  if (insertWhereMention) { insertContextMention('where', insertWhereMention.dataset.insertWhereMention); return; }
+  const insertWhoMention = hit('[data-insert-who-mention]');
+  if (insertWhoMention) { insertContextMention('who', insertWhoMention.dataset.insertWhoMention); return; }
   // Revealed/hidden (GM) starts collapsed on every entity, but once a GM
   // opens it, docs/adr/next-request.md (2026-07-06) asks that it "stay
   // revealed on future loading of the given entity" — a real persisted
@@ -1218,6 +1229,16 @@ function onClick(ev) {
     if (window.confirm('Delete this image? This cannot be undone.')) store.update((d) => removeGalleryImage(d, galleryDelete.dataset.galleryDelete));
     return;
   }
+  if (hit('[data-gallery-upload-confirm]')) {
+    const draft = galleryUploadDraft;
+    if (!draft) return;
+    const nameInput = root.querySelector('[data-gallery-upload-name]');
+    const name = ((nameInput && nameInput.value) || draft.name || '').trim() || 'Untitled';
+    galleryUploadDraft = null;
+    store.update((d) => addGalleryImages(d, { entityId: null, lockedTag: null, title: name, mimeType: draft.mimeType, thumbDataUrl: draft.thumbDataUrl, originalDataUrl: draft.originalDataUrl }).campaign);
+    return toast('Image added');
+  }
+  if (hit('[data-gallery-upload-cancel]')) { galleryUploadDraft = null; return renderDrawerBody(); }
 
   // --- settings: Bestiary statblock templates -------------------------------
   const tplSystemAdd = hit('[data-tpl-system-add]');
@@ -1478,6 +1499,8 @@ function onChange(ev) {
   const t = ev.target;
   const whereTagSelect = t.closest('[data-where-tag-select]');
   if (whereTagSelect) { whereLocationTagFilter = whereTagSelect.value || null; return render(); }
+  const whoTagSelect = t.closest('[data-who-tag-select]');
+  if (whoTagSelect) { whoTagFilter = whoTagSelect.value || null; return render(); }
 
   // --- Planetfall Grid Battlemap (Phase 11, docs/adr/0023) ------------------
   const bmRename = t.closest('[data-battlemap-rename]');
@@ -1501,7 +1524,7 @@ function onChange(ev) {
     loadAndMaybeResize(file, 1600)
       .then(({ thumbDataUrl, originalDataUrl }) => {
         store.update((d) => {
-          const r = addGalleryImages(d, { entityId: null, lockedTag: null, title: file.name, mimeType: file.type, thumbDataUrl, originalDataUrl });
+          const r = addGalleryImages(d, { entityId: null, lockedTag: 'battlemap', title: file.name, mimeType: file.type, thumbDataUrl, originalDataUrl });
           return setBattlemapBackground(r.campaign, mapId, r.thumbnailId);
         });
         toast('Background added');
@@ -1767,6 +1790,24 @@ function onChange(ev) {
     return;
   }
 
+  // Gallery's own "+ Upload" (as opposed to an entity's "+ Photo" above) —
+  // same resize pipeline, but no entityId/lockedTag and no immediate
+  // commit: the resized result becomes a pending draft, and the inline
+  // form it opens (drawers/index.js's gallery()) is what actually calls
+  // addGalleryImages, once the GM confirms a friendly name.
+  const galleryUploadSelect = t.closest('[data-gallery-upload-select]');
+  if (galleryUploadSelect) {
+    const file = (t.files || [])[0];
+    if (!file) return;
+    loadAndMaybeResize(file, 256)
+      .then(({ thumbDataUrl, originalDataUrl }) => {
+        galleryUploadDraft = { thumbDataUrl, originalDataUrl, mimeType: file.type, name: titleFromFilename(file.name) };
+        renderDrawerBody();
+      })
+      .catch((err) => toast(`Couldn't read image — ${err.message}`));
+    return;
+  }
+
   if (t.closest('[data-doc-upload]')) {
     const files = Array.from(t.files || []);
     if (!files.length) return;
@@ -1867,6 +1908,12 @@ function onInput(ev) {
   // whatever was already typed instead of resetting it to blank.
   const trkDraftName = t.closest('[data-party-tracker-draft-name]');
   if (trkDraftName) { partyTrackerDraftName = t.value; return; }
+
+  // Same reasoning as the Party Tracker draft name above: keeps a typed
+  // friendly name from being lost if some unrelated store.update()
+  // elsewhere triggers a full render while the Gallery upload form is open.
+  const galleryUploadNameInput = t.closest('[data-gallery-upload-name]');
+  if (galleryUploadNameInput) { if (galleryUploadDraft) galleryUploadDraft.name = t.value; return; }
 
   // Same reasoning as the Party Tracker draft name above: typing a custom
   // name (not from a 🎲 roll) must survive any unrelated store.update
@@ -2763,6 +2810,24 @@ function commitMentionField(field) {
   store.update((d) => editContextText(d, key, fieldName, serializeMentionEditor(field)));
 }
 
+// Shared by WHERE's and WHO's tag-picker candidate click (workspace/
+// index.js's whereLocationPicker/whoEntityPicker) — inserts a real
+// @mention for `entityId` at the end of the given context question's
+// Focus field (`key.summary`) and commits it the same way any other
+// mention insertion does.
+function insertContextMention(key, entityId) {
+  const ent = getEntity(store.get(), entityId);
+  const field = root.querySelector(`[data-ctx="${key}.summary"]`);
+  if (!ent || !field) return;
+  const range = document.createRange();
+  range.selectNodeContents(field);
+  range.collapse(false);
+  insertMentionNode(range, { kind: 'entity', entityId, name: ent.name || 'Unnamed' });
+  field.focus();
+  commitMentionField(field);
+  toast(`Mentioned ${ent.name || 'Unnamed'} in Focus`);
+}
+
 // Shared by clicking a suggestion and pressing Enter on the highlighted one.
 function chooseMentionSuggestItem(index) {
   if (!mentionSuggest) return;
@@ -2885,7 +2950,7 @@ function render() {
   }
 
   const drawer = root.querySelector('[data-drawer]');
-  drawer.dataset.open = String(openDrawers.length > 0);
+  drawer.dataset.open = String(openDrawers.length > 0 && !drawerCollapsed);
   const titleEl = drawer.querySelector('[data-drawer-title]');
   titleEl.textContent = titleForDrawer(doc, activeDrawer);
   titleEl.classList.remove('drawer-title-toggle'); // Cast's own collapse-via-title is gone — Cast isn't a drawer tab anymore
@@ -2912,8 +2977,11 @@ function render() {
         <span class="drawer-tab-close" data-drawer-tab-close="${id}" aria-label="Close ${m ? m.label : id}">✕</span>
       </button>`;
     }).join('')}</div>
+    <button class="drawer-tabs-collapse" data-drawer-collapse title="Hide the drawer (keeps its tabs open — click the floating icon to bring it back)" aria-label="Hide drawer">⌄</button>
     <button class="drawer-tabs-close-all" data-close-all-drawers title="Close all open tabs" aria-label="Close all open tabs">✕</button>`
   );
+  const restoreBtn = root.querySelector('[data-drawer-restore]');
+  if (restoreBtn) restoreBtn.hidden = !(drawerCollapsed && openDrawers.length > 0);
   renderDrawerBody();
 
   // The anchor panel — a second, independent "current drawer" slot pinned
@@ -3168,8 +3236,8 @@ function buildDrawerUi() {
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,
-    journalEditOpen, whereLocationTagFilter, graphFilter, helpOpen, settingsMenuOpen, aboutOpen,
-    galleryFilter, galleryTagFilters, galleryTagListOpen,
+    journalEditOpen, whereLocationTagFilter, whoTagFilter, graphFilter, helpOpen, settingsMenuOpen, aboutOpen,
+    galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon,
   };
 }

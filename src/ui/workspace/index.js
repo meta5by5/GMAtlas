@@ -80,13 +80,13 @@ const VIEWS = {
       ${lastScene(doc)}`);
   },
 
-  who(doc) {
+  who(doc, ui) {
     return card('WHO is here', 'People and factions in play.', `
       ${summaryField('who', doc.context.who.summary, 'Party, NPCs, factions present…', doc)}
       <div class="shift-actions">
         <button class="chip" data-shift-prompt="Introduce NPC">＋ Introduce NPC</button>
       </div>
-      ${entityList(doc, ['npc', 'faction'])}`);
+      ${whoEntityPicker(doc, ui)}`);
   },
 
   where(doc, ui) {
@@ -175,22 +175,50 @@ function whereLocationPicker(doc, ui) {
     : `<div class="ws-placeholder">${tagFilter ? 'No Locations tagged #' + esc(tagFilter) + '.' : 'No Locations yet.'}</div>`;
 
   return `
-    <div class="where-picker">
-      <div class="where-picker-row">
-        <div class="where-picker-tags"><span class="field-label-static">Location tags</span>${tagListbox}</div>
-        <div class="where-picker-candidates"><span class="field-label-static">Matching locations</span>${candidatePanel}</div>
+    <div class="entity-tag-picker">
+      <div class="entity-tag-picker-row">
+        <div class="entity-tag-picker-tags"><span class="field-label-static">Location tags</span>${tagListbox}</div>
+        <div class="entity-tag-picker-candidates"><span class="field-label-static">Matching locations</span>${candidatePanel}</div>
       </div>
       <div class="entity-add-row"><button class="chip" data-where-add-location>＋ New Location</button></div>
     </div>`;
 }
 
-function entityList(doc, types) {
-  const items = (doc.entities.items || []).filter((e) => types.includes(e.type));
-  const addBtns = types.map((t) => `<button class="chip" data-entity-add="${t}">＋ ${t.charAt(0).toUpperCase() + t.slice(1)}</button>`).join('');
-  const chips = items.length
-    ? `<div class="entity-chips">${items.map((e) => `<button class="entity-chip" draggable="true" data-open-entity="${esc(e.id)}" data-drag-entity="${esc(e.id)}" data-drop-entity="${esc(e.id)}" title="Click to open · drag onto another entity to link, or onto a text field to mention">${esc(e.name || 'Unnamed')}${e.relationships && e.relationships.length ? ` <span class="dim">🔗${e.relationships.length}</span>` : ''}</button>`).join('')}</div>`
-    : `<div class="ws-placeholder">No ${types.join('/')} yet. Add one, or type <b>@Name</b> in the situation to create it automatically.</div>`;
-  return `${chips}<div class="entity-add-row">${addBtns}</div>`;
+// WHO tab: the exact same tag-picker -> click-to-mention pattern as
+// WHERE's whereLocationPicker above, applied to people instead of places —
+// NPC and Faction tags pooled together (not a separate type-filter chip
+// row; kept as close to WHERE's own shape as possible, one type at a time
+// was WHERE's whole design, this just widens "one type" to "two related
+// ones"). "Introduce NPC" (the data-shift-prompt chip above this in who())
+// is left as-is — narrating a brand-new introduction in prose is a
+// different action from mentioning an entity that already exists.
+function whoEntityPicker(doc, ui) {
+  const tagFilter = ui.whoTagFilter || null;
+  const vocab = [...new Set([...listTagVocabulary(doc, 'npc'), ...listTagVocabulary(doc, 'faction')])].sort((a, b) => a.localeCompare(b));
+  const tagListbox = vocab.length
+    ? `<select size="${Math.min(8, Math.max(3, vocab.length))}" data-who-tag-select>
+        <option value="" ${!tagFilter ? 'selected' : ''}>— all tags —</option>
+        ${vocab.map((t) => `<option value="${esc(t)}" ${t === tagFilter ? 'selected' : ''}>#${esc(t)}</option>`).join('')}
+      </select>`
+    : '<p class="ws-placeholder">No NPC/Faction tags yet — tag one in Cast to start filtering.</p>';
+
+  const allPeople = (doc.entities.items || []).filter((e) => e.type === 'npc' || e.type === 'faction');
+  const candidates = tagFilter ? allPeople.filter((e) => (e.tags || []).includes(tagFilter)) : allPeople;
+  const candidatePanel = candidates.length
+    ? `<div class="entity-chips">${candidates.map((e) => `<button type="button" class="entity-chip" data-insert-who-mention="${esc(e.id)}" title="Insert @${esc(e.name || 'Unnamed')} into Focus">${esc(e.name || 'Unnamed')}</button>`).join('')}</div>`
+    : `<div class="ws-placeholder">${tagFilter ? 'No NPCs/Factions tagged #' + esc(tagFilter) + '.' : 'No NPCs/Factions yet.'}</div>`;
+
+  return `
+    <div class="entity-tag-picker">
+      <div class="entity-tag-picker-row">
+        <div class="entity-tag-picker-tags"><span class="field-label-static">NPC/Faction tags</span>${tagListbox}</div>
+        <div class="entity-tag-picker-candidates"><span class="field-label-static">Matching people</span>${candidatePanel}</div>
+      </div>
+      <div class="entity-add-row">
+        <button class="chip" data-entity-add="npc">＋ New NPC</button>
+        <button class="chip" data-entity-add="faction">＋ New Faction</button>
+      </div>
+    </div>`;
 }
 
 // Expedition trackers (docs/adr/0009-situation-engine-revisited.md,

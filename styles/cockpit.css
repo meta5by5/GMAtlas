@@ -57,8 +57,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .settings-menu button { text-align: left; background: none; border: none; color: var(--text); padding: 0.5rem 0.75rem; font-size: 0.85rem; }
 .settings-menu button:hover { background: var(--tier2-bg); }
 
-/* Party/Colony/Journal's header tab group (right-aligned in .header-actions) */
+/* Party/Colony/Journal's header tab group (right-aligned in .header-actions,
+   just left of the ⚙ menu). Their label always shows now, the same as the
+   right-hand edge nav's own icon+label buttons (.mc-edge — bold label,
+   never hidden at any width) — a prior narrow-viewport rule that hid just
+   this group's label text (not the whole button, unlike an even earlier,
+   worse bug that hid the buttons entirely) is gone; .header-actions wraps
+   instead of overflowing if that ever runs out of room on a narrow phone. */
 .header-drawer-tabs { display: flex; gap: var(--sp-2); }
+.header-drawer-tabs .btn-label { font-weight: bold; }
 .header-drawer-tabs .badge { margin-left: 0.3em; }
 
 /* About overlay — same centered-modal shape as .mc-search-overlay, simpler
@@ -281,6 +288,26 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--text-dim); cursor: pointer; font-size: 0.85rem;
 }
 .drawer-tabs-close-all:hover { background: var(--bg-inset); color: var(--accent); }
+/* Collapse arrow — hides the whole drawer panel (keeping every tab open)
+   so the workspace behind it is visible again; same strip-corner
+   treatment as "close all" beside it, just a separate action. */
+.drawer-tabs-collapse {
+  flex: 0 0 auto; display: flex; align-items: center; padding: 0 var(--sp-2);
+  background: none; border: none; border-left: 1px solid var(--tier1-border);
+  color: var(--text-dim); cursor: pointer; font-size: 0.85rem;
+}
+.drawer-tabs-collapse:hover { background: var(--bg-inset); color: var(--accent); }
+/* The floating icon that replaces the drawer entirely while collapsed —
+   fixed just left of the edge nav, near where the drawer itself would
+   have opened, so restoring it feels like clicking "back where it was." */
+.drawer-collapsed-restore {
+  position: fixed; top: calc(var(--header-h) + var(--sp-3)); right: calc(var(--edge-w) + var(--sp-3));
+  z-index: 15; width: 2.4rem; height: 2.4rem; border-radius: 50%;
+  background: var(--tier3-bg); border: 1px solid var(--border-strong); box-shadow: var(--shadow);
+  color: var(--accent); font-size: 1.1rem; cursor: pointer;
+}
+.drawer-collapsed-restore:hover { background: var(--tier2-bg); }
+.drawer-collapsed-restore[hidden] { display: none; }
 
 /* --- Responsive: three tiers (phone / tablet / desktop), per the founding
    brief's §3.5 spec — "Co-Pilot becomes a tablet edge-tab, a phone
@@ -346,7 +373,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
    Phase 2 — interactive components
    ============================================================ */
 
-.header-actions { display: flex; align-items: center; gap: var(--sp-3); }
+.header-actions { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
 .campaign-title { font-size: 0.85rem; color: var(--accent); cursor: pointer; }
 .campaign-title:hover { text-decoration: underline; }
 
@@ -502,10 +529,14 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 /* WHERE tab's tag-listbox + candidate-panel redesign ("USER CHANGES"
    batch, docs/adr/0019) — a listbox (not chips, per explicit request) on
    one side, matching Locations on the other. */
-.where-picker { margin-top: var(--sp-3); }
-.where-picker-row { display: flex; gap: var(--sp-4); flex-wrap: wrap; }
-.where-picker-tags, .where-picker-candidates { flex: 1 1 12rem; min-width: 10rem; }
-.where-picker-tags select { width: 100%; margin-top: var(--sp-1); }
+/* Shared tag-filter -> candidate-panel -> click-to-mention layout, first
+   built for WHERE's Location picker, now reused by WHO's NPC/Faction one
+   (workspace/index.js's whereLocationPicker/whoEntityPicker) — generically
+   named since it's no longer WHERE-specific. */
+.entity-tag-picker { margin-top: var(--sp-3); }
+.entity-tag-picker-row { display: flex; gap: var(--sp-4); flex-wrap: wrap; }
+.entity-tag-picker-tags, .entity-tag-picker-candidates { flex: 1 1 12rem; min-width: 10rem; }
+.entity-tag-picker-tags select { width: 100%; margin-top: var(--sp-1); }
 
 /* Co-Pilot actions */
 .copilot-action { width: 100%; text-align: left; background: var(--bg-inset); color: var(--accent); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.5rem 0.6rem; font-size: 0.82rem; }
@@ -607,6 +638,13 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .doc-content-input { min-height: 8rem; }
 
 /* Gallery (Phase 11, docs/adr/0021-gallery.md) */
+.gallery-toolbar { margin-bottom: var(--sp-2); }
+/* The friendly-name confirmation step after picking a file (an inline
+   form, not a popup, per this app's standing rule) — preview + name field
+   side by side on a wide drawer, stacking on a narrow one. */
+.gallery-upload-form { display: flex; gap: var(--sp-3); align-items: flex-start; margin-bottom: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--tier2-bg); flex-wrap: wrap; }
+.gallery-upload-preview { width: 5rem; height: 5rem; border-radius: var(--radius-sm); object-fit: cover; border: 1px solid var(--border); background: var(--bg-inset); }
+.gallery-upload-fields { flex: 1 1 12rem; min-width: 10rem; }
 .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: var(--sp-3); margin-top: var(--sp-3); }
 .gallery-card { position: relative; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--tier2-bg); padding: var(--sp-3); display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); text-align: center; }
 .gallery-card > [data-gallery-delete] { position: absolute; top: 0.3rem; right: 0.3rem; }
@@ -682,10 +720,6 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
      width along with it. */
   .last-scene-body { flex-direction: column; }
   .last-scene-body .scene-text { flex-basis: auto; max-width: none; width: auto !important; resize: vertical; }
-  /* Keep every header control clickable at narrow widths — hide just the
-     text label, not the whole button (a prior blanket `display: none` on
-     .btn.sm hid Journal/Party/Colony/the gear menu entirely here). */
-  .header-drawer-tabs .btn-label { display: none; }
 }
 
 /* Threads (progress clocks) */

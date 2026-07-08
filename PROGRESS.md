@@ -14,6 +14,26 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-08 UX batch, eight items**: Gallery gained its own "+ Upload"
+(an inline friendly-name form after picking a file, not a popup —
+previously the only way in was an entity's "+ Photo"); Battlemap
+background uploads now auto-tag `battlemap` and the "pick existing"
+picker filters to that tag; the header's Party/Colony/Journal buttons
+always show their label now (matching the edge nav's own icon+label
+buttons); "New Campaign" moved fully into the Settings drawer (out of the
+⚙ quick-menu); the gear button moved to the header's far right, icon-only;
+WHO's NPC/Faction list is now the same tag-listbox -> candidate-panel ->
+click-to-mention picker WHERE already had (`entity-tag-picker`, generic
+CSS shared by both); an NPC tagged `#character` no longer shows "Deepen"
+or "Revealed/hidden" (both are for NPCs the GM is inventing/keeping
+secrets about, not a player-controlled character); the drawer tab strip
+gained a collapse arrow that hides the whole drawer (keeping every tab
+open) behind a small floating ☰ icon. Also: Enhancement types split
+"Wetware / Bio-Genetics" into two separate options and renamed
+"Gene-Modification" to "Mutation" (label-only, id unchanged). Verified via
+40 jsdom smoke checks across two scripts plus `npm test` (321/321,
+unaffected — UI-only, no schema changes).
+
 **2026-07-08 Planetfall Grid Battlemap** (`docs/adr/0023-planetfall-grid-
 battlemap.md`) — the first of Phase 11's four remaining tactical-tools
 items, chosen and scoped this session (four rounds of clarifying

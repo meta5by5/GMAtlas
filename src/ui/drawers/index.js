@@ -263,10 +263,17 @@ function inspector(doc, e, ui) {
       ${strengthOrBond}
       <button class="icon-btn" data-entity-unlink="${esc(r.to)}" title="Remove link" aria-label="Remove link">✕</button></span>`;
   }).join('');
+  // A #character-tagged NPC is a Party member (see the Party tab's own
+  // "#character" filter) — Deepen (a from-scratch flavor-roll flourish for
+  // an NPC the GM is inventing on the fly) and Revealed/hidden (the GM's
+  // secret notes on someone the PLAYER already controls openly) don't
+  // apply to a player character the same way they do to an antagonist or
+  // bystander NPC, so both are hidden once this tag is present.
+  const isPartyCharacter = e.type === 'npc' && (e.tags || []).some((t) => t.toLowerCase() === 'character');
   return `
     <div class="inspector-head">
       <input class="inspector-name" data-entity-field="name" value="${esc(e.name)}" placeholder="Name">
-      ${e.type === 'npc' ? `<button class="icon-btn" data-deepen-npc="${esc(e.id)}" title="Roll a Stereotype/Want/Complication and add it to this NPC's Overview">🎲 Deepen</button>` : ''}
+      ${e.type === 'npc' && !isPartyCharacter ? `<button class="icon-btn" data-deepen-npc="${esc(e.id)}" title="Roll a Stereotype/Want/Complication and add it to this NPC's Overview">🎲 Deepen</button>` : ''}
       <button class="icon-btn" data-entity-del="${esc(e.id)}" title="Delete entity">🗑</button>
     </div>
     <div class="inspector-photo-row">
@@ -281,11 +288,11 @@ function inspector(doc, e, ui) {
     <div class="field-label">${fieldLabelRow('Overview (shared)', e.type, 'overview')}
       <div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-entity-field="overview" data-placeholder="What the party knows.">${buildMentionEditorHTML(doc, e.overview)}</div></div>
     </div>
-    <div class="revealed-block">
+    ${isPartyCharacter ? '' : `<div class="revealed-block">
       <button class="btn ghost sm" data-reveal-toggle="${esc(e.id)}">${e.revealedOpen ? '▾' : '▸'} Revealed / hidden (GM)</button>
       ${oracleLinkIcon(e.type, 'revealed')}
       ${e.revealedOpen ? `<div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-entity-field="revealed" data-placeholder="Secrets, twists, true motives.">${buildMentionEditorHTML(doc, e.revealed)}</div></div>` : ''}
-    </div>
+    </div>`}
     ${factionSection(doc, e)}
     ${statblockSection(e, doc, ui)}
     ${enhancementsSection(e, ui)}
@@ -1744,6 +1751,32 @@ function gallery(doc, ui = {}) {
   const allTags = listGalleryTagVocabulary(doc);
   const images = listGalleryImages(doc, { search, tags: [...activeTags] });
 
+  // Upload, direct from the Gallery itself (previously the only way in was
+  // through an entity's own "+ Photo" — this is a real, owner-less upload,
+  // entityId: null). A resize happens immediately on file selection
+  // (ui.galleryUploadDraft holds the result, not the raw File — same
+  // client-side canvas resize battlemap backgrounds/entity photos already
+  // use), but the actual addGalleryImages commit waits for the GM to
+  // confirm a friendly display name — an inline form, not a popup, per
+  // this app's standing "no window.prompt() for data entry" rule.
+  const draft = ui.galleryUploadDraft;
+  const uploadForm = draft ? `
+    <div class="gallery-upload-form">
+      <img class="gallery-upload-preview" src="${esc(draft.thumbDataUrl)}" alt="Upload preview">
+      <div class="gallery-upload-fields">
+        <label class="field-label">Friendly name
+          <input type="text" data-gallery-upload-name value="${esc(draft.name)}" placeholder="e.g. Captain Reyes">
+        </label>
+        <div class="entity-add-row">
+          <button type="button" class="btn primary sm" data-gallery-upload-confirm>Add to Gallery</button>
+          <button type="button" class="btn ghost sm" data-gallery-upload-cancel>Cancel</button>
+        </div>
+      </div>
+    </div>` : `
+    <div class="gallery-toolbar">
+      <label class="chip">🖼 Upload image<input type="file" accept="image/*" hidden data-gallery-upload-select></label>
+    </div>`;
+
   const cards = images.map((img) => {
     const owner = img.entityId ? getEntity(doc, img.entityId) : null;
     const tagChips = (img.tags || []).map((t) => {
@@ -1762,6 +1795,7 @@ function gallery(doc, ui = {}) {
   }).join('');
 
   return `
+    ${uploadForm}
     <datalist id="gallery-tag-list">${allTags.map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
     <input class="drawer-search" data-gallery-filter value="${esc(search)}" placeholder="Search by title or tag…">
     ${allTags.length ? `
@@ -1770,7 +1804,7 @@ function gallery(doc, ui = {}) {
       ${allTags.map((t) => `<button class="chip sm ${activeTags.has(t) ? 'active' : ''}" data-gallery-tag-filter="${esc(t)}">#${esc(t)}</button>`).join('')}
     </div>` : ''}` : ''}
     <div class="gallery-grid">
-      ${images.length ? cards : '<p class="ws-placeholder">No images yet — add a photo from any entity\'s inspector.</p>'}
+      ${images.length ? cards : '<p class="ws-placeholder">No images yet — upload one above, or add a photo from any entity\'s inspector.</p>'}
     </div>`;
 }
 
@@ -1799,7 +1833,12 @@ function battlemap(doc, ui = {}) {
   if (!active) return `${head}<p class="ws-placeholder">No maps yet — create one to get started.</p>`;
 
   const bg = active.backgroundImageId ? getGalleryImage(doc, active.backgroundImageId) : null;
-  const pickableImages = listGalleryImages(doc, {}).filter((img) => img.kind === 'thumbnail');
+  // Only Gallery images tagged "battlemap" are offered as a pickable
+  // background — an upload made through THIS drawer (below) is
+  // auto-tagged with it, the same "auto-tag + lock" convention an entity
+  // photo upload already uses for its own type tag, so the picker never
+  // gets cluttered with unrelated entity portraits.
+  const pickableImages = listGalleryImages(doc, { tags: ['battlemap'] }).filter((img) => img.kind === 'thumbnail');
 
   const palette = BATTLEMAP_ICONS.map((i) => `
     <button type="button" class="chip sm ${ui.battlemapPlacingIcon === i.key ? 'active' : ''}" data-battlemap-palette-pick="${esc(i.key)}" title="${esc(i.label)}">${i.glyph} ${esc(i.label)}</button>`).join('');

@@ -9,12 +9,17 @@
 // augmentation fits Hostile's body-horror-adjacent tone better than
 // hard cybernetics) — original content, not transcribed from any
 // sourcebook, same posture as domain/enhancements.js's Strain mechanic
-// itself (see that file's header comment).
+// itself (see that file's header comment). 'bio-genetics' split out from
+// the former combined "Wetware / Bio-Genetics" label into its own type on
+// direct request; 'gene-modification' keeps its stored id (existing
+// installed enhancements of this type must keep resolving correctly) but
+// now displays as "Mutation" — a label-only rename, not a re-ID.
 export const ENHANCEMENT_TYPES = [
   { id: 'cybernetics', label: 'Cybernetics' },
-  { id: 'wetware', label: 'Wetware / Bio-Genetics' },
+  { id: 'wetware', label: 'Wetware' },
+  { id: 'bio-genetics', label: 'Bio-Genetics' },
   { id: 'psionics', label: 'Psionics' },
-  { id: 'gene-modification', label: 'Gene-Modification' },
+  { id: 'gene-modification', label: 'Mutation' },
 ];
 
 export function enhancementTypeLabel(id) {
