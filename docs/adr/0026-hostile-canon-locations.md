@@ -6,6 +6,31 @@ Accepted and implemented (2026-07-08), first pass. Extends ADR 0013/0025's
 Location-field precedent with a new, independent field group; does not
 change either.
 
+**2026-07-08 follow-up (same day)**: three direct UI refinements, folded
+into this ADR rather than a new one since they're the same feature —
+(1) Star System became a `<select>` sourced from existing Location
+entities tagged `#star` instead of free text, with the field label
+showing `(#star)` so a GM knows where the options come from — a world's
+star is now modeled by linking to another Location entity a GM creates
+and tags, not by typing a descriptive string. This is a genuinely
+different mental model from the canon import's `starSystem` strings
+(e.g. "Wolf 359 (M6V Red Dwarf)"), which don't retroactively match
+anything until a GM creates a matching `#star`-tagged Location — a known,
+accepted tradeoff of the request as given, not a bug. (2) Trade Codes
+became a dropdown-add (`data-entity-tradecode-add`, no `#` prefix on
+options, matching the WHO/WHERE tag-picker's listbox *style* without its
+two-panel candidate mechanism) plus removable chips, via two new small
+domain functions (`addLocationTradeCode`/`removeLocationTradeCode`,
+mirroring `addFactionAsset`/`removeFactionAsset` exactly) — replacing
+the original comma-separated text input, since typo-free codes matter
+for the `findTradeCode()` label lookup already driving the summary line
+under it. Bases stayed a comma input (not part of the request). (3) Both
+the Location card and World Profile card became collapsible, collapsed
+by default (`ui.expandedLocationCard`/`ui.expandedWorldProfile`,
+ephemeral Sets — same shape as `enhancementsSection`'s
+`ui.expandedEnhancements`), so a Cast list full of imported worlds
+doesn't default to a wall of open cards.
+
 ## Context
 
 Direct ask: "Make a robust and fully detailed locations database for

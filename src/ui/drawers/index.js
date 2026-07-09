@@ -297,7 +297,7 @@ function inspector(doc, e, ui) {
       ${e.revealedOpen ? `<div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-entity-field="revealed" data-placeholder="Secrets, twists, true motives.">${buildMentionEditorHTML(doc, e.revealed)}</div></div>` : ''}
     </div>`}
     ${factionSection(doc, e)}
-    ${locationSection(doc, e)}
+    ${locationSection(doc, e, ui)}
     ${statblockSection(e, doc, ui)}
     ${enhancementsSection(e, ui)}
     <div class="rel-block">
@@ -352,13 +352,19 @@ function factionSection(doc, e) {
 // priceAt() bias — see entities.js's ensureLocationFields for why they
 // default to '' rather than requiring a choice. data-entity-field is
 // already generic (shell.js), so no new change handler is needed.
-function locationSection(doc, e) {
+// Collapsed by default (ui.expandedLocationCard, ephemeral — same Set
+// shape as enhancementsSection's ui.expandedEnhancements below), since a
+// GM working a busy Cast list doesn't need every Location's card open at
+// once.
+function locationSection(doc, e, ui = {}) {
   if (e.type !== 'location') return '';
   const devTypes = economyTypesForModel(doc.settings.tradeEconomyModel || 'hostile');
   const biomes = biomesForGenrePack(doc.settings.genrePack || 'hostile');
+  const open = (ui.expandedLocationCard || new Set()).has(e.id);
   return `
     <div class="faction-card">
-      <h4>Location card</h4>
+      <h4><button class="btn ghost sm" data-location-card-toggle="${esc(e.id)}">${open ? '▾' : '▸'} Location card</button></h4>
+      ${open ? `
       <label class="field-label">${fieldLabelRow('Development level', 'location', 'developmentLevel')}
         <select data-entity-field="developmentLevel">
           <option value="" ${!e.developmentLevel ? 'selected' : ''}>— unset —</option>
@@ -372,8 +378,9 @@ function locationSection(doc, e) {
         </select>
       </label>
       <p class="dim small">Both bias Trade prices for this Location (Settings → Trade Economy Model has the full dial reference) — leave either unset to price as before.</p>
+      ` : ''}
     </div>
-    ${worldProfileSection(doc, e)}`;
+    ${worldProfileSection(doc, e, ui)}`;
 }
 
 // World Profile card (docs/adr/0026-hostile-canon-locations.md): the
@@ -385,13 +392,26 @@ function locationSection(doc, e) {
 // one in even before the canon import has run) — same "don't show a
 // blank card nobody asked for" instinct as the rest of this inspector,
 // but a Hostile-genre GM shouldn't have to switch genre packs to discover
-// the fields exist.
-function worldProfileSection(doc, e) {
+// the fields exist. Collapsed by default (ui.expandedWorldProfile), same
+// shape as locationSection's own toggle above.
+//
+// Star System (2026-07-08 follow-up) is a `<select>` sourced from
+// existing Location entities tagged #star, not free text — the field
+// still stores a plain string (the chosen star Location's name), so
+// data-entity-field's generic handler needs no changes; a GM models a
+// star system as its own Location entity (tagged #star) and links a
+// world to it by name. Trade Codes (same follow-up) is a dropdown-add +
+// removable-chip list (mirroring factionStatsHtml's asset chips) instead
+// of a comma-separated input, since typo-free codes matter for the
+// findTradeCode() lookup driving the summary line below it; Bases stays
+// a comma input (not part of that request).
+function worldProfileSection(doc, e, ui = {}) {
   if (e.type !== 'location') return '';
   const hasAny = e.hex || e.zone || e.starport || e.worldSize || e.atmosphere || e.hydrographics ||
     e.population || e.government || e.lawLevel || e.techLevel || (e.bases && e.bases.length) ||
     (e.tradeCodes && e.tradeCodes.length) || e.gasGiant || e.starSystem;
   if (!hasAny && doc.settings.genrePack !== 'hostile') return '';
+  const open = (ui.expandedWorldProfile || new Set()).has(e.id);
   const codeSelect = (field, label, table, value) => `
     <label class="field-label">${fieldLabelRow(label, 'location', field)}
       <select data-entity-field="${field}">
@@ -399,9 +419,13 @@ function worldProfileSection(doc, e) {
         ${table.map((t) => `<option value="${esc(t.code)}" ${value === t.code ? 'selected' : ''}>${esc(t.code)} — ${esc(t.label)}</option>`).join('')}
       </select>
     </label>`;
+  const starLocations = listEntities(doc).filter((l) => l.type === 'location' && (l.tags || []).includes('star'));
+  const tradeCodeChips = (e.tradeCodes || []).map((c) => `
+    <span class="chip sm">${esc((findTradeCode(c) || {}).label || c)} <button type="button" class="icon-btn" data-entity-tradecode-remove="${esc(e.id)}::${esc(c)}" title="Remove">✕</button></span>`).join('');
   return `
     <div class="faction-card">
-      <h4>World Profile (UWP)</h4>
+      <h4><button class="btn ghost sm" data-world-profile-toggle="${esc(e.id)}">${open ? '▾' : '▸'} World Profile (UWP)</button></h4>
+      ${open ? `
       <p class="dim small">HOSTILE's own Universal World Profile format — reference only, doesn't affect Trade pricing. See Settings → Trade Economy Model for the full digit-meaning legend.</p>
       <div class="faction-stats-row">
         <label class="field-label">${fieldLabelRow('Hex', 'location', 'hex')}
@@ -421,18 +445,27 @@ function worldProfileSection(doc, e) {
       ${codeSelect('population', 'Population', POPULATIONS, e.population)}
       ${codeSelect('government', 'Government', GOVERNMENTS, e.government)}
       ${codeSelect('lawLevel', 'Law Level', LAW_LEVELS, e.lawLevel)}
-      <label class="field-label">${fieldLabelRow('Star System', 'location', 'starSystem')}
-        <input data-entity-field="starSystem" value="${esc(e.starSystem)}" placeholder="Wolf 359 (M6V Red Dwarf)">
+      <label class="field-label">${fieldLabelRow('Star System (#star)', 'location', 'starSystem')}
+        <select data-entity-field="starSystem">
+          <option value="" ${!e.starSystem ? 'selected' : ''}>— unset —</option>
+          ${starLocations.map((l) => `<option value="${esc(l.name)}" ${e.starSystem === l.name ? 'selected' : ''}>${esc(l.name) || 'Unnamed'}</option>`).join('')}
+        </select>
+        ${!starLocations.length ? '<p class="dim small">No Locations tagged #star yet — tag one in Cast to offer it here.</p>' : ''}
       </label>
       <label class="field-label">${fieldLabelRow('Bases', 'location', 'bases')}
         <input data-entity-field="bases" value="${esc((e.bases || []).join(', '))}" placeholder="USSC, MRA">
       </label>
       ${e.bases && e.bases.length ? `<p class="dim small">${e.bases.map((b) => esc((findBase(b) || {}).label || b)).join(' · ')}</p>` : ''}
-      <label class="field-label">${fieldLabelRow('Trade Codes', 'location', 'tradeCodes')}
-        <input data-entity-field="tradeCodes" value="${esc((e.tradeCodes || []).join(', '))}" placeholder="agricultural, garden, non-industrial">
-      </label>
-      ${e.tradeCodes && e.tradeCodes.length ? `<p class="dim small">${e.tradeCodes.map((c) => esc((findTradeCode(c) || {}).label || c)).join(' · ')}</p>` : ''}
+      <div class="faction-assets">
+        <span class="field-label-static">${fieldLabelRow('Trade Codes', 'location', 'tradeCodes')}</span>
+        <span class="faction-asset-list">${tradeCodeChips || '<span class="dim small">None yet.</span>'}</span>
+        <select data-entity-tradecode-add="${esc(e.id)}">
+          <option value="">— add a trade code —</option>
+          ${TRADE_CODES.map((t) => `<option value="${esc(t.code)}">${esc(t.label)}</option>`).join('')}
+        </select>
+      </div>
       <label class="chip sm"><input type="checkbox" data-entity-field="gasGiant" ${e.gasGiant ? 'checked' : ''}> Gas giant present in system</label>
+      ` : ''}
     </div>`;
 }
 

@@ -2473,6 +2473,7 @@ test('formatFactionTurnRumors renders a readable block, or an explanatory messag
 
 // --- SWN/CWN content (2026-07-06, docs/adr/0011-swn-cwn-content.md) --------
 import { setFactionStat, addFactionAsset, removeFactionAsset } from '../src/domain/entities.js';
+import { addLocationTradeCode, removeLocationTradeCode } from '../src/domain/entities.js';
 import { resolveFactionTurn, formatFactionTurnResult, rollFactionAsset, FACTION_ACTION_TYPES } from '../src/domain/factions.js';
 import { deepenNpc } from '../src/domain/session.js';
 import {
@@ -3202,6 +3203,22 @@ test('importHostileLocations skips only the already-present name, still importin
   let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'Earth' }));
   const { createdIds } = importHostileLocations(camp);
   assert.equal(createdIds.length, HOSTILE_LOCATIONS.length - 1);
+});
+
+test('addLocationTradeCode appends a code deduped; removeLocationTradeCode drops it; both no-op on a non-Location entity', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'Rustwell' }));
+  camp = addLocationTradeCode(camp, id, 'agricultural');
+  camp = addLocationTradeCode(camp, id, 'agricultural'); // dedup
+  camp = addLocationTradeCode(camp, id, 'garden');
+  assert.deepEqual(getEntity(camp, id).tradeCodes, ['agricultural', 'garden']);
+  camp = removeLocationTradeCode(camp, id, 'agricultural');
+  assert.deepEqual(getEntity(camp, id).tradeCodes, ['garden']);
+
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Reyes' }));
+  const before = camp;
+  camp = addLocationTradeCode(camp, npcId, 'agricultural');
+  assert.deepEqual(camp, before);
 });
 
 // --- docs/adr/0014: Game Mechanics Index (pure storage half only — the

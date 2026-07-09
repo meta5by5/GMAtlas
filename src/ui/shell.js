@@ -21,6 +21,7 @@ import {
   getEntity, addEntityStatblockGroup, removeEntityStatblockGroup, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
   setEntityStatblockTrackValue, setEntityStatblockAttributeValue, updateRelationshipLabel, updateRelationshipType, updateRelationshipStrength,
   listEntities, ENTITY_TYPES, TYPE_LABEL, setFactionStat, addFactionAsset, removeFactionAsset, createItemFromCatalog,
+  addLocationTradeCode, removeLocationTradeCode,
 } from '../domain/entities.js';
 import { findCatalogItem } from '../data/gearCatalog.js';
 import { installEnhancement, removeEnhancement } from '../domain/enhancements.js';
@@ -228,6 +229,8 @@ let entityTagListOpen = false; // ephemeral — collapses the tag sub-filter chi
 let catalogPickerOpen = false; // ephemeral — the Cast drawer's "+ Item from catalog" (ADR 0012) inline picker, open or not
 let enhancementDraft = {}; // ephemeral — entityId -> name text rolled into the Enhancements add-form's name field, overwritten by each 🎲 roll until "Install" commits it (docs/adr/next-request.md, 2026-07-06)
 let expandedEnhancements = new Set(); // ephemeral — entity ids whose Enhancements section is expanded (collapsed by default)
+let expandedLocationCard = new Set(); // ephemeral — entity ids whose Location card is expanded (docs/adr/0026 follow-up, collapsed by default)
+let expandedWorldProfile = new Set(); // ephemeral — entity ids whose World Profile (UWP) card is expanded (docs/adr/0026 follow-up, collapsed by default)
 let mechanicsScanning = false; // ephemeral — true while scanMechanicsIndex()'s async PDF.js scan is in flight (docs/adr/0014)
 let tocScanning = false; // ephemeral — true while scanAndGenerateToc()'s async PDF.js outline scan is in flight (docs/adr/0020)
 let lensPickerOpen = false; // ephemeral — "What Happens Next?"'s Suggestion Lens chip picker, open or not (docs/adr/0009)
@@ -837,6 +840,23 @@ function onClick(ev) {
     const id = enhToggle.dataset.enhancementsToggle;
     if (expandedEnhancements.has(id)) expandedEnhancements.delete(id); else expandedEnhancements.add(id);
     return renderDrawerBody();
+  }
+  const locCardToggle = hit('[data-location-card-toggle]');
+  if (locCardToggle) {
+    const id = locCardToggle.dataset.locationCardToggle;
+    if (expandedLocationCard.has(id)) expandedLocationCard.delete(id); else expandedLocationCard.add(id);
+    return renderDrawerBody();
+  }
+  const worldProfileToggle = hit('[data-world-profile-toggle]');
+  if (worldProfileToggle) {
+    const id = worldProfileToggle.dataset.worldProfileToggle;
+    if (expandedWorldProfile.has(id)) expandedWorldProfile.delete(id); else expandedWorldProfile.add(id);
+    return renderDrawerBody();
+  }
+  const tradeCodeRemove = hit('[data-entity-tradecode-remove]');
+  if (tradeCodeRemove) {
+    const [id, code] = tradeCodeRemove.dataset.entityTradecodeRemove.split('::');
+    return store.update((d) => removeLocationTradeCode(d, id, code));
   }
   const sbGroupToggle = hit('[data-statblock-group-toggle]');
   if (sbGroupToggle) {
@@ -1682,16 +1702,27 @@ function onChange(ev) {
         return;
       }
     }
-    // World Profile (docs/adr/0026): `bases`/`tradeCodes` are stored as
-    // arrays (data/hostileUwpTables.js's code ids) but edited as a plain
+    // World Profile (docs/adr/0026): `bases` is stored as an array
+    // (data/hostileUwpTables.js's code ids) but edited as a plain
     // comma-separated <input> — same CSV-split-trim-filter shape
     // entities.js's setEntityTags already uses for tags, just inline here
     // since this is the one place a plain text field feeds an array
-    // field via the otherwise string-only generic handler. `gasGiant` is
-    // the first checkbox-backed data-entity-field, hence the type check.
+    // field via the otherwise string-only generic handler (`tradeCodes`
+    // is dropdown-add + chip-remove instead, see data-entity-tradecode-add/
+    // -remove below). `gasGiant` is the first checkbox-backed
+    // data-entity-field, hence the type check.
     let value = t.type === 'checkbox' ? t.checked : t.value;
-    if (field === 'bases' || field === 'tradeCodes') value = t.value.split(',').map((s) => s.trim()).filter(Boolean);
+    if (field === 'bases') value = t.value.split(',').map((s) => s.trim()).filter(Boolean);
     return store.update((d) => updateEntity(d, active, { [field]: value }));
+  }
+
+  const tradeCodeAdd = t.closest('[data-entity-tradecode-add]');
+  if (tradeCodeAdd) {
+    const id = tradeCodeAdd.dataset.entityTradecodeAdd;
+    const code = t.value;
+    if (code) store.update((d) => addLocationTradeCode(d, id, code));
+    t.value = '';
+    return;
   }
 
   const relLabel = t.closest('[data-entity-rel-label]');
@@ -3273,7 +3304,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw,
+    enhancementDraft, expandedEnhancements, expandedLocationCard, expandedWorldProfile, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,

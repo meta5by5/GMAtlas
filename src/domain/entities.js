@@ -237,6 +237,29 @@ export function removeFactionAsset(campaign, id, index) {
   return next;
 }
 
+/** Add one Trade Code (a data/hostileUwpTables.js TRADE_CODES `code`) to a
+ *  Location's tradeCodes list, deduped. No-op on a non-Location entity or
+ *  an empty/already-present code. Mirrors addFactionAsset's shape — the
+ *  UI drives this from a dropdown of TRADE_CODES rather than free text. */
+export function addLocationTradeCode(campaign, id, code) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  const clean = String(code || '').trim();
+  if (!e || e.type !== 'location' || !clean) return next;
+  ensureLocationFields(e);
+  if (!e.tradeCodes.includes(clean)) e.tradeCodes.push(clean);
+  return next;
+}
+
+/** Remove one Trade Code by exact value. No-op on a non-Location entity. */
+export function removeLocationTradeCode(campaign, id, code) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (!e || e.type !== 'location' || !Array.isArray(e.tradeCodes)) return next;
+  e.tradeCodes = e.tradeCodes.filter((c) => c !== code);
+  return next;
+}
+
 // --- internal mutators (operate on an already-cloned campaign) ------------
 function _create(campaign, { type = 'npc', name = '' } = {}) {
   const ents = ensure(campaign);

@@ -14,6 +14,15 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-08 HOSTILE Canon Locations follow-up**: Star System is now a
+`<select>` sourced from Locations tagged `#star` (label shows `(#star)`)
+instead of free text; Trade Codes became a dropdown-add + removable-chip
+list (no `#` prefix, two new domain functions
+`addLocationTradeCode`/`removeLocationTradeCode` mirroring
+`addFactionAsset`/`removeFactionAsset`); both the Location card and
+World Profile card are now collapsible, collapsed by default. Verified
+via 1 new domain test (332 total) and a jsdom smoke test.
+
 **2026-07-08 HOSTILE Canon Locations** (`docs/adr/0026-hostile-canon-
 locations.md`, extending ADR 0013/0025): close reading of `assets/docs/
 Hostile setting.pdf` (321 pages) turned up a full Cepheus Engine/
