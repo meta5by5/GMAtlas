@@ -122,6 +122,12 @@ export function defaultCampaign(now = new Date().toISOString()) {
       // overrides data/statblockTemplates.js defaults once a system is
       // edited (see domain/statblockTemplates.js). Empty = all defaults.
       statblockTemplates: {},
+      // Whether a rich-text field's formatting toolbar starts collapsed
+      // (UX batch) — a per-GM display preference, not campaign content. A
+      // toolbar's actual shown/hidden state also depends on any per-field
+      // override the GM has made this session (ui.collapsedToolbars,
+      // ephemeral — see mentionEditor.js's toolbarCollapsed()).
+      toolbarCollapsedByDefault: false,
       form: {},          // legacy Story Director form fields, preserved verbatim
       ui: { activeCenterTab: 'journal', activeLeftTab: 'entityList', oracleFilter: '', entityFilter: '', docFilter: '', docTagFilter: [] },
     },

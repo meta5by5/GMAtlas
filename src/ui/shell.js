@@ -152,6 +152,7 @@ let docFilter = '';
 let graphFilter = ''; // ephemeral — highlights/dims graph-svg nodes by name substring, never removes them
 let helpOpen = new Set(); // ephemeral — which collapsible "?" tip icons are currently expanded, keyed by a stable per-instance string
 let settingsMenuOpen = false; // ephemeral — the header gear's Settings/About dropdown (New Campaign lives only in the Settings drawer now, not this menu)
+let settingsTab = 'general'; // ephemeral — which of the 4 topical Settings tabs is active (UX batch)
 let aboutOpen = false; // ephemeral — the About overlay
 let docTagFilters = new Set();
 let docTagEditorOpen = new Set(); // ephemeral — which doc/ref cards' tag editors are expanded
@@ -230,6 +231,8 @@ let catalogPickerOpen = false; // ephemeral — the Cast drawer's "+ Item from c
 let enhancementDraft = {}; // ephemeral — entityId -> name text rolled into the Enhancements add-form's name field, overwritten by each 🎲 roll until "Install" commits it (docs/adr/next-request.md, 2026-07-06)
 let expandedEnhancements = new Set(); // ephemeral — entity ids whose Enhancements section is expanded (collapsed by default)
 let expandedWorldDemographics = new Set(); // ephemeral — entity ids whose World Demographics card is expanded (docs/adr/0026 follow-up, collapsed by default)
+let expandedSceneFields = new Set(); // ephemeral — "sceneId::field" keys whose Latest Scene field is expanded (UX batch, collapsed by default; click the label to expand)
+let collapsedToolbars = new Set(); // ephemeral — rich-text toolbar keys OVERRIDDEN away from campaign.settings.toolbarCollapsedByDefault (mentionEditor.js's toolbarCollapsed() XORs this against the default; see UX batch)
 let expandedWorldProfile = new Set(); // ephemeral — entity ids whose World Profile (UWP) card is expanded (docs/adr/0026 follow-up, collapsed by default)
 let mechanicsScanning = false; // ephemeral — true while scanMechanicsIndex()'s async PDF.js scan is in flight (docs/adr/0014)
 let tocScanning = false; // ephemeral — true while scanAndGenerateToc()'s async PDF.js outline scan is in flight (docs/adr/0020)
@@ -473,6 +476,8 @@ function onClick(ev) {
   if (hit('[data-menu-open-settings]')) { settingsMenuOpen = false; toggleDrawer('settings'); return render(); }
   if (hit('[data-menu-open-about]')) { settingsMenuOpen = false; aboutOpen = true; return render(); }
   if (hit('[data-about-close]')) { aboutOpen = false; return render(); }
+  const settingsTabBtn = hit('[data-settings-tab]');
+  if (settingsTabBtn) { settingsTab = settingsTabBtn.dataset.settingsTab; return renderDrawerBody(); }
 
   // --- Phase 9: Activity -> Rules Lens suggestion, apply as default ruleset ---
   const applyRuleset = hit('[data-apply-ruleset]');
@@ -852,6 +857,18 @@ function onClick(ev) {
     const id = worldProfileToggle.dataset.worldProfileToggle;
     if (expandedWorldProfile.has(id)) expandedWorldProfile.delete(id); else expandedWorldProfile.add(id);
     return renderDrawerBody();
+  }
+  const sceneFieldToggle = hit('[data-scene-field-toggle]');
+  if (sceneFieldToggle) {
+    const key = sceneFieldToggle.dataset.sceneFieldToggle;
+    if (expandedSceneFields.has(key)) expandedSceneFields.delete(key); else expandedSceneFields.add(key);
+    return render();
+  }
+  const toolbarToggle = hit('[data-rich-toolbar-toggle]');
+  if (toolbarToggle) {
+    const key = toolbarToggle.dataset.richToolbarToggle;
+    if (collapsedToolbars.has(key)) collapsedToolbars.delete(key); else collapsedToolbars.add(key);
+    return render();
   }
   const tradeCodeRemove = hit('[data-entity-tradecode-remove]');
   if (tradeCodeRemove) {
@@ -1829,6 +1846,7 @@ function onChange(ev) {
     return toast(`Genre Pack set to ${t.value}`);
   }
   if (t.closest('[data-settings-stat-ruleset]')) return store.update((d) => { d.settings.statRuleset = t.value; return d; });
+  if (t.closest('[data-settings-toolbar-default]')) return store.update((d) => { d.settings.toolbarCollapsedByDefault = t.checked; return d; });
   if (t.closest('[data-trade-economy-model-select]')) {
     store.update((d) => { d.settings.tradeEconomyModel = t.value; return d; });
     return toast(`Trade Economy Model set to ${t.value}`);
@@ -3305,11 +3323,11 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw,
+    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, expandedSceneFields, collapsedToolbars, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,
-    journalEditOpen, whereLocationTagFilter, whoTagFilter, graphFilter, helpOpen, settingsMenuOpen, aboutOpen,
+    journalEditOpen, whereLocationTagFilter, whoTagFilter, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon,
   };

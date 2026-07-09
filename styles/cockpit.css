@@ -422,6 +422,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
    that instead of growing forever. resize:none because the height is
    already content-driven — a manual drag handle would just fight it. */
 .scene-fields textarea { resize: none; overflow-y: auto; line-height: 1.4; min-height: calc(1.4em + 1rem); max-height: calc(1.4em * 4 + 1rem); }
+/* Collapsed-by-default scene fields (docs/adr next-request UX batch) —
+   the toggle is a <button> standing in for the field's own label text,
+   so it needs the label's font reset instead of a default button look. */
+.scene-field-toggle { background: none; border: none; padding: 0; margin: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; text-align: left; }
 /* Latest Scene: the combined text view sits at 70% width, its split
    fields at 30%, side by side instead of stacked — the fields are edited
    far less often than the text is read, so giving the text the larger
@@ -597,6 +601,10 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .recap-panel [data-recap-save] { margin-top: var(--sp-3); }
 .settings-group { margin-bottom: var(--sp-6); }
 .settings-group h3 { font-size: 0.85rem; margin: 0 0 var(--sp-2); color: var(--accent); }
+/* Settings topical tabs (UX batch) — a plain sticky button row above
+   whichever tab's sections are currently rendered. */
+.settings-tab-bar { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: var(--sp-4); padding-bottom: var(--sp-3); border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--tier2-bg, inherit); z-index: 1; }
+.settings-tab-bar .btn.active { color: var(--accent); border-color: var(--accent); }
 
 /* Collapsible "?" tip icons ("USER CHANGES" QoL batch) — a section title
    plus its toggle, right-aligned on the same line; the h3/h4 keeps its own

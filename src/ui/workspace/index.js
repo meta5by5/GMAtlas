@@ -7,7 +7,7 @@ import { listThreads, THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES }
 import { ACTIVITIES, suggestRulesLens } from '../../domain/activities.js';
 import { listTagVocabulary } from '../../domain/entities.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
-import { buildMentionEditorHTML, richToolbarHTML } from '../mentionEditor.js';
+import { buildMentionEditorHTML, richToolbarHTML, toolbarCollapsed } from '../mentionEditor.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -42,7 +42,7 @@ const VIEWS = {
     const stress = c.stress == null ? 5 : c.stress;
     return card('WHAT is happening', 'The active situation — your primary workspace.', `
       <div class="field-label">Situation
-        <div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-ctx="what.situation" data-placeholder="What is unresolved right now?">${buildMentionEditorHTML(doc, c.situation)}</div></div>
+        <div class="rich-field">${richToolbarHTML('what:situation', toolbarCollapsed(doc, ui, 'what:situation'))}<div class="mention-editor" contenteditable="true" data-ctx="what.situation" data-placeholder="What is unresolved right now?">${buildMentionEditorHTML(doc, c.situation)}</div></div>
       </div>
       <div class="field-row">
         <label class="field-label">Intent
@@ -77,12 +77,12 @@ const VIEWS = {
       <div class="shift-actions" aria-label="Shift story">
         ${WHAT_ACTIONS.map((a) => `<button class="chip" data-shift="${esc(a)}">⚡ ${esc(a)}</button>`).join('')}
       </div>
-      ${lastScene(doc)}`);
+      ${lastScene(doc, ui)}`);
   },
 
   who(doc, ui) {
     return card('WHO is here', 'People and factions in play.', `
-      ${summaryField('who', doc.context.who.summary, 'Party, NPCs, factions present…', doc)}
+      ${summaryField('who', doc.context.who.summary, 'Party, NPCs, factions present…', doc, ui)}
       <div class="shift-actions">
         <button class="chip" data-shift-prompt="Introduce NPC">＋ Introduce NPC</button>
       </div>
@@ -91,20 +91,20 @@ const VIEWS = {
 
   where(doc, ui) {
     return card('WHERE it happens', 'The place the scene is set.', `
-      ${summaryField('where', doc.context.where.summary, 'Location and immediate surroundings…', doc)}
+      ${summaryField('where', doc.context.where.summary, 'Location and immediate surroundings…', doc, ui)}
       ${whereLocationPicker(doc, ui)}`);
   },
 
-  why(doc) {
+  why(doc, ui) {
     return card('WHY they are here', 'The objective driving the party, tracked as progress clocks.', `
-      ${summaryField('why', doc.context.why.summary, 'The current goal or stakes…', doc)}
+      ${summaryField('why', doc.context.why.summary, 'The current goal or stakes…', doc, ui)}
       <div class="shift-actions">
         <button class="chip" data-shift-prompt="Set Objective">◎ Set Objective</button>
       </div>
       ${threadsBlock(doc)}`);
   },
 
-  how(doc) {
+  how(doc, ui) {
     const activity = doc.context.how.activity || '';
     return card('HOW it plays', 'Mode, pacing, and the Rules Lens it suggests.', `
       <label class="field-label">Activity
@@ -114,7 +114,7 @@ const VIEWS = {
         </select>
       </label>
       ${rulesLensSuggestion(doc, activity)}
-      ${summaryField('how', doc.context.how.summary, 'Exploration, combat, social, downtime…', doc)}
+      ${summaryField('how', doc.context.how.summary, 'Exploration, combat, social, downtime…', doc, ui)}
       <div class="shift-actions">
         <button class="chip" data-shift="Advance Time">⏱ Advance Time</button>
       </div>`);
@@ -140,9 +140,10 @@ function rulesLensSuggestion(doc, activity) {
   </div>`;
 }
 
-function summaryField(key, val, placeholder, doc) {
+function summaryField(key, val, placeholder, doc, ui) {
+  const toolbarKey = `${key}:summary`;
   return `<div class="field-label">Focus
-    <div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-ctx="${key}.summary" data-placeholder="${esc(placeholder)}">${buildMentionEditorHTML(doc, val)}</div></div>
+    <div class="rich-field">${richToolbarHTML(toolbarKey, toolbarCollapsed(doc, ui, toolbarKey))}<div class="mention-editor" contenteditable="true" data-ctx="${key}.summary" data-placeholder="${esc(placeholder)}">${buildMentionEditorHTML(doc, val)}</div></div>
   </div>`;
 }
 
@@ -276,11 +277,20 @@ function sceneFieldIcon(field) {
 // starting at rows="1" then auto-growing (autoGrowSceneField, ui/shell.js,
 // on input and once per render) up to a CSS-capped ~4 rows reads far
 // better than either a cramped single line or a field that's always tall.
-function sceneField(scene, key, label, placeholder) {
-  return `<label class="field-label sm">
-    <span class="field-label-row">${esc(label)}${sceneFieldIcon(key)}</span>
-    <textarea data-scene-field="${esc(scene.id)}::${key}" rows="1" placeholder="${esc(placeholder)}">${esc(scene[key] || '')}</textarea>
-  </label>`;
+// Collapsed by default (ui.expandedSceneFields, ephemeral — same Set
+// shape as drawers/index.js's expandedEnhancements) — clicking the label
+// expands just that one field; the WHAT tab opens with all 7 collapsed
+// to their labels so it reads as a scannable list, not a wall of text
+// boxes, until the GM picks one to look at.
+function sceneField(scene, key, label, placeholder, ui) {
+  const open = ((ui && ui.expandedSceneFields) || new Set()).has(`${scene.id}::${key}`);
+  return `<div class="field-label sm">
+    <span class="field-label-row">
+      <button type="button" class="scene-field-toggle" data-scene-field-toggle="${esc(scene.id)}::${key}">${open ? '▾' : '▸'} ${esc(label)}</button>
+      ${sceneFieldIcon(key)}
+    </span>
+    ${open ? `<textarea data-scene-field="${esc(scene.id)}::${key}" rows="1" placeholder="${esc(placeholder)}">${esc(scene[key] || '')}</textarea>` : ''}
+  </div>`;
 }
 
 // Latest Scene split fields: Opening/Driver/Clue/Complication/Likely
@@ -292,7 +302,7 @@ function sceneField(scene, key, label, placeholder) {
 // holds the FULL line's content (not a fragment nested in a fixed
 // template) — editing it directly rewrites what "Opening:" reads in the
 // combined text below.
-function lastScene(doc) {
+function lastScene(doc, ui) {
   const scenes = doc.scenes || [];
   if (!scenes.length) return '<div class="ws-placeholder">No scenes yet. Continue Story to generate the opening beat.</div>';
   const s = scenes[scenes.length - 1];
@@ -301,13 +311,13 @@ function lastScene(doc) {
     <div class="last-scene-body">
       <pre class="scene-text">${esc(s.text)}</pre>
       <div class="scene-fields">
-        ${sceneField(s, 'opening', 'Opening', 'What the party notices first…')}
-        ${sceneField(s, 'driver', 'Driver', "What's pushing this scene forward…")}
-        ${sceneField(s, 'clue', 'Clue', 'A detail that connects to the current thread…')}
-        ${sceneField(s, 'complication', 'Complication', 'What makes the obvious choice costly…')}
-        ${sceneField(s, 'decisionPoint', 'Decision point', 'What tradeoff does the party have to weigh…')}
-        ${sceneField(s, 'consequence', 'Likely consequence', 'What happens if nothing changes…')}
-        ${sceneField(s, 'situationLine', 'Current thread', 'The ongoing thread this scene connects to…')}
+        ${sceneField(s, 'opening', 'Opening', 'What the party notices first…', ui)}
+        ${sceneField(s, 'driver', 'Driver', "What's pushing this scene forward…", ui)}
+        ${sceneField(s, 'clue', 'Clue', 'A detail that connects to the current thread…', ui)}
+        ${sceneField(s, 'complication', 'Complication', 'What makes the obvious choice costly…', ui)}
+        ${sceneField(s, 'decisionPoint', 'Decision point', 'What tradeoff does the party have to weigh…', ui)}
+        ${sceneField(s, 'consequence', 'Likely consequence', 'What happens if nothing changes…', ui)}
+        ${sceneField(s, 'situationLine', 'Current thread', 'The ongoing thread this scene connects to…', ui)}
       </div>
     </div>
   </details>`;

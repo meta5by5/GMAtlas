@@ -221,8 +221,34 @@ function serializeTable(table) {
  *  mousedown listener — rule 4) finds the sibling editor via
  *  `closest('.rich-field')`, so this markup carries no field-specific
  *  wiring of its own and is safe to call identically from every site. */
-export function richToolbarHTML() {
-  return `<div class="rich-toolbar" data-rich-toolbar>
+/** Resolves whether the toolbar identified by `key` is collapsed right
+ *  now: ui.collapsedToolbars tracks which keys are OVERRIDDEN away from
+ *  the campaign's persisted default (settings.toolbarCollapsedByDefault),
+ *  not the absolute state directly — so toggling a key twice always
+ *  returns to the current default, and changing the Settings default
+ *  itself immediately re-resolves every non-overridden toolbar without
+ *  needing to touch ui.collapsedToolbars at all. */
+export function toolbarCollapsed(doc, ui, key) {
+  const def = !!(doc.settings && doc.settings.toolbarCollapsedByDefault);
+  const overridden = ((ui && ui.collapsedToolbars) || new Set()).has(key);
+  return overridden ? !def : def;
+}
+
+// `key` (a stable per-field string, e.g. "entity:123:overview") identifies
+// this toolbar instance for the collapse toggle below; `collapsed` is the
+// RESOLVED boolean the caller computes (shell.js's toolbarCollapsed() XORs
+// ui.collapsedToolbars' per-key override against the persisted
+// campaign.settings.toolbarCollapsedByDefault — see Settings' "Formatting
+// toolbars" option) — this function just renders whichever state it's
+// told. Both params are optional (default: a key-less, always-expanded
+// toolbar) so a caller that hasn't been updated yet still renders
+// correctly, just without the collapse behavior.
+export function richToolbarHTML(key = '', collapsed = false) {
+  const toggle = key
+    ? `<button type="button" class="icon-btn rich-toolbar-toggle" data-rich-toolbar-toggle="${escAttr(key)}" title="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}" aria-label="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}">${collapsed ? '▸' : '▾'}</button>`
+    : '';
+  if (collapsed) return `<div class="rich-toolbar" data-rich-toolbar>${toggle}</div>`;
+  return `<div class="rich-toolbar" data-rich-toolbar>${toggle}
     <button type="button" class="icon-btn" data-rich-cmd="bold" title="Bold (**text**)"><b>B</b></button>
     <button type="button" class="icon-btn" data-rich-cmd="italic" title="Italic (*text*)"><i>I</i></button>
     <button type="button" class="icon-btn" data-rich-cmd="underline" title="Underline (_text_)"><u>U</u></button>

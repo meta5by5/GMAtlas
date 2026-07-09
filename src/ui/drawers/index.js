@@ -27,7 +27,7 @@ import { getEnhancements, strainUsed, strainCapacity, isOverStrained } from '../
 import { getMechanicsIndex } from '../../domain/mechanicsIndex.js';
 import { ENHANCEMENT_TYPES } from '../../data/enhancementTypes.js';
 import { buildGuideTree, getActiveGuideDoc } from '../../domain/guide.js';
-import { buildMentionEditorHTML, richToolbarHTML } from '../mentionEditor.js';
+import { buildMentionEditorHTML, richToolbarHTML, toolbarCollapsed } from '../mentionEditor.js';
 import { buildSessionRecap } from '../../domain/recap.js';
 import { RULESETS, findRuleset, STARFORGED_PROGRESS_DIFFICULTIES, findProgressDifficulty } from '../../data/rulesets.js';
 import { GEAR_TEMPLATE_SYSTEMS, findGearTemplate } from '../../data/gearTemplates.js';
@@ -58,7 +58,7 @@ export function renderDrawer(id, doc, ui = {}) {
     case 'cast': return entities(doc, ui);
     case 'entity-detail': return entityDetail(doc, ui);
     case 'party': return party(doc, ui);
-    case 'colony': return colony(doc);
+    case 'colony': return colony(doc, ui);
     case 'trade': return trade(doc, ui);
     case 'guide': return guide(doc, ui);
     case 'settings': return settings(doc, ui);
@@ -292,14 +292,14 @@ function inspector(doc, e, ui) {
       </div>
     </div>
     <div class="field-label">${fieldLabelRow('Overview (shared)', e.type, 'overview')}
-      <div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-entity-field="overview" data-placeholder="What the party knows.">${buildMentionEditorHTML(doc, e.overview)}</div></div>
+      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:overview`, toolbarCollapsed(doc, ui, `entity:${e.id}:overview`))}<div class="mention-editor" contenteditable="true" data-entity-field="overview" data-placeholder="What the party knows.">${buildMentionEditorHTML(doc, e.overview)}</div></div>
     </div>
     ${isPartyCharacter ? '' : `<div class="revealed-block">
       <button class="btn ghost sm" data-reveal-toggle="${esc(e.id)}">${e.revealedOpen ? '▾' : '▸'} Revealed / hidden (GM)</button>
       ${oracleLinkIcon(e.type, 'revealed')}
-      ${e.revealedOpen ? `<div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-entity-field="revealed" data-placeholder="Secrets, twists, true motives.">${buildMentionEditorHTML(doc, e.revealed)}</div></div>` : ''}
+      ${e.revealedOpen ? `<div class="rich-field">${richToolbarHTML(`entity:${e.id}:revealed`, toolbarCollapsed(doc, ui, `entity:${e.id}:revealed`))}<div class="mention-editor" contenteditable="true" data-entity-field="revealed" data-placeholder="Secrets, twists, true motives.">${buildMentionEditorHTML(doc, e.revealed)}</div></div>` : ''}
     </div>`}
-    ${factionSection(doc, e)}
+    ${factionSection(doc, e, ui)}
     ${worldProfileSection(doc, e, ui)}
     ${worldDemographicsSection(doc, e, ui)}
     ${statblockSection(e, doc, ui)}
@@ -326,7 +326,7 @@ function inspector(doc, e, ui) {
 // mechanism" pattern the Trade drawer's Contracts already use) — opt-in
 // per faction, not auto-created, so a faction nobody's tracking doesn't
 // clutter the WHY question's thread list.
-function factionSection(doc, e) {
+function factionSection(doc, e, ui) {
   if (e.type !== 'faction') return '';
   const track = getPressureTrack(doc, e.id);
   return `
@@ -339,10 +339,10 @@ function factionSection(doc, e) {
         <input data-entity-field="leadership" value="${esc(e.leadership)}" placeholder="Who's in charge">
       </label>
       <div class="field-label">${fieldLabelRow('Scenario seed', 'faction', 'scenarioSeed')}
-        <div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-entity-field="scenarioSeed" data-placeholder="A one-paragraph hook this faction can drop into a session.">${buildMentionEditorHTML(doc, e.scenarioSeed)}</div></div>
+        <div class="rich-field">${richToolbarHTML(`entity:${e.id}:scenarioSeed`, toolbarCollapsed(doc, ui, `entity:${e.id}:scenarioSeed`))}<div class="mention-editor" contenteditable="true" data-entity-field="scenarioSeed" data-placeholder="A one-paragraph hook this faction can drop into a session.">${buildMentionEditorHTML(doc, e.scenarioSeed)}</div></div>
       </div>
       <div class="field-label">${fieldLabelRow('Agenda', 'faction', 'agenda')}
-        <div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-entity-field="agenda" data-placeholder="What is this faction actively pursuing right now?">${buildMentionEditorHTML(doc, e.agenda)}</div></div>
+        <div class="rich-field">${richToolbarHTML(`entity:${e.id}:agenda`, toolbarCollapsed(doc, ui, `entity:${e.id}:agenda`))}<div class="mention-editor" contenteditable="true" data-entity-field="agenda" data-placeholder="What is this faction actively pursuing right now?">${buildMentionEditorHTML(doc, e.agenda)}</div></div>
       </div>
       ${diplomacyFieldsHtml(e)}
       ${factionStatsHtml(e)}
@@ -952,7 +952,7 @@ function journal(doc, ui = {}) {
     <button class="btn ghost recap-toggle" data-recap-toggle>${recapOpen ? '▾' : '▸'} Previously on…</button>
     ${recapOpen ? recapPanel(doc) : ''}
     <div class="drawer-note">
-      <div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-journal-input data-placeholder="Add a note, ruling, or clue… (drag an entity here, or type @, to mention it)"></div></div>
+      <div class="rich-field">${richToolbarHTML('journal:new', toolbarCollapsed(doc, ui, 'journal:new'))}<div class="mention-editor" contenteditable="true" data-journal-input data-placeholder="Add a note, ruling, or clue… (drag an entity here, or type @, to mention it)"></div></div>
       <div class="drawer-note-actions">
         <button class="btn" data-journal-add>Add note</button>
         <button class="btn ghost" data-export-journal>Export</button>
@@ -977,7 +977,7 @@ function journal(doc, ui = {}) {
 function journalEntryRow(doc, e, ui) {
   const editing = (ui.journalEditOpen || new Set()).has(e.id);
   const body = editing
-    ? `<div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-journal-edit="${esc(e.id)}">${buildMentionEditorHTML(doc, e.text)}</div></div>`
+    ? `<div class="rich-field">${richToolbarHTML(`journal:${e.id}`, toolbarCollapsed(doc, ui, `journal:${e.id}`))}<div class="mention-editor" contenteditable="true" data-journal-edit="${esc(e.id)}">${buildMentionEditorHTML(doc, e.text)}</div></div>`
     : `<div class="journal-text mention-text">${e.isHtml ? e.text : buildMentionEditorHTML(doc, e.text)}</div>`;
   return `
         <div class="journal-entry">
@@ -1108,73 +1108,102 @@ function oracleGroupRow(doc, node, forceOpen, expanded, editorOpen, tagEditorOpe
     </div>`;
 }
 
+// Settings tabs (UX batch) — the 12 sections below were one long scroll;
+// grouped here into 4 topical tabs (a purely cosmetic regrouping, no
+// section's own content/behavior changed). ui.settingsTab is ephemeral,
+// default 'general'. Each tab's content array is evaluated lazily (a
+// thunk, not a pre-rendered string) so switching tabs doesn't pay the
+// cost of rendering the other three.
+const SETTINGS_TABS = [
+  { id: 'general', label: 'General' },
+  { id: 'genre-rules', label: 'Genre & Rules' },
+  { id: 'trade-economy', label: 'Trade & Economy' },
+  { id: 'reference-tools', label: 'Reference Tools' },
+];
+
 function settings(doc, ui = {}) {
   const info = ui.storageInfo || { campaignBytes: 0, hasBackup: false, backupBytes: 0 };
-  return `
-    <div class="settings-group">
-      <h3>Campaign</h3>
-      <label class="field-label">Title
-        <input data-campaign-title-input value="${esc(doc.meta.title)}">
-      </label>
-    </div>
-    <div class="settings-group">
-      ${sectionHeadRow('h3', 'Data (local-first)', 'settings-data')}
-      ${helpBody('settings-data', "Everything is stored in this browser. Export a backup or bind a file in a OneDrive-synced folder. A browser's storage for this app is commonly 5-10MB total. Large uploaded documents are the usual reason this fills up — move big rulebooks into <code>assets/docs/</code> (via a rebuild) instead, which has no such limit.", ui)}
-      <div class="btn-col">
-        <button class="btn" data-export-campaign>Export Campaign JSON</button>
-        <label class="btn ghost file-btn">Import Campaign JSON<input type="file" accept=".json,application/json" data-import-campaign hidden></label>
-        <button class="btn ghost" data-bind-file>Bind Save File / OneDrive</button>
-        <button class="btn ghost" data-new-campaign>New Campaign</button>
+  const activeTab = SETTINGS_TABS.some((t) => t.id === ui.settingsTab) ? ui.settingsTab : 'general';
+  const tabBar = `<div class="settings-tab-bar">${SETTINGS_TABS.map((t) => `
+    <button class="btn ghost sm ${t.id === activeTab ? 'active' : ''}" data-settings-tab="${t.id}" aria-selected="${t.id === activeTab}">${esc(t.label)}</button>`).join('')}</div>`;
+
+  const sections = {
+    general: () => `
+      <div class="settings-group">
+        <h3>Campaign</h3>
+        <label class="field-label">Title
+          <input data-campaign-title-input value="${esc(doc.meta.title)}">
+        </label>
       </div>
-      <p class="dim small storage-usage">Campaign size: ${formatBytes(info.campaignBytes)}${info.hasBackup ? ` · backup: ${formatBytes(info.backupBytes)}` : ' · no backup saved yet'}</p>
-      ${info.hasBackup ? `<button class="btn ghost" data-restore-backup title="Replaces the current campaign with the last save that persisted before this one">↺ Restore last backup</button>` : ''}
-    </div>
-    <div class="settings-group">
-      ${sectionHeadRow('h3', 'Genre lens', 'settings-genre')}
-      ${helpBody('settings-genre', "A free-text flavor label — doesn't change any oracle content. The Genre Pack below is which oracle table set the whole campaign rolls against (Continue Story, Oracle drawer, Generate NPC, Universal Search) — genre-aware, not genre-locked, so this is a data swap, not a different engine.", ui)}
-      <label class="field-label">Setting
-        <input data-genre-input value="${esc(doc.settings.genre || '')}" placeholder="Hostile, generic sci-fi, …">
-      </label>
-      <label class="field-label">Genre Pack
-        <select data-genre-pack-select>
-          ${GENRE_PACKS.map((p) => `<option value="${p.id}" ${p.id === (doc.settings.genrePack || 'hostile') ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}
-        </select>
-      </label>
-    </div>
-    <div class="settings-group">
-      ${sectionHeadRow('h3', 'Stat system', 'settings-statsystem')}
-      ${helpBody('settings-statsystem', 'Creates entity stat templates aligned to the chosen rule system.', ui)}
-      <label class="field-label">Default ruleset
-        <select data-settings-stat-ruleset>
-          ${RULESETS.map((r) => `<option value="${r.id}" ${r.id === (doc.settings.statRuleset || 'starforged') ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
-        </select>
-      </label>
-      ${(() => {
-        const activeRuleset = findRuleset(doc.settings.statRuleset || 'starforged');
-        return activeRuleset.doc
-          ? `<p class="dim small">Reference: <a href="${activeRuleset.doc}" target="_blank" rel="noreferrer">${esc(activeRuleset.label)} PDF</a></p>`
-          : `<p class="dim small">No sourcebook in this repo's library — ${esc(activeRuleset.label)}'s stats here are original content, not a transcription.</p>`;
-      })()}
-    </div>
-    ${statblockTemplateEditor(doc)}
-    ${rulesConstitutionSection(ui)}
-    ${tradeEconomyModelSection(doc, ui)}
-    ${hostileCanonLocationsSection(doc)}
-    ${mechanicsIndexSection(doc, ui)}
-    ${tocSection(doc, ui)}
-    <div class="settings-group">
-      ${sectionHeadRow('h3', 'Companion tools', 'settings-companion')}
-      ${helpBody('settings-companion', "GMAtlas tracks character sheets in-app, ruleset-aware. For full character-building wizards this app doesn't replicate, the community Crew Link tool is one Ironsworn/Starforged option:", ui)}
-      <div class="btn-col">
-        <a class="btn ghost" href="https://starforged-crew-link.scottbenton.dev" target="_blank" rel="noreferrer">Open Crew Link ↗</a>
+      <div class="settings-group">
+        ${sectionHeadRow('h3', 'Data (local-first)', 'settings-data')}
+        ${helpBody('settings-data', "Everything is stored in this browser. Export a backup or bind a file in a OneDrive-synced folder. A browser's storage for this app is commonly 5-10MB total. Large uploaded documents are the usual reason this fills up — move big rulebooks into <code>assets/docs/</code> (via a rebuild) instead, which has no such limit.", ui)}
+        <div class="btn-col">
+          <button class="btn" data-export-campaign>Export Campaign JSON</button>
+          <label class="btn ghost file-btn">Import Campaign JSON<input type="file" accept=".json,application/json" data-import-campaign hidden></label>
+          <button class="btn ghost" data-bind-file>Bind Save File / OneDrive</button>
+          <button class="btn ghost" data-new-campaign>New Campaign</button>
+        </div>
+        <p class="dim small storage-usage">Campaign size: ${formatBytes(info.campaignBytes)}${info.hasBackup ? ` · backup: ${formatBytes(info.backupBytes)}` : ' · no backup saved yet'}</p>
+        ${info.hasBackup ? `<button class="btn ghost" data-restore-backup title="Replaces the current campaign with the last save that persisted before this one">↺ Restore last backup</button>` : ''}
       </div>
-      <p class="dim small">Opens in a new tab — never embedded, so it can't get stuck behind an in-app frame.</p>
-    </div>
-    <div class="settings-group">
-      <h3>Build</h3>
-      <p class="dim small">Phase ${esc(BUILD.phase)} · v${esc(BUILD.version)} — ${esc(BUILD.label)}</p>
-      <ul class="build-notes">${BUILD.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>
-    </div>`;
+      <div class="settings-group">
+        ${sectionHeadRow('h3', 'Editor preferences', 'settings-editor')}
+        <label class="chip sm"><input type="checkbox" data-settings-toolbar-default ${doc.settings.toolbarCollapsedByDefault ? 'checked' : ''}> Rich-text formatting toolbars start collapsed</label>
+        <p class="dim small">Every field's own toolbar (Journal, Overview, Guide, …) still has its own ▸/▾ icon to override this per-field for the rest of the session.</p>
+      </div>
+      <div class="settings-group">
+        ${sectionHeadRow('h3', 'Companion tools', 'settings-companion')}
+        ${helpBody('settings-companion', "GMAtlas tracks character sheets in-app, ruleset-aware. For full character-building wizards this app doesn't replicate, the community Crew Link tool is one Ironsworn/Starforged option:", ui)}
+        <div class="btn-col">
+          <a class="btn ghost" href="https://starforged-crew-link.scottbenton.dev" target="_blank" rel="noreferrer">Open Crew Link ↗</a>
+        </div>
+        <p class="dim small">Opens in a new tab — never embedded, so it can't get stuck behind an in-app frame.</p>
+      </div>
+      <div class="settings-group">
+        <h3>Build</h3>
+        <p class="dim small">Phase ${esc(BUILD.phase)} · v${esc(BUILD.version)} — ${esc(BUILD.label)}</p>
+        <ul class="build-notes">${BUILD.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>
+      </div>`,
+    'genre-rules': () => `
+      <div class="settings-group">
+        ${sectionHeadRow('h3', 'Genre lens', 'settings-genre')}
+        ${helpBody('settings-genre', "A free-text flavor label — doesn't change any oracle content. The Genre Pack below is which oracle table set the whole campaign rolls against (Continue Story, Oracle drawer, Generate NPC, Universal Search) — genre-aware, not genre-locked, so this is a data swap, not a different engine.", ui)}
+        <label class="field-label">Setting
+          <input data-genre-input value="${esc(doc.settings.genre || '')}" placeholder="Hostile, generic sci-fi, …">
+        </label>
+        <label class="field-label">Genre Pack
+          <select data-genre-pack-select>
+            ${GENRE_PACKS.map((p) => `<option value="${p.id}" ${p.id === (doc.settings.genrePack || 'hostile') ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}
+          </select>
+        </label>
+      </div>
+      <div class="settings-group">
+        ${sectionHeadRow('h3', 'Stat system', 'settings-statsystem')}
+        ${helpBody('settings-statsystem', 'Creates entity stat templates aligned to the chosen rule system.', ui)}
+        <label class="field-label">Default ruleset
+          <select data-settings-stat-ruleset>
+            ${RULESETS.map((r) => `<option value="${r.id}" ${r.id === (doc.settings.statRuleset || 'starforged') ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
+          </select>
+        </label>
+        ${(() => {
+          const activeRuleset = findRuleset(doc.settings.statRuleset || 'starforged');
+          return activeRuleset.doc
+            ? `<p class="dim small">Reference: <a href="${activeRuleset.doc}" target="_blank" rel="noreferrer">${esc(activeRuleset.label)} PDF</a></p>`
+            : `<p class="dim small">No sourcebook in this repo's library — ${esc(activeRuleset.label)}'s stats here are original content, not a transcription.</p>`;
+        })()}
+      </div>
+      ${statblockTemplateEditor(doc)}
+      ${rulesConstitutionSection(ui)}`,
+    'trade-economy': () => `
+      ${tradeEconomyModelSection(doc, ui)}
+      ${hostileCanonLocationsSection(doc)}`,
+    'reference-tools': () => `
+      ${mechanicsIndexSection(doc, ui)}
+      ${tocSection(doc, ui)}`,
+  };
+
+  return `${tabBar}${sections[activeTab]()}`;
 }
 
 // --- Settings: Bestiary statblock templates (the "future-state" field-
@@ -1479,7 +1508,7 @@ function party(doc, ui = {}) {
 }
 
 // --- Colony: 5PFH Planetfall turn sheet + crew roster + lifeform filter ----
-function colony(doc) {
+function colony(doc, ui = {}) {
   const fields = getColonyFields(doc);
   const crew = listCrewRows(doc);
   const characters = listEntities(doc, ['npc']);
@@ -1489,7 +1518,8 @@ function colony(doc) {
   const fieldRows = COLONY_FIELDS.map((f) => {
     const v = fields[f.key];
     if (f.type === 'textarea') {
-      return `<label class="field-label">${esc(f.label)}<div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-colony-field="${f.key}">${buildMentionEditorHTML(doc, v)}</div></div></label>`;
+      const toolbarKey = `colony:${f.key}`;
+      return `<label class="field-label">${esc(f.label)}<div class="rich-field">${richToolbarHTML(toolbarKey, toolbarCollapsed(doc, ui, toolbarKey))}<div class="mention-editor" contenteditable="true" data-colony-field="${f.key}">${buildMentionEditorHTML(doc, v)}</div></div></label>`;
     }
     return `<label class="field-label">${esc(f.label)}<input type="${f.type === 'number' ? 'number' : 'text'}" data-colony-field="${f.key}" value="${esc(v == null ? '' : v)}"></label>`;
   }).join('');
@@ -1668,7 +1698,7 @@ function guide(doc, ui = {}) {
   return `
     ${helpBody('guide-intro', 'A table of contents for the campaign — <code>@Name</code> links a Cast entity, <code>@[Doc Name]</code> references a document (<code>@[Doc Name#12]</code> or <code>@[Doc Name p.12]</code> jumps to a page). Click a mention to open it; arrow-key the cursor into it to edit its label. Saves automatically. Drag a document below to reorganize the tree.', ui)}
     <div class="guide-doc-head">${titleEl}</div>
-    <div class="rich-field">${richToolbarHTML()}<div class="mention-editor guide-editor" contenteditable="true" data-guide-input data-guide-active="${esc(active.id)}" data-placeholder="Colony Builder — see @[5PFH Planetfall p.12] for the turn sheet.&#10;Meet @Captain Reyes in Docking Bay 3.">${buildMentionEditorHTML(doc, active.text)}</div></div>
+    <div class="rich-field">${richToolbarHTML(`guide:${active.id}`, toolbarCollapsed(doc, ui, `guide:${active.id}`))}<div class="mention-editor guide-editor" contenteditable="true" data-guide-input data-guide-active="${esc(active.id)}" data-placeholder="Colony Builder — see @[5PFH Planetfall p.12] for the turn sheet.&#10;Meet @Captain Reyes in Docking Bay 3.">${buildMentionEditorHTML(doc, active.text)}</div></div>
     ${mechanicsIndexList(doc)}
     <div class="guide-tree-section">
       <div class="guide-tree-head">
@@ -1886,7 +1916,7 @@ function documents(doc, ui = {}) {
         </div>
       </div>
       ${d.kind === 'file' ? '' : `
-      <div class="rich-field">${richToolbarHTML()}<div class="mention-editor doc-content-input" contenteditable="true" data-doc-content="${esc(d.id)}" data-placeholder="Store notes, references, or handout text here…">${buildMentionEditorHTML(doc, d.content)}</div></div>
+      <div class="rich-field">${richToolbarHTML(`doc:${d.id}`, toolbarCollapsed(doc, ui, `doc:${d.id}`))}<div class="mention-editor doc-content-input" contenteditable="true" data-doc-content="${esc(d.id)}" data-placeholder="Store notes, references, or handout text here…">${buildMentionEditorHTML(doc, d.content)}</div></div>
       <div class="drawer-note-actions"><button class="btn sm" data-doc-save="${esc(d.id)}">Save</button></div>`}
       ${tagEditorOpen.has(d.id) ? docTagEditor(d) : ''}
     </div>`;
