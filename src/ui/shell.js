@@ -45,6 +45,7 @@ import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTrack
 import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow } from '../domain/colony.js';
 import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract } from '../domain/trade.js';
 import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors, resolveFactionTurn, formatFactionTurnResult, rollFactionAsset } from '../domain/factions.js';
+import { importHostileLocations } from '../domain/hostileLocations.js';
 import { generateMission, formatMission } from '../domain/missions.js';
 import {
   getActiveGuideDoc, setGuideDocText, setActiveGuideId, createGuideDoc, renameGuideDoc,
@@ -1320,6 +1321,15 @@ function onClick(ev) {
     store.update((d) => addNote(d, formatMission(generateMission(d)), 'Mission'));
     return toast('Mission generated');
   }
+  if (hit('[data-hostile-locations-import]')) {
+    let createdCount = 0;
+    store.update((d) => {
+      const r = importHostileLocations(d);
+      createdCount = r.createdIds.length;
+      return r.campaign;
+    });
+    return toast(createdCount ? `${createdCount} location(s) imported` : 'Already up to date — nothing new to import');
+  }
   if (hit('[data-advance-faction-turns]')) {
     let rumorCount = 0;
     store.update((d) => {
@@ -1672,7 +1682,16 @@ function onChange(ev) {
         return;
       }
     }
-    return store.update((d) => updateEntity(d, active, { [field]: t.value }));
+    // World Profile (docs/adr/0026): `bases`/`tradeCodes` are stored as
+    // arrays (data/hostileUwpTables.js's code ids) but edited as a plain
+    // comma-separated <input> — same CSV-split-trim-filter shape
+    // entities.js's setEntityTags already uses for tags, just inline here
+    // since this is the one place a plain text field feeds an array
+    // field via the otherwise string-only generic handler. `gasGiant` is
+    // the first checkbox-backed data-entity-field, hence the type check.
+    let value = t.type === 'checkbox' ? t.checked : t.value;
+    if (field === 'bases' || field === 'tradeCodes') value = t.value.split(',').map((s) => s.trim()).filter(Boolean);
+    return store.update((d) => updateEntity(d, active, { [field]: value }));
   }
 
   const relLabel = t.closest('[data-entity-rel-label]');

@@ -39,6 +39,11 @@ import { BATTLEMAP_ICONS, findBattlemapIcon } from '../../data/battlemapIcons.js
 import { GENRE_PACKS, bestiaryTerm } from '../../data/genrePacks.js';
 import { ECONOMY_MODELS, economyTypesForModel } from '../../data/economyTypes.js';
 import { biomesForGenrePack } from '../../data/biomes.js';
+import {
+  STARPORT_CLASSES, WORLD_SIZES, ATMOSPHERES, HYDROGRAPHICS, POPULATIONS, GOVERNMENTS, LAW_LEVELS, BASES, TRADE_CODES,
+  findStarportClass, findWorldSize, findAtmosphere, findHydrographics, findPopulation, findGovernment, findLawLevel, findBase, findTradeCode,
+} from '../../data/hostileUwpTables.js';
+import { HOSTILE_LOCATIONS } from '../../data/hostileLocations.js';
 import { DOCS_MANIFEST } from '../../data/docsManifest.js';
 
 const esc = (s) => String(s == null ? '' : s)
@@ -367,6 +372,67 @@ function locationSection(doc, e) {
         </select>
       </label>
       <p class="dim small">Both bias Trade prices for this Location (Settings → Trade Economy Model has the full dial reference) — leave either unset to price as before.</p>
+    </div>
+    ${worldProfileSection(doc, e)}`;
+}
+
+// World Profile card (docs/adr/0026-hostile-canon-locations.md): the
+// Universal World Profile HOSTILE's own sourcebook uses for every named
+// world/station — purely descriptive/reference, independent of the
+// Development Level/Biome Trade-bias fields above. Renders for any
+// Location entity that has at least one World Profile field set, OR
+// whenever the active genre pack is Hostile (so a GM can start filling
+// one in even before the canon import has run) — same "don't show a
+// blank card nobody asked for" instinct as the rest of this inspector,
+// but a Hostile-genre GM shouldn't have to switch genre packs to discover
+// the fields exist.
+function worldProfileSection(doc, e) {
+  if (e.type !== 'location') return '';
+  const hasAny = e.hex || e.zone || e.starport || e.worldSize || e.atmosphere || e.hydrographics ||
+    e.population || e.government || e.lawLevel || e.techLevel || (e.bases && e.bases.length) ||
+    (e.tradeCodes && e.tradeCodes.length) || e.gasGiant || e.starSystem;
+  if (!hasAny && doc.settings.genrePack !== 'hostile') return '';
+  const codeSelect = (field, label, table, value) => `
+    <label class="field-label">${fieldLabelRow(label, 'location', field)}
+      <select data-entity-field="${field}">
+        <option value="" ${!value ? 'selected' : ''}>— unset —</option>
+        ${table.map((t) => `<option value="${esc(t.code)}" ${value === t.code ? 'selected' : ''}>${esc(t.code)} — ${esc(t.label)}</option>`).join('')}
+      </select>
+    </label>`;
+  return `
+    <div class="faction-card">
+      <h4>World Profile (UWP)</h4>
+      <p class="dim small">HOSTILE's own Universal World Profile format — reference only, doesn't affect Trade pricing. See Settings → Trade Economy Model for the full digit-meaning legend.</p>
+      <div class="faction-stats-row">
+        <label class="field-label">${fieldLabelRow('Hex', 'location', 'hex')}
+          <input data-entity-field="hex" value="${esc(e.hex)}" placeholder="0704">
+        </label>
+        <label class="field-label">${fieldLabelRow('Zone', 'location', 'zone')}
+          <input data-entity-field="zone" value="${esc(e.zone)}" placeholder="Near Earth Zone">
+        </label>
+        <label class="field-label">${fieldLabelRow('Tech Level', 'location', 'techLevel')}
+          <input data-entity-field="techLevel" value="${esc(e.techLevel)}" placeholder="12">
+        </label>
+      </div>
+      ${codeSelect('starport', 'Starport', STARPORT_CLASSES, e.starport)}
+      ${codeSelect('worldSize', 'World Size', WORLD_SIZES, e.worldSize)}
+      ${codeSelect('atmosphere', 'Atmosphere', ATMOSPHERES, e.atmosphere)}
+      ${codeSelect('hydrographics', 'Hydrographics', HYDROGRAPHICS, e.hydrographics)}
+      ${codeSelect('population', 'Population', POPULATIONS, e.population)}
+      ${codeSelect('government', 'Government', GOVERNMENTS, e.government)}
+      ${codeSelect('lawLevel', 'Law Level', LAW_LEVELS, e.lawLevel)}
+      <label class="field-label">${fieldLabelRow('Star System', 'location', 'starSystem')}
+        <input data-entity-field="starSystem" value="${esc(e.starSystem)}" placeholder="Wolf 359 (M6V Red Dwarf)">
+      </label>
+      <label class="field-label">${fieldLabelRow('Bases', 'location', 'bases')}
+        <input data-entity-field="bases" value="${esc((e.bases || []).join(', '))}" placeholder="USSC, MRA">
+      </label>
+      ${e.bases && e.bases.length ? `<p class="dim small">${e.bases.map((b) => esc((findBase(b) || {}).label || b)).join(' · ')}</p>` : ''}
+      <label class="field-label">${fieldLabelRow('Trade Codes', 'location', 'tradeCodes')}
+        <input data-entity-field="tradeCodes" value="${esc((e.tradeCodes || []).join(', '))}" placeholder="agricultural, garden, non-industrial">
+      </label>
+      ${e.tradeCodes && e.tradeCodes.length ? `<p class="dim small">${e.tradeCodes.map((c) => esc((findTradeCode(c) || {}).label || c)).join(' · ')}</p>` : ''}
+      <label class="chip sm"><input type="checkbox" data-entity-field="gasGiant" ${e.gasGiant ? 'checked' : ''}> Gas giant present in system</label>
     </div>`;
 }
 
@@ -1029,6 +1095,7 @@ function settings(doc, ui = {}) {
     ${statblockTemplateEditor(doc)}
     ${rulesConstitutionSection(ui)}
     ${tradeEconomyModelSection(doc, ui)}
+    ${hostileCanonLocationsSection(doc)}
     ${mechanicsIndexSection(doc, ui)}
     ${tocSection(doc, ui)}
     <div class="settings-group">
@@ -1126,6 +1193,35 @@ function tradeEconomyModelSection(doc, ui) {
       <h4>Biomes (${esc((GENRE_PACKS.find((p) => p.id === (doc.settings.genrePack || 'hostile')) || {}).label || 'active pack')})</h4>
       <p class="dim small">Set a Location's Biome (on its Location card) to one of these to bias prices by resource type, independent of and compounding with Development Level. Dials are 0-10, 0 = locally abundant/cheap, 10 = scarce/expensive.</p>
       <ul class="rules-provider-legend">${biomeRows}</ul>
+    </div>`;
+}
+
+// HOSTILE Canon Locations (docs/adr/0026-hostile-canon-locations.md): the
+// import button plus a UWP reference legend, gated to the Hostile genre
+// pack — the Universal World Profile format is Cepheus Engine/HOSTILE-
+// specific, not a generic sci-fi concept the way Trade Economy Model/
+// Biome above are. The import itself is additive/idempotent (dedup by
+// name, domain/hostileLocations.js), so no confirmation dialog is needed
+// — matches the "Advance Faction Turns" bulk-action button's shape.
+function hostileCanonLocationsSection(doc) {
+  if ((doc.settings.genrePack || 'hostile') !== 'hostile') return '';
+  const starportRows = STARPORT_CLASSES.map((s) => `
+    <li><b>${esc(s.code)} — ${esc(s.label)}</b> <span class="dim small">${esc(s.description)}</span></li>`).join('');
+  const baseRows = BASES.map((b) => `
+    <li><b>${esc(b.code)}</b> — <span class="dim small">${esc(b.label)}: ${esc(b.description)}</span></li>`).join('');
+  const tradeCodeRows = TRADE_CODES.map((t) => `
+    <li><b>${esc(t.label)}</b> <span class="dim small">(${esc(t.code)})</span> — <span class="dim small">${esc(t.description)}</span></li>`).join('');
+  return `
+    <div class="settings-group">
+      ${sectionHeadRow('h3', 'HOSTILE Canon Locations', 'settings-hostile-locations')}
+      <p class="dim small">The HOSTILE Settings sourcebook's own world gazetteer — ${HOSTILE_LOCATIONS.length} worlds authored so far (Near Earth Zone), more zones queued. Importing creates a real, fully-editable Location entity per world; already-imported worlds (matched by name) are skipped, so it's safe to re-run after a new zone is added.</p>
+      <button class="btn ghost" data-hostile-locations-import>🌍 Import HOSTILE Canon Locations</button>
+      <h4>Starport Classes</h4>
+      <ul class="rules-provider-legend">${starportRows}</ul>
+      <h4>Bases</h4>
+      <ul class="rules-provider-legend">${baseRows}</ul>
+      <h4>Trade Codes</h4>
+      <ul class="rules-provider-legend">${tradeCodeRows}</ul>
     </div>`;
 }
 

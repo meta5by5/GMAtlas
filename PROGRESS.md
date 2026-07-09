@@ -14,6 +14,28 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-08 HOSTILE Canon Locations** (`docs/adr/0026-hostile-canon-
+locations.md`, extending ADR 0013/0025): close reading of `assets/docs/
+Hostile setting.pdf` (321 pages) turned up a full Cepheus Engine/
+Traveller-style gazetteer — 108 named worlds/stations, each with a UWP
+(Universal World Profile) stat line and, for most, real "Planetology"/
+"Development" prose. Locations gained a new "World Profile" card (13
+optional fields — hex, zone, starport, size, atmosphere, hydrographics,
+population, government, law level, tech level, bases, trade codes, gas
+giant, star system — decoded against a new `data/hostileUwpTables.js`
+reference), independent of the existing Development Level/Biome
+Trade-bias fields. A new gated Settings button, "🌍 Import HOSTILE Canon
+Locations," bulk-creates real, fully-editable Location entities from
+`data/hostileLocations.js` via `domain/hostileLocations.js`'s
+`importHostileLocations()` — idempotent (dedup by name), safe to re-run
+as later zones are appended. This pass ships the Near Earth Zone in
+full: all 30 worlds, each with a condensed GM-scannable summary and a
+real page citation; Fomalhaut Settlement Zone and Capella Extraction
+Zone/New Concessions Zone are queued next (tracked as a living checklist
+in the data file). Verified via 4 new domain tests (331 total) and a
+jsdom smoke test covering the World Profile card, the Settings legend +
+genre-pack gating, and import idempotency.
+
 **2026-07-08 Location Development Level + Biome, Trade "smart exchange
 rates"** (`docs/adr/0025-location-biome-trade.md`, extending ADR 0013):
 Development Level is now a real dropdown field on every Location

@@ -163,10 +163,39 @@ function ensureFactionFields(e) {
 // blank additionally falls back to the pre-existing tag-scan, so an
 // already-tagged Location keeps pricing the way it always has). Same
 // lazy-set-on-touch shape as ensureFactionFields above.
+// World Profile fields (docs/adr/0026-hostile-canon-locations.md): a
+// Universal World Profile (UWP), the Cepheus Engine/Traveller-style
+// per-world stat line HOSTILE's own sourcebook uses for every named
+// world/station (data/hostileUwpTables.js has the decode tables). All
+// optional/blank by default — a Location that never touches these renders
+// no World Profile card at all (ui/drawers/index.js's worldProfileSection),
+// same additive posture as developmentLevel/biome above. Independent of
+// both: a Location can carry a UWP alongside or instead of an ADR-0013/
+// ADR-0025 developmentLevel/biome — the UWP fields are reference/
+// descriptive, not another Trade price bias.
+function ensureWorldProfileFields(e) {
+  if (e.type !== 'location') return;
+  if (e.hex === undefined) e.hex = '';
+  if (e.zone === undefined) e.zone = '';
+  if (e.starport === undefined) e.starport = '';
+  if (e.worldSize === undefined) e.worldSize = '';
+  if (e.atmosphere === undefined) e.atmosphere = '';
+  if (e.hydrographics === undefined) e.hydrographics = '';
+  if (e.population === undefined) e.population = '';
+  if (e.government === undefined) e.government = '';
+  if (e.lawLevel === undefined) e.lawLevel = '';
+  if (e.techLevel === undefined) e.techLevel = '';
+  if (!Array.isArray(e.bases)) e.bases = [];
+  if (!Array.isArray(e.tradeCodes)) e.tradeCodes = [];
+  if (e.gasGiant === undefined) e.gasGiant = false;
+  if (e.starSystem === undefined) e.starSystem = '';
+}
+
 function ensureLocationFields(e) {
   if (e.type !== 'location') return;
   if (e.developmentLevel === undefined) e.developmentLevel = '';
   if (e.biome === undefined) e.biome = '';
+  ensureWorldProfileFields(e);
 }
 
 function clampFactionStat(n) {

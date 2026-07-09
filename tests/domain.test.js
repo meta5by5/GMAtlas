@@ -3152,6 +3152,58 @@ test('priceAt compounds developmentLevel bias and biome bias independently, on t
   assert.ok(biomeBiasAt(loc, 'water') < 1);
 });
 
+// --- docs/adr/0026: HOSTILE canon locations (World Profile fields + import)
+import { importHostileLocations } from '../src/domain/hostileLocations.js';
+import { HOSTILE_LOCATIONS } from '../src/data/hostileLocations.js';
+
+test('ensureLocationFields defaults every World Profile field to blank/false/empty-array on a fresh Location', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'Prospect Station' }));
+  const loc = getEntity(camp, id);
+  for (const f of ['hex', 'zone', 'starport', 'worldSize', 'atmosphere', 'hydrographics', 'population', 'government', 'lawLevel', 'techLevel', 'starSystem']) {
+    assert.equal(loc[f], '', `expected ${f} to default to ''`);
+  }
+  assert.deepEqual(loc.bases, []);
+  assert.deepEqual(loc.tradeCodes, []);
+  assert.equal(loc.gasGiant, false);
+});
+
+test('importHostileLocations creates one Location entity per canon entry, fully patched with its World Profile fields, tags, and summary', () => {
+  let camp = defaultCampaign();
+  const { campaign: next, createdIds } = importHostileLocations(camp);
+  assert.equal(createdIds.length, HOSTILE_LOCATIONS.length);
+  const earth = HOSTILE_LOCATIONS.find((l) => l.name === 'Earth');
+  const entity = findByName(next, 'Earth');
+  assert.ok(entity);
+  assert.equal(entity.type, 'location');
+  assert.equal(entity.hex, earth.hex);
+  assert.equal(entity.starport, earth.starport);
+  assert.equal(entity.starSystem, earth.starSystem);
+  assert.deepEqual(entity.bases, earth.bases);
+  assert.deepEqual(entity.tradeCodes, earth.tradeCodes);
+  assert.equal(entity.gasGiant, earth.gasGiant);
+  assert.equal(entity.overview, earth.summary);
+  assert.ok(entity.tags.includes('hostile-canon'));
+});
+
+test('importHostileLocations is idempotent — re-running it creates nothing new, and never overwrites a GM\'s edits to an already-imported world', () => {
+  let camp = defaultCampaign();
+  let next; ({ campaign: next } = importHostileLocations(camp));
+  const earthId = findByName(next, 'Earth').id;
+  next = updateEntity(next, earthId, { overview: 'GM-edited overview, do not clobber' });
+  const again = importHostileLocations(next);
+  assert.equal(again.createdIds.length, 0);
+  assert.equal(findByName(again.campaign, 'Earth').overview, 'GM-edited overview, do not clobber');
+  assert.equal((again.campaign.entities.items || []).filter((e) => e.name === 'Earth').length, 1);
+});
+
+test('importHostileLocations skips only the already-present name, still importing everything else', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'Earth' }));
+  const { createdIds } = importHostileLocations(camp);
+  assert.equal(createdIds.length, HOSTILE_LOCATIONS.length - 1);
+});
+
 // --- docs/adr/0014: Game Mechanics Index (pure storage half only — the
 // actual PDF.js scan is async/browser-only, see ui/mechanicsScan.js) -------
 import { getMechanicsIndex, setMechanicsIndex } from '../src/domain/mechanicsIndex.js';
