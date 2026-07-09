@@ -130,6 +130,51 @@ alone.
    world orbit," not a tag string that could drift out of sync with the
    real `starSystem` field.
 
+**2026-07-08 fourth follow-up (same day)**: on request to recommend and
+then apply the clearest way to represent the Zone > Star > World > Base
+containment hierarchy in the entity tracker and the Graph. Recommendation
+given and accepted: reuse the existing Relationships/Graph mechanism
+rather than invent a new hierarchy concept, using a consistent two-type
+pattern across every pair (no separate "orbits" type, and no different
+treatment for a `#deepspace`/`#orbit` system-object vs. a `#planet` —
+the tags already carry that distinction for filtering).
+
+1. **`RELATIONSHIP_TYPES` gained `contains`** (`entities.js`,
+   `RELATIONSHIP_TYPE_LABEL.contains = 'Contains'`), alongside the
+   existing `located_at`. Left unconstrained in
+   `RELATIONSHIP_TYPE_TARGETS` (like `linked`/`allied_with`/etc.) since
+   a "contains" edge is reasonable from a Location to any entity type,
+   not just another Location.
+2. **The Relationships add-row now asks for the type before the
+   target** (`inspector()`, `drawers/index.js`) — swapped the two
+   `<select>`s' DOM order; `data-entity-link-add`'s handler already read
+   both by attribute selector, not tab/DOM order, so no shell.js change
+   was needed.
+3. **A new `HOSTILE_ZONES` catalog** (`data/hostileLocations.js`, one
+   entry so far: "Near Earth Zone", tagged `#zone`) sits above stars in
+   the hierarchy — import order is now Bases, Zones, Stars, then
+   Worlds.
+4. **`domain/hostileLocations.js`'s new `linkContains(campaign,
+   parentName, childName)`** replaces the previous follow-up's
+   single-purpose `orbits`/`located_at` loop: it sets the parent's edge
+   to `type: 'contains'`/`label: 'Contains'` (via `addRelationship`)
+   and then explicitly retypes/relabels the child's mirrored edge to
+   `type: 'located_at'`/`label: 'Located At'` (via
+   `updateRelationshipType`/`updateRelationshipLabel` — the mirror
+   `_link` creates on its own defaults to generic `'linked'`, which
+   isn't what "Located At" needs). Called for every Zone→Star, Star→
+   World, and World→Base pair after all four catalogs land: Zone
+   -Contains-> Star -Contains-> World -Contains-> Base, with the
+   reverse edge on each pair reading Located At. A Base entity (e.g.
+   USSC) ends up with one Located At edge per world it has a presence
+   at, since the same canonical Base entity is referenced by several
+   worlds' `bases` arrays — this is an ordinary many-edges-from-one-
+   entity relationship, not a new mechanism.
+5. Verified via a rewritten domain test (asserting the exact
+   type/label on both sides of the Zone↔Star, Star↔World, and
+   World↔Base pairs, 334 total) plus a jsdom smoke test confirming the
+   same chain end to end and the Relationships row's new field order.
+
 ## Context
 
 Direct ask: "Make a robust and fully detailed locations database for

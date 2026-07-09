@@ -33,10 +33,10 @@ export const TYPE_LABEL = { npc: 'NPC', location: 'Location', faction: 'Faction'
 // Starforged Bond (Make a Connection -> Forge a Bond, rulebook pp.163-166/
 // 233) is just a `bond`-typed relationship whose `strength` a GM raises as
 // the connection deepens, not a separate progress-track data shape.
-export const RELATIONSHIP_TYPES = ['linked', 'member_of', 'owns', 'controls', 'located_at', 'allied_with', 'rival_of', 'bond'];
+export const RELATIONSHIP_TYPES = ['linked', 'member_of', 'owns', 'controls', 'located_at', 'contains', 'allied_with', 'rival_of', 'bond'];
 export const RELATIONSHIP_TYPE_LABEL = {
   linked: 'Linked', member_of: 'Member Of', owns: 'Owns', controls: 'Controls',
-  located_at: 'Located At', allied_with: 'Allied With', rival_of: 'Rival Of', bond: 'Bond',
+  located_at: 'Located At', contains: 'Contains', allied_with: 'Allied With', rival_of: 'Rival Of', bond: 'Bond',
 };
 // Which entity types a typed relationship's target is expected to be, for
 // "flag, don't delete" (pack 9, below) — null means no constraint (allied_with/

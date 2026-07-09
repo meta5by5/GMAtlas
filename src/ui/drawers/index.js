@@ -309,8 +309,8 @@ function inspector(doc, e, ui) {
       <p class="dim small">Drag another entity's ⠿ handle onto this one (or vice versa), or pick one below, to link them.</p>
       <div class="rel-chips">${rels || '<span class="dim small">None yet.</span>'}</div>
       ${others.length ? `<div class="rel-add">
-        <select data-entity-link-target>${others.map((o) => `<option value="${esc(o.id)}">${esc(o.name) || 'Unnamed'}</option>`).join('')}</select>
         <select data-entity-link-type>${relTypeOptions('linked')}</select>
+        <select data-entity-link-target>${others.map((o) => `<option value="${esc(o.id)}">${esc(o.name) || 'Unnamed'}</option>`).join('')}</select>
         <input data-entity-link-label placeholder="label (ally, rival…)">
         <button class="btn sm" data-entity-link-add title="Link" aria-label="Link">🔗 Link</button>
       </div>` : '<p class="dim small">Add another entity to create relationships.</p>'}

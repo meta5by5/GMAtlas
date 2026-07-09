@@ -1,7 +1,7 @@
 // hostileLocations.js — the HOSTILE Settings sourcebook's own gazetteer
 // (docs/adr/0026-hostile-canon-locations.md), transcribed directly from
 // assets/docs/Hostile setting.pdf's "World Data" (pp.27-49) and per-world
-// write-up chapters. Three linked catalogs, imported in this order by
+// write-up chapters. Four linked catalogs, imported in this order by
 // domain/hostileLocations.js's importHostileLocations() so every
 // cross-reference already exists by the time it's needed:
 //
@@ -9,11 +9,14 @@
 //      DRW, MRA), imported as real Location entities tagged #base, so a
 //      world's Bases field can reference them the same way Trade Codes
 //      references its own dropdown, rather than a static code lookup.
-//   2. HOSTILE_STARS  — one entity per star system, tagged #star, whose
+//   2. HOSTILE_ZONES  — one entity per named zone (currently just "Near
+//      Earth Zone"), tagged #zone — the top of the Zone > Star > World
+//      containment hierarchy (2026-07-08 follow-up).
+//   3. HOSTILE_STARS  — one entity per star system, tagged #star, whose
 //      own `starSystem` field references ITSELF (its own name) — the
 //      self-reference the World Profile UI uses to know "this Location
 //      IS a star, hide the planet-only fields."
-//   3. HOSTILE_LOCATIONS — the worlds themselves, each `starSystem`
+//   4. HOSTILE_LOCATIONS — the worlds themselves, each `starSystem`
 //      pointing at the matching HOSTILE_STARS entry's name, and a
 //      `locationKind` of 'planet' | 'orbit' | 'deepspace' driving a
 //      matching #planet/#orbit/#deepspace tag: 'orbit' for a body
@@ -21,6 +24,15 @@
 //      a primary itself (Forlorn, Prosperity), 'deepspace' for an
 //      unclaimed/independent asteroid not orbiting a habitable world
 //      (LQ105, Exile, Rock 17, The Solomons), 'planet' otherwise.
+//
+// domain/hostileLocations.js links all four into a real Contains/Located
+// At relationship chain after every catalog lands: Zone --Contains-->
+// Star --Contains--> World --Contains--> Base, with the reverse edge on
+// each pair typed/labeled Located At (Star Located At Zone, World
+// Located At Star, Base Located At World) — the clearest, lowest-new-
+// mechanism way to represent this hierarchy, since it reuses the
+// existing Relationships chip list and Graph rendering rather than a
+// new hierarchy concept.
 //
 // Each world entry's condensed `summary` paraphrases the book's own
 // "Planetology"/"Development" prose (not verbatim — see the cited `page`
@@ -38,6 +50,10 @@
 // Catalogue of Off-World Colonies star listing (pp.27-28, 50-53). Their
 // `summary` says so honestly rather than inventing detail; `page` cites
 // the table instead of a dedicated page.
+
+export const HOSTILE_ZONES = [
+  { id: 'zone-near-earth', name: 'Near Earth Zone', summary: 'The sector of surveyed space nearest Earth — the first ring of Off-World colonization, reached by the earliest hyperspace missions.', page: 27 },
+];
 
 export const HOSTILE_BASES = [
   { id: 'base-ussc', name: 'USSC', summary: 'United States Space Command — a US military base.', page: 45 },
@@ -302,4 +318,8 @@ export function findHostileStar(id) {
 
 export function findHostileBase(id) {
   return HOSTILE_BASES.find((b) => b.id === id) || null;
+}
+
+export function findHostileZone(id) {
+  return HOSTILE_ZONES.find((z) => z.id === id) || null;
 }

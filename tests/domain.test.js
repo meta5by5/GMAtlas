@@ -2300,7 +2300,7 @@ test('a bond relationship does NOT create a track when the source has no Starfor
 });
 
 test('RELATIONSHIP_TYPES includes the Constitution-named taxonomy plus the legacy "linked" fallback', () => {
-  for (const t of ['linked', 'member_of', 'owns', 'controls', 'located_at', 'allied_with', 'rival_of', 'bond']) {
+  for (const t of ['linked', 'member_of', 'owns', 'controls', 'located_at', 'contains', 'allied_with', 'rival_of', 'bond']) {
     assert.ok(RELATIONSHIP_TYPES.includes(t));
   }
 });
@@ -3155,7 +3155,7 @@ test('priceAt compounds developmentLevel bias and biome bias independently, on t
 
 // --- docs/adr/0026: HOSTILE canon locations (World Profile fields + import)
 import { importHostileLocations } from '../src/domain/hostileLocations.js';
-import { HOSTILE_LOCATIONS, HOSTILE_STARS, HOSTILE_BASES } from '../src/data/hostileLocations.js';
+import { HOSTILE_LOCATIONS, HOSTILE_STARS, HOSTILE_BASES, HOSTILE_ZONES } from '../src/data/hostileLocations.js';
 import { addLocationBase, removeLocationBase } from '../src/domain/entities.js';
 
 test('ensureLocationFields defaults every World Profile field to blank/false/empty-array on a fresh Location', () => {
@@ -3170,14 +3170,18 @@ test('ensureLocationFields defaults every World Profile field to blank/false/emp
   assert.equal(loc.gasGiant, false);
 });
 
-test('importHostileLocations creates one Location entity per base, star, and world entry — bases and stars first, so a world\'s references resolve', () => {
+test('importHostileLocations creates one Location entity per base, zone, star, and world entry — bases/zones/stars first, so a world\'s references resolve', () => {
   let camp = defaultCampaign();
   const { campaign: next, createdIds } = importHostileLocations(camp);
-  assert.equal(createdIds.length, HOSTILE_BASES.length + HOSTILE_STARS.length + HOSTILE_LOCATIONS.length);
+  assert.equal(createdIds.length, HOSTILE_BASES.length + HOSTILE_ZONES.length + HOSTILE_STARS.length + HOSTILE_LOCATIONS.length);
 
   const ussc = findByName(next, 'USSC');
   assert.ok(ussc);
   assert.ok(ussc.tags.includes('base'));
+
+  const nez = findByName(next, 'Near Earth Zone');
+  assert.ok(nez);
+  assert.ok(nez.tags.includes('zone'));
 
   const wolf359 = findByName(next, 'Wolf 359');
   assert.ok(wolf359);
@@ -3201,9 +3205,26 @@ test('importHostileLocations creates one Location entity per base, star, and wor
   assert.ok(!entity.tags.includes(earth.starSystem), 'the star is a relationship now, not duplicated as a tag');
   assert.ok(entity.tags.includes(earth.locationKind));
 
+  // Zone -Contains-> Star -Contains-> World -Contains-> Base, reverse edges Located At.
   const sun = findByName(next, 'The Sun');
-  assert.ok(entity.relationships.some((r) => r.to === sun.id && r.type === 'located_at'), 'Earth is linked to The Sun via a real relationship');
-  assert.ok(sun.relationships.some((r) => r.to === entity.id), 'the relationship is mirrored on the star side too');
+  const sunRel = sun.relationships.find((r) => r.to === nez.id);
+  assert.equal(sunRel.type, 'located_at');
+  assert.equal(sunRel.label, 'Located At');
+  const nezRel = nez.relationships.find((r) => r.to === sun.id);
+  assert.equal(nezRel.type, 'contains');
+  assert.equal(nezRel.label, 'Contains');
+
+  const earthRel = entity.relationships.find((r) => r.to === sun.id);
+  assert.equal(earthRel.type, 'located_at');
+  assert.equal(earthRel.label, 'Located At');
+  const sunToEarthRel = sun.relationships.find((r) => r.to === entity.id);
+  assert.equal(sunToEarthRel.type, 'contains');
+  assert.equal(sunToEarthRel.label, 'Contains');
+
+  const usscRel = ussc.relationships.find((r) => r.to === entity.id);
+  assert.equal(usscRel.type, 'located_at');
+  const earthToUsscRel = entity.relationships.find((r) => r.to === ussc.id);
+  assert.equal(earthToUsscRel.type, 'contains');
 });
 
 test('importHostileLocations is idempotent — re-running it creates nothing new, and never overwrites a GM\'s edits to an already-imported world', () => {
@@ -3221,7 +3242,7 @@ test('importHostileLocations skips only the already-present name, still importin
   let camp = defaultCampaign();
   let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'Earth' }));
   const { createdIds } = importHostileLocations(camp);
-  assert.equal(createdIds.length, HOSTILE_BASES.length + HOSTILE_STARS.length + HOSTILE_LOCATIONS.length - 1);
+  assert.equal(createdIds.length, HOSTILE_BASES.length + HOSTILE_ZONES.length + HOSTILE_STARS.length + HOSTILE_LOCATIONS.length - 1);
 });
 
 test('every HOSTILE_LOCATIONS entry\'s starSystem matches a real HOSTILE_STARS name, and every star name is unique from every world name (no import collisions)', () => {

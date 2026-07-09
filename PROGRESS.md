@@ -14,6 +14,16 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-08 HOSTILE Canon Locations fourth follow-up**: the Zone >
+Star > World > Base hierarchy is now real relationships, not just tags/
+fields — a new `contains` relationship type plus the existing
+`located_at`, applied consistently (Zone -Contains-> Star -Contains->
+World -Contains-> Base, reverse edges Located At). New `HOSTILE_ZONES`
+catalog (one entry: "Near Earth Zone"); import order is now Bases,
+Zones, Stars, Worlds. The Relationships add-row now asks for type
+before target entity. Verified via a rewritten domain test and a jsdom
+smoke test (334 tests total).
+
 **2026-07-08 HOSTILE Canon Locations third follow-up**: the Location
 card layout got a full redesign into two purpose-named cards — World
 Profile (UWP): Hex/Star System/Zone on one row, then World Size,
