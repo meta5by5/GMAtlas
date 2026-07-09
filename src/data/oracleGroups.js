@@ -7,7 +7,7 @@
 export const ORACLE_GROUPS = [
   { label: '⭐ Core Solo', children: ['Campaign', 'Core Oracles', 'Core Solo Engine', 'Campaign Intelligence Engine'] },
   { label: '☠ Threats & Conflict', children: ['Conflict', 'Conflict Architecture', 'Danger Situations', 'Fear and Dread', 'Horror Escalation', 'Miscellaneous'] },
-  { label: '📚 Story Beats', children: ['Plot Engine', 'Story', 'Adventure', 'Adventure Seed', 'Missions', 'Mission Aftermath', 'Mysteries & Coverups', 'Scenario Framing'] },
+  { label: '📚 Story Beats', children: ['Plot Engine', 'Story', 'Adventure', 'Adventure Seed', 'Missions', 'Mission Aftermath', 'Mysteries & Coverups', 'Scenario Framing', 'Starforged Oracles'] },
   { label: '👥 Characters & Society', children: ['Characters', 'Factions', 'Frontier Society', 'Corporate Powers', 'Stars Without Number', 'Augmentation', 'Crew & NPCs', 'Law, Marshals & Crime', 'Marines & Security', 'Androids & AI'] },
   { label: '🌌 Locations', children: ['Planets', 'Settlements', 'Districts', 'Location Themes', 'Site Concept', 'Sector & System Creation', 'Worlds & Colonies', 'Colonies and Expeditions', 'Vaults / Ruins', 'Derelicts'] },
   { label: '🚀 Space Operations', children: ['Starships', 'Space Encounters', 'Space Operations', 'Trade & Cargo', 'Industrial Hazards', 'Exploration', 'Environmental Hazards'] },
@@ -24,4 +24,14 @@ export const ORACLE_GROUPS = [
 // filterOracleTree below.
 export const GROUP_ALIASES = {
   Xenobestiary: ['Creature Concept'],
+};
+
+// Optional "(source)" suffix shown next to a SCENE_TABLES top-level group's
+// label in the Oracle tree — display-only lookup, keyed by the same string
+// used as the group's `label`/`path` for roll dispatch and search, so it
+// never touches functional behavior (see ADR 0030). Not every group needs
+// an entry; unlisted groups render with no suffix.
+export const ORACLE_TABLE_SOURCES = {
+  'Stars Without Number': 'SWN',
+  'Starforged Oracles': 'Starforged/StarSmith-inspired',
 };

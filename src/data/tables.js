@@ -1762,6 +1762,35 @@ Object.assign(SCENE_TABLES, {
       "a world under a standing evacuation order nobody enforces", "a world with a black market bigger than its legal economy", "a world where a single family has ruled for generations"
     ]
   },
+  "Starforged Oracles": {
+    "Plot Twist": [
+      "an ally's own goal conflicts with the party's, and they choose it over you",
+      "the real threat was never the one you were watching",
+      "a resource everyone assumed was safe turns out to be running out",
+      "someone the party trusted was reporting to the opposition the whole time",
+      "the mission's true purpose was hidden from the party until now",
+      "an old debt comes due at the worst possible moment",
+      "the enemy's plan was already three steps ahead of the party's",
+      "a rescued party turns out to be more dangerous than what they were rescued from",
+      "the evidence the party gathered points to an uncomfortable truth about themselves",
+      "a supposed dead end reopens because someone else has been digging too",
+      "the patron's stated goal was a cover story for something worse",
+      "an artifact the party is carrying has been quietly changing them",
+      "the timeline everyone assumed was wrong — the deadline already passed",
+      "a faction thought neutral has been arming one side in secret",
+      "the safest-looking option was deliberately made to look that way"
+    ],
+    "Combat Gambit": [
+      "seize the high ground before the enemy can", "use the environment itself as a weapon",
+      "draw fire to protect someone who can't defend themselves", "feign a retreat to pull the enemy out of position",
+      "target the enemy's equipment instead of the enemy", "create cover where none existed a moment ago",
+      "cut off the enemy's escape route first", "turn two enemies against each other",
+      "sacrifice position for a decisive opening strike", "disable the lights, or whatever the enemy relies on to see",
+      "take a hostage-equivalent — leverage, not just a target", "hold the line long enough for reinforcements or an exit",
+      "break the enemy's formation before they can regroup", "go for the objective, not the kill",
+      "improvise a weapon from whatever's already in reach"
+    ]
+  },
   "Xenobestiary": {
     "Creature Origin": [
       "engineered as a bioweapon that outlived its funding", "evolved in a pressure and radiation regime nothing should survive",

@@ -7,6 +7,7 @@ import {
   hasOracleOverride, getOracleTags, isOracleTagLocked, listOracleTagVocabulary,
   filterOracleTreeByTags,
 } from '../../domain/oracles.js';
+import { ORACLE_TABLE_SOURCES } from '../../data/oracleGroups.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import {
   listEntities, filterEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, listTagVocabulary, listEntityTagVocabulary,
@@ -1123,11 +1124,15 @@ function oracleGroupRow(doc, node, forceOpen, expanded, editorOpen, tagEditorOpe
   const childRows = node.children.map((c) => oracleGroupRow(doc, c, forceOpen, expanded, editorOpen, tagEditorOpen, tables)).join('');
   const rollGroupBtn = node.kind === 'group'
     ? `<button class="icon-btn" data-roll-group="${esc(key)}" title="Roll every table in this group" aria-label="Roll group">🎲🎲</button>` : '';
+  // Source suffix is a display-only lookup keyed by the top-level SCENE_TABLES
+  // key (node.path.length === 1) — never touches node.label/path themselves,
+  // which rollGroup dispatch and filterOracleTree search still key off of.
+  const source = node.kind === 'group' && node.path && node.path.length === 1 ? ORACLE_TABLE_SOURCES[node.path[0]] : null;
   return `
     <div class="oracle-group ${node.kind}">
       <button class="oracle-group-head" data-oracle-toggle="${esc(key)}">
         <span class="oracle-toggle-caret">${open ? '▾' : '▸'}</span>
-        <span class="oracle-group-label">${esc(node.label)}</span>
+        <span class="oracle-group-label">${esc(node.label)}${source ? ` <span class="dim">(${esc(source)})</span>` : ''}</span>
       </button>
       ${rollGroupBtn}
       ${open ? `<div class="oracle-group-children">${childRows}</div>` : ''}

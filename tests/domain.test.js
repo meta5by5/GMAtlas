@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { SCENE_TABLES, makeRng, rollTable, rollGroup, flattenKeys, getTable, tablesWithOverrides } from '../src/domain/oracles.js';
+import { ORACLE_TABLE_SOURCES } from '../src/data/oracleGroups.js';
 import { applyShift, listShifts, contextSummary } from '../src/domain/context.js';
 import { generateScene, recomposeSceneText } from '../src/domain/scenes.js';
 import { continueStory, applyStoryShift, rollOracle, patchContext, drawSuggestionLenses, suggestNextWithLens } from '../src/domain/session.js';
@@ -1924,6 +1925,22 @@ test('the Stars Without Number oracle group (Faction Action, World Tag — origi
   const tree = buildGroupedOracleTree(SCENE_TABLES);
   const societyCat = tree.find((cat) => cat.label === '👥 Characters & Society');
   assert.ok(societyCat.children.some((g) => g.label === 'Stars Without Number'));
+});
+
+test('the Starforged Oracles group (Plot Twist, Combat Gambit — original content, no sourcebook) rolls correctly and is bucketed under Story Beats, with a source label registered', () => {
+  assert.ok(Array.isArray(SCENE_TABLES['Starforged Oracles']['Plot Twist']));
+  assert.ok(Array.isArray(SCENE_TABLES['Starforged Oracles']['Combat Gambit']));
+  const twistRoll = rollTable(SCENE_TABLES, ['Starforged Oracles', 'Plot Twist'], makeRng(4));
+  assert.ok(SCENE_TABLES['Starforged Oracles']['Plot Twist'].includes(twistRoll.result));
+  const gambitRoll = rollTable(SCENE_TABLES, ['Starforged Oracles', 'Combat Gambit'], makeRng(4));
+  assert.ok(SCENE_TABLES['Starforged Oracles']['Combat Gambit'].includes(gambitRoll.result));
+
+  const tree = buildGroupedOracleTree(SCENE_TABLES);
+  const storyCat = tree.find((cat) => cat.label === '📚 Story Beats');
+  const group = storyCat.children.find((g) => g.label === 'Starforged Oracles');
+  assert.ok(group);
+  assert.equal(group.path.length, 1, 'top-level group path stays a single-element breadcrumb, unaffected by the source label');
+  assert.ok(ORACLE_TABLE_SOURCES[group.label], 'a source suffix should be registered for this group, for display purposes only');
 });
 
 // --- oracle table entry editor (Phase 8) ------------------------------------
