@@ -1664,21 +1664,38 @@ function contractAddForm(locations, npcs) {
   </div>`;
 }
 
-function contractRow(doc, c) {
+// A contract's name toggles the row collapsed to just its name (default
+// collapsed — a Contracts board can get long; UX batch, ui.expandedContracts,
+// same ephemeral Set shape used throughout this session). Collapsed, only
+// the name + payout show; everything else (route, clock, status/priority,
+// the new description/conflict/opportunity flavor fields, actions) is
+// behind the toggle.
+function contractRow(doc, c, ui) {
+  const open = (ui.expandedContracts || new Set()).has(c.id);
   const pips = Array.from({ length: c.segments }, (_, i) => `<span class="pip ${i < c.filled ? 'on' : ''}"></span>`).join('');
   const patron = c.patronId && getEntity(doc, c.patronId);
   const origin = c.originId && getEntity(doc, c.originId);
   const destination = c.destinationId && getEntity(doc, c.destinationId);
   return `<div class="trade-contract-row thread-status-${esc(c.status)} thread-priority-${esc(c.priority)} ${c.done ? 'done' : ''}">
     <div class="trade-contract-head">
-      <span class="trade-contract-name">${esc(c.name)}</span>
+      <button type="button" class="trade-contract-name" data-contract-toggle="${esc(c.id)}">${open ? '▾' : '▸'} ${esc(c.name)}</button>
       ${c.type ? `<span class="chip sm">${esc(c.type)}</span>` : ''}
       <span class="trade-contract-payout">💰 ${c.payout}</span>
     </div>
+    ${open ? `
     <div class="trade-contract-route">
       ${patron ? `<button class="entity-chip" data-open-entity="${esc(patron.id)}" title="Patron">${esc(patron.name) || 'Unnamed'}</button>` : '<span class="dim small">No patron set</span>'}
       ${origin || destination ? `<span class="dim small">${origin ? esc(origin.name) || 'Unnamed' : '?'} → ${destination ? esc(destination.name) || 'Unnamed' : '?'}</span>` : ''}
     </div>
+    <label class="field-label sm">Description
+      <textarea data-contract-field="${esc(c.id)}::description" rows="1" placeholder="What the job actually is…">${esc(c.description)}</textarea>
+    </label>
+    <label class="field-label sm">Conflict
+      <textarea data-contract-field="${esc(c.id)}::conflict" rows="1" placeholder="What's working against the party…">${esc(c.conflict)}</textarea>
+    </label>
+    <label class="field-label sm">Opportunity
+      <textarea data-contract-field="${esc(c.id)}::opportunity" rows="1" placeholder="What upside exists beyond the payout…">${esc(c.opportunity)}</textarea>
+    </label>
     <span class="thread-clock" title="${c.filled}/${c.segments}">${pips}</span>
     <select class="thread-status-select" data-thread-status="${esc(c.id)}" title="Narrative lifecycle stage">
       ${THREAD_STATUSES.map((s) => `<option value="${s}" ${s === c.status ? 'selected' : ''}>${esc(THREAD_STATUS_LABELS[s])}</option>`).join('')}
@@ -1691,6 +1708,7 @@ function contractRow(doc, c) {
       <button class="icon-btn" data-thread-back="${esc(c.id)}" title="Set back">－</button>
       <button class="icon-btn" data-thread-del="${esc(c.id)}" title="Remove">✕</button>
     </span>
+    ` : ''}
   </div>`;
 }
 
@@ -1728,18 +1746,31 @@ function contractsSection(doc, ui) {
     </div>
     ${ui.tradeContractAddOpen ? contractAddForm(locations, npcs) : ''}
     <div class="trade-contract-list">
-      ${contracts.length ? contracts.map((c) => contractRow(doc, c)).join('') : '<p class="ws-placeholder">No contracts yet — generate one, or add one manually.</p>'}
+      ${contracts.length ? contracts.map((c) => contractRow(doc, c, ui)).join('') : '<p class="ws-placeholder">No contracts yet — generate one, or add one manually.</p>'}
     </div>`;
 }
 
 function trade(doc, ui = {}) {
-  const locations = listEntities(doc, ['location']);
+  const allLocations = listEntities(doc, ['location']);
+  // Location tag filter (UX batch) — narrows the Location <select>
+  // below, same idea as the Cast drawer's own tag filter chips, just a
+  // single-select dropdown here since Trade only needs to pick ONE
+  // Location at a time (no cumulative multi-tag filter needed).
+  const tagVocab = listTagVocabulary(doc, 'location');
+  const tagFilter = tagVocab.includes(ui.tradeLocationTagFilter) ? ui.tradeLocationTagFilter : '';
+  const locations = tagFilter ? allLocations.filter((l) => (l.tags || []).includes(tagFilter)) : allLocations;
   const selectedId = ui.tradeLocationId && locations.some((l) => l.id === ui.tradeLocationId) ? ui.tradeLocationId : '';
   const selectedLocation = selectedId ? getEntity(doc, selectedId) : null;
 
   return `
     <div class="statblock-head"><h4>Merchant — Market</h4></div>
     <p class="dim small">Supply/demand at each Location drive price — buying drains supply and raises the next price there, selling floods it and lowers it, so two Locations never agree.</p>
+    ${tagVocab.length ? `<label class="field-label">Filter by tag
+      <select data-trade-location-tag-filter>
+        <option value="">— all tags —</option>
+        ${tagVocab.map((t) => `<option value="${esc(t)}" ${t === tagFilter ? 'selected' : ''}>#${esc(t)}</option>`).join('')}
+      </select>
+    </label>` : ''}
     <label class="field-label">Location
       <select data-trade-location>
         <option value="">— choose a Location —</option>
@@ -1747,7 +1778,7 @@ function trade(doc, ui = {}) {
       </select>
     </label>
     ${selectedLocation ? marketTable(selectedLocation)
-      : (locations.length ? '<p class="ws-placeholder">Pick a Location to see its market.</p>' : '<p class="ws-placeholder">No Locations yet — add one in Cast first.</p>')}
+      : (locations.length ? '<p class="ws-placeholder">Pick a Location to see its market.</p>' : '<p class="ws-placeholder">No Locations match that tag.</p>')}
     ${cargoManifestSection(doc)}
     ${contractsSection(doc, ui)}`;
 }

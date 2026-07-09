@@ -238,7 +238,7 @@ function addJournalEntry(campaign, text, source) {
  *  what they created — a contract is exactly the kind of session event a
  *  returning GM should see in "Previously on..." without having to dig
  *  through the Trade drawer's contract board to reconstruct it. */
-export function createContract(campaign, { name = '', type = '', patronId = '', originId = '', destinationId = '', payout = 0, segments = 4 } = {}) {
+export function createContract(campaign, { name = '', type = '', patronId = '', originId = '', destinationId = '', payout = 0, segments = 4, description = '', conflict = '', opportunity = '' } = {}) {
   const next = addThread(campaign, name || type || 'New contract', segments);
   const t = next.threads[next.threads.length - 1];
   Object.assign(t, {
@@ -248,6 +248,13 @@ export function createContract(campaign, { name = '', type = '', patronId = '', 
     originId: originId || '',
     destinationId: destinationId || '',
     payout: Math.max(0, Math.round(Number(payout)) || 0),
+    // Free-text flavor fields (UX batch) — same "opt-in, no roll-up
+    // mechanic" posture as Faction's HQ/Leadership/Agenda: what the job
+    // actually is, what's working against the party, and what upside
+    // exists beyond the flat payout.
+    description: description || '',
+    conflict: conflict || '',
+    opportunity: opportunity || '',
   });
   const patron = patronId && getEntity(next, patronId);
   const origin = originId && getEntity(next, originId);
@@ -262,10 +269,11 @@ export function createContract(campaign, { name = '', type = '', patronId = '', 
   return { campaign: next, id: t.id };
 }
 
-/** Patch a contract's trade-specific fields (type/patron/route/payout) —
- *  its clock/status/priority still go through threads.js's own mutators,
- *  since a contract's progress clock IS an ordinary Thread's. No-op on an
- *  id that isn't actually a contract. */
+/** Patch a contract's trade-specific fields (type/patron/route/payout/
+ *  description/conflict/opportunity) — its clock/status/priority still
+ *  go through threads.js's own mutators, since a contract's progress
+ *  clock IS an ordinary Thread's. No-op on an id that isn't actually a
+ *  contract. */
 export function updateContract(campaign, id, patch = {}) {
   const next = clone(campaign);
   const t = (next.threads || []).find((x) => x.id === id);
@@ -275,6 +283,9 @@ export function updateContract(campaign, id, patch = {}) {
   if (patch.originId !== undefined) t.originId = patch.originId;
   if (patch.destinationId !== undefined) t.destinationId = patch.destinationId;
   if (patch.payout !== undefined) t.payout = Math.max(0, Math.round(Number(patch.payout)) || 0);
+  if (patch.description !== undefined) t.description = patch.description;
+  if (patch.conflict !== undefined) t.conflict = patch.conflict;
+  if (patch.opportunity !== undefined) t.opportunity = patch.opportunity;
   return next;
 }
 

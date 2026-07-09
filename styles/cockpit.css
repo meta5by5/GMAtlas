@@ -1226,7 +1226,7 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 }
 .trade-contract-row.done .trade-contract-name { text-decoration: line-through; color: var(--text-dim); }
 .trade-contract-head { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--sp-2); }
-.trade-contract-name { font-weight: 600; }
+.trade-contract-name { background: none; border: none; padding: 0; margin: 0; font: inherit; font-weight: 600; color: inherit; cursor: pointer; text-align: left; }
 .trade-contract-payout { margin-left: auto; color: var(--accent-strong); font-weight: 700; }
 .trade-contract-route { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--sp-2); }
 

@@ -44,7 +44,7 @@ import {
 } from '../domain/documents.js';
 import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue, setPartySharedGear, addPartySharedAsset, removePartySharedAsset } from '../domain/party.js';
 import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow } from '../domain/colony.js';
-import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract } from '../domain/trade.js';
+import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract, updateContract } from '../domain/trade.js';
 import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors, resolveFactionTurn, formatFactionTurnResult, rollFactionAsset } from '../domain/factions.js';
 import { importHostileLocations } from '../domain/hostileLocations.js';
 import { generateMission, formatMission } from '../domain/missions.js';
@@ -236,6 +236,8 @@ let collapsedToolbars = new Set(); // ephemeral — rich-text toolbar keys OVERR
 let expandedPartyMembers = new Set(); // ephemeral — entity ids whose Party member card shows its statblocks (collapsed by default; click the name to expand, UX batch)
 let journalActionsOpen = true; // ephemeral — the Journal drawer's Actions row (Add note, Generate Mission, ...), open by default (UX batch)
 let collapsedOverview = new Set(); // ephemeral — entity ids whose Overview field has been explicitly collapsed (open by default, UX batch)
+let expandedContracts = new Set(); // ephemeral — contract (Thread) ids whose full row is expanded (collapsed to just the name by default, UX batch)
+let tradeLocationTagFilter = ''; // ephemeral — Trade tab's Location tag filter (UX batch), narrows the Location <select>'s options
 let expandedWorldProfile = new Set(); // ephemeral — entity ids whose World Profile (UWP) card is expanded (docs/adr/0026 follow-up, collapsed by default)
 let mechanicsScanning = false; // ephemeral — true while scanMechanicsIndex()'s async PDF.js scan is in flight (docs/adr/0014)
 let tocScanning = false; // ephemeral — true while scanAndGenerateToc()'s async PDF.js outline scan is in flight (docs/adr/0020)
@@ -1392,6 +1394,12 @@ function onClick(ev) {
   if (back) return store.update((d) => advanceThread(d, back.dataset.threadBack, -1));
   const tdel = hit('[data-thread-del]');
   if (tdel) return store.update((d) => removeThread(d, tdel.dataset.threadDel));
+  const contractToggle = hit('[data-contract-toggle]');
+  if (contractToggle) {
+    const id = contractToggle.dataset.contractToggle;
+    if (expandedContracts.has(id)) expandedContracts.delete(id); else expandedContracts.add(id);
+    return renderDrawerBody();
+  }
 
   const docSave = hit('[data-doc-save]');
   if (docSave) {
@@ -1645,7 +1653,7 @@ function onChange(ev) {
     loadAndMaybeResize(file, 1600)
       .then(({ thumbDataUrl, originalDataUrl }) => {
         store.update((d) => {
-          const r = addGalleryImages(d, { entityId: null, lockedTag: 'battlemap', title: file.name, mimeType: file.type, thumbDataUrl, originalDataUrl });
+          const r = addGalleryImages(d, { entityId: null, lockedTag: 'battlemap', title: titleFromFilename(file.name), mimeType: file.type, thumbDataUrl, originalDataUrl });
           return setBattlemapBackground(r.campaign, mapId, r.thumbnailId);
         });
         toast('Background added');
@@ -1868,10 +1876,17 @@ function onChange(ev) {
   // --- trade ---
   const tradeLoc = t.closest('[data-trade-location]');
   if (tradeLoc) { tradeLocationId = tradeLoc.value; return renderDrawerBody(); }
+  const tradeLocTagFilter = t.closest('[data-trade-location-tag-filter]');
+  if (tradeLocTagFilter) { tradeLocationTagFilter = tradeLocTagFilter.value; return renderDrawerBody(); }
   const tradeDial = t.closest('[data-trade-dial]');
   if (tradeDial) {
     const [locId, commodityId, field] = tradeDial.dataset.tradeDial.split('::');
     return store.update((d) => setMarketDial(d, locId, commodityId, field, Number(t.value)));
+  }
+  const contractField = t.closest('[data-contract-field]');
+  if (contractField) {
+    const [id, field] = contractField.dataset.contractField.split('::');
+    return store.update((d) => updateContract(d, id, { [field]: t.value }));
   }
 
   // --- settings: Bestiary statblock template field edits ---
@@ -3394,7 +3409,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw,
+    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,

@@ -3457,6 +3457,29 @@ test('updateContract patches trade-specific fields and no-ops on a non-contract 
   assert.deepEqual(listThreads(camp).find((t) => t.id === plainId), before);
 });
 
+test('createContract defaults description/conflict/opportunity to \'\', and both create and updateContract accept them', () => {
+  let camp = defaultCampaign();
+  let { campaign, id } = createContract(camp, { name: 'A contract' });
+  camp = campaign;
+  let contract = listContracts(camp).find((c) => c.id === id);
+  assert.equal(contract.description, '');
+  assert.equal(contract.conflict, '');
+  assert.equal(contract.opportunity, '');
+
+  ({ campaign, id } = createContract(camp, { name: 'Fully specified', description: 'Ferry cargo', conflict: 'Pirates', opportunity: 'A bonus if early' }));
+  camp = campaign;
+  contract = listContracts(camp).find((c) => c.id === id);
+  assert.equal(contract.description, 'Ferry cargo');
+  assert.equal(contract.conflict, 'Pirates');
+  assert.equal(contract.opportunity, 'A bonus if early');
+
+  camp = updateContract(camp, id, { description: 'Updated', conflict: 'Storms', opportunity: 'None' });
+  contract = listContracts(camp).find((c) => c.id === id);
+  assert.equal(contract.description, 'Updated');
+  assert.equal(contract.conflict, 'Storms');
+  assert.equal(contract.opportunity, 'None');
+});
+
 test('generateContract rolls the Contract Type oracle table (Trade & Cargo group) and creates a contract from it', () => {
   let camp = defaultCampaign();
   const { campaign, id } = generateContract(camp, { rng: makeRng(3) });
