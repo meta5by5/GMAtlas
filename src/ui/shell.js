@@ -47,6 +47,7 @@ import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewR
 import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract, updateContract } from '../domain/trade.js';
 import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors, resolveFactionTurn, formatFactionTurnResult, rollFactionAsset } from '../domain/factions.js';
 import { importHostileLocations } from '../domain/hostileLocations.js';
+import { exportContentPack, importContentPack } from '../domain/contentPack.js';
 import { generateMission, formatMission } from '../domain/missions.js';
 import {
   getActiveGuideDoc, setGuideDocText, setActiveGuideId, createGuideDoc, renameGuideDoc,
@@ -184,6 +185,11 @@ let battlemapPlacingIcon = null;
 // layer is translated by (see updateBattlemapWorldTransform below).
 let battlemapCamera = { scale: 1, x: 0, y: 0 };
 let battlemapPan = null; // { world, startClientX, startClientY, startX, startY } while a drag-pan is in progress
+// Content Pack export checkboxes (Settings > General) — ephemeral, which
+// sections the next "Export Content Pack" click includes; unrelated to
+// campaign data itself (domain/contentPack.js's exportContentPack takes
+// this exact shape as its second argument).
+let contentPackFlags = { entities: false, guide: false, journal: false };
 // @-mention autocomplete (Journal input, Guide editor, WHO/WHERE/WHAT/WHY/HOW
 // context fields) — { field, start, end, items, activeIndex } while typing an
 // "@partial" run; start/end are the field.value indices of that run
@@ -1435,6 +1441,11 @@ function onClick(ev) {
   }
 
   if (hit('[data-export-campaign]')) return download(`gmatlas-${stamp()}.json`, store.export());
+  if (hit('[data-export-content-pack]')) {
+    if (!contentPackFlags.entities && !contentPackFlags.guide && !contentPackFlags.journal) return toast('Select at least one section to export');
+    const pack = exportContentPack(store.get(), contentPackFlags);
+    return download(`gmatlas-content-pack-${stamp()}.json`, JSON.stringify(pack, null, 2));
+  }
   if (hit('[data-export-journal]')) return exportJournal();
   if (hit('[data-generate-mission]')) {
     store.update((d) => addNote(d, formatMission(generateMission(d)), 'Mission'));
@@ -1954,6 +1965,26 @@ function onChange(ev) {
     // errors become a rejected Promise, not a synchronous throw, so this
     // must await it inside the try, not just call it.
     reader.onload = async () => { try { await store.import(reader.result); toast('Campaign imported'); } catch (e) { toast('Import failed'); } };
+    reader.readAsText(file);
+    return;
+  }
+
+  const packFlag = t.closest('[data-content-pack-flag]');
+  if (packFlag) {
+    contentPackFlags = { ...contentPackFlags, [packFlag.dataset.contentPackFlag]: t.checked };
+    return renderDrawerBody();
+  }
+  if (t.closest('[data-import-content-pack]')) {
+    const file = t.files && t.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      let pack;
+      try { pack = JSON.parse(reader.result); } catch { return toast('Import failed — not a valid file'); }
+      if (!pack || pack.app !== 'GMAtlas' || pack.kind !== 'content-pack') return toast('Import failed — not a GMAtlas Content Pack file');
+      store.update((d) => importContentPack(d, pack));
+      toast('Content pack imported');
+    };
     reader.readAsText(file);
     return;
   }
@@ -3510,6 +3541,7 @@ function buildDrawerUi() {
     journalEditOpen, whereLocationTagFilter, whoTagFilter, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
+    contentPackFlags,
   };
 }
 

@@ -1179,6 +1179,7 @@ function settings(doc, ui = {}) {
         <p class="dim small storage-usage">Campaign size: ${formatBytes(info.campaignBytes)}${info.hasBackup ? ` · backup: ${formatBytes(info.backupBytes)}` : ' · no backup saved yet'}</p>
         ${info.hasBackup ? `<button class="btn ghost" data-restore-backup title="Replaces the current campaign with the last save that persisted before this one">↺ Restore last backup</button>` : ''}
       </div>
+      ${contentPackSection(ui)}
       <div class="settings-group">
         ${sectionHeadRow('h3', 'Editor preferences', 'settings-editor')}
         <label class="chip sm"><input type="checkbox" data-settings-toolbar-default ${doc.settings.toolbarCollapsedByDefault ? 'checked' : ''}> Rich-text formatting toolbars start collapsed</label>
@@ -1286,6 +1287,32 @@ function rulesConstitutionSection(ui) {
         </table>
       </div>
       <ul class="rules-provider-legend">${legend}</ul>
+    </div>`;
+}
+
+// Content Packs (domain/contentPack.js): export/import just Entities/Guide
+// docs/Journal entries as a portable, additive file — distinct from the
+// whole-campaign JSON export/import right above it (which REPLACES the
+// current campaign), so this lives directly beneath it in the same "Data"
+// area of the General tab rather than a separate tab of its own. The three
+// checkboxes are ephemeral UI state (ui.contentPackFlags, shell.js) — which
+// sections the next Export click includes; unchecked means "not in this
+// file at all," not "export an empty list."
+function contentPackSection(ui) {
+  const flags = ui.contentPackFlags || { entities: false, guide: false, journal: false };
+  return `
+    <div class="settings-group">
+      ${sectionHeadRow('h3', 'Content Packs', 'settings-content-packs')}
+      ${helpBody('settings-content-packs', 'Export just Entities, Guide docs, and/or Journal entries as a portable file, then import it into another campaign — always additive (new ids, never dedups or replaces), unlike the whole-campaign export above.', ui)}
+      <div class="content-pack-checks">
+        <label class="chip sm"><input type="checkbox" data-content-pack-flag="entities" ${flags.entities ? 'checked' : ''}> Entities</label>
+        <label class="chip sm"><input type="checkbox" data-content-pack-flag="guide" ${flags.guide ? 'checked' : ''}> Guide docs</label>
+        <label class="chip sm"><input type="checkbox" data-content-pack-flag="journal" ${flags.journal ? 'checked' : ''}> Journal entries</label>
+      </div>
+      <div class="btn-col">
+        <button class="btn" data-export-content-pack>Export Content Pack</button>
+        <label class="btn ghost file-btn">Import Content Pack<input type="file" accept=".json,application/json" data-import-content-pack hidden></label>
+      </div>
     </div>`;
 }
 

@@ -617,6 +617,8 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .help-text { margin-top: var(--sp-1); }
 .btn-col { display: flex; flex-direction: column; gap: var(--sp-2); }
 .file-btn { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.content-pack-checks { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+.content-pack-checks .chip { display: inline-flex; align-items: center; gap: 0.3rem; cursor: pointer; }
 
 /* Rules Constitution reference table (Settings) */
 .tablewrap-narrow { overflow-x: auto; margin: var(--sp-2) 0; }

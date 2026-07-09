@@ -3905,3 +3905,98 @@ test('multiple named maps coexist independently — icons/background/grid on one
   assert.equal(getBattlemap(camp, idA).icons.length, 1);
   assert.equal(getBattlemap(camp, idB).icons.length, 0);
 });
+
+// --- Content Packs (ad-hoc Entities/Guide/Journal transfer between campaigns) --
+import { exportContentPack, importContentPack } from '../src/domain/contentPack.js';
+
+test('exportContentPack only includes sections whose flag is true, strips thumbnailId from entities', () => {
+  let camp = defaultCampaign();
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Vex' }));
+  camp = updateEntity(camp, npcId, { thumbnailId: 'img_123' });
+  camp = addNote(camp, 'A note', 'Journal');
+
+  const entitiesOnly = exportContentPack(camp, { entities: true });
+  assert.ok(Array.isArray(entitiesOnly.entities));
+  assert.equal(entitiesOnly.entities.length, 1);
+  assert.equal(entitiesOnly.entities[0].thumbnailId, undefined);
+  assert.equal(entitiesOnly.guide, undefined);
+  assert.equal(entitiesOnly.journal, undefined);
+  assert.equal(entitiesOnly.app, 'GMAtlas');
+  assert.equal(entitiesOnly.kind, 'content-pack');
+
+  const nothing = exportContentPack(camp, {});
+  assert.equal(nothing.entities, undefined);
+  assert.equal(nothing.guide, undefined);
+  assert.equal(nothing.journal, undefined);
+});
+
+test('importContentPack assigns fresh ids, remaps entity relationships, and drops out-of-pack targets', () => {
+  let source = defaultCampaign();
+  let aId, bId, outsideId;
+  ({ campaign: source, id: aId } = createEntity(source, { type: 'npc', name: 'A' }));
+  ({ campaign: source, id: bId } = createEntity(source, { type: 'npc', name: 'B' }));
+  ({ campaign: source, id: outsideId } = createEntity(source, { type: 'npc', name: 'Outside' }));
+  source = addRelationship(source, aId, bId, 'friend', 'linked');
+  source = addRelationship(source, aId, outsideId, 'rival', 'linked');
+
+  const pack = exportContentPack(source, { entities: true });
+  // Only export A and B — Outside stays behind, simulating a pack that never included it.
+  pack.entities = pack.entities.filter((e) => e.id === aId || e.id === bId);
+
+  let dest = defaultCampaign();
+  dest = importContentPack(dest, pack);
+  assert.equal(dest.entities.items.length, 2);
+  const importedA = dest.entities.items.find((e) => e.name === 'A');
+  const importedB = dest.entities.items.find((e) => e.name === 'B');
+  assert.ok(importedA.id !== aId, 'imported entity gets a fresh id, not the source campaign\'s id');
+  assert.equal(importedA.relationships.length, 1, 'the relationship to Outside (not in the pack) is dropped');
+  assert.equal(importedA.relationships[0].to, importedB.id, 'the surviving relationship is remapped to the NEW id');
+});
+
+test('importContentPack remaps guide doc ids and re-parents an orphaned child to root', () => {
+  let source = defaultCampaign();
+  let parentId, childId;
+  ({ campaign: source, id: parentId } = createGuideDoc(source, { title: 'Parent' }));
+  ({ campaign: source, id: childId } = createGuideDoc(source, { title: 'Child', parentId }));
+
+  const pack = exportContentPack(source, { guide: true });
+  // Export only the child — its parent stays behind, simulating a partial pack.
+  pack.guide = pack.guide.filter((d) => d.id === childId);
+
+  let dest = defaultCampaign();
+  dest = importContentPack(dest, pack);
+  const importedChild = dest.guide.docs.find((d) => d.title === 'Child');
+  assert.ok(importedChild);
+  assert.equal(importedChild.parentId, null, 'a doc whose parent was not also imported becomes a new root');
+
+  // Full pack (both docs) preserves the parent/child relationship under new ids.
+  const fullPack = exportContentPack(source, { guide: true });
+  let dest2 = defaultCampaign();
+  dest2 = importContentPack(dest2, fullPack);
+  const p2 = dest2.guide.docs.find((d) => d.title === 'Parent');
+  const c2 = dest2.guide.docs.find((d) => d.title === 'Child');
+  assert.equal(c2.parentId, p2.id);
+});
+
+test('importContentPack appends journal entries with fresh ids, additive (no dedup, does not touch existing entries)', () => {
+  let source = defaultCampaign();
+  source = addNote(source, 'Imported note', 'Journal');
+  const pack = exportContentPack(source, { journal: true });
+
+  let dest = defaultCampaign();
+  dest = addNote(dest, 'Existing note', 'Journal');
+  dest = importContentPack(dest, pack);
+  assert.equal(dest.journal.length, 2);
+  assert.ok(dest.journal.some((j) => j.text === 'Existing note'));
+  assert.ok(dest.journal.some((j) => j.text === 'Imported note'));
+  const ids = dest.journal.map((j) => j.id);
+  assert.equal(new Set(ids).size, 2, 'ids are unique, not collided');
+});
+
+test('importContentPack is a no-op for a missing/malformed pack', () => {
+  let camp = defaultCampaign();
+  camp = addNote(camp, 'Untouched', 'Journal');
+  const before = JSON.stringify(camp);
+  const after = importContentPack(camp, null);
+  assert.equal(JSON.stringify(after), before);
+});
