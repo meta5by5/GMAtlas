@@ -1149,10 +1149,16 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .party-member-list { display: flex; flex-direction: column; gap: var(--sp-2); margin: var(--sp-2) 0 var(--sp-3); }
 .party-member-card {
   background: var(--tier2-bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: var(--sp-3); width: 100%; box-sizing: border-box; cursor: pointer;
+  padding: var(--sp-3); width: 100%; box-sizing: border-box;
 }
 .party-member-card:hover { border-color: var(--accent); }
-.party-member-name { font-weight: 600; margin-bottom: var(--sp-2); }
+/* Name (a button standing in for the collapse toggle) on the left, the
+   ↗ open-in-editor icon right-aligned on the same row (UX batch — the
+   whole card used to open the editor on any click, which fought with a
+   plain collapse click on the name). */
+.party-member-row { display: flex; align-items: center; gap: var(--sp-2); }
+.party-member-name { background: none; border: none; padding: 0; margin: 0; font: inherit; font-weight: 600; color: inherit; cursor: pointer; text-align: left; flex: 1 1 auto; }
+.party-member-row .icon-btn { margin-left: auto; }
 /* One row per ruleset/template (partyMemberStatblocks) — small caption
    above a non-wrapping badge row, same "fit on one line, scroll if it
    truly can't" fallback the Entity Inspector's character-sheet-stats uses. */

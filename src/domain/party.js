@@ -15,6 +15,8 @@ function clone(c) { try { return structuredClone(c); } catch { return JSON.parse
 function ensure(campaign) {
   if (!campaign.party || typeof campaign.party !== 'object') campaign.party = { trackers: [] };
   if (!Array.isArray(campaign.party.trackers)) campaign.party.trackers = [];
+  if (campaign.party.sharedGear === undefined) campaign.party.sharedGear = '';
+  if (!Array.isArray(campaign.party.sharedAssets)) campaign.party.sharedAssets = [];
   return campaign.party;
 }
 
@@ -102,5 +104,37 @@ export function removePartyTracker(campaign, id) {
   const next = clone(campaign);
   const party = ensure(next);
   party.trackers = party.trackers.filter((x) => x.id !== id);
+  return next;
+}
+
+/** Party-wide free-text gear notes (not tied to any one character) —
+ *  e.g. a shared toolkit, a ship's medkit. One field, overwritten
+ *  wholesale on each edit like every other rich-text field in this app. */
+export function setPartySharedGear(campaign, text) {
+  const next = clone(campaign);
+  const party = ensure(next);
+  party.sharedGear = String(text || '');
+  return next;
+}
+
+/** Append a free-text Shared Asset. Mirrors addPartyTracker's shape
+ *  (party-level, not entity-level — see entities.js's addFactionAsset
+ *  for the entity-scoped equivalent this deliberately does NOT reuse). */
+export function addPartySharedAsset(campaign, text) {
+  const next = clone(campaign);
+  const party = ensure(next);
+  const clean = String(text || '').trim();
+  if (!clean) return next;
+  party.sharedAssets.push(clean);
+  return next;
+}
+
+/** Remove one Shared Asset by index. */
+export function removePartySharedAsset(campaign, index) {
+  const next = clone(campaign);
+  const party = ensure(next);
+  const i = Number(index);
+  if (!Number.isInteger(i) || i < 0 || i >= party.sharedAssets.length) return next;
+  party.sharedAssets.splice(i, 1);
   return next;
 }

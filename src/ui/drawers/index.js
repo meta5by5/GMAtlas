@@ -1482,29 +1482,54 @@ function partyTrackerAddForm(ui, isStarforged) {
 }
 
 // --- Party: #character roster (live entity filter) + free-form trackers ----
+// A member card's name toggles the statblock badges collapsed/expanded
+// (ui.expandedPartyMembers, ephemeral — collapsed by default, same Set
+// shape used throughout this session); a dedicated icon, right-aligned
+// on the same row, opens the full entity editor instead (data-open-entity
+// no longer sits on the whole card — clicking anywhere used to open the
+// editor, which fought with wanting a plain collapse click on the name).
+function partyMemberCard(e, doc, ui) {
+  const open = (ui.expandedPartyMembers || new Set()).has(e.id);
+  return `
+    <div class="party-member-card">
+      <div class="party-member-row">
+        <button type="button" class="party-member-name" data-party-member-toggle="${esc(e.id)}">${open ? '▾' : '▸'} ${esc(e.name) || '<em>Unnamed</em>'}</button>
+        <button class="icon-btn" data-open-entity="${esc(e.id)}" title="Open in entity editor" aria-label="Open in entity editor">↗</button>
+      </div>
+      ${open ? partyMemberStatblocks(e, doc) : ''}
+    </div>`;
+}
+
 function party(doc, ui = {}) {
   const members = listPartyMembers(doc);
   const trackers = listPartyTrackers(doc);
-  const memberCards = members.map((e) => `
-    <div class="party-member-card" data-open-entity="${esc(e.id)}">
-      <div class="party-member-name">${esc(e.name) || '<em>Unnamed</em>'}</div>
-      ${partyMemberStatblocks(e, doc)}
-    </div>`).join('');
+  const memberCards = members.map((e) => partyMemberCard(e, doc, ui)).join('');
 
   const isStarforged = ((doc.settings && doc.settings.statRuleset) || 'starforged') === 'starforged';
   const trackerRows = trackers.map(partyTrackerRow).join('');
+  const party_ = doc.party || {};
+  const sharedGearKey = 'party:sharedGear';
+  const sharedAssetChips = (party_.sharedAssets || []).map((a, i) => `
+    <span class="chip sm">${esc(a)} <button type="button" class="icon-btn" data-party-shared-asset-remove="${i}" title="Remove">✕</button></span>`).join('');
 
   return `
-    <div class="statblock-head"><h4>Party Roster</h4></div>
-    <p class="dim small">NPC entities tagged <code>#character</code> — tag an NPC in the Cast drawer to add them here.</p>
+    <div class="statblock-head"><h4>Party Roster</h4><button class="chip" data-party-add-character>＋ Add NPC</button></div>
+    <p class="dim small">NPC entities tagged <code>#character</code> — tag an NPC in the Cast drawer to add one you already made, or add one here.</p>
     <div class="party-member-list">
-      ${memberCards || '<p class="ws-placeholder">No party members yet. In Cast, add an NPC and tag it #character.</p>'}
+      ${memberCards || '<p class="ws-placeholder">No party members yet. Add one above, or tag an existing NPC #character in Cast.</p>'}
     </div>
     <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Party Trackers</h4>${ui.partyTrackerAddOpen ? '' : '<button class="chip" data-party-tracker-add-toggle>＋ Tracker</button>'}</div>
     ${ui.partyTrackerAddOpen ? partyTrackerAddForm(ui, isStarforged) : ''}
     <div class="party-tracker-list">
       ${trackerRows || '<p class="ws-placeholder">No trackers yet — add one for credits, supply, or any shared resource.</p>'}
-    </div>`;
+    </div>
+    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Shared Gear</h4></div>
+    <div class="rich-field">${richToolbarHTML(sharedGearKey, toolbarCollapsed(doc, ui, sharedGearKey))}<div class="mention-editor" contenteditable="true" data-party-field="sharedGear" data-placeholder="A shared toolkit, the ship's medkit, anything not tied to one character…">${buildMentionEditorHTML(doc, party_.sharedGear)}</div></div>
+    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Shared Assets</h4><button class="chip" data-party-add-vehicle>＋ Vehicle</button></div>
+    <div class="entity-chips">${sharedAssetChips || '<span class="dim small">None yet.</span>'}</div>
+    <div class="entity-add-row"><input class="doc-tag-input" data-party-shared-asset-input placeholder="Add a shared asset…"></div>
+    ${cargoManifestSection(doc)}
+    ${contractsSection(doc, ui)}`;
 }
 
 // --- Colony: 5PFH Planetfall turn sheet + crew roster + lifeform filter ----
@@ -1545,7 +1570,7 @@ function colony(doc, ui = {}) {
     <div class="statblock-head"><h4>Colony Turn Sheet</h4></div>
     <p class="dim small">5PFH Planetfall campaign-turn tracker.</p>
     <div class="colony-fields">${fieldRows}</div>
-    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Crew Roster</h4><button class="chip" data-colony-crew-add>＋ Crew</button></div>
+    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Crew Roster</h4><button class="chip" data-colony-add-character>＋ Add NPC</button><button class="chip" data-colony-crew-add>＋ Crew</button></div>
     <div class="colony-crew-list">
       ${crewRows || '<p class="ws-placeholder">No crew rows yet.</p>'}
     </div>
@@ -1643,13 +1668,48 @@ function contractRow(doc, c) {
   </div>`;
 }
 
-function trade(doc, ui = {}) {
+// Cargo Manifest + Contracts (docs/adr/0003/0004) — extracted so both
+// trade() and party() can render them identically (UX batch: "show Cargo
+// Manifest and Contracts on Party too, for ease of access"). Both read
+// party-wide data (listCargoManifest/listContracts aren't location-
+// scoped), and every control inside (data-trade-buy, data-thread-*,
+// data-trade-contract-*) is already read by attribute selector in
+// shell.js, not container-scoped — rendering this markup a second time
+// in a different drawer needs zero new handler code.
+function cargoManifestSection(doc) {
+  const manifest = listCargoManifest(doc);
+  return `
+    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Cargo Manifest</h4></div>
+    <div class="trade-manifest-list">
+      ${manifest.length ? manifest.map((row) => {
+        const c = findCommodity(row.commodityId);
+        return `<div class="trade-manifest-row"><span>${esc(c ? c.label : row.commodityId)}</span><b>${row.qty}</b></div>`;
+      }).join('') : '<p class="ws-placeholder">No cargo yet — buy something from a Location\'s market on the Trade drawer.</p>'}
+    </div>`;
+}
+
+function contractsSection(doc, ui) {
   const locations = listEntities(doc, ['location']);
   const npcs = listEntities(doc, ['npc']);
+  const contracts = listContracts(doc);
+  return `
+    <div class="statblock-head" style="margin-top: var(--sp-4);">
+      <h4>Contracts</h4>
+      <div class="trade-contract-head-actions">
+        <button class="chip" data-trade-generate-contract title="Roll the Contract Type oracle table into a new contract">🎲 Generate</button>
+        ${ui.tradeContractAddOpen ? '' : '<button class="chip" data-trade-contract-add-toggle>＋ Contract</button>'}
+      </div>
+    </div>
+    ${ui.tradeContractAddOpen ? contractAddForm(locations, npcs) : ''}
+    <div class="trade-contract-list">
+      ${contracts.length ? contracts.map((c) => contractRow(doc, c)).join('') : '<p class="ws-placeholder">No contracts yet — generate one, or add one manually.</p>'}
+    </div>`;
+}
+
+function trade(doc, ui = {}) {
+  const locations = listEntities(doc, ['location']);
   const selectedId = ui.tradeLocationId && locations.some((l) => l.id === ui.tradeLocationId) ? ui.tradeLocationId : '';
   const selectedLocation = selectedId ? getEntity(doc, selectedId) : null;
-  const manifest = listCargoManifest(doc);
-  const contracts = listContracts(doc);
 
   return `
     <div class="statblock-head"><h4>Merchant — Market</h4></div>
@@ -1662,24 +1722,8 @@ function trade(doc, ui = {}) {
     </label>
     ${selectedLocation ? marketTable(selectedLocation)
       : (locations.length ? '<p class="ws-placeholder">Pick a Location to see its market.</p>' : '<p class="ws-placeholder">No Locations yet — add one in Cast first.</p>')}
-    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Cargo Manifest</h4></div>
-    <div class="trade-manifest-list">
-      ${manifest.length ? manifest.map((row) => {
-        const c = findCommodity(row.commodityId);
-        return `<div class="trade-manifest-row"><span>${esc(c ? c.label : row.commodityId)}</span><b>${row.qty}</b></div>`;
-      }).join('') : '<p class="ws-placeholder">No cargo yet — buy something from a Location\'s market above.</p>'}
-    </div>
-    <div class="statblock-head" style="margin-top: var(--sp-4);">
-      <h4>Contracts</h4>
-      <div class="trade-contract-head-actions">
-        <button class="chip" data-trade-generate-contract title="Roll the Contract Type oracle table into a new contract">🎲 Generate</button>
-        ${ui.tradeContractAddOpen ? '' : '<button class="chip" data-trade-contract-add-toggle>＋ Contract</button>'}
-      </div>
-    </div>
-    ${ui.tradeContractAddOpen ? contractAddForm(locations, npcs) : ''}
-    <div class="trade-contract-list">
-      ${contracts.length ? contracts.map((c) => contractRow(doc, c)).join('') : '<p class="ws-placeholder">No contracts yet — generate one, or add one manually.</p>'}
-    </div>`;
+    ${cargoManifestSection(doc)}
+    ${contractsSection(doc, ui)}`;
 }
 
 // --- Guide: a tree of freeform reference documents (docs/adr/0017) --------

@@ -1532,7 +1532,7 @@ test('formatTravellerRollCopyText matches the dice roll window\'s layout for a T
 });
 
 // --- party (Party tab: #character roster + free trackers) ------------------
-import { listPartyMembers, addPartyTracker, updatePartyTracker, stepPartyTracker, setPartyTrackerValue, removePartyTracker, listPartyTrackers } from '../src/domain/party.js';
+import { listPartyMembers, addPartyTracker, updatePartyTracker, stepPartyTracker, setPartyTrackerValue, removePartyTracker, listPartyTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset } from '../src/domain/party.js';
 
 test('listPartyMembers returns only npc entities tagged #character', () => {
   let camp = defaultCampaign();
@@ -1625,6 +1625,28 @@ test('a difficulty is only honored for a counter under the Starforged ruleset �
   camp.settings.statRuleset = 'starforged';
   camp = addPartyTracker(camp, { name: 'Cash', kind: 'currency', difficulty: 'epic' }); // wrong kind — ignored
   assert.equal(listPartyTrackers(camp)[0].difficulty, undefined);
+});
+
+test('setPartySharedGear overwrites the party-wide gear note wholesale; a fresh campaign defaults it to \'\'', () => {
+  let camp = defaultCampaign();
+  assert.equal(camp.party.sharedGear, undefined); // lazily set on first touch, like party.trackers
+  camp = setPartySharedGear(camp, 'A shared toolkit and a medkit.');
+  assert.equal(camp.party.sharedGear, 'A shared toolkit and a medkit.');
+  camp = setPartySharedGear(camp, 'Just the medkit now.');
+  assert.equal(camp.party.sharedGear, 'Just the medkit now.');
+});
+
+test('addPartySharedAsset appends free text (no-op on blank); removePartySharedAsset drops one by index', () => {
+  let camp = defaultCampaign();
+  camp = addPartySharedAsset(camp, 'Spare oxygen tanks');
+  camp = addPartySharedAsset(camp, '   '); // blank — no-op
+  camp = addPartySharedAsset(camp, 'A working comm relay');
+  assert.deepEqual(camp.party.sharedAssets, ['Spare oxygen tanks', 'A working comm relay']);
+  camp = removePartySharedAsset(camp, 0);
+  assert.deepEqual(camp.party.sharedAssets, ['A working comm relay']);
+  const before = camp;
+  camp = removePartySharedAsset(camp, 99); // out of range — no-op
+  assert.deepEqual(camp, before);
 });
 
 // --- colony (5PFH Planetfall turn sheet + crew + lifeform filter) ----------

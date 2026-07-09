@@ -42,7 +42,7 @@ import {
   listReferenceDocuments, renameRefDocument, addRefDocumentTag, removeRefDocumentTag, hideRefDocument, listDocuments,
   sanitizeExternalLinkUrl,
 } from '../domain/documents.js';
-import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue } from '../domain/party.js';
+import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue, setPartySharedGear, addPartySharedAsset, removePartySharedAsset } from '../domain/party.js';
 import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow } from '../domain/colony.js';
 import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract } from '../domain/trade.js';
 import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors, resolveFactionTurn, formatFactionTurnResult, rollFactionAsset } from '../domain/factions.js';
@@ -233,6 +233,7 @@ let expandedEnhancements = new Set(); // ephemeral — entity ids whose Enhancem
 let expandedWorldDemographics = new Set(); // ephemeral — entity ids whose World Demographics card is expanded (docs/adr/0026 follow-up, collapsed by default)
 let expandedSceneFields = new Set(); // ephemeral — "sceneId::field" keys whose Latest Scene field is expanded (UX batch, collapsed by default; click the label to expand)
 let collapsedToolbars = new Set(); // ephemeral — rich-text toolbar keys OVERRIDDEN away from campaign.settings.toolbarCollapsedByDefault (mentionEditor.js's toolbarCollapsed() XORs this against the default; see UX batch)
+let expandedPartyMembers = new Set(); // ephemeral — entity ids whose Party member card shows its statblocks (collapsed by default; click the name to expand, UX batch)
 let expandedWorldProfile = new Set(); // ephemeral — entity ids whose World Profile (UWP) card is expanded (docs/adr/0026 follow-up, collapsed by default)
 let mechanicsScanning = false; // ephemeral — true while scanMechanicsIndex()'s async PDF.js scan is in flight (docs/adr/0014)
 let tocScanning = false; // ephemeral — true while scanAndGenerateToc()'s async PDF.js outline scan is in flight (docs/adr/0020)
@@ -1059,9 +1060,41 @@ function onClick(ev) {
   if (trkStep) return store.update((d) => stepPartyTracker(d, trkStep.dataset.partyTrackerStep, Number(trkStep.dataset.delta)));
   const trkBox = hit('[data-party-tracker-box]');
   if (trkBox) return store.update((d) => setPartyTrackerValue(d, trkBox.dataset.partyTrackerBox, Number(trkBox.dataset.trackN)));
+  const partyMemberToggle = hit('[data-party-member-toggle]');
+  if (partyMemberToggle) {
+    const id = partyMemberToggle.dataset.partyMemberToggle;
+    if (expandedPartyMembers.has(id)) expandedPartyMembers.delete(id); else expandedPartyMembers.add(id);
+    return renderDrawerBody();
+  }
+  // "+ Add NPC" (UX batch, same quick-create+tag shape Colony's own
+  // add-character below uses) — a blank NPC, tagged #character so it
+  // immediately satisfies listPartyMembers' existing filter.
+  if (hit('[data-party-add-character]')) {
+    store.update((d) => { const r = createEntity(d, { type: 'npc' }); return addEntityTag(r.campaign, r.id, 'character'); });
+    return toast('NPC added to Party');
+  }
+  // "+ Vehicle" — a blank Asset entity tagged #vehicle (Colony's own
+  // Vehicle/Asset dropdown already lists every Asset regardless of tag,
+  // so this shows up there immediately too).
+  if (hit('[data-party-add-vehicle]')) {
+    store.update((d) => { const r = createEntity(d, { type: 'asset' }); return addEntityTag(r.campaign, r.id, 'vehicle'); });
+    return toast('Vehicle added — name it in Cast');
+  }
+  const sharedAssetDel = hit('[data-party-shared-asset-remove]');
+  if (sharedAssetDel) return store.update((d) => removePartySharedAsset(d, Number(sharedAssetDel.dataset.partySharedAssetRemove)));
 
   // --- colony ---
   if (hit('[data-colony-crew-add]')) { store.update((d) => addCrewRow(d, {})); return toast('Crew row added'); }
+  // "+ Add NPC" (same quick-create+tag shape as Party's above) — creates
+  // the NPC AND its crew-row assignment in one action.
+  if (hit('[data-colony-add-character]')) {
+    store.update((d) => {
+      const r = createEntity(d, { type: 'npc' });
+      const tagged = addEntityTag(r.campaign, r.id, 'character');
+      return addCrewRow(tagged, { characterId: r.id });
+    });
+    return toast('NPC added to Crew Roster');
+  }
   const crewDel = hit('[data-colony-crew-remove]');
   if (crewDel) return store.update((d) => removeCrewRow(d, crewDel.dataset.colonyCrewRemove));
 
@@ -1502,7 +1535,7 @@ function onKeydown(ev) {
   // blur (see onChange) — Enter has no native effect on a bare <input>
   // outside a <form>, so it's wired here to trigger that same blur instead
   // of duplicating the commit logic.
-  const commitOnEnterTarget = ev.target.closest('[data-doc-rename-input], [data-ref-rename-input], [data-doc-tag-input], [data-ref-tag-input], [data-entity-tag-input], [data-oracle-tag-input], [data-guide-rename-input], [data-guide-title-input]');
+  const commitOnEnterTarget = ev.target.closest('[data-doc-rename-input], [data-ref-rename-input], [data-doc-tag-input], [data-ref-tag-input], [data-entity-tag-input], [data-oracle-tag-input], [data-guide-rename-input], [data-guide-title-input], [data-party-shared-asset-input]');
   if (commitOnEnterTarget && ev.key === 'Enter') { ev.preventDefault(); commitOnEnterTarget.blur(); return; }
 
   // Party Tracker creation form: Enter in the name field submits (same
@@ -1650,6 +1683,16 @@ function onChange(ev) {
     const value = t.value.trim();
     t.value = '';
     if (value) return store.update((d) => addEntityTag(d, active, value));
+    return;
+  }
+
+  // Party Shared Assets — same auto-commit-on-change shape as the entity
+  // tag input above.
+  const partySharedAssetInput = t.closest('[data-party-shared-asset-input]');
+  if (partySharedAssetInput) {
+    const value = t.value.trim();
+    t.value = '';
+    if (value) return store.update((d) => addPartySharedAsset(d, value));
     return;
   }
 
@@ -2710,6 +2753,15 @@ function onFocusOut(ev) {
     if (value !== (current || '')) store.update((d) => setColonyField(d, key, value));
   }
 
+  // Party's Shared Gear — same blur-commit shape as Colony's rich fields
+  // just above.
+  const partySharedGearField = ev.target.closest('[data-party-field="sharedGear"]');
+  if (partySharedGearField && partySharedGearField.isContentEditable) {
+    const value = serializeMentionEditor(partySharedGearField);
+    const current = (store.get().party || {}).sharedGear;
+    if (value !== (current || '')) store.update((d) => setPartySharedGear(d, value));
+  }
+
   // A Document library note's content box — converted from <textarea> to
   // a mention-editor div; committed the same way its "Save" button always
   // has (data-doc-save, ui onClick), just reading serializeMentionEditor
@@ -3323,7 +3375,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, expandedSceneFields, collapsedToolbars, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw,
+    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, expandedSceneFields, collapsedToolbars, expandedPartyMembers, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,
