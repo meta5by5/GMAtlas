@@ -85,6 +85,51 @@ cross-references it previously only described in text:
    Bases/Trade Codes dropdowns) are hidden, since a star isn't itself a
    world with a starport or an atmosphere.
 
+**2026-07-08 third follow-up (same day)**: the card layout got a full
+redesign into two purpose-named cards, and the import now recreates a
+real orbit relationship instead of relying on the `starSystem` string
+alone.
+
+1. **Two cards, redistributed fields.** The old `locationSection`
+   (Development Level/Biome) and `worldProfileSection` (the UWP fields)
+   are gone, replaced by two new cards with every field re-sorted by
+   theme: **World Profile (UWP)** — Hex, Star System, and Zone on one
+   row, then World Size, Atmosphere, Biome, Hydrographics, and Gas Giant
+   (physical/astrographic facts) — and **World Demographics** —
+   Starport, Bases, a visual divider, then Tech Level and Law Level on
+   one row, Trade Codes, Economy, Population, and Government (developed/
+   governed facts). Biome (ADR 0025) and Economy (renamed from
+   "Development level," still the same `developmentLevel` field feeding
+   `domain/trade.js`'s bias functions — display label only) both moved
+   card without any change to their underlying storage or Trade-pricing
+   behavior. Gas Giant wasn't named in either of the requested field
+   lists; rather than silently dropping a working control, it was kept
+   and placed at the end of World Profile as the closest thematic fit
+   (a system-level astrographic fact) — flagged here in case that
+   placement should move.
+2. **A self-referencing star now hides ALL of World Demographics**
+   (the whole card returns `''`), not just Tech Level — a star has no
+   starport, bases, population, government, trade codes, or economy any
+   more than it has a tech level. Within World Profile, a star also now
+   hides World Size/Atmosphere/Biome/Hydrographics/Gas Giant, showing
+   only Hex/Star System/Zone — this widens the very first follow-up's
+   narrower "hide the field list from that draft" scope to match the
+   new card boundaries.
+3. **The import now links every world to its star as a real
+   relationship**, not just via the `starSystem` string.
+   `domain/hostileLocations.js`'s `importHostileLocations()` gained a
+   final pass, after all three catalogs land, that calls the existing
+   `addRelationship(campaign, worldId, starId, 'orbits', 'located_at')`
+   for every `HOSTILE_LOCATIONS` entry — idempotent (`addRelationship`
+   no-ops on an already-linked pair) and unconditional (runs even for
+   worlds that already existed from an earlier import), so re-running
+   import after a later zone lands still backfills any missing link.
+4. **The star name is no longer duplicated as a tag on the world** —
+   `hostile-canon`/zone/`locationKind` remain, but the relationship
+   above is now the single source of truth for "which star does this
+   world orbit," not a tag string that could drift out of sync with the
+   real `starSystem` field.
+
 ## Context
 
 Direct ask: "Make a robust and fully detailed locations database for

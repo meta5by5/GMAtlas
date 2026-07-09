@@ -405,6 +405,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .field-label-row { display: flex; align-items: center; width: 100%; }
 .field-label-row .icon-btn { margin-left: auto; text-transform: none; letter-spacing: normal; }
 .field-label-hint { text-transform: none; letter-spacing: normal; opacity: 0.8; }
+/* Visual separator between an entity card's field groups (World
+   Demographics: Starport/Bases vs. Tech Level onward, docs/adr/0026). */
+.field-divider { border: none; border-top: 1px solid var(--border); margin: var(--sp-3) 0; }
 /* WHAT tab's tracker rows (Intent/Threat/Mystery, Resources/Reputation/
    Stress) — auto-fit instead of a fixed 3-column grid, so they reflow to
    2 or 1 per row as the window narrows instead of jumping straight from

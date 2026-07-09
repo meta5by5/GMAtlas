@@ -300,7 +300,8 @@ function inspector(doc, e, ui) {
       ${e.revealedOpen ? `<div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-entity-field="revealed" data-placeholder="Secrets, twists, true motives.">${buildMentionEditorHTML(doc, e.revealed)}</div></div>` : ''}
     </div>`}
     ${factionSection(doc, e)}
-    ${locationSection(doc, e, ui)}
+    ${worldProfileSection(doc, e, ui)}
+    ${worldDemographicsSection(doc, e, ui)}
     ${statblockSection(e, doc, ui)}
     ${enhancementsSection(e, ui)}
     <div class="rel-block">
@@ -349,75 +350,32 @@ function factionSection(doc, e) {
     </div>`;
 }
 
-// Location card (docs/adr/0025-location-biome-trade.md): Development Level
-// and Biome, two real dropdown fields mirroring factionSection's "only
-// render for this entity type" shape. Both feed domain/trade.js's
-// priceAt() bias — see entities.js's ensureLocationFields for why they
-// default to '' rather than requiring a choice. data-entity-field is
-// already generic (shell.js), so no new change handler is needed.
-// Collapsed by default (ui.expandedLocationCard, ephemeral — same Set
-// shape as enhancementsSection's ui.expandedEnhancements below), since a
-// GM working a busy Cast list doesn't need every Location's card open at
-// once.
-function locationSection(doc, e, ui = {}) {
-  if (e.type !== 'location') return '';
-  const devTypes = economyTypesForModel(doc.settings.tradeEconomyModel || 'hostile');
-  const biomes = biomesForGenrePack(doc.settings.genrePack || 'hostile');
-  const open = (ui.expandedLocationCard || new Set()).has(e.id);
-  return `
-    <div class="faction-card">
-      <h4><button class="btn ghost sm" data-location-card-toggle="${esc(e.id)}">${open ? '▾' : '▸'} Location card</button></h4>
-      ${open ? `
-      <label class="field-label">${fieldLabelRow('Development level', 'location', 'developmentLevel')}
-        <select data-entity-field="developmentLevel">
-          <option value="" ${!e.developmentLevel ? 'selected' : ''}>— unset —</option>
-          ${devTypes.map((t) => `<option value="${esc(t.id)}" ${e.developmentLevel === t.id ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}
-        </select>
-      </label>
-      <label class="field-label">${fieldLabelRow('Biome', 'location', 'biome')}
-        <select data-entity-field="biome">
-          <option value="" ${!e.biome ? 'selected' : ''}>— unset —</option>
-          ${biomes.map((b) => `<option value="${esc(b.id)}" ${e.biome === b.id ? 'selected' : ''}>${esc(b.label)}</option>`).join('')}
-        </select>
-      </label>
-      <p class="dim small">Both bias Trade prices for this Location (Settings → Trade Economy Model has the full dial reference) — leave either unset to price as before.</p>
-      ` : ''}
-    </div>
-    ${worldProfileSection(doc, e, ui)}`;
-}
-
-// World Profile card (docs/adr/0026-hostile-canon-locations.md): the
-// Universal World Profile HOSTILE's own sourcebook uses for every named
-// world/station — purely descriptive/reference, independent of the
-// Development Level/Biome Trade-bias fields above. Renders for any
-// Location entity that has at least one World Profile field set, OR
-// whenever the active genre pack is Hostile (so a GM can start filling
-// one in even before the canon import has run) — same "don't show a
-// blank card nobody asked for" instinct as the rest of this inspector,
-// but a Hostile-genre GM shouldn't have to switch genre packs to discover
-// the fields exist. Collapsed by default (ui.expandedWorldProfile), same
-// shape as locationSection's own toggle above.
+// World Profile (UWP) card (docs/adr/0026-hostile-canon-locations.md,
+// 2026-07-08 third follow-up): the physical/astrographic half of a
+// Location's Universal World Profile — Hex, Star System, Zone (one row),
+// then World Size, Atmosphere, Biome, Hydrographics. Biome (ADR 0025)
+// lives here now, not in a separate card — it's still the same field
+// feeding domain/trade.js's biomeBiasAt(), only its UI position moved.
+// Renders for any Location entity that has at least one of these fields
+// set, OR whenever the active genre pack is Hostile (so a GM can start
+// filling one in even before the canon import has run). Collapsed by
+// default (ui.expandedWorldProfile, ephemeral — same Set shape as
+// enhancementsSection's ui.expandedEnhancements).
 //
-// Star System (2026-07-08 follow-up) is a `<select>` sourced from
-// existing Location entities tagged #star, not free text — the field
-// still stores a plain string (the chosen star Location's name), so
-// data-entity-field's generic handler needs no changes; a GM models a
-// star system as its own Location entity (tagged #star) and links a
-// world to it by name. A star's own World Profile self-references (its
-// starSystem equals its own name, per data/hostileLocations.js's
-// HOSTILE_STARS/domain/hostileLocations.js's import) — when that's true
-// this card hides every planet-only field (Starport through the gas
-// giant checkbox, including Bases/Trade Codes) and shows only Hex/Star
-// System/Zone/Tech Level, since a star isn't itself a world. Bases (same
-// follow-up) works exactly like Trade Codes below it — a dropdown-add +
-// removable-chip list — but sources its options from #base-tagged
-// Location entities rather than a static table, via the new
-// addLocationBase/removeLocationBase (entities.js).
+// Star System is a `<select>` sourced from existing Location entities
+// tagged #star, not free text — the field still stores a plain string
+// (the chosen star Location's name), so data-entity-field's generic
+// handler needs no changes; a GM models a star system as its own
+// Location entity (tagged #star) and links a world to it by name. A
+// star's own World Profile self-references (its starSystem equals its
+// own name, per data/hostileLocations.js's HOSTILE_STARS/domain/
+// hostileLocations.js's import) — when that's true, this card hides
+// World Size/Atmosphere/Biome/Hydrographics (a star has none of these)
+// and shows only Hex/Star System/Zone; worldDemographicsSection below
+// hides itself entirely for the same reason.
 function worldProfileSection(doc, e, ui = {}) {
   if (e.type !== 'location') return '';
-  const hasAny = e.hex || e.zone || e.starport || e.worldSize || e.atmosphere || e.hydrographics ||
-    e.population || e.government || e.lawLevel || e.techLevel || (e.bases && e.bases.length) ||
-    (e.tradeCodes && e.tradeCodes.length) || e.gasGiant || e.starSystem;
+  const hasAny = e.hex || e.zone || e.worldSize || e.atmosphere || e.biome || e.hydrographics || e.starSystem || e.gasGiant;
   if (!hasAny && doc.settings.genrePack !== 'hostile') return '';
   const open = (ui.expandedWorldProfile || new Set()).has(e.id);
   const isStar = !!(e.starSystem && e.starSystem === e.name);
@@ -428,42 +386,78 @@ function worldProfileSection(doc, e, ui = {}) {
         ${table.map((t) => `<option value="${esc(t.code)}" ${value === t.code ? 'selected' : ''}>${esc(t.code)} — ${esc(t.label)}</option>`).join('')}
       </select>
     </label>`;
-  const allLocations = listEntities(doc).filter((l) => l.type === 'location');
-  const starLocations = allLocations.filter((l) => (l.tags || []).includes('star'));
-  const baseLocations = allLocations.filter((l) => (l.tags || []).includes('base'));
+  const starLocations = listEntities(doc).filter((l) => l.type === 'location' && (l.tags || []).includes('star'));
+  const biomes = biomesForGenrePack(doc.settings.genrePack || 'hostile');
+  return `
+    <div class="faction-card">
+      <h4><button class="btn ghost sm" data-world-profile-toggle="${esc(e.id)}">${open ? '▾' : '▸'} World Profile (UWP)</button></h4>
+      ${open ? `
+      <p class="dim small">HOSTILE's own Universal World Profile format — reference only, doesn't affect Trade pricing. See Settings → Trade Economy Model for the full digit-meaning legend.</p>
+      <div class="faction-stats-row">
+        <label class="field-label">${fieldLabelRow('Hex', 'location', 'hex')}
+          <input data-entity-field="hex" value="${esc(e.hex)}" placeholder="0704" size="4" maxlength="4">
+        </label>
+        <label class="field-label">${fieldLabelRow('Star System', 'location', 'starSystem', '(#star)')}
+          <select data-entity-field="starSystem">
+            <option value="" ${!e.starSystem ? 'selected' : ''}>— unset —</option>
+            ${starLocations.map((l) => `<option value="${esc(l.name)}" ${e.starSystem === l.name ? 'selected' : ''}>${esc(l.name) || 'Unnamed'}</option>`).join('')}
+          </select>
+          ${!starLocations.length ? '<p class="dim small">No Locations tagged #star yet.</p>' : ''}
+        </label>
+        <label class="field-label">${fieldLabelRow('Zone', 'location', 'zone')}
+          <input data-entity-field="zone" value="${esc(e.zone)}" placeholder="Near Earth Zone">
+        </label>
+      </div>
+      ${isStar ? '<p class="dim small">This Location is a star system (its Star System field references itself) — planet-only fields are hidden.</p>' : `
+      ${codeSelect('worldSize', 'World Size', WORLD_SIZES, e.worldSize)}
+      ${codeSelect('atmosphere', 'Atmosphere', ATMOSPHERES, e.atmosphere)}
+      <label class="field-label">${fieldLabelRow('Biome', 'location', 'biome')}
+        <select data-entity-field="biome">
+          <option value="" ${!e.biome ? 'selected' : ''}>— unset —</option>
+          ${biomes.map((b) => `<option value="${esc(b.id)}" ${e.biome === b.id ? 'selected' : ''}>${esc(b.label)}</option>`).join('')}
+        </select>
+      </label>
+      ${codeSelect('hydrographics', 'Hydrographics', HYDROGRAPHICS, e.hydrographics)}
+      <label class="chip sm"><input type="checkbox" data-entity-field="gasGiant" ${e.gasGiant ? 'checked' : ''}> Gas giant present in system</label>
+      `}
+      ` : ''}
+    </div>`;
+}
+
+// World Demographics card (docs/adr/0026, third follow-up): the
+// developed/governed half of a Location's profile — Starport, Bases,
+// then (visually separated) Tech Level + Law Level, Trade Codes, Economy
+// (the ADR 0013/0025 developmentLevel field, relabeled — still the same
+// field feeding domain/trade.js's developmentLevelBiasAt(), only the
+// display label changed), Population, Government. Hidden entirely for a
+// self-referencing star (worldProfileSection's isStar check) — a star
+// has no starport, bases, population, government, tech level, law
+// level, trade codes, or economy of its own.
+function worldDemographicsSection(doc, e, ui = {}) {
+  if (e.type !== 'location') return '';
+  if (e.starSystem && e.starSystem === e.name) return ''; // self-referencing star: no demographics
+  const hasAny = e.starport || (e.bases && e.bases.length) || e.techLevel || e.lawLevel ||
+    (e.tradeCodes && e.tradeCodes.length) || e.developmentLevel || e.population || e.government;
+  if (!hasAny && doc.settings.genrePack !== 'hostile') return '';
+  const open = (ui.expandedWorldDemographics || new Set()).has(e.id);
+  const codeSelect = (field, label, table, value) => `
+    <label class="field-label">${fieldLabelRow(label, 'location', field)}
+      <select data-entity-field="${field}">
+        <option value="" ${!value ? 'selected' : ''}>— unset —</option>
+        ${table.map((t) => `<option value="${esc(t.code)}" ${value === t.code ? 'selected' : ''}>${esc(t.code)} — ${esc(t.label)}</option>`).join('')}
+      </select>
+    </label>`;
+  const baseLocations = listEntities(doc).filter((l) => l.type === 'location' && (l.tags || []).includes('base'));
+  const devTypes = economyTypesForModel(doc.settings.tradeEconomyModel || 'hostile');
   const tradeCodeChips = (e.tradeCodes || []).map((c) => `
     <span class="chip sm">${esc((findTradeCode(c) || {}).label || c)} <button type="button" class="icon-btn" data-entity-tradecode-remove="${esc(e.id)}::${esc(c)}" title="Remove">✕</button></span>`).join('');
   const baseChips = (e.bases || []).map((b) => `
     <span class="chip sm">${esc(b)} <button type="button" class="icon-btn" data-entity-base-remove="${esc(e.id)}::${esc(b)}" title="Remove">✕</button></span>`).join('');
   return `
     <div class="faction-card">
-      <h4><button class="btn ghost sm" data-world-profile-toggle="${esc(e.id)}">${open ? '▾' : '▸'} World Profile (UWP)</button></h4>
+      <h4><button class="btn ghost sm" data-world-demographics-toggle="${esc(e.id)}">${open ? '▾' : '▸'} World Demographics</button></h4>
       ${open ? `
-      <p class="dim small">HOSTILE's own Universal World Profile format — reference only, doesn't affect Trade pricing. See Settings → Trade Economy Model for the full digit-meaning legend.</p>
-      <label class="field-label">${fieldLabelRow('Hex', 'location', 'hex')}
-        <input data-entity-field="hex" value="${esc(e.hex)}" placeholder="0704" size="4" maxlength="4">
-      </label>
-      <label class="field-label">${fieldLabelRow('Star System', 'location', 'starSystem', '(#star)')}
-        <select data-entity-field="starSystem">
-          <option value="" ${!e.starSystem ? 'selected' : ''}>— unset —</option>
-          ${starLocations.map((l) => `<option value="${esc(l.name)}" ${e.starSystem === l.name ? 'selected' : ''}>${esc(l.name) || 'Unnamed'}</option>`).join('')}
-        </select>
-        ${!starLocations.length ? '<p class="dim small">No Locations tagged #star yet — tag one in Cast to offer it here.</p>' : ''}
-      </label>
-      <label class="field-label">${fieldLabelRow('Zone', 'location', 'zone')}
-        <input data-entity-field="zone" value="${esc(e.zone)}" placeholder="Near Earth Zone">
-      </label>
-      <label class="field-label">${fieldLabelRow('Tech Level', 'location', 'techLevel')}
-        <input data-entity-field="techLevel" value="${esc(e.techLevel)}" placeholder="12">
-      </label>
-      ${isStar ? '<p class="dim small">This Location is a star system (its Star System field references itself) — planet-only fields are hidden.</p>' : `
       ${codeSelect('starport', 'Starport', STARPORT_CLASSES, e.starport)}
-      ${codeSelect('worldSize', 'World Size', WORLD_SIZES, e.worldSize)}
-      ${codeSelect('atmosphere', 'Atmosphere', ATMOSPHERES, e.atmosphere)}
-      ${codeSelect('hydrographics', 'Hydrographics', HYDROGRAPHICS, e.hydrographics)}
-      ${codeSelect('population', 'Population', POPULATIONS, e.population)}
-      ${codeSelect('government', 'Government', GOVERNMENTS, e.government)}
-      ${codeSelect('lawLevel', 'Law Level', LAW_LEVELS, e.lawLevel)}
       <div class="faction-assets">
         <span class="field-label-static">${fieldLabelRow('Bases', 'location', 'bases', '(#base)')}</span>
         <span class="faction-asset-list">${baseChips || '<span class="dim small">None yet.</span>'}</span>
@@ -471,7 +465,19 @@ function worldProfileSection(doc, e, ui = {}) {
           <option value="">— add a base —</option>
           ${baseLocations.map((l) => `<option value="${esc(l.name)}">${esc(l.name)}</option>`).join('')}
         </select>
-        ${!baseLocations.length ? '<p class="dim small">No Locations tagged #base yet — tag one in Cast to offer it here.</p>' : ''}
+        ${!baseLocations.length ? '<p class="dim small">No Locations tagged #base yet.</p>' : ''}
+      </div>
+      <hr class="field-divider">
+      <div class="faction-stats-row">
+        <label class="field-label">${fieldLabelRow('Tech Level', 'location', 'techLevel')}
+          <input data-entity-field="techLevel" value="${esc(e.techLevel)}" placeholder="12">
+        </label>
+        <label class="field-label">${fieldLabelRow('Law Level', 'location', 'lawLevel')}
+          <select data-entity-field="lawLevel">
+            <option value="" ${!e.lawLevel ? 'selected' : ''}>— unset —</option>
+            ${LAW_LEVELS.map((t) => `<option value="${esc(t.code)}" ${e.lawLevel === t.code ? 'selected' : ''}>${esc(t.code)} — ${esc(t.label)}</option>`).join('')}
+          </select>
+        </label>
       </div>
       <div class="faction-assets">
         <span class="field-label-static">${fieldLabelRow('Trade Codes', 'location', 'tradeCodes')}</span>
@@ -481,8 +487,15 @@ function worldProfileSection(doc, e, ui = {}) {
           ${TRADE_CODES.map((t) => `<option value="${esc(t.code)}">${esc(t.label)}</option>`).join('')}
         </select>
       </div>
-      <label class="chip sm"><input type="checkbox" data-entity-field="gasGiant" ${e.gasGiant ? 'checked' : ''}> Gas giant present in system</label>
-      `}
+      <label class="field-label">${fieldLabelRow('Economy', 'location', 'developmentLevel')}
+        <select data-entity-field="developmentLevel">
+          <option value="" ${!e.developmentLevel ? 'selected' : ''}>— unset —</option>
+          ${devTypes.map((t) => `<option value="${esc(t.id)}" ${e.developmentLevel === t.id ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}
+        </select>
+      </label>
+      ${codeSelect('population', 'Population', POPULATIONS, e.population)}
+      ${codeSelect('government', 'Government', GOVERNMENTS, e.government)}
+      <p class="dim small">Economy biases Trade prices for this Location (Settings → Trade Economy Model has the full dial reference) — leave unset to price as before.</p>
       ` : ''}
     </div>`;
 }

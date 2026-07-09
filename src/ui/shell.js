@@ -229,7 +229,7 @@ let entityTagListOpen = false; // ephemeral — collapses the tag sub-filter chi
 let catalogPickerOpen = false; // ephemeral — the Cast drawer's "+ Item from catalog" (ADR 0012) inline picker, open or not
 let enhancementDraft = {}; // ephemeral — entityId -> name text rolled into the Enhancements add-form's name field, overwritten by each 🎲 roll until "Install" commits it (docs/adr/next-request.md, 2026-07-06)
 let expandedEnhancements = new Set(); // ephemeral — entity ids whose Enhancements section is expanded (collapsed by default)
-let expandedLocationCard = new Set(); // ephemeral — entity ids whose Location card is expanded (docs/adr/0026 follow-up, collapsed by default)
+let expandedWorldDemographics = new Set(); // ephemeral — entity ids whose World Demographics card is expanded (docs/adr/0026 follow-up, collapsed by default)
 let expandedWorldProfile = new Set(); // ephemeral — entity ids whose World Profile (UWP) card is expanded (docs/adr/0026 follow-up, collapsed by default)
 let mechanicsScanning = false; // ephemeral — true while scanMechanicsIndex()'s async PDF.js scan is in flight (docs/adr/0014)
 let tocScanning = false; // ephemeral — true while scanAndGenerateToc()'s async PDF.js outline scan is in flight (docs/adr/0020)
@@ -841,10 +841,10 @@ function onClick(ev) {
     if (expandedEnhancements.has(id)) expandedEnhancements.delete(id); else expandedEnhancements.add(id);
     return renderDrawerBody();
   }
-  const locCardToggle = hit('[data-location-card-toggle]');
-  if (locCardToggle) {
-    const id = locCardToggle.dataset.locationCardToggle;
-    if (expandedLocationCard.has(id)) expandedLocationCard.delete(id); else expandedLocationCard.add(id);
+  const worldDemoToggle = hit('[data-world-demographics-toggle]');
+  if (worldDemoToggle) {
+    const id = worldDemoToggle.dataset.worldDemographicsToggle;
+    if (expandedWorldDemographics.has(id)) expandedWorldDemographics.delete(id); else expandedWorldDemographics.add(id);
     return renderDrawerBody();
   }
   const worldProfileToggle = hit('[data-world-profile-toggle]');
@@ -3312,7 +3312,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, expandedLocationCard, expandedWorldProfile, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw,
+    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,

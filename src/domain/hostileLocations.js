@@ -13,9 +13,14 @@
 // World Profile UI's dropdowns source from). A star's own `starSystem`
 // field is set to its OWN name (data/hostileLocations.js's HOSTILE_STARS
 // entries already encode this) — that self-reference is what tells the
-// UI "this Location IS the star, not a world orbiting one."
+// UI "this Location IS the star, not a world orbiting one." After all
+// three catalogs land, every world is also linked to its star via a real
+// `located_at`/"orbits" relationship (not just the starSystem field) —
+// the star name is deliberately NOT duplicated as a tag on the world
+// anymore now that this relationship exists; the relationship is the
+// single source of truth for "which star does this world orbit."
 
-import { createEntity, updateEntity, findByName } from './entities.js';
+import { createEntity, updateEntity, findByName, addRelationship } from './entities.js';
 import { HOSTILE_BASES, HOSTILE_STARS, HOSTILE_LOCATIONS } from '../data/hostileLocations.js';
 
 function importCatalog(campaign, entries, makeFields) {
@@ -61,7 +66,7 @@ export function importHostileLocations(campaign) {
   createdIds = createdIds.concat(stars.createdIds);
 
   const worlds = importCatalog(next, HOSTILE_LOCATIONS, (entry) => ({
-    tags: ['hostile-canon', entry.zone, entry.starSystem, entry.locationKind],
+    tags: ['hostile-canon', entry.zone, entry.locationKind],
     overview: entry.summary,
     hex: entry.hex,
     zone: entry.zone,
@@ -80,6 +85,18 @@ export function importHostileLocations(campaign) {
   }));
   next = worlds.campaign;
   createdIds = createdIds.concat(worlds.createdIds);
+
+  // Link each world to the star it orbits as a real relationship (not just
+  // the starSystem field) — run unconditionally, not just for freshly
+  // created worlds, so re-running the import after a GM has already
+  // imported an earlier batch still backfills any relationship that's
+  // missing. addRelationship (entities.js) is itself idempotent (a second
+  // call between the same pair is a no-op), so this is always safe.
+  for (const entry of HOSTILE_LOCATIONS) {
+    const world = findByName(next, entry.name);
+    const star = findByName(next, entry.starSystem);
+    if (world && star && world.id !== star.id) next = addRelationship(next, world.id, star.id, 'orbits', 'located_at');
+  }
 
   return { campaign: next, createdIds };
 }

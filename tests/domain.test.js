@@ -3198,8 +3198,12 @@ test('importHostileLocations creates one Location entity per base, star, and wor
   assert.equal(entity.overview, earth.summary);
   assert.ok(entity.tags.includes('hostile-canon'));
   assert.ok(entity.tags.includes(earth.zone));
-  assert.ok(entity.tags.includes(earth.starSystem), 'the star is also a tag value on the world');
+  assert.ok(!entity.tags.includes(earth.starSystem), 'the star is a relationship now, not duplicated as a tag');
   assert.ok(entity.tags.includes(earth.locationKind));
+
+  const sun = findByName(next, 'The Sun');
+  assert.ok(entity.relationships.some((r) => r.to === sun.id && r.type === 'located_at'), 'Earth is linked to The Sun via a real relationship');
+  assert.ok(sun.relationships.some((r) => r.to === entity.id), 'the relationship is mirrored on the star side too');
 });
 
 test('importHostileLocations is idempotent — re-running it creates nothing new, and never overwrites a GM\'s edits to an already-imported world', () => {

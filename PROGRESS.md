@@ -14,6 +14,19 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-08 HOSTILE Canon Locations third follow-up**: the Location
+card layout got a full redesign into two purpose-named cards — World
+Profile (UWP): Hex/Star System/Zone on one row, then World Size,
+Atmosphere, Biome, Hydrographics, Gas Giant; World Demographics:
+Starport, Bases, a divider, Tech Level + Law Level on one row, Trade
+Codes, Economy (renamed from Development Level, same underlying field),
+Population, Government. A self-referencing star now hides the entire
+World Demographics card plus the remaining planet-only World Profile
+fields. The canon import also now links every world to its star as a
+real relationship (`located_at`/"orbits"), and no longer duplicates the
+star name as a tag. Verified via an updated domain test and a jsdom
+smoke test (334 tests total).
+
 **2026-07-08 HOSTILE Canon Locations second follow-up**: the canon
 import now recreates its own cross-references instead of leaving them
 as descriptive text — two new catalogs, `HOSTILE_BASES` (4 entries,
