@@ -1212,7 +1212,7 @@ function rulesConstitutionSection(ui) {
       <td>${providers.map((p) => `<span class="chip sm rules-provider-chip">${esc(providerLabel(p))}</span>`).join(' ')}</td>
     </tr>`).join('');
   const legend = Object.entries(RULES_PROVIDERS).map(([id, p]) => `
-    <li><b>${esc(p.label)}</b> — <span class="dim small">${esc(p.status)}.</span> ${esc(p.note)}</li>`).join('');
+    <li><b>${esc(p.label)}</b> — <span class="dim small">${esc(p.status)}.</span></li>`).join('');
   return `
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Rules Constitution', 'settings-rules-constitution')}
@@ -1768,7 +1768,7 @@ function graph(doc, ui = {}) {
   const legend = ENTITY_TYPES.map((t) => `<span class="graph-legend-item"><span class="dot" style="background:${nodeColor(t)}"></span>${TYPE_LABEL[t]}</span>`).join('');
 
   return `
-    <p class="dim small">${g.nodes.length} entit${g.nodes.length === 1 ? 'y' : 'ies'} · ${g.edges.length} link${g.edges.length === 1 ? '' : 's'}. Click a node to open it.</p>
+    <p class="dim small">Click a node to open it.</p>
     <div class="graph-legend">${legend}</div>
     <div class="graph-toolbar">
       <button class="icon-btn" data-graph-zoom="in" title="Zoom in">＋</button>

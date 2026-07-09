@@ -112,7 +112,7 @@ function drawerMeta(id) { return DRAWERS.find((d) => d.id === id) || DRAWER_META
 // CHANGES" QoL batch — they're still ordinary drawers otherwise (DRAWERS/
 // drawerMeta above is unchanged, still the source of truth for both groups'
 // glyph/label).
-const EDGE_ORDER = ['guide', 'oracle', 'cast', 'trade', 'documents', 'gallery', 'battlemap', 'graph', 'copilot', 'settings'];
+const EDGE_ORDER = ['guide', 'oracle', 'cast', 'trade', 'documents', 'gallery', 'battlemap', 'graph', 'copilot'];
 // The header's own small drawer-tab group, right-aligned in .header-actions
 // — same data-drawer-open routing as the edge nav (onClick's [data-drawer-
 // open] branch has no idea which container a button lives in), rendered by
@@ -2978,23 +2978,17 @@ function render() {
   root.querySelector('[data-copilot-body]').innerHTML = renderCopilot(doc);
   root.querySelector('[data-copilot]').dataset.open = String(copilotOpen);
 
-  const linkCount = Math.round(((doc.entities.items || []).reduce((s, e) => s + ((e.relationships || []).length), 0)) / 2);
-  const badges = {
-    journal: doc.journal.length || '', cast: (doc.entities.items || []).length || '', graph: linkCount || '',
-    party: (doc.party && doc.party.trackers && doc.party.trackers.length) || '',
-  };
   const edge = root.querySelector('[data-edge]');
   edge.innerHTML = EDGE_ORDER.map((id) => {
     if (id === 'copilot') return `<button data-toggle-copilot title="Co-Pilot"><span class="glyph">💡</span><b>Co-Pilot</b></button>`;
     const d = drawerMeta(id);
     if (!d) return '';
-    const badge = badges[d.id] || '';
     if (id === 'cast') {
       const isOpen = anchoredDrawer === 'cast' || openDrawers.includes('cast');
-      return `<button data-toggle-cast aria-expanded="${isOpen}" title="Cast — a draggable, searchable entity list; opens anchored beside whichever drawer is active by default"><span class="glyph">${d.glyph}</span><b>${d.label}</b>${badge ? `<span class="badge">${badge}</span>` : ''}</button>`;
+      return `<button data-toggle-cast aria-expanded="${isOpen}" title="Cast — a draggable, searchable entity list; opens anchored beside whichever drawer is active by default"><span class="glyph">${d.glyph}</span><b>${d.label}</b></button>`;
     }
     return `<button data-drawer-open="${d.id}" aria-expanded="${activeDrawer === d.id}" title="${d.label}">
-      <span class="glyph">${d.glyph}</span><b>${d.label}</b>${badge ? `<span class="badge">${badge}</span>` : ''}
+      <span class="glyph">${d.glyph}</span><b>${d.label}</b>
     </button>`;
   }).join('');
 
@@ -3007,8 +3001,7 @@ function render() {
     headerTabs.innerHTML = HEADER_ORDER.map((id) => {
       const d = drawerMeta(id);
       if (!d) return '';
-      const badge = badges[d.id] || '';
-      return `<button class="btn ghost sm" data-drawer-open="${d.id}" aria-expanded="${activeDrawer === d.id}" title="${d.label}"><span class="glyph">${d.glyph}</span> <span class="btn-label">${d.label}</span>${badge ? `<span class="badge">${badge}</span>` : ''}</button>`;
+      return `<button class="btn ghost sm" data-drawer-open="${d.id}" aria-expanded="${activeDrawer === d.id}" title="${d.label}"><span class="glyph">${d.glyph}</span> <span class="btn-label">${d.label}</span></button>`;
     }).join('');
   }
 
