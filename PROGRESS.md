@@ -14,6 +14,27 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-08 Location Development Level + Biome, Trade "smart exchange
+rates"** (`docs/adr/0025-location-biome-trade.md`, extending ADR 0013):
+Development Level is now a real dropdown field on every Location
+(previously tag-only, per ADR 0013's known UI gap), with the old tag
+scan kept as an automatic fallback for backward compatibility. Biome is
+a new, independent axis (`data/biomes.js`, 7/6/6 curated entries per
+genre pack) that compounds with, rather than replaces, Development
+Level when pricing Trade commodities — a Waterworld tagged Industrial
+prices Water cheap AND manufactured goods cheap, both computed
+independently and multiplied together in `priceAt()`. Commodities
+gained a finer `resourceType` (water/fuel/food/ore/tech/luxury)
+alongside their existing raw/manufactured `category` for biome to bias
+against. New "Location card" inspector section needed zero new
+event-handling code (the generic `data-entity-field` handler already
+covers it); Settings' Trade Economy Model section gained a matching
+biome reference list. Verified via 4 new domain tests (327 total) and a
+jsdom smoke test through the real inspector and Settings render paths —
+caught and fixed a real syntax-breaking bug (an unescaped apostrophe in
+a new template string) that `npm test` alone would have missed, since
+the domain suite never imports UI files.
+
 **2026-07-08 Follow-up fixes**: the doc viewer now reclaims the main
 drawer's width once it's collapsed (an anchored side panel, if any, still
 counts — only the main drawer's own collapse state is dropped from the

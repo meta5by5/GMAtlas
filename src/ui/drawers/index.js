@@ -38,6 +38,7 @@ import { listBattlemaps, getActiveBattlemap } from '../../domain/battlemaps.js';
 import { BATTLEMAP_ICONS, findBattlemapIcon } from '../../data/battlemapIcons.js';
 import { GENRE_PACKS, bestiaryTerm } from '../../data/genrePacks.js';
 import { ECONOMY_MODELS, economyTypesForModel } from '../../data/economyTypes.js';
+import { biomesForGenrePack } from '../../data/biomes.js';
 import { DOCS_MANIFEST } from '../../data/docsManifest.js';
 
 const esc = (s) => String(s == null ? '' : s)
@@ -291,6 +292,7 @@ function inspector(doc, e, ui) {
       ${e.revealedOpen ? `<div class="rich-field">${richToolbarHTML()}<div class="mention-editor" contenteditable="true" data-entity-field="revealed" data-placeholder="Secrets, twists, true motives.">${buildMentionEditorHTML(doc, e.revealed)}</div></div>` : ''}
     </div>`}
     ${factionSection(doc, e)}
+    ${locationSection(doc, e)}
     ${statblockSection(e, doc, ui)}
     ${enhancementsSection(e, ui)}
     <div class="rel-block">
@@ -336,6 +338,35 @@ function factionSection(doc, e) {
       ${diplomacyFieldsHtml(e)}
       ${factionStatsHtml(e)}
       ${factionPressureHtml(e, track)}
+    </div>`;
+}
+
+// Location card (docs/adr/0025-location-biome-trade.md): Development Level
+// and Biome, two real dropdown fields mirroring factionSection's "only
+// render for this entity type" shape. Both feed domain/trade.js's
+// priceAt() bias — see entities.js's ensureLocationFields for why they
+// default to '' rather than requiring a choice. data-entity-field is
+// already generic (shell.js), so no new change handler is needed.
+function locationSection(doc, e) {
+  if (e.type !== 'location') return '';
+  const devTypes = economyTypesForModel(doc.settings.tradeEconomyModel || 'hostile');
+  const biomes = biomesForGenrePack(doc.settings.genrePack || 'hostile');
+  return `
+    <div class="faction-card">
+      <h4>Location card</h4>
+      <label class="field-label">${fieldLabelRow('Development level', 'location', 'developmentLevel')}
+        <select data-entity-field="developmentLevel">
+          <option value="" ${!e.developmentLevel ? 'selected' : ''}>— unset —</option>
+          ${devTypes.map((t) => `<option value="${esc(t.id)}" ${e.developmentLevel === t.id ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}
+        </select>
+      </label>
+      <label class="field-label">${fieldLabelRow('Biome', 'location', 'biome')}
+        <select data-entity-field="biome">
+          <option value="" ${!e.biome ? 'selected' : ''}>— unset —</option>
+          ${biomes.map((b) => `<option value="${esc(b.id)}" ${e.biome === b.id ? 'selected' : ''}>${esc(b.label)}</option>`).join('')}
+        </select>
+      </label>
+      <p class="dim small">Both bias Trade prices for this Location (Settings → Trade Economy Model has the full dial reference) — leave either unset to price as before.</p>
     </div>`;
 }
 
@@ -1079,16 +1110,22 @@ function tradeEconomyModelSection(doc, ui) {
   const types = economyTypesForModel(active);
   const rows = types.map((t) => `
     <li><b>${esc(t.label)}</b> — <span class="dim small">scarcity ${t.scarcity}/10, manufacturing ${t.manufacturing}/10.</span> ${esc(t.description)}</li>`).join('');
+  const biomes = biomesForGenrePack(doc.settings.genrePack || 'hostile');
+  const biomeRows = biomes.map((b) => `
+    <li><b>${esc(b.label)}</b> — <span class="dim small">water ${b.resourceScarcity.water}, fuel ${b.resourceScarcity.fuel}, food ${b.resourceScarcity.food}, ore ${b.resourceScarcity.ore}, tech ${b.resourceScarcity.tech}, luxury ${b.resourceScarcity.luxury} (/10).</span> ${esc(b.description)}</li>`).join('');
   return `
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Trade Economy Model', 'settings-trade-economy')}
-      ${helpBody('settings-trade-economy', 'Tag a Location with one of these to bias its market prices beyond the manual supply/demand dials — untagged Locations are unaffected. Only one model is active at a time, but a Location already tagged from the other model keeps working if you switch.', ui)}
+      ${helpBody('settings-trade-economy', 'Set a Location\'s Development Level (on its Location card) to one of these to bias its market prices beyond the manual supply/demand dials — unset Locations are unaffected. Only one model is active at a time, but a Location already tagged the old way (a matching tag instead of the field) keeps working if you switch.', ui)}
       <label class="field-label">Model
         <select data-trade-economy-model-select>
           ${ECONOMY_MODELS.map((m) => `<option value="${m.id}" ${m.id === active ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}
         </select>
       </label>
       <ul class="rules-provider-legend">${rows}</ul>
+      <h4>Biomes (${esc((GENRE_PACKS.find((p) => p.id === (doc.settings.genrePack || 'hostile')) || {}).label || 'active pack')})</h4>
+      <p class="dim small">Set a Location's Biome (on its Location card) to one of these to bias prices by resource type, independent of and compounding with Development Level. Dials are 0-10, 0 = locally abundant/cheap, 10 = scarce/expensive.</p>
+      <ul class="rules-provider-legend">${biomeRows}</ul>
     </div>`;
 }
 

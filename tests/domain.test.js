@@ -3088,6 +3088,70 @@ test('a fresh campaign defaults settings.tradeEconomyModel to hostile, and Locat
   for (const t of economyTypesForModel('traveller')) assert.ok(!vocab.includes(t.label));
 });
 
+// --- docs/adr/0025: Location biome + development-level fields, smart trade bias
+import { developmentLevelBiasAt, biomeBiasAt } from '../src/domain/trade.js';
+import { findBiome } from '../src/data/biomes.js';
+
+test('ensureLocationFields defaults a fresh Location\'s developmentLevel and biome to \'\', and leaves non-Locations untouched', () => {
+  let camp = defaultCampaign();
+  let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Prospect Station' }));
+  const loc = getEntity(camp, locId);
+  assert.equal(loc.developmentLevel, '');
+  assert.equal(loc.biome, '');
+
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Reyes' }));
+  const npc = getEntity(camp, npcId);
+  assert.equal(npc.developmentLevel, undefined);
+  assert.equal(npc.biome, undefined);
+});
+
+test('developmentLevelBiasAt prefers the Location\'s developmentLevel field over a tag match, but falls back to the tag scan when the field is unset', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'Rustwell' }));
+  // Field unset, no tag -> no bias.
+  assert.equal(developmentLevelBiasAt(getEntity(camp, id), 'water'), 1);
+
+  // Tag-only (legacy path) still works.
+  const extraction = findEconomyType('extraction');
+  camp = addEntityTag(camp, id, extraction.label);
+  assert.ok(Math.abs(developmentLevelBiasAt(getEntity(camp, id), 'water') - economyBiasAt(getEntity(camp, id), 'water')) < 1e-9);
+
+  // Field set to a DIFFERENT economy type takes priority over the tag.
+  const corporate = findEconomyType('corporate-enclave'); // scarcity 1, manufacturing 8
+  camp = updateEntity(camp, id, { developmentLevel: corporate.id });
+  const loc = getEntity(camp, id);
+  assert.ok(Math.abs(developmentLevelBiasAt(loc, 'water') - (0.6 + (corporate.scarcity / 10) * 0.8)) < 1e-9);
+});
+
+test('biomeBiasAt resolves the Location\'s biome field against the commodity\'s resourceType, and is 1 for an unset/unmatched biome or a commodity with no resourceType', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'Meridian' }));
+  assert.equal(biomeBiasAt(getEntity(camp, id), 'water'), 1); // unset biome
+
+  const waterworld = findBiome('waterworld');
+  camp = updateEntity(camp, id, { biome: waterworld.id });
+  const loc = getEntity(camp, id);
+  const expected = 0.6 + (waterworld.resourceScarcity.water / 10) * 0.8;
+  assert.ok(Math.abs(biomeBiasAt(loc, 'water') - expected) < 1e-9);
+
+  camp = updateEntity(camp, id, { biome: 'not-a-real-biome' });
+  assert.equal(biomeBiasAt(getEntity(camp, id), 'water'), 1);
+});
+
+test('priceAt compounds developmentLevel bias and biome bias independently, on top of supply/demand', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'Rustwell' }));
+  const extraction = findEconomyType('extraction'); // scarcity 6
+  const waterworld = findBiome('waterworld'); // water scarcity dial 0
+  camp = updateEntity(camp, id, { developmentLevel: extraction.id, biome: waterworld.id });
+  const loc = getEntity(camp, id);
+  const water = findCommodity('water');
+  const expectedBias = developmentLevelBiasAt(loc, 'water') * biomeBiasAt(loc, 'water');
+  assert.equal(priceAt(loc, 'water'), Math.max(1, Math.round(water.basePrice * expectedBias)));
+  // Waterworld's near-zero water scarcity should pull the combined bias down from extraction's alone.
+  assert.ok(biomeBiasAt(loc, 'water') < 1);
+});
+
 // --- docs/adr/0014: Game Mechanics Index (pure storage half only — the
 // actual PDF.js scan is async/browser-only, see ui/mechanicsScan.js) -------
 import { getMechanicsIndex, setMechanicsIndex } from '../src/domain/mechanicsIndex.js';

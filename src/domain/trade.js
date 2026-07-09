@@ -25,7 +25,8 @@
 // module (colony.js/party.js's ensure() pattern, threads.js's clock).
 
 import { COMMODITIES, findCommodity } from '../data/commodities.js';
-import { ECONOMY_TYPES } from '../data/economyTypes.js';
+import { ECONOMY_TYPES, findEconomyType } from '../data/economyTypes.js';
+import { findBiome } from '../data/biomes.js';
 import { getEntity } from './entities.js';
 import { addThread, listThreads } from './threads.js';
 import { tablesWithOverrides, pick } from './oracles.js';
@@ -83,35 +84,78 @@ function economyTypeForLocation(location) {
   return ECONOMY_TYPES.find((t) => tags.has(t.label.toLowerCase())) || null;
 }
 
+// Shared by economyBiasAt/developmentLevelBiasAt and biomeBiasAt below —
+// the same "0-10 scarcity dial -> a 0.6x-1.4x price multiplier" mapping,
+// just fed from two different dial sources (docs/adr/0025).
+function biasFromDial(dial) {
+  return 0.6 + (Math.max(0, Math.min(10, dial)) / 10) * 0.8;
+}
+
 /** A 0.6x-1.4x price multiplier from a Location's tagged economy type, or
  *  exactly 1 (no change) if the Location carries no recognized economy-type
  *  tag — additive to the existing supply/demand dials, never a replacement.
  *  Raw commodities price off `scarcity` (scarce locally = pricier);
  *  manufactured commodities price off the inverse of `manufacturing` (weak
  *  local fabrication = pricier) — two dials instead of a literal tech
- *  level, per docs/adr/0013. */
+ *  level, per docs/adr/0013. Kept exactly as it was (still exported, still
+ *  the tag-scan path) — developmentLevelBiasAt below wraps it as a
+ *  fallback rather than replacing it, so a Location tagged before ADR 0025
+ *  added a real `developmentLevel` field keeps pricing unchanged. */
 export function economyBiasAt(location, commodityId) {
   const c = findCommodity(commodityId);
   const et = economyTypeForLocation(location);
   if (!c || !et) return 1;
   const dial = c.category === 'manufactured' ? (10 - et.manufacturing) : et.scarcity;
-  return 0.6 + (Math.max(0, Math.min(10, dial)) / 10) * 0.8;
+  return biasFromDial(dial);
 }
 
-/** basePrice * demandFactor / supplyFactor * economyBias — pure and
- *  stateless. The supply/demand dials are 0-100 around a neutral midpoint
- *  of 50; each maps onto a 0.5x-1.5x multiplier, so a fresh market (50/50)
- *  with no tagged economy type prices at exactly basePrice. High demand or
- *  low supply raises the price; low demand or high supply lowers it — never
- *  below 1 (a price of 0 would make a commodity worthless to trade, which
- *  isn't a state this model needs). */
+/** Development level bias (docs/adr/0025-location-biome-trade.md) —
+ *  prefers a Location's real `developmentLevel` field if set (a GM-picked
+ *  dropdown now, entities.js's ensureLocationFields), falling back to the
+ *  pre-existing tag-scan (economyTypeForLocation, same as economyBiasAt
+ *  above) when it isn't. This is what priceAt() actually calls now;
+ *  economyBiasAt stays as the narrower tag-only piece this wraps. */
+export function developmentLevelBiasAt(location, commodityId) {
+  const c = findCommodity(commodityId);
+  const et = (location && location.developmentLevel && findEconomyType(location.developmentLevel)) || economyTypeForLocation(location);
+  if (!c || !et) return 1;
+  const dial = c.category === 'manufactured' ? (10 - et.manufacturing) : et.scarcity;
+  return biasFromDial(dial);
+}
+
+/** A second, independent 0.6x-1.4x price multiplier from a Location's
+ *  biome (data/biomes.js) — compounds with developmentLevelBiasAt rather
+ *  than replacing it: development level answers "how built-up is this
+ *  place," biome answers "what does the environment itself have plenty or
+ *  little of." Reads the commodity's finer `resourceType` (water/fuel/
+ *  food/ore/tech/luxury), not the coarser raw/manufactured `category`
+ *  developmentLevelBiasAt uses, so the two can genuinely diverge on the
+ *  same commodity (a Waterworld prices Water cheap regardless of whether
+ *  it's also tagged/set Industrial). Exactly 1 (no change) if the
+ *  Location has no biome set or the commodity has no resourceType. */
+export function biomeBiasAt(location, commodityId) {
+  const c = findCommodity(commodityId);
+  const biome = location && location.biome && findBiome(location.biome);
+  if (!c || !biome || !c.resourceType) return 1;
+  const dial = biome.resourceScarcity[c.resourceType];
+  if (dial === undefined) return 1;
+  return biasFromDial(dial);
+}
+
+/** basePrice * demandFactor / supplyFactor * developmentLevelBias *
+ *  biomeBias — pure and stateless. The supply/demand dials are 0-100
+ *  around a neutral midpoint of 50; each maps onto a 0.5x-1.5x multiplier,
+ *  so a fresh market (50/50) with neither bias set prices at exactly
+ *  basePrice. High demand or low supply raises the price; low demand or
+ *  high supply lowers it — never below 1 (a price of 0 would make a
+ *  commodity worthless to trade, which isn't a state this model needs). */
 export function priceAt(location, commodityId) {
   const c = findCommodity(commodityId);
   if (!c || !location) return 0;
   const { supply, demand } = getMarket(location)[commodityId];
   const demandFactor = 0.5 + demand / 100;
   const supplyFactor = 0.5 + supply / 100;
-  const bias = economyBiasAt(location, commodityId);
+  const bias = developmentLevelBiasAt(location, commodityId) * biomeBiasAt(location, commodityId);
   return Math.max(1, Math.round((c.basePrice * demandFactor * bias) / supplyFactor));
 }
 

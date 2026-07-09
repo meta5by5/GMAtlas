@@ -155,6 +155,20 @@ function ensureFactionFields(e) {
   if (e.secret === undefined) e.secret = '';
 }
 
+// Location card fields (docs/adr/0025-location-biome-trade.md): both are
+// optional ids into data/economyTypes.js's ECONOMY_TYPES and
+// data/biomes.js's BIOMES respectively — blank means "unset," which
+// domain/trade.js's developmentLevelBiasAt/biomeBiasAt both treat as "no
+// bias, price exactly as before this feature existed" (developmentLevel
+// blank additionally falls back to the pre-existing tag-scan, so an
+// already-tagged Location keeps pricing the way it always has). Same
+// lazy-set-on-touch shape as ensureFactionFields above.
+function ensureLocationFields(e) {
+  if (e.type !== 'location') return;
+  if (e.developmentLevel === undefined) e.developmentLevel = '';
+  if (e.biome === undefined) e.biome = '';
+}
+
 function clampFactionStat(n) {
   const v = Math.round(Number(n));
   return Number.isFinite(v) ? Math.max(0, Math.min(10, v)) : 0;
@@ -211,6 +225,7 @@ function _create(campaign, { type = 'npc', name = '' } = {}) {
   ents.activeId = rec.id;
   ensureAutoStatblock(rec, campaign.settings);
   ensureFactionFields(rec);
+  ensureLocationFields(rec);
   return rec;
 }
 
@@ -287,7 +302,7 @@ export function createItemFromCatalog(campaign, catalogEntry) {
 export function updateEntity(campaign, id, patch) {
   const next = clone(campaign);
   const e = getEntity(next, id);
-  if (e) { Object.assign(e, patch); ensureAutoStatblock(e, next.settings); ensureFactionFields(e); }
+  if (e) { Object.assign(e, patch); ensureAutoStatblock(e, next.settings); ensureFactionFields(e); ensureLocationFields(e); }
   return next;
 }
 

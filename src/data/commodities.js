@@ -14,15 +14,24 @@
 // against, once a GM tags a Location with an economy type. Purely
 // additive: a commodity/Location with no economy type involved prices
 // exactly as it always has.
+//
+// `resourceType` (docs/adr/0025-location-biome-trade.md): a finer axis
+// than `category` — which of a Location's BIOME dials
+// (data/biomes.js's `resourceScarcity`) this commodity prices against.
+// Deliberately a second, independent dimension rather than replacing
+// `category`: development level and biome are two different questions
+// ("how built-up is this place" vs. "what does the environment itself
+// have plenty or little of") that should be able to bias the same
+// commodity differently and compound, not share one axis.
 export const COMMODITIES = [
-  { id: 'water', label: 'Water', basePrice: 5, category: 'raw' },
-  { id: 'fuel', label: 'Fuel', basePrice: 10, category: 'raw' },
-  { id: 'medical-supplies', label: 'Medical Supplies', basePrice: 25, category: 'manufactured' },
-  { id: 'weapons', label: 'Weapons', basePrice: 40, category: 'manufactured' },
-  { id: 'salvage', label: 'Salvage', basePrice: 15, category: 'raw' },
-  { id: 'luxury-goods', label: 'Luxury Goods', basePrice: 60, category: 'manufactured' },
-  { id: 'ore', label: 'Ore', basePrice: 12, category: 'raw' },
-  { id: 'foodstuffs', label: 'Foodstuffs', basePrice: 8, category: 'raw' },
+  { id: 'water', label: 'Water', basePrice: 5, category: 'raw', resourceType: 'water' },
+  { id: 'fuel', label: 'Fuel', basePrice: 10, category: 'raw', resourceType: 'fuel' },
+  { id: 'medical-supplies', label: 'Medical Supplies', basePrice: 25, category: 'manufactured', resourceType: 'tech' },
+  { id: 'weapons', label: 'Weapons', basePrice: 40, category: 'manufactured', resourceType: 'tech' },
+  { id: 'salvage', label: 'Salvage', basePrice: 15, category: 'raw', resourceType: 'ore' },
+  { id: 'luxury-goods', label: 'Luxury Goods', basePrice: 60, category: 'manufactured', resourceType: 'luxury' },
+  { id: 'ore', label: 'Ore', basePrice: 12, category: 'raw', resourceType: 'ore' },
+  { id: 'foodstuffs', label: 'Foodstuffs', basePrice: 8, category: 'raw', resourceType: 'food' },
 ];
 
 export function findCommodity(id) {
