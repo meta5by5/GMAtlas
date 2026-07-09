@@ -404,6 +404,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
    right-aligned on the label's own line via margin-left:auto. */
 .field-label-row { display: flex; align-items: center; width: 100%; }
 .field-label-row .icon-btn { margin-left: auto; text-transform: none; letter-spacing: normal; }
+.field-label-hint { text-transform: none; letter-spacing: normal; opacity: 0.8; }
 /* WHAT tab's tracker rows (Intent/Threat/Mystery, Resources/Reputation/
    Stress) — auto-fit instead of a fixed 3-column grid, so they reflow to
    2 or 1 per row as the window narrows instead of jumping straight from

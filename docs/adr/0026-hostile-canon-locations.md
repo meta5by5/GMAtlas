@@ -31,6 +31,60 @@ ephemeral Sets — same shape as `enhancementsSection`'s
 `ui.expandedEnhancements`), so a Cast list full of imported worlds
 doesn't default to a wall of open cards.
 
+**2026-07-08 second follow-up (same day)**: the "known tradeoff, not a
+bug" from the first follow-up above got resolved for real, plus four
+more direct refinements — the canon import itself now recreates the
+cross-references it previously only described in text:
+
+1. **The import recreates stars and bases as real entities, in
+   dependency order.** `data/hostileLocations.js` gained two new
+   catalogs — `HOSTILE_BASES` (USSC/JASDF/DRW/MRA, tagged `#base`) and
+   `HOSTILE_STARS` (one per world's star system, tagged `#star`, each
+   with its own `starSystem` field set to ITS OWN name — the
+   self-reference the World Profile UI now checks for). `domain/
+   hostileLocations.js`'s `importHostileLocations()` imports Bases, then
+   Stars, then the worlds themselves, in that order, so a world's
+   `bases`/`starSystem` values already resolve to real entities by the
+   time it's created — the "won't retroactively match" tradeoff the
+   first follow-up flagged no longer applies for the canon data itself
+   (it still applies to any Location a GM hand-enters without linking
+   it). One star name (Tau Ceti's) collided with its own world's name;
+   disambiguated to "Tau Ceti System" — a new domain test asserts no
+   such collision exists across the whole catalog.
+2. **`#planet`/`#orbit`/`#deepspace` tags**, one per world, from a new
+   `locationKind` field on each `HOSTILE_LOCATIONS` entry: `orbit` for a
+   body explicitly described as a moon orbiting a gas giant/brown dwarf
+   rather than a system's primary (Forlorn, Prosperity), `deepspace` for
+   an unclaimed/independent asteroid not orbiting a habitable world
+   (LQ105, Exile, Rock 17, The Solomons), `planet` for the remaining 24.
+3. **Field order**: Star System moved up between Hex and Zone (was
+   below the coded `<select>`s); Hex is now `size="4" maxlength="4"`
+   (hex codes are always exactly 4 digits).
+4. **Every world's tags now include its zone AND its star** (previously
+   only zone) — `importHostileLocations()`'s world pass tags
+   `[hostile-canon, zone, starSystem, locationKind]`.
+5. **Bases now works exactly like Trade Codes**: a dropdown-add
+   (`data-entity-base-add`) plus removable chips, via two new domain
+   functions `addLocationBase`/`removeLocationBase` (mirroring
+   `addLocationTradeCode`/`removeLocationTradeCode` exactly) — but
+   sourced from `#base`-tagged Location entities (dynamic) rather than
+   the static `BASES` table Trade Codes still uses, matching how Star
+   System already sources from `#star`-tagged entities. The old
+   comma-input for Bases is gone.
+6. **`(#star)`/`(#base)` label hints render lowercase**, not shouted by
+   `.field-label`'s uppercase styling — `fieldLabelRow()` gained an
+   optional 4th `hint` parameter rendered in a new
+   `.field-label-hint { text-transform: none; }` span (styles/
+   cockpit.css), leaving the rest of the label's uppercase treatment
+   untouched.
+7. **A self-referencing Star System hides the planet-only fields.**
+   When `e.starSystem === e.name` (true only for a `HOSTILE_STARS`
+   entity, self-referencing by construction), `worldProfileSection`
+   renders only Hex/Star System/Zone/Tech Level and a short explanatory
+   note — Starport through the gas giant checkbox (including the new
+   Bases/Trade Codes dropdowns) are hidden, since a star isn't itself a
+   world with a starport or an atmosphere.
+
 ## Context
 
 Direct ask: "Make a robust and fully detailed locations database for

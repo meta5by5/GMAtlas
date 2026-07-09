@@ -260,6 +260,31 @@ export function removeLocationTradeCode(campaign, id, code) {
   return next;
 }
 
+/** Add one Base — a Location entity's NAME, not a static code — to a
+ *  Location's bases list, deduped. No-op on a non-Location entity or an
+ *  empty/already-present name. Mirrors addLocationTradeCode's shape, but
+ *  Bases references real #base-tagged Location entities (docs/adr/0026
+ *  follow-up) rather than a static reference table, so the UI drives
+ *  this from a dropdown of existing Locations, not a fixed code list. */
+export function addLocationBase(campaign, id, name) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  const clean = String(name || '').trim();
+  if (!e || e.type !== 'location' || !clean) return next;
+  ensureLocationFields(e);
+  if (!e.bases.includes(clean)) e.bases.push(clean);
+  return next;
+}
+
+/** Remove one Base by exact value. No-op on a non-Location entity. */
+export function removeLocationBase(campaign, id, name) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (!e || e.type !== 'location' || !Array.isArray(e.bases)) return next;
+  e.bases = e.bases.filter((b) => b !== name);
+  return next;
+}
+
 // --- internal mutators (operate on an already-cloned campaign) ------------
 function _create(campaign, { type = 'npc', name = '' } = {}) {
   const ents = ensure(campaign);

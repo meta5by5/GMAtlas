@@ -21,7 +21,7 @@ import {
   getEntity, addEntityStatblockGroup, removeEntityStatblockGroup, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
   setEntityStatblockTrackValue, setEntityStatblockAttributeValue, updateRelationshipLabel, updateRelationshipType, updateRelationshipStrength,
   listEntities, ENTITY_TYPES, TYPE_LABEL, setFactionStat, addFactionAsset, removeFactionAsset, createItemFromCatalog,
-  addLocationTradeCode, removeLocationTradeCode,
+  addLocationTradeCode, removeLocationTradeCode, addLocationBase, removeLocationBase,
 } from '../domain/entities.js';
 import { findCatalogItem } from '../data/gearCatalog.js';
 import { installEnhancement, removeEnhancement } from '../domain/enhancements.js';
@@ -857,6 +857,11 @@ function onClick(ev) {
   if (tradeCodeRemove) {
     const [id, code] = tradeCodeRemove.dataset.entityTradecodeRemove.split('::');
     return store.update((d) => removeLocationTradeCode(d, id, code));
+  }
+  const baseRemove = hit('[data-entity-base-remove]');
+  if (baseRemove) {
+    const [id, name] = baseRemove.dataset.entityBaseRemove.split('::');
+    return store.update((d) => removeLocationBase(d, id, name));
   }
   const sbGroupToggle = hit('[data-statblock-group-toggle]');
   if (sbGroupToggle) {
@@ -1702,17 +1707,12 @@ function onChange(ev) {
         return;
       }
     }
-    // World Profile (docs/adr/0026): `bases` is stored as an array
-    // (data/hostileUwpTables.js's code ids) but edited as a plain
-    // comma-separated <input> — same CSV-split-trim-filter shape
-    // entities.js's setEntityTags already uses for tags, just inline here
-    // since this is the one place a plain text field feeds an array
-    // field via the otherwise string-only generic handler (`tradeCodes`
-    // is dropdown-add + chip-remove instead, see data-entity-tradecode-add/
-    // -remove below). `gasGiant` is the first checkbox-backed
-    // data-entity-field, hence the type check.
-    let value = t.type === 'checkbox' ? t.checked : t.value;
-    if (field === 'bases') value = t.value.split(',').map((s) => s.trim()).filter(Boolean);
+    // World Profile (docs/adr/0026): `gasGiant` is the first
+    // checkbox-backed data-entity-field, hence the type check. `bases`
+    // and `tradeCodes` are dropdown-add + chip-remove instead of plain
+    // fields (data-entity-base-add/-remove, data-entity-tradecode-add/
+    // -remove below), so neither reaches this generic path anymore.
+    const value = t.type === 'checkbox' ? t.checked : t.value;
     return store.update((d) => updateEntity(d, active, { [field]: value }));
   }
 
@@ -1721,6 +1721,14 @@ function onChange(ev) {
     const id = tradeCodeAdd.dataset.entityTradecodeAdd;
     const code = t.value;
     if (code) store.update((d) => addLocationTradeCode(d, id, code));
+    t.value = '';
+    return;
+  }
+  const baseAdd = t.closest('[data-entity-base-add]');
+  if (baseAdd) {
+    const id = baseAdd.dataset.entityBaseAdd;
+    const name = t.value;
+    if (name) store.update((d) => addLocationBase(d, id, name));
     t.value = '';
     return;
   }

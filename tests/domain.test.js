@@ -3155,7 +3155,8 @@ test('priceAt compounds developmentLevel bias and biome bias independently, on t
 
 // --- docs/adr/0026: HOSTILE canon locations (World Profile fields + import)
 import { importHostileLocations } from '../src/domain/hostileLocations.js';
-import { HOSTILE_LOCATIONS } from '../src/data/hostileLocations.js';
+import { HOSTILE_LOCATIONS, HOSTILE_STARS, HOSTILE_BASES } from '../src/data/hostileLocations.js';
+import { addLocationBase, removeLocationBase } from '../src/domain/entities.js';
 
 test('ensureLocationFields defaults every World Profile field to blank/false/empty-array on a fresh Location', () => {
   let camp = defaultCampaign();
@@ -3169,10 +3170,20 @@ test('ensureLocationFields defaults every World Profile field to blank/false/emp
   assert.equal(loc.gasGiant, false);
 });
 
-test('importHostileLocations creates one Location entity per canon entry, fully patched with its World Profile fields, tags, and summary', () => {
+test('importHostileLocations creates one Location entity per base, star, and world entry — bases and stars first, so a world\'s references resolve', () => {
   let camp = defaultCampaign();
   const { campaign: next, createdIds } = importHostileLocations(camp);
-  assert.equal(createdIds.length, HOSTILE_LOCATIONS.length);
+  assert.equal(createdIds.length, HOSTILE_BASES.length + HOSTILE_STARS.length + HOSTILE_LOCATIONS.length);
+
+  const ussc = findByName(next, 'USSC');
+  assert.ok(ussc);
+  assert.ok(ussc.tags.includes('base'));
+
+  const wolf359 = findByName(next, 'Wolf 359');
+  assert.ok(wolf359);
+  assert.ok(wolf359.tags.includes('star'));
+  assert.equal(wolf359.starSystem, 'Wolf 359', 'a star self-references its own name');
+
   const earth = HOSTILE_LOCATIONS.find((l) => l.name === 'Earth');
   const entity = findByName(next, 'Earth');
   assert.ok(entity);
@@ -3180,11 +3191,15 @@ test('importHostileLocations creates one Location entity per canon entry, fully 
   assert.equal(entity.hex, earth.hex);
   assert.equal(entity.starport, earth.starport);
   assert.equal(entity.starSystem, earth.starSystem);
+  assert.equal(entity.starSystem, 'The Sun');
   assert.deepEqual(entity.bases, earth.bases);
   assert.deepEqual(entity.tradeCodes, earth.tradeCodes);
   assert.equal(entity.gasGiant, earth.gasGiant);
   assert.equal(entity.overview, earth.summary);
   assert.ok(entity.tags.includes('hostile-canon'));
+  assert.ok(entity.tags.includes(earth.zone));
+  assert.ok(entity.tags.includes(earth.starSystem), 'the star is also a tag value on the world');
+  assert.ok(entity.tags.includes(earth.locationKind));
 });
 
 test('importHostileLocations is idempotent — re-running it creates nothing new, and never overwrites a GM\'s edits to an already-imported world', () => {
@@ -3202,7 +3217,18 @@ test('importHostileLocations skips only the already-present name, still importin
   let camp = defaultCampaign();
   let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'Earth' }));
   const { createdIds } = importHostileLocations(camp);
-  assert.equal(createdIds.length, HOSTILE_LOCATIONS.length - 1);
+  assert.equal(createdIds.length, HOSTILE_BASES.length + HOSTILE_STARS.length + HOSTILE_LOCATIONS.length - 1);
+});
+
+test('every HOSTILE_LOCATIONS entry\'s starSystem matches a real HOSTILE_STARS name, and every star name is unique from every world name (no import collisions)', () => {
+  const starNames = new Set(HOSTILE_STARS.map((s) => s.name));
+  for (const loc of HOSTILE_LOCATIONS) {
+    assert.ok(starNames.has(loc.starSystem), `${loc.name}'s starSystem "${loc.starSystem}" has no matching HOSTILE_STARS entry`);
+  }
+  const worldNames = new Set(HOSTILE_LOCATIONS.map((l) => l.name));
+  for (const star of HOSTILE_STARS) {
+    assert.ok(!worldNames.has(star.name), `star name "${star.name}" collides with a world name`);
+  }
 });
 
 test('addLocationTradeCode appends a code deduped; removeLocationTradeCode drops it; both no-op on a non-Location entity', () => {
@@ -3218,6 +3244,22 @@ test('addLocationTradeCode appends a code deduped; removeLocationTradeCode drops
   let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Reyes' }));
   const before = camp;
   camp = addLocationTradeCode(camp, npcId, 'agricultural');
+  assert.deepEqual(camp, before);
+});
+
+test('addLocationBase appends a name deduped; removeLocationBase drops it; both no-op on a non-Location entity', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'Rustwell' }));
+  camp = addLocationBase(camp, id, 'USSC');
+  camp = addLocationBase(camp, id, 'USSC'); // dedup
+  camp = addLocationBase(camp, id, 'MRA');
+  assert.deepEqual(getEntity(camp, id).bases, ['USSC', 'MRA']);
+  camp = removeLocationBase(camp, id, 'USSC');
+  assert.deepEqual(getEntity(camp, id).bases, ['MRA']);
+
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Reyes' }));
+  const before = camp;
+  camp = addLocationBase(camp, npcId, 'USSC');
   assert.deepEqual(camp, before);
 });
 

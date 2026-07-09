@@ -14,6 +14,21 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-08 HOSTILE Canon Locations second follow-up**: the canon
+import now recreates its own cross-references instead of leaving them
+as descriptive text — two new catalogs, `HOSTILE_BASES` (4 entries,
+`#base`) and `HOSTILE_STARS` (30 entries, `#star`, each self-referencing
+its own name), imported before the 30 worlds so every world's
+`bases`/`starSystem` resolve to real entities immediately. Every world
+also gained a `#planet`/`#orbit`/`#deepspace` tag and a star tag
+alongside its zone tag. Bases now works like Trade Codes (dropdown-add +
+removable chips, sourced from `#base`-tagged entities). World Profile
+field order is now Hex/Star System/Zone/Tech Level (Hex capped to 4
+characters); a self-referencing Star System (i.e. this Location IS a
+star) hides every planet-only field. Verified via 3 new/rewritten domain
+tests (334 total, including a collision-free cross-reference check) and
+a jsdom smoke test.
+
 **2026-07-08 HOSTILE Canon Locations follow-up**: Star System is now a
 `<select>` sourced from Locations tagged `#star` (label shows `(#star)`)
 instead of free text; Trade Codes became a dropdown-add + removable-chip
