@@ -234,6 +234,8 @@ let expandedWorldDemographics = new Set(); // ephemeral — entity ids whose Wor
 let expandedSceneFields = new Set(); // ephemeral — "sceneId::field" keys whose Latest Scene field is expanded (UX batch, collapsed by default; click the label to expand)
 let collapsedToolbars = new Set(); // ephemeral — rich-text toolbar keys OVERRIDDEN away from campaign.settings.toolbarCollapsedByDefault (mentionEditor.js's toolbarCollapsed() XORs this against the default; see UX batch)
 let expandedPartyMembers = new Set(); // ephemeral — entity ids whose Party member card shows its statblocks (collapsed by default; click the name to expand, UX batch)
+let journalActionsOpen = true; // ephemeral — the Journal drawer's Actions row (Add note, Generate Mission, ...), open by default (UX batch)
+let collapsedOverview = new Set(); // ephemeral — entity ids whose Overview field has been explicitly collapsed (open by default, UX batch)
 let expandedWorldProfile = new Set(); // ephemeral — entity ids whose World Profile (UWP) card is expanded (docs/adr/0026 follow-up, collapsed by default)
 let mechanicsScanning = false; // ephemeral — true while scanMechanicsIndex()'s async PDF.js scan is in flight (docs/adr/0014)
 let tocScanning = false; // ephemeral — true while scanAndGenerateToc()'s async PDF.js outline scan is in flight (docs/adr/0020)
@@ -589,6 +591,13 @@ function onClick(ev) {
   }
 
   if (hit('[data-recap-toggle]')) { recapOpen = !recapOpen; return renderDrawerBody(); }
+  if (hit('[data-journal-actions-toggle]')) { journalActionsOpen = !journalActionsOpen; return renderDrawerBody(); }
+  const overviewToggle = hit('[data-overview-toggle]');
+  if (overviewToggle) {
+    const id = overviewToggle.dataset.overviewToggle;
+    if (collapsedOverview.has(id)) collapsedOverview.delete(id); else collapsedOverview.add(id);
+    return renderDrawerBody();
+  }
   const typeFilterBtn = hit('[data-entity-type-filter]');
   if (typeFilterBtn) {
     entityTypeFilter = typeFilterBtn.dataset.entityTypeFilter;
@@ -785,6 +794,16 @@ function onClick(ev) {
   if (unlink) { const active = store.get().entities.activeId; return store.update((d) => removeRelationship(d, active, unlink.dataset.entityUnlink)); }
   const entTagRemove = hit('[data-entity-tag-remove]');
   if (entTagRemove) { const active = store.get().entities.activeId; return store.update((d) => removeEntityTag(d, active, entTagRemove.dataset.entityTagRemove)); }
+  // A tag on an entity's own tagEditor is clickable — jumps to Cast
+  // filtered to just that tag (replacing whatever filter Cast already
+  // had, not accumulating — "show me everything else tagged this," a
+  // fresh start from wherever the GM clicked it).
+  const entTagJump = hit('[data-entity-tag-jump]');
+  if (entTagJump) {
+    entityTagFilters = new Set([entTagJump.dataset.entityTagJump]);
+    openDrawerTab('cast');
+    return render();
+  }
   if (hit('[data-entity-link-add]')) {
     const active = store.get().entities.activeId;
     const target = root.querySelector('[data-entity-link-target]');
@@ -3375,7 +3394,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, expandedSceneFields, collapsedToolbars, expandedPartyMembers, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw,
+    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,

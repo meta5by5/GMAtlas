@@ -426,6 +426,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
    the toggle is a <button> standing in for the field's own label text,
    so it needs the label's font reset instead of a default button look. */
 .scene-field-toggle { background: none; border: none; padding: 0; margin: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; text-align: left; }
+.overview-toggle { background: none; border: none; padding: 0; margin: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; text-align: left; }
 /* Latest Scene: the combined text view sits at 70% width, its split
    fields at 30%, side by side instead of stacked — the fields are edited
    far less often than the text is read, so giving the text the larger
@@ -776,9 +777,19 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 /* Entity thumbnail (Phase 11, docs/adr/0021-gallery.md) — left-aligned
    beside Type/Tags, per the request. */
 .inspector-photo-row { display: flex; gap: var(--sp-3); align-items: flex-start; margin-top: var(--sp-3); }
-.inspector-photo { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); }
+/* 40% of the row's width whether or not a photo is assigned yet — an
+   unassigned entity still reserves the same space (via
+   .inspector-photo-empty's dashed placeholder box below) so the layout
+   doesn't jump once a photo is added. */
+.inspector-photo { flex: 0 0 40%; max-width: 40%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); }
 .inspector-photo-fields { flex: 1 1 auto; min-width: 0; }
 .inspector-photo .gallery-thumb-circle { width: 4.5rem; height: 4.5rem; }
+.inspector-photo-empty {
+  display: flex; align-items: center; justify-content: center; width: 100%;
+  aspect-ratio: 1 / 1; border: 1px dashed var(--border); border-radius: var(--radius-sm);
+  color: var(--text-dim); font-size: 0.8rem; cursor: pointer; text-align: center; padding: var(--sp-2); box-sizing: border-box;
+}
+.inspector-photo-empty:hover { border-color: var(--accent); color: var(--accent); }
 .field-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
 .rel-block { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-3); }
 .rel-block h4 { margin: 0 0 var(--sp-2); font-size: 0.8rem; color: var(--accent); }
@@ -829,7 +840,11 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .tag-editor-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); margin-bottom: 0.35rem; }
 .field-label-static { font-size: 0.7rem; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; }
 .tag-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-2); }
-.tag-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--tier2-bg); border: 1px solid var(--border); border-radius: 999px; padding: 0.2rem 0.5rem; font-size: 0.78rem; }
+.tag-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--tier2-bg); border: 1px solid var(--border); border-radius: 999px; padding: 0.15rem 0.45rem; font-size: 0.68rem; }
+/* The tag's own text is a button (jumps to Cast filtered by this tag) —
+   reset to read as plain chip text, not a nested button. */
+.tag-chip-jump { background: none; border: none; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; }
+.tag-chip-jump:hover { text-decoration: underline; color: var(--accent); }
 
 /* clickable entity chips in WHO/WHERE cards */
 .entity-chip { cursor: pointer; }

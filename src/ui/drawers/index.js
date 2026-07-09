@@ -276,6 +276,13 @@ function inspector(doc, e, ui) {
   // apply to a player character the same way they do to an antagonist or
   // bystander NPC, so both are hidden once this tag is present.
   const isPartyCharacter = e.type === 'npc' && (e.tags || []).some((t) => t.toLowerCase() === 'character');
+  // Overview defaults OPEN (unlike most of this session's new
+  // collapsibles) — it's an entity's core identifying summary, the first
+  // thing a GM wants on opening one, not a rarely-needed detail; the
+  // Set here tracks which entities have been explicitly COLLAPSED
+  // (inverse of the usual "tracks expanded" convention), matching
+  // journalActionsOpen's same "!== closed" default-open shape.
+  const overviewOpen = !((ui.collapsedOverview || new Set()).has(e.id));
   return `
     <div class="inspector-head">
       <input class="inspector-name" data-entity-field="name" value="${esc(e.name)}" placeholder="Name">
@@ -291,8 +298,12 @@ function inspector(doc, e, ui) {
         ${tagEditor(doc, e)}
       </div>
     </div>
-    <div class="field-label">${fieldLabelRow('Overview (shared)', e.type, 'overview')}
-      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:overview`, toolbarCollapsed(doc, ui, `entity:${e.id}:overview`))}<div class="mention-editor" contenteditable="true" data-entity-field="overview" data-placeholder="What the party knows.">${buildMentionEditorHTML(doc, e.overview)}</div></div>
+    <div class="field-label">
+      <span class="field-label-row">
+        <button type="button" class="overview-toggle" data-overview-toggle="${esc(e.id)}">${overviewOpen ? '▾' : '▸'} Overview</button>
+        ${oracleLinkIcon(e.type, 'overview')}
+      </span>
+      ${overviewOpen ? `<div class="rich-field">${richToolbarHTML(`entity:${e.id}:overview`, toolbarCollapsed(doc, ui, `entity:${e.id}:overview`))}<div class="mention-editor" contenteditable="true" data-entity-field="overview" data-placeholder="What the party knows.">${buildMentionEditorHTML(doc, e.overview)}</div></div>` : ''}
     </div>
     ${isPartyCharacter ? '' : `<div class="revealed-block">
       <button class="btn ghost sm" data-reveal-toggle="${esc(e.id)}">${e.revealedOpen ? '▾' : '▸'} Revealed / hidden (GM)</button>
@@ -625,8 +636,12 @@ function entityPhotoHtml(doc, e) {
       <label class="btn ghost sm file-btn">Replace<input type="file" accept="image/*" data-entity-photo-upload="${esc(e.id)}" hidden></label>
     </div>`;
   }
+  // Unassigned still reserves the same 40%-of-row width (.inspector-photo
+  // CSS) as the assigned state above, via a dashed placeholder box —
+  // previously this was just a small floating button with no reserved
+  // space, which made the layout jump once a photo was added.
   return `<div class="inspector-photo">
-    <label class="btn ghost sm file-btn">＋ Photo<input type="file" accept="image/*" data-entity-photo-upload="${esc(e.id)}" hidden></label>
+    <label class="inspector-photo-empty file-btn">＋ Photo<input type="file" accept="image/*" data-entity-photo-upload="${esc(e.id)}" hidden></label>
   </div>`;
 }
 
@@ -642,7 +657,8 @@ function entityPhotoHtml(doc, e) {
 function tagEditor(doc, e) {
   const tags = e.tags || [];
   const chips = tags.map((t) => `
-    <span class="tag-chip">${esc(t)}
+    <span class="tag-chip">
+      <button type="button" class="tag-chip-jump" data-entity-tag-jump="${esc(t)}" title="Filter Cast by #${esc(t)}">${esc(t)}</button>
       <button class="icon-btn" data-entity-tag-remove="${esc(t)}" title="Remove tag">✕</button>
     </span>`).join('');
   const vocab = listTagVocabulary(doc, e.type, e.id);
@@ -948,12 +964,19 @@ function plainText(s) { return String(s || '').replace(/<[^>]+>/g, ' ').replace(
 function journal(doc, ui = {}) {
   const entries = (doc.journal || []).slice().reverse();
   const recapOpen = !!ui.recapOpen;
+  // Defaults OPEN (unlike this session's other new collapsibles) — "Add
+  // note" lives in here, the single most common Journal action, so
+  // hiding it by default would cost every GM an extra click on the
+  // drawer's most frequent workflow. The toggle still exists for anyone
+  // who wants the row out of the way once they've seen it.
+  const actionsOpen = ui.journalActionsOpen !== false;
   return `
     <button class="btn ghost recap-toggle" data-recap-toggle>${recapOpen ? '▾' : '▸'} Previously on…</button>
     ${recapOpen ? recapPanel(doc) : ''}
     <div class="drawer-note">
       <div class="rich-field">${richToolbarHTML('journal:new', toolbarCollapsed(doc, ui, 'journal:new'))}<div class="mention-editor" contenteditable="true" data-journal-input data-placeholder="Add a note, ruling, or clue… (drag an entity here, or type @, to mention it)"></div></div>
-      <div class="drawer-note-actions">
+      <button class="btn ghost sm" data-journal-actions-toggle>${actionsOpen ? '▾' : '▸'} Actions</button>
+      ${actionsOpen ? `<div class="drawer-note-actions">
         <button class="btn" data-journal-add>Add note</button>
         <button class="btn ghost" data-export-journal>Export</button>
         <button class="btn ghost" data-generate-mission title="Roll a job: payout/deadline scaled by the current Threat, plus a complication">🎲 Generate Mission</button>
@@ -961,7 +984,7 @@ function journal(doc, ui = {}) {
         <button class="btn ghost" data-generate-creature title="Roll a creature concept: origin, movement, trait, and threat">🎲 Creature Concept</button>
         <button class="btn ghost" data-generate-site title="Roll a site concept: a feature, a danger, and a wonder">🎲 Site Concept</button>
         <button class="btn ghost" data-generate-seed title="Roll an adventure seed: a hook, a twist, and a complication">🎲 Adventure Seed</button>
-      </div>
+      </div>` : ''}
     </div>
     <div class="journal-list">
       ${entries.length ? entries.map((e) => journalEntryRow(doc, e, ui)).join('')
@@ -981,9 +1004,12 @@ function journalEntryRow(doc, e, ui) {
     : `<div class="journal-text mention-text">${e.isHtml ? e.text : buildMentionEditorHTML(doc, e.text)}</div>`;
   return `
         <div class="journal-entry">
-          <div class="journal-meta">${new Date(e.createdAt).toLocaleString()} · ${esc(e.source || 'Journal')}
-                <button class="icon-btn" data-journal-edit-toggle="${esc(e.id)}" title="${editing ? 'Done editing' : 'Edit'}" aria-label="Edit">${editing ? '✓' : '✎'}</button>
-                <button class="icon-btn" data-journal-del="${esc(e.id)}" title="Delete" aria-label="Delete">✕</button>
+          <div class="journal-meta">
+                <span>${new Date(e.createdAt).toLocaleString()} · ${esc(e.source || 'Journal')}</span>
+                <span class="journal-meta-actions">
+                  <button class="icon-btn" data-journal-edit-toggle="${esc(e.id)}" title="${editing ? 'Done editing' : 'Edit'}" aria-label="Edit">${editing ? '✓' : '✎'}</button>
+                  <button class="icon-btn" data-journal-del="${esc(e.id)}" title="Delete" aria-label="Delete">✕</button>
+                </span>
               </div>
               ${body}
         </div>`;
