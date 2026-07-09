@@ -44,7 +44,7 @@ import { biomesForGenrePack } from '../../data/biomes.js';
 import {
   STARPORT_CLASSES, WORLD_SIZES, ATMOSPHERES, HYDROGRAPHICS, POPULATIONS, GOVERNMENTS, LAW_LEVELS, BASES, TRADE_CODES, findTradeCode,
 } from '../../data/hostileUwpTables.js';
-import { HOSTILE_LOCATIONS, HOSTILE_STARS, HOSTILE_BASES } from '../../data/hostileLocations.js';
+import { HOSTILE_LOCATIONS_META } from '../../data/hostileLocationsMeta.js';
 import { DOCS_MANIFEST } from '../../data/docsManifest.js';
 
 const esc = (s) => String(s == null ? '' : s)
@@ -381,8 +381,8 @@ function factionSection(doc, e, ui) {
 // handler needs no changes; a GM models a star system as its own
 // Location entity (tagged #star) and links a world to it by name. A
 // star's own World Profile self-references (its starSystem equals its
-// own name, per data/hostileLocations.js's HOSTILE_STARS/domain/
-// hostileLocations.js's import) — when that's true, this card hides
+// own name, per the HOSTILE Locations JSON pack's own `stars` entries/
+// domain/hostileLocations.js's import) — when that's true, this card hides
 // World Size/Atmosphere/Biome/Hydrographics (a star has none of these)
 // and shows only Hex/Star System/Zone; worldDemographicsSection below
 // hides itself entirely for the same reason.
@@ -1231,7 +1231,7 @@ function settings(doc, ui = {}) {
       ${sourcebookInventorySection(ui)}`,
     'trade-economy': () => `
       ${tradeEconomyModelSection(doc, ui)}
-      ${hostileCanonLocationsSection(doc)}`,
+      ${hostileCanonLocationsSection(doc, ui)}`,
     'reference-tools': () => `
       ${mechanicsIndexSection(doc, ui)}
       ${tocSection(doc, ui)}`,
@@ -1377,8 +1377,13 @@ function tradeEconomyModelSection(doc, ui) {
 // specific, not a generic sci-fi concept the way Trade Economy Model/
 // Biome above are. The import itself is additive/idempotent (dedup by
 // name, domain/hostileLocations.js), so no confirmation dialog is needed
-// — matches the "Advance Faction Turns" bulk-action button's shape.
-function hostileCanonLocationsSection(doc) {
+// — matches the "Advance Faction Turns" bulk-action button's shape. The
+// catalog itself is fetched at click time now (docs/adr/0026 JSON-pack
+// addendum, ui/hostileLocationsFetch.js) rather than read from bundled
+// JS — HOSTILE_LOCATIONS_META's few counts are the only piece of it still
+// shipped as JS, so this legend text doesn't need a network round-trip
+// just to describe what importing will do.
+function hostileCanonLocationsSection(doc, ui = {}) {
   if ((doc.settings.genrePack || 'hostile') !== 'hostile') return '';
   const starportRows = STARPORT_CLASSES.map((s) => `
     <li><b>${esc(s.code)} — ${esc(s.label)}</b> <span class="dim small">${esc(s.description)}</span></li>`).join('');
@@ -1386,11 +1391,12 @@ function hostileCanonLocationsSection(doc) {
     <li><b>${esc(b.code)}</b> — <span class="dim small">${esc(b.label)}: ${esc(b.description)}</span></li>`).join('');
   const tradeCodeRows = TRADE_CODES.map((t) => `
     <li><b>${esc(t.label)}</b> <span class="dim small">(${esc(t.code)})</span> — <span class="dim small">${esc(t.description)}</span></li>`).join('');
+  const importing = !!ui.hostileLocationsImporting;
   return `
     <div class="settings-group">
       ${sectionHeadRow('h3', 'HOSTILE Canon Locations', 'settings-hostile-locations')}
-      <p class="dim small">The HOSTILE Settings sourcebook's own world gazetteer — ${HOSTILE_LOCATIONS.length} worlds, ${HOSTILE_STARS.length} star systems, and ${HOSTILE_BASES.length} bases authored so far (Near Earth Zone), more zones queued. Importing creates a real, fully-editable Location entity per world/star/base (bases and stars first, so every world's references resolve); already-imported ones (matched by name) are skipped, so it's safe to re-run after a new zone is added.</p>
-      <button class="btn ghost" data-hostile-locations-import>🌍 Import HOSTILE Canon Locations</button>
+      <p class="dim small">The HOSTILE Settings sourcebook's own world gazetteer — ${HOSTILE_LOCATIONS_META.worldCount} worlds, ${HOSTILE_LOCATIONS_META.starCount} star systems, and ${HOSTILE_LOCATIONS_META.baseCount} bases authored so far (${esc(HOSTILE_LOCATIONS_META.zoneLabel)}), more zones queued. Importing creates a real, fully-editable Location entity per world/star/base (bases and stars first, so every world's references resolve); already-imported ones (matched by name) are skipped, so it's safe to re-run after a new zone is added. Fetches the data pack over the network at click time — needs <code>npm run serve</code> (won't work opened directly as a <code>file://</code> page).</p>
+      <button class="btn ghost" data-hostile-locations-import ${importing ? 'disabled' : ''}>${importing ? 'Importing…' : '🌍 Import HOSTILE Canon Locations'}</button>
       <h4>Starport Classes</h4>
       <ul class="rules-provider-legend">${starportRows}</ul>
       <h4>Bases</h4>

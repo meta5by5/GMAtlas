@@ -47,6 +47,7 @@ import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewR
 import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract, updateContract } from '../domain/trade.js';
 import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors, resolveFactionTurn, formatFactionTurnResult, rollFactionAsset } from '../domain/factions.js';
 import { importHostileLocations } from '../domain/hostileLocations.js';
+import { fetchHostileLocationsPack } from './hostileLocationsFetch.js';
 import { exportContentPack, importContentPack } from '../domain/contentPack.js';
 import { generateMission, formatMission } from '../domain/missions.js';
 import {
@@ -252,6 +253,7 @@ let expandedContracts = new Set(); // ephemeral — contract (Thread) ids whose 
 let tradeLocationTagFilter = ''; // ephemeral — Trade tab's Location tag filter (UX batch), narrows the Location <select>'s options
 let expandedWorldProfile = new Set(); // ephemeral — entity ids whose World Profile (UWP) card is expanded (docs/adr/0026 follow-up, collapsed by default)
 let mechanicsScanning = false; // ephemeral — true while scanMechanicsIndex()'s async PDF.js scan is in flight (docs/adr/0014)
+let hostileLocationsImporting = false; // ephemeral — true while fetchHostileLocationsPack()'s async fetch is in flight (docs/adr/0026 JSON-pack addendum)
 let tocScanning = false; // ephemeral — true while scanAndGenerateToc()'s async PDF.js outline scan is in flight (docs/adr/0020)
 let lensPickerOpen = false; // ephemeral — "What Happens Next?"'s Suggestion Lens chip picker, open or not (docs/adr/0009)
 let lensDraw = []; // ephemeral — the current random draw of lens chips, fixed until re-opened (not redrawn on every unrelated re-render)
@@ -1452,13 +1454,23 @@ function onClick(ev) {
     return toast('Mission generated');
   }
   if (hit('[data-hostile-locations-import]')) {
-    let createdCount = 0;
-    store.update((d) => {
-      const r = importHostileLocations(d);
-      createdCount = r.createdIds.length;
-      return r.campaign;
-    });
-    return toast(createdCount ? `${createdCount} location(s) imported` : 'Already up to date — nothing new to import');
+    if (hostileLocationsImporting) return;
+    hostileLocationsImporting = true;
+    renderDrawerBody();
+    fetchHostileLocationsPack()
+      .then((pack) => {
+        let createdCount = 0;
+        store.update((d) => {
+          const r = importHostileLocations(d, pack);
+          createdCount = r.createdIds.length;
+          return r.campaign;
+        });
+        hostileLocationsImporting = false;
+        renderDrawerBody();
+        toast(createdCount ? `${createdCount} location(s) imported` : 'Already up to date — nothing new to import');
+      })
+      .catch((err) => { hostileLocationsImporting = false; renderDrawerBody(); toast(`Import failed — ${err.message}`); });
+    return;
   }
   if (hit('[data-advance-faction-turns]')) {
     let rumorCount = 0;
@@ -3541,7 +3553,7 @@ function buildDrawerUi() {
     journalEditOpen, whereLocationTagFilter, whoTagFilter, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
-    contentPackFlags,
+    contentPackFlags, hostileLocationsImporting,
   };
 }
 

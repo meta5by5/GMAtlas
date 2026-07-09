@@ -3207,9 +3207,18 @@ test('priceAt compounds developmentLevel bias and biome bias independently, on t
 });
 
 // --- docs/adr/0026: HOSTILE canon locations (World Profile fields + import)
+// The catalog itself moved out of bundled JS into assets/data-packs/
+// hostile-near-earth-zone.json (fetched at runtime by ui/
+// hostileLocationsFetch.js) — tests read it directly off disk with plain
+// fs, standing in for the fetch() a real browser does, since
+// importHostileLocations() itself now just takes plain data as its second
+// argument and has no idea where it came from.
+import { readFileSync } from 'node:fs';
 import { importHostileLocations } from '../src/domain/hostileLocations.js';
-import { HOSTILE_LOCATIONS, HOSTILE_STARS, HOSTILE_BASES, HOSTILE_ZONES } from '../src/data/hostileLocations.js';
 import { addLocationBase, removeLocationBase } from '../src/domain/entities.js';
+
+const HOSTILE_PACK = JSON.parse(readFileSync(new URL('../assets/data-packs/hostile-near-earth-zone.json', import.meta.url)));
+const { locations: HOSTILE_LOCATIONS, stars: HOSTILE_STARS, bases: HOSTILE_BASES, zones: HOSTILE_ZONES } = HOSTILE_PACK;
 
 test('ensureLocationFields defaults every World Profile field to blank/false/empty-array on a fresh Location', () => {
   let camp = defaultCampaign();
@@ -3225,7 +3234,7 @@ test('ensureLocationFields defaults every World Profile field to blank/false/emp
 
 test('importHostileLocations creates one Location entity per base, zone, star, and world entry — bases/zones/stars first, so a world\'s references resolve', () => {
   let camp = defaultCampaign();
-  const { campaign: next, createdIds } = importHostileLocations(camp);
+  const { campaign: next, createdIds } = importHostileLocations(camp, HOSTILE_PACK);
   assert.equal(createdIds.length, HOSTILE_BASES.length + HOSTILE_ZONES.length + HOSTILE_STARS.length + HOSTILE_LOCATIONS.length);
 
   const ussc = findByName(next, 'USSC');
@@ -3282,10 +3291,10 @@ test('importHostileLocations creates one Location entity per base, zone, star, a
 
 test('importHostileLocations is idempotent — re-running it creates nothing new, and never overwrites a GM\'s edits to an already-imported world', () => {
   let camp = defaultCampaign();
-  let next; ({ campaign: next } = importHostileLocations(camp));
+  let next; ({ campaign: next } = importHostileLocations(camp, HOSTILE_PACK));
   const earthId = findByName(next, 'Earth').id;
   next = updateEntity(next, earthId, { overview: 'GM-edited overview, do not clobber' });
-  const again = importHostileLocations(next);
+  const again = importHostileLocations(next, HOSTILE_PACK);
   assert.equal(again.createdIds.length, 0);
   assert.equal(findByName(again.campaign, 'Earth').overview, 'GM-edited overview, do not clobber');
   assert.equal((again.campaign.entities.items || []).filter((e) => e.name === 'Earth').length, 1);
@@ -3294,8 +3303,16 @@ test('importHostileLocations is idempotent — re-running it creates nothing new
 test('importHostileLocations skips only the already-present name, still importing everything else', () => {
   let camp = defaultCampaign();
   let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'Earth' }));
-  const { createdIds } = importHostileLocations(camp);
+  const { createdIds } = importHostileLocations(camp, HOSTILE_PACK);
   assert.equal(createdIds.length, HOSTILE_BASES.length + HOSTILE_ZONES.length + HOSTILE_STARS.length + HOSTILE_LOCATIONS.length - 1);
+});
+
+test('importHostileLocations degrades gracefully (creates nothing, no throw) on a missing or malformed pack', () => {
+  let camp = defaultCampaign();
+  const missing = importHostileLocations(camp, undefined);
+  assert.equal(missing.createdIds.length, 0);
+  const malformed = importHostileLocations(camp, { bases: 'not an array', stars: null });
+  assert.equal(malformed.createdIds.length, 0);
 });
 
 test('every HOSTILE_LOCATIONS entry\'s starSystem matches a real HOSTILE_STARS name, and every star name is unique from every world name (no import collisions)', () => {

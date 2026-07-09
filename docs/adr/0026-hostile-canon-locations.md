@@ -175,6 +175,63 @@ the tags already carry that distinction for filtering).
    World↔Base pairs, 334 total) plus a jsdom smoke test confirming the
    same chain end to end and the Relationships row's new field order.
 
+**2026-07-09 fifth follow-up — JSON-pack conversion**: on request to
+"Convert the Locations database done in javascript into a gamesystem
+specific import JSON file that does not delete existing content." The
+catalog itself (`HOSTILE_BASES`/`HOSTILE_ZONES`/`HOSTILE_STARS`/
+`HOSTILE_LOCATIONS`, ~1000 lines of plain data, no functions) moved out of
+bundled JS entirely into `assets/data-packs/hostile-near-earth-zone.json`
+— `{ zones, bases, stars, locations }`, an exact structural export of the
+four arrays with no reshaping — fetched only at import-click time rather
+than shipped in every page load's JS bundle.
+
+1. **`domain/hostileLocations.js`'s `importHostileLocations(campaign)`
+   became `importHostileLocations(campaign, pack)`** — its own dedup-by-
+   name and `linkContains` relationship-building logic is byte-for-byte
+   unchanged, it just reads `pack.bases`/`pack.zones`/`pack.stars`/
+   `pack.locations` instead of the four module-level constants it used to
+   import statically. A missing/malformed section (not an array) is
+   treated as empty rather than throwing, so a partial or hand-edited pack
+   degrades gracefully instead of crashing the whole import. This keeps
+   the module exactly as pure/synchronous/DOM-free as before (rule 3) —
+   it has no idea its data now comes from a fetch, only that it's handed
+   a plain object.
+2. **New `src/ui/hostileLocationsFetch.js`** (not `domain/`, since
+   `fetch()` is neither pure nor synchronous) does the actual network
+   call, mirroring `ui/mechanicsScan.js`'s already-established pattern
+   for this exact constraint: `file://` is a hard no (Chromium treats a
+   `file://` page's `fetch()` to another `file://` resource as
+   cross-origin and blocks it outright), so it checks `location.protocol`
+   up front and throws a clear "needs `npm run serve`" message rather
+   than attempting and failing per-request. Every other feature in this
+   app still works over a plain `file://` double-click; this one joins
+   Mechanics Index/TOC scan as the exceptions.
+3. **`src/data/hostileLocationsMeta.js`** (new, tiny) keeps just four
+   numbers — world/star/base counts and the zone label — as bundled JS,
+   hand-maintained, so Settings' legend text ("30 worlds, 30 star
+   systems, and 4 bases authored so far...") can render before the real
+   pack is ever fetched, without a network round-trip just to describe
+   what the import button will do.
+4. **`src/data/hostileLocations.js` (the old JS data file) is deleted**
+   — its content lives on, verbatim, as the JSON pack; its two unused-
+   outside-itself helper functions (`findHostileLocation`/`findHostileStar`/
+   `findHostileBase`/`findHostileZone`) were dropped rather than ported,
+   since nothing outside that file ever called them.
+5. **Nothing about the dedup-by-name safety or the Contains/Located-At
+   relationship-linking changed** — per the direct request's "does not
+   delete existing content," an already-imported world/star/zone/base is
+   still skipped, never overwritten, and re-running the import after a
+   future zone is appended to the JSON pack is exactly as safe as before.
+6. Verified via 5 new/updated domain tests (345 total — tests now read
+   the JSON pack directly off disk with plain `fs`, standing in for the
+   `fetch()` a real browser does, and pass it explicitly to
+   `importHostileLocations`) plus two jsdom smoke tests: one confirming
+   the `file://` guard's error message and a real HTTP fetch-then-import
+   round trip against a local static server (65 entities created, Earth's
+   `starSystem` correctly resolved to "The Sun"), and a second confirming
+   Settings' legend text and import button still render correctly from
+   the new small metadata file.
+
 ## Context
 
 Direct ask: "Make a robust and fully detailed locations database for

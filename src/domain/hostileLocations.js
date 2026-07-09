@@ -6,15 +6,24 @@
 // in, one real entity out) but as a bulk loop, matching the shape of
 // other bulk actions like factions.js's advanceFactionTurns.
 //
+// The catalog itself is no longer bundled JS — as of the JSON-pack
+// conversion (docs/adr/0026 addendum) it lives in assets/data-packs/
+// hostile-near-earth-zone.json, fetched at import-click time by
+// ui/hostileLocationsFetch.js (fetch() isn't pure/synchronous, so it
+// can't live here per rule 3) and handed to importHostileLocations below
+// as a plain `{bases, zones, stars, locations}` object — this module
+// stays exactly as pure/DOM-free/synchronous as before, just no longer
+// importing its own data.
+//
 // Import order matters (2026-07-08 follow-ups): Bases, then Zones, then
 // Stars, then the worlds themselves — each later pass references
 // entities the earlier pass already created (a world's `bases`/
 // `starSystem` values are real Location NAMES, matched against
 // #base/#star-tagged entities the World Profile UI's dropdowns source
-// from). A star's own `starSystem` field is set to its OWN name
-// (data/hostileLocations.js's HOSTILE_STARS entries already encode
-// this) — that self-reference is what tells the UI "this Location IS
-// the star, not a world orbiting one."
+// from). A star's own `starSystem` field is set to its OWN name (the
+// JSON pack's own `stars` entries already encode this) — that
+// self-reference is what tells the UI "this Location IS the star, not a
+// world orbiting one."
 //
 // After all four catalogs land, linkHierarchy() builds the real
 // Zone > Star > World > Base containment chain as relationships (not
@@ -31,7 +40,6 @@
 // At Near Earth Zone").
 
 import { createEntity, updateEntity, findByName, addRelationship, updateRelationshipType, updateRelationshipLabel } from './entities.js';
-import { HOSTILE_BASES, HOSTILE_ZONES, HOSTILE_STARS, HOSTILE_LOCATIONS } from '../data/hostileLocations.js';
 
 function importCatalog(campaign, entries, makeFields) {
   let next = campaign;
@@ -61,35 +69,43 @@ function linkContains(campaign, parentName, childName) {
   return next;
 }
 
-/** Creates one Location entity per data/hostileLocations.js entry not
- *  already present in the campaign (deduped by exact name match via
- *  findByName — safely re-runnable as later zones are appended to the
- *  data file; already-imported worlds/stars/zones/bases are skipped, not
- *  duplicated or overwritten, so a GM's own edits are never clobbered by
- *  a later import). Imports HOSTILE_BASES, HOSTILE_ZONES, HOSTILE_STARS,
- *  then HOSTILE_LOCATIONS, in that order, then links the whole Zone >
- *  Star > World > Base containment chain as relationships. Returns
- *  {campaign, createdIds} (combined across all four catalogs — the
- *  relationship-linking pass creates no new entities, only edges). */
-export function importHostileLocations(campaign) {
+/** Creates one Location entity per entry in `pack` (the fetched JSON —
+ *  see ui/hostileLocationsFetch.js — shaped `{bases, zones, stars,
+ *  locations}`) not already present in the campaign, deduped by exact
+ *  name match via findByName — safely re-runnable as later zones are
+ *  appended to the pack; already-imported worlds/stars/zones/bases are
+ *  skipped, not duplicated or overwritten, so a GM's own edits are never
+ *  clobbered by a later import. Imports pack.bases, pack.zones,
+ *  pack.stars, then pack.locations, in that order, then links the whole
+ *  Zone > Star > World > Base containment chain as relationships.
+ *  Returns {campaign, createdIds} (combined across all four catalogs —
+ *  the relationship-linking pass creates no new entities, only edges).
+ *  A missing/malformed section (not an array) is treated as empty rather
+ *  than throwing, so a partial or hand-edited pack degrades gracefully. */
+export function importHostileLocations(campaign, pack) {
   let next = campaign;
   let createdIds = [];
+  const p = pack && typeof pack === 'object' ? pack : {};
+  const packBases = Array.isArray(p.bases) ? p.bases : [];
+  const packZones = Array.isArray(p.zones) ? p.zones : [];
+  const packStars = Array.isArray(p.stars) ? p.stars : [];
+  const packLocations = Array.isArray(p.locations) ? p.locations : [];
 
-  const bases = importCatalog(next, HOSTILE_BASES, (entry) => ({
+  const bases = importCatalog(next, packBases, (entry) => ({
     tags: ['hostile-canon', 'base'],
     overview: entry.summary,
   }));
   next = bases.campaign;
   createdIds = createdIds.concat(bases.createdIds);
 
-  const zones = importCatalog(next, HOSTILE_ZONES, (entry) => ({
+  const zones = importCatalog(next, packZones, (entry) => ({
     tags: ['hostile-canon', 'zone'],
     overview: entry.summary,
   }));
   next = zones.campaign;
   createdIds = createdIds.concat(zones.createdIds);
 
-  const stars = importCatalog(next, HOSTILE_STARS, (entry) => ({
+  const stars = importCatalog(next, packStars, (entry) => ({
     tags: ['hostile-canon', 'star'],
     overview: entry.summary,
     hex: entry.hex,
@@ -99,7 +115,7 @@ export function importHostileLocations(campaign) {
   next = stars.campaign;
   createdIds = createdIds.concat(stars.createdIds);
 
-  const worlds = importCatalog(next, HOSTILE_LOCATIONS, (entry) => ({
+  const worlds = importCatalog(next, packLocations, (entry) => ({
     tags: ['hostile-canon', entry.zone, entry.locationKind],
     overview: entry.summary,
     hex: entry.hex,
@@ -120,8 +136,8 @@ export function importHostileLocations(campaign) {
   next = worlds.campaign;
   createdIds = createdIds.concat(worlds.createdIds);
 
-  for (const star of HOSTILE_STARS) next = linkContains(next, star.zone, star.name);
-  for (const world of HOSTILE_LOCATIONS) {
+  for (const star of packStars) next = linkContains(next, star.zone, star.name);
+  for (const world of packLocations) {
     next = linkContains(next, world.starSystem, world.name);
     for (const baseName of world.bases) next = linkContains(next, world.name, baseName);
   }
