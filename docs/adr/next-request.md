@@ -691,3 +691,54 @@ Priority	Component	Why it fits your goals
 
 For Saga Atlas, I would go one step further than most battlemap applications: rather than centering the experience on drawing, I'd make it room-centric. Users would assemble maps from reusable, metadata-rich room modules (e.g., "Medical Bay," "Hydroponics," "Ancient Shrine") that automatically carry appropriate props, encounters, environmental details, and story hooks. This approach aligns well with your preference for reducing cognitive load while preserving exploration, replayability, and emergent storytelling.
 END OF CHATGPT SUGGESTIONS
+
+<!-- Processed 2026-07-08 (Battlemap clarifications batch,
+docs/adr/0027-encounter-manager-and-battlemap-content.md +
+docs/adr/0028-multiuser-access-and-cloud-sync.md):
+- Read the real PDF (assets/docs/5PFH Planetfall 1.2.pdf) directly via
+  pdftotext for both page references: printed p.53 (PDF p.55) is a real,
+  complete sector-tracking legend (Home/Colony, Investigation Site,
+  numbered Resource Level, numbered Hazard Level, Enemy Occupation,
+  Enemy Strongpoint, Ancient Sign) — scoped as a new exploration icon
+  set. Printed p.97/PDF p.99 is the start of a long multi-page Buildings
+  table (a dozen+ named buildings just in the first few pages, many more
+  follow) — real, but too large to transcribe inside a scoping ADR;
+  deferred to its own dedicated content-authoring pass, same treatment
+  the HOSTILE Canon Locations gazetteer (ADR 0026) got.
+- Encounter Manager expanded into a per-ruleset resolver registry (one
+  initiative/resolution function per ruleset, keyed off the existing
+  settings.statRuleset selector, "one system active at a time" per your
+  wording) rather than one generic tracker — 5PFH's and SWN's actual
+  resolver logic still needs its own reconciliation pass against each
+  system's real combat chapter before it's built.
+- Interactive Maps "layers" interpreted (not confirmed — flagged as an
+  assumption) as toggleable visibility groups (Background/Grid/
+  Annotations/Tokens/Fog), not a full pixel z-order layer engine — say
+  so if that's not what was meant.
+- Mobile UX compact forms/tabs: noted as an open, unscoped backlog item
+  (DESIGN-NEW-FUNCTIONALITY.md) — needs specifics on which screens feel
+  cramped before it's actionable.
+- Shipyard: the given URL didn't yield fetchable content (client-
+  rendered app, no server-side HTML) — still blocked, now on a readable
+  GitHub source link rather than a URL at all; asked you directly for
+  one rather than guessing.
+- Multi-user public access + Supabase sync: per your explicit choice
+  when asked directly, recorded as a long-horizon, NOT-started
+  initiative (docs/adr/0028) rather than committed roadmap — it's a
+  genuine architectural fork from this app's local-first design
+  (CLAUDE.md Article VIII), and needs its own dedicated
+  architecture-decision pass (source of truth, conflict resolution,
+  dependency posture, tier-gating security) before any code changes.
+-->
+
+<!-- Processed 2026-07-08 (addendum, docs/adr/0029-shipyard-deckplan-
+builder.md): the GitLab source (gitlab.com/IvanSanchez/geomorph-
+shipyard, GPLv3) was provided and read directly. Its README names the
+exact awkwardness ("scroll through the library and press add," a
+hover-preview as the only discovery aid, no search/filter at all) — the
+proposed replacement reuses Gallery's existing tag+search mechanism as
+the direct fix, plus a gridless Battlemap map as the canvas (not a new
+drawer) and one new capability (icon rotation/flip) neither Battlemap
+nor Gallery has today. No code yet; content-authoring (the part
+category/tonnage list) still needed first.
+-->

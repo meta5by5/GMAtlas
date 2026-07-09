@@ -232,6 +232,67 @@ than shipped in every page load's JS bundle.
    Settings' legend text and import button still render correctly from
    the new small metadata file.
 
+**2026-07-09 sixth follow-up — Fomalhaut Settlement Zone**: the second
+zone on this ADR's rollout checklist, per the direct request "create the
+importable location database for FOMALHAUT SETTLEMENT ZONE."
+
+1. **24 worlds, 24 stars, 1 zone**, transcribed from `assets/docs/Hostile
+   setting.pdf`'s FOM World Data table (p.29), star catalog (pp.50-53),
+   and the "Outer Rim Worlds - Highlights" page (p.75). FOM is Outer Rim
+   material, not Core — the book gives it no per-world Planetology/
+   Development prose the way every NEZ world got (pages 54-74); only four
+   FOM entries get real descriptive text, all sourced from the Highlights
+   page: Fomalhaut (the system itself — three named gas giants, an ICO
+   "free zone" gone lawless), Medusa (an explicitly-named moon of a gas
+   giant around Ross 780, hence `locationKind: 'orbit'`), LR210 (the
+   outermost of three super-hot super-Earths around 82 Eridani), and
+   LR203 (orbiting the flare star EV Lacertae). The other 20 worlds get
+   the same honest "cataloged with minimal detail beyond its World Data
+   table entry" summary this ADR already used for six sparse NEZ worlds,
+   built only from their own UWP decode (trade codes, star type) — no
+   invented lore.
+2. **No bases catalog entries.** NEZ's USSC/JASDF/DRW/MRA assignments
+   (Earth, Armstrong, Tau Ceti, etc.) came from per-world prose naming a
+   specific national base — FOM's zone map only shows generic "Space
+   Force Base"/"MRA Base" icon categories with no per-world national
+   attribution decodable from the extracted text, so every FOM world's
+   `bases` stays `[]` rather than guessing.
+3. **A second JSON pack file, not one growing file.** New `assets/
+   data-packs/hostile-fomalhaut-settlement-zone.json`, exact same
+   `{zones, bases, stars, locations}` shape as the Near Earth Zone pack —
+   kept as its own file (rather than appended into `hostile-near-earth-
+   zone.json`) so each zone stays independently reviewable/citable and
+   future zones don't risk merge conflicts in one large file.
+   `ui/hostileLocationsFetch.js`'s `fetchHostileLocationsPack()` now
+   fetches every URL in a `PACK_URLS` array and concatenates each pack's
+   four arrays before returning — `domain/hostileLocations.js`'s
+   `importHostileLocations()` needed zero changes, since it already just
+   loops whatever arrays it's handed. Settings keeps its one **"🌍 Import
+   HOSTILE Canon Locations"** button, now covering both zones at once;
+   adding Capella/New Concessions/EZ6/EZ9 later only means appending
+   another URL to `PACK_URLS` and another file, no UI change.
+4. **`Fomalhaut` (the world) and `Fomalhaut System` (its star) disambig-
+   uated** exactly like Tau Ceti's precedent (2026-07-08 follow-up) — the
+   star's `starSystem` self-references its own name, "Fomalhaut System",
+   not "Fomalhaut", so it never collides with the world entity sharing
+   the real star's name.
+5. **`HOSTILE_LOCATIONS_META` updated** to the combined total (54 worlds,
+   54 stars, 4 bases, zone label naming both zones) — still the one
+   piece of the catalog shipped as bundled JS, so Settings' legend text
+   doesn't need a network round-trip just to render.
+6. Verified via 4 new domain tests (354 total): the FOM pack's shape (24/
+   24/1/0), no name collisions between the FOM and NEZ packs, a
+   FOM-pack-alone import (creates every entity, links Zone->Star->World
+   containment), and a merged-pack import producing the union of both
+   zones' entities — matching exactly what the real fetch-and-merge does.
+7. Extracted the sourcebook's text for this pass via a throwaway
+   `pdfjs-dist` Node script (installed with `--no-save`, not a permanent
+   dependency — CLAUDE.md's environment-constraints exception for a
+   dev-only one-off tool) run against the vendored PDF.js's own legacy
+   Node build, since no PDF page-rendering tool was available in this
+   environment; the output was discarded after this pass, no artifact
+   committed.
+
 ## Context
 
 Direct ask: "Make a robust and fully detailed locations database for
@@ -386,7 +447,8 @@ legible directly in each dropdown's own `code — label` options).
 - **Rollout checklist** (tracked at the top of
   `data/hostileLocations.js`, update there as each pass lands):
   - [x] Near Earth Zone (NEZ) — 30 worlds, this pass.
-  - [ ] Fomalhaut Settlement Zone (FOM)
+  - [x] Fomalhaut Settlement Zone (FOM) — 24 worlds, sixth follow-up
+        (2026-07-09).
   - [ ] Capella Extraction Zone / New Concessions Zone (subsector codes
         observed in the source: CAP, EZ6, EZ9 — exact zone/subsector
         boundaries need confirming against the source text during that

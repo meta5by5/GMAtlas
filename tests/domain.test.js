@@ -3362,6 +3362,72 @@ test('every HOSTILE_LOCATIONS entry\'s starSystem matches a real HOSTILE_STARS n
   }
 });
 
+// --- docs/adr/0026 rollout: Fomalhaut Settlement Zone (FOM), the second
+// zone file appended to the gazetteer (see ui/hostileLocationsFetch.js's
+// PACK_URLS). A separate JSON file per zone, not a growing single file —
+// importHostileLocations() itself doesn't care whether it's handed one
+// zone's pack or a merge of several, so these tests both exercise the FOM
+// pack alone and confirm merging it with the NEZ pack (what the real fetch
+// does) behaves exactly like importing one big combined pack would.
+const FOM_PACK = JSON.parse(readFileSync(new URL('../assets/data-packs/hostile-fomalhaut-settlement-zone.json', import.meta.url)));
+const { locations: FOM_LOCATIONS, stars: FOM_STARS, zones: FOM_ZONES } = FOM_PACK;
+
+test('Fomalhaut Settlement Zone pack: 24 worlds, 24 stars, 1 zone, no bases (undecodable from the source map icons)', () => {
+  assert.equal(FOM_LOCATIONS.length, 24);
+  assert.equal(FOM_STARS.length, 24);
+  assert.equal(FOM_ZONES.length, 1);
+  assert.deepEqual(FOM_PACK.bases, []);
+});
+
+test('every FOM_LOCATIONS entry\'s starSystem matches a real FOM_STARS name, and no FOM star/world name collides with a name in the NEZ pack or within FOM itself', () => {
+  const fomStarNames = new Set(FOM_STARS.map((s) => s.name));
+  for (const loc of FOM_LOCATIONS) {
+    assert.ok(fomStarNames.has(loc.starSystem), `${loc.name}'s starSystem "${loc.starSystem}" has no matching FOM_STARS entry`);
+  }
+  const fomWorldNames = new Set(FOM_LOCATIONS.map((l) => l.name));
+  for (const star of FOM_STARS) {
+    assert.ok(!fomWorldNames.has(star.name), `star name "${star.name}" collides with a FOM world name`);
+  }
+  const nezNames = new Set([...HOSTILE_LOCATIONS, ...HOSTILE_STARS, ...HOSTILE_BASES, ...HOSTILE_ZONES].map((e) => e.name));
+  for (const name of [...fomWorldNames, ...fomStarNames]) {
+    assert.ok(!nezNames.has(name), `"${name}" collides with an existing Near Earth Zone pack name`);
+  }
+});
+
+test('importHostileLocations on the FOM pack alone creates every base/zone/star/world entry and links the Zone->Star->World containment chain', () => {
+  let camp = defaultCampaign();
+  const { campaign: next, createdIds } = importHostileLocations(camp, FOM_PACK);
+  assert.equal(createdIds.length, FOM_ZONES.length + FOM_STARS.length + FOM_LOCATIONS.length);
+
+  const zone = findByName(next, 'Fomalhaut Settlement Zone');
+  assert.ok(zone && zone.tags.includes('zone'));
+
+  const fomalhaut = findByName(next, 'Fomalhaut');
+  const fomStar = findByName(next, 'Fomalhaut System');
+  assert.ok(fomalhaut && fomalhaut.type === 'location');
+  assert.ok(fomStar && fomStar.tags.includes('star'));
+  assert.equal(fomStar.starSystem, 'Fomalhaut System', 'the star self-references its own name, disambiguated from the world sharing its name');
+
+  const zoneRel = zone.relationships.find((r) => r.to === fomStar.id);
+  assert.equal(zoneRel.type, 'contains');
+  const starRel = fomStar.relationships.find((r) => r.to === fomalhaut.id);
+  assert.equal(starRel.type, 'contains');
+});
+
+test('merging the NEZ and FOM packs (what the real fetch does) and importing once creates the union of both zones\' entities', () => {
+  let camp = defaultCampaign();
+  const merged = {
+    zones: [...HOSTILE_ZONES, ...FOM_ZONES],
+    bases: [...HOSTILE_BASES],
+    stars: [...HOSTILE_STARS, ...FOM_STARS],
+    locations: [...HOSTILE_LOCATIONS, ...FOM_LOCATIONS],
+  };
+  const { campaign: next, createdIds } = importHostileLocations(camp, merged);
+  assert.equal(createdIds.length, HOSTILE_BASES.length + HOSTILE_ZONES.length + HOSTILE_STARS.length + HOSTILE_LOCATIONS.length + FOM_ZONES.length + FOM_STARS.length + FOM_LOCATIONS.length);
+  assert.ok(findByName(next, 'Earth'));
+  assert.ok(findByName(next, 'Fomalhaut'));
+});
+
 test('addLocationTradeCode appends a code deduped; removeLocationTradeCode drops it; both no-op on a non-Location entity', () => {
   let camp = defaultCampaign();
   let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'Rustwell' }));

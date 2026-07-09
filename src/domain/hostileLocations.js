@@ -8,12 +8,13 @@
 //
 // The catalog itself is no longer bundled JS — as of the JSON-pack
 // conversion (docs/adr/0026 addendum) it lives in assets/data-packs/
-// hostile-near-earth-zone.json, fetched at import-click time by
-// ui/hostileLocationsFetch.js (fetch() isn't pure/synchronous, so it
-// can't live here per rule 3) and handed to importHostileLocations below
-// as a plain `{bases, zones, stars, locations}` object — this module
+// hostile-*.json, one file per zone, fetched and merged at import-click
+// time by ui/hostileLocationsFetch.js (fetch() isn't pure/synchronous, so
+// it can't live here per rule 3) and handed to importHostileLocations
+// below as a plain `{bases, zones, stars, locations}` object — this module
 // stays exactly as pure/DOM-free/synchronous as before, just no longer
-// importing its own data.
+// importing its own data, and has no idea the pack it's handed may itself
+// be a merge of several zone files.
 //
 // Import order matters (2026-07-08 follow-ups): Bases, then Zones, then
 // Stars, then the worlds themselves — each later pass references

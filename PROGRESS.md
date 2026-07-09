@@ -14,6 +14,29 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-09 HOSTILE Canon Locations — Fomalhaut Settlement Zone**: the
+second zone on ADR 0026's rollout checklist is authored and importable —
+24 worlds, 24 stars, 1 zone entity, transcribed from the sourcebook's FOM
+World Data table (p.29), star catalog (pp.50-53), and the "Outer Rim
+Worlds - Highlights" page (p.75, which covers Fomalhaut, Medusa, LR210's
+star 82 Eridani, and LR203's star EV Lacertae with real prose; the other
+20 worlds get an honest "cataloged with minimal detail beyond its World
+Data table entry" summary, same posture as the six sparse NEZ worlds).
+No bases — FOM's zone map only shows generic base-type icons, not the
+national USSC/JASDF/DRW/MRA assignments NEZ's per-world prose named, so
+none were invented. New `assets/data-packs/hostile-fomalhaut-settlement-
+zone.json`, same `{zones,bases,stars,locations}` shape as the Near Earth
+Zone pack. `ui/hostileLocationsFetch.js` now fetches every zone file
+listed in `PACK_URLS` and merges them before import, so Settings' single
+"Import HOSTILE Canon Locations" button covers both zones at once and
+needs no UI change as further zones land — `importHostileLocations()`
+itself was already zone-agnostic. `HOSTILE_LOCATIONS_META` counts updated
+(54 worlds, 54 stars, 4 bases). Verified via 4 new domain tests (358
+total): FOM pack shape, no name collisions against the NEZ pack, a
+FOM-only import, and a merged-pack import matching what the real fetch
+produces. Capella Extraction Zone / New Concessions Zone / Extraction
+Zones 6 & 9 remain queued next on the same checklist.
+
 **2026-07-08 HOSTILE Canon Locations fourth follow-up**: the Zone >
 Star > World > Base hierarchy is now real relationships, not just tags/
 fields — a new `contains` relationship type plus the existing
@@ -856,10 +879,20 @@ estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
     above (not re-detailed here to avoid a third copy); the two
     substantial pieces have their own ADRs (`docs/adr/0013-trade-economy-
     types.md`, `docs/adr/0014-mechanics-index-pdfjs.md`).
-  - **Remaining, not yet started (each blocked on external input, not
-    effort):** Shipyard companion link (needs the tool's actual URL);
-    a sync adapter / shared campaign database (needs a decision on what
-    backend to sync to).
+  - **Remaining, not yet started:** Shipyard companion link — **scoped**
+    (`docs/adr/0029-shipyard-deckplan-builder.md`) after reading the real
+    GitLab source: a gridless Battlemap map plus a Gallery-style tagged
+    part library (fixing the reference tool's own "scroll and hover, no
+    filter" limitation) and one new capability, icon rotation/flip — not
+    a new drawer, still not built. Sync adapter / shared campaign
+    database — the backend choice is answered
+    (Supabase, 2026-07-08), but see `docs/adr/0028-multiuser-access-and-
+    cloud-sync.md`: it arrived bundled with a full multi-user/auth/
+    membership-tier product ask, a genuine architectural fork from this
+    app's local-first design, recorded as long-horizon and **not
+    started** per the user's own explicit choice, pending a dedicated
+    architecture-decision pass (source of truth, conflict resolution,
+    dependency posture, tier gating — see the ADR).
   - **Phase 11 backlog added 2026-07-06** (`DESIGN-NEW-FUNCTIONALITY.md`'s
     new Phase 11 section, from `docs/adr/next-request.md`'s "Add to
     roadmap" ask): Gallery (per-entity thumbnails + a tagged image
@@ -902,4 +935,6 @@ estimates for every item below live in `DESIGN-NEW-FUNCTIONALITY.md`'s
   installability was audited clean. **Still open**: no in-session undo
   beyond the one-slot backup; toasts are single-slot and can clobber each
   other during multi-file upload; icon-only buttons still rely on hover
-  tooltips that don't fire on touch.
+  tooltips that don't fire on touch; a direct 2026-07-08 ask ("more
+  compact access to forms and tabs" on mobile) is unscoped — needs
+  specifics on which screens feel cramped before it's actionable.
