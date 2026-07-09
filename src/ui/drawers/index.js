@@ -2187,6 +2187,16 @@ function battlemap(doc, ui = {}) {
     </div>`;
   }).join('');
 
+  // Pan/zoom camera (UX batch, ephemeral — same reset-on-open convention
+  // as Graph's own zoom): the world layer (background+grid+icons) sits
+  // inside a fixed-size, overflow:hidden viewport at its own 1:1 size,
+  // and gets transform: translate(x,y) scale(scale) applied — icons keep
+  // their existing 0-1-fraction-of-this-box positioning unchanged, they
+  // pan/zoom for free since they share the transformed parent. shell.js's
+  // wheel/drag handlers write this transform directly to the live DOM
+  // during interaction (updateBattlemapWorldTransform); this inline style
+  // is only the value on a fresh render.
+  const cam = ui.battlemapCamera || { scale: 1, x: 0, y: 0 };
   return `${head}
     <div class="battlemap-toolbar">
       <input class="battlemap-name-input" data-battlemap-rename="${esc(active.id)}" value="${esc(active.name)}" placeholder="Map name">
@@ -2198,12 +2208,18 @@ function battlemap(doc, ui = {}) {
       </select>` : ''}
       <label class="chip sm"><input type="checkbox" data-battlemap-grid-toggle="${esc(active.id)}" ${active.gridEnabled ? 'checked' : ''}> Grid</label>
       ${active.gridEnabled ? `<input type="number" class="battlemap-grid-size-input" min="10" max="200" value="${active.gridSize}" data-battlemap-grid-size="${esc(active.id)}" title="Grid cell size (px)">` : ''}
+      <span class="battlemap-camera-controls">
+        <button type="button" class="icon-btn" data-battlemap-camera-zoom="out" title="Zoom out">－</button>
+        <button type="button" class="icon-btn" data-battlemap-camera-zoom="in" title="Zoom in">＋</button>
+        <button type="button" class="icon-btn" data-battlemap-camera-reset title="Reset view">⟲</button>
+      </span>
     </div>
     <div class="battlemap-palette">${palette}</div>
-    <div class="battlemap-canvas ${ui.battlemapPlacingIcon ? 'placing' : ''}" data-battlemap-canvas="${esc(active.id)}" data-drop-battlemap="${esc(active.id)}"
-      style="${bg ? `background-image:url('${esc(bg.dataUrl)}');` : ''}${active.gridEnabled ? `--battlemap-grid-size:${active.gridSize}px;` : ''}">
-      ${!bg ? '<p class="ws-placeholder battlemap-placeholder">No background set — upload or pick an image above.</p>' : ''}
-      ${active.gridEnabled ? '<div class="battlemap-grid-overlay"></div>' : ''}
-      ${markers}
+    <div class="battlemap-viewport ${ui.battlemapPlacingIcon ? 'placing' : ''}" data-battlemap-canvas="${esc(active.id)}" data-drop-battlemap="${esc(active.id)}">
+      <div class="battlemap-world" style="transform:translate(${cam.x}px,${cam.y}px) scale(${cam.scale});${bg ? `background-image:url('${esc(bg.dataUrl)}');` : ''}${active.gridEnabled ? `--battlemap-grid-size:${active.gridSize}px;` : ''}">
+        ${!bg ? '<p class="ws-placeholder battlemap-placeholder">No background set — upload or pick an image above.</p>' : ''}
+        ${active.gridEnabled ? '<div class="battlemap-grid-overlay"></div>' : ''}
+        ${markers}
+      </div>
     </div>`;
 }

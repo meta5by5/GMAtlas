@@ -2,7 +2,28 @@
 
 ## Status
 
-**Implemented** (2026-07-08). A later pass on 2026-07-08 (recorded in
+**Implemented** (2026-07-08).
+
+**2026-07-09 addendum — pan/zoom camera.** On direct request ("Battlemap
+background should be resizeable or allow zoom and repositioning camera
+for an unlimited background to move around and place tokens"), the
+canvas rendering model changed from a single `.battlemap-canvas` div
+(background-image + icons in one box, always showing the whole image at
+`background-size: cover`) into a fixed-size `.battlemap-viewport`
+(`overflow: hidden`) containing a `.battlemap-world` layer that receives
+`transform: translate(x,y) scale(scale)`. Icons keep their existing 0-1
+fraction positioning unchanged — it's just relative to the world layer
+now, so panning/zooming moves them for free via the shared parent
+transform. Camera state is ephemeral (resets on map switch), matching
+Graph's own `graphView` zoom/pan in spirit — wheel-zoom anchored to the
+cursor, drag-to-pan, +/-/reset buttons — sharing this app's single
+delegated `wheel`/`mousedown`/`mousemove`/`mouseup` listeners (branching
+on `.battlemap-viewport` alongside Graph's own `.graph-svg` checks, not
+new listeners, per rule 4). The two coordinate-math call sites that turn
+a click/drop into an icon's stored fraction now route through one shared
+`screenToWorldFraction()` (`shell.js`) that inverts the current camera
+transform first. No schema change — `domain/battlemaps.js`'s icon
+`x`/`y` semantics and `clampFraction` guard are untouched. A later pass on 2026-07-08 (recorded in
 `docs/adr/next-request.md`'s "Processed 2026-07-08" note and reflected in
 an earlier revision of this Status section) claimed the drawer's render
 function, its click/drag handlers, and the canvas/grid/icon-marker CSS

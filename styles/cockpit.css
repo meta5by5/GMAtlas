@@ -664,20 +664,35 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .battlemap-name-input { width: auto; flex: 1 1 12rem; min-width: 8rem; }
 .battlemap-toolbar select, .battlemap-grid-size-input { width: auto; }
 .battlemap-palette { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: var(--sp-2); }
-/* The canvas: a background image scaled to fill the drawer's width at its
-   own aspect ratio (padding-top trick — no fixed height, since a GM's
-   background image could be any shape), a relative-positioned box so
-   every placed icon's 0-1 x/y fraction maps directly to a CSS percentage
-   left/top. .placing shows a crosshair cursor while an icon is armed from
-   the palette (openInlinePrompt-adjacent battlemapPlacingIcon, shell.js). */
-.battlemap-canvas {
+/* The viewport: a fixed-aspect box (padding-top trick — no fixed height,
+   since a GM's background image could be any shape), overflow:hidden so
+   panning/zooming the world layer inside it never spills outside the
+   drawer. .placing shows a crosshair cursor while an icon is armed from
+   the palette (openInlinePrompt-adjacent battlemapPlacingIcon, shell.js).
+   Pan/zoom camera (UX batch): the world layer below is the SAME size as
+   this viewport at rest (scale 1, no translate) — an icon's 0-1 x/y
+   fraction is always relative to the world layer, so it pans/zooms for
+   free as the world layer's own transform changes, no per-icon math. */
+.battlemap-viewport {
   position: relative; width: 100%; padding-top: 60%; overflow: hidden;
-  background-color: var(--bg-inset); background-size: cover; background-position: center;
+  background-color: var(--bg-inset);
   border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
-.battlemap-canvas.placing { cursor: crosshair; }
-.battlemap-canvas.drop-hover { outline: 2px solid var(--accent); outline-offset: -2px; }
-.battlemap-canvas .battlemap-placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; margin: 0; }
+.battlemap-viewport.placing { cursor: crosshair; }
+.battlemap-viewport.drop-hover { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* transform-origin: 0 0 is load-bearing — shell.js's screenToWorldFraction/
+   zoomBattlemapCamera math assumes translate/scale apply relative to the
+   viewport's own top-left corner (matching getBoundingClientRect()'s
+   .left/.top), not CSS's default center origin. cursor:grab hints the
+   drag-to-pan gesture (mousedown+move, shell.js) even though nothing here
+   is natively draggable. */
+.battlemap-world {
+  position: absolute; inset: 0; transform-origin: 0 0; cursor: grab;
+  background-size: cover; background-position: center;
+}
+.battlemap-world:active { cursor: grabbing; }
+.battlemap-world .battlemap-placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; margin: 0; }
+.battlemap-camera-controls { display: inline-flex; gap: 2px; margin-left: auto; }
 /* A CSS-only grid (no SVG/canvas drawing) — --battlemap-grid-size is set
    inline per map (shell.js) so gridSize stays real campaign data, not a
    hardcoded constant; sized in background-size so it scales with the cell

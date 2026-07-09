@@ -178,6 +178,12 @@ let galleryTagListOpen = false; // ephemeral — collapses the Gallery drawer's 
 // icon onto the canvas is a separate path (native HTML5 DnD, below) that
 // never touches this flag at all.
 let battlemapPlacingIcon = null;
+// Pan/zoom camera (UX batch) — ephemeral, mirrors graphView's own shape/
+// reset-on-open convention exactly (no schema change; a GM re-orients in
+// one scroll/drag). scale is a multiplier, x/y are CSS pixels the world
+// layer is translated by (see updateBattlemapWorldTransform below).
+let battlemapCamera = { scale: 1, x: 0, y: 0 };
+let battlemapPan = null; // { world, startClientX, startClientY, startX, startY } while a drag-pan is in progress
 // @-mention autocomplete (Journal input, Guide editor, WHO/WHERE/WHAT/WHY/HOW
 // context fields) — { field, start, end, items, activeIndex } while typing an
 // "@partial" run; start/end are the field.value indices of that run
@@ -698,14 +704,25 @@ function onClick(ev) {
   if (bmCanvas && battlemapPlacingIcon) {
     const mapId = bmCanvas.dataset.battlemapCanvas;
     const rect = bmCanvas.getBoundingClientRect();
-    const x = rect.width ? (ev.clientX - rect.left) / rect.width : 0.5;
-    const y = rect.height ? (ev.clientY - rect.top) / rect.height : 0.5;
+    const { x, y } = screenToWorldFraction(rect, battlemapCamera, ev.clientX, ev.clientY);
     const key = battlemapPlacingIcon;
     battlemapPlacingIcon = null;
     return store.update((d) => addBattlemapIcon(d, mapId, { kind: 'annotation', iconKey: key, x, y }));
   }
   const bmSelect = hit('[data-battlemap-select]');
-  if (bmSelect) return store.update((d) => setActiveBattlemap(d, bmSelect.dataset.battlemapSelect));
+  if (bmSelect) { battlemapCamera = { scale: 1, x: 0, y: 0 }; return store.update((d) => setActiveBattlemap(d, bmSelect.dataset.battlemapSelect)); }
+  const bmCameraReset = hit('[data-battlemap-camera-reset]');
+  if (bmCameraReset) { battlemapCamera = { scale: 1, x: 0, y: 0 }; updateBattlemapWorldTransform(); return; }
+  const bmCameraZoom = hit('[data-battlemap-camera-zoom]');
+  if (bmCameraZoom) {
+    const world = root.querySelector('.battlemap-world');
+    const viewport = world && world.closest('.battlemap-viewport');
+    if (viewport) {
+      const rect = viewport.getBoundingClientRect();
+      zoomBattlemapCamera(rect.width / 2, rect.height / 2, bmCameraZoom.dataset.battlemapCameraZoom === 'in' ? 1.3 : 1 / 1.3);
+    }
+    return;
+  }
   const bmAdd = hit('[data-battlemap-add]');
   if (bmAdd) {
     openInlinePrompt('battlemap-add', { label: 'Map name', placeholder: 'e.g. Docking Bay 3', anchorRect: bmAdd.getBoundingClientRect() });
@@ -2232,18 +2249,29 @@ function updateGraphViewBox() {
 
 function onWheel(ev) {
   const svg = ev.target.closest('.graph-svg');
-  if (!svg) return;
-  ev.preventDefault();
-  const rect = svg.getBoundingClientRect();
-  if (!rect.width || !rect.height) return;
-  const fx = (ev.clientX - rect.left) / rect.width, fy = (ev.clientY - rect.top) / rect.height;
-  const curW = GRAPH_W / graphView.scale, curH = GRAPH_H / graphView.scale;
-  const wx = graphView.x + fx * curW, wy = graphView.y + fy * curH; // user-space point under the cursor
-  const scale = Math.min(6, Math.max(0.5, graphView.scale * (ev.deltaY < 0 ? 1.15 : 1 / 1.15)));
-  const newW = GRAPH_W / scale, newH = GRAPH_H / scale;
-  // Keep that same point under the cursor after the scale change.
-  graphView = { scale, x: wx - fx * newW, y: wy - fy * newH };
-  updateGraphViewBox();
+  if (svg) {
+    ev.preventDefault();
+    const rect = svg.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const fx = (ev.clientX - rect.left) / rect.width, fy = (ev.clientY - rect.top) / rect.height;
+    const curW = GRAPH_W / graphView.scale, curH = GRAPH_H / graphView.scale;
+    const wx = graphView.x + fx * curW, wy = graphView.y + fy * curH; // user-space point under the cursor
+    const scale = Math.min(6, Math.max(0.5, graphView.scale * (ev.deltaY < 0 ? 1.15 : 1 / 1.15)));
+    const newW = GRAPH_W / scale, newH = GRAPH_H / scale;
+    // Keep that same point under the cursor after the scale change.
+    graphView = { scale, x: wx - fx * newW, y: wy - fy * newH };
+    updateGraphViewBox();
+    return;
+  }
+  // Battlemap pan/zoom camera (UX batch) — same delegated 'wheel' listener,
+  // just a second ancestor check (one listener per event type, rule 4).
+  const viewport = ev.target.closest('.battlemap-viewport');
+  if (viewport) {
+    ev.preventDefault();
+    const rect = viewport.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    zoomBattlemapCamera(ev.clientX - rect.left, ev.clientY - rect.top, ev.deltaY < 0 ? 1.15 : 1 / 1.15);
+  }
 }
 
 function onMouseDown(ev) {
@@ -2295,8 +2323,21 @@ function onMouseDown(ev) {
   }
 
   const svg = ev.target.closest('.graph-svg');
-  if (!svg || ev.target.closest('[data-graph-node]')) return; // don't hijack a node click into a pan
-  graphPan = { svg, startClientX: ev.clientX, startClientY: ev.clientY, startX: graphView.x, startY: graphView.y };
+  if (svg) {
+    if (ev.target.closest('[data-graph-node]')) return; // don't hijack a node click into a pan
+    graphPan = { svg, startClientX: ev.clientX, startClientY: ev.clientY, startX: graphView.x, startY: graphView.y };
+    return;
+  }
+  // Battlemap drag-to-pan — don't hijack a drag that's repositioning an
+  // existing icon/token (those are native HTML5 draggable, started via
+  // dragstart, but mousedown still fires first; excluding them here keeps
+  // this purely a background-drag-to-pan gesture) or a click meant to
+  // place an armed palette icon (battlemapPlacingIcon, handled in
+  // onClick — panning while an icon is armed would make it hard to aim).
+  const viewport = ev.target.closest('.battlemap-viewport');
+  if (viewport && !battlemapPlacingIcon && !ev.target.closest('[data-drag-battlemap-icon]')) {
+    battlemapPan = { startClientX: ev.clientX, startClientY: ev.clientY, startX: battlemapCamera.x, startY: battlemapCamera.y };
+  }
 }
 
 // --- Rich-text toolbar helpers (ADR 0018) ----------------------------------
@@ -2435,6 +2476,14 @@ function insertTableSkeleton(field) {
 }
 
 function onGraphMouseMove(ev) {
+  if (battlemapPan) {
+    // translate() is specified in real screen px (see the camera comment
+    // above completeBattlemapDrop), so a client-pixel delta maps directly
+    // — no rect/scale conversion needed, unlike Graph's SVG-viewBox math.
+    battlemapCamera = { ...battlemapCamera, x: battlemapPan.startX + (ev.clientX - battlemapPan.startClientX), y: battlemapPan.startY + (ev.clientY - battlemapPan.startClientY) };
+    updateBattlemapWorldTransform();
+    return;
+  }
   if (!graphPan) return;
   const rect = graphPan.svg.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
@@ -2445,7 +2494,7 @@ function onGraphMouseMove(ev) {
   updateGraphViewBox();
 }
 
-function onGraphMouseUp() { graphPan = null; }
+function onGraphMouseUp() { graphPan = null; battlemapPan = null; }
 
 // ---- drag-and-drop: entity → entity (relate) or entity → text (mention) --
 // Native HTML5 DnD, delegated at the root like everything else. A custom
@@ -2549,8 +2598,7 @@ function onDrop(ev) {
 function completeBattlemapDrop(target, { entityId, battlemapIconRef }, clientX, clientY) {
   const mapId = target.dataset.dropBattlemap;
   const rect = target.getBoundingClientRect();
-  const x = rect.width ? (clientX - rect.left) / rect.width : 0.5;
-  const y = rect.height ? (clientY - rect.top) / rect.height : 0.5;
+  const { x, y } = screenToWorldFraction(rect, battlemapCamera, clientX, clientY);
   if (battlemapIconRef) {
     const [srcMapId, iconId] = battlemapIconRef.split('::');
     if (srcMapId !== mapId) return; // an icon only ever moves within its own map
@@ -2562,6 +2610,52 @@ function completeBattlemapDrop(target, { entityId, battlemapIconRef }, clientX, 
     toast(`${(ent && ent.name) || 'Token'} placed on the map`);
   }
 }
+
+// --- Battlemap pan/zoom camera (UX batch) ----------------------------------
+// The world layer (background + grid + icons, drawers/index.js's
+// battlemap()) sits inside a fixed-size, overflow:hidden viewport and is
+// unscaled/untranslated at rest — its own box is exactly the viewport's
+// size, so an icon's stored 0-1 fraction is a fraction of THAT box either
+// way. transform: translate(x,y) scale(scale) (in that order, so
+// translate is specified in real screen px, unaffected by scale — a
+// mouse-drag delta maps 1:1 to camera.x/y regardless of current zoom).
+
+/** Converts a click/drop's viewport-relative clientX/Y into the world
+ *  layer's 0-1 fraction, inverting the current camera transform — the
+ *  single conversion point both click-to-place and completeBattlemapDrop
+ *  route through, so panning/zooming never desyncs where an icon actually
+ *  lands from where the cursor was. domain/battlemaps.js's own
+ *  clampFraction still clamps the result on write, same as before this
+ *  feature existed. */
+function screenToWorldFraction(rect, camera, clientX, clientY) {
+  if (!rect.width || !rect.height) return { x: 0.5, y: 0.5 };
+  const sx = clientX - rect.left, sy = clientY - rect.top;
+  const wx = (sx - camera.x) / camera.scale, wy = (sy - camera.y) / camera.scale;
+  return { x: wx / rect.width, y: wy / rect.height };
+}
+
+/** Writes the current camera straight to the live .battlemap-world
+ *  element's transform, bypassing store/render — same perf shape as
+ *  Graph's updateGraphViewBox(), needed for smooth wheel/drag feedback. */
+function updateBattlemapWorldTransform() {
+  const world = root.querySelector('.battlemap-world');
+  if (!world) return;
+  world.style.transform = `translate(${battlemapCamera.x}px, ${battlemapCamera.y}px) scale(${battlemapCamera.scale})`;
+}
+
+/** Rescales the camera so the world point currently under (screenX,
+ *  screenY) — viewport-relative px — stays under it after the zoom,
+ *  clamped to [0.5, 6] like Graph's own zoom range. Shared by the wheel
+ *  handler and the +/- buttons (button clicks center on the viewport's
+ *  own middle instead of a cursor position). */
+function zoomBattlemapCamera(screenX, screenY, factor) {
+  const wx = (screenX - battlemapCamera.x) / battlemapCamera.scale;
+  const wy = (screenY - battlemapCamera.y) / battlemapCamera.scale;
+  const scale = Math.min(6, Math.max(0.5, battlemapCamera.scale * factor));
+  battlemapCamera = { scale, x: screenX - wx * scale, y: screenY - wy * scale };
+  updateBattlemapWorldTransform();
+}
+
 
 /** The Guide-tree reparent mutator both the mouse (onDrop) and touch
  *  (onTouchEnd) paths call — moveGuideDoc itself already no-ops on a
@@ -3415,7 +3509,7 @@ function buildDrawerUi() {
     tradeLocationId, tradeContractAddOpen,
     journalEditOpen, whereLocationTagFilter, whoTagFilter, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
-    battlemapPlacingIcon,
+    battlemapPlacingIcon, battlemapCamera,
   };
 }
 
