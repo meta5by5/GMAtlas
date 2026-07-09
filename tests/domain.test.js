@@ -2893,6 +2893,20 @@ test('providerLabel resolves a known id and falls back to the id itself for an u
   assert.equal(providerLabel('nonexistent'), 'nonexistent');
 });
 
+// --- Sourcebook Inventory (Settings' "what third-party content is actually
+// used" view) — every curated entry must key against a real, currently-
+// scanned Reference Library PDF, or it's silently dead data nobody notices.
+import { SOURCEBOOK_INVENTORY } from '../src/data/sourcebookInventory.js';
+import { DOCS_MANIFEST } from '../src/data/docsManifest.js';
+
+test('every SOURCEBOOK_INVENTORY entry keys a real DOCS_MANIFEST file, and every entry has a status', () => {
+  const manifestFiles = new Set(DOCS_MANIFEST.map((d) => d.file));
+  for (const s of SOURCEBOOK_INVENTORY) {
+    assert.ok(manifestFiles.has(s.file), `"${s.file}" is not a real file in the current Reference Library scan`);
+    assert.ok(s.status && s.status.length, `"${s.file}" has no status blurb`);
+  }
+});
+
 // --- Universal Search (Phase 8, pack 23) ------------------------------------
 import { universalSearch } from '../src/domain/search.js';
 

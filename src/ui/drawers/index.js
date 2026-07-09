@@ -34,6 +34,7 @@ import { RULESETS, findRuleset, STARFORGED_PROGRESS_DIFFICULTIES, findProgressDi
 import { GEAR_TEMPLATE_SYSTEMS, findGearTemplate } from '../../data/gearTemplates.js';
 import { GEAR_CATALOG, findCatalogItem } from '../../data/gearCatalog.js';
 import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel } from '../../data/rulesConstitution.js';
+import { SOURCEBOOK_INVENTORY } from '../../data/sourcebookInventory.js';
 import { listGalleryImages, listGalleryTagVocabulary, getGalleryImage } from '../../domain/gallery.js';
 import { listBattlemaps, getActiveBattlemap } from '../../domain/battlemaps.js';
 import { BATTLEMAP_ICONS, findBattlemapIcon } from '../../data/battlemapIcons.js';
@@ -1225,7 +1226,8 @@ function settings(doc, ui = {}) {
         })()}
       </div>
       ${statblockTemplateEditor(doc)}
-      ${rulesConstitutionSection(ui)}`,
+      ${rulesConstitutionSection(ui)}
+      ${sourcebookInventorySection(ui)}`,
     'trade-economy': () => `
       ${tradeEconomyModelSection(doc, ui)}
       ${hostileCanonLocationsSection(doc)}`,
@@ -1284,6 +1286,28 @@ function rulesConstitutionSection(ui) {
         </table>
       </div>
       <ul class="rules-provider-legend">${legend}</ul>
+    </div>`;
+}
+
+// Sourcebook Inventory: "what third-party content is available for use in
+// the Core" — a curated per-PDF status (data/sourcebookInventory.js) joined
+// against DOCS_MANIFEST (the auto-generated Reference Library scan) for its
+// real title/link, same read-only `<ul class="rules-provider-legend">`
+// shape as Rules Constitution/Trade Economy Model above. A manifest entry
+// with no curated status yet (e.g. a PDF just dropped into assets/docs/
+// and not rebuilt-and-reviewed) still shows, flagged "not yet reviewed" —
+// nothing silently disappears just because this list wasn't updated for it.
+function sourcebookInventorySection(ui) {
+  const byFile = Object.fromEntries(SOURCEBOOK_INVENTORY.map((s) => [s.file, s]));
+  const rows = DOCS_MANIFEST.map((d) => {
+    const s = byFile[d.file] || { status: 'not yet reviewed' };
+    return `<li><b>${esc(d.title)}</b> — <span class="dim small">${esc(s.status)}.</span>${s.note ? ` ${esc(s.note)}` : ''}</li>`;
+  }).join('');
+  return `
+    <div class="settings-group">
+      ${sectionHeadRow('h3', 'Sourcebook Inventory', 'settings-sourcebook-inventory')}
+      ${helpBody('settings-sourcebook-inventory', 'Every real PDF in the Reference Library (assets/docs/), and what\'s actually been authored from it so far — a sourcebook can sit in the library a long time before becoming in-app content, or ever. Per the copyright posture behind every ruleset addition here, "integrated"/"authored" content is always an original re-implementation of well-known concepts, never a transcription of a book\'s actual text or tables.', ui)}
+      <ul class="rules-provider-legend">${rows}</ul>
     </div>`;
 }
 
