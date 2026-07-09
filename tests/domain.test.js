@@ -314,7 +314,7 @@ import { advise } from '../src/domain/copilot.js';
 import {
   addDocument, updateDocument, removeDocument, parseDocumentMentions, parseDocumentMentionRefs, linkDocumentMentions, listDocumentMentions,
   findDocumentTabByTitle, openDocumentTab, closeDocumentTab, resolveDocumentTab, resolvedDocumentMentionNames, listReferenceDocuments,
-  parseTextBlocks, parseInlineNodes, sanitizeExternalLinkUrl,
+  parseTextBlocks, parseInlineNodes, sanitizeExternalLinkUrl, sanitizeColorValue,
 } from '../src/domain/documents.js';
 import { titleFromFilename } from '../src/domain/titleCase.js';
 
@@ -434,6 +434,42 @@ test('parseInlineNodes: a link label can itself carry bold/italic formatting', (
 test('parseInlineNodes: a [label](url) whose url is unsafe renders as literal bracket text, not a link', () => {
   const nodes = parseInlineNodes('[click me](javascript:alert(1))');
   assert.equal(nodes.some((n) => n.type === 'link'), false);
+});
+
+// --- color markup (rich-text toolbar color picker) -------------------------
+test('sanitizeColorValue: accepts 3/6/8-digit hex, lowercases it', () => {
+  assert.equal(sanitizeColorValue('#FFF'), '#fff');
+  assert.equal(sanitizeColorValue('#FF6B6B'), '#ff6b6b');
+  assert.equal(sanitizeColorValue('#ff6b6bcc'), '#ff6b6bcc');
+});
+
+test('sanitizeColorValue: rejects anything that is not exactly a hex color (no CSS injection surface)', () => {
+  assert.equal(sanitizeColorValue('red'), null);
+  assert.equal(sanitizeColorValue('#ff6b6b; background:url(x)'), null);
+  assert.equal(sanitizeColorValue('rgb(255,0,0)'), null);
+  assert.equal(sanitizeColorValue(''), null);
+  assert.equal(sanitizeColorValue('#gg0000'), null);
+});
+
+test('parseInlineNodes: [label](color:#hex) becomes a color node with a sanitized (lowercased) color', () => {
+  const nodes = parseInlineNodes('This is [important](color:#FF0000) text');
+  assert.deepEqual(nodes, [
+    { type: 'text', text: 'This is ' },
+    { type: 'color', color: '#ff0000', children: [{ type: 'text', text: 'important' }] },
+    { type: 'text', text: ' text' },
+  ]);
+});
+
+test('parseInlineNodes: a color label can itself carry bold/italic formatting', () => {
+  const nodes = parseInlineNodes('[**urgent**](color:#ff0000)');
+  assert.deepEqual(nodes, [
+    { type: 'color', color: '#ff0000', children: [{ type: 'bold', children: [{ type: 'text', text: 'urgent' }] }] },
+  ]);
+});
+
+test('parseInlineNodes: a [label](color:...) whose value is not a valid hex renders as literal bracket text, not a color node', () => {
+  const nodes = parseInlineNodes('[click me](color:red)');
+  assert.equal(nodes.some((n) => n.type === 'color'), false);
 });
 
 test('parseTextBlocks: recognizes a pipe table (header + --- separator + rows)', () => {

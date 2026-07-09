@@ -191,6 +191,14 @@ let battlemapPan = null; // { world, startClientX, startClientY, startX, startY 
 // campaign data itself (domain/contentPack.js's exportContentPack takes
 // this exact shape as its second argument).
 let contentPackFlags = { entities: false, guide: false, journal: false };
+// Rich-text toolbar color button: the field/Range captured at mousedown,
+// consulted once the native <input type="color"> the button triggers
+// fires its own 'change' — by then the field's live Selection has moved
+// to the color input itself, so this is what onChange restores before
+// reusing wrapSelectionWithMarkup. null except mid-gesture (mousedown ->
+// native picker open -> change), same lifecycle openInlinePrompt's own
+// captured-range metadata has for the Link button.
+let pendingColorInsert = null;
 // @-mention autocomplete (Journal input, Guide editor, WHO/WHERE/WHAT/WHY/HOW
 // context fields) — { field, start, end, items, activeIndex } while typing an
 // "@partial" run; start/end are the field.value indices of that run
@@ -1981,6 +1989,20 @@ function onChange(ev) {
     return;
   }
 
+  if (t.closest('[data-rich-color-input]')) {
+    if (!pendingColorInsert) return;
+    const { field, range } = pendingColorInsert;
+    pendingColorInsert = null;
+    field.focus();
+    if (range) {
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    wrapSelectionWithMarkup(field, '[', `](color:${t.value})`);
+    return;
+  }
+
   const packFlag = t.closest('[data-content-pack-flag]');
   if (packFlag) {
     contentPackFlags = { ...contentPackFlags, [packFlag.dataset.contentPackFlag]: t.checked };
@@ -2361,6 +2383,16 @@ function onMouseDown(ev) {
         ],
         meta: { field, range }, anchorRect: richCmd.getBoundingClientRect(),
       });
+    } else if (cmd === 'color') {
+      // Capture the range NOW, same reasoning as Link above — by the time
+      // the native color picker closes and fires 'change' on the hidden
+      // <input type="color">, focus (and therefore window.getSelection())
+      // has moved to that input, not this field.
+      const sel = window.getSelection();
+      const range = (sel && sel.rangeCount && field.contains(sel.anchorNode)) ? sel.getRangeAt(0).cloneRange() : null;
+      pendingColorInsert = { field, range };
+      const swatch = richCmd.closest('.rich-toolbar')?.querySelector('[data-rich-color-input]');
+      if (swatch) swatch.click();
     }
     return;
   }

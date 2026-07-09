@@ -488,9 +488,13 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 /* Lightweight rich-text toolbar (ADR 0018) — one small row of buttons above
    a .mention-editor that insert plain markup characters (see shell.js's
    data-rich-cmd mousedown handler), not live execCommand formatting. */
-.rich-toolbar { display: flex; flex-wrap: wrap; gap: 0.15rem; margin-bottom: 0.25rem; }
+.rich-toolbar { display: flex; flex-wrap: wrap; gap: 0.15rem; margin-bottom: 0.25rem; position: relative; }
 .rich-toolbar .icon-btn { border: 1px solid var(--border); border-radius: var(--radius-sm); min-width: 1.6rem; text-align: center; }
 .rich-toolbar .icon-btn:hover { color: var(--text); border-color: var(--accent); }
+/* Visually hidden but still a real, clickable input (display:none blocks
+   the native color picker from opening in most engines) — triggered via
+   .click() from the 🎨 button, never shown/clicked directly itself. */
+.rich-color-swatch { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; opacity: 0; pointer-events: none; }
 
 /* An inline mention — a real hyperlink-like span living in the text, not a
    badge below it. mention-link-active means it resolved to a real entity

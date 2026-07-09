@@ -535,25 +535,41 @@ export function sanitizeExternalLinkUrl(raw) {
   return parsed.href;
 }
 
+/** Validates a GM-entered (or hand-typed, since this is plain-text markup —
+ *  see parseInlineNodes' `[label](color:...)` shape below) color value for
+ *  the rich-text toolbar's color-picker button. Deliberately hex-only (3/6/
+ *  8-digit `#...`) — the exact format a native `<input type="color">`
+ *  always produces, so the write path (the toolbar) never needs sanitizing,
+ *  and narrow enough on the read path that nothing resembling a CSS
+ *  injection (a semicolon, a `url(...)`, a second declaration) can ever
+ *  reach a rendered `style` attribute. Returns null (renders as literal
+ *  bracket text, never a broken/unsafe span) for anything else. */
+export function sanitizeColorValue(raw) {
+  const input = String(raw || '').trim();
+  return /^#[0-9a-f]{3}$|^#[0-9a-f]{6}$|^#[0-9a-f]{8}$/i.test(input) ? input.toLowerCase() : null;
+}
+
 /** Parse @mentions plus `**bold**`/`*italic*`/`_underline_`/`~small~`/
- *  `^large^`/`[label](url)` inline markup in
+ *  `^large^`/`[label](url)`/`[label](color:#hex)` inline markup in
  *  `text` into a small node tree: {type:'text', text} | {type:'mention',
  *  name, page, label} | {type:'bold'|'italic'|'underline', children} |
- *  {type:'link', url, children}. Mentions are atomic leaves — never split
- *  by a formatting boundary — but bold/italic/underline/link content is
- *  parsed recursively, so e.g. a mention can sit inside bold text, or bold
- *  text inside a link label. A delimiter never matches across a line
- *  break, matching common Markdown-lite convention (an unclosed `**` at
- *  the end of a paragraph just renders as a literal `**`, not a bold run
- *  swallowing everything after it) — `[label](url)` follows the same rule
- *  for both its bracket pairs. A `[...](...)` whose url doesn't survive
- *  sanitizeExternalLinkUrl renders as literal bracket text, never a link —
- *  this is the one delimiter type that can fail to match for a reason
- *  other than an unclosed pair. Used by ui/mentionEditor.js only — the
- *  mention-only scan (`scanMentions`/`parseDocumentMentionRefs` and
- *  everything built on them: linkDocumentMentions,
- *  resolvedDocumentMentionNames, ...) is untouched, since those only ever
- *  care about the @mention shape. */
+ *  {type:'link', url, children} | {type:'color', color, children}.
+ *  Mentions are atomic leaves — never split by a formatting boundary — but
+ *  bold/italic/underline/link/color content is parsed recursively, so e.g.
+ *  a mention can sit inside bold text, or bold text inside a link label. A
+ *  delimiter never matches across a line break, matching common
+ *  Markdown-lite convention (an unclosed `**` at the end of a paragraph
+ *  just renders as a literal `**`, not a bold run swallowing everything
+ *  after it) — `[label](url)`/`[label](color:...)` follow the same rule
+ *  for both bracket pairs. A `[...](...)` whose parenthetical is neither a
+ *  valid `color:` value (sanitizeColorValue) nor a url that survives
+ *  sanitizeExternalLinkUrl renders as literal bracket text, never a link
+ *  or a broken span — this is the one delimiter type that can fail to
+ *  match for a reason other than an unclosed pair. Used by
+ *  ui/mentionEditor.js only — the mention-only scan (`scanMentions`/
+ *  `parseDocumentMentionRefs` and everything built on them:
+ *  linkDocumentMentions, resolvedDocumentMentionNames, ...) is untouched,
+ *  since those only ever care about the @mention shape. */
 export function parseInlineNodes(text) {
   const source = String(text || '');
   const mentions = scanMentions(source);
@@ -575,24 +591,35 @@ export function parseInlineNodes(text) {
         continue;
       }
 
-      // [label](url) external link — checked before the symmetric-marker
-      // delimiters below since it's a two-part, asymmetric shape they can't
-      // express. A stray '[' that isn't part of a well-formed pair (no ']',
-      // no '(' immediately after, no closing ')', a line break inside
-      // either part, or a url that fails sanitizeExternalLinkUrl) just
-      // falls through to i++ and renders as a literal character, same as
-      // any other unmatched marker.
+      // [label](url) external link, or [label](color:#hex) — checked before
+      // the symmetric-marker delimiters below since it's a two-part,
+      // asymmetric shape they can't express. A stray '[' that isn't part of
+      // a well-formed pair (no ']', no '(' immediately after, no closing
+      // ')', a line break inside either part, an invalid color, or a url
+      // that fails sanitizeExternalLinkUrl) just falls through to i++ and
+      // renders as a literal character, same as any other unmatched marker.
       if (source[i] === '[') {
         const closeBracket = source.indexOf(']', i + 1);
         if (closeBracket !== -1 && closeBracket < end && !source.slice(i + 1, closeBracket).includes('\n') && source[closeBracket + 1] === '(') {
           const closeParen = source.indexOf(')', closeBracket + 2);
           if (closeParen !== -1 && closeParen < end && !source.slice(closeBracket + 2, closeParen).includes('\n')) {
-            const url = sanitizeExternalLinkUrl(source.slice(closeBracket + 2, closeParen));
-            if (url) {
-              flush(i);
-              nodes.push({ type: 'link', url, children: parseRange(i + 1, closeBracket) });
-              i = closeParen + 1; textStart = i;
-              continue;
+            const inner = source.slice(closeBracket + 2, closeParen);
+            if (inner.startsWith('color:')) {
+              const color = sanitizeColorValue(inner.slice('color:'.length));
+              if (color) {
+                flush(i);
+                nodes.push({ type: 'color', color, children: parseRange(i + 1, closeBracket) });
+                i = closeParen + 1; textStart = i;
+                continue;
+              }
+            } else {
+              const url = sanitizeExternalLinkUrl(inner);
+              if (url) {
+                flush(i);
+                nodes.push({ type: 'link', url, children: parseRange(i + 1, closeBracket) });
+                i = closeParen + 1; textStart = i;
+                continue;
+              }
             }
           }
         }

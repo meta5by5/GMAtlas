@@ -80,6 +80,13 @@ function renderInlineNodes(doc, nodes) {
     // never left off, since this is the one place this app renders a
     // user-authored href.
     else if (node.type === 'link') html += `<a class="ext-link" data-ext-link="${escAttr(node.url)}" href="${escAttr(node.url)}" target="_blank" rel="noopener noreferrer" title="Opens in a new tab: ${escAttr(node.url)}">${renderInlineNodes(doc, node.children)}</a>`;
+    // node.color already passed sanitizeColorValue (documents.js's
+    // parseInlineNodes only ever produces a 'color' node for a value that
+    // did — hex-only) — data-color, not the style attribute, is what
+    // serializeMentionEditor reads back below, since a browser's CSSOM
+    // commonly normalizes an inline `style="color:#hex"` to rgb(...) form
+    // once parsed into real DOM, which would silently mangle a round-trip.
+    else if (node.type === 'color') html += `<span class="rt-color" data-color="${escAttr(node.color)}" style="color:${escAttr(node.color)}">${renderInlineNodes(doc, node.children)}</span>`;
   }
   return html;
 }
@@ -148,6 +155,12 @@ export function serializeMentionEditor(container) {
       out += `](${node.getAttribute('href') || ''})`;
       return;
     }
+    if (node.classList && node.classList.contains('rt-color')) {
+      out += '[';
+      for (const c of node.childNodes) walk(c);
+      out += `](color:${node.dataset.color || ''})`;
+      return;
+    }
     if (node.tagName === 'UL' || node.tagName === 'OL') {
       const marker = node.tagName === 'UL' ? '- ' : '1. ';
       const items = [...node.children].filter((c) => c.tagName === 'LI');
@@ -197,6 +210,12 @@ function serializeTableCell(node) {
       out += '[';
       for (const c of n.childNodes) walk(c);
       out += `](${n.getAttribute('href') || ''})`;
+      return;
+    }
+    if (n.classList && n.classList.contains('rt-color')) {
+      out += '[';
+      for (const c of n.childNodes) walk(c);
+      out += `](color:${n.dataset.color || ''})`;
       return;
     }
     for (const c of n.childNodes) walk(c);
@@ -258,6 +277,8 @@ export function richToolbarHTML(key = '', collapsed = false) {
     <button type="button" class="icon-btn" data-rich-cmd="large" title="Large text (^text^)"><b>A</b></button>
     <button type="button" class="icon-btn" data-rich-cmd="table" title="Insert a table — add more rows/columns by typing more | cells |">▦</button>
     <button type="button" class="icon-btn" data-rich-cmd="link" title="Insert an external link ([label](url)) — opens in a new tab; any ?query string is stripped">🔗</button>
+    <button type="button" class="icon-btn" data-rich-cmd="color" title="Text color ([label](color:#hex))">🎨</button>
+    <input type="color" class="rich-color-swatch" data-rich-color-input tabindex="-1" aria-hidden="true">
   </div>`;
 }
 
