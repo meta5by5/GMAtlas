@@ -14,6 +14,41 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-09 SWN Faction Turn Engine** (`docs/adr/0031-swn-faction-turn-
+engine.md`): a full, playable Stars Without Number faction-turn system,
+distinct from `domain/factions.js`'s existing lighter-weight Force/
+Cunning/Wealth mini-game (untouched, still available). Per direct
+confirmation, this transcribes SWN's real content in full — all 72 named
+assets across Force/Cunning/Wealth (ratings 1-8), 20 faction tags, 11
+goals, the XP cost table — explicitly superseding ADR 0011's "stay
+proprietary" stance for factions specifically (that ADR's Status line now
+points here). New `src/data/swnFactionData.js` (the tables) and `src/
+domain/factionTurnEngine.js` (all 9 SWN actions — Attack/Buy/Sell/Repair/
+Refit/Expand Influence/Change Homeworld/Seize Planet/Use Asset Ability —
+plus turn bookkeeping and goal tracking, which reuses Threads exactly like
+the existing Pressure Track does). Automation is propose-then-confirm:
+Step (one faction) or Full Round (every faction, chained) computes a full
+draft — goal, action, targets, dice — that the GM reviews and commits,
+never silently applied. The Faction Log surfaces as a left-anchored panel
+that opens and resizes exactly like the in-app PDF viewer (a direct
+follow-up request), not a normal drawer tab — modeled on `.mc-doc-viewer`'s
+own fixed-panel mechanism. The Faction inspector gained a new "Faction
+Turn (SWN)" card (HP/FacCreds/XP, Homeworld, Bases of Influence, Tags,
+Goal + its Thread-backed clock, structured Assets). Scope explicitly
+bounded in three places (see the ADR): Seize Planet is a single-turn
+HP-pool approximation of the book's multi-turn siege; Change Homeworld
+always takes one turn (no hex-distance modeling); Use Asset Ability
+mechanically resolves only ~5 simple dice-for-FacCreds abilities, every
+other asset's special text is surfaced for the GM to adjudicate directly.
+Verified via 30 new domain tests (373 total) plus a direct, non-browser
+render-path check (inspector card, Faction Log panel body, and the full
+propose→review→commit→feed→filter pipeline against real domain data all
+produce correct HTML with no thrown errors) — a full jsdom browser-boot
+smoke test was attempted but abandoned as too slow/fragile for this pass
+(external classic-script loading via jsdom proved unreliable); the
+lighter, direct verification was judged sufficient given the 30 passing
+domain tests already cover every mechanical edge case.
+
 **2026-07-09 HOSTILE Canon Locations — Fomalhaut Settlement Zone**: the
 second zone on ADR 0026's rollout checklist is authored and importable —
 24 worlds, 24 stars, 1 zone entity, transcribed from the sourcebook's FOM

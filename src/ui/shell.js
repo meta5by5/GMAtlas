@@ -46,6 +46,10 @@ import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTrack
 import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow } from '../domain/colony.js';
 import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract, updateContract } from '../domain/trade.js';
 import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors, resolveFactionTurn, formatFactionTurnResult, rollFactionAsset } from '../domain/factions.js';
+import {
+  ensureFactionGoalTrack, buyAsset, sellAsset, repairAssetOrFaction, useAssetAbility, expandInfluence,
+  proposeFactionStep, advanceFactionTurnRound, commitFactionTurn,
+} from '../domain/factionTurnEngine.js';
 import { importHostileLocations } from '../domain/hostileLocations.js';
 import { fetchHostileLocationsPack } from './hostileLocationsFetch.js';
 import { exportContentPack, importContentPack } from '../domain/contentPack.js';
@@ -61,6 +65,7 @@ import { universalSearch } from '../domain/search.js';
 import { renderWorkspace } from './workspace/index.js';
 import { renderCopilot } from './copilotPanel.js';
 import { renderDrawer, formatBytes, helpToggle } from './drawers/index.js';
+import { renderFactionLog } from './drawers/factionLog.js';
 import { renderSearchPanel } from './searchPanel.js';
 import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
 
@@ -279,6 +284,18 @@ let tradeContractAddOpen = false; // ephemeral — the inline "+ Contract" creat
 // Independent of openDrawers — an anchored drawer is deliberately NOT also
 // a tab (see anchorDrawerTab/unanchorDrawerTab below).
 let anchoredDrawer = null;
+// Faction Log panel (docs/adr/0031) — NOT part of the drawer tab stack
+// above, exactly like the doc viewer below isn't either: its own
+// ephemeral visibility flag, toggled by the header's "⚔ Factions" button
+// and the panel's own ✕. `factionLogDrafts` holds the current batch of
+// proposed-but-not-yet-committed turn drafts (Step mode: a 1-item array;
+// Full Round: one per eligible faction, chained — see
+// domain/factionTurnEngine.js's module doc comment for why a round's
+// drafts commit as an all-or-nothing batch). `factionLogFilterId` narrows
+// the committed-events feed to one faction ('' = show every faction).
+let factionLogOpen = false;
+let factionLogDrafts = null;
+let factionLogFilterId = '';
 // The doc-viewer iframe reload guard (below) can't compare against the live
 // DOM `frame.src` readback — browsers always return that as a normalized
 // ABSOLUTE URL, while resolvedActive.src is a relative path for Reference
@@ -304,6 +321,7 @@ export function mountShell(el) {
           <button class="btn ghost sm" data-search-toggle title="Search everything (Cast, Journal, Oracle, Documents, Party, Colony) — Ctrl/Cmd+K">🔍 Search</button>
           <span class="campaign-title" title="Campaign name"></span>
           <div class="header-drawer-tabs" data-header-drawer-tabs></div>
+          <button class="btn ghost sm" data-faction-log-toggle title="Faction Log — SWN faction turns">⚔ Factions</button>
           <div class="settings-menu-wrap">
             <button class="btn ghost sm" data-settings-menu-toggle title="Menu" aria-label="Menu">⚙</button>
             <div class="settings-menu" data-settings-menu hidden>
@@ -330,6 +348,13 @@ export function mountShell(el) {
         <div class="doc-viewer-tabs" data-doc-viewer-tabs></div>
         <div class="doc-viewer-empty" data-doc-viewer-empty hidden></div>
         <iframe data-doc-viewer-frame title="Document viewer"></iframe>
+      </div>
+      <div class="mc-faction-log" data-faction-log hidden aria-label="Faction Log">
+        <div class="faction-log-head">
+          <h2>⚔ Faction Log</h2>
+          <button class="icon-btn" data-faction-log-close aria-label="Close">✕</button>
+        </div>
+        <div class="faction-log-body" data-faction-log-body></div>
       </div>
       <div class="mc-search-overlay" data-search-overlay hidden aria-label="Universal Search">
         <div class="search-panel">
@@ -1222,6 +1247,72 @@ function onClick(ev) {
     return toast(line || 'Faction turn resolved');
   }
 
+  // --- SWN Faction Turn Engine (docs/adr/0031): direct, immediate
+  // single-click actions on the Faction inspector's "Faction Turn" card —
+  // distinct from the Faction Log panel's propose-then-confirm batch flow
+  // below, the same way the existing 🎲 Roll Faction Asset button above is
+  // an immediate action rather than something reviewed first. ---
+  const factionTagRemove = hit('[data-faction-tag-remove]');
+  if (factionTagRemove) {
+    const [factionId, tagId] = factionTagRemove.dataset.factionTagRemove.split('::');
+    store.update((d) => {
+      const f = getEntity(d, factionId);
+      if (!f) return d;
+      return updateEntity(d, factionId, { factionTags: (f.factionTags || []).filter((t) => t !== tagId) });
+    });
+    return;
+  }
+  const factionRepair = hit('[data-faction-fa-repair]');
+  if (factionRepair) {
+    const [factionId, factionAssetId] = factionRepair.dataset.factionFaRepair.split('::');
+    let msg = '';
+    store.update((d) => { const r = repairAssetOrFaction(d, { factionId, factionAssetId, increments: 1 }); msg = r.event.narrative; return r.campaign; });
+    return toast(msg);
+  }
+  const factionAbility = hit('[data-faction-fa-ability]');
+  if (factionAbility) {
+    const [factionId, factionAssetId] = factionAbility.dataset.factionFaAbility.split('::');
+    let msg = '';
+    store.update((d) => { const r = useAssetAbility(d, { factionId, factionAssetId }); msg = r.event.narrative; return r.campaign; });
+    return toast(msg);
+  }
+  const factionSell = hit('[data-faction-fa-sell]');
+  if (factionSell) {
+    const [factionId, factionAssetId] = factionSell.dataset.factionFaSell.split('::');
+    let msg = '';
+    store.update((d) => { const r = sellAsset(d, { factionId, factionAssetId }); msg = r.event.narrative; return r.campaign; });
+    return toast(msg);
+  }
+
+  // --- Faction Log panel (docs/adr/0031) — open/close + the propose-then-
+  // confirm turn controls. Drafts are held in ephemeral `factionLogDrafts`
+  // (never persisted) until "Commit All"/"Commit" applies them for real. ---
+  if (hit('[data-faction-log-toggle]')) { factionLogOpen = !factionLogOpen; return render(); }
+  if (hit('[data-faction-log-close]')) { factionLogOpen = false; return render(); }
+  const factionLogFilter = hit('[data-faction-log-filter-clear]');
+  if (factionLogFilter) { factionLogFilterId = ''; return renderFactionLogBody(); }
+  if (hit('[data-faction-log-step-go]')) {
+    const select = root.querySelector('[data-faction-log-step-select]');
+    const factionId = select && select.value;
+    if (!factionId) return toast('Pick a faction to step first');
+    const draft = proposeFactionStep(store.get(), factionId);
+    factionLogDrafts = draft ? [draft] : [];
+    return renderFactionLogBody();
+  }
+  if (hit('[data-faction-log-full-round]')) {
+    factionLogDrafts = advanceFactionTurnRound(store.get());
+    return renderFactionLogBody();
+  }
+  if (hit('[data-faction-log-discard]')) { factionLogDrafts = null; return renderFactionLogBody(); }
+  if (hit('[data-faction-log-commit]')) {
+    if (factionLogDrafts && factionLogDrafts.length) {
+      const last = factionLogDrafts[factionLogDrafts.length - 1];
+      store.update(() => commitFactionTurn(last));
+    }
+    factionLogDrafts = null;
+    return; // store.update() already re-renders the whole shell, including the panel body
+  }
+
   // --- NPC deepening (SWN-inspired stereotype/want/complication, 2026-07-06) ---
   const deepen = hit('[data-deepen-npc]');
   if (deepen) {
@@ -1847,7 +1938,10 @@ function onChange(ev) {
     // and `tradeCodes` are dropdown-add + chip-remove instead of plain
     // fields (data-entity-base-add/-remove, data-entity-tradecode-add/
     // -remove below), so neither reaches this generic path anymore.
-    const value = t.type === 'checkbox' ? t.checked : t.value;
+    // SWN Faction Turn Engine (docs/adr/0031): hp/facCreds/xp are the
+    // first plain-number-backed fields — coerced via Number() same as the
+    // checkbox branch, so the engine's arithmetic never receives a string.
+    const value = t.type === 'checkbox' ? t.checked : t.type === 'number' ? (Number(t.value) || 0) : t.value;
     return store.update((d) => updateEntity(d, active, { [field]: value }));
   }
 
@@ -1882,6 +1976,54 @@ function onChange(ev) {
     const [factionId, stat] = factionStat.dataset.factionStat.split('::');
     return store.update((d) => setFactionStat(d, factionId, stat, t.value));
   }
+
+  // --- SWN Faction Turn Engine (docs/adr/0031): dropdown-add controls on
+  // the Faction inspector's "Faction Turn" card, mirroring the existing
+  // data-entity-base-add/data-entity-tradecode-add pattern exactly. ---
+  const factionTagAdd = t.closest('[data-faction-tag-add]');
+  if (factionTagAdd) {
+    const factionId = factionTagAdd.dataset.factionTagAdd;
+    const tagId = t.value;
+    t.value = '';
+    if (!tagId) return;
+    return store.update((d) => {
+      const f = getEntity(d, factionId);
+      if (!f || (f.factionTags || []).length >= 2 || (f.factionTags || []).includes(tagId)) return d;
+      return updateEntity(d, factionId, { factionTags: [...(f.factionTags || []), tagId] });
+    });
+  }
+  const factionGoalSelect = t.closest('[data-faction-goal-select]');
+  if (factionGoalSelect) {
+    const factionId = factionGoalSelect.dataset.factionGoalSelect;
+    const goalId = t.value;
+    return store.update((d) => {
+      let next = updateEntity(d, factionId, { currentGoalId: goalId });
+      if (goalId) next = ensureFactionGoalTrack(next, factionId, goalId);
+      return next;
+    });
+  }
+  const factionBaseAdd = t.closest('[data-faction-base-add]');
+  if (factionBaseAdd) {
+    const factionId = factionBaseAdd.dataset.factionBaseAdd;
+    const locationId = t.value;
+    t.value = '';
+    if (!locationId) return;
+    let msg = '';
+    store.update((d) => { const f = getEntity(d, factionId); const r = expandInfluence(d, { factionId, locationId, hp: Math.min(4, (f && f.facCreds) || 1) }); msg = r.event.narrative; return r.campaign; });
+    return toast(msg);
+  }
+  const factionBuyAssetAdd = t.closest('[data-faction-buyasset-add]');
+  if (factionBuyAssetAdd) {
+    const factionId = factionBuyAssetAdd.dataset.factionBuyassetAdd;
+    const [statType, catalogId] = (t.value || '').split('::');
+    t.value = '';
+    if (!statType || !catalogId) return;
+    let msg = '';
+    store.update((d) => { const f = getEntity(d, factionId); const r = buyAsset(d, { factionId, statType, catalogId, locationId: f && f.homeworldId }); msg = r.event.narrative; return r.campaign; });
+    return toast(msg);
+  }
+  const factionLogFilterChange = t.closest('[data-faction-log-filter]');
+  if (factionLogFilterChange) { factionLogFilterId = t.value; return renderFactionLogBody(); }
 
   const oev = t.closest('[data-oracle-entry-value]');
   if (oev) {
@@ -3397,8 +3539,29 @@ function render() {
     }
   }
 
+  const factionLogEl = root.querySelector('[data-faction-log]');
+  factionLogEl.hidden = !factionLogOpen;
+  // Same overlap mechanic as the doc viewer's --viewer-overlap above,
+  // shrinking the panel to stay clear of whatever drawer is open beside
+  // it — see cockpit.css's .mc-faction-log doc comment.
+  factionLogEl.style.setProperty('--factionlog-overlap', `${sidePanelInsetPx(doc)}px`);
+  if (factionLogOpen) renderFactionLogBody();
+
   renderSearchOverlay();
   renderDiceRollOverlay();
+}
+
+// Faction Log panel body — a targeted update (not the whole render()) so
+// picking a faction to Step, or Commit/Discard-ing a proposed batch,
+// doesn't need a full store.update() round-trip when nothing in the
+// campaign has actually changed yet (ephemeral factionLogDrafts aren't
+// persisted campaign state). Called from render() when the panel is open,
+// and directly by the draft-related click handlers above.
+function renderFactionLogBody() {
+  const body = root && root.querySelector('[data-faction-log-body]');
+  if (!body) return;
+  const doc = store.get();
+  body.innerHTML = renderFactionLog(doc, { factionLogDrafts, factionLogFilterId });
 }
 
 // Lives outside the drawer/workspace update paths above since it's a

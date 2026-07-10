@@ -7,6 +7,7 @@
 import { overlookedThreads } from './threads.js';
 import { listFlaggedRelationships } from './entities.js';
 import { factionsUnderPressure } from './factions.js';
+import { factionsWithGoalNearCompletion } from './factionTurnEngine.js';
 import { expeditionsInDanger } from './expeditions.js';
 
 export function advise(doc) {
@@ -43,6 +44,13 @@ export function advise(doc) {
   // only, same as every other signal here — never auto-generates anything.
   const hotFaction = factionsUnderPressure(doc)[0];
 
+  // SWN Faction Turn Engine (docs/adr/0031): a faction's current Goal is
+  // also a `kind`-tagged Thread (kind:'faction-goal'), so it's excluded
+  // from the generic `threads` filter above the same way the Pressure
+  // Track already is — this is its own dedicated "about to pay off"
+  // signal, mirroring hotFaction's exact shape and priority slot.
+  const hotFactionGoal = factionsWithGoalNearCompletion(doc)[0];
+
   // Expedition trackers (docs/adr/0009-situation-engine-revisited.md,
   // Decision item 1): a GM-set danger threshold (Supplies <=2 or Exposure
   // >=8) on any expedition-tagged Thread, surfaced the same "one signal,
@@ -54,6 +62,7 @@ export function advise(doc) {
   let observation;
   if (hot && hot.filled / hot.segments >= 0.75) observation = `“${hot.name}” is ${hot.filled}/${hot.segments} — one more push resolves it. Consider paying it off now.`;
   else if (hotFaction) observation = `“${hotFaction.faction.name}” is close to acting on its agenda — a mission tied to them would land naturally now.`;
+  else if (hotFactionGoal) observation = `“${hotFactionGoal.faction.name}” is close to completing its faction goal — expect them to act on it soon, and to bank XP when it lands.`;
   else if (hotExpedition) observation = `“${hotExpedition.name}” is running low on supplies or dangerously exposed — force a supply-vs-route dilemma next.`;
   else if (threat >= 7) observation = 'Threat is high — the situation is exposed, watched, or already tipping over.';
   else if (stress >= 7) observation = 'Stress is high — a scene without combat should follow, or someone breaks.';

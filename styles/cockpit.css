@@ -1089,6 +1089,29 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .mc-doc-viewer iframe { flex: 1; border: none; width: 100%; background: #fff; }
 .mc-doc-viewer iframe[hidden] { display: none; }
 
+/* Faction Log panel (docs/adr/0031-swn-faction-turn-engine.md) — a
+   left-anchored panel that opens and resizes exactly like the doc viewer
+   above (position:fixed, left:0, right shrinks to stay clear of whatever
+   drawer is open), per direct request. `--factionlog-overlap` is set from
+   the same sidePanelInsetPx(doc) helper the doc viewer's --viewer-overlap
+   already uses (shell.js), so both panels react identically to a drawer
+   opening/closing/collapsing beside them. Higher z-index than the doc
+   viewer since opening it is a deliberate GM action, not something that
+   should be hidden behind an already-open viewer. */
+.mc-faction-log {
+  position: fixed; top: var(--header-h); left: 0;
+  right: calc(var(--edge-w) + var(--factionlog-overlap, 0px)); bottom: 0;
+  background: var(--bg); border-left: 1px solid var(--border-strong);
+  display: flex; flex-direction: column; z-index: 16;
+}
+.mc-faction-log[hidden] { display: none; }
+.faction-log-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--sp-3) var(--sp-4); background: var(--tier1-bg); border-bottom: 1px solid var(--tier1-border);
+}
+.faction-log-head h2 { margin: 0; font-size: 1rem; }
+.faction-log-body { flex: 1; overflow: auto; padding: var(--sp-4); }
+
 /* Universal Search (Phase 8, pack 23) — a top-anchored overlay above
    everything else (drawer included) so a result stays reachable regardless
    of what's currently open; the panel itself is the only thing that

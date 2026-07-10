@@ -11,6 +11,7 @@ import {
   toggleStatblockFieldTrack, setStatblockTrackValue, toggleStatblockFieldAttribute, setStatblockAttributeValue,
 } from './statblocks.js';
 import { economyTypesForModel } from '../data/economyTypes.js';
+import { SWN_XP_TABLE } from '../data/swnFactionData.js';
 
 // `item` (ADR 0012): gear/weapons/armor as first-class entities — tags,
 // @mentions, relationships (`owns` now has a concrete use: "NPC X owns Item
@@ -153,6 +154,50 @@ function ensureFactionFields(e) {
   if (e.fear === undefined) e.fear = '';
   if (e.need === undefined) e.need = '';
   if (e.secret === undefined) e.secret = '';
+  ensureFactionTurnFields(e);
+}
+
+// SWN Faction Turn Engine fields (docs/adr/0031-swn-faction-turn-engine.md)
+// — a second, deeper layer on top of the existing force/cunning/wealth/
+// assets mini-game above (kept, unchanged): real HP/FacCreds/XP, a
+// homeworld + Bases of Influence (real Location entity references, same
+// dropdown-of-existing-entities pattern the HOSTILE World Profile's
+// #star/#base fields already established), structured purchasable assets
+// (`factionAssets`, deliberately a NEW field — the existing free-text
+// `assets` list and its 🎲 roll button are untouched, zero collision),
+// SWN Faction Tags, and a current Goal. All blank/zero/empty by default,
+// same lazy-set-on-touch shape as every other field group here. `hp`'s
+// companion max is never stored — see computeFactionMaxHp below, always
+// derived from force/cunning/wealth via SWN_XP_TABLE so it can never drift
+// out of sync with the three base stats.
+function ensureFactionTurnFields(e) {
+  if (e.type !== 'faction') return;
+  if (e.hp === undefined) e.hp = computeFactionMaxHp(e);
+  if (e.facCreds === undefined) e.facCreds = 0;
+  if (e.xp === undefined) e.xp = 0;
+  if (e.homeworldId === undefined) e.homeworldId = '';
+  if (!Array.isArray(e.basesOfInfluence)) e.basesOfInfluence = [];
+  if (!Array.isArray(e.factionAssets)) e.factionAssets = [];
+  if (!Array.isArray(e.factionTags)) e.factionTags = [];
+  if (!Array.isArray(e.governedLocationIds)) e.governedLocationIds = [];
+  if (e.currentGoalId === undefined) e.currentGoalId = '';
+  if (e.seizeProgress === undefined) e.seizeProgress = null;
+  if (e.busyUntilTurn === undefined) e.busyUntilTurn = null;
+}
+
+/** A faction's maximum HP, always derived from its three base stats —
+ *  never stored, so it can't drift out of sync with force/cunning/wealth.
+ *  SWN: "4 plus the experience point cost of the highest attributes in
+ *  Force, Cunning, and Wealth" — the XP-cost table's own values equal its
+ *  HP-value column, so this sums hpValue(force)+hpValue(cunning)+
+ *  hpValue(wealth), each falling back to rating 1's value (1) for 0. */
+export function computeFactionMaxHp(e) {
+  const hpFor = (stat) => {
+    const rating = Math.max(1, Math.min(8, Math.round(Number(e && e[stat]) || 0)));
+    const row = SWN_XP_TABLE[rating];
+    return row ? row.hpValue : 1;
+  };
+  return 4 + hpFor('force') + hpFor('cunning') + hpFor('wealth');
 }
 
 // Location card fields (docs/adr/0025-location-biome-trade.md): both are
@@ -210,6 +255,12 @@ export function setFactionStat(campaign, id, stat, value) {
   const e = getEntity(next, id);
   if (!e || e.type !== 'faction' || !['force', 'cunning', 'wealth'].includes(stat)) return next;
   e[stat] = clampFactionStat(value);
+  // A lowered stat can drop the derived max HP (computeFactionMaxHp) below
+  // current hp — clamp down to match, same "never above max" invariant
+  // every other track in this app holds. Never raises hp; that's Repair
+  // Asset/Faction's job (domain/factionTurnEngine.js), not a side effect
+  // of a stat edit.
+  if (typeof e.hp === 'number') e.hp = Math.min(e.hp, computeFactionMaxHp(e));
   return next;
 }
 

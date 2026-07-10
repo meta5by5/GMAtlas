@@ -60,6 +60,18 @@ export function defaultCampaign(now = new Date().toISOString()) {
     timeline: [],        // breadcrumbs: campaign > act > scene > beat
     threads: [],         // progress clocks (NEW): [{id,name,filled,segments,done}]
 
+    // SWN Faction Turn Engine (docs/adr/0031-swn-faction-turn-engine.md):
+    // a campaign-wide, reverse-chronological feed of every committed
+    // faction-turn action (attacks, purchases, goal progress, ...), each
+    // entry referencing the faction(s) involved by id — the Faction Log
+    // panel reads this unfiltered, a Faction's own inspector card filters
+    // it to just that faction's events. `factionTurnNumber` increments
+    // once per full round (domain/factionTurnEngine.js's startTurnRound).
+    // Additive/lazy-init like battlemaps/gallery above — no migrate.js
+    // step needed for an old campaign missing these keys.
+    factionLog: [],
+    factionTurnNumber: 0,
+
     director: {},        // unified Story Director cascade state
     oracles: { overrides: {}, usage: {} },
     documents: { library: [], openTabs: [], activeTab: null, refOverrides: {} },

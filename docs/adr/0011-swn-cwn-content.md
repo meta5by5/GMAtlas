@@ -5,6 +5,18 @@
 Accepted. Extends `docs/adr/0010-traveller-swn-content.md` (which added SWN's
 first oracle group) rather than superseding it.
 
+**Superseded in part by `docs/adr/0031-swn-faction-turn-engine.md`
+(2026-07-09)**: this ADR's "original re-implementation, nothing transcribes
+SWN's actual Asset lists/faction action names" copyright stance, specifically
+for **factions only**, no longer holds — a direct, explicit request to build
+"all the decision options" from the real book overrode it for that one
+subsystem. The Force/Cunning/Wealth-plus-Assets-list *shape* this ADR
+introduced is unchanged and still lives in `domain/factions.js`'s own
+lighter-weight mini-game; ADR 0031 adds a second, deeper, SWN-transcribed
+engine alongside it, not a replacement. Every OTHER piece of this ADR
+(NPC deepening, creature/site/adventure-seed generation, CWN cybernetics)
+is untouched and still holds to the original-reimplementation posture below.
+
 ## Context
 
 The user asked to revise the SWN content "to incorporate game concepts from

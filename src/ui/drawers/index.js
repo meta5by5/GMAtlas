@@ -11,7 +11,7 @@ import { ORACLE_TABLE_SOURCES } from '../../data/oracleGroups.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import {
   listEntities, filterEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, listTagVocabulary, listEntityTagVocabulary,
-  RELATIONSHIP_TYPES, RELATIONSHIP_TYPE_LABEL, isRelationshipFlagged,
+  RELATIONSHIP_TYPES, RELATIONSHIP_TYPE_LABEL, isRelationshipFlagged, computeFactionMaxHp,
 } from '../../domain/entities.js';
 import { parseStatsString, sortStatblockGroups, getStatblockTemplates } from '../../domain/statblocks.js';
 import { listTemplates } from '../../domain/statblockTemplates.js';
@@ -24,6 +24,8 @@ import { getMarket, priceAt, listCargoManifest, listContracts } from '../../doma
 import { COMMODITIES, findCommodity } from '../../data/commodities.js';
 import { THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { getPressureTrack } from '../../domain/factions.js';
+import { getFactionGoalTrack } from '../../domain/factionTurnEngine.js';
+import { SWN_FACTION_ASSETS, SWN_FACTION_TAGS, SWN_FACTION_GOALS, findSwnAssetAnyStat, findSwnTag, findSwnGoal } from '../../data/swnFactionData.js';
 import { getEnhancements, strainUsed, strainCapacity, isOverStrained } from '../../domain/enhancements.js';
 import { getMechanicsIndex } from '../../domain/mechanicsIndex.js';
 import { ENHANCEMENT_TYPES } from '../../data/enhancementTypes.js';
@@ -360,6 +362,105 @@ function factionSection(doc, e, ui) {
       ${diplomacyFieldsHtml(e)}
       ${factionStatsHtml(e)}
       ${factionPressureHtml(e, track)}
+    </div>
+    ${factionTurnSectionHtml(doc, e)}`;
+}
+
+// SWN Faction Turn Engine (docs/adr/0031-swn-faction-turn-engine.md) — a
+// second, deeper card below the existing stats/pressure-track card above
+// (kept, untouched): real HP/FacCreds/XP, Homeworld + Bases of Influence
+// (real Location references, same dropdown-of-existing-entities pattern
+// worldDemographicsSection's Bases field already established), the
+// structured Assets list (transcribed catalog, NOT the free-text `assets`
+// chip list above — zero collision), SWN Faction Tags, and the current
+// Goal + its Thread-backed progress clock (getFactionGoalTrack, mirroring
+// getPressureTrack exactly). Attack isn't offered as a direct button here
+// — it inherently needs picking a rival faction/asset pair, which the
+// Faction Log panel's turn-review flow already does as part of proposing
+// a full turn; every other action (buy/sell/repair/refit/expand/use
+// ability) is a quick, immediate, single-click GM action here instead.
+function factionTurnSectionHtml(doc, e) {
+  if (e.type !== 'faction') return '';
+  const maxHp = computeFactionMaxHp(e);
+  const locations = listEntities(doc, 'location');
+  const goalTrack = e.currentGoalId ? getFactionGoalTrack(doc, e.id) : null;
+  const tagChips = (e.factionTags || []).map((id) => {
+    const tag = findSwnTag(id);
+    return `<span class="chip sm" title="${esc(tag ? tag.effect : '')}">${esc(tag ? tag.name : id)} <button type="button" class="icon-btn" data-faction-tag-remove="${esc(e.id)}::${esc(id)}" title="Remove">✕</button></span>`;
+  }).join('');
+  const availableTags = SWN_FACTION_TAGS.filter((t) => !t.repeatable && !(e.factionTags || []).includes(t.id));
+  const assetOptions = [];
+  for (const statType of ['force', 'cunning', 'wealth']) {
+    for (const a of SWN_FACTION_ASSETS[statType]) {
+      if (a.rating <= (e[statType] || 0) && a.cost <= (e.facCreds || 0)) assetOptions.push({ statType, ...a });
+    }
+  }
+  const assetRows = (e.factionAssets || []).map((fa) => {
+    const catalog = findSwnAssetAnyStat(fa.catalogId) || { name: fa.catalogId, hp: fa.hp, rating: '?' };
+    const loc = locations.find((l) => l.id === fa.locationId);
+    return `<div class="thread-row">
+      <span class="thread-name">${esc(catalog.name)} <span class="dim small">(${esc(fa.statType)} ${catalog.rating}, ${fa.hp}/${catalog.hp} HP${fa.status === 'assembling' ? ', assembling' : ''}${fa.stealthed ? ', stealthed' : ''})</span> <span class="dim small">— ${esc(loc ? loc.name : 'unknown world')}</span></span>
+      <span class="thread-actions">
+        <button class="icon-btn" data-faction-fa-repair="${esc(e.id)}::${esc(fa.id)}" title="Repair">✚</button>
+        ${catalog.hasAction ? `<button class="icon-btn" data-faction-fa-ability="${esc(e.id)}::${esc(fa.id)}" title="Use Asset Ability">⚙</button>` : ''}
+        <button class="icon-btn" data-faction-fa-sell="${esc(e.id)}::${esc(fa.id)}" title="Sell">✕</button>
+      </span>
+    </div>`;
+  }).join('');
+  const goalPips = goalTrack ? Array.from({ length: goalTrack.segments }, (_, i) => `<span class="pip ${i < goalTrack.filled ? 'on' : ''}"></span>`).join('') : '';
+  return `
+    <div class="faction-card">
+      <h4>Faction Turn (SWN)</h4>
+      <div class="faction-stats-row">
+        <label class="field-label">HP <input type="number" min="0" max="${maxHp}" data-entity-field="hp" value="${Number(e.hp) || 0}"> <span class="dim small">/ ${maxHp}</span></label>
+        <label class="field-label">FacCreds <input type="number" min="0" data-entity-field="facCreds" value="${Number(e.facCreds) || 0}"></label>
+        <label class="field-label">XP <input type="number" min="0" data-entity-field="xp" value="${Number(e.xp) || 0}"></label>
+      </div>
+      <label class="field-label">${fieldLabelRow('Homeworld', 'faction', 'homeworldId')}
+        <select data-entity-field="homeworldId">
+          <option value="">— unset —</option>
+          ${locations.map((l) => `<option value="${esc(l.id)}" ${e.homeworldId === l.id ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
+        </select>
+      </label>
+      <div class="faction-assets">
+        <span class="field-label-static">Bases of Influence</span>
+        <span class="faction-asset-list">${(e.basesOfInfluence || []).map((b) => { const l = locations.find((x) => x.id === b.locationId); return `<span class="chip sm">${esc(l ? l.name : 'unknown')} (${b.hp}/${b.maxHp} HP)</span>`; }).join('') || '<span class="dim small">None yet.</span>'}</span>
+        <select data-faction-base-add="${esc(e.id)}">
+          <option value="">— expand influence to —</option>
+          ${locations.filter((l) => !(e.basesOfInfluence || []).some((b) => b.locationId === l.id)).map((l) => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="faction-assets">
+        <span class="field-label-static">Tags</span>
+        <span class="faction-asset-list">${tagChips || '<span class="dim small">None yet.</span>'}</span>
+        <select data-faction-tag-add="${esc(e.id)}">
+          <option value="">— add a tag (max 2) —</option>
+          ${availableTags.map((t) => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('')}
+        </select>
+      </div>
+      <label class="field-label">${fieldLabelRow('Goal', 'faction', 'currentGoalId')}
+        <select data-faction-goal-select="${esc(e.id)}">
+          <option value="">— none —</option>
+          ${SWN_FACTION_GOALS.map((g) => `<option value="${esc(g.id)}" ${e.currentGoalId === g.id ? 'selected' : ''} title="${esc(g.description)}">${esc(g.name)}</option>`).join('')}
+        </select>
+      </label>
+      ${goalTrack ? `<div class="thread-row thread-status-${esc(goalTrack.status)} ${goalTrack.done ? 'done' : ''}">
+        <span class="thread-name">${esc(findSwnGoal(e.currentGoalId) ? findSwnGoal(e.currentGoalId).description : '')}</span>
+        <span class="thread-clock" title="${goalTrack.filled}/${goalTrack.segments}">${goalPips}</span>
+        <span class="thread-actions">
+          <button class="icon-btn" data-thread-adv="${esc(goalTrack.id)}" title="Advance">＋</button>
+          <button class="icon-btn" data-thread-back="${esc(goalTrack.id)}" title="Set back">－</button>
+        </span>
+      </div>` : ''}
+      <div class="faction-assets">
+        <span class="field-label-static">Assets (SWN)</span>
+      </div>
+      ${assetRows || '<p class="dim small">No structured assets yet.</p>'}
+      <select data-faction-buyasset-add="${esc(e.id)}">
+        <option value="">— buy an asset —</option>
+        ${assetOptions.map((a) => `<option value="${esc(a.statType)}::${esc(a.id)}">${esc(a.name)} (${a.statType} ${a.rating}, ${a.cost} FacCred${a.cost === 1 ? '' : 's'})</option>`).join('')}
+      </select>
+      ${!e.homeworldId ? '<p class="dim small">Set a Homeworld above before buying assets.</p>' : ''}
     </div>`;
 }
 
