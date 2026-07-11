@@ -10,6 +10,105 @@ than replacing it; extends the Faction entity type introduced there,
 `domain/threads.js`'s Thread engine, and `docs/adr/0022`'s inline-prompt/
 delegated-handler conventions.
 
+**2026-07-09 follow-up (same day) — Faction Events: location-pairing,
+relationship stance, WHO/WHERE integration.** On direct follow-up request:
+a faction turn's decisions ("which factions are active in this system/
+region," "where is the activity, same or different district than the
+party," "allies vs. opponents weighted by the existing Relationships
+strength dial") belong to the WHO/WHERE tabs, not just an isolated
+per-faction log. Renamed "Faction Log" → **"Faction Events"** throughout
+(the user's own term, and a better name now that it's a real per-location
+event system) — `campaign.factionLog` → `campaign.factionEvents`,
+`ui/drawers/factionLog.js` → `factionEvents.js`, all `data-faction-log-*`
+attributes/CSS renamed to `data-faction-events-*`/`.mc-faction-events`.
+The header's "⚔ Factions" toggle button is gone — a new edge-nav slot
+(below) is the only trigger now.
+
+1. **Every event is now a Faction-Location pair.** `makeEvent()`
+   (`factionTurnEngine.js`) gained `locationId` (already in scope in every
+   action function via the acting asset's own location), `coLocatedFactions`
+   (every OTHER faction present there, each tagged `'ally'|'rival'|
+   'neutral'`), and `witnessed` (whether that location is where the party
+   currently is). All three are computed once at propose time and frozen
+   — a relationship changing later, or the party moving on, never rewrites
+   an already-committed event's framing.
+2. **Relationship-weighted ally/opponent stance.** New
+   `entities.js` `getRelationshipBetween(campaign, aId, bId)` (a real gap —
+   every relationship lookup before this was a copy-pasted inline
+   `.find()`). New `factionTurnEngine.js` `relationshipStanceBetween`:
+   an explicit `allied_with`/`rival_of` relationship type wins outright;
+   otherwise the existing 0-10 `strength` dial decides (>=7 ally, <=3
+   rival); no relationship at all is `'neutral'` (a stranger, not an
+   enemy) — simple GM-legible thresholds, matching this codebase's
+   existing style (e.g. `factionsUnderPressure`'s 0.75 cutoff) over a
+   continuous/opaque formula. `rivalAssetsAt` was generalized into
+   `factionsAtLocation` (every other faction present — active asset,
+   homeworld, or Base of Influence — each tagged with `.stance`); Attack/
+   Seize Planet auto-targeting (`autoArgs`, `candidateActions`,
+   `seizePlanet`'s own resistance tally) now **only ever pick a rival,
+   falling back to neutral if none is present, and never an ally** — two
+   allied factions sharing a world stop being auto-targeted against each
+   other. A direct, GM-driven Attack (the inspector's own button) still
+   lets a GM deliberately strike an ally if they choose — the engine
+   itself doesn't block it, only the *automatic* targeting does.
+3. **District, via the existing `contains`/`located_at` relationship
+   pair.** That pair already existed (introduced for the HOSTILE
+   gazetteer's Zone>Star>World>Base chain, `docs/adr/0026`) but nothing
+   ever walked it — new `entities.js` `getContainingLocation`/
+   `getContainedLocations` (one-hop traversal) and `isSameDistrict`
+   (same location, shared immediate parent, or one directly contains the
+   other — a single-level check, not deep ancestor recursion; a
+   documented scope cut, not an oversight, since "district" is a
+   local-scale concept and this app's only real multi-level `contains`
+   hierarchy today is HOSTILE-specific).
+4. **"Current location" for witnessed-vs-news, per direct confirmation
+   (`AskUserQuestion`): parsed from WHERE's own Focus `@mention`s**
+   (new `getCurrentWhereLocations`, reusing the existing `findMentions`),
+   not a revived structured pointer — a past redesign had deliberately
+   removed `context.where.entityIds` as "duplicative of Focus," and this
+   follows that same reasoning rather than refighting it. A witnessed
+   entry renders as directly observed; a non-witnessed one gets a "News
+   from {location}:" prefix at DISPLAY time only (`factionEvents.js`) —
+   the stored `narrative` text itself stays clean/reusable.
+5. **WHO/WHERE surfacing**, small read-only summaries + jump chips, same
+   posture as the existing `data-entity-tag-jump` pattern (no new data
+   entry): WHO gets "Factions active nearby" (factions present at/near
+   the current WHERE location(s), each a chip opening Faction Events
+   filtered to that faction); WHERE gets "Faction activity here" (the 5
+   most recent committed events there, each opening the panel filtered to
+   that location). WHAT gained no new UI — an event's `narrative` field
+   already reads as "what is happening" prose, satisfying that part of
+   the request without a fourth duplicated surface. The Faction Events
+   panel itself gained a second filter dimension (location, alongside the
+   existing faction filter) to support the WHERE jump.
+6. **Edge nav: new "Faction Events" slot between Cast and Trade.**
+   `EDGE_ORDER` gained `'faction-events'`, special-cased in the render
+   loop exactly like `'cast'`/`'copilot'` already are (not a real
+   `DRAWERS` entry — the panel isn't part of that tab-stack mechanism).
+   Its click handler does two things together: toggles the panel, and —
+   only when turning it **on** — sets the Cast type filter to Faction and
+   calls the existing `anchorDrawerTab('cast')` (the exact function
+   Cast's own edge-nav button already calls), so Cast opens anchored and
+   filtered to Faction at the same moment the Events panel opens beside
+   it, resizing correctly with no changes to `sidePanelInsetPx` (it
+   already sums main-drawer + anchor widths). Turning the panel back off
+   doesn't close Cast — independent lifecycles once both are open, same
+   as every other pair of simultaneously-opened panels in this app.
+7. Verified via 8 new domain tests (380 total): `getRelationshipBetween`,
+   `relationshipStanceBetween` (all three paths), the district helpers,
+   `factionsAtLocation`'s stance-tagging (including asset-less
+   homeworld/Base-only presence), `getCurrentWhereLocations`'s mention
+   parsing, an attack-auto-targeting test confirming an allied co-located
+   faction is never chosen across 15 seeds, and an event-shape test
+   confirming `locationId`/`coLocatedFactions`/`witnessed` all compute
+   correctly and flip when WHERE's Focus starts mentioning the location.
+   Plus a direct render-path check (the same non-browser approach used for
+   the original pass) exercising the real production code: a three-faction,
+   one-ally/one-rival scenario through `advanceFactionTurnRound` →
+   `commitFactionTurn`, confirming `witnessed` flips correctly once WHERE
+   mentions the shared world, and that WHO/WHERE/the Events panel all
+   render their new sections/chips/filters correctly against that data.
+
 ## Context
 
 Direct ask: "Design and build the interface for playing the SWN faction

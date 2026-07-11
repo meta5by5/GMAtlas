@@ -60,16 +60,21 @@ export function defaultCampaign(now = new Date().toISOString()) {
     timeline: [],        // breadcrumbs: campaign > act > scene > beat
     threads: [],         // progress clocks (NEW): [{id,name,filled,segments,done}]
 
-    // SWN Faction Turn Engine (docs/adr/0031-swn-faction-turn-engine.md):
-    // a campaign-wide, reverse-chronological feed of every committed
+    // SWN Faction Turn Engine (docs/adr/0031-swn-faction-turn-engine.md,
+    // renamed "Faction Events" in its location-pairing follow-up): a
+    // campaign-wide, reverse-chronological feed of every committed
     // faction-turn action (attacks, purchases, goal progress, ...), each
-    // entry referencing the faction(s) involved by id — the Faction Log
-    // panel reads this unfiltered, a Faction's own inspector card filters
-    // it to just that faction's events. `factionTurnNumber` increments
-    // once per full round (domain/factionTurnEngine.js's startTurnRound).
-    // Additive/lazy-init like battlemaps/gallery above — no migrate.js
-    // step needed for an old campaign missing these keys.
-    factionLog: [],
+    // entry a Faction-Location pair — `locationId` where it happened,
+    // `coLocatedFactions` (every other faction present there, tagged
+    // ally/rival/neutral), `witnessed` (whether it happened where the
+    // party currently is, per WHERE's own Focus @mentions). The Faction
+    // Events panel reads this unfiltered (or filtered by faction/
+    // location); a Faction's own inspector card filters to just that
+    // faction's events. `factionTurnNumber` increments once per full
+    // round (domain/factionTurnEngine.js's startTurnRound). Additive/
+    // lazy-init like battlemaps/gallery above — no migrate.js step needed
+    // for an old campaign missing these keys.
+    factionEvents: [],
     factionTurnNumber: 0,
 
     director: {},        // unified Story Director cascade state
@@ -140,6 +145,23 @@ export function defaultCampaign(now = new Date().toISOString()) {
       // override the GM has made this session (ui.collapsedToolbars,
       // ephemeral — see mentionEditor.js's toolbarCollapsed()).
       toolbarCollapsedByDefault: false,
+      // Rules Constitution (docs/adr/0032): the GM's chosen provider per
+      // gameplay area (data/rulesConstitution.js's GAMEPLAY_AREAS ids),
+      // e.g. { factions: 'gmatlascore' }. An unset area key falls back to
+      // that area's own first-listed provider (resolveProviderChoice) —
+      // only `factions` actually changes app behavior today
+      // (data/factionRulesProviders.js reads this same key); every other
+      // area is a recorded preference for the still-future Phase 9 Rules
+      // Lens recommender.
+      rulesProviderChoices: {},
+      // Game System Activation gate (docs/adr/0032): whether a
+      // `requiresActivation` provider (RULES_PROVIDERS.swn today — its
+      // Faction Turn Engine transcribes real SWN content) is usable. A
+      // fresh campaign starts every gated system OFF (GMAtlas Core is the
+      // effective default) since this app deploys publicly; migrate.js
+      // grandfathers this to `true` for a campaign that already has real
+      // SWN faction-turn data, so nothing already built breaks.
+      gameSystemActivations: { swn: false },
       form: {},          // legacy Story Director form fields, preserved verbatim
       ui: { activeCenterTab: 'journal', activeLeftTab: 'entityList', oracleFilter: '', entityFilter: '', docFilter: '', docTagFilter: [] },
     },

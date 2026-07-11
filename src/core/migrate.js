@@ -154,6 +154,33 @@ export function migrateDocument(doc, now = new Date().toISOString()) {
   let d = withDefaults(doc, now);
   // Future upgrades run here in order:
   // while (d.schemaVersion < SCHEMA_VERSION) { ...step...; d.schemaVersion++; }
+
+  // Game System Activation grandfather step (docs/adr/0032): a fresh
+  // campaign starts every `requiresActivation` provider OFF (see
+  // schema.js's default), since this app also deploys publicly and "owned
+  // the sourcebook, personal use" no longer holds by default. But a
+  // campaign that already has real SWN Faction Turn Engine data (built
+  // under docs/adr/0031, before this gate existed) must not suddenly read
+  // as gated — check the ORIGINAL incoming `doc` (not the defaulted `d`,
+  // which already carries the schema default) for any sign SWN was
+  // already in real use: a committed factionEvents entry, or a faction
+  // entity with real Faction Turn Engine fields set. Only fires once — a
+  // doc that already has an explicit `gameSystemActivations` value (this
+  // step already ran, or a GM has since toggled it by hand) is left alone.
+  const hasExplicitActivations = !!(doc && doc.settings && doc.settings.gameSystemActivations !== undefined);
+  if (!hasExplicitActivations) {
+    const legacySwnUsage = !!(
+      (Array.isArray(doc && doc.factionEvents) && doc.factionEvents.length) ||
+      (doc && doc.entities && Array.isArray(doc.entities.items) && doc.entities.items.some((e) => (
+        e && e.type === 'faction' && (e.hp !== undefined || e.currentGoalId || (Array.isArray(e.factionAssets) && e.factionAssets.length))
+      )))
+    );
+    if (legacySwnUsage) {
+      d.settings = d.settings || {};
+      d.settings.gameSystemActivations = { ...(d.settings.gameSystemActivations || {}), swn: true };
+    }
+  }
+
   d.schemaVersion = SCHEMA_VERSION;
   d.app = APP_NAME;
   return d;

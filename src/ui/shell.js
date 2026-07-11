@@ -48,6 +48,7 @@ import { setMarketDial, buyCommodity, sellCommodity, createContract, generateCon
 import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors, resolveFactionTurn, formatFactionTurnResult, rollFactionAsset } from '../domain/factions.js';
 import {
   ensureFactionGoalTrack, buyAsset, sellAsset, repairAssetOrFaction, useAssetAbility, expandInfluence,
+  refitAsset, changeHomeworld, seizePlanet, toggleAssetStealth, expandEventReadAloud, setEventReadAloud,
   proposeFactionStep, advanceFactionTurnRound, commitFactionTurn,
 } from '../domain/factionTurnEngine.js';
 import { importHostileLocations } from '../domain/hostileLocations.js';
@@ -65,7 +66,7 @@ import { universalSearch } from '../domain/search.js';
 import { renderWorkspace } from './workspace/index.js';
 import { renderCopilot } from './copilotPanel.js';
 import { renderDrawer, formatBytes, helpToggle } from './drawers/index.js';
-import { renderFactionLog } from './drawers/factionLog.js';
+import { renderFactionEvents } from './drawers/factionEvents.js';
 import { renderSearchPanel } from './searchPanel.js';
 import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
 
@@ -119,7 +120,7 @@ function drawerMeta(id) { return DRAWERS.find((d) => d.id === id) || DRAWER_META
 // CHANGES" QoL batch — they're still ordinary drawers otherwise (DRAWERS/
 // drawerMeta above is unchanged, still the source of truth for both groups'
 // glyph/label).
-const EDGE_ORDER = ['guide', 'oracle', 'cast', 'trade', 'documents', 'gallery', 'battlemap', 'graph', 'copilot'];
+const EDGE_ORDER = ['guide', 'oracle', 'cast', 'faction-events', 'trade', 'documents', 'gallery', 'battlemap', 'graph', 'copilot'];
 // The header's own small drawer-tab group, right-aligned in .header-actions
 // — same data-drawer-open routing as the edge nav (onClick's [data-drawer-
 // open] branch has no idea which container a button lives in), rendered by
@@ -230,7 +231,7 @@ let inlinePrompt = null;
 // .mention-editor contenteditable divs now, not <textarea> — the how.activity
 // <select> also carries data-ctx, so this scopes to .mention-editor
 // specifically rather than a bare [data-ctx] to exclude it.
-const MENTION_FIELD_SELECTOR = '[data-journal-input], [data-guide-input], .mention-editor[data-ctx], .mention-editor[data-entity-field]';
+const MENTION_FIELD_SELECTOR = '[data-journal-input], [data-guide-input], .mention-editor[data-ctx], .mention-editor[data-entity-field], .mention-editor[data-faction-event-readaloud]';
 const DROP_TARGET_SELECTOR = `[data-drop-entity], ${MENTION_FIELD_SELECTOR}`;
 // Relationship graph pan/zoom — ephemeral, reset whenever the Graph tab is
 // freshly opened (see openDrawerTab). {scale, x, y} describes the SVG
@@ -284,18 +285,26 @@ let tradeContractAddOpen = false; // ephemeral — the inline "+ Contract" creat
 // Independent of openDrawers — an anchored drawer is deliberately NOT also
 // a tab (see anchorDrawerTab/unanchorDrawerTab below).
 let anchoredDrawer = null;
-// Faction Log panel (docs/adr/0031) — NOT part of the drawer tab stack
-// above, exactly like the doc viewer below isn't either: its own
-// ephemeral visibility flag, toggled by the header's "⚔ Factions" button
-// and the panel's own ✕. `factionLogDrafts` holds the current batch of
-// proposed-but-not-yet-committed turn drafts (Step mode: a 1-item array;
-// Full Round: one per eligible faction, chained — see
+// Faction Events panel (docs/adr/0031, renamed from "Faction Log" in its
+// location-pairing follow-up) — NOT part of the drawer tab stack above,
+// exactly like the doc viewer below isn't either: its own ephemeral
+// visibility flag, toggled by the edge nav's "Faction Events" button
+// (between Cast and Trade — see EDGE_ORDER) and the panel's own ✕.
+// Opening it also anchors Cast filtered to Faction (see the click handler
+// below) — the two panels are otherwise independent once open (closing
+// one doesn't close the other). `factionEventsDrafts` holds the current
+// batch of proposed-but-not-yet-committed turn drafts (Step mode: a
+// 1-item array; Full Round: one per eligible faction, chained — see
 // domain/factionTurnEngine.js's module doc comment for why a round's
-// drafts commit as an all-or-nothing batch). `factionLogFilterId` narrows
-// the committed-events feed to one faction ('' = show every faction).
-let factionLogOpen = false;
-let factionLogDrafts = null;
-let factionLogFilterId = '';
+// drafts commit as an all-or-nothing batch). `factionEventsFactionFilterId`/
+// `factionEventsLocationFilterId` narrow the committed-events feed by
+// faction and/or location ('' = no filter on that dimension) — WHO's
+// "Factions active nearby" jumps set the former, WHERE's "Faction
+// activity here" jumps set the latter.
+let factionEventsOpen = false;
+let factionEventsDrafts = null;
+let factionEventsFactionFilterId = '';
+let factionEventsLocationFilterId = '';
 // The doc-viewer iframe reload guard (below) can't compare against the live
 // DOM `frame.src` readback — browsers always return that as a normalized
 // ABSOLUTE URL, while resolvedActive.src is a relative path for Reference
@@ -321,7 +330,6 @@ export function mountShell(el) {
           <button class="btn ghost sm" data-search-toggle title="Search everything (Cast, Journal, Oracle, Documents, Party, Colony) — Ctrl/Cmd+K">🔍 Search</button>
           <span class="campaign-title" title="Campaign name"></span>
           <div class="header-drawer-tabs" data-header-drawer-tabs></div>
-          <button class="btn ghost sm" data-faction-log-toggle title="Faction Log — SWN faction turns">⚔ Factions</button>
           <div class="settings-menu-wrap">
             <button class="btn ghost sm" data-settings-menu-toggle title="Menu" aria-label="Menu">⚙</button>
             <div class="settings-menu" data-settings-menu hidden>
@@ -349,12 +357,12 @@ export function mountShell(el) {
         <div class="doc-viewer-empty" data-doc-viewer-empty hidden></div>
         <iframe data-doc-viewer-frame title="Document viewer"></iframe>
       </div>
-      <div class="mc-faction-log" data-faction-log hidden aria-label="Faction Log">
-        <div class="faction-log-head">
-          <h2>⚔ Faction Log</h2>
-          <button class="icon-btn" data-faction-log-close aria-label="Close">✕</button>
+      <div class="mc-faction-events" data-faction-events hidden aria-label="Faction Events">
+        <div class="faction-events-head">
+          <h2>⚔ Faction Events</h2>
+          <button class="icon-btn" data-faction-events-close aria-label="Close">✕</button>
         </div>
-        <div class="faction-log-body" data-faction-log-body></div>
+        <div class="faction-events-body" data-faction-events-body></div>
       </div>
       <div class="mc-search-overlay" data-search-overlay hidden aria-label="Universal Search">
         <div class="search-panel">
@@ -516,6 +524,23 @@ function onClick(ev) {
   if (hit('[data-drawer-anchor-close]')) { anchoredDrawer = null; return render(); }
   if (hit('[data-toggle-copilot]')) { copilotOpen = !copilotOpen; return render(); }
   if (hit('[data-toggle-cast]')) return toggleCastDrawer();
+  // Faction Events edge-nav button (docs/adr/0031, between Cast and Trade
+  // — see EDGE_ORDER): toggles the panel, and — only when turning it ON —
+  // also anchors Cast filtered to Faction (the same anchorDrawerTab('cast')
+  // Cast's own edge-nav button calls, so it opens exactly the way Cast
+  // always does elsewhere). sidePanelInsetPx(doc) already sums the main
+  // drawer + anchor widths, so the panel's resize math needs no changes to
+  // correctly shrink for Cast being anchored beside it. Turning the panel
+  // back off doesn't close Cast — independent lifecycles once both are open.
+  if (hit('[data-toggle-faction-events]')) {
+    factionEventsOpen = !factionEventsOpen;
+    if (factionEventsOpen) {
+      entityTypeFilter = 'faction';
+      entityTagFilters = new Set();
+      return anchorDrawerTab('cast'); // anchorDrawerTab already calls render() itself
+    }
+    return render();
+  }
 
   // Header gear menu (Settings / About — "USER CHANGES" QoL batch,
   // replacing the old bare campaign-title-is-the-settings-button). New
@@ -1283,34 +1308,100 @@ function onClick(ev) {
     store.update((d) => { const r = sellAsset(d, { factionId, factionAssetId }); msg = r.event.narrative; return r.campaign; });
     return toast(msg);
   }
+  // --- docs/adr/0032: stealth toggle (no event/toast — a plain status
+  // flip), Change Homeworld (a Base-of-Influence chip's 🏠 button), and
+  // Press the Siege (continues an in-progress Seize Planet immediately,
+  // same posture as Repair/Sell above). ---
+  const factionStealth = hit('[data-faction-fa-stealth]');
+  if (factionStealth) {
+    const [factionId, factionAssetId] = factionStealth.dataset.factionFaStealth.split('::');
+    return store.update((d) => toggleAssetStealth(d, { factionId, factionAssetId }).campaign);
+  }
+  const factionMakeHomeworld = hit('[data-faction-base-homeworld]');
+  if (factionMakeHomeworld) {
+    const [factionId, newLocationId] = factionMakeHomeworld.dataset.factionBaseHomeworld.split('::');
+    let msg = '';
+    store.update((d) => { const r = changeHomeworld(d, { factionId, newLocationId, turnNumber: d.factionTurnNumber }); msg = r.event.narrative; return r.campaign; });
+    return toast(msg);
+  }
+  const factionSiege = hit('[data-faction-fa-siege]');
+  if (factionSiege) {
+    const factionId = factionSiege.dataset.factionFaSiege;
+    let msg = '';
+    store.update((d) => {
+      const f = getEntity(d, factionId);
+      if (!f || !f.seizeProgress) return d;
+      const r = seizePlanet(d, { factionId, locationId: f.seizeProgress.locationId, turnNumber: d.factionTurnNumber });
+      msg = r.event.narrative;
+      return r.campaign;
+    });
+    return toast(msg || 'Nothing to press.');
+  }
+  // Faction Events Roster (docs/adr/0032) — "Manage →" selects a faction
+  // into the filter (same state the WHO/WHERE jump chips already drive)
+  // to show its full live card; "← All factions" clears back to the
+  // compact list.
+  const rosterManage = hit('[data-faction-events-roster-manage]');
+  if (rosterManage) { factionEventsFactionFilterId = rosterManage.dataset.factionEventsRosterManage; return renderFactionEventsBody(); }
+  if (hit('[data-faction-events-roster-clear]')) { factionEventsFactionFilterId = ''; return renderFactionEventsBody(); }
+  // "🎭 Expand to Read-Aloud" — template-composes event.readAloud once;
+  // after that the panel renders it as an editable field instead of this
+  // button (data-faction-event-readaloud, handled by the rich-text commit
+  // path below like every other mention-editor field).
+  const expandReadAloud = hit('[data-faction-event-expand-readaloud]');
+  if (expandReadAloud) {
+    const eventId = expandReadAloud.dataset.factionEventExpandReadaloud;
+    return store.update((d) => {
+      const event = (d.factionEvents || []).find((ev) => ev.id === eventId);
+      if (!event) return d;
+      return setEventReadAloud(d, eventId, expandEventReadAloud(d, event));
+    });
+  }
 
-  // --- Faction Log panel (docs/adr/0031) — open/close + the propose-then-
-  // confirm turn controls. Drafts are held in ephemeral `factionLogDrafts`
-  // (never persisted) until "Commit All"/"Commit" applies them for real. ---
-  if (hit('[data-faction-log-toggle]')) { factionLogOpen = !factionLogOpen; return render(); }
-  if (hit('[data-faction-log-close]')) { factionLogOpen = false; return render(); }
-  const factionLogFilter = hit('[data-faction-log-filter-clear]');
-  if (factionLogFilter) { factionLogFilterId = ''; return renderFactionLogBody(); }
-  if (hit('[data-faction-log-step-go]')) {
-    const select = root.querySelector('[data-faction-log-step-select]');
+  // --- Faction Events panel (docs/adr/0031, renamed from "Faction Log"
+  // in its location-pairing follow-up) — open/close + the propose-then-
+  // confirm turn controls. Drafts are held in ephemeral
+  // `factionEventsDrafts` (never persisted) until "Commit All"/"Commit"
+  // applies them for real. The edge-nav toggle (see EDGE_ORDER) is handled
+  // separately below since it also anchors Cast filtered to Faction. ---
+  if (hit('[data-faction-events-close]')) { factionEventsOpen = false; return render(); }
+  if (hit('[data-faction-events-step-go]')) {
+    const select = root.querySelector('[data-faction-events-step-select]');
     const factionId = select && select.value;
     if (!factionId) return toast('Pick a faction to step first');
     const draft = proposeFactionStep(store.get(), factionId);
-    factionLogDrafts = draft ? [draft] : [];
-    return renderFactionLogBody();
+    factionEventsDrafts = draft ? [draft] : [];
+    return renderFactionEventsBody();
   }
-  if (hit('[data-faction-log-full-round]')) {
-    factionLogDrafts = advanceFactionTurnRound(store.get());
-    return renderFactionLogBody();
+  if (hit('[data-faction-events-full-round]')) {
+    factionEventsDrafts = advanceFactionTurnRound(store.get());
+    return renderFactionEventsBody();
   }
-  if (hit('[data-faction-log-discard]')) { factionLogDrafts = null; return renderFactionLogBody(); }
-  if (hit('[data-faction-log-commit]')) {
-    if (factionLogDrafts && factionLogDrafts.length) {
-      const last = factionLogDrafts[factionLogDrafts.length - 1];
+  if (hit('[data-faction-events-discard]')) { factionEventsDrafts = null; return renderFactionEventsBody(); }
+  if (hit('[data-faction-events-commit]')) {
+    if (factionEventsDrafts && factionEventsDrafts.length) {
+      const last = factionEventsDrafts[factionEventsDrafts.length - 1];
       store.update(() => commitFactionTurn(last));
     }
-    factionLogDrafts = null;
+    factionEventsDrafts = null;
     return; // store.update() already re-renders the whole shell, including the panel body
+  }
+  // WHO's "Factions active nearby" / WHERE's "Faction activity here" jump
+  // chips — open the panel pre-filtered, without touching Cast (unlike
+  // the edge-nav toggle below, which deliberately opens both together).
+  const factionEventsJump = hit('[data-faction-events-jump]');
+  if (factionEventsJump) {
+    factionEventsFactionFilterId = factionEventsJump.dataset.factionEventsJump;
+    factionEventsLocationFilterId = '';
+    factionEventsOpen = true;
+    return render();
+  }
+  const factionEventsLocationJump = hit('[data-faction-events-location-jump]');
+  if (factionEventsLocationJump) {
+    factionEventsLocationFilterId = factionEventsLocationJump.dataset.factionEventsLocationJump;
+    factionEventsFactionFilterId = '';
+    factionEventsOpen = true;
+    return render();
   }
 
   // --- NPC deepening (SWN-inspired stereotype/want/complication, 2026-07-06) ---
@@ -2022,8 +2113,52 @@ function onChange(ev) {
     store.update((d) => { const f = getEntity(d, factionId); const r = buyAsset(d, { factionId, statType, catalogId, locationId: f && f.homeworldId }); msg = r.event.narrative; return r.campaign; });
     return toast(msg);
   }
-  const factionLogFilterChange = t.closest('[data-faction-log-filter]');
-  if (factionLogFilterChange) { factionLogFilterId = t.value; return renderFactionLogBody(); }
+  const factionEventsFactionFilterChange = t.closest('[data-faction-events-faction-filter]');
+  if (factionEventsFactionFilterChange) { factionEventsFactionFilterId = t.value; return renderFactionEventsBody(); }
+  const factionEventsLocationFilterChange = t.closest('[data-faction-events-location-filter]');
+  if (factionEventsLocationFilterChange) { factionEventsLocationFilterId = t.value; return renderFactionEventsBody(); }
+
+  // --- docs/adr/0032: GMAtlas Core provider selection + Refit Asset —
+  // data-faction-field carries an explicit faction id (unlike the generic
+  // data-entity-field, which only ever resolves against Cast's single
+  // "active entity") so the Faction Turn card works correctly when it's
+  // NOT the currently-open Cast entity (the Faction Events Roster). ---
+  const factionField = t.closest('[data-faction-field]');
+  if (factionField) {
+    const [factionId, field] = factionField.dataset.factionField.split('::');
+    const value = t.type === 'number' ? (Number(t.value) || 0) : t.value;
+    return store.update((d) => updateEntity(d, factionId, { [field]: value }));
+  }
+  const factionProviderSelect = t.closest('[data-faction-provider-select]');
+  if (factionProviderSelect) {
+    const factionId = factionProviderSelect.dataset.factionProviderSelect;
+    return store.update((d) => updateEntity(d, factionId, { rulesProvider: t.value }));
+  }
+  const factionFaRefit = t.closest('[data-faction-fa-refit]');
+  if (factionFaRefit) {
+    const [factionId, factionAssetId] = factionFaRefit.dataset.factionFaRefit.split('::');
+    const newCatalogId = t.value;
+    t.value = '';
+    if (!newCatalogId) return;
+    let msg = '';
+    store.update((d) => { const r = refitAsset(d, { factionId, factionAssetId, newCatalogId }); msg = r.event.narrative; return r.campaign; });
+    return toast(msg);
+  }
+
+  // --- Rules Constitution / Game System Activation (docs/adr/0032) — same
+  // direct-mutation-of-the-already-cloned-doc shape as the existing
+  // data-settings-stat-ruleset/data-settings-toolbar-default toggles just
+  // below (store.update's mutator always receives a fresh clone). ---
+  const rulesProviderChoice = t.closest('[data-rules-provider-choice]');
+  if (rulesProviderChoice) {
+    const areaId = rulesProviderChoice.dataset.rulesProviderChoice;
+    return store.update((d) => { d.settings.rulesProviderChoices = { ...(d.settings.rulesProviderChoices || {}), [areaId]: t.value }; return d; });
+  }
+  const gameSystemActivate = t.closest('[data-game-system-activate]');
+  if (gameSystemActivate) {
+    const systemId = gameSystemActivate.dataset.gameSystemActivate;
+    return store.update((d) => { d.settings.gameSystemActivations = { ...(d.settings.gameSystemActivations || {}), [systemId]: t.checked }; return d; });
+  }
 
   const oev = t.closest('[data-oracle-entry-value]');
   if (oev) {
@@ -3113,6 +3248,17 @@ function onFocusOut(ev) {
   // instead of .value now — no separate blur-autosave path for this one,
   // since the explicit Save button is this field's established pattern
   // (unlike every other field here, which never had one).
+
+  // A committed Faction Event's read-aloud paragraph (docs/adr/0032) —
+  // same blur-commit shape as every rich field above, once "🎭 Expand to
+  // Read-Aloud" has generated the field at least once (setEventReadAloud).
+  const readAloudField = ev.target.closest('[data-faction-event-readaloud]');
+  if (readAloudField && readAloudField.isContentEditable) {
+    const id = readAloudField.dataset.factionEventReadaloud;
+    const value = serializeMentionEditor(readAloudField);
+    const current = (store.get().factionEvents || []).find((e) => e.id === id);
+    if (current && value !== (current.readAloud || '')) store.update((d) => setEventReadAloud(d, id, value));
+  }
 }
 
 // Ctrl/Cmd+Click a document mention's page (ADR 0018) — the page lives in a
@@ -3396,6 +3542,13 @@ function render() {
   const edge = root.querySelector('[data-edge]');
   edge.innerHTML = EDGE_ORDER.map((id) => {
     if (id === 'copilot') return `<button data-toggle-copilot title="Co-Pilot"><span class="glyph">💡</span><b>Co-Pilot</b></button>`;
+    // Faction Events (docs/adr/0031) isn't a DRAWERS/renderDrawer() entry —
+    // its own fixed left-anchored panel (see mc-faction-events) — so it's
+    // special-cased here exactly like 'copilot' above, not looked up via
+    // drawerMeta. Opening it also anchors Cast filtered to Faction (see
+    // the click handler), so its aria-expanded reflects the panel's own
+    // factionEventsOpen flag, not any drawer/anchor state.
+    if (id === 'faction-events') return `<button data-toggle-faction-events aria-expanded="${factionEventsOpen}" title="Faction Events — SWN faction turns, opens Cast filtered to Faction alongside it"><span class="glyph">⚔</span><b>Faction Events</b></button>`;
     const d = drawerMeta(id);
     if (!d) return '';
     if (id === 'cast') {
@@ -3521,9 +3674,20 @@ function render() {
         // a real reload (blank, then the real src) makes clicking the
         // second mention actually jump, not just silently update the src
         // attribute with no visible effect.
+        //
+        // The two assignments are deliberately NOT back-to-back in the same
+        // tick (confirmed, a real reported bug): once the frame already has
+        // a real PDF loaded (i.e. this isn't the first document opened this
+        // session), blanking it and immediately loading a new — possibly
+        // large, data: URI — PDF in the same synchronous pass could leave
+        // Chromium's built-in PDF viewer stuck rendering nothing at all
+        // (a blank/white frame that no longer responds to further src
+        // changes). Deferring the real src to the next tick gives the
+        // unload from `about:blank` a chance to actually complete first.
+        const nextSrc = resolvedActive.src;
         frame.src = 'about:blank';
-        frame.src = resolvedActive.src;
-        lastDocViewerSrc = resolvedActive.src;
+        setTimeout(() => { if (frame.isConnected) frame.src = nextSrc; }, 0);
+        lastDocViewerSrc = nextSrc;
       }
     } else {
       // A resolved 'lib' entry with no dataUrl means the file never actually
@@ -3539,29 +3703,29 @@ function render() {
     }
   }
 
-  const factionLogEl = root.querySelector('[data-faction-log]');
-  factionLogEl.hidden = !factionLogOpen;
+  const factionEventsEl = root.querySelector('[data-faction-events]');
+  factionEventsEl.hidden = !factionEventsOpen;
   // Same overlap mechanic as the doc viewer's --viewer-overlap above,
   // shrinking the panel to stay clear of whatever drawer is open beside
-  // it — see cockpit.css's .mc-faction-log doc comment.
-  factionLogEl.style.setProperty('--factionlog-overlap', `${sidePanelInsetPx(doc)}px`);
-  if (factionLogOpen) renderFactionLogBody();
+  // it — see cockpit.css's .mc-faction-events doc comment.
+  factionEventsEl.style.setProperty('--factionevents-overlap', `${sidePanelInsetPx(doc)}px`);
+  if (factionEventsOpen) renderFactionEventsBody();
 
   renderSearchOverlay();
   renderDiceRollOverlay();
 }
 
-// Faction Log panel body — a targeted update (not the whole render()) so
-// picking a faction to Step, or Commit/Discard-ing a proposed batch,
+// Faction Events panel body — a targeted update (not the whole render())
+// so picking a faction to Step, or Commit/Discard-ing a proposed batch,
 // doesn't need a full store.update() round-trip when nothing in the
-// campaign has actually changed yet (ephemeral factionLogDrafts aren't
+// campaign has actually changed yet (ephemeral factionEventsDrafts aren't
 // persisted campaign state). Called from render() when the panel is open,
 // and directly by the draft-related click handlers above.
-function renderFactionLogBody() {
-  const body = root && root.querySelector('[data-faction-log-body]');
+function renderFactionEventsBody() {
+  const body = root && root.querySelector('[data-faction-events-body]');
   if (!body) return;
   const doc = store.get();
-  body.innerHTML = renderFactionLog(doc, { factionLogDrafts, factionLogFilterId });
+  replaceBodyPreservingScroll(body, renderFactionEvents(doc, { factionEventsDrafts, factionEventsFactionFilterId, factionEventsLocationFilterId }));
 }
 
 // Lives outside the drawer/workspace update paths above since it's a
@@ -3752,11 +3916,36 @@ function buildDrawerUi() {
   };
 }
 
+// A drawer body's innerHTML is fully torn down and rebuilt on every
+// render (see below) — including the Guide's own contenteditable text box
+// (.guide-editor, resize:vertical/overflow-y:auto, so a GM can shrink it
+// and scroll within a long reference doc). Replacing innerHTML resets
+// scrollTop to 0 on both the body itself and any such nested scrollable
+// box, which — confirmed, a real reported bug — snapped the Guide editor
+// back to the top every time a GM clicked an inline @mention link inside
+// it (any store.update() re-renders the whole shell). Capturing/restoring
+// scrollTop across the replace fixes it generically for the drawer body
+// itself (helps a long Cast/Journal list too) and specifically for
+// `[data-guide-input]` (there's exactly one visible at a time, so
+// re-querying it by that same attribute after the rebuild finds "the same"
+// logical box even though the DOM node itself is new).
+function replaceBodyPreservingScroll(body, html) {
+  const bodyScrollTop = body.scrollTop;
+  const guideEditor = body.querySelector('[data-guide-input]');
+  const guideScrollTop = guideEditor ? guideEditor.scrollTop : null;
+  body.innerHTML = html;
+  body.scrollTop = bodyScrollTop;
+  if (guideScrollTop != null) {
+    const newGuideEditor = body.querySelector('[data-guide-input]');
+    if (newGuideEditor) newGuideEditor.scrollTop = guideScrollTop;
+  }
+}
+
 function renderDrawerBody() {
   const doc = store.get();
   const body = root && root.querySelector('[data-drawer-body]');
   if (body) {
-    body.innerHTML = activeDrawer ? renderDrawer(activeDrawer, doc, buildDrawerUi()) : '';
+    replaceBodyPreservingScroll(body, activeDrawer ? renderDrawer(activeDrawer, doc, buildDrawerUi()) : '');
   }
   // Every ephemeral UI flag this touches (oracleFilter, recapOpen, ...)
   // could equally apply to whichever drawer is anchored, not just the main
@@ -3781,7 +3970,7 @@ function renderDrawerBody() {
 function renderDrawerAnchorBody() {
   const doc = store.get();
   const body = root && root.querySelector('[data-drawer-anchor-body]');
-  if (body) body.innerHTML = anchoredDrawer ? renderDrawer(anchoredDrawer, doc, buildDrawerUi()) : '';
+  if (body) replaceBodyPreservingScroll(body, anchoredDrawer ? renderDrawer(anchoredDrawer, doc, buildDrawerUi()) : '');
 }
 
 // A store.update() that fails to persist (most commonly localStorage quota

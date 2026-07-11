@@ -59,11 +59,21 @@ export function advise(doc) {
   // one could be running in parallel.
   const hotExpedition = expeditionsInDanger(doc)[0];
 
+  // Faction Events world-scale activity (docs/adr/0032): the most recent
+  // COMMITTED event that's both witnessed (the party's own location) and
+  // faction-vs-world scoped (Expand Influence's contested roll, Seize
+  // Planet) — the same signal that already nudges Threat on commit
+  // (factionTurnEngine.js's pushEvent), surfaced here too so the Co-Pilot
+  // names it explicitly rather than the GM only seeing a raised number.
+  const factionEvents = Array.isArray(doc && doc.factionEvents) ? doc.factionEvents : [];
+  const hotWorldEvent = factionEvents.slice().reverse().find((e) => e.witnessed && e.scope === 'faction-vs-world');
+
   let observation;
   if (hot && hot.filled / hot.segments >= 0.75) observation = `“${hot.name}” is ${hot.filled}/${hot.segments} — one more push resolves it. Consider paying it off now.`;
   else if (hotFaction) observation = `“${hotFaction.faction.name}” is close to acting on its agenda — a mission tied to them would land naturally now.`;
   else if (hotFactionGoal) observation = `“${hotFactionGoal.faction.name}” is close to completing its faction goal — expect them to act on it soon, and to bank XP when it lands.`;
   else if (hotExpedition) observation = `“${hotExpedition.name}” is running low on supplies or dangerously exposed — force a supply-vs-route dilemma next.`;
+  else if (hotWorldEvent) observation = `“${hotWorldEvent.factionName}” has moved directly against the party's own location — faction activity here may force a response scene next.`;
   else if (threat >= 7) observation = 'Threat is high — the situation is exposed, watched, or already tipping over.';
   else if (stress >= 7) observation = 'Stress is high — a scene without combat should follow, or someone breaks.';
   else if (resources <= 2) observation = 'Supplies are critically low — the next scene should address resupply, or someone pays for the shortage.';

@@ -170,7 +170,18 @@ function ensureFactionFields(e) {
 // companion max is never stored — see computeFactionMaxHp below, always
 // derived from force/cunning/wealth via SWN_XP_TABLE so it can never drift
 // out of sync with the three base stats.
-function ensureFactionTurnFields(e) {
+// Exported (unlike ensureFactionFields/ensureLocationFields, which stay
+// private) so factionTurnEngine.js's mutators can call it defensively on
+// a freshly-fetched faction before touching factionAssets/basesOfInfluence/
+// etc. — the same "ensure fields before mutating a possibly-stale entity"
+// discipline addFactionAsset/addLocationTradeCode/addLocationBase already
+// follow, needed here because getEntity() itself never lazily defaults
+// anything (only _create/updateEntity do); a faction entity created before
+// this field existed (or simply never touched via updateEntity since)
+// would otherwise have factionAssets === undefined, and e.g.
+// payFactionUpkeep's `for (const a of f.factionAssets)` would throw
+// "is not iterable" instead of treating it as empty.
+export function ensureFactionTurnFields(e) {
   if (e.type !== 'faction') return;
   if (e.hp === undefined) e.hp = computeFactionMaxHp(e);
   if (e.facCreds === undefined) e.facCreds = 0;
@@ -183,6 +194,13 @@ function ensureFactionTurnFields(e) {
   if (e.currentGoalId === undefined) e.currentGoalId = '';
   if (e.seizeProgress === undefined) e.seizeProgress = null;
   if (e.busyUntilTurn === undefined) e.busyUntilTurn = null;
+  // Rules Constitution per-faction override (docs/adr/0032) — '' means
+  // "use the campaign default" (settings.rulesProviderChoices.factions,
+  // via data/factionRulesProviders.js's factionProviderFor), a specific
+  // provider id ('swn'/'gmatlascore') pins this one faction regardless of
+  // the campaign default, matching settings.statRuleset's own default-
+  // plus-per-entity-override shape.
+  if (e.rulesProvider === undefined) e.rulesProvider = '';
 }
 
 /** A faction's maximum HP, always derived from its three base stats —
@@ -691,6 +709,62 @@ export function updateRelationshipStrength(campaign, aId, bId, strength) {
   const r = a && a.relationships.find((rel) => rel.to === bId);
   if (r) { normalizeRel(r); r.strength = clampStrength(strength); }
   return next;
+}
+
+/** Looks up the relationship FROM `aId` TO `bId` (a's own edge, not the
+ *  mirrored one on b's side — same "each side is independent" convention
+ *  every other relationship mutator here already follows). Returns null
+ *  if either entity or the edge itself doesn't exist. The one shared
+ *  lookup helper this module was missing (docs/adr/0031's Faction Events
+ *  follow-up) — every mutator above did this same `.find((r) => r.to ===
+ *  bId)` inline; new read-only consumers (e.g. factionTurnEngine.js's
+ *  relationship-weighted ally/opponent stance) use this instead of a
+ *  fourth copy. */
+export function getRelationshipBetween(campaign, aId, bId) {
+  const a = getEntity(campaign, aId);
+  if (!a) return null;
+  return (a.relationships || []).find((rel) => rel.to === bId) || null;
+}
+
+/** The Location `locationId` has a `located_at` edge to — i.e. its
+ *  immediate containing region/district, per the HOSTILE gazetteer's own
+ *  Zone>Star>World>Base `contains`/`located_at` pair (docs/adr/0026,
+ *  0031's Faction Events follow-up generalizes it to a plain "district"
+ *  concept for any Location, not just HOSTILE's). Returns the first match
+ *  only — a Location is expected to have at most one immediate parent in
+ *  practice, same assumption `linkContains` already makes. Null if none. */
+export function getContainingLocation(campaign, locationId) {
+  const loc = getEntity(campaign, locationId);
+  if (!loc) return null;
+  const rel = (loc.relationships || []).find((r) => r.type === 'located_at');
+  return rel ? getEntity(campaign, rel.to) : null;
+}
+
+/** Every Location `locationId` has a `contains` edge to (its immediate
+ *  children — the reverse of getContainingLocation above). */
+export function getContainedLocations(campaign, locationId) {
+  const loc = getEntity(campaign, locationId);
+  if (!loc) return [];
+  return (loc.relationships || [])
+    .filter((r) => r.type === 'contains')
+    .map((r) => getEntity(campaign, r.to))
+    .filter(Boolean);
+}
+
+/** Same location, or one immediate hop apart in the contains/located_at
+ *  hierarchy (same parent, or one directly contains the other) — a
+ *  single-level "same district" check, not deep ancestor recursion (see
+ *  docs/adr/0031's Faction Events follow-up for why one level is enough
+ *  for a local-scale "district" concept). */
+export function isSameDistrict(campaign, aId, bId) {
+  if (!aId || !bId) return false;
+  if (aId === bId) return true;
+  const parentA = getContainingLocation(campaign, aId);
+  const parentB = getContainingLocation(campaign, bId);
+  if (parentA && parentB && parentA.id === parentB.id) return true;
+  if (parentA && parentA.id === bId) return true;
+  if (parentB && parentB.id === aId) return true;
+  return false;
 }
 
 /** Pack 9's "flag, don't delete": a relationship whose type implies a target

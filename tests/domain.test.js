@@ -2915,7 +2915,7 @@ test('formatSessionRecap renders a readable plain-text block', () => {
 });
 
 // --- Rules Constitution (data reference, requirements/initial design inputs/gameplay-goals.md) ---
-import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel } from '../src/data/rulesConstitution.js';
+import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel, resolveProviderChoice, isGameSystemActivated } from '../src/data/rulesConstitution.js';
 
 test('every provider referenced in GAMEPLAY_AREAS is a registered RULES_PROVIDERS entry', () => {
   const ids = new Set(Object.keys(RULES_PROVIDERS));
@@ -2927,6 +2927,29 @@ test('every provider referenced in GAMEPLAY_AREAS is a registered RULES_PROVIDER
 test('providerLabel resolves a known id and falls back to the id itself for an unknown one', () => {
   assert.equal(providerLabel('starforged'), 'Starforged');
   assert.equal(providerLabel('nonexistent'), 'nonexistent');
+});
+
+// --- docs/adr/0032: dropdowns-everywhere Rules Constitution + Game System
+// Activation gate ------------------------------------------------------
+test('every GAMEPLAY_AREAS entry has a unique id; Factions lists both swn and gmatlascore, swn first (preserves pre-dropdown default behavior)', () => {
+  const ids = GAMEPLAY_AREAS.map((a) => a.id);
+  assert.equal(new Set(ids).size, ids.length, 'no duplicate area ids');
+  assert.ok(ids.every((id) => /^[a-z0-9-]+$/.test(id)), 'every id is a plain kebab-case slug');
+  const factions = GAMEPLAY_AREAS.find((a) => a.id === 'factions');
+  assert.deepEqual(factions.providers, ['swn', 'gmatlascore']);
+});
+
+test('resolveProviderChoice falls back to an area\'s own first-listed provider when unset, and honors an explicit settings.rulesProviderChoices override', () => {
+  assert.equal(resolveProviderChoice({}, 'factions'), 'swn');
+  assert.equal(resolveProviderChoice({ rulesProviderChoices: { factions: 'gmatlascore' } }, 'factions'), 'gmatlascore');
+  assert.equal(resolveProviderChoice({}, 'not-a-real-area'), null);
+});
+
+test('isGameSystemActivated: a provider with no requiresActivation flag is always activated; swn requires an explicit true under settings.gameSystemActivations', () => {
+  assert.equal(isGameSystemActivated({ settings: {} }, 'gmatlascore'), true, 'gmatlascore has no gate');
+  assert.equal(isGameSystemActivated({ settings: {} }, 'swn'), false, 'swn is gated, unset reads as not activated');
+  assert.equal(isGameSystemActivated({ settings: { gameSystemActivations: { swn: true } } }, 'swn'), true);
+  assert.equal(isGameSystemActivated({ settings: { gameSystemActivations: { swn: false } } }, 'swn'), false);
 });
 
 // --- Sourcebook Inventory (Settings' "what third-party content is actually
@@ -4423,8 +4446,8 @@ test('commitFactionTurn just hands back the draft\'s resultCampaign; proposeFact
   const draft = proposeFactionStep(camp, factionId, { rng: makeRng(11) });
   assert.ok(draft);
   assert.equal(draft.resultCampaign.factionTurnNumber, 1);
-  assert.equal(draft.resultCampaign.factionLog.length, 1);
-  assert.equal(draft.resultCampaign.factionLog[0].factionId, factionId);
+  assert.equal(draft.resultCampaign.factionEvents.length, 1);
+  assert.equal(draft.resultCampaign.factionEvents[0].factionId, factionId);
 
   const committed = commitFactionTurn(draft);
   assert.strictEqual(committed, draft.resultCampaign);
@@ -4441,8 +4464,8 @@ test('advanceFactionTurnRound bumps factionTurnNumber exactly once for the whole
   const finalCampaign = drafts[drafts.length - 1].resultCampaign;
   assert.equal(finalCampaign.factionTurnNumber, 1);
   // Both factions' committed events made it into the final chained campaign's log.
-  assert.equal(finalCampaign.factionLog.length, 2);
-  const loggedFactionIds = finalCampaign.factionLog.map((e) => e.factionId).sort();
+  assert.equal(finalCampaign.factionEvents.length, 2);
+  const loggedFactionIds = finalCampaign.factionEvents.map((e) => e.factionId).sort();
   assert.deepEqual(loggedFactionIds, [aId, bId].sort());
 });
 
@@ -4452,4 +4475,357 @@ test('proposeFactionTurn falls back to a "none" action for a bare faction with n
   const draft = proposeFactionTurn(camp, factionId, { rng: makeRng(3) });
   assert.equal(draft.action, 'none');
   assert.equal(draft.event.outcome, 'info');
+});
+
+// --- docs/adr/0031 Faction Events follow-up: location-pairing, relationship
+// stance, district/witnessed framing, WHO/WHERE tie-ins ------------------
+import { getRelationshipBetween, getContainingLocation, getContainedLocations, isSameDistrict } from '../src/domain/entities.js';
+import { relationshipStanceBetween, factionsAtLocation, getCurrentWhereLocations } from '../src/domain/factionTurnEngine.js';
+
+test('getRelationshipBetween looks up the relationship FROM a TO b (a\'s own edge), and returns null for a missing entity or edge', () => {
+  let camp = defaultCampaign();
+  let aId, bId;
+  ({ campaign: camp, id: aId } = createEntity(camp, { type: 'faction', name: 'A' }));
+  ({ campaign: camp, id: bId } = createEntity(camp, { type: 'faction', name: 'B' }));
+  assert.equal(getRelationshipBetween(camp, aId, bId), null);
+  camp = addRelationship(camp, aId, bId, 'Rival', 'rival_of');
+  const rel = getRelationshipBetween(camp, aId, bId);
+  assert.ok(rel);
+  assert.equal(rel.type, 'rival_of');
+  assert.equal(getRelationshipBetween(camp, 'nope', bId), null);
+});
+
+test('relationshipStanceBetween: explicit allied_with/rival_of types win outright; otherwise the strength dial decides (>=7 ally, <=3 rival); no relationship at all is neutral', () => {
+  let camp = defaultCampaign();
+  let aId, bId, cId, dId, eId;
+  ({ campaign: camp, id: aId } = createEntity(camp, { type: 'faction', name: 'A' }));
+  ({ campaign: camp, id: bId } = createEntity(camp, { type: 'faction', name: 'B' }));
+  ({ campaign: camp, id: cId } = createEntity(camp, { type: 'faction', name: 'C' }));
+  ({ campaign: camp, id: dId } = createEntity(camp, { type: 'faction', name: 'D' }));
+  ({ campaign: camp, id: eId } = createEntity(camp, { type: 'faction', name: 'E' }));
+  camp = addRelationship(camp, aId, bId, 'Allied', 'allied_with');
+  camp = addRelationship(camp, aId, cId, 'Rival', 'rival_of');
+  camp = addRelationship(camp, aId, dId, 'Linked', 'linked');
+  camp = updateRelationshipStrength(camp, aId, dId, 8);
+  camp = addRelationship(camp, aId, eId, 'Linked', 'linked');
+  camp = updateRelationshipStrength(camp, aId, eId, 2);
+  assert.equal(relationshipStanceBetween(camp, aId, bId), 'ally');
+  assert.equal(relationshipStanceBetween(camp, aId, cId), 'rival');
+  assert.equal(relationshipStanceBetween(camp, aId, dId), 'ally'); // strength 8 >= 7, no explicit type
+  assert.equal(relationshipStanceBetween(camp, aId, eId), 'rival'); // strength 2 <= 3
+  let fId; ({ campaign: camp, id: fId } = createEntity(camp, { type: 'faction', name: 'F' }));
+  assert.equal(relationshipStanceBetween(camp, aId, fId), 'neutral'); // no relationship at all
+});
+
+test('getContainingLocation/getContainedLocations walk the contains/located_at pair; isSameDistrict is a single-level (same/parent/child) check', () => {
+  let camp = defaultCampaign();
+  let zoneId, worldId, baseId, farId;
+  ({ campaign: camp, id: zoneId } = createEntity(camp, { type: 'location', name: 'Zone' }));
+  ({ campaign: camp, id: worldId } = createEntity(camp, { type: 'location', name: 'World' }));
+  ({ campaign: camp, id: baseId } = createEntity(camp, { type: 'location', name: 'Base' }));
+  ({ campaign: camp, id: farId } = createEntity(camp, { type: 'location', name: 'Far Away' }));
+  camp = addRelationship(camp, zoneId, worldId, 'Contains', 'contains');
+  camp = updateRelationshipType(camp, worldId, zoneId, 'located_at');
+  camp = addRelationship(camp, worldId, baseId, 'Contains', 'contains');
+  camp = updateRelationshipType(camp, baseId, worldId, 'located_at');
+
+  assert.equal(getContainingLocation(camp, worldId).id, zoneId);
+  assert.equal(getContainingLocation(camp, zoneId), null);
+  assert.deepEqual(getContainedLocations(camp, zoneId).map((l) => l.id), [worldId]);
+  assert.deepEqual(getContainedLocations(camp, worldId).map((l) => l.id), [baseId]);
+
+  assert.equal(isSameDistrict(camp, worldId, worldId), true);
+  assert.equal(isSameDistrict(camp, worldId, baseId), true); // world directly contains base
+  assert.equal(isSameDistrict(camp, baseId, worldId), true); // symmetric
+  assert.equal(isSameDistrict(camp, worldId, zoneId), true); // world's own parent
+  assert.equal(isSameDistrict(camp, baseId, zoneId), false); // two hops — not a single-level match
+  assert.equal(isSameDistrict(camp, worldId, farId), false);
+});
+
+test('factionsAtLocation lists every OTHER faction present (active asset, homeworld, or Base of Influence) at a location, tagged with relationshipStanceBetween; asset-less presence still appears with asset:null', () => {
+  let camp = defaultCampaign();
+  let aId, aLoc; ({ campaign: camp, factionId: aId, locationId: aLoc } = makeFactionWithHomeworld(camp, 'Acting Faction'));
+  let allyId; ({ campaign: camp, factionId: allyId } = makeFactionWithHomeworld(camp, 'Ally', {}));
+  camp = updateEntity(camp, allyId, { homeworldId: aLoc }); // present via homeworld only, no asset
+  camp = addRelationship(camp, aId, allyId, 'Allied', 'allied_with');
+  let rivalId; ({ campaign: camp, factionId: rivalId } = makeFactionWithHomeworld(camp, 'Rival'));
+  camp = updateEntity(camp, rivalId, { homeworldId: aLoc }); // co-located, same world as the acting faction
+  camp = buyAsset(camp, { factionId: rivalId, statType: 'force', catalogId: 'militia-unit', locationId: aLoc }).campaign;
+  camp = updateEntity(camp, rivalId, { factionAssets: getEntity(camp, rivalId).factionAssets.map((a) => ({ ...a, status: 'active', locationId: aLoc })) });
+  camp = addRelationship(camp, aId, rivalId, 'Rival', 'rival_of');
+
+  const entries = factionsAtLocation(camp, aId, aLoc);
+  const byFaction = Object.fromEntries(entries.map((e) => [e.faction.id, e]));
+  assert.equal(byFaction[allyId].stance, 'ally');
+  assert.equal(byFaction[allyId].asset, null);
+  assert.equal(byFaction[rivalId].stance, 'rival');
+  assert.ok(byFaction[rivalId].asset);
+});
+
+test('getCurrentWhereLocations parses Location @mentions out of WHERE\'s own Focus text (context.where.summary), ignoring non-Location mentions', () => {
+  let camp = defaultCampaign();
+  let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Prospect Station' }));
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Reyes' }));
+  camp = patchContext(camp, 'where', { summary: 'The party is at @[Prospect Station], talking to @Reyes.' });
+  const locs = getCurrentWhereLocations(camp);
+  assert.equal(locs.length, 1);
+  assert.equal(locs[0].id, locId);
+});
+
+test('attack auto-targeting (autoArgs, via proposeFactionTurn) never picks an allied co-located faction as a defender — only a rival, falling back to neutral if no rival is present', () => {
+  let camp = defaultCampaign();
+  let aId, aLoc; ({ campaign: camp, factionId: aId, locationId: aLoc } = makeFactionWithHomeworld(camp, 'Attacker', { force: 8, facCreds: 0 }));
+  camp = buyAsset(camp, { factionId: aId, statType: 'force', catalogId: 'militia-unit', locationId: aLoc, }).campaign;
+  camp = updateEntity(camp, aId, { factionAssets: getEntity(camp, aId).factionAssets.map((a) => ({ ...a, status: 'active' })) });
+
+  let allyId; ({ campaign: camp, factionId: allyId } = makeFactionWithHomeworld(camp, 'Ally', { force: 1 }));
+  camp = buyAsset(camp, { factionId: allyId, statType: 'force', catalogId: 'hitmen', locationId: aLoc }).campaign;
+  camp = updateEntity(camp, allyId, { factionAssets: getEntity(camp, allyId).factionAssets.map((a) => ({ ...a, status: 'active', locationId: aLoc })) });
+  camp = addRelationship(camp, aId, allyId, 'Allied', 'allied_with');
+
+  // Only an allied faction is co-located — attack must never target it, so
+  // the heuristic should pick a DIFFERENT action instead (no rival/neutral
+  // target exists). Force the heuristic toward attack-favoring conditions
+  // by giving the faction nothing else affordable to do.
+  camp = updateEntity(camp, aId, { facCreds: 0 });
+  const draft = proposeFactionTurn(camp, aId, { rng: makeRng(1) });
+  if (draft.action === 'attack') {
+    assert.notEqual(draft.event.targets[0].factionId, allyId, 'an allied co-located faction must never be the attack target');
+  }
+
+  // Now add a rival at the same location — attack (if chosen at all,
+  // across several seeds) must only ever target the rival, never the ally.
+  let rivalId; ({ campaign: camp, factionId: rivalId } = makeFactionWithHomeworld(camp, 'Rival', { force: 1 }));
+  camp = buyAsset(camp, { factionId: rivalId, statType: 'force', catalogId: 'hitmen', locationId: aLoc }).campaign;
+  camp = updateEntity(camp, rivalId, { factionAssets: getEntity(camp, rivalId).factionAssets.map((a) => ({ ...a, status: 'active', locationId: aLoc })) });
+  camp = addRelationship(camp, aId, rivalId, 'Rival', 'rival_of');
+  for (let seed = 0; seed < 15; seed++) {
+    const d = proposeFactionTurn(camp, aId, { rng: makeRng(seed) });
+    if (d.action === 'attack') assert.equal(d.event.targets[0].factionId, rivalId, `seed ${seed}: attack must target the rival, never the ally`);
+  }
+});
+
+test('event records are Faction-Location pairs: locationId, coLocatedFactions (deduped, ally/rival/neutral tagged), and witnessed (true only when the location is where WHERE\'s Focus currently points)', () => {
+  let camp = defaultCampaign();
+  let aId, aLoc; ({ campaign: camp, factionId: aId, locationId: aLoc } = makeFactionWithHomeworld(camp, 'Faction A'));
+  let bId; ({ campaign: camp, factionId: bId } = makeFactionWithHomeworld(camp, 'Faction B', {}));
+  camp = updateEntity(camp, bId, { homeworldId: aLoc });
+  camp = addRelationship(camp, aId, bId, 'Allied', 'allied_with');
+
+  // Not witnessed yet — WHERE doesn't mention this location.
+  let r = buyAsset(camp, { factionId: aId, statType: 'force', catalogId: 'militia-unit', locationId: aLoc, turnNumber: 1 });
+  assert.equal(r.event.locationId, aLoc);
+  assert.equal(r.event.witnessed, false);
+  assert.deepEqual(r.event.coLocatedFactions, [{ factionId: bId, factionName: 'Faction B', stance: 'ally' }]);
+
+  // Now WHERE points at the same world — the same action is witnessed.
+  const locName = getEntity(camp, aLoc).name;
+  camp = patchContext(camp, 'where', { summary: `The party arrives at @[${locName}].` });
+  r = buyAsset(camp, { factionId: aId, statType: 'force', catalogId: 'militia-unit', locationId: aLoc, turnNumber: 2 });
+  assert.equal(r.event.witnessed, true);
+});
+
+test('a "stale" faction entity missing factionAssets/basesOfInfluence/etc. (predating these fields, or simply never touched via updateEntity since — getEntity() never lazily defaults anything) is backfilled defensively rather than throwing "is not iterable" — regression test for a real reported bug hit via Step', () => {
+  let camp = defaultCampaign();
+  let factionId, locationId; ({ campaign: camp, factionId, locationId } = makeFactionWithHomeworld(camp, 'Legacy Faction'));
+  // Simulate a pre-existing campaign's faction entity that predates these
+  // fields (or was created by an older build) — delete them outright,
+  // exactly what an old IndexedDB save would look like before ever being
+  // touched by updateEntity again.
+  const stale = getEntity(camp, factionId);
+  delete stale.factionAssets;
+  delete stale.basesOfInfluence;
+  delete stale.factionTags;
+  delete stale.governedLocationIds;
+
+  assert.doesNotThrow(() => proposeFactionStep(camp, factionId, { rng: makeRng(4) }));
+  const draft = proposeFactionStep(camp, factionId, { rng: makeRng(4) });
+  assert.ok(draft);
+  const f = getEntity(draft.resultCampaign, factionId);
+  assert.ok(Array.isArray(f.factionAssets), 'factionAssets backfilled to a real array, not left undefined');
+  assert.ok(Array.isArray(f.basesOfInfluence), 'basesOfInfluence backfilled to a real array, not left undefined');
+});
+
+// --- docs/adr/0032: GMAtlas Core provider, Game System Activation gate,
+// event scope + regional responses, read-aloud generation, WHAT-tab hook --
+import {
+  GMATLAS_FORCE_ASSETS, GMATLAS_CUNNING_ASSETS, GMATLAS_WEALTH_ASSETS,
+  GMATLAS_FACTION_TAGS, GMATLAS_FACTION_GOALS, findGmatlasAssetAnyStat,
+} from '../src/data/gmatlasFactionData.js';
+import { FACTION_RULES_PROVIDERS, factionProviderId, factionProviderFor } from '../src/data/factionRulesProviders.js';
+import {
+  toggleAssetStealth, generateFactionResponses, expandEventReadAloud, setEventReadAloud,
+} from '../src/domain/factionTurnEngine.js';
+
+test('GMAtlas Core asset/tag/goal catalog: 24 assets per stat, no id collisions, no name/id overlap with SWN, every asset has a valid attack/counter shape', () => {
+  assert.equal(GMATLAS_FORCE_ASSETS.length, 24);
+  assert.equal(GMATLAS_CUNNING_ASSETS.length, 24);
+  assert.equal(GMATLAS_WEALTH_ASSETS.length, 24);
+  const ids = new Set();
+  const swnIds = new Set([...SWN_FORCE_ASSETS, ...SWN_CUNNING_ASSETS, ...SWN_WEALTH_ASSETS].map((a) => a.id));
+  for (const list of [GMATLAS_FORCE_ASSETS, GMATLAS_CUNNING_ASSETS, GMATLAS_WEALTH_ASSETS]) {
+    for (const a of list) {
+      assert.ok(!ids.has(a.id), `duplicate GMAtlas asset id ${a.id}`);
+      assert.ok(!swnIds.has(a.id), `GMAtlas asset id "${a.id}" collides with an SWN asset id`);
+      ids.add(a.id);
+      assert.ok(a.name && a.rating >= 1 && a.rating <= 8 && a.hp >= 0 && a.cost > 0);
+      assert.ok(a.attack === null || (a.attack.vs && a.attack.dice));
+      assert.ok(a.counter === null || !!a.counter.dice);
+    }
+  }
+  assert.equal(GMATLAS_FACTION_TAGS.length, 20);
+  assert.equal(GMATLAS_FACTION_TAGS.filter((t) => t.repeatable).length, 1);
+  assert.equal(GMATLAS_FACTION_GOALS.length, 11);
+  for (const g of GMATLAS_FACTION_GOALS) assert.equal(typeof g.difficulty, 'function');
+});
+
+test('GMAtlas Core mirrors SWN\'s mechanical numbers exactly, position-for-position, per the confirmed "full 1:1 parallel" decision', () => {
+  for (let i = 0; i < SWN_FORCE_ASSETS.length; i++) {
+    const swn = SWN_FORCE_ASSETS[i]; const g = GMATLAS_FORCE_ASSETS[i];
+    assert.equal(g.rating, swn.rating); assert.equal(g.hp, swn.hp); assert.equal(g.cost, swn.cost);
+    assert.equal(g.tl, swn.tl); assert.equal(g.assetType, swn.assetType); assert.equal(g.hasAction, swn.hasAction);
+    assert.notEqual(g.name, swn.name, `GMAtlas asset at index ${i} must not reuse SWN's own name`);
+  }
+  for (let i = 0; i < SWN_FACTION_GOALS.length; i++) {
+    assert.equal(GMATLAS_FACTION_GOALS[i].difficulty({ force: 6, wealth: 6, cunning: 6 }), SWN_FACTION_GOALS[i].difficulty({ force: 6, wealth: 6, cunning: 6 }));
+    assert.deepEqual(GMATLAS_FACTION_GOALS[i].countable, SWN_FACTION_GOALS[i].countable);
+  }
+});
+
+test('findGmatlasAssetAnyStat finds an asset regardless of stat track, and returns null for an unknown id', () => {
+  const found = findGmatlasAssetAnyStat('levy-militia');
+  assert.ok(found);
+  assert.equal(found.statType, 'force');
+  assert.equal(findGmatlasAssetAnyStat('does-not-exist'), null);
+});
+
+test('factionProviderId resolution order: a faction\'s own rulesProvider override beats the campaign\'s settings.rulesProviderChoices.factions default, which beats the hardcoded "swn" fallback', () => {
+  assert.equal(factionProviderId({ settings: {} }, null), 'swn');
+  assert.equal(factionProviderId({ settings: { rulesProviderChoices: { factions: 'gmatlascore' } } }, { rulesProvider: '' }), 'gmatlascore');
+  assert.equal(factionProviderId({ settings: { rulesProviderChoices: { factions: 'gmatlascore' } } }, { rulesProvider: 'swn' }), 'swn', 'per-faction override wins over the campaign default');
+  assert.equal(factionProviderFor({ settings: {} }, null), FACTION_RULES_PROVIDERS.swn);
+});
+
+test('a faction entity defaults rulesProvider to \'\' (campaign default)', () => {
+  let camp = defaultCampaign();
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Unaffiliated' }));
+  assert.equal(getEntity(camp, factionId).rulesProvider, '');
+});
+
+test('buyAsset resolves the GMAtlas Core catalog when the faction is pinned to it, even with an SWN-default campaign', () => {
+  let camp = defaultCampaign();
+  let factionId, locationId; ({ campaign: camp, factionId, locationId } = makeFactionWithHomeworld(camp, 'Kestrel Concern'));
+  camp = updateEntity(camp, factionId, { rulesProvider: 'gmatlascore' });
+  const r = buyAsset(camp, { factionId, statType: 'force', catalogId: 'levy-militia', locationId });
+  assert.equal(r.event.outcome, 'success');
+  assert.equal(getEntity(r.campaign, factionId).factionAssets[0].catalogId, 'levy-militia');
+  // The SWN-only id doesn't exist in this faction's own (GMAtlas) catalog.
+  const bad = buyAsset(camp, { factionId, statType: 'force', catalogId: 'militia-unit', locationId });
+  assert.equal(bad.event.outcome, 'failure');
+});
+
+test('attack resolves each side\'s catalog from its OWN provider independently — an SWN faction can attack a GMAtlas Core one, and vice versa', () => {
+  let camp = defaultCampaign();
+  let attackerId, aLoc; ({ campaign: camp, factionId: attackerId, locationId: aLoc } = makeFactionWithHomeworld(camp, 'Attacker', { force: 10 }));
+  let defenderId; ({ campaign: camp, id: defenderId } = createEntity(camp, { type: 'faction', name: 'Defender' }));
+  camp = updateEntity(camp, defenderId, { force: 0, hp: 20 });
+  camp = updateEntity(camp, attackerId, { rulesProvider: 'swn' });
+  camp = updateEntity(camp, defenderId, { rulesProvider: 'gmatlascore' });
+  camp = buyAsset(camp, { factionId: attackerId, statType: 'force', catalogId: 'militia-unit', locationId: aLoc }).campaign;
+  const attackerAssetId = getEntity(camp, attackerId).factionAssets[0].id;
+  camp = updateEntity(camp, defenderId, { factionAssets: [{ id: 'fa_def', catalogId: 'garrison-guards', statType: 'force', locationId: aLoc, hp: 3, stealthed: false, status: 'active', missedMaintenance: 0 }] });
+  const r = attack(camp, { attackerId, attackerFactionAssetId: attackerAssetId, defenderId, defenderFactionAssetId: 'fa_def', rng: makeRng(1) });
+  assert.equal(r.event.outcome, 'success');
+  assert.match(r.event.narrative, /Garrison Guards/, 'defender\'s GMAtlas Core catalog name resolved correctly, not an SWN one');
+});
+
+test('toggleAssetStealth flips the flag with no event/dice; no-ops for a missing asset', () => {
+  let camp = defaultCampaign();
+  let factionId, locationId; ({ campaign: camp, factionId, locationId } = makeFactionWithHomeworld(camp, 'Shrouded Concern'));
+  camp = buyAsset(camp, { factionId, statType: 'force', catalogId: 'militia-unit', locationId }).campaign;
+  const factionAssetId = getEntity(camp, factionId).factionAssets[0].id;
+  assert.equal(getEntity(camp, factionId).factionAssets[0].stealthed, false);
+  const r1 = toggleAssetStealth(camp, { factionId, factionAssetId });
+  assert.equal(getEntity(r1.campaign, factionId).factionAssets[0].stealthed, true);
+  const r2 = toggleAssetStealth(r1.campaign, { factionId, factionAssetId });
+  assert.equal(getEntity(r2.campaign, factionId).factionAssets[0].stealthed, false);
+});
+
+test('event scope: self actions (buyAsset) vs faction-vs-faction (attack) vs faction-vs-world (expandInfluence/seizePlanet) classify correctly', () => {
+  let camp = defaultCampaign();
+  let factionId, locationId; ({ campaign: camp, factionId, locationId } = makeFactionWithHomeworld(camp, 'Scope Test'));
+  const buy = buyAsset(camp, { factionId, statType: 'force', catalogId: 'militia-unit', locationId });
+  assert.equal(buy.event.scope, 'self');
+  const expand = expandInfluence(camp, { factionId, locationId: 'somewhere-else', hp: 2, rng: makeRng(1) });
+  assert.equal(expand.event.scope, 'faction-vs-world');
+});
+
+test('generateFactionResponses produces one stance-tagged statement per co-located faction for a faction-vs-world event, and none for a self-scoped event', () => {
+  let camp = defaultCampaign();
+  let aId, aLoc; ({ campaign: camp, factionId: aId, locationId: aLoc } = makeFactionWithHomeworld(camp, 'Mover'));
+  let bId; ({ campaign: camp, id: bId } = createEntity(camp, { type: 'faction', name: 'Rival Next Door' }));
+  camp = updateEntity(camp, bId, { homeworldId: aLoc });
+  const worldEvent = { scope: 'faction-vs-world', coLocatedFactions: [{ factionId: bId, factionName: 'Rival Next Door', stance: 'rival' }] };
+  const responses = generateFactionResponses(camp, worldEvent, makeRng(1));
+  assert.equal(responses.length, 1);
+  assert.equal(responses[0].factionName, 'Rival Next Door');
+  assert.equal(responses[0].stance, 'rival');
+  assert.ok(responses[0].statement.length > 0);
+  const selfEvent = { scope: 'self', coLocatedFactions: [{ factionId: bId, factionName: 'Rival Next Door', stance: 'rival' }] };
+  assert.deepEqual(generateFactionResponses(camp, selfEvent, makeRng(1)), []);
+});
+
+test('expandEventReadAloud composes a witnessed-vs-news-framed paragraph incorporating narrative and responses; setEventReadAloud stores it on the committed event', () => {
+  let camp = defaultCampaign();
+  let factionId, locationId; ({ campaign: camp, factionId, locationId } = makeFactionWithHomeworld(camp, 'Loud Concern'));
+  const witnessed = { id: 'ev1', action: 'expandInfluence', outcome: 'success', witnessed: true, factionName: 'Loud Concern', locationId, narrative: 'Loud Concern plants a flag.', responses: [{ factionName: 'Quiet Rival', stance: 'rival', statement: 'moves to exploit the opening while it lasts.' }] };
+  const news = { ...witnessed, id: 'ev2', witnessed: false };
+  const witnessedText = expandEventReadAloud(camp, witnessed);
+  const newsText = expandEventReadAloud(camp, news);
+  assert.match(witnessedText, /Before your eyes/);
+  assert.match(newsText, /Word reaches you/);
+  assert.match(witnessedText, /Loud Concern plants a flag\./);
+  assert.match(witnessedText, /Quiet Rival moves to exploit/);
+  camp.factionEvents = [witnessed];
+  const saved = setEventReadAloud(camp, 'ev1', witnessedText);
+  assert.equal(saved.factionEvents[0].readAloud, witnessedText);
+  assert.equal(camp.factionEvents[0].readAloud, undefined, 'setEventReadAloud clones — the input campaign is untouched');
+});
+
+test('WHAT-tab consequence hook: a witnessed, non-failure faction-vs-world event committed via proposeFactionStep nudges context.what.threat by exactly 1 (clamped at 10); the same event NOT witnessed leaves it untouched', () => {
+  // seizeProgress with remainingHp<=0 makes proposeFactionTurn deterministically
+  // resolve seizePlanet's immediate-completion branch (always faction-vs-world,
+  // always outcome:'success') — avoids depending on the random action heuristic.
+  let camp = defaultCampaign();
+  let factionId, locationId; ({ campaign: camp, factionId, locationId } = makeFactionWithHomeworld(camp, 'Witnessed Invader'));
+  camp = updateEntity(camp, factionId, { seizeProgress: { locationId, remainingHp: 0 } });
+  const locName = getEntity(camp, locationId).name;
+  camp = patchContext(camp, 'where', { summary: `The party stands at @[${locName}].` });
+  camp.context.what.threat = 3;
+
+  const draft = proposeFactionStep(camp, factionId, { rng: makeRng(1) });
+  assert.equal(draft.event.scope, 'faction-vs-world');
+  assert.equal(draft.event.witnessed, true);
+  assert.equal(draft.event.outcome, 'success');
+  assert.equal(draft.resultCampaign.context.what.threat, 4, 'threat ticked up by exactly 1');
+
+  // Same setup, but WHERE points elsewhere — not witnessed, no nudge.
+  let camp2 = defaultCampaign();
+  let factionId2, locationId2; ({ campaign: camp2, factionId: factionId2, locationId: locationId2 } = makeFactionWithHomeworld(camp2, 'Unwitnessed Invader'));
+  camp2 = updateEntity(camp2, factionId2, { seizeProgress: { locationId: locationId2, remainingHp: 0 } });
+  camp2.context.what.threat = 3;
+  const draft2 = proposeFactionStep(camp2, factionId2, { rng: makeRng(1) });
+  assert.equal(draft2.event.witnessed, false);
+  assert.equal(draft2.resultCampaign.context.what.threat, 3, 'no nudge — the party isn\'t where this happened');
+});
+
+test('Co-Pilot surfaces the most recent witnessed faction-vs-world committed event as an observation', () => {
+  let camp = defaultCampaign();
+  camp.factionEvents = [
+    { id: 'a', factionId: 'f1', factionName: 'Old News', scope: 'faction-vs-world', witnessed: true, outcome: 'success', turnNumber: 1 },
+    { id: 'b', factionId: 'f2', factionName: 'Fresh Invader', scope: 'faction-vs-world', witnessed: true, outcome: 'success', turnNumber: 2 },
+    { id: 'c', factionId: 'f3', factionName: 'Self Only', scope: 'self', witnessed: true, outcome: 'success', turnNumber: 3 },
+  ];
+  const result = advise(camp);
+  assert.match(result.observation, /Fresh Invader/);
 });

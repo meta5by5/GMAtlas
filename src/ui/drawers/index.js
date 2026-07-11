@@ -25,7 +25,7 @@ import { COMMODITIES, findCommodity } from '../../data/commodities.js';
 import { THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { getPressureTrack } from '../../domain/factions.js';
 import { getFactionGoalTrack } from '../../domain/factionTurnEngine.js';
-import { SWN_FACTION_ASSETS, SWN_FACTION_TAGS, SWN_FACTION_GOALS, findSwnAssetAnyStat, findSwnTag, findSwnGoal } from '../../data/swnFactionData.js';
+import { FACTION_RULES_PROVIDERS, factionProviderFor } from '../../data/factionRulesProviders.js';
 import { getEnhancements, strainUsed, strainCapacity, isOverStrained } from '../../domain/enhancements.js';
 import { getMechanicsIndex } from '../../domain/mechanicsIndex.js';
 import { ENHANCEMENT_TYPES } from '../../data/enhancementTypes.js';
@@ -35,7 +35,7 @@ import { buildSessionRecap } from '../../domain/recap.js';
 import { RULESETS, findRuleset, STARFORGED_PROGRESS_DIFFICULTIES, findProgressDifficulty } from '../../data/rulesets.js';
 import { GEAR_TEMPLATE_SYSTEMS, findGearTemplate } from '../../data/gearTemplates.js';
 import { GEAR_CATALOG, findCatalogItem } from '../../data/gearCatalog.js';
-import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel } from '../../data/rulesConstitution.js';
+import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel, resolveProviderChoice, isGameSystemActivated } from '../../data/rulesConstitution.js';
 import { SOURCEBOOK_INVENTORY } from '../../data/sourcebookInventory.js';
 import { listGalleryImages, listGalleryTagVocabulary, getGalleryImage } from '../../domain/gallery.js';
 import { listBattlemaps, getActiveBattlemap } from '../../domain/battlemaps.js';
@@ -366,65 +366,103 @@ function factionSection(doc, e, ui) {
     ${factionTurnSectionHtml(doc, e)}`;
 }
 
-// SWN Faction Turn Engine (docs/adr/0031-swn-faction-turn-engine.md) — a
+// SWN/GMAtlas Core Faction Turn Engine (docs/adr/0031, docs/adr/0032) — a
 // second, deeper card below the existing stats/pressure-track card above
 // (kept, untouched): real HP/FacCreds/XP, Homeworld + Bases of Influence
 // (real Location references, same dropdown-of-existing-entities pattern
 // worldDemographicsSection's Bases field already established), the
-// structured Assets list (transcribed catalog, NOT the free-text `assets`
-// chip list above — zero collision), SWN Faction Tags, and the current
-// Goal + its Thread-backed progress clock (getFactionGoalTrack, mirroring
-// getPressureTrack exactly). Attack isn't offered as a direct button here
-// — it inherently needs picking a rival faction/asset pair, which the
-// Faction Log panel's turn-review flow already does as part of proposing
-// a full turn; every other action (buy/sell/repair/refit/expand/use
-// ability) is a quick, immediate, single-click GM action here instead.
-function factionTurnSectionHtml(doc, e) {
+// structured Assets list (a provider's catalog — NOT the free-text
+// `assets` chip list above — zero collision), Faction Tags, and the
+// current Goal + its Thread-backed progress clock (getFactionGoalTrack,
+// mirroring getPressureTrack exactly). Every catalog lookup resolves
+// through this faction's own provider (factionProviderFor — its own
+// `rulesProvider` override, else the campaign default, else SWN), so this
+// card renders identically whichever provider a faction uses — exported
+// (unlike this file's other section renderers) so factionEvents.js's
+// Faction Roster can render the exact same live, editable card inline
+// without duplicating any of this markup/logic. Attack isn't offered as a
+// direct button here — it inherently needs picking a rival faction/asset
+// pair, which the Faction Events panel's turn-review flow already does as
+// part of proposing a full turn; every other action (buy/sell/repair/
+// refit/expand/change homeworld/use ability/stealth toggle) is a quick,
+// immediate, single-click GM action here instead. HP/FacCreds/XP/
+// Homeworld use `data-faction-field` (an explicit faction id baked into
+// the attribute, mirroring `data-faction-stat`) rather than the generic
+// `data-entity-field` (which only ever resolves against Cast's single
+// "active entity") — this card needs to work correctly for a faction that
+// ISN'T the one currently open in Cast, since the Faction Roster below
+// can show any faction on demand.
+export function factionTurnSectionHtml(doc, e) {
   if (e.type !== 'faction') return '';
   const maxHp = computeFactionMaxHp(e);
   const locations = listEntities(doc, 'location');
+  const provider = factionProviderFor(doc, e);
+  const defaultProvider = factionProviderFor(doc, null);
   const goalTrack = e.currentGoalId ? getFactionGoalTrack(doc, e.id) : null;
   const tagChips = (e.factionTags || []).map((id) => {
-    const tag = findSwnTag(id);
+    const tag = provider.findTag(id);
     return `<span class="chip sm" title="${esc(tag ? tag.effect : '')}">${esc(tag ? tag.name : id)} <button type="button" class="icon-btn" data-faction-tag-remove="${esc(e.id)}::${esc(id)}" title="Remove">✕</button></span>`;
   }).join('');
-  const availableTags = SWN_FACTION_TAGS.filter((t) => !t.repeatable && !(e.factionTags || []).includes(t.id));
+  const availableTags = provider.tags.filter((t) => !t.repeatable && !(e.factionTags || []).includes(t.id));
   const assetOptions = [];
   for (const statType of ['force', 'cunning', 'wealth']) {
-    for (const a of SWN_FACTION_ASSETS[statType]) {
+    for (const a of provider.assets[statType]) {
       if (a.rating <= (e[statType] || 0) && a.cost <= (e.facCreds || 0)) assetOptions.push({ statType, ...a });
     }
   }
   const assetRows = (e.factionAssets || []).map((fa) => {
-    const catalog = findSwnAssetAnyStat(fa.catalogId) || { name: fa.catalogId, hp: fa.hp, rating: '?' };
+    const catalog = provider.findAssetAnyStat(fa.catalogId) || { name: fa.catalogId, hp: fa.hp, rating: '?' };
     const loc = locations.find((l) => l.id === fa.locationId);
+    const refitOptions = (provider.assets[fa.statType] || []).filter((o) => o.id !== fa.catalogId && o.rating <= (e[fa.statType] || 0));
     return `<div class="thread-row">
-      <span class="thread-name">${esc(catalog.name)} <span class="dim small">(${esc(fa.statType)} ${catalog.rating}, ${fa.hp}/${catalog.hp} HP${fa.status === 'assembling' ? ', assembling' : ''}${fa.stealthed ? ', stealthed' : ''})</span> <span class="dim small">— ${esc(loc ? loc.name : 'unknown world')}</span></span>
+      <span class="thread-name">${esc(catalog.name)} <span class="dim small">(${esc(fa.statType)} ${catalog.rating}, ${fa.hp}/${catalog.hp} HP${fa.status === 'assembling' ? ', assembling' : ''}${fa.stealthed ? ', stealthed' : ''}${fa.missedMaintenance ? ', ⚠ missed upkeep' : ''})</span> <span class="dim small">— ${esc(loc ? loc.name : 'unknown world')}</span></span>
       <span class="thread-actions">
+        <button class="icon-btn" data-faction-fa-stealth="${esc(e.id)}::${esc(fa.id)}" title="${fa.stealthed ? 'Unstealth' : 'Stealth'}">${fa.stealthed ? '🕶' : '👁'}</button>
         <button class="icon-btn" data-faction-fa-repair="${esc(e.id)}::${esc(fa.id)}" title="Repair">✚</button>
         ${catalog.hasAction ? `<button class="icon-btn" data-faction-fa-ability="${esc(e.id)}::${esc(fa.id)}" title="Use Asset Ability">⚙</button>` : ''}
         <button class="icon-btn" data-faction-fa-sell="${esc(e.id)}::${esc(fa.id)}" title="Sell">✕</button>
       </span>
+      ${refitOptions.length ? `<select data-faction-fa-refit="${esc(e.id)}::${esc(fa.id)}">
+        <option value="">— refit into —</option>
+        ${refitOptions.map((o) => `<option value="${esc(o.id)}">${esc(o.name)} (${fa.statType} ${o.rating}, ${o.cost} FacCred${o.cost === 1 ? '' : 's'})</option>`).join('')}
+      </select>` : ''}
     </div>`;
   }).join('');
   const goalPips = goalTrack ? Array.from({ length: goalTrack.segments }, (_, i) => `<span class="pip ${i < goalTrack.filled ? 'on' : ''}"></span>`).join('') : '';
+  const providerOptions = Object.values(FACTION_RULES_PROVIDERS)
+    .filter((p) => isGameSystemActivated(doc, p.id))
+    .map((p) => `<option value="${esc(p.id)}" ${e.rulesProvider === p.id ? 'selected' : ''}>${esc(p.label)}</option>`).join('');
+  const busy = !!(e.busyUntilTurn && e.busyUntilTurn > (doc.factionTurnNumber || 0));
+  const seizeLoc = e.seizeProgress ? locations.find((l) => l.id === e.seizeProgress.locationId) : null;
+  const governedNames = (e.governedLocationIds || []).map((id) => { const l = locations.find((x) => x.id === id); return l ? l.name : 'an unnamed world'; });
   return `
     <div class="faction-card">
-      <h4>Faction Turn (SWN)</h4>
+      <h4>Faction Turn (${esc(provider.label)})</h4>
+      <label class="field-label">Rules Provider
+        <select data-faction-provider-select="${esc(e.id)}">
+          <option value="">— campaign default (${esc(defaultProvider.label)}) —</option>
+          ${providerOptions}
+        </select>
+      </label>
       <div class="faction-stats-row">
-        <label class="field-label">HP <input type="number" min="0" max="${maxHp}" data-entity-field="hp" value="${Number(e.hp) || 0}"> <span class="dim small">/ ${maxHp}</span></label>
-        <label class="field-label">FacCreds <input type="number" min="0" data-entity-field="facCreds" value="${Number(e.facCreds) || 0}"></label>
-        <label class="field-label">XP <input type="number" min="0" data-entity-field="xp" value="${Number(e.xp) || 0}"></label>
+        <label class="field-label">HP <input type="number" min="0" max="${maxHp}" data-faction-field="${esc(e.id)}::hp" value="${Number(e.hp) || 0}"> <span class="dim small">/ ${maxHp}</span></label>
+        <label class="field-label">FacCreds <input type="number" min="0" data-faction-field="${esc(e.id)}::facCreds" value="${Number(e.facCreds) || 0}"></label>
+        <label class="field-label">XP <input type="number" min="0" data-faction-field="${esc(e.id)}::xp" value="${Number(e.xp) || 0}"></label>
       </div>
+      ${busy ? `<p class="dim small">🚀 In transit until turn ${e.busyUntilTurn}.</p>` : ''}
+      ${e.seizeProgress ? `<div class="thread-row">
+        <span class="thread-name">Seizing ${esc(seizeLoc ? seizeLoc.name : 'a world')} <span class="dim small">— ${e.seizeProgress.remainingHp} HP resistance remains</span></span>
+        <span class="thread-actions"><button class="btn ghost sm" data-faction-fa-siege="${esc(e.id)}">▶ Press the Siege</button></span>
+      </div>` : ''}
       <label class="field-label">${fieldLabelRow('Homeworld', 'faction', 'homeworldId')}
-        <select data-entity-field="homeworldId">
+        <select data-faction-field="${esc(e.id)}::homeworldId">
           <option value="">— unset —</option>
           ${locations.map((l) => `<option value="${esc(l.id)}" ${e.homeworldId === l.id ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
         </select>
       </label>
       <div class="faction-assets">
         <span class="field-label-static">Bases of Influence</span>
-        <span class="faction-asset-list">${(e.basesOfInfluence || []).map((b) => { const l = locations.find((x) => x.id === b.locationId); return `<span class="chip sm">${esc(l ? l.name : 'unknown')} (${b.hp}/${b.maxHp} HP)</span>`; }).join('') || '<span class="dim small">None yet.</span>'}</span>
+        <span class="faction-asset-list">${(e.basesOfInfluence || []).map((b) => { const l = locations.find((x) => x.id === b.locationId); return `<span class="chip sm">${esc(l ? l.name : 'unknown')} (${b.hp}/${b.maxHp} HP)${b.locationId !== e.homeworldId ? ` <button type="button" class="icon-btn" data-faction-base-homeworld="${esc(e.id)}::${esc(b.locationId)}" title="Make Homeworld">🏠</button>` : ''}</span>`; }).join('') || '<span class="dim small">None yet.</span>'}</span>
         <select data-faction-base-add="${esc(e.id)}">
           <option value="">— expand influence to —</option>
           ${locations.filter((l) => !(e.basesOfInfluence || []).some((b) => b.locationId === l.id)).map((l) => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('')}
@@ -438,14 +476,18 @@ function factionTurnSectionHtml(doc, e) {
           ${availableTags.map((t) => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('')}
         </select>
       </div>
+      ${governedNames.length ? `<div class="faction-assets">
+        <span class="field-label-static">Governed Worlds</span>
+        <span class="faction-asset-list">${governedNames.map((n) => `<span class="chip sm">${esc(n)}</span>`).join('')}</span>
+      </div>` : ''}
       <label class="field-label">${fieldLabelRow('Goal', 'faction', 'currentGoalId')}
         <select data-faction-goal-select="${esc(e.id)}">
           <option value="">— none —</option>
-          ${SWN_FACTION_GOALS.map((g) => `<option value="${esc(g.id)}" ${e.currentGoalId === g.id ? 'selected' : ''} title="${esc(g.description)}">${esc(g.name)}</option>`).join('')}
+          ${provider.goals.map((g) => `<option value="${esc(g.id)}" ${e.currentGoalId === g.id ? 'selected' : ''} title="${esc(g.description)}">${esc(g.name)}</option>`).join('')}
         </select>
       </label>
       ${goalTrack ? `<div class="thread-row thread-status-${esc(goalTrack.status)} ${goalTrack.done ? 'done' : ''}">
-        <span class="thread-name">${esc(findSwnGoal(e.currentGoalId) ? findSwnGoal(e.currentGoalId).description : '')}</span>
+        <span class="thread-name">${esc(provider.findGoal(e.currentGoalId) ? provider.findGoal(e.currentGoalId).description : '')}</span>
         <span class="thread-clock" title="${goalTrack.filled}/${goalTrack.segments}">${goalPips}</span>
         <span class="thread-actions">
           <button class="icon-btn" data-thread-adv="${esc(goalTrack.id)}" title="Advance">＋</button>
@@ -453,7 +495,7 @@ function factionTurnSectionHtml(doc, e) {
         </span>
       </div>` : ''}
       <div class="faction-assets">
-        <span class="field-label-static">Assets (SWN)</span>
+        <span class="field-label-static">Assets (${esc(provider.label)})</span>
       </div>
       ${assetRows || '<p class="dim small">No structured assets yet.</p>'}
       <select data-faction-buyasset-add="${esc(e.id)}">
@@ -1328,7 +1370,7 @@ function settings(doc, ui = {}) {
         })()}
       </div>
       ${statblockTemplateEditor(doc)}
-      ${rulesConstitutionSection(ui)}
+      ${rulesConstitutionSection(doc, ui)}
       ${sourcebookInventorySection(ui)}`,
     'trade-economy': () => `
       ${tradeEconomyModelSection(doc, ui)}
@@ -1363,31 +1405,62 @@ const FIELD_FORMATS = [
   { id: 'plain', label: 'Plain number ("3")' },
 ];
 
-// Read-only reference table: which external ruleset (or Saga Atlas itself)
-// is the intended content provider per gameplay area — the "Rules
-// Constitution" (requirements/initial design inputs/gameplay-goals.md, docs/adr/0002). Not yet an
-// engine (that's Phase 9's Activity -> Rules Lens work); for now this just
-// makes the design principle visible to the GM, the same way the Build
-// panel below makes the changelog visible.
-function rulesConstitutionSection(ui) {
-  const rows = GAMEPLAY_AREAS.map(({ area, providers }) => `
+// Rules Constitution (docs/adr/0002, docs/adr/0032): which external
+// ruleset (or Saga Atlas itself) is the GM's chosen content provider per
+// gameplay area. Every row now renders a real `<select>` — but only the
+// Factions row's choice actually changes app behavior right now
+// (data/factionRulesProviders.js reads the exact same settings key); every
+// other row just records a stated preference for the still-future Phase 9
+// Activity -> Rules Lens recommender, called out explicitly below so a GM
+// doesn't assume the whole table is already live.
+function rulesConstitutionSection(doc, ui) {
+  const rows = GAMEPLAY_AREAS.map((area) => {
+    const chosen = resolveProviderChoice(doc.settings, area.id);
+    const options = area.providers
+      .filter((p) => isGameSystemActivated(doc, p))
+      .map((p) => `<option value="${esc(p)}" ${chosen === p ? 'selected' : ''}>${esc(providerLabel(p))}</option>`).join('');
+    return `
     <tr>
-      <td>${esc(area)}</td>
-      <td>${providers.map((p) => `<span class="chip sm rules-provider-chip">${esc(providerLabel(p))}</span>`).join(' ')}</td>
-    </tr>`).join('');
+      <td>${esc(area.area)}</td>
+      <td><select data-rules-provider-choice="${esc(area.id)}">${options}</select></td>
+    </tr>`;
+  }).join('');
   const legend = Object.entries(RULES_PROVIDERS).map(([id, p]) => `
     <li><b>${esc(p.label)}</b> — <span class="dim small">${esc(p.status)}.</span></li>`).join('');
   return `
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Rules Constitution', 'settings-rules-constitution')}
-      ${helpBody('settings-rules-constitution', 'Every ruleset is a content provider, not the application — Saga Atlas owns the campaign; each system contributes only what it does best for a given gameplay area. Reference only today; becomes an Activity → Rules Lens recommender in a future phase.', ui)}
+      ${helpBody('settings-rules-constitution', 'Every ruleset is a content provider, not the application — Saga Atlas owns the campaign; each system contributes only what it does best for a given gameplay area. Only the Factions row changes real app behavior today — every other row records your intended provider for a future Rules Lens recommender (Phase 9).', ui)}
       <div class="tablewrap-narrow">
         <table class="rules-constitution-table">
-          <thead><tr><th>Gameplay area</th><th>Provider(s)</th></tr></thead>
+          <thead><tr><th>Gameplay area</th><th>Provider</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
       <ul class="rules-provider-legend">${legend}</ul>
+      ${gameSystemActivationSection(doc)}
+    </div>`;
+}
+
+// Game System Activation (docs/adr/0032): a real, owned-sourcebook
+// transcription (SWN's Faction Turn Engine today — the RULES_PROVIDERS
+// entry with `requiresActivation: true`) sits behind an explicit opt-in,
+// since this app also deploys publicly (GitHub Pages), where "personal
+// reference to a book you own" doesn't hold by default. A fresh checkbox
+// list, not folded into the table above, since it's a one-time compliance
+// gate rather than a per-area preference. `isGameSystemActivated` (data/
+// rulesConstitution.js) is the seam a real licensing check would replace
+// this boolean read with later.
+function gameSystemActivationSection(doc) {
+  const gated = Object.entries(RULES_PROVIDERS).filter(([, p]) => p.requiresActivation);
+  if (!gated.length) return '';
+  const rows = gated.map(([id, p]) => `
+    <p><label><input type="checkbox" data-game-system-activate="${esc(id)}" ${isGameSystemActivated(doc, id) ? 'checked' : ''}>
+      <span class="dim small">${esc(p.activationText || `Activate ${p.label} content.`)}</span></label></p>`).join('');
+  return `
+    <div class="settings-group">
+      <h4>Game System Activation</h4>
+      ${rows}
     </div>`;
 }
 

@@ -5,7 +5,8 @@
 import { listShifts } from '../../domain/context.js';
 import { listThreads, THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { ACTIVITIES, suggestRulesLens } from '../../domain/activities.js';
-import { listTagVocabulary } from '../../domain/entities.js';
+import { listTagVocabulary, isSameDistrict, getEntity } from '../../domain/entities.js';
+import { getCurrentWhereLocations } from '../../domain/factionTurnEngine.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { buildMentionEditorHTML, richToolbarHTML, toolbarCollapsed } from '../mentionEditor.js';
 
@@ -86,13 +87,15 @@ const VIEWS = {
       <div class="shift-actions">
         <button class="chip" data-shift-prompt="Introduce NPC">＋ Introduce NPC</button>
       </div>
-      ${whoEntityPicker(doc, ui)}`);
+      ${whoEntityPicker(doc, ui)}
+      ${factionsActiveNearbyBlock(doc)}`);
   },
 
   where(doc, ui) {
     return card('WHERE it happens', 'The place the scene is set.', `
       ${summaryField('where', doc.context.where.summary, 'Location and immediate surroundings…', doc, ui)}
-      ${whereLocationPicker(doc, ui)}`);
+      ${whereLocationPicker(doc, ui)}
+      ${factionActivityHereBlock(doc)}`);
   },
 
   why(doc, ui) {
@@ -221,6 +224,69 @@ function whoEntityPicker(doc, ui) {
       </div>
     </div>`;
 }
+
+// Faction Events tie-in (docs/adr/0031's Faction Events follow-up): a
+// small, read-only summary + jump link, not a new place to enter data —
+// same posture as the tag-jump chips elsewhere in this app. "Nearby" here
+// means present at (or in the same district as) whichever Location(s)
+// are currently @mentioned in WHERE's own Focus text
+// (getCurrentWhereLocations) — the same "Focus text is the single source
+// of truth for what's in the scene" reasoning the WHO/WHERE redesign
+// already established, not a new structured pointer.
+function presenceLocationsOf(faction) {
+  const set = new Set();
+  if (faction.homeworldId) set.add(faction.homeworldId);
+  for (const b of faction.basesOfInfluence || []) set.add(b.locationId);
+  for (const a of faction.factionAssets || []) if (a.status === 'active') set.add(a.locationId);
+  return set;
+}
+
+function factionsActiveNearbyBlock(doc) {
+  const whereLocations = getCurrentWhereLocations(doc);
+  if (!whereLocations.length) return '';
+  const whereIds = whereLocations.map((l) => l.id);
+  const factions = (doc.entities.items || []).filter((e) => e.type === 'faction');
+  const active = factions.filter((f) => {
+    const locs = presenceLocationsOf(f);
+    for (const locId of locs) for (const whereId of whereIds) if (isSameDistrict(doc, locId, whereId)) return true;
+    return false;
+  });
+  if (!active.length) return '';
+  const chips = active.map((f) => `<button type="button" class="entity-chip" data-faction-events-jump="${esc(f.id)}" title="Open Faction Events, filtered to ${esc(f.name || 'this faction')}">${esc(f.name || 'Unnamed faction')}</button>`).join('');
+  return `
+    <div class="workspace-mini-section">
+      <span class="field-label-static">Factions active nearby</span>
+      <div class="entity-chips">${chips}</div>
+    </div>`;
+}
+
+// Same tie-in, from WHERE's side: the most recent committed Faction
+// Events at the current location(s)/district, each jumping to the panel
+// filtered to that location.
+function factionActivityHereBlock(doc) {
+  const whereLocations = getCurrentWhereLocations(doc);
+  if (!whereLocations.length) return '';
+  const whereIds = whereLocations.map((l) => l.id);
+  const log = Array.isArray(doc.factionEvents) ? doc.factionEvents : [];
+  const here = log.filter((e) => e.locationId && whereIds.some((id) => isSameDistrict(doc, e.locationId, id)));
+  if (!here.length) return '';
+  const recent = here.slice(-5).reverse();
+  const rows = recent.map((e) => {
+    const loc = getEntity(doc, e.locationId);
+    return `<button type="button" class="entity-chip" data-faction-events-location-jump="${esc(e.locationId)}" title="Open Faction Events, filtered to ${esc(loc ? loc.name : 'this location')}">${esc(e.factionName || 'Unnamed faction')} — ${esc(e.narrative ? e.narrative.slice(0, 60) : ACTION_LABEL_FOR_WHERE[e.action] || e.action)}</button>`;
+  }).join('');
+  return `
+    <div class="workspace-mini-section">
+      <span class="field-label-static">Faction activity here</span>
+      <div class="entity-chips">${rows}</div>
+    </div>`;
+}
+
+const ACTION_LABEL_FOR_WHERE = {
+  attack: 'Attack', buyAsset: 'Buy Asset', sellAsset: 'Sell Asset', repairAssetOrFaction: 'Repair',
+  refitAsset: 'Refit Asset', expandInfluence: 'Expand Influence', changeHomeworld: 'Change Homeworld',
+  seizePlanet: 'Seize Planet', useAssetAbility: 'Use Asset Ability', none: 'No action', busy: 'In transit',
+};
 
 // Expedition trackers (docs/adr/0009-situation-engine-revisited.md,
 // Decision item 1): a compact 3-slider block (Supplies/Exposure/Morale, 0-10,

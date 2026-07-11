@@ -98,6 +98,39 @@ test('migrateDocument upgrades and normalizes an existing document', () => {
   assert.equal(doc.app, 'GMAtlas');
 });
 
+// --- docs/adr/0032: Game System Activation grandfather step -----------
+test('migrateDocument: a genuinely fresh campaign keeps the schema default — gameSystemActivations.swn stays false (gated)', () => {
+  const doc = migrateDocument({ ...defaultCampaign(), schemaVersion: 0 });
+  assert.equal(doc.settings.gameSystemActivations.swn, false);
+});
+
+test('migrateDocument: a campaign with committed factionEvents and no explicit gameSystemActivations key is grandfathered to swn:true', () => {
+  const older = { ...defaultCampaign(), schemaVersion: 0, factionEvents: [{ id: 'fev_x', factionId: 'f1', action: 'buyAsset', outcome: 'success' }] };
+  delete older.settings.gameSystemActivations;
+  const doc = migrateDocument(older);
+  assert.equal(doc.settings.gameSystemActivations.swn, true);
+});
+
+test('migrateDocument: a campaign with a faction entity carrying real SWN Faction Turn Engine fields (hp/currentGoalId/factionAssets) and no explicit gameSystemActivations key is also grandfathered to swn:true', () => {
+  const older = {
+    ...defaultCampaign(), schemaVersion: 0,
+    entities: { items: [{ id: 'e1', type: 'faction', name: 'Old Faction', hp: 12, currentGoalId: '', factionAssets: [] }], activeId: null, history: [] },
+  };
+  delete older.settings.gameSystemActivations;
+  const doc = migrateDocument(older);
+  assert.equal(doc.settings.gameSystemActivations.swn, true);
+});
+
+test('migrateDocument: a campaign that already has an EXPLICIT gameSystemActivations value is left alone, even if it also shows legacy SWN usage', () => {
+  const older = {
+    ...defaultCampaign(), schemaVersion: 0,
+    factionEvents: [{ id: 'fev_x', factionId: 'f1', action: 'buyAsset', outcome: 'success' }],
+  };
+  older.settings.gameSystemActivations = { swn: false };
+  const doc = migrateDocument(older);
+  assert.equal(doc.settings.gameSystemActivations.swn, false, 'a GM\'s own explicit choice is never silently overridden');
+});
+
 test('round-trip: export → import is stable', () => {
   const doc = importCampaign(v053);
   const roundTripped = importCampaign(JSON.parse(JSON.stringify(doc)));

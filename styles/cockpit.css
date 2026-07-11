@@ -543,6 +543,11 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 .entity-tag-picker-tags, .entity-tag-picker-candidates { flex: 1 1 12rem; min-width: 10rem; }
 .entity-tag-picker-tags select { width: 100%; margin-top: var(--sp-1); }
 
+/* WHO/WHERE's Faction Events tie-in (docs/adr/0031's Faction Events
+   follow-up) — a small read-only summary + jump chips, same entity-chips
+   markup the tag pickers above already use. */
+.workspace-mini-section { margin-top: var(--sp-3); }
+
 /* Co-Pilot actions */
 .copilot-action { width: 100%; text-align: left; background: var(--bg-inset); color: var(--accent); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.5rem 0.6rem; font-size: 0.82rem; }
 .copilot-action:hover { border-color: var(--accent); }
@@ -1089,28 +1094,38 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .mc-doc-viewer iframe { flex: 1; border: none; width: 100%; background: #fff; }
 .mc-doc-viewer iframe[hidden] { display: none; }
 
-/* Faction Log panel (docs/adr/0031-swn-faction-turn-engine.md) — a
-   left-anchored panel that opens and resizes exactly like the doc viewer
-   above (position:fixed, left:0, right shrinks to stay clear of whatever
-   drawer is open), per direct request. `--factionlog-overlap` is set from
-   the same sidePanelInsetPx(doc) helper the doc viewer's --viewer-overlap
+/* Faction Events panel (docs/adr/0031-swn-faction-turn-engine.md, renamed
+   from "Faction Log" in its location-pairing follow-up) — a left-anchored
+   panel that opens and resizes exactly like the doc viewer above
+   (position:fixed, left:0, right shrinks to stay clear of whatever drawer
+   is open), per direct request. `--factionevents-overlap` is set from the
+   same sidePanelInsetPx(doc) helper the doc viewer's --viewer-overlap
    already uses (shell.js), so both panels react identically to a drawer
    opening/closing/collapsing beside them. Higher z-index than the doc
    viewer since opening it is a deliberate GM action, not something that
    should be hidden behind an already-open viewer. */
-.mc-faction-log {
+.mc-faction-events {
   position: fixed; top: var(--header-h); left: 0;
-  right: calc(var(--edge-w) + var(--factionlog-overlap, 0px)); bottom: 0;
+  right: calc(var(--edge-w) + var(--factionevents-overlap, 0px)); bottom: 0;
   background: var(--bg); border-left: 1px solid var(--border-strong);
   display: flex; flex-direction: column; z-index: 16;
 }
-.mc-faction-log[hidden] { display: none; }
-.faction-log-head {
+.mc-faction-events[hidden] { display: none; }
+.faction-events-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: var(--sp-3) var(--sp-4); background: var(--tier1-bg); border-bottom: 1px solid var(--tier1-border);
 }
-.faction-log-head h2 { margin: 0; font-size: 1rem; }
-.faction-log-body { flex: 1; overflow: auto; padding: var(--sp-4); }
+.faction-events-head h2 { margin: 0; font-size: 1rem; }
+.faction-events-body { flex: 1; overflow: auto; padding: var(--sp-4); }
+
+/* Faction Events follow-up: co-located ally/rival/neutral chips and the
+   "News from {location}" framing tag for a non-witnessed entry — plain
+   color cues, same tier-token palette as every other chip in this app. */
+.faction-event-colocated { margin: var(--sp-1) 0 var(--sp-2); display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.chip.stance-ally { border-color: var(--accent); }
+.chip.stance-rival { border-color: #b33; color: #b33; }
+.chip.stance-neutral { opacity: 0.8; }
+.faction-event-news-tag { font-style: italic; color: var(--text-dim); }
 
 /* Universal Search (Phase 8, pack 23) — a top-anchored overlay above
    everything else (drawer included) so a result stays reachable regardless

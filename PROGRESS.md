@@ -14,6 +14,64 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-10 GMAtlas Core faction provider, Game System Activation,
+event scope/regional responses, read-aloud narrative, WHAT-tab hook**
+(`docs/adr/0032-gmatlas-core-faction-provider.md`, extending `docs/adr/
+0031`): a second, original-content faction provider — `data/
+gmatlasFactionData.js` mirrors SWN's 72 assets/20 tags/11 goals with
+identical mechanics/numbers but original names/text — selectable per-
+faction or campaign-wide via `data/factionRulesProviders.js`
+(`factionProviderFor`), with `domain/factionTurnEngine.js`'s every catalog
+lookup (including a mixed-provider `attack`) resolving through it. SWN's
+transcribed content now sits behind a Game System Activation checkbox in
+Settings (`settings.gameSystemActivations`, `isGameSystemActivated()`) —
+gated OFF by default for a fresh campaign (GitHub Pages is public
+distribution, not personal use), grandfathered ON by `migrate.js` for any
+campaign that already has real SWN faction data. Committed Faction Events
+now carry a `scope` (self/faction-vs-faction/faction-vs-world) and, for
+world-scope events, `responses` — a logged reaction per co-located
+faction (`generateFactionResponses`) — plus an on-demand, GM-editable
+`readAloud` paragraph (`expandEventReadAloud`/`setEventReadAloud`). A
+witnessed, non-failure world-scope event nudges `context.what.threat`
+(mirroring `session.js`'s existing "consequences gently escalate"
+heuristic); Co-Pilot surfaces the same signal. The Faction Turn card
+(`factionTurnSectionHtml`, now exported) gained a Rules Provider selector
+and previously-unreachable Refit/Change Homeworld/Stealth-toggle
+controls plus Governed Worlds/Seize Progress/Busy status, and — since its
+HP/FacCreds/XP/Homeworld fields moved off the "active entity"-only
+mechanism onto an explicit-id one — now also renders inline inside
+Faction Events' new "Faction Roster" section. Rules Constitution
+(Settings) is real per-area `<select>`s now, not a static table — only
+the Factions row is functional today, the rest record a stated
+preference for the still-future Phase 9 Rules Lens. Verified via 20 new
+tests (401 total).
+
+**2026-07-09 Faction Events follow-up** (`docs/adr/0031` addendum):
+renamed "Faction Log" → "Faction Events" throughout (schema field, files,
+CSS, data attributes) per direct follow-up request reframing a faction
+turn around WHO ("which factions are active nearby"), WHERE ("same or
+different district than the party, witnessed vs. news"), and relationship
+strength ("weight ally/opponent decisions on the existing Relationships
+dial"). Every event is now a Faction-Location pair — `locationId`,
+`coLocatedFactions` (every other faction present, tagged ally/rival/
+neutral via new `relationshipStanceBetween`, which generalized
+`rivalAssetsAt` into `factionsAtLocation` and stopped Attack/Seize Planet
+from ever auto-targeting an allied co-located faction), and `witnessed`
+(computed from Location `@mention`s in WHERE's own Focus text via new
+`getCurrentWhereLocations`, per direct confirmation — no revived
+structured "current location" pointer). District support reuses the
+existing `contains`/`located_at` relationship pair (new
+`getContainingLocation`/`getContainedLocations`/`isSameDistrict` — nothing
+had ever walked that pair before). WHO/WHERE gained small "Factions active
+nearby"/"Faction activity here" summaries with jump chips into the
+Events panel (now with a second, location-based filter dimension
+alongside the existing faction filter). The panel's trigger moved from a
+header button to a new edge-nav slot between Cast and Trade that opens
+both the Events panel AND Cast (anchored, filtered to Faction) together.
+Verified via 8 new domain tests (380 total) plus a direct render-path
+check (no browser) confirming witnessed/coLocated framing and the new
+WHO/WHERE/panel sections against a real three-faction scenario.
+
 **2026-07-09 SWN Faction Turn Engine** (`docs/adr/0031-swn-faction-turn-
 engine.md`): a full, playable Stars Without Number faction-turn system,
 distinct from `domain/factions.js`'s existing lighter-weight Force/
