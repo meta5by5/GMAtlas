@@ -5,33 +5,39 @@
 // tags/goals/maintenance/auto-abilities) resolve against whichever content
 // provider is actually chosen for that faction.
 
-import * as swn from './swnFactionData.js';
-import * as gmatlascore from './gmatlasFactionData.js';
+import {
+  SWN_FACTION_ASSETS, SWN_FACTION_TAGS, SWN_FACTION_GOALS, SWN_ASSET_MAINTENANCE,
+  SWN_AUTOMATIC_ASSET_ABILITIES, findSwnAssetAnyStat, findSwnTag, findSwnGoal,
+} from './swnFactionData.js';
+import {
+  GMATLAS_FACTION_ASSETS, GMATLAS_FACTION_TAGS, GMATLAS_FACTION_GOALS, GMATLAS_ASSET_MAINTENANCE,
+  GMATLAS_AUTOMATIC_ASSET_ABILITIES, findGmatlasAssetAnyStat, findGmatlasTag, findGmatlasGoal,
+} from './gmatlasFactionData.js';
 
 export const FACTION_RULES_PROVIDERS = {
   swn: {
     id: 'swn',
     label: 'Stars Without Number',
-    assets: swn.SWN_FACTION_ASSETS,
-    tags: swn.SWN_FACTION_TAGS,
-    goals: swn.SWN_FACTION_GOALS,
-    maintenance: swn.SWN_ASSET_MAINTENANCE,
-    autoAbilities: swn.SWN_AUTOMATIC_ASSET_ABILITIES,
-    findAssetAnyStat: swn.findSwnAssetAnyStat,
-    findTag: swn.findSwnTag,
-    findGoal: swn.findSwnGoal,
+    assets: SWN_FACTION_ASSETS,
+    tags: SWN_FACTION_TAGS,
+    goals: SWN_FACTION_GOALS,
+    maintenance: SWN_ASSET_MAINTENANCE,
+    autoAbilities: SWN_AUTOMATIC_ASSET_ABILITIES,
+    findAssetAnyStat: findSwnAssetAnyStat,
+    findTag: findSwnTag,
+    findGoal: findSwnGoal,
   },
   gmatlascore: {
     id: 'gmatlascore',
     label: 'GMAtlas Core',
-    assets: gmatlascore.GMATLAS_FACTION_ASSETS,
-    tags: gmatlascore.GMATLAS_FACTION_TAGS,
-    goals: gmatlascore.GMATLAS_FACTION_GOALS,
-    maintenance: gmatlascore.GMATLAS_ASSET_MAINTENANCE,
-    autoAbilities: gmatlascore.GMATLAS_AUTOMATIC_ASSET_ABILITIES,
-    findAssetAnyStat: gmatlascore.findGmatlasAssetAnyStat,
-    findTag: gmatlascore.findGmatlasTag,
-    findGoal: gmatlascore.findGmatlasGoal,
+    assets: GMATLAS_FACTION_ASSETS,
+    tags: GMATLAS_FACTION_TAGS,
+    goals: GMATLAS_FACTION_GOALS,
+    maintenance: GMATLAS_ASSET_MAINTENANCE,
+    autoAbilities: GMATLAS_AUTOMATIC_ASSET_ABILITIES,
+    findAssetAnyStat: findGmatlasAssetAnyStat,
+    findTag: findGmatlasTag,
+    findGoal: findGmatlasGoal,
   },
 };
 

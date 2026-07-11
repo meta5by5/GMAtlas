@@ -140,11 +140,15 @@ export function defaultCampaign(now = new Date().toISOString()) {
       // edited (see domain/statblockTemplates.js). Empty = all defaults.
       statblockTemplates: {},
       // Whether a rich-text field's formatting toolbar starts collapsed
-      // (UX batch) — a per-GM display preference, not campaign content. A
-      // toolbar's actual shown/hidden state also depends on any per-field
-      // override the GM has made this session (ui.collapsedToolbars,
-      // ephemeral — see mentionEditor.js's toolbarCollapsed()).
-      toolbarCollapsedByDefault: false,
+      // (UX batch, default flipped true in docs/adr/0032 for a denser
+      // mobile-friendly out-of-the-box layout) — a per-GM display
+      // preference, not campaign content. A toolbar's actual shown/hidden
+      // state also depends on any per-field override the GM has made this
+      // session (ui.collapsedToolbars, ephemeral — see mentionEditor.js's
+      // toolbarCollapsed()). Additive default only — an existing campaign
+      // that already saved an explicit value (including a prior `false`)
+      // is untouched; this only changes a brand-new campaign's default.
+      toolbarCollapsedByDefault: true,
       // Rules Constitution (docs/adr/0032): the GM's chosen provider per
       // gameplay area (data/rulesConstitution.js's GAMEPLAY_AREAS ids),
       // e.g. { factions: 'gmatlascore' }. An unset area key falls back to

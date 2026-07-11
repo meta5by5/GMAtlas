@@ -8,7 +8,12 @@ Status line) — every other piece of ADR 0011 is untouched. Builds on top
 of `domain/factions.js`'s existing Force/Cunning/Wealth mini-game rather
 than replacing it; extends the Faction entity type introduced there,
 `domain/threads.js`'s Thread engine, and `docs/adr/0022`'s inline-prompt/
-delegated-handler conventions.
+delegated-handler conventions. **Partially superseded by `docs/adr/0033-
+mobile-responsive-tab-unification.md` (2026-07-10):** the Faction Events
+panel's left-anchored, "resize like the PDF viewer" design (below, and its
+same-day follow-up) is replaced by an ordinary `DRAWERS` tab, for phone-
+width usability — everything else in this ADR (the engine, the content,
+the inspector card, the event feed itself) is unaffected.
 
 **2026-07-09 follow-up (same day) — Faction Events: location-pairing,
 relationship stance, WHO/WHERE integration.** On direct follow-up request:
@@ -245,6 +250,11 @@ with Repair/Use Ability/Sell buttons. **Attack is deliberately NOT a
 direct inspector button** — picking a rival faction/asset pair is
 inherently a two-sided decision better made in the turn-review flow below,
 not a single-click action on one faction's own card.
+
+**Superseded 2026-07-10 by `docs/adr/0033-mobile-responsive-tab-
+unification.md`: this panel is now an ordinary `DRAWERS` entry, not the
+left-anchored fixed panel described below** — kept here verbatim as the
+historical record of the original design, not current behavior.
 
 **Faction Log — a left-anchored, auto-resizing panel, NOT the normal
 `DRAWERS`/`EDGE_ORDER` tab-stack**, per the direct follow-up request. Modeled

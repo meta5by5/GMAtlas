@@ -14,6 +14,25 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-10 Mobile-responsive UI** (`docs/adr/0033-mobile-responsive-tab-
+unification.md`): the general-purpose drawer-anchor mechanism is gone —
+Faction Events is now an ordinary drawer tab (partially superseding
+`docs/adr/0031`'s left-anchored panel design), and the document viewer/
+main drawer are mutually exclusive, so at most one side panel is ever on
+screen, always full width. A new phone breakpoint (`@media (max-width:
+480px)`) makes the remaining panel full-width, collapses several fixed-
+column "table row" grids to one column (Colony/Party/Trade/Threads),
+switches statblock fields to a compact multi-column badge layout (~5/row,
+reusing the existing `.attr-badge` shape), and tightens spacing app-wide
+via a denser `--sp-*` override. Rich-text toolbars default to collapsed
+now. Cast's existing touch-drag system gained hover-to-switch-tab/hover-
+to-reveal-Mission-Control mid-drag. UI/CSS-only — `npm test`'s 401 tests
+are unaffected; verification also caught and fixed a real bundler-
+compatibility bug (an `import * as X` style `scripts/build.js` doesn't
+recognize, introduced the same day) that made a "successful" build
+silently emit a broken bundle. A real narrow-viewport/touch-emulated
+browser pass is recommended as a follow-up.
+
 **2026-07-10 GMAtlas Core faction provider, Game System Activation,
 event scope/regional responses, read-aloud narrative, WHAT-tab hook**
 (`docs/adr/0032-gmatlas-core-faction-provider.md`, extending `docs/adr/

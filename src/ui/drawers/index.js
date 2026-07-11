@@ -82,13 +82,13 @@ const ENTITY_TYPES_BY_LABEL = [...ENTITY_TYPES].sort((a, b) => TYPE_LABEL[a].loc
 // The Cast drawer: list-only — search, type filter, "Generate…" (its head,
 // see shell.js's headExtraForDrawer), draggable/clickable rows. No inline
 // inspector (that moved to its own "Entity Detail" tab, entityDetail()
-// below). Cast is a real drawer like any other (2026-07-06 restructure) —
-// openable as a normal tab or anchored beside whichever drawer IS active
-// (anchored by default, via shell.js's toggleCastDrawer, so an entity can
-// still be dragged into Journal/Guide without losing sight of the list).
-// Clicking a row opens Entity Detail (data-open-entity, same as a mention
-// link or a relationship chip); dragging one (from anywhere on the row, not
-// just the ⠿ handle — see the CSS) still links/mentions same as always.
+// below). Cast is an ordinary drawer tab (docs/adr/0032 removed the anchor-
+// beside-another-drawer mechanism it used to open into). Clicking a row
+// opens Entity Detail (data-open-entity, same as a mention link or a
+// relationship chip); dragging one (from anywhere on the row, not just the
+// ⠿ handle — see the CSS) links/mentions on desktop, and on touch can
+// instead be dragged onto another tab (switches to it) or the header
+// (reveals Mission Control) mid-drag — see shell.js's onTouchMove.
 export function entities(doc, ui) {
   const allItems = listEntities(doc);
   const typeFilter = ui.entityTypeFilter || '';

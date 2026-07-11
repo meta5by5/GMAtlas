@@ -185,7 +185,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   width: auto; font-size: 0.7rem; padding: 0.1rem 0.35rem; border-radius: var(--radius-sm);
   background: var(--bg-inset); color: var(--text-dim); border: 1px solid var(--border);
 }
-.mc-drawer .entity-list, .mc-drawer-anchor .entity-list { max-height: none; margin-top: var(--sp-2); }
+.mc-drawer .entity-list { max-height: none; margin-top: var(--sp-2); }
 
 /* --- Edge tabs → tertiary drawers ----------------------------------- */
 .mc-edge {
@@ -229,33 +229,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .mc-drawer h2.drawer-title-toggle { cursor: pointer; user-select: none; }
 .mc-drawer h2.drawer-title-toggle:hover { color: var(--accent); }
 
-/* Anchor panel — a drawer pulled out of the tab stack (see anchorDrawerTab
-   in shell.js) and pinned to its own side panel immediately left of the
-   main drawer (--anchor-offset = the main drawer's own width, 0 if it's
-   closed), so two drawers can be visible at once (e.g. Journal anchored
-   left of Oracle while rolling). Same fixed-panel mechanics as .mc-drawer
-   itself, just offset further from the edge tabs. */
-.mc-drawer-anchor {
-  position: fixed; top: var(--header-h); right: calc(var(--edge-w) + var(--anchor-offset, 0px)); bottom: 0;
-  width: min(var(--anchor-w, 420px), 88vw);
-  background: var(--tier3-bg);
-  border-left: 1px solid var(--border-strong);
-  box-shadow: var(--shadow);
-  padding: var(--sp-4);
-  overflow: auto;
-  transform: translateX(100%);
-  transition: transform 0.2s ease, right 0.2s ease;
-  z-index: 20;
-  visibility: hidden;
-  pointer-events: none;
-}
-.mc-drawer-anchor[data-open="true"] { transform: translateX(0); visibility: visible; pointer-events: auto; }
-.mc-drawer-anchor .drawer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-3); }
-.mc-drawer-anchor h2 { margin: 0; font-size: 1rem; }
-
 /* Tabbed drawer switching (2026-07-04) — hidden entirely unless 2+ drawers
    are pinned open at once, so the common single-drawer case is unchanged.
-   Same tab-strip pattern as the doc viewer's own tabs (.doc-viewer-tab). */
+   Same tab-strip pattern as the doc viewer's own tabs (.doc-viewer-tab). No
+   anchor icon (docs/adr/0032 removed the second, side-by-side panel a tab
+   used to be pinned into) — a tab only ever switches or closes now. */
 .drawer-tabs {
   display: flex; align-items: stretch; margin: calc(var(--sp-4) * -1) calc(var(--sp-4) * -1) var(--sp-3);
   background: var(--tier1-bg); border-bottom: 1px solid var(--tier1-border);
@@ -269,8 +247,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .drawer-tab.active { background: var(--tier3-bg); color: var(--accent); }
 .drawer-tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.drawer-tab-anchor, .drawer-tab-close { border-radius: 3px; padding: 0 3px; }
-.drawer-tab-anchor:hover, .drawer-tab-close:hover { background: var(--bg-inset); color: var(--text); }
+.drawer-tab-close { border-radius: 3px; padding: 0 3px; }
+.drawer-tab-close:hover { background: var(--bg-inset); color: var(--text); }
 /* "Close all" — separate from a single tab's own ✕, pinned to the strip's
    right corner outside the scrollable tab list, so it's always reachable
    regardless of how many tabs are open. */
@@ -325,10 +303,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 /* Phone (<768px): Co-Pilot is a bottom sheet, summoned from an edge tab.
-   Cast/every other drawer (.mc-drawer/.mc-drawer-anchor) has no dedicated
-   phone/tablet override — it just stays the same fixed right-docked panel,
-   capped at 88vw, as on desktop; that was already true for every other
-   drawer before Cast joined the same system (2026-07-06 restructure). */
+   See the phone-tier drawer/statblock overrides further down (docs/adr/
+   0032) for .mc-drawer's own narrow-viewport treatment. */
 @media (max-width: 767px) {
   .mc-copilot {
     position: fixed; left: 0; right: var(--edge-w); bottom: 0;
@@ -359,6 +335,44 @@ button { font: inherit; color: inherit; cursor: pointer; }
 @media (min-width: 1024px) {
   /* Co-Pilot is a permanent region on desktop — never a sheet/edge-tab. */
   .mc-copilot { transform: none; }
+}
+
+/* Phone tier (<=480px), docs/adr/0032 — layered under the three-way
+   Co-Pilot split above, additive not a replacement. Two goals: (1) the one
+   remaining side panel (.mc-drawer — the doc viewer/anchor panel are
+   already always-full-width/removed respectively, see their own rules
+   above) gets the FULL viewport instead of the 88vw cap every other tier
+   still uses, safe now that at most one panel is ever open at once;
+   (2) several fixed-column "table row" grids drop to a single column so
+   every field is readable without a horizontal scrollbar — same later-in-
+   cascade-wins technique .field-row-2col's own 1023px override already
+   established just above, not !important overrides. */
+@media (max-width: 480px) {
+  .mc-drawer { left: 0; width: auto; padding: var(--sp-3); }
+  .field-row2, .colony-fields, .rel-add, .party-tracker-row, .colony-crew-row,
+  .thread-row, .trade-contract-row {
+    grid-template-columns: 1fr;
+  }
+
+  /* Statblock fields: compact label-over-value badges instead of a full-
+     width label|value row, reusing the exact shape Party's own
+     .attr-badge already proved out for the same "5+ fit on one line, no
+     horizontal scroll" problem — a `.statblock-block` child that ISN'T a
+     field row (the head, the "+ Add" controls, ...) keeps its own full-
+     width line via flex-basis:100%; every `.statblock-row` (plain/attr/
+     track — all three share this one class) wraps into the wider grid.
+     Targets ~5 plain-field badges per row on a typical phone width. */
+  .statblock-block { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: flex-start; }
+  .statblock-block > *:not(.statblock-row) { flex-basis: 100%; }
+  .statblock-row {
+    display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+    flex: 0 0 auto; width: 4.4rem; min-height: 2.6rem;
+    gap: 0; margin-bottom: 0; padding: 0.3rem 0.35rem;
+    background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.22); border-radius: 8px;
+  }
+  .statblock-row.track-row { width: 7.5rem; }
+  .statblock-key { font-size: 0.58rem; letter-spacing: 0.03em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .statblock-val { font-size: 0.78rem; width: 100%; }
 }
 
 /* ============================================================
@@ -1052,20 +1066,14 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 /* Edge tabs grew from 6 to 9 — let the strip scroll instead of clipping. */
 .mc-edge { overflow-y: auto; }
 
-/* In-app PDF viewer — "over the left and middle sections, adjacent left of
-   the document library window": fills workspace+Co-Pilot, leaves the edge
-   tabs clickable, and stops short of the open drawer (--viewer-overlap, set
-   in shell.js's render() to the current drawer's width) so an open Documents
-   drawer still reads as the library "window" the viewer sits next to —
-   rather than being drawn OVER the viewer's own content/close button. The
-   drawer keeps a higher z-index than the viewer for exactly that reason;
-   without the overlap inset, anything the viewer renders under the drawer's
-   footprint is present but physically unclickable (found via Playwright
-   during the Phase 5 verification pass — the close button reported as
-   "visible" but every click on it was intercepted by the drawer above it). */
+/* In-app PDF viewer — full width beside the edge tabs, exactly like
+   .mc-drawer's own footprint. Mutually exclusive with the main drawer
+   (docs/adr/0032: "just tab groups," one panel visible at once) — shell.js's
+   render() hides .mc-drawer whenever a document tab is open, so the two
+   never compete for z-index/click-through the way they used to when shown
+   side by side. */
 .mc-doc-viewer {
-  position: fixed; top: var(--header-h); left: 0;
-  right: calc(var(--edge-w) + var(--viewer-overlap, 0px)); bottom: 0;
+  position: fixed; top: var(--header-h); left: 0; right: var(--edge-w); bottom: 0;
   background: var(--bg); border-left: 1px solid var(--border-strong);
   display: flex; flex-direction: column; z-index: 15;
 }
@@ -1094,28 +1102,9 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .mc-doc-viewer iframe { flex: 1; border: none; width: 100%; background: #fff; }
 .mc-doc-viewer iframe[hidden] { display: none; }
 
-/* Faction Events panel (docs/adr/0031-swn-faction-turn-engine.md, renamed
-   from "Faction Log" in its location-pairing follow-up) — a left-anchored
-   panel that opens and resizes exactly like the doc viewer above
-   (position:fixed, left:0, right shrinks to stay clear of whatever drawer
-   is open), per direct request. `--factionevents-overlap` is set from the
-   same sidePanelInsetPx(doc) helper the doc viewer's --viewer-overlap
-   already uses (shell.js), so both panels react identically to a drawer
-   opening/closing/collapsing beside them. Higher z-index than the doc
-   viewer since opening it is a deliberate GM action, not something that
-   should be hidden behind an already-open viewer. */
-.mc-faction-events {
-  position: fixed; top: var(--header-h); left: 0;
-  right: calc(var(--edge-w) + var(--factionevents-overlap, 0px)); bottom: 0;
-  background: var(--bg); border-left: 1px solid var(--border-strong);
-  display: flex; flex-direction: column; z-index: 16;
-}
-.mc-faction-events[hidden] { display: none; }
-.faction-events-head {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: var(--sp-3) var(--sp-4); background: var(--tier1-bg); border-bottom: 1px solid var(--tier1-border);
-}
-.faction-events-head h2 { margin: 0; font-size: 1rem; }
+/* Faction Events (docs/adr/0031-swn-faction-turn-engine.md, docs/adr/0032)
+   is an ordinary drawer tab now, not its own fixed panel — .mc-drawer's
+   CSS above covers it. Only its body content classes remain here. */
 .faction-events-body { flex: 1; overflow: auto; padding: var(--sp-4); }
 
 /* Faction Events follow-up: co-located ally/rival/neutral chips and the

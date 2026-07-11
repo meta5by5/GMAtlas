@@ -39,3 +39,14 @@
   --copilot-w: 22rem;
   --edge-w: 3.25rem;
 }
+
+/* Phone tier (docs/adr/0032) — a denser spacing scale, scoped to this one
+   media query rather than redefining the tokens globally, so a phone
+   screen doesn't lose vertical space to desktop-sized gaps between rows.
+   Every rule in cockpit.css that reads var(--sp-*) picks this up for free —
+   no per-component overrides needed. */
+@media (max-width: 480px) {
+  :root {
+    --sp-1: 0.15rem; --sp-2: 0.35rem; --sp-3: 0.5rem; --sp-4: 0.65rem; --sp-6: 1rem;
+  }
+}

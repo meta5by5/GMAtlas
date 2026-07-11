@@ -78,15 +78,11 @@ const QUESTION_LABELS = { who: 'WHO', where: 'WHERE', what: 'WHAT', why: 'WHY', 
 // rulebooks (the ones already in assets/docs/, several 20-60MB) belong in
 // the Reference Library instead, which has no such limit.
 const MAX_DOC_UPLOAD_BYTES = 5 * 1024 * 1024;
-// 'cast' IS a real drawer (2026-07-06 restructure) — it's a full member of
-// DRAWERS/openDrawers/anchoredDrawer like any other, so "move it back into
-// the tab group" (unanchor) and "close it" both just work via the same
-// generic machinery every other drawer already has. The one thing that
-// stays special-cased is how it's OPENED: toggleCastDrawer() (not the
-// generic toggleDrawer()) opens it into the anchor slot by default rather
-// than the tab stack, since it's most useful sitting beside whichever
-// drawer IS active (to drag an entity into Journal/Guide) rather than
-// replacing it — see toggleCastDrawer below.
+// 'cast' IS a real drawer (2026-07-06 restructure), an ordinary DRAWERS/
+// openDrawers member with no special-cased open/close behavior (docs/adr/
+// 0032 removed the anchor-slot mechanism it used to open into by default —
+// dragging an entity into another tab's fields is now the touch-drag
+// hover-to-switch-tab gesture instead, see onTouchMove below).
 // 'entity-detail' (an entity's actual name/tags/overview/statblocks/
 // relationships form) is NOT here — it has no edge nav button at all, and
 // only ever opens via openDrawerTab('entity-detail') from an entity click
@@ -100,6 +96,7 @@ const DRAWERS = [
   { id: 'party', glyph: '👥', label: 'Party' },
   { id: 'cast', glyph: '☷', label: 'Cast' },
   { id: 'colony', glyph: '🏛', label: 'Colony' },
+  { id: 'faction-events', glyph: '⚔', label: 'Faction Events' },
   { id: 'trade', glyph: '💰', label: 'Trade' },
   { id: 'documents', glyph: '📄', label: 'Docs' },
   { id: 'gallery', glyph: '🖼', label: 'Gallery' },
@@ -277,31 +274,19 @@ let partyTrackerDraftKind = 'meter'; // ephemeral — the creation form's in-pro
 let partyTrackerDraftName = ''; // ephemeral — mirrors the creation form's name input so a kind-change re-render (which rebuilds that input from scratch) doesn't wipe out whatever the GM already typed
 let tradeLocationId = ''; // ephemeral — which Location's market the Trade drawer currently shows
 let tradeContractAddOpen = false; // ephemeral — the inline "+ Contract" creation form, open or not
-// A drawer can be pulled out of the normal tab stack (openDrawers/
-// activeDrawer) and "anchored" instead — pinned to its own side panel
-// (.mc-drawer-anchor) immediately left of the main drawer, so two drawers
-// are visible side by side (e.g. Journal anchored left of Oracle while
-// rolling, so a roll's journal entry is visible without switching tabs).
-// Independent of openDrawers — an anchored drawer is deliberately NOT also
-// a tab (see anchorDrawerTab/unanchorDrawerTab below).
-let anchoredDrawer = null;
-// Faction Events panel (docs/adr/0031, renamed from "Faction Log" in its
-// location-pairing follow-up) — NOT part of the drawer tab stack above,
-// exactly like the doc viewer below isn't either: its own ephemeral
-// visibility flag, toggled by the edge nav's "Faction Events" button
-// (between Cast and Trade — see EDGE_ORDER) and the panel's own ✕.
-// Opening it also anchors Cast filtered to Faction (see the click handler
-// below) — the two panels are otherwise independent once open (closing
-// one doesn't close the other). `factionEventsDrafts` holds the current
-// batch of proposed-but-not-yet-committed turn drafts (Step mode: a
-// 1-item array; Full Round: one per eligible faction, chained — see
-// domain/factionTurnEngine.js's module doc comment for why a round's
-// drafts commit as an all-or-nothing batch). `factionEventsFactionFilterId`/
+// Faction Events (docs/adr/0031/0032) is now an ordinary DRAWERS tab
+// (`renderDrawer('faction-events', ...)`, ui/drawers/factionEvents.js) —
+// no separate visibility flag needed, `openDrawers`/`activeDrawer` alone
+// decide whether it's showing, same as every other drawer. Only its own
+// ephemeral review/filter state stays here (not persisted): `factionEventsDrafts`
+// holds the current batch of proposed-but-not-yet-committed turn drafts
+// (Step mode: a 1-item array; Full Round: one per eligible faction,
+// chained — see domain/factionTurnEngine.js's module doc comment for why
+// a round's drafts commit as an all-or-nothing batch). `factionEventsFactionFilterId`/
 // `factionEventsLocationFilterId` narrow the committed-events feed by
 // faction and/or location ('' = no filter on that dimension) — WHO's
 // "Factions active nearby" jumps set the former, WHERE's "Faction
 // activity here" jumps set the latter.
-let factionEventsOpen = false;
 let factionEventsDrafts = null;
 let factionEventsFactionFilterId = '';
 let factionEventsLocationFilterId = '';
@@ -357,13 +342,6 @@ export function mountShell(el) {
         <div class="doc-viewer-empty" data-doc-viewer-empty hidden></div>
         <iframe data-doc-viewer-frame title="Document viewer"></iframe>
       </div>
-      <div class="mc-faction-events" data-faction-events hidden aria-label="Faction Events">
-        <div class="faction-events-head">
-          <h2>⚔ Faction Events</h2>
-          <button class="icon-btn" data-faction-events-close aria-label="Close">✕</button>
-        </div>
-        <div class="faction-events-body" data-faction-events-body></div>
-      </div>
       <div class="mc-search-overlay" data-search-overlay hidden aria-label="Universal Search">
         <div class="search-panel">
           <div class="search-panel-head">
@@ -385,17 +363,6 @@ export function mountShell(el) {
         <div class="dice-roll-card" data-dice-roll-card></div>
       </div>
       <nav class="mc-edge" aria-label="Drawers" data-edge></nav>
-      <aside class="mc-drawer-anchor" data-drawer-anchor aria-label="Anchored drawer">
-        <div class="drawer-head">
-          <h2 data-drawer-anchor-title>Drawer</h2>
-          <div class="drawer-head-actions">
-            <div class="drawer-head-extra" data-drawer-anchor-head-extra></div>
-            <button class="icon-btn" data-drawer-anchor-unpin title="Move back into tabs" aria-label="Move back into tabs">▶</button>
-            <button class="icon-btn" data-drawer-anchor-close title="Close" aria-label="Close">✕</button>
-          </div>
-        </div>
-        <div class="mc-drawer-body" data-drawer-anchor-body></div>
-      </aside>
       <aside class="mc-drawer" data-drawer aria-label="Drawer">
         <div class="drawer-tabs" data-drawer-tabs></div>
         <div class="drawer-head">
@@ -502,44 +469,28 @@ function onClick(ev) {
   const edge = hit('[data-drawer-open]');
   if (edge) return toggleDrawer(edge.dataset.drawerOpen);
   if (hit('[data-close-drawer]')) return closeDrawerTab(activeDrawer);
-  // Check the nested close ✕ and anchor icon before the tab button they sit
-  // inside — all three match `[data-drawer-tab]` via closest() otherwise
-  // (the tab button itself carries that attribute too), so neither would
-  // ever be reachable on its own.
+  // Check the nested close ✕ before the tab button it sits inside — both
+  // match `[data-drawer-tab]` via closest() otherwise (the tab button
+  // itself carries that attribute too), so the ✕ would never be reachable
+  // on its own.
   const drawerTabClose = hit('[data-drawer-tab-close]');
   if (drawerTabClose) return closeDrawerTab(drawerTabClose.dataset.drawerTabClose);
-  const drawerTabAnchor = hit('[data-drawer-tab-anchor]');
-  if (drawerTabAnchor) return anchorDrawerTab(drawerTabAnchor.dataset.drawerTabAnchor);
   const drawerTab = hit('[data-drawer-tab]');
   if (drawerTab) { activeDrawer = drawerTab.dataset.drawerTab; return render(); }
   if (hit('[data-close-all-drawers]')) return closeAllDrawerTabs();
   if (hit('[data-drawer-collapse]')) { drawerCollapsed = true; return render(); }
   if (hit('[data-drawer-restore]')) { drawerCollapsed = false; return render(); }
-  if (hit('[data-drawer-anchor-unpin]')) return unanchorDrawerTab();
-  // Distinct from unpin (▶, "merge into tabs"): closes the anchored drawer
-  // outright, with no promote-into-openDrawers step — fixes a real reported
-  // bug where, if the anchor panel was the only thing open, ▶ silently
-  // turned it into the MAIN drawer (which alone had a ✕) instead of closing
-  // it, forcing a confusing second click.
-  if (hit('[data-drawer-anchor-close]')) { anchoredDrawer = null; return render(); }
   if (hit('[data-toggle-copilot]')) { copilotOpen = !copilotOpen; return render(); }
-  if (hit('[data-toggle-cast]')) return toggleCastDrawer();
-  // Faction Events edge-nav button (docs/adr/0031, between Cast and Trade
-  // — see EDGE_ORDER): toggles the panel, and — only when turning it ON —
-  // also anchors Cast filtered to Faction (the same anchorDrawerTab('cast')
-  // Cast's own edge-nav button calls, so it opens exactly the way Cast
-  // always does elsewhere). sidePanelInsetPx(doc) already sums the main
-  // drawer + anchor widths, so the panel's resize math needs no changes to
-  // correctly shrink for Cast being anchored beside it. Turning the panel
-  // back off doesn't close Cast — independent lifecycles once both are open.
+  if (hit('[data-toggle-cast]')) return toggleDrawer('cast');
+  // Faction Events edge-nav button (docs/adr/0031/0032, between Cast and
+  // Trade — see EDGE_ORDER): now an ordinary drawer tab; opening it also
+  // narrows Cast's own type filter to Faction, so switching to Cast next
+  // shows exactly the roster this button implies, matching the pre-0032
+  // behavior's intent without needing a second panel open at once.
   if (hit('[data-toggle-faction-events]')) {
-    factionEventsOpen = !factionEventsOpen;
-    if (factionEventsOpen) {
-      entityTypeFilter = 'faction';
-      entityTagFilters = new Set();
-      return anchorDrawerTab('cast'); // anchorDrawerTab already calls render() itself
-    }
-    return render();
+    entityTypeFilter = 'faction';
+    entityTagFilters = new Set();
+    return toggleDrawer('faction-events');
   }
 
   // Header gear menu (Settings / About — "USER CHANGES" QoL batch,
@@ -642,7 +593,6 @@ function onClick(ev) {
 
   const roll = hit('[data-roll]');
   if (roll) {
-    anchorJournalBesideOracleRoll(roll);
     const path = roll.dataset.roll.split('>');
     let text = '';
     store.update((d) => { const r = rollOracle(d, path); text = r.text; return r.campaign; });
@@ -1016,7 +966,6 @@ function onClick(ev) {
   if (hit('[data-oracle-collapse-all]')) { expandedOracleGroups = new Set(); return renderDrawerBody(); }
   const rollGroupBtn = hit('[data-roll-group]');
   if (rollGroupBtn) {
-    anchorJournalBesideOracleRoll(rollGroupBtn);
     const path = rollGroupBtn.dataset.rollGroup.split('>');
     let text = '';
     store.update((d) => { const r = rollOracle(d, path, { group: true }); text = r.text; return r.campaign; });
@@ -1079,15 +1028,13 @@ function onClick(ev) {
     renderDrawerBody();
     return render();
   }
-  // A field's 🔮 link (docs/adr/0016) — opens Oracle anchored beside
-  // whichever drawer/tab is currently active (e.g. Entity Detail), not on
-  // top of it, so the field being written stays visible next to the
-  // filtered Oracle results — anchorDrawerTab() already renders itself.
+  // A field's 🔮 link (docs/adr/0016) — opens Oracle filtered to this
+  // field's linked tags.
   const oracleFieldLink = hit('[data-oracle-field-link]');
   if (oracleFieldLink) {
     const [entityType, field] = oracleFieldLink.dataset.oracleFieldLink.split('.');
     const tags = oracleLinkTagsFor(entityType, field);
-    if (tags) { oracleTagFilter = tags; oracleFilter = ''; anchorDrawerTab('oracle'); }
+    if (tags) { oracleTagFilter = tags; oracleFilter = ''; openDrawerTab('oracle'); render(); }
     return;
   }
 
@@ -1342,8 +1289,8 @@ function onClick(ev) {
   // to show its full live card; "← All factions" clears back to the
   // compact list.
   const rosterManage = hit('[data-faction-events-roster-manage]');
-  if (rosterManage) { factionEventsFactionFilterId = rosterManage.dataset.factionEventsRosterManage; return renderFactionEventsBody(); }
-  if (hit('[data-faction-events-roster-clear]')) { factionEventsFactionFilterId = ''; return renderFactionEventsBody(); }
+  if (rosterManage) { factionEventsFactionFilterId = rosterManage.dataset.factionEventsRosterManage; return renderDrawerBody(); }
+  if (hit('[data-faction-events-roster-clear]')) { factionEventsFactionFilterId = ''; return renderDrawerBody(); }
   // "🎭 Expand to Read-Aloud" — template-composes event.readAloud once;
   // after that the panel renders it as an editable field instead of this
   // button (data-faction-event-readaloud, handled by the rich-text commit
@@ -1358,49 +1305,45 @@ function onClick(ev) {
     });
   }
 
-  // --- Faction Events panel (docs/adr/0031, renamed from "Faction Log"
-  // in its location-pairing follow-up) — open/close + the propose-then-
-  // confirm turn controls. Drafts are held in ephemeral
-  // `factionEventsDrafts` (never persisted) until "Commit All"/"Commit"
-  // applies them for real. The edge-nav toggle (see EDGE_ORDER) is handled
-  // separately below since it also anchors Cast filtered to Faction. ---
-  if (hit('[data-faction-events-close]')) { factionEventsOpen = false; return render(); }
+  // --- Faction Events (docs/adr/0031/0032) — now an ordinary drawer tab;
+  // this block is just the propose-then-confirm turn controls. Drafts are
+  // held in ephemeral `factionEventsDrafts` (never persisted) until
+  // "Commit All"/"Commit" applies them for real. ---
   if (hit('[data-faction-events-step-go]')) {
     const select = root.querySelector('[data-faction-events-step-select]');
     const factionId = select && select.value;
     if (!factionId) return toast('Pick a faction to step first');
     const draft = proposeFactionStep(store.get(), factionId);
     factionEventsDrafts = draft ? [draft] : [];
-    return renderFactionEventsBody();
+    return renderDrawerBody();
   }
   if (hit('[data-faction-events-full-round]')) {
     factionEventsDrafts = advanceFactionTurnRound(store.get());
-    return renderFactionEventsBody();
+    return renderDrawerBody();
   }
-  if (hit('[data-faction-events-discard]')) { factionEventsDrafts = null; return renderFactionEventsBody(); }
+  if (hit('[data-faction-events-discard]')) { factionEventsDrafts = null; return renderDrawerBody(); }
   if (hit('[data-faction-events-commit]')) {
     if (factionEventsDrafts && factionEventsDrafts.length) {
       const last = factionEventsDrafts[factionEventsDrafts.length - 1];
       store.update(() => commitFactionTurn(last));
     }
     factionEventsDrafts = null;
-    return; // store.update() already re-renders the whole shell, including the panel body
+    return; // store.update() already re-renders the whole shell, including the drawer body
   }
   // WHO's "Factions active nearby" / WHERE's "Faction activity here" jump
-  // chips — open the panel pre-filtered, without touching Cast (unlike
-  // the edge-nav toggle below, which deliberately opens both together).
+  // chips — open the Faction Events tab pre-filtered.
   const factionEventsJump = hit('[data-faction-events-jump]');
   if (factionEventsJump) {
     factionEventsFactionFilterId = factionEventsJump.dataset.factionEventsJump;
     factionEventsLocationFilterId = '';
-    factionEventsOpen = true;
+    openDrawerTab('faction-events');
     return render();
   }
   const factionEventsLocationJump = hit('[data-faction-events-location-jump]');
   if (factionEventsLocationJump) {
     factionEventsLocationFilterId = factionEventsLocationJump.dataset.factionEventsLocationJump;
     factionEventsFactionFilterId = '';
-    factionEventsOpen = true;
+    openDrawerTab('faction-events');
     return render();
   }
 
@@ -2114,9 +2057,9 @@ function onChange(ev) {
     return toast(msg);
   }
   const factionEventsFactionFilterChange = t.closest('[data-faction-events-faction-filter]');
-  if (factionEventsFactionFilterChange) { factionEventsFactionFilterId = t.value; return renderFactionEventsBody(); }
+  if (factionEventsFactionFilterChange) { factionEventsFactionFilterId = t.value; return renderDrawerBody(); }
   const factionEventsLocationFilterChange = t.closest('[data-faction-events-location-filter]');
-  if (factionEventsLocationFilterChange) { factionEventsLocationFilterId = t.value; return renderFactionEventsBody(); }
+  if (factionEventsLocationFilterChange) { factionEventsLocationFilterId = t.value; return renderDrawerBody(); }
 
   // --- docs/adr/0032: GMAtlas Core provider selection + Refit Asset —
   // data-faction-field carries an explicit faction id (unlike the generic
@@ -2481,10 +2424,6 @@ function toggleDrawer(id) {
 
 function openDrawerTab(id) {
   if (!id) return;
-  // Opening a drawer that's currently anchored (e.g. clicking its edge-tab
-  // button directly) restores it to normal tab behavior rather than leaving
-  // it anchored AND also added as a duplicate tab.
-  if (anchoredDrawer === id) anchoredDrawer = null;
   if (!openDrawers.includes(id)) {
     openDrawers = [...openDrawers, id];
     if (id === 'oracle') oracleFilter = '';
@@ -2498,72 +2437,6 @@ function closeDrawerTab(id) {
   openDrawers = openDrawers.filter((d) => d !== id);
   if (activeDrawer === id) activeDrawer = openDrawers[openDrawers.length - 1] || null;
   render();
-}
-
-// Pull a drawer OUT of the tab stack and pin it to the side panel left of
-// the main drawer instead (see anchoredDrawer's doc comment above). Only
-// one drawer can be anchored at a time — anchoring a second one displaces
-// whichever was already there back into the normal tab group (never just
-// discarded; "avoid closing or removing access"), same as
-// unanchorDrawerTab does for the ▶ button. Also works on a drawer that
-// isn't currently a tab at all (Cast's toggleCastDrawer relies on this —
-// it can open straight into the anchor slot without ever touching
-// openDrawers first).
-function anchorDrawerTab(id) {
-  if (!id) return;
-  openDrawers = openDrawers.filter((d) => d !== id);
-  if (activeDrawer === id) activeDrawer = openDrawers[openDrawers.length - 1] || null;
-  if (anchoredDrawer && anchoredDrawer !== id) {
-    const displaced = anchoredDrawer;
-    if (!openDrawers.includes(displaced)) openDrawers = [...openDrawers, displaced];
-    if (!activeDrawer) activeDrawer = displaced;
-  }
-  anchoredDrawer = id;
-  render();
-}
-
-// The anchor panel's own "▶ move back into tabs" button — restores the
-// anchored drawer to the normal tab stack as the active tab.
-function unanchorDrawerTab() {
-  if (!anchoredDrawer) return;
-  const id = anchoredDrawer;
-  anchoredDrawer = null;
-  if (!openDrawers.includes(id)) openDrawers = [...openDrawers, id];
-  activeDrawer = id;
-  render();
-}
-
-// Cast's edge-nav toggle — opens into the anchor slot by default (a
-// draggable, searchable entity list is most useful sitting beside whichever
-// drawer IS active, e.g. to drag an entity into Journal or Guide, rather
-// than replacing it in the tab stack), but once moved into the tab group
-// (its own ⇤/▶ icons, same as any other drawer) it behaves exactly like one
-// from then on — this only special-cases the "currently closed everywhere"
-// case, not Cast's behavior once it's open.
-function toggleCastDrawer() {
-  if (anchoredDrawer === 'cast') { anchoredDrawer = null; return render(); }
-  if (openDrawers.includes('cast')) {
-    if (activeDrawer === 'cast') return closeDrawerTab('cast');
-    activeDrawer = 'cast';
-    return render();
-  }
-  anchorDrawerTab('cast');
-}
-
-// "Open the Journal anchoring it to the left of Oracles when rolling on
-// Oracle tables": rolling FROM the Oracle drawer itself (`.mc-drawer-body`
-// is shared by both the main drawer and the anchor panel, so this fires
-// regardless of which one Oracle happens to be in — but NOT from the
-// Co-Pilot's own quick-roll shortcut, which has no such ancestor) pins
-// Journal into the anchor slot so the entry the roll just logged is
-// visible without switching tabs. No-ops if something is already anchored
-// (including Oracle itself, if the GM anchored Oracle rather than Journal)
-// — this only ever fills an empty anchor slot, never steals one.
-function anchorJournalBesideOracleRoll(el) {
-  if (!el.closest('.mc-drawer-body') || anchoredDrawer) return;
-  openDrawers = openDrawers.filter((d) => d !== 'journal');
-  if (activeDrawer === 'journal') activeDrawer = openDrawers[openDrawers.length - 1] || null;
-  anchoredDrawer = 'journal';
 }
 
 // The tab strip's own "✕ close all" corner button — distinct from a single
@@ -3090,6 +2963,11 @@ function completeDrop(target, { entityId, documentId }, clientX, clientY) {
 // completeDrop() the mouse path uses, rather than a second interaction
 // model with its own chance to drift out of sync.
 const TOUCH_DRAG_THRESHOLD = 10; // px of finger movement before a touch counts as a drag, not a tap/scroll
+// docs/adr/0032: how long a drag has to hover over a different tab (or the
+// header) before it switches to it / reveals Mission Control — long enough
+// that passing over a tab en route elsewhere doesn't trigger it, short
+// enough to feel responsive once the GM actually parks there.
+const TOUCH_HOVER_DWELL_MS = 500;
 let touchDrag = null;
 
 function onTouchStart(ev) {
@@ -3105,7 +2983,34 @@ function onTouchStart(ev) {
     documentId: docSrc ? docSrc.dataset.dragDocument : null,
     startX: touch.clientX, startY: touch.clientY,
     engaged: false, lastTarget: null, ghostEl: null,
+    hoverKey: null, hoverTimer: null,
   };
+}
+
+// While a touch drag is active, hovering over a different drawer tab (or
+// the header) for TOUCH_HOVER_DWELL_MS switches to it / collapses the
+// drawer to reveal Mission Control — WITHOUT ending the drag, so a field
+// that was hidden when the drag started can still be the eventual drop
+// target (docs/adr/0032's "drag a Cast entity onto another tab" ask). The
+// dwell timer resets the instant the touch point leaves whatever zone it
+// was over; render()'s targeted innerHTML replacements never touch
+// document.body, so the drag's own ghost element (a document.body child,
+// not inside `root`) survives a mid-drag re-render untouched.
+function updateTouchDragHover(under) {
+  const hoverTab = under && under.closest('.drawer-tab');
+  const hoverHeader = under && under.closest('.mc-header');
+  const hoverKey = hoverTab ? 'tab:' + hoverTab.dataset.drawerTab : hoverHeader ? 'header' : null;
+  if (hoverKey === touchDrag.hoverKey) return;
+  touchDrag.hoverKey = hoverKey;
+  clearTimeout(touchDrag.hoverTimer);
+  if (hoverHeader) {
+    if (!drawerCollapsed) touchDrag.hoverTimer = setTimeout(() => { drawerCollapsed = true; render(); }, TOUCH_HOVER_DWELL_MS);
+  } else if (hoverTab) {
+    const targetId = hoverTab.dataset.drawerTab;
+    if (targetId !== activeDrawer || drawerCollapsed) {
+      touchDrag.hoverTimer = setTimeout(() => { activeDrawer = targetId; drawerCollapsed = false; render(); }, TOUCH_HOVER_DWELL_MS);
+    }
+  }
 }
 
 function onTouchMove(ev) {
@@ -3120,6 +3025,7 @@ function onTouchMove(ev) {
   ev.preventDefault(); // only once actually dragging — a plain tap/scroll is never blocked
   if (touchDrag.ghostEl) { touchDrag.ghostEl.style.left = touch.clientX + 'px'; touchDrag.ghostEl.style.top = touch.clientY + 'px'; }
   const under = document.elementFromPoint(touch.clientX, touch.clientY);
+  updateTouchDragHover(under);
   const dropTarget = under && under.closest(touchDrag.guideNodeId ? '[data-drop-guide-node]' : DROP_TARGET_SELECTOR);
   if (dropTarget !== touchDrag.lastTarget) {
     if (touchDrag.lastTarget) touchDrag.lastTarget.classList.remove('drop-hover');
@@ -3134,6 +3040,7 @@ function onTouchEnd() {
   if (!touchDrag) return;
   const drag = touchDrag;
   touchDrag = null;
+  clearTimeout(drag.hoverTimer);
   if (drag.ghostEl) drag.ghostEl.remove();
   if (drag.lastTarget) drag.lastTarget.classList.remove('drop-hover');
   if (!drag.engaged || !drag.lastTarget) return; // a tap, or released off any valid target
@@ -3542,19 +3449,17 @@ function render() {
   const edge = root.querySelector('[data-edge]');
   edge.innerHTML = EDGE_ORDER.map((id) => {
     if (id === 'copilot') return `<button data-toggle-copilot title="Co-Pilot"><span class="glyph">💡</span><b>Co-Pilot</b></button>`;
-    // Faction Events (docs/adr/0031) isn't a DRAWERS/renderDrawer() entry —
-    // its own fixed left-anchored panel (see mc-faction-events) — so it's
-    // special-cased here exactly like 'copilot' above, not looked up via
-    // drawerMeta. Opening it also anchors Cast filtered to Faction (see
-    // the click handler), so its aria-expanded reflects the panel's own
-    // factionEventsOpen flag, not any drawer/anchor state.
-    if (id === 'faction-events') return `<button data-toggle-faction-events aria-expanded="${factionEventsOpen}" title="Faction Events — SWN faction turns, opens Cast filtered to Faction alongside it"><span class="glyph">⚔</span><b>Faction Events</b></button>`;
+    // Faction Events (docs/adr/0031/0032) is an ordinary DRAWERS entry now
+    // (see renderDrawer()'s switch) — special-cased ONLY because opening it
+    // also narrows Cast's own type filter to Faction (see the click
+    // handler), so it needs its own button attribute instead of the plain
+    // data-drawer-open every other tile below uses.
+    if (id === 'faction-events') {
+      const d = drawerMeta('faction-events');
+      return `<button data-toggle-faction-events aria-expanded="${openDrawers.includes('faction-events')}" title="Faction Events — SWN faction turns, narrows Cast to Factions"><span class="glyph">${d.glyph}</span><b>${d.label}</b></button>`;
+    }
     const d = drawerMeta(id);
     if (!d) return '';
-    if (id === 'cast') {
-      const isOpen = anchoredDrawer === 'cast' || openDrawers.includes('cast');
-      return `<button data-toggle-cast aria-expanded="${isOpen}" title="Cast — a draggable, searchable entity list; opens anchored beside whichever drawer is active by default"><span class="glyph">${d.glyph}</span><b>${d.label}</b></button>`;
-    }
     return `<button data-drawer-open="${d.id}" aria-expanded="${activeDrawer === d.id}" title="${d.label}">
       <span class="glyph">${d.glyph}</span><b>${d.label}</b>
     </button>`;
@@ -3585,8 +3490,14 @@ function render() {
     }
   }
 
+  // The doc viewer (below) and the main drawer are mutually exclusive
+  // (docs/adr/0032: "just tab groups," never two panels sharing the
+  // viewport at once) — a document open takes over the full panel width;
+  // closing its last open tab (or it never having one) returns to the
+  // normal drawer tab-stack.
+  const docViewerOpenTabs = (doc.documents && doc.documents.openTabs) || [];
   const drawer = root.querySelector('[data-drawer]');
-  drawer.dataset.open = String(openDrawers.length > 0 && !drawerCollapsed);
+  drawer.dataset.open = String(openDrawers.length > 0 && !drawerCollapsed && docViewerOpenTabs.length === 0);
   const titleEl = drawer.querySelector('[data-drawer-title]');
   titleEl.textContent = titleForDrawer(doc, activeDrawer);
   titleEl.classList.remove('drawer-title-toggle'); // Cast's own collapse-via-title is gone — Cast isn't a drawer tab anymore
@@ -3597,11 +3508,9 @@ function render() {
   // Tab strip — same pattern as the doc viewer's own tabs below: one pinned
   // drawer per tab, click to switch, ✕ to close without needing to make it
   // active first. Hidden entirely when only one (or zero) drawers are open,
-  // so the common case looks identical to the old single-drawer UI. Each
-  // tab also gets an anchor icon (⇤) that pulls it out of this stack
-  // entirely and pins it to its own side panel left of the main drawer
-  // (see anchorDrawerTab) — e.g. Journal anchored left of Oracle while
-  // rolling, so both stay visible at once.
+  // so the common case looks identical to the old single-drawer UI. No
+  // anchor icon (docs/adr/0032 removed the second, side-by-side panel this
+  // used to pin a tab into — every tab is a full-width switch now).
   const drawerTabsEl = root.querySelector('[data-drawer-tabs]');
   drawerTabsEl.hidden = openDrawers.length < 2;
   drawerTabsEl.innerHTML = openDrawers.length < 2 ? '' : (
@@ -3609,7 +3518,6 @@ function render() {
       const m = drawerMeta(id);
       return `<button class="drawer-tab ${id === activeDrawer ? 'active' : ''}" data-drawer-tab="${id}" title="${m ? m.label : id}">
         <span class="glyph">${m ? m.glyph : ''}</span><span class="drawer-tab-label">${m ? m.label : id}</span>
-        <span class="drawer-tab-anchor" data-drawer-tab-anchor="${id}" title="Anchor beside the main drawer" aria-label="Anchor ${m ? m.label : id} beside the main drawer">⇤</span>
         <span class="drawer-tab-close" data-drawer-tab-close="${id}" aria-label="Close ${m ? m.label : id}">✕</span>
       </button>`;
     }).join('')}</div>
@@ -3620,32 +3528,9 @@ function render() {
   if (restoreBtn) restoreBtn.hidden = !(drawerCollapsed && openDrawers.length > 0);
   renderDrawerBody();
 
-  // The anchor panel — a second, independent "current drawer" slot pinned
-  // left of the main drawer (see anchoredDrawer's doc comment). Uses the
-  // exact same renderDrawer()/titleForDrawer() the main drawer does; the
-  // two are otherwise unrelated (a drawer is either a normal tab or
-  // anchored, never both — see openDrawerTab/anchorDrawerTab).
-  const anchorPanel = root.querySelector('[data-drawer-anchor]');
-  anchorPanel.dataset.open = String(!!anchoredDrawer);
-  anchorPanel.querySelector('[data-drawer-anchor-title]').textContent = titleForDrawer(doc, anchoredDrawer);
-  const anchorHeadExtra = anchorPanel.querySelector('[data-drawer-anchor-head-extra]');
-  if (anchorHeadExtra) anchorHeadExtra.innerHTML = headExtraForDrawer(anchoredDrawer);
-  const mainDrawerWidthPx = openDrawers.length > 0 ? (doc.drawers.widths[activeDrawer] || 420) : 0;
-  anchorPanel.style.setProperty('--anchor-offset', mainDrawerWidthPx + 'px');
-  anchorPanel.style.setProperty('--anchor-w', (doc.drawers.widths[anchoredDrawer] || 420) + 'px');
-  renderDrawerAnchorBody();
-
   const viewer = root.querySelector('[data-doc-viewer]');
-  const openTabs = (doc.documents && doc.documents.openTabs) || [];
+  const openTabs = docViewerOpenTabs;
   viewer.hidden = openTabs.length === 0;
-  // Stop the viewer short of whatever drawer is currently open (it's always
-  // the Documents drawer in practice, since that's the only place a
-  // data-doc-open link exists) — the drawer sits at a higher z-index, so
-  // without this the viewer's own controls (e.g. a tab's close button)
-  // render underneath the drawer and become unclickable despite being
-  // visible. Accounts for an anchored drawer too, if one is pinned beside
-  // the main drawer (sidePanelInsetPx below).
-  viewer.style.setProperty('--viewer-overlap', `${sidePanelInsetPx(doc)}px`);
   if (openTabs.length) {
     const activeTab = doc.documents.activeTab && openTabs.includes(doc.documents.activeTab)
       ? doc.documents.activeTab : openTabs[openTabs.length - 1];
@@ -3703,29 +3588,8 @@ function render() {
     }
   }
 
-  const factionEventsEl = root.querySelector('[data-faction-events]');
-  factionEventsEl.hidden = !factionEventsOpen;
-  // Same overlap mechanic as the doc viewer's --viewer-overlap above,
-  // shrinking the panel to stay clear of whatever drawer is open beside
-  // it — see cockpit.css's .mc-faction-events doc comment.
-  factionEventsEl.style.setProperty('--factionevents-overlap', `${sidePanelInsetPx(doc)}px`);
-  if (factionEventsOpen) renderFactionEventsBody();
-
   renderSearchOverlay();
   renderDiceRollOverlay();
-}
-
-// Faction Events panel body — a targeted update (not the whole render())
-// so picking a faction to Step, or Commit/Discard-ing a proposed batch,
-// doesn't need a full store.update() round-trip when nothing in the
-// campaign has actually changed yet (ephemeral factionEventsDrafts aren't
-// persisted campaign state). Called from render() when the panel is open,
-// and directly by the draft-related click handlers above.
-function renderFactionEventsBody() {
-  const body = root && root.querySelector('[data-faction-events-body]');
-  if (!body) return;
-  const doc = store.get();
-  replaceBodyPreservingScroll(body, renderFactionEvents(doc, { factionEventsDrafts, factionEventsFactionFilterId, factionEventsLocationFilterId }));
 }
 
 // Lives outside the drawer/workspace update paths above since it's a
@@ -3838,27 +3702,10 @@ function diceRollCardHtml(label, method, r) {
     </div>`;
 }
 
-// Total horizontal space (in px) the main drawer + an anchored drawer (if
-// pinned) together occupy, immediately left of the edge tabs — what the doc
-// viewer's --viewer-overlap needs to stay clear of, so its own controls
-// (e.g. a tab's close button) don't render underneath (and therefore
-// unclickable behind) either drawer panel. A collapsed main drawer
-// (drawerCollapsed) is visually gone — the viewer should reclaim that
-// space and expand to cover the workspace behind it, the same "see what's
-// underneath" goal the collapse arrow itself exists for — so it drops out
-// of this calculation entirely while collapsed. The anchor panel isn't
-// affected by the main drawer's collapse state, so it still counts.
-function sidePanelInsetPx(doc) {
-  let px = 0;
-  if (openDrawers.length > 0 && !drawerCollapsed) px += doc.drawers.widths[activeDrawer] || 420;
-  if (anchoredDrawer) px += doc.drawers.widths[anchoredDrawer] || 420;
-  return px;
-}
 
 // Entity Detail's title names whichever entity it's currently showing —
 // there's only ever the one active entity, so unlike every other drawer
-// there's no separate list to distinguish it from. Shared by both the main
-// drawer and the anchor panel, since either can show it.
+// there's no separate list to distinguish it from.
 function titleForDrawer(doc, id) {
   if (id === 'entity-detail') {
     const active = getEntity(doc, doc.entities && doc.entities.activeId);
@@ -3869,13 +3716,10 @@ function titleForDrawer(doc, id) {
 }
 
 // Cast's "Generate…" dropdown is the one drawer-specific control that lives
-// in the HEAD (next to the close ✕/unpin ▶) rather than the body — every
-// other drawer's own controls (Party's "+ Tracker", Trade's "+ Contract",
-// ...) stay inside their own body content, but Cast's search/filter/list
-// already fills that space, and the dropdown needs to read "right next to
-// the close button" regardless of whether Cast is the main drawer or
-// anchored. Both head-extra slots call this; it's a no-op ('') for every
-// other drawer id.
+// in the HEAD (next to the close ✕) rather than the body — every other
+// drawer's own controls (Party's "+ Tracker", Trade's "+ Contract", ...)
+// stay inside their own body content, but Cast's search/filter/list
+// already fills that space. A no-op ('') for every other drawer id.
 function castGenerateSelectHtml() {
   return `<select class="entity-generate-select" data-entity-generate title="Create a new entity of this type">
     <option value="" selected>Generate…</option>
@@ -3898,9 +3742,7 @@ function headExtraForDrawer(id) {
   return '';
 }
 
-// Every ephemeral UI flag a drawer template might read, in one place —
-// shared by the main drawer and the anchor panel (renderDrawerAnchorBody
-// below) since either can be asked to render any drawer id.
+// Every ephemeral UI flag a drawer template might read, in one place.
 function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
@@ -3941,17 +3783,26 @@ function replaceBodyPreservingScroll(body, html) {
   }
 }
 
+// Faction Events (docs/adr/0031/0032) renders via its own pure function
+// (ui/drawers/factionEvents.js) instead of drawers/index.js's renderDrawer()
+// switch — that file already imports factionTurnSectionHtml FROM
+// drawers/index.js (to reuse the exact same live Faction Turn card inside
+// its Roster section), so routing renderDrawer() through it too would be a
+// circular import between the two files. This is the one drawer id with a
+// special case here; everything else (open/close/tab-switch/width) is
+// identical to any other DRAWERS entry.
+function renderActiveDrawerHtml(doc) {
+  if (!activeDrawer) return '';
+  if (activeDrawer === 'faction-events') {
+    return renderFactionEvents(doc, { factionEventsDrafts, factionEventsFactionFilterId, factionEventsLocationFilterId });
+  }
+  return renderDrawer(activeDrawer, doc, buildDrawerUi());
+}
+
 function renderDrawerBody() {
   const doc = store.get();
   const body = root && root.querySelector('[data-drawer-body]');
-  if (body) {
-    replaceBodyPreservingScroll(body, activeDrawer ? renderDrawer(activeDrawer, doc, buildDrawerUi()) : '');
-  }
-  // Every ephemeral UI flag this touches (oracleFilter, recapOpen, ...)
-  // could equally apply to whichever drawer is anchored, not just the main
-  // one — refreshing both here means none of renderDrawerBody's many call
-  // sites need to remember to also call renderDrawerAnchorBody themselves.
-  renderDrawerAnchorBody();
+  if (body) replaceBodyPreservingScroll(body, renderActiveDrawerHtml(doc));
   // Clicking any entity link (inline mention, WHO/WHERE chip, relationship
   // chip, graph node, ...) sets this so the Cast inspector's name field is
   // immediately focused+selected once it renders — "single click opens it
@@ -3961,16 +3812,6 @@ function renderDrawerBody() {
     const nameInput = root && root.querySelector('.inspector-name');
     if (nameInput) { nameInput.focus(); nameInput.select(); }
   }
-}
-
-// The anchor panel's content — same renderDrawer()/buildDrawerUi() the main
-// drawer uses, just targeting the anchor panel's own body element. A drawer
-// is never both anchored AND the active tab at once (see openDrawerTab/
-// anchorDrawerTab), so there's no risk of double-rendering the same id.
-function renderDrawerAnchorBody() {
-  const doc = store.get();
-  const body = root && root.querySelector('[data-drawer-anchor-body]');
-  if (body) replaceBodyPreservingScroll(body, anchoredDrawer ? renderDrawer(anchoredDrawer, doc, buildDrawerUi()) : '');
 }
 
 // A store.update() that fails to persist (most commonly localStorage quota
