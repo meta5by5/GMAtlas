@@ -54,7 +54,7 @@
 // - "District" is a single-level contains/located_at check (entities.js's
 //   isSameDistrict), not deep ancestor recursion.
 
-import { getEntity, updateEntity, listEntities, getRelationshipBetween, isSameDistrict, findMentions, ensureFactionTurnFields } from './entities.js';
+import { getEntity, updateEntity, listEntities, getRelationshipBetween, isSameDistrict, findMentions, ensureFactionTurnFields, getContainingLocation, getContainedLocations, getEntityFaction, setEntityFactionMembership } from './entities.js';
 import { listThreads, addThread, advanceThread, removeThread } from './threads.js';
 // Provider indirection (docs/adr/0032): every asset/tag/goal catalog lookup
 // below resolves through factionProviderFor(campaign, faction) instead of
@@ -139,6 +139,97 @@ export function factionsAtLocation(campaign, factionId, locationId) {
     }
   }
   return out;
+}
+
+/** Every location structurally related to `locationId` — its full
+ *  located_at ancestor chain PLUS every location any of those ancestors
+ *  (and locationId itself) `contains`, walked breadth-first. A single
+ *  `visited` Set both prevents re-queuing (so a cycle, though today's
+ *  data can't produce one, can't infinite-loop) and is itself the only
+ *  cycle guard the descend phase needs; `maxDepth` additionally caps how
+ *  far up the ancestor chain climbing goes, as a second, independent
+ *  backstop. Distinct from isSameDistrict's deliberate single-hop scope —
+ *  this is the deep-traversal counterpart for "every location anywhere in
+ *  this location's whole region," not "is this the same immediate
+ *  district." */
+function regionLocationIds(campaign, locationId, maxDepth) {
+  const visited = new Set();
+  if (!locationId) return visited;
+  const queue = [locationId];
+  visited.add(locationId);
+  let cursor = locationId;
+  let depth = 0;
+  while (depth < maxDepth) {
+    const parent = getContainingLocation(campaign, cursor);
+    if (!parent || visited.has(parent.id)) break;
+    visited.add(parent.id);
+    queue.push(parent.id);
+    cursor = parent.id;
+    depth++;
+  }
+  let i = 0;
+  while (i < queue.length) {
+    const id = queue[i]; i++;
+    for (const child of getContainedLocations(campaign, id)) {
+      if (!visited.has(child.id)) { visited.add(child.id); queue.push(child.id); }
+    }
+  }
+  return visited;
+}
+
+/** Every faction with ANY presence — an asset, homeworld, Base of
+ *  Influence, a governed location, or a location whose own membership
+ *  (entities.js's getEntityFaction) points at them — anywhere in
+ *  `locationId`'s full region (regionLocationIds above), not just the
+ *  single co-located location factionsAtLocation checks. This is the
+ *  "location is the central determining factor in which factions are
+ *  active" query: it's what a Region view or faction-driven mission/
+ *  encounter generation (Phase C) reads from instead of reinventing a
+ *  named Region entity type. Tags each with `.stance` relative to
+ *  `anchorFactionId` when one is given (same shape as factionsAtLocation's
+ *  own `.stance`); 'neutral' when no anchor is given, since there's
+ *  nothing to compare against. */
+export function factionsInRegion(campaign, locationId, { anchorFactionId = null, maxDepth = 6 } = {}) {
+  const regionIds = regionLocationIds(campaign, locationId, maxDepth);
+  const out = [];
+  for (const f of listEntities(campaign, 'faction')) {
+    if (f.id === anchorFactionId) continue;
+    const viaAsset = (f.factionAssets || []).some((a) => regionIds.has(a.locationId));
+    const viaHomeworld = regionIds.has(f.homeworldId);
+    const viaBase = (f.basesOfInfluence || []).some((b) => regionIds.has(b.locationId));
+    const viaGoverned = (f.governedLocationIds || []).some((id) => regionIds.has(id));
+    const viaMembership = Array.from(regionIds).some((id) => {
+      const owner = getEntityFaction(campaign, id);
+      return owner && !owner.synthetic && owner.id === f.id;
+    });
+    if (viaAsset || viaHomeworld || viaBase || viaGoverned || viaMembership) {
+      const stance = anchorFactionId ? relationshipStanceBetween(campaign, anchorFactionId, f.id) : 'neutral';
+      out.push({ faction: f, stance });
+    }
+  }
+  return out;
+}
+
+/** Every faction actually present AT `locationId` specifically — active
+ *  asset, homeworld, Base of Influence, a governed location, or the
+ *  location's own faction membership (entities.js's getEntityFaction) —
+ *  the single-location, no-exclusions counterpart to factionsAtLocation
+ *  (which always excludes one anchor faction, for targeting) and
+ *  factionsInRegion (which walks the whole containment tree, for a wider
+ *  "active nearby" query). Used to scope the Faction Events panel to
+ *  whoever's narratively active at WHERE's own current location, rather
+ *  than listing every faction in the campaign regardless of relevance. */
+export function factionsPresentAt(campaign, locationId) {
+  if (!locationId) return [];
+  const owner = getEntityFaction(campaign, locationId);
+  return listEntities(campaign, 'faction').filter((f) => {
+    const viaAsset = (f.factionAssets || []).some((a) => a.locationId === locationId && a.status === 'active' && !a.stealthed);
+    const viaHomeworld = f.homeworldId === locationId;
+    const viaBase = (f.basesOfInfluence || []).some((b) => b.locationId === locationId);
+    const viaGoverned = (f.governedLocationIds || []).includes(locationId);
+    const viaMembership = owner && !owner.synthetic && owner.id === f.id;
+    return viaAsset || viaHomeworld || viaBase || viaGoverned || viaMembership;
+  });
 }
 
 /** factionsAtLocation entries actually eligible as an Attack/Seize Planet
@@ -399,6 +490,150 @@ export function factionsWithGoalNearCompletion(campaign) {
     .filter((t) => t.kind === 'faction-goal' && !t.done && t.status !== 'resolved' && t.status !== 'archived' && t.filled / t.segments >= 0.75)
     .map((t) => ({ ...t, faction: getFaction(campaign, t.factionId) }))
     .filter((t) => t.faction);
+}
+
+/** A single read-only rollup of everything this faction "is" — its own
+ *  record, every entity actually a member of it (real member_of edges,
+ *  not the synthetic Unaligned fallback), the locations it governs, its
+ *  current goal (definition + progress track), its allies/rivals, and its
+ *  slice of the campaign-wide Faction Events log. This is what "the
+ *  faction forms track all faction history, NPCs, assets, colonies, and
+ *  storyline" cashes out to: one query a faction's inspector card reads,
+ *  not a new stored record — everything here is already tracked
+ *  elsewhere (entities' relationships, the faction's own fields, the
+ *  shared event log); this just assembles the view. Returns null for a
+ *  missing/non-faction id. */
+export function getFactionDossier(campaign, factionId) {
+  const faction = getFaction(campaign, factionId);
+  if (!faction || faction.type !== 'faction') return null;
+  const memberEntities = listEntities(campaign)
+    .filter((e) => e.id !== factionId && (e.relationships || []).some((r) => r.type === 'member_of' && r.to === factionId));
+  const governedLocations = (faction.governedLocationIds || []).map((id) => getEntity(campaign, id)).filter(Boolean);
+  const provider = factionProviderFor(campaign, faction);
+  const goalDefinition = faction.currentGoalId ? provider.findGoal(faction.currentGoalId) : null;
+  const goalTrack = getFactionGoalTrack(campaign, factionId);
+  const allies = []; const rivals = [];
+  for (const other of listEntities(campaign, 'faction')) {
+    if (other.id === factionId) continue;
+    const stance = relationshipStanceBetween(campaign, factionId, other.id);
+    if (stance === 'ally') allies.push(other);
+    else if (stance === 'rival') rivals.push(other);
+  }
+  const events = (campaign.factionEvents || []).filter((e) => e.factionId === factionId);
+  return { faction, memberEntities, governedLocations, goal: { definition: goalDefinition, track: goalTrack }, allies, rivals, events };
+}
+
+/** Living Faction Engine Phase B — a derived read, not a stored flag
+ *  (same "compute on every read" convention as isRelationshipFlagged/
+ *  overlookedThreads): true once enough scenes have passed since the
+ *  last committed faction round to make one due. `settings.factionPacing`
+ *  is additive/lazy — an old campaign without it reads as the schema
+ *  default (3 scenes) rather than throwing. */
+export function isFactionRoundDue(campaign) {
+  const p = (campaign.settings && campaign.settings.factionPacing) || { scenesPerRound: 3, scenesSinceLastRound: 0 };
+  const threshold = p.scenesPerRound != null ? p.scenesPerRound : 3;
+  if (threshold <= 0) return false; // 0 (or negative) is the "off" setting, not "always due"
+  return (p.scenesSinceLastRound || 0) >= threshold;
+}
+
+/** Resets the pacing counter — called once a faction turn is actually
+ *  committed (Step or Full Round), never on propose/discard, since only a
+ *  committed turn represents party activity actually being "spent." */
+export function resetFactionPacing(campaign) {
+  const next = clone(campaign);
+  next.settings = next.settings || {};
+  const p = next.settings.factionPacing || { scenesPerRound: 3, scenesSinceLastRound: 0 };
+  next.settings.factionPacing = { ...p, scenesSinceLastRound: 0 };
+  return next;
+}
+
+/** Every committed Faction Event grouped by `turnNumber`, most recent
+ *  round first — Round History browsing (Living Faction Engine Phase D).
+ *  A pure grouping over the existing log; no new stored state. */
+export function factionEventsByRound(campaign, { factionId } = {}) {
+  const log = Array.isArray(campaign.factionEvents) ? campaign.factionEvents : [];
+  const filtered = factionId ? log.filter((e) => e.factionId === factionId) : log;
+  const byRound = new Map();
+  for (const e of filtered) {
+    const tn = e.turnNumber || 0;
+    if (!byRound.has(tn)) byRound.set(tn, []);
+    byRound.get(tn).push(e);
+  }
+  return Array.from(byRound.entries())
+    .sort((a, b) => b[0] - a[0])
+    .map(([turnNumber, events]) => ({ turnNumber, events }));
+}
+
+/** Faction Conflict's escalation clock — a Thread (`kind:
+ *  'faction-conflict-escalation', conflictId`), mirroring the faction
+ *  goal track's exact shape/UI (the same pip clock, the same advance/
+ *  back controls) — deliberately the single most prominent piece of a
+ *  conflict's UI, per the design's own validation against GM-community
+ *  sentiment on Blades in the Dark-style clocks being the most beloved
+ *  "track pressure without homework" pattern in the hobby. */
+export function getConflictEscalationTrack(campaign, conflictId) {
+  return listThreads(campaign).find((t) => t.kind === 'faction-conflict-escalation' && t.conflictId === conflictId) || null;
+}
+
+/** Creates a conflict's escalation Thread the first time it's needed —
+ *  no-op if one already exists. Unlike a faction's goal track (replaced
+ *  whenever the goal changes), a conflict's escalation clock is
+ *  permanent for that conflict's whole lifetime — there's nothing to
+ *  swap it for. `segments` defaults to 6 (Cold/Simmering/Skirmish/
+ *  Active/Escalated/Open War), but a GM can size a shorter/longer
+ *  conflict differently at creation time. */
+export function ensureConflictEscalationTrack(campaign, conflictId, segments = 6) {
+  const conflict = getEntity(campaign, conflictId);
+  if (!conflict || conflict.type !== 'conflict') return clone(campaign);
+  if (getConflictEscalationTrack(campaign, conflictId)) return clone(campaign);
+  let next = clone(campaign);
+  next = addThread(next, conflict.name || 'Conflict', segments);
+  const t = next.threads[next.threads.length - 1];
+  t.kind = 'faction-conflict-escalation';
+  t.conflictId = conflictId;
+  return next;
+}
+
+/** Faction Conflict × Faction Turn Engine integration (docs/adr/0036
+ *  follow-up — closing the "the clock is GM-vibes-only, disconnected
+ *  from what the dice actually resolved" gap): given the ids of one or
+ *  more just-COMMITTED Faction Events, finds every Conflict whose
+ *  `involves` relationships plausibly cover BOTH sides of that event —
+ *  the acting faction, plus either the Attack's named defender
+ *  (`event.targets[0].factionId`, the only action with one specific
+ *  named opponent) or any RIVAL co-located faction for a faction-vs-
+ *  world event (Expand Influence/Seize Planet have no single named
+ *  opponent — every co-located rival is a plausible match). A
+ *  SUGGESTION only — this never advances anything itself; the caller
+ *  surfaces each match for the GM to accept (advance the conflict's own
+ *  escalation Thread, same `advanceThread` every other clock in this
+ *  app already uses) or dismiss (Article II — the dice informed this,
+ *  they didn't decide it). */
+export function suggestedConflictEscalations(campaign, eventIds) {
+  if (!eventIds || !eventIds.length) return [];
+  const events = (campaign.factionEvents || []).filter((e) => eventIds.includes(e.id));
+  if (!events.length) return [];
+  const conflicts = listEntities(campaign, 'conflict');
+  if (!conflicts.length) return [];
+  const out = [];
+  for (const event of events) {
+    if (event.scope !== 'faction-vs-faction' && event.scope !== 'faction-vs-world') continue;
+    const opposingIds = new Set();
+    if (event.scope === 'faction-vs-faction') {
+      const defenderId = event.targets && event.targets[0] && event.targets[0].factionId;
+      if (defenderId) opposingIds.add(defenderId);
+    } else {
+      for (const c of event.coLocatedFactions || []) if (c.stance === 'rival') opposingIds.add(c.factionId);
+    }
+    if (!opposingIds.size) continue;
+    for (const conflict of conflicts) {
+      const involvedIds = new Set((conflict.relationships || []).filter((r) => r.type === 'involves').map((r) => r.to));
+      if (!involvedIds.has(event.factionId)) continue;
+      if (![...opposingIds].some((id) => involvedIds.has(id))) continue;
+      out.push({ conflictId: conflict.id, conflictName: conflict.name || 'Unnamed conflict', eventId: event.id, factionName: event.factionName, narrative: event.narrative });
+    }
+  }
+  return out;
 }
 
 // --- turn bookkeeping ----------------------------------------------------
@@ -665,7 +900,7 @@ export function changeHomeworld(campaign, { factionId, newLocationId, turnNumber
  *  allied faction's assets at the target world are never counted as
  *  resistance. */
 export function seizePlanet(campaign, { factionId, locationId, rng = Math.random, turnNumber } = {}) {
-  const next = clone(campaign);
+  let next = clone(campaign);
   const f = getFaction(next, factionId);
   if (!f || f.type !== 'faction') return { campaign: next, event: makeEvent(next, { turnNumber, factionId, action: 'seizePlanet', outcome: 'failure', narrative: 'No such faction.' }) };
   const opposition = attackableTargetsAt(next, factionId, locationId);
@@ -675,7 +910,14 @@ export function seizePlanet(campaign, { factionId, locationId, rng = Math.random
   if (remaining <= 0) {
     f.governedLocationIds = Array.from(new Set([...(f.governedLocationIds || []), locationId]));
     f.seizeProgress = null;
-    const event = makeEvent(next, { turnNumber, factionId, factionName: f.name, action: 'seizePlanet', locationId, targets: [{ locationId }], outcome: 'success', narrative: `${f.name} completes its seizure — no organized resistance remained.` });
+    // Conquest also flips the location's own faction membership (Living
+    // Faction Engine: "the outpost location becomes a member of that
+    // faction"), replacing any prior owner's member_of edge outright —
+    // not just appending to the faction-side governedLocationIds array,
+    // which is display-only and has no reciprocal linkage on its own.
+    next = setEntityFactionMembership(next, locationId, factionId);
+    const locName = (getEntity(next, locationId) || {}).name || 'The location';
+    const event = makeEvent(next, { turnNumber, factionId, factionName: f.name, action: 'seizePlanet', locationId, targets: [{ locationId }], outcome: 'success', narrative: `${f.name} completes its seizure — no organized resistance remained. ${locName} is now under ${f.name}'s control.` });
     event.responses = generateFactionResponses(next, event, rng);
     let result = advanceGoalProgress(next, factionId, { seizePlanet: true });
     return { campaign: result, event };
@@ -692,9 +934,16 @@ export function seizePlanet(campaign, { factionId, locationId, rng = Math.random
   }
   remaining = Math.max(0, remaining - dealt);
   const done = remaining <= 0;
-  if (done) { f.governedLocationIds = Array.from(new Set([...(f.governedLocationIds || []), locationId])); f.seizeProgress = null; }
-  else f.seizeProgress = { locationId, remainingHp: remaining };
-  const event = makeEvent(next, { turnNumber, factionId, factionName: f.name, action: 'seizePlanet', locationId, targets: [{ locationId }], rollsSummary: rolls.join('; '), outcome: done ? 'success' : 'partial', narrative: `${f.name} presses its seizure of the planet — ${dealt} damage dealt, ${remaining} HP of resistance remain.` });
+  let locName = null;
+  if (done) {
+    f.governedLocationIds = Array.from(new Set([...(f.governedLocationIds || []), locationId]));
+    f.seizeProgress = null;
+    next = setEntityFactionMembership(next, locationId, factionId);
+    locName = (getEntity(next, locationId) || {}).name || 'the location';
+  } else {
+    f.seizeProgress = { locationId, remainingHp: remaining };
+  }
+  const event = makeEvent(next, { turnNumber, factionId, factionName: f.name, action: 'seizePlanet', locationId, targets: [{ locationId }], rollsSummary: rolls.join('; '), outcome: done ? 'success' : 'partial', narrative: `${f.name} presses its seizure of the planet — ${dealt} damage dealt, ${remaining} HP of resistance remain.${done ? ` ${locName} is now under ${f.name}'s control.` : ''}` });
   event.responses = generateFactionResponses(next, event, rng);
   let result = { campaign: next, event };
   if (done) result.campaign = advanceGoalProgress(result.campaign, factionId, { seizePlanet: true });
@@ -829,7 +1078,17 @@ function candidateActions(campaign, f) {
   const cheapestAffordable = ['force', 'cunning', 'wealth'].some((s) => (provider.assets[s] || []).some((a) => a.rating <= (f[s] || 0) && a.cost <= (f.facCreds || 0)));
   if (f.homeworldId && cheapestAffordable) out.push('buyAsset');
   if (activeAssets.length) out.push('sellAsset');
-  if (damagedAssets.length || (f.hp || 0) < computeMaxHp(f)) out.push('repairAssetOrFaction');
+  // Both repair paths (a damaged asset, or the faction's own self-heal)
+  // cost at least 1 FacCred (repairAssetOrFaction's own increments=1
+  // formula) — this must gate on affordability exactly like buyAsset/
+  // expandInfluence already do above, or a 0-FacCred faction whose max HP
+  // has risen above its current HP (a stat raised after creation — the
+  // "never raises hp automatically, that's Repair's job" design in
+  // entities.js's setFactionStat) gets stuck proposing a guaranteed-fail
+  // Repair as its ONLY candidate, forever, since nothing else in this list
+  // requires anything the faction lacks either — a real reported bug
+  // ("Step always proposes Repair, which always fails").
+  if ((f.facCreds || 0) >= 1 && (damagedAssets.length || (f.hp || 0) < computeMaxHp(f))) out.push('repairAssetOrFaction');
   if (activeAssets.length) out.push('refitAsset');
   if (f.homeworldId && (f.facCreds || 0) >= 1) out.push('expandInfluence');
   if ((f.basesOfInfluence || []).length) out.push('changeHomeworld');
@@ -940,27 +1199,67 @@ export function proposeFactionTurn(campaign, factionId, { rng = Math.random, tur
   if (!faction || faction.type !== 'faction') return null;
   const tn = turnNumber || (campaign.factionTurnNumber || 0) + 1;
   if (faction.busyUntilTurn && faction.busyUntilTurn > tn) {
-    return { factionId, factionName: faction.name, turnNumber: tn, action: 'busy', event: makeEvent(campaign, { turnNumber: tn, factionId, factionName: faction.name, action: 'busy', locationId: faction.homeworldId, outcome: 'info', narrative: `${faction.name} is still in transit.` }), resultCampaign: clone(campaign) };
+    const event = makeEvent(campaign, { turnNumber: tn, factionId, factionName: faction.name, action: 'busy', locationId: faction.homeworldId, outcome: 'info', narrative: `${faction.name} is still in transit.` });
+    event.impact = computeImpact(faction, faction);
+    return { factionId, factionName: faction.name, turnNumber: tn, action: 'busy', event, resultCampaign: clone(campaign) };
   }
   let working = clone(campaign);
   working = payFactionUpkeep(working, factionId).campaign;
   working = pickGoalIfNone(working, factionId, { rng });
   const f = getFaction(working, factionId);
+  const before = f;
 
+  let result;
   if (f.seizeProgress) {
     const r = seizePlanet(working, { factionId, locationId: f.seizeProgress.locationId, rng, turnNumber: tn });
-    return { factionId, factionName: f.name, turnNumber: tn, action: 'seizePlanet', event: r.event, resultCampaign: r.campaign };
+    result = { action: 'seizePlanet', event: r.event, resultCampaign: r.campaign };
+  } else {
+    const actionType = pickActionHeuristic(working, f, f.currentGoalId, rng);
+    const args = autoArgs(working, f, actionType, rng);
+    if (!args) {
+      const event = makeEvent(working, { turnNumber: tn, factionId, factionName: f.name, action: 'none', locationId: f.homeworldId, outcome: 'info', narrative: `${f.name} has no viable action this turn.` });
+      result = { action: 'none', event, resultCampaign: working };
+    } else {
+      const fn = ACTIONS[actionType];
+      const r = fn(working, { factionId, ...args, rng, turnNumber: tn });
+      result = { action: actionType, event: r.event, resultCampaign: r.campaign };
+    }
   }
+  result.event.impact = computeImpact(before, getFaction(result.resultCampaign, factionId));
+  return { factionId, factionName: f.name, turnNumber: tn, action: result.action, event: result.event, resultCampaign: result.resultCampaign };
+}
 
-  const actionType = pickActionHeuristic(working, f, f.currentGoalId, rng);
-  const args = autoArgs(working, f, actionType, rng);
-  if (!args) {
-    const event = makeEvent(working, { turnNumber: tn, factionId, factionName: f.name, action: 'none', locationId: f.homeworldId, outcome: 'info', narrative: `${f.name} has no viable action this turn.` });
-    return { factionId, factionName: f.name, turnNumber: tn, action: 'none', event, resultCampaign: working };
-  }
-  const fn = ACTIONS[actionType];
-  const r = fn(working, { factionId, ...args, rng, turnNumber: tn });
-  return { factionId, factionName: f.name, turnNumber: tn, action: actionType, event: r.event, resultCampaign: r.campaign };
+/** A plain snapshot of the faction fields "impact" cares about — HP,
+ *  FacCreds, and each asset's own hp/status — used only to diff
+ *  before-vs-after (below), never stored on its own. */
+function snapshotFactionForImpact(faction) {
+  if (!faction) return { hp: 0, facCreds: 0, assets: [] };
+  return {
+    hp: faction.hp || 0,
+    facCreds: faction.facCreds || 0,
+    assets: (faction.factionAssets || []).map((a) => ({ id: a.id, catalogId: a.catalogId, hp: a.hp, status: a.status })),
+  };
+}
+
+/** "The impact of this event on the faction" (direct request) — a plain
+ *  before/after diff computed ONCE at propose time (when both states are
+ *  naturally on hand) and stored permanently on the committed event:
+ *  HP/FacCreds deltas plus which of the faction's OWN assets were
+ *  added/removed/changed. Deliberately not a replayable command log or a
+ *  cross-faction diff (an Attack's defender-side damage is scoped to the
+ *  defending faction's own future `impact`, not duplicated here) — kept
+ *  simple per direct instruction. */
+function computeImpact(before, after) {
+  const b = snapshotFactionForImpact(before);
+  const a = snapshotFactionForImpact(after);
+  const beforeIds = new Set(b.assets.map((x) => x.id));
+  const afterIds = new Set(a.assets.map((x) => x.id));
+  const assetsAdded = a.assets.filter((x) => !beforeIds.has(x.id)).map((x) => ({ id: x.id, catalogId: x.catalogId }));
+  const assetsRemoved = b.assets.filter((x) => !afterIds.has(x.id)).map((x) => ({ id: x.id, catalogId: x.catalogId }));
+  const assetsChanged = a.assets
+    .filter((x) => { const prior = b.assets.find((y) => y.id === x.id); return prior && (prior.hp !== x.hp || prior.status !== x.status); })
+    .map((x) => { const prior = b.assets.find((y) => y.id === x.id); return { id: x.id, catalogId: x.catalogId, hpBefore: prior.hp, hpAfter: x.hp, statusBefore: prior.status, statusAfter: x.status }; });
+  return { hpDelta: a.hp - b.hp, facCredsDelta: a.facCreds - b.facCreds, assetsAdded, assetsRemoved, assetsChanged };
 }
 
 /** A committed draft's resultCampaign already has the event appended to
@@ -993,12 +1292,17 @@ function proposeAndLog(campaign, factionId, opts) {
  *  a round's drafts are an all-or-nothing batch: commit the LAST draft's
  *  resultCampaign (it already carries every prior draft's effects) via
  *  commitFactionTurn(drafts[drafts.length-1]), or discard the whole
- *  batch and call this again for a fresh one. */
-export function advanceFactionTurnRound(campaign, { rng = Math.random } = {}) {
+ *  batch and call this again for a fresh one. `factionIds` optionally
+ *  scopes the round to a specific subset (e.g. the UI passing
+ *  `factionsPresentAt(doc, activeLocationId)` so Full Round only ever
+ *  processes whoever's active at WHERE's own current location) — every
+ *  faction in the campaign, same as before this option existed, when
+ *  omitted. */
+export function advanceFactionTurnRound(campaign, { rng = Math.random, factionIds } = {}) {
   let working = startTurnRound(campaign);
   const turnNumber = working.factionTurnNumber;
-  const factionIds = listEntities(working, 'faction').map((f) => f.id);
-  const order = initiativeOrder(factionIds, rng);
+  const ids = factionIds || listEntities(working, 'faction').map((f) => f.id);
+  const order = initiativeOrder(ids, rng);
   const drafts = [];
   for (const factionId of order) {
     const draft = proposeAndLog(working, factionId, { rng, turnNumber });

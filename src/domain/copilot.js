@@ -7,7 +7,7 @@
 import { overlookedThreads } from './threads.js';
 import { listFlaggedRelationships } from './entities.js';
 import { factionsUnderPressure } from './factions.js';
-import { factionsWithGoalNearCompletion } from './factionTurnEngine.js';
+import { factionsWithGoalNearCompletion, isFactionRoundDue } from './factionTurnEngine.js';
 import { expeditionsInDanger } from './expeditions.js';
 
 export function advise(doc) {
@@ -68,12 +68,35 @@ export function advise(doc) {
   const factionEvents = Array.isArray(doc && doc.factionEvents) ? doc.factionEvents : [];
   const hotWorldEvent = factionEvents.slice().reverse().find((e) => e.witnessed && e.scope === 'faction-vs-world');
 
+  // Faction Turn pacing (Living Faction Engine Phase B): a scene-count
+  // nudge, not an urgent signal — ranked below every other Faction Events
+  // signal above (a hot faction/goal/world-event is more actionable right
+  // now than "it's just been a while"), but still ahead of the generic
+  // threat/stress/mystery fallbacks, since "go run a faction round" is a
+  // concrete move a GM can act on immediately.
+  const factionRoundDue = isFactionRoundDue(doc);
+
+  // Living Faction Engine Phase C: whichever faction signal above is
+  // actually driving the observation (same priority order), named
+  // explicitly so the UI can offer a one-click "Generate mission from
+  // them" — turning the observation from narration into something the
+  // GM can actually hand the party, rather than a passive nudge.
+  const hotFactionId = hotFaction ? hotFaction.faction.id
+    : hotFactionGoal ? hotFactionGoal.faction.id
+    : hotWorldEvent ? hotWorldEvent.factionId
+    : null;
+  const hotFactionName = hotFaction ? hotFaction.faction.name
+    : hotFactionGoal ? hotFactionGoal.faction.name
+    : hotWorldEvent ? hotWorldEvent.factionName
+    : null;
+
   let observation;
   if (hot && hot.filled / hot.segments >= 0.75) observation = `“${hot.name}” is ${hot.filled}/${hot.segments} — one more push resolves it. Consider paying it off now.`;
   else if (hotFaction) observation = `“${hotFaction.faction.name}” is close to acting on its agenda — a mission tied to them would land naturally now.`;
   else if (hotFactionGoal) observation = `“${hotFactionGoal.faction.name}” is close to completing its faction goal — expect them to act on it soon, and to bank XP when it lands.`;
   else if (hotExpedition) observation = `“${hotExpedition.name}” is running low on supplies or dangerously exposed — force a supply-vs-route dilemma next.`;
   else if (hotWorldEvent) observation = `“${hotWorldEvent.factionName}” has moved directly against the party's own location — faction activity here may force a response scene next.`;
+  else if (factionRoundDue) observation = 'It\'s been a few scenes since factions last acted — consider Step or Full Round in Faction Events.';
   else if (threat >= 7) observation = 'Threat is high — the situation is exposed, watched, or already tipping over.';
   else if (stress >= 7) observation = 'Stress is high — a scene without combat should follow, or someone breaks.';
   else if (resources <= 2) observation = 'Supplies are critically low — the next scene should address resupply, or someone pays for the shortage.';
@@ -132,5 +155,5 @@ export function advise(doc) {
   // observation-only posture as `overlooked` above. Never auto-corrected.
   const flaggedRelationships = listFlaggedRelationships(doc).map((r) => `${r.entityName} —${r.type}→ ${r.toName}`);
 
-  return { observation, consequence, opportunity, suggestedOracle, suggestedOraclePath, quickActions, overlooked, flaggedRelationships };
+  return { observation, consequence, opportunity, suggestedOracle, suggestedOraclePath, quickActions, overlooked, flaggedRelationships, hotFactionId, hotFactionName };
 }

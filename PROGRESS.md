@@ -14,6 +14,100 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-13 Faction Conflict × Faction Turn Engine escalation
+suggestions** (`docs/adr/0036` same-day follow-up): closed the one gap a
+narrower SWN-specific research pass flagged as likely to read as
+"bolted on" to that community — the escalation clock was entirely
+GM-clicked, disconnected from the mechanically-resolved Faction Turn
+Engine. A committed Attack/Expand Influence/Seize Planet event between
+two factions both linked to the same tracked Conflict now surfaces a
+dismissible "did this affect a tracked conflict?" suggestion right after
+commit, with a one-click Escalate — never applied automatically (Article
+II; the dice inform it, they don't decide it). 3 new domain tests (427
+total).
+
+**2026-07-13 Faction Conflict** (`docs/adr/0036-faction-conflict.md`):
+an external subsystem spec (`docs/design/FACTION-CONFLICT.md`) validated
+against real GM-community sentiment on faction/conflict tooling
+complexity (SWN's own faction system reviewed as tolerated-not-loved;
+Blades in the Dark's Progress Clock as the most consistently praised
+"track pressure without homework" pattern; concrete devlog evidence of a
+faction system redesigned twice for taking up too much headspace) before
+being simplified and built. Conflict is a first-class entity type (an
+escalation clock reusing the existing Thread/pip machinery, a stated-
+vs-root-cause gap, a third-party-casualty line, session hooks — all
+always visible and alone a usable conflict; deep history, irreversible
+facts, per-faction posture, information asymmetry, and GM notes demoted
+behind a collapsed-by-default "Add depth" toggle), with a single
+one-click quick-start generator rather than a multi-table wizard. 8 new
+domain tests (424 total).
+
+**2026-07-13 Living Faction Engine Phases B/C/D** (`docs/adr/0035-faction-
+engine-pacing-missions-turn-ui.md`): activity-based pacing (a scene-count
+nudge, never auto-committing), faction-driven missions (`campaign.
+missions[]`, a hot faction's activity becomes a real trackable job via a
+new Co-Pilot button, with accept/decline/resolve controls in Faction
+Events), and a clean turn-processing UI — structured "assets affected"
+and a per-location recent-events panel on draft/committed turn cards,
+every faction name a clickable link into the Entity Editor, a new "Turn
+History" section there (campaign-wide, per faction, with the specific
+turn clicked from highlighted and its impact shown), and a collapsed-by-
+default Round History browser. Explicitly built WITHOUT the retcon/
+replay concept originally sketched for Phase D — dropped per direct
+request ("remove the retcon concept, keep it simple") in favor of a
+much lighter permanent before/after `impact` diff computed once per
+turn. 7 new domain tests (416 total).
+
+**2026-07-13 Faction Events turn-heuristic fix + WHERE docking** (second
+direct follow-up to Phase A): fixed a real bug where Step/Full Round could
+get permanently stuck proposing a guaranteed-fail Repair action for a
+resourceless faction (`candidateActions` now gates Repair on affordability
+like every other action already does); Full Round now scopes to the
+Active Location the same way Step already did (`advanceFactionTurnRound`'s
+new `factionIds` param); the Roster card is now a genuinely narrow
+"current activity + social/political ramifications" summary with full
+editing moved to the Entity Editor exclusively; and the whole Faction
+Events card can now relocate into the WHERE workspace tab as a docked
+right column (new down-arrow) and pop back to the drawer tab group (new
+up-arrow). 2 new domain tests (409 total).
+
+**2026-07-13 Faction Events UI refinement** (direct follow-up to Phase A,
+below): the shared Faction Turn card's per-faction Rules Provider selector
+is gone — ruleset choice is Settings-only now — and its Homeworld field is
+hidden specifically when the card renders inside Faction Events (still
+shown in the Cast entity editor). The Faction Events panel's Step select
+and Faction Roster now scope to `factionsPresentAt` WHERE's own Active
+Location instead of listing every faction in the campaign, with a clear
+prompt when no Location is set on WHERE yet; the committed Events feed's
+location filter defaults to that Active Location (auto-following WHERE
+until a GM explicitly overrides it) without narrowing which faction/
+location history remains browsable. The Step select's chosen faction now
+stays visibly labeled until changed. 1 new domain test (407 total).
+
+**2026-07-13 Living Faction Engine, Phase A** (`docs/adr/0034-faction-
+membership-and-region-depth.md`): first of a four-phase roadmap (A:
+universal membership/conquest/region-depth, this pass; B: activity-based
+pacing; C: faction-driven missions/encounters; D: retcon support) making
+`docs/adr/0031`/`0032`'s SWN Faction Turn Engine behave as a fully
+independent, living regional engine — factions with their own destiny,
+territory that structurally changes hands on conquest, every entity
+conceptually belonging to a faction (even a bystander), and location as
+the central factor in regional faction activity. New `entities.js`
+`getEntityFaction`/`setEntityFactionMembership`: a synthetic, non-persisted
+"Unaligned" fallback for any entity with no real `member_of` edge (derived
+on read, no forced migration), plus a general membership setter that
+replaces rather than doubles an existing edge. `factionTurnEngine.js`'s
+`seizePlanet` now flips the conquered location's own membership (not just
+appending to the conquering faction's `governedLocationIds` array as
+before), and the committed event narrative says so explicitly. New
+`factionsInRegion` walks the FULL `contains`/`located_at` tree (the
+existing `isSameDistrict`/`factionsAtLocation` are deliberately single-hop
+only, untouched) — the backbone Phase C's faction-driven mission/encounter
+generation will read from. New `getFactionDossier` rolls up a faction's
+real members, governed locations, goal, allies/rivals, and event-log slice
+into one read-only view. 6 new domain tests (406 total, all green);
+`node scripts/build.js` rebuilt clean.
+
 **2026-07-10 Mobile-responsive UI** (`docs/adr/0033-mobile-responsive-tab-
 unification.md`): the general-purpose drawer-anchor mechanism is gone —
 Faction Events is now an ordinary drawer tab (partially superseding

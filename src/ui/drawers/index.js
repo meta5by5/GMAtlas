@@ -24,8 +24,9 @@ import { getMarket, priceAt, listCargoManifest, listContracts } from '../../doma
 import { COMMODITIES, findCommodity } from '../../data/commodities.js';
 import { THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { getPressureTrack } from '../../domain/factions.js';
-import { getFactionGoalTrack } from '../../domain/factionTurnEngine.js';
-import { FACTION_RULES_PROVIDERS, factionProviderFor } from '../../data/factionRulesProviders.js';
+import { getFactionGoalTrack, factionEventsByRound, getConflictEscalationTrack } from '../../domain/factionTurnEngine.js';
+import { generateConflictSeed } from '../../domain/factionConflicts.js';
+import { factionProviderFor } from '../../data/factionRulesProviders.js';
 import { getEnhancements, strainUsed, strainCapacity, isOverStrained } from '../../domain/enhancements.js';
 import { getMechanicsIndex } from '../../domain/mechanicsIndex.js';
 import { ENHANCEMENT_TYPES } from '../../data/enhancementTypes.js';
@@ -315,6 +316,7 @@ function inspector(doc, e, ui) {
       ${e.revealedOpen ? `<div class="rich-field">${richToolbarHTML(`entity:${e.id}:revealed`, toolbarCollapsed(doc, ui, `entity:${e.id}:revealed`))}<div class="mention-editor" contenteditable="true" data-entity-field="revealed" data-placeholder="Secrets, twists, true motives.">${buildMentionEditorHTML(doc, e.revealed)}</div></div>` : ''}
     </div>`}
     ${factionSection(doc, e, ui)}
+    ${conflictSection(doc, e, ui)}
     ${worldProfileSection(doc, e, ui)}
     ${worldDemographicsSection(doc, e, ui)}
     ${statblockSection(e, doc, ui)}
@@ -363,7 +365,132 @@ function factionSection(doc, e, ui) {
       ${factionStatsHtml(e)}
       ${factionPressureHtml(e, track)}
     </div>
-    ${factionTurnSectionHtml(doc, e)}`;
+    ${factionTurnSectionHtml(doc, e, ui && ui.entityDetailFocusEventId)}`;
+}
+
+const CONFLICT_STATUS_OPTIONS = [
+  ['cold', 'Cold'], ['simmering', 'Simmering'], ['active', 'Active'], ['escalated', 'Escalated'], ['open_war', 'Open War'], ['resolved', 'Resolved'],
+];
+
+/** Faction Conflict (Living Faction Engine, docs/design/faction-
+ *  conflict-integration-plan.md) — validated against GM-community
+ *  sentiment before being scoped this way. The "hero path" below is
+ *  always visible and alone is a usable conflict: status, the escalation
+ *  clock (a Thread, same pip UI as a faction's goal track — deliberately
+ *  the single most prominent element, matching Blades in the Dark's own
+ *  beloved clock pattern), the stated-vs-root cause gap (two one-line
+ *  fields, the highest-narrative-value/lowest-bookkeeping idea in the
+ *  whole design), a third-party casualty line, and session hooks. Every
+ *  faction "involved" is just the existing relationship system (a new
+ *  `involves` type) — no bespoke id-array. Everything else (deep
+ *  history, irreversible facts, per-faction posture, information
+ *  asymmetry, party leverage, GM notes) lives behind an explicit "Add
+ *  depth" toggle a GM opens only if a conflict earns it. */
+function conflictSection(doc, e, ui) {
+  if (e.type !== 'conflict') return '';
+  const involvedFactions = (e.relationships || []).filter((r) => r.type === 'involves').map((r) => getEntity(doc, r.to)).filter(Boolean);
+  const track = getConflictEscalationTrack(doc, e.id);
+  const pips = track ? Array.from({ length: track.segments }, (_, i) => `<span class="pip ${i < track.filled ? 'on' : ''}"></span>`).join('') : '';
+  const clockHtml = track
+    ? `<div class="thread-row">
+        <span class="thread-name">Escalation <span class="dim small">${track.filled}/${track.segments}</span></span>
+        <span class="thread-clock">${pips}</span>
+        <span class="thread-actions">
+          <button class="icon-btn" data-thread-adv="${esc(track.id)}" title="Escalate">＋</button>
+          <button class="icon-btn" data-thread-back="${esc(track.id)}" title="De-escalate">－</button>
+        </span>
+      </div>`
+    : `<button class="btn ghost sm" data-conflict-start-clock="${esc(e.id)}">▶ Start Escalation Clock</button>`;
+  const hookRows = (e.sessionHooks || []).map((h) => `<div class="thread-row">
+      <span class="thread-name"><label><input type="checkbox" data-conflict-hook-toggle="${esc(e.id)}::${esc(h.id)}" ${h.used ? 'checked' : ''}> <span class="${h.used ? 'dim small' : ''}">${esc(h.text)}</span></label></span>
+      <span class="thread-actions"><button class="icon-btn" data-conflict-hook-remove="${esc(e.id)}::${esc(h.id)}" title="Remove">✕</button></span>
+    </div>`).join('');
+  const depthOpen = (ui.expandedConflictDepth || new Set()).has(e.id);
+  return `
+    <div class="faction-card">
+      <h4>Conflict</h4>
+      <label class="field-label">Status
+        <select data-entity-field="status">${CONFLICT_STATUS_OPTIONS.map(([v, l]) => `<option value="${v}" ${e.status === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      </label>
+      ${clockHtml}
+      ${involvedFactions.length ? `<div class="faction-assets"><span class="field-label-static">Involved</span><span class="faction-asset-list">${involvedFactions.map((f) => `<button type="button" class="entity-chip" data-open-entity="${esc(f.id)}">${esc(f.name) || 'Unnamed'}</button>`).join('')}</span></div>` : '<p class="dim small">Link this conflict to at least one faction below (Relationships → Involves).</p>'}
+      <label class="field-label">What people say it's about
+        <input data-entity-field="statedCause" value="${esc(e.statedCause)}" placeholder="The public story">
+      </label>
+      <label class="field-label">What's actually driving it
+        <input data-entity-field="rootCause" value="${esc(e.rootCause)}" placeholder="The real reason">
+      </label>
+      <label class="field-label">Why the gap matters
+        <input data-entity-field="causeGapHook" value="${esc(e.causeGapHook)}" placeholder="What happens if the party notices">
+      </label>
+      <label class="field-label">Someone innocent gets hurt regardless
+        <input data-entity-field="thirdPartyCasualty" value="${esc(e.thirdPartyCasualty)}" placeholder="Who, and how">
+      </label>
+      <button class="btn ghost sm" data-conflict-quickstart="${esc(e.id)}">🎲 Quick-start</button>
+      <div class="faction-assets">
+        <span class="field-label-static">Session hooks</span>
+      </div>
+      ${hookRows || '<p class="dim small">None yet.</p>'}
+      <div class="rel-add">
+        <input data-conflict-hook-input="${esc(e.id)}" placeholder="New session hook…">
+        <button class="btn ghost sm" data-conflict-hook-add="${esc(e.id)}">+ Add</button>
+      </div>
+      <button class="btn ghost sm" data-conflict-depth-toggle="${esc(e.id)}">${depthOpen ? '▾' : '▸'} Add depth</button>
+      ${depthOpen ? conflictDepthHtml(doc, e, ui, involvedFactions) : ''}
+    </div>`;
+}
+
+function conflictDepthHtml(doc, e, ui, involvedFactions) {
+  const factRows = (e.irreversibleFacts || []).map((f) => `<p class="dim small">• ${esc(f.summary)}${f.consequence ? ` — <i>${esc(f.consequence)}</i>` : ''}</p>`).join('');
+  const postureRows = involvedFactions.map((f) => {
+    const p = (e.factionPostures || []).find((x) => x.factionId === f.id) || { cohesion: 5, notes: '' };
+    return `<div class="thread-row">
+      <span class="thread-name">${esc(f.name)} <span class="dim small">— cohesion</span> <input type="number" min="0" max="10" class="rel-strength-input" data-conflict-posture-field="${esc(e.id)}::${esc(f.id)}::cohesion" value="${Number(p.cohesion) || 0}"></span>
+      <span class="thread-actions"><button class="icon-btn" data-conflict-posture-remove="${esc(e.id)}::${esc(f.id)}" title="Remove posture">✕</button></span>
+    </div>
+    <input data-conflict-posture-field="${esc(e.id)}::${esc(f.id)}::notes" value="${esc(p.notes)}" placeholder="Dependency, doctrine, public vs. private goal — in your own words">`;
+  }).join('');
+  const asym = e.informationAsymmetry;
+  const asymHtml = asym
+    ? `<label class="field-label">Who holds it
+        <select data-conflict-asymmetry-field="${esc(e.id)}::holderFactionId">
+          <option value="">— unset —</option>
+          ${involvedFactions.map((f) => `<option value="${esc(f.id)}" ${asym.holderFactionId === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}
+        </select>
+      </label>
+      <input data-conflict-asymmetry-field="${esc(e.id)}::whatTheyKnow" value="${esc(asym.whatTheyKnow)}" placeholder="What they know">
+      <input data-conflict-asymmetry-field="${esc(e.id)}::impactIfRevealed" value="${esc(asym.impactIfRevealed)}" placeholder="What happens if the party reveals it">
+      ${asym.revealed
+        ? '<p class="dim small">✓ Revealed.</p>'
+        : `<button class="btn ghost sm" data-conflict-asymmetry-reveal="${esc(e.id)}">Reveal</button>`}
+      <button class="btn ghost sm" data-conflict-asymmetry-clear="${esc(e.id)}">Clear</button>`
+    : `<button class="btn ghost sm" data-conflict-asymmetry-add="${esc(e.id)}">+ Add Information Asymmetry</button>`;
+  return `
+    <div class="field-label">${fieldLabelRow('Deep root', 'conflict', 'deepRootSummary')}
+      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:deepRootSummary`, toolbarCollapsed(doc, ui, `entity:${e.id}:deepRootSummary`))}<div class="mention-editor" contenteditable="true" data-entity-field="deepRootSummary" data-placeholder="What started this, long before the party got involved.">${buildMentionEditorHTML(doc, e.deepRootSummary)}</div></div>
+    </div>
+    <div class="field-label">${fieldLabelRow('Precipitating incident', 'conflict', 'precipitatingIncident')}
+      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:precipitatingIncident`, toolbarCollapsed(doc, ui, `entity:${e.id}:precipitatingIncident`))}<div class="mention-editor" contenteditable="true" data-entity-field="precipitatingIncident" data-placeholder="The recent, smaller thing that actually lit the fuse.">${buildMentionEditorHTML(doc, e.precipitatingIncident)}</div></div>
+    </div>
+    <div class="field-label">${fieldLabelRow('Last de-escalation attempt', 'conflict', 'lastDeescalationAttempt')}
+      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:lastDeescalationAttempt`, toolbarCollapsed(doc, ui, `entity:${e.id}:lastDeescalationAttempt`))}<div class="mention-editor" contenteditable="true" data-entity-field="lastDeescalationAttempt" data-placeholder="Who tried to fix this, why it failed, who got blamed.">${buildMentionEditorHTML(doc, e.lastDeescalationAttempt)}</div></div>
+    </div>
+    <div class="faction-assets"><span class="field-label-static">Irreversible facts</span></div>
+    ${factRows || '<p class="dim small">None yet.</p>'}
+    <div class="rel-add">
+      <input data-conflict-fact-summary="${esc(e.id)}" placeholder="What happened (can't be undone)">
+      <input data-conflict-fact-consequence="${esc(e.id)}" placeholder="What it means going forward">
+      <button class="btn ghost sm" data-conflict-fact-add="${esc(e.id)}">+ Add</button>
+    </div>
+    ${involvedFactions.length ? `<div class="faction-assets"><span class="field-label-static">Faction postures</span></div>${postureRows}` : ''}
+    <div class="faction-assets"><span class="field-label-static">Information asymmetry</span></div>
+    ${asymHtml}
+    <label class="field-label">Party leverage
+      <input data-entity-field="partyLeverage" value="${esc(e.partyLeverage)}" placeholder="Information, an asset, or an NPC neither faction controls">
+    </label>
+    <div class="field-label">${fieldLabelRow('GM notes', 'conflict', 'gmNotes')}
+      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:gmNotes`, toolbarCollapsed(doc, ui, `entity:${e.id}:gmNotes`))}<div class="mention-editor" contenteditable="true" data-entity-field="gmNotes" data-placeholder="Anything else worth remembering.">${buildMentionEditorHTML(doc, e.gmNotes)}</div></div>
+    </div>`;
 }
 
 // SWN/GMAtlas Core Faction Turn Engine (docs/adr/0031, docs/adr/0032) — a
@@ -392,12 +519,22 @@ function factionSection(doc, e, ui) {
 // "active entity") — this card needs to work correctly for a faction that
 // ISN'T the one currently open in Cast, since the Faction Roster below
 // can show any faction on demand.
-export function factionTurnSectionHtml(doc, e) {
+//
+// Which ruleset provider a faction uses is set in Settings only (Rules
+// Constitution's campaign-wide default) — there's no per-faction override
+// control on this card (there was one; removed on direct request so a GM
+// isn't offered two places to change the same thing). This is now the
+// Entity Editor's card ONLY — "everything about a faction" lives here, per
+// direct request — Faction Events no longer renders it at all; instead it
+// shows a narrower current-activity/social-political summary
+// (factionEvents.js's own factionActivitySummaryHtml) with a link back to
+// this full card (data-open-entity, the same universal "open this entity's
+// full editor" mechanism every other entity chip in the app already uses).
+export function factionTurnSectionHtml(doc, e, focusEventId) {
   if (e.type !== 'faction') return '';
   const maxHp = computeFactionMaxHp(e);
   const locations = listEntities(doc, 'location');
   const provider = factionProviderFor(doc, e);
-  const defaultProvider = factionProviderFor(doc, null);
   const goalTrack = e.currentGoalId ? getFactionGoalTrack(doc, e.id) : null;
   const tagChips = (e.factionTags || []).map((id) => {
     const tag = provider.findTag(id);
@@ -429,21 +566,12 @@ export function factionTurnSectionHtml(doc, e) {
     </div>`;
   }).join('');
   const goalPips = goalTrack ? Array.from({ length: goalTrack.segments }, (_, i) => `<span class="pip ${i < goalTrack.filled ? 'on' : ''}"></span>`).join('') : '';
-  const providerOptions = Object.values(FACTION_RULES_PROVIDERS)
-    .filter((p) => isGameSystemActivated(doc, p.id))
-    .map((p) => `<option value="${esc(p.id)}" ${e.rulesProvider === p.id ? 'selected' : ''}>${esc(p.label)}</option>`).join('');
   const busy = !!(e.busyUntilTurn && e.busyUntilTurn > (doc.factionTurnNumber || 0));
   const seizeLoc = e.seizeProgress ? locations.find((l) => l.id === e.seizeProgress.locationId) : null;
   const governedNames = (e.governedLocationIds || []).map((id) => { const l = locations.find((x) => x.id === id); return l ? l.name : 'an unnamed world'; });
   return `
     <div class="faction-card">
       <h4>Faction Turn (${esc(provider.label)})</h4>
-      <label class="field-label">Rules Provider
-        <select data-faction-provider-select="${esc(e.id)}">
-          <option value="">— campaign default (${esc(defaultProvider.label)}) —</option>
-          ${providerOptions}
-        </select>
-      </label>
       <div class="faction-stats-row">
         <label class="field-label">HP <input type="number" min="0" max="${maxHp}" data-faction-field="${esc(e.id)}::hp" value="${Number(e.hp) || 0}"> <span class="dim small">/ ${maxHp}</span></label>
         <label class="field-label">FacCreds <input type="number" min="0" data-faction-field="${esc(e.id)}::facCreds" value="${Number(e.facCreds) || 0}"></label>
@@ -503,7 +631,57 @@ export function factionTurnSectionHtml(doc, e) {
         ${assetOptions.map((a) => `<option value="${esc(a.statType)}::${esc(a.id)}">${esc(a.name)} (${a.statType} ${a.rating}, ${a.cost} FacCred${a.cost === 1 ? '' : 's'})</option>`).join('')}
       </select>
       ${!e.homeworldId ? '<p class="dim small">Set a Homeworld above before buying assets.</p>' : ''}
+    </div>
+    ${factionTurnHistoryHtml(doc, e, focusEventId)}`;
+}
+
+// Living Faction Engine Phase D: "the log of all turns across the
+// campaign involving the faction" — direct request, reached by clicking a
+// faction's name anywhere in Faction Events (data-open-entity, this same
+// entity editor). Reuses factionEventsByRound's factionId filter (the
+// SAME grouping the Round History browser uses, not a second query) so a
+// GM sees this faction's whole history grouped by round, most recent
+// first. `focusEventId` (threaded from shell.js's entityDetailFocusEventId,
+// set only when arriving via a specific turn's name link) highlights that
+// one entry and expands its "impact of this event" detail inline — every
+// other entry stays a compact one-liner.
+function factionTurnHistoryHtml(doc, e, focusEventId) {
+  const rounds = factionEventsByRound(doc, { factionId: e.id });
+  if (!rounds.length) return '';
+  const provider = factionProviderFor(doc, e);
+  const rows = rounds.map(({ turnNumber, events }) => {
+    const entries = events.map((ev) => {
+      const focused = focusEventId && ev.id === focusEventId;
+      const loc = ev.locationId ? getEntity(doc, ev.locationId) : null;
+      const impactLine = focused && ev.impact ? factionImpactSummary(provider, ev.impact) : '';
+      return `<div class="thread-row${focused ? ' focused' : ''}">
+        <span class="thread-name">${esc(ACTION_LABEL_FOR_HISTORY[ev.action] || ev.action)}${ev.outcome ? ` (${esc(ev.outcome)})` : ''}${loc ? ` @ ${esc(loc.name)}` : ''} <span class="dim small">${esc(ev.narrative || '')}</span></span>
+      </div>${impactLine}`;
+    }).join('');
+    return `<div class="faction-turn-history-round"><span class="field-label-static">Turn ${turnNumber}</span>${entries}</div>`;
+  }).join('');
+  return `
+    <div class="faction-card">
+      <h4>Turn History</h4>
+      ${rows}
     </div>`;
+}
+
+const ACTION_LABEL_FOR_HISTORY = {
+  attack: 'Attack', buyAsset: 'Buy Asset', sellAsset: 'Sell Asset', repairAssetOrFaction: 'Repair',
+  refitAsset: 'Refit Asset', expandInfluence: 'Expand Influence', changeHomeworld: 'Change Homeworld',
+  seizePlanet: 'Seize Planet', useAssetAbility: 'Use Asset Ability', none: 'No action', busy: 'In transit',
+};
+
+function factionImpactSummary(provider, impact) {
+  const nameFor = (catalogId) => { const c = provider.findAssetAnyStat(catalogId); return c ? c.name : catalogId; };
+  const lines = [
+    ...(impact.assetsAdded || []).map((a) => `+ ${esc(nameFor(a.catalogId))} (new)`),
+    ...(impact.assetsRemoved || []).map((a) => `− ${esc(nameFor(a.catalogId))} (lost)`),
+    ...(impact.assetsChanged || []).map((a) => `${esc(nameFor(a.catalogId))}: ${a.hpBefore}→${a.hpAfter} HP`),
+  ];
+  const stat = `${impact.hpDelta ? `${impact.hpDelta > 0 ? '+' : ''}${impact.hpDelta} HP ` : ''}${impact.facCredsDelta ? `${impact.facCredsDelta > 0 ? '+' : ''}${impact.facCredsDelta} FacCreds` : ''}`;
+  return `<p class="dim small">Impact of this turn: ${stat || 'no change'}${lines.length ? ` — ${lines.join('; ')}` : ''}</p>`;
 }
 
 // World Profile (UWP) card (docs/adr/0026-hostile-canon-locations.md,
@@ -1439,6 +1617,26 @@ function rulesConstitutionSection(doc, ui) {
       </div>
       <ul class="rules-provider-legend">${legend}</ul>
       ${gameSystemActivationSection(doc)}
+      ${factionPacingSection(doc)}
+    </div>`;
+}
+
+// Living Faction Engine Phase B: how many scenes pass before Co-Pilot
+// nudges "consider a faction round" — a plain number input, same pattern
+// as every other small numeric Settings field (statRuleset's sibling
+// dropdowns). Never disables the manual Step/Full Round buttons; this
+// only tunes the reminder's cadence (0 turns the nudge off entirely,
+// since isFactionRoundDue's >= comparison is always true against a 0
+// threshold — a GM who never wants the reminder can set it here).
+function factionPacingSection(doc) {
+  const p = (doc.settings && doc.settings.factionPacing) || { scenesPerRound: 3, scenesSinceLastRound: 0 };
+  return `
+    <div class="settings-group">
+      <h4>Faction Pacing</h4>
+      <label class="field-label">Scenes per faction round
+        <input type="number" min="0" data-faction-pacing-scenes-per-round value="${Number(p.scenesPerRound) || 0}">
+      </label>
+      <p class="dim small">Co-Pilot suggests a Step or Full Round in Faction Events once this many scenes have passed since the last one committed (currently ${Number(p.scenesSinceLastRound) || 0} since). Set to 0 to turn the reminder off.</p>
     </div>`;
 }
 

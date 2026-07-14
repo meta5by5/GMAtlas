@@ -10,7 +10,9 @@ const esc = (s) => String(s == null ? '' : s)
 export function renderCopilot(doc) {
   const a = advise(doc);
   return `
-    <div class="copilot-card"><h3>I noticed…</h3><p>${esc(a.observation)}</p></div>
+    <div class="copilot-card"><h3>I noticed…</h3><p>${esc(a.observation)}</p>
+      ${a.hotFactionId ? `<button class="copilot-action" data-generate-faction-mission="${esc(a.hotFactionId)}">📋 Generate mission from ${esc(a.hotFactionName)}</button>` : ''}
+    </div>
     <div class="copilot-card"><h3>If nothing changes…</h3><p>${esc(a.consequence)}</p></div>
     <div class="copilot-card"><h3>Opportunity</h3><p>${esc(a.opportunity)}</p></div>
     <div class="copilot-card">

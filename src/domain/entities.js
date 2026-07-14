@@ -20,8 +20,14 @@ import { SWN_XP_TABLE } from '../data/swnFactionData.js';
 // casing. Stats live in `gear`-kind statblock groups (domain/statblocks.js),
 // one per ruleset system, the same "carry several simultaneously" pattern
 // `character` groups already established — see data/gearTemplates.js.
-export const ENTITY_TYPES = ['npc', 'location', 'faction', 'asset', 'lore', 'item'];
-export const TYPE_LABEL = { npc: 'NPC', location: 'Location', faction: 'Faction', asset: 'Asset', lore: 'Lore', item: 'Item' };
+//
+// `conflict` (Faction Conflict, docs/adr/0036): an inter-faction conflict
+// as a first-class entity, same reasoning as `item` above — it gets
+// @mentions/Graph/Universal Search/Cast listing for free, and "which
+// factions are involved" becomes the existing relationship system (a new
+// `involves` type, below) instead of a bespoke id-pointer array.
+export const ENTITY_TYPES = ['npc', 'location', 'faction', 'asset', 'lore', 'item', 'conflict'];
+export const TYPE_LABEL = { npc: 'NPC', location: 'Location', faction: 'Faction', asset: 'Asset', lore: 'Lore', item: 'Item', conflict: 'Conflict' };
 
 // Relationship edge taxonomy (Phase 7, Constitution pack 66's Context Graph
 // depth item): a relationship now carries a semantic `type` alongside its
@@ -34,19 +40,22 @@ export const TYPE_LABEL = { npc: 'NPC', location: 'Location', faction: 'Faction'
 // Starforged Bond (Make a Connection -> Forge a Bond, rulebook pp.163-166/
 // 233) is just a `bond`-typed relationship whose `strength` a GM raises as
 // the connection deepens, not a separate progress-track data shape.
-export const RELATIONSHIP_TYPES = ['linked', 'member_of', 'owns', 'controls', 'located_at', 'contains', 'allied_with', 'rival_of', 'bond'];
+export const RELATIONSHIP_TYPES = ['linked', 'member_of', 'owns', 'controls', 'located_at', 'contains', 'allied_with', 'rival_of', 'bond', 'involves'];
 export const RELATIONSHIP_TYPE_LABEL = {
   linked: 'Linked', member_of: 'Member Of', owns: 'Owns', controls: 'Controls',
   located_at: 'Located At', contains: 'Contains', allied_with: 'Allied With', rival_of: 'Rival Of', bond: 'Bond',
+  involves: 'Involves',
 };
 // Which entity types a typed relationship's target is expected to be, for
 // "flag, don't delete" (pack 9, below) — null means no constraint (allied_with/
 // rival_of/bond/linked can point at anything). Deliberately a small, named
 // set rather than every type implying a constraint: these four are the ones
 // the Constitution's own edge taxonomy names as structurally directional
-// (pack 66's Member Of/Owns/Controls/Located At examples).
+// (pack 66's Member Of/Owns/Controls/Located At examples). `involves` (Faction
+// Conflict) joins them the same way — a Conflict's edge to a Faction.
 const RELATIONSHIP_TYPE_TARGETS = {
   member_of: ['faction'], owns: ['asset'], controls: ['faction', 'location', 'asset'], located_at: ['location'],
+  involves: ['faction'],
 };
 // Rival Of/Allied With/Bond aren't directional (no single fixed target type
 // the way Member Of always points at a faction), but they're still social
@@ -261,6 +270,154 @@ function ensureLocationFields(e) {
   ensureWorldProfileFields(e);
 }
 
+// Faction Conflict (docs/adr/0036, docs/design/faction-conflict-
+// integration-plan.md): validated against GM-community sentiment on
+// faction-tooling complexity before being scoped this way — a "hero
+// path" (status, the escalation clock — a Thread, see
+// factionTurnEngine.js's ensureConflictEscalationTrack — statedCause/
+// rootCause/causeGapHook/thirdPartyCasualty as short plain fields,
+// sessionHooks) that alone is a usable conflict, plus an "Add depth"
+// group (deepRootSummary/precipitatingIncident/lastDeescalationAttempt/
+// gmNotes as longer narrative fields, irreversibleFacts, factionPostures,
+// informationAsymmetry, partyLeverage) a GM opens only if a conflict
+// earns it. Nothing here is required — every field is blank by default,
+// same lazy-set-on-touch shape as every other entity type's fields.
+function ensureConflictFields(e) {
+  if (e.type !== 'conflict') return;
+  if (e.status === undefined) e.status = 'cold'; // cold|simmering|active|escalated|open_war|resolved
+  if (e.statedCause === undefined) e.statedCause = '';
+  if (e.rootCause === undefined) e.rootCause = '';
+  if (e.causeGapHook === undefined) e.causeGapHook = '';
+  if (e.thirdPartyCasualty === undefined) e.thirdPartyCasualty = '';
+  if (e.locationId === undefined) e.locationId = '';
+  if (!Array.isArray(e.sessionHooks)) e.sessionHooks = []; // [{id, text, used}]
+  // Add-depth fields — longer narrative text, rendered with the rich
+  // mention-editor toolbar (same as Faction's Agenda/Scenario Seed).
+  if (e.deepRootSummary === undefined) e.deepRootSummary = '';
+  if (e.precipitatingIncident === undefined) e.precipitatingIncident = '';
+  if (e.lastDeescalationAttempt === undefined) e.lastDeescalationAttempt = '';
+  if (e.partyLeverage === undefined) e.partyLeverage = '';
+  if (e.gmNotes === undefined) e.gmNotes = '';
+  if (!Array.isArray(e.irreversibleFacts)) e.irreversibleFacts = []; // [{id, summary, consequence}] — append-only
+  if (!Array.isArray(e.factionPostures)) e.factionPostures = []; // [{factionId, cohesion, notes}]
+  if (e.informationAsymmetry === undefined) e.informationAsymmetry = null; // {holderFactionId, whatTheyKnow, impactIfRevealed, revealed}
+}
+
+/** Append one free-text Session Hook — {id, text, used:false} — to a
+ *  conflict. No-op on a non-conflict entity or an empty hook. */
+export function addConflictSessionHook(campaign, id, text) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  const clean = String(text || '').trim();
+  if (!e || e.type !== 'conflict' || !clean) return next;
+  ensureConflictFields(e);
+  e.sessionHooks.push({ id: 'hook_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text: clean, used: false });
+  return next;
+}
+
+/** Flip a Session Hook's used flag — "this has been delivered to the
+ *  party." No-op on a missing hook. */
+export function toggleConflictSessionHookUsed(campaign, id, hookId) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (!e || e.type !== 'conflict') return next;
+  const hook = (e.sessionHooks || []).find((h) => h.id === hookId);
+  if (hook) hook.used = !hook.used;
+  return next;
+}
+
+export function removeConflictSessionHook(campaign, id, hookId) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (!e || e.type !== 'conflict' || !Array.isArray(e.sessionHooks)) return next;
+  e.sessionHooks = e.sessionHooks.filter((h) => h.id !== hookId);
+  return next;
+}
+
+/** Append one Irreversible Fact — {summary, consequence} — never removed
+ *  once added (Article VIII: campaign data is sacred), same "flag/append,
+ *  don't delete" posture as every other permanent-history field in this
+ *  app (the Faction Events log, relationship flagging). */
+export function addConflictIrreversibleFact(campaign, id, summary, consequence) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  const clean = String(summary || '').trim();
+  if (!e || e.type !== 'conflict' || !clean) return next;
+  ensureConflictFields(e);
+  e.irreversibleFacts.push({ id: 'fact_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), summary: clean, consequence: String(consequence || '').trim() });
+  return next;
+}
+
+/** Add or update ONE faction's posture within THIS conflict —
+ *  deliberately stored on the conflict record, not the shared faction
+ *  entity, so the same faction can hold a different posture in two
+ *  simultaneous conflicts (direct instruction: this module extends
+ *  factions, it doesn't overwrite them). Deliberately just two fields —
+ *  `cohesion` (0-10, the neutral midpoint 5 on first touch, same
+ *  convention as this app's other 0-10 dials) and a single free-text
+ *  `notes` a GM can use for dependency/doctrine/public-vs-private-goal
+ *  or anything else, in their own words, rather than five separate
+ *  structured sub-fields most GMs won't fill in individually (validated
+ *  simplification — see docs/design/faction-conflict-integration-plan.md). */
+export function setConflictFactionPosture(campaign, id, factionId, patch) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  const faction = getEntity(next, factionId);
+  if (!e || e.type !== 'conflict' || !faction || faction.type !== 'faction') return next;
+  ensureConflictFields(e);
+  let posture = e.factionPostures.find((p) => p.factionId === factionId);
+  if (!posture) {
+    posture = { factionId, cohesion: 5, notes: '' };
+    e.factionPostures.push(posture);
+  }
+  Object.assign(posture, patch);
+  if (posture.cohesion !== undefined) posture.cohesion = clampFactionStat(posture.cohesion);
+  return next;
+}
+
+export function removeConflictFactionPosture(campaign, id, factionId) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (!e || e.type !== 'conflict' || !Array.isArray(e.factionPostures)) return next;
+  e.factionPostures = e.factionPostures.filter((p) => p.factionId !== factionId);
+  return next;
+}
+
+/** Creates the conflict's one information asymmetry on first touch
+ *  (defaults blank, `revealed:false`), or patches whichever fields are
+ *  given on an existing one — one function for both, same as
+ *  setConflictFactionPosture's create-or-patch shape. */
+export function updateConflictInformationAsymmetry(campaign, id, patch) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (!e || e.type !== 'conflict') return next;
+  ensureConflictFields(e);
+  e.informationAsymmetry = { holderFactionId: '', whatTheyKnow: '', impactIfRevealed: '', revealed: false, ...(e.informationAsymmetry || {}), ...patch };
+  return next;
+}
+
+/** Clears the asymmetry entirely — a GM starting fresh after this one's
+ *  been spent (revealConflictInformationAsymmetry below keeps the spent
+ *  one visible instead; this is the deliberate "actually remove it" op). */
+export function clearConflictInformationAsymmetry(campaign, id) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (!e || e.type !== 'conflict') return next;
+  e.informationAsymmetry = null;
+  return next;
+}
+
+/** Marks the asymmetry revealed IN PLACE — kept, not deleted, same
+ *  posture as irreversibleFacts; use clearConflictInformationAsymmetry
+ *  instead if the GM wants to start a fresh one. */
+export function revealConflictInformationAsymmetry(campaign, id) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (!e || e.type !== 'conflict' || !e.informationAsymmetry) return next;
+  e.informationAsymmetry.revealed = true;
+  return next;
+}
+
 function clampFactionStat(n) {
   const v = Math.round(Number(n));
   return Number.isFinite(v) ? Math.max(0, Math.min(10, v)) : 0;
@@ -372,6 +529,7 @@ function _create(campaign, { type = 'npc', name = '' } = {}) {
   ensureAutoStatblock(rec, campaign.settings);
   ensureFactionFields(rec);
   ensureLocationFields(rec);
+  ensureConflictFields(rec);
   return rec;
 }
 
@@ -448,7 +606,7 @@ export function createItemFromCatalog(campaign, catalogEntry) {
 export function updateEntity(campaign, id, patch) {
   const next = clone(campaign);
   const e = getEntity(next, id);
-  if (e) { Object.assign(e, patch); ensureAutoStatblock(e, next.settings); ensureFactionFields(e); ensureLocationFields(e); }
+  if (e) { Object.assign(e, patch); ensureAutoStatblock(e, next.settings); ensureFactionFields(e); ensureLocationFields(e); ensureConflictFields(e); }
   return next;
 }
 
@@ -711,6 +869,22 @@ export function updateRelationshipStrength(campaign, aId, bId, strength) {
   return next;
 }
 
+/** General-purpose "which faction is this entity a member of" setter — used
+ *  both for a GM directly assigning membership and for a location changing
+ *  hands (factionTurnEngine.js's seizePlanet). Always replaces any existing
+ *  `member_of` edge outright rather than adding a second one, so an entity
+ *  never ends up with two factions at once; passing `factionId: null` just
+ *  clears membership (getEntityFaction below then reads that as Unaligned —
+ *  no separate "remove and stop" branch needed here). */
+export function setEntityFactionMembership(campaign, entityId, factionId) {
+  const next = clone(campaign);
+  const entity = getEntity(next, entityId);
+  if (!entity) return next;
+  entity.relationships = (entity.relationships || []).filter((r) => r.type !== 'member_of');
+  if (factionId) _link(next, entityId, factionId, 'Member Of', 'member_of');
+  return next;
+}
+
 /** Looks up the relationship FROM `aId` TO `bId` (a's own edge, not the
  *  mirrored one on b's side — same "each side is independent" convention
  *  every other relationship mutator here already follows). Returns null
@@ -749,6 +923,30 @@ export function getContainedLocations(campaign, locationId) {
     .filter((r) => r.type === 'contains')
     .map((r) => getEntity(campaign, r.to))
     .filter(Boolean);
+}
+
+/** Every entity conceptually belongs to a faction, even a bystander one —
+ *  "even if it is bystander" per the Living Faction Engine ask. Rather than
+ *  forcing a real `member_of` edge onto every existing NPC/location/asset
+ *  (a migration that would touch the whole cast for no mechanical gain),
+ *  this resolves the entity's real membership if one exists and otherwise
+ *  returns a synthetic, non-persisted "Unaligned" faction descriptor —
+ *  same "derived on every read, nothing stored" posture as
+ *  isRelationshipFlagged below. `synthetic: true` lets callers (UI, the
+ *  faction dossier, mission generation) tell it apart from a real faction
+ *  entity without a null check at every call site. A `member_of` edge
+ *  whose target is no longer type `faction` (already flaggable via
+ *  isRelationshipFlagged) degrades to Unaligned here too, rather than
+ *  returning a non-faction entity. */
+export function getEntityFaction(campaign, entityId) {
+  const entity = getEntity(campaign, entityId);
+  if (!entity) return null;
+  const rel = (entity.relationships || []).find((r) => r.type === 'member_of');
+  if (rel) {
+    const faction = getEntity(campaign, rel.to);
+    if (faction && faction.type === 'faction') return faction;
+  }
+  return { id: null, name: 'Unaligned', type: 'faction', synthetic: true };
 }
 
 /** Same location, or one immediate hop apart in the contains/located_at

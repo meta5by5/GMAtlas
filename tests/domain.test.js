@@ -237,6 +237,15 @@ test('continueStory appends a scene, a timeline crumb, and a journal entry', () 
   assert.equal(camp.scenes.length, 0);
 });
 
+test('continueStory increments settings.factionPacing.scenesSinceLastRound by exactly 1 per call (Living Faction Engine Phase B)', () => {
+  let camp = defaultCampaign();
+  assert.equal(camp.settings.factionPacing.scenesSinceLastRound, 0);
+  camp = continueStory(camp);
+  assert.equal(camp.settings.factionPacing.scenesSinceLastRound, 1);
+  camp = continueStory(camp);
+  assert.equal(camp.settings.factionPacing.scenesSinceLastRound, 2);
+});
+
 test('drawSuggestionLenses draws the requested count of distinct lenses from both Discovery and Approach lists combined', () => {
   const camp = defaultCampaign();
   const drawn = drawSuggestionLenses(camp, { rng: makeRng(3), count: 4 });
@@ -3679,7 +3688,7 @@ test('generateContract prices its payout from the real gap between two Locations
 });
 
 // --- Phase 10: Mission/Job generator ----------------------------------------
-import { generateMission, formatMission } from '../src/domain/missions.js';
+import { generateMission, formatMission, addMission, updateMissionStatus, removeMission, missionsForFaction } from '../src/domain/missions.js';
 
 test('generateMission defaults danger to context.what.threat, and higher danger raises payout while tightening the deadline', () => {
   let camp = defaultCampaign();
@@ -3730,6 +3739,45 @@ test('formatMission renders a readable multi-line block including payout, deadli
   assert.match(text, /Deadline: 4 days/);
   assert.match(text, /a rescue creates a hostage/);
   assert.match(text, /halves the payout/);
+});
+
+test('generateMission with a factionId derives danger from that faction\'s own current-goal urgency (goal track fill ratio) instead of context.what.threat, and names the faction in title/sourceFactionId', () => {
+  let camp = defaultCampaign();
+  let factionId, locationId; ({ campaign: camp, factionId, locationId } = makeFactionWithHomeworld(camp, 'Patron Faction'));
+  camp.context.what.threat = 9; // should be ignored once a factionId is given
+  camp = updateEntity(camp, factionId, { currentGoalId: 'expand-influence-goal' });
+  camp = ensureFactionGoalTrack(camp, factionId, 'expand-influence-goal');
+  const track = getFactionGoalTrack(camp, factionId);
+  camp = advanceThread(camp, track.id, Math.round(track.segments / 2));
+
+  const m = generateMission(camp, { rng: makeRng(1), factionId });
+  assert.equal(m.sourceFactionId, factionId);
+  assert.match(m.title, /Patron Faction/);
+  assert.notEqual(m.danger, 9, 'faction goal urgency used, not the campaign threat');
+
+  const noGoal = generateMission(camp, { rng: makeRng(1), factionId: locationId }); // not even a faction
+  assert.equal(noGoal.sourceFactionId, null);
+});
+
+test('addMission persists a real trackable record distinct from formatMission\'s journal-note path; updateMissionStatus/removeMission round-trip; missionsForFaction filters by source', () => {
+  let camp = defaultCampaign();
+  let factionId; ({ campaign: camp, factionId } = makeFactionWithHomeworld(camp, 'Job Giver'));
+  const generated = generateMission(camp, { rng: makeRng(1), factionId });
+  camp = addMission(camp, generated);
+  assert.equal(camp.missions.length, 1);
+  const missionId = camp.missions[0].id;
+  assert.equal(camp.missions[0].status, 'open');
+  assert.equal(camp.missions[0].sourceFactionId, factionId);
+
+  camp = updateMissionStatus(camp, missionId, 'accepted');
+  assert.equal(camp.missions[0].status, 'accepted');
+  camp = updateMissionStatus(camp, missionId, 'not-a-real-status');
+  assert.equal(camp.missions[0].status, 'accepted', 'invalid status is ignored');
+
+  assert.deepEqual(missionsForFaction(camp, factionId).map((m) => m.id), [missionId]);
+
+  camp = removeMission(camp, missionId);
+  assert.equal(camp.missions.length, 0);
 });
 
 // --- Gear/Item entity sub-type (ADR 0012) -----------------------------------
@@ -4439,6 +4487,32 @@ test('pickGoalIfNone assigns a goal (and its Thread) only when the faction has n
   assert.equal(getEntity(camp, factionId).currentGoalId, goalId);
 });
 
+test('proposeFactionTurn attaches an "impact" diff to its event — FacCreds/HP deltas and which of the faction\'s own assets were added/removed/changed — computed once at propose time and carried onto the committed event unchanged', () => {
+  let camp = defaultCampaign();
+  let factionId, locationId; ({ campaign: camp, factionId, locationId } = makeFactionWithHomeworld(camp, 'Sable Cartel'));
+  const draft = proposeFactionTurn(camp, factionId, { rng: makeRng(2) });
+  assert.ok(draft.event.impact, 'every propose path attaches impact, including the fallback ones');
+  assert.equal(typeof draft.event.impact.hpDelta, 'number');
+  assert.equal(typeof draft.event.impact.facCredsDelta, 'number');
+  assert.ok(Array.isArray(draft.event.impact.assetsAdded));
+  assert.ok(Array.isArray(draft.event.impact.assetsRemoved));
+  assert.ok(Array.isArray(draft.event.impact.assetsChanged));
+
+  // buyAsset specifically should show a negative FacCreds delta and one
+  // added asset — force it via a seeded rng that lands on buyAsset, or
+  // just call buyAsset directly through the same propose machinery by
+  // asserting the invariant holds whenever that action IS chosen.
+  for (let seed = 1; seed <= 20; seed++) {
+    const d = proposeFactionTurn(camp, factionId, { rng: makeRng(seed) });
+    if (d.action === 'buyAsset') {
+      assert.ok(d.event.impact.facCredsDelta < 0);
+      assert.equal(d.event.impact.assetsAdded.length, 1);
+      return;
+    }
+  }
+  assert.fail('no seed in range produced buyAsset — widen the search range');
+});
+
 test('commitFactionTurn just hands back the draft\'s resultCampaign; proposeFactionStep logs one committed-ready event with the right turn number', () => {
   let camp = defaultCampaign();
   let factionId, locationId; ({ campaign: camp, factionId, locationId } = makeFactionWithHomeworld(camp, 'Sable Cartel'));
@@ -4469,12 +4543,49 @@ test('advanceFactionTurnRound bumps factionTurnNumber exactly once for the whole
   assert.deepEqual(loggedFactionIds, [aId, bId].sort());
 });
 
+test('advanceFactionTurnRound\'s optional factionIds scopes the round to just that subset, leaving every other faction untouched (no draft, no event) — used to scope Full Round to whoever\'s active at WHERE\'s own current location', () => {
+  let camp = defaultCampaign();
+  let aId; ({ campaign: camp, factionId: aId } = makeFactionWithHomeworld(camp, 'Faction A'));
+  let bId; ({ campaign: camp, factionId: bId } = makeFactionWithHomeworld(camp, 'Faction B'));
+
+  const drafts = advanceFactionTurnRound(camp, { rng: makeRng(2), factionIds: [aId] });
+  assert.equal(drafts.length, 1);
+  assert.equal(drafts[0].factionId, aId);
+  const finalCampaign = drafts[drafts.length - 1].resultCampaign;
+  assert.equal(finalCampaign.factionEvents.length, 1);
+  assert.equal(finalCampaign.factionEvents[0].factionId, aId);
+  assert.equal(getEntity(finalCampaign, bId).facCreds, getEntity(camp, bId).facCreds, 'Faction B was never proposed, so its state is untouched');
+});
+
 test('proposeFactionTurn falls back to a "none" action for a bare faction with no homeworld, assets, or FacCreds', () => {
   let camp = defaultCampaign();
   let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Bare Faction' }));
   const draft = proposeFactionTurn(camp, factionId, { rng: makeRng(3) });
   assert.equal(draft.action, 'none');
   assert.equal(draft.event.outcome, 'info');
+});
+
+test('repairAssetOrFaction is never proposed as a candidate action for a 0-FacCred faction, even when its max HP has risen above its current HP (a stat raised after creation) — regression for a real reported bug where Step got stuck proposing a guaranteed-fail Repair every turn', () => {
+  let camp = defaultCampaign();
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Stuck Faction' }));
+  // Zero every stat first (hp clamps down to match, no deficit yet), then
+  // raise Force back up with no assets/homeworld/bases — maxHp rises,
+  // hp does NOT (setFactionStat's own documented "never raises hp"
+  // behavior), and Force+Cunning+Wealth stay too low for any FacCred
+  // income either, so facCreds is genuinely stuck at 0.
+  camp = setFactionStat(camp, factionId, 'force', 0);
+  camp = setFactionStat(camp, factionId, 'cunning', 0);
+  camp = setFactionStat(camp, factionId, 'wealth', 0);
+  camp = setFactionStat(camp, factionId, 'force', 3);
+  const f = getEntity(camp, factionId);
+  assert.ok(f.hp < computeFactionMaxHp(f), 'fixture actually has a max-HP deficit');
+  assert.equal(f.facCreds, 0);
+  for (let seed = 1; seed <= 5; seed++) {
+    const draft = proposeFactionTurn(camp, factionId, { rng: makeRng(seed) });
+    assert.notEqual(draft.action, 'repairAssetOrFaction', `seed ${seed} proposed an unaffordable Repair`);
+    assert.equal(draft.action, 'none');
+    assert.equal(draft.event.outcome, 'info');
+  }
 });
 
 // --- docs/adr/0031 Faction Events follow-up: location-pairing, relationship
@@ -4828,4 +4939,437 @@ test('Co-Pilot surfaces the most recent witnessed faction-vs-world committed eve
   ];
   const result = advise(camp);
   assert.match(result.observation, /Fresh Invader/);
+});
+
+test('advise() names whichever faction signal is actually driving the observation as hotFactionId/hotFactionName (Living Faction Engine Phase C — powers a "Generate mission from them" Co-Pilot button), and both are null when no faction signal fired', () => {
+  let camp = defaultCampaign();
+  camp.factionEvents = [
+    { id: 'a', factionId: 'f9', factionName: 'World Mover', scope: 'faction-vs-world', witnessed: true, outcome: 'success', turnNumber: 1 },
+  ];
+  const withWorldEvent = advise(camp);
+  assert.equal(withWorldEvent.hotFactionId, 'f9');
+  assert.equal(withWorldEvent.hotFactionName, 'World Mover');
+
+  const bare = advise(defaultCampaign());
+  assert.equal(bare.hotFactionId, null);
+  assert.equal(bare.hotFactionName, null);
+});
+
+// --- Living Faction Engine, Phase A: universal membership, conquest flips,
+// region depth, faction dossier ---------------------------------------------
+import { getEntityFaction, setEntityFactionMembership } from '../src/domain/entities.js';
+import { factionsInRegion, getFactionDossier, factionsPresentAt, isFactionRoundDue, resetFactionPacing, factionEventsByRound } from '../src/domain/factionTurnEngine.js';
+
+test('factionsPresentAt lists every faction present exactly at a location — asset, homeworld, Base, governed, or member_of — with no anchor exclusion, and is empty for a location with no presence or a null id', () => {
+  let camp = defaultCampaign();
+  let assetFactionId, homeLocId; ({ campaign: camp, factionId: assetFactionId, locationId: homeLocId } = makeFactionWithHomeworld(camp, 'Asset Faction'));
+  camp = buyAsset(camp, { factionId: assetFactionId, statType: 'force', catalogId: 'militia-unit', locationId: homeLocId }).campaign;
+  camp = updateEntity(camp, assetFactionId, { factionAssets: getEntity(camp, assetFactionId).factionAssets.map((a) => ({ ...a, status: 'active', locationId: homeLocId })) });
+
+  let governedFactionId; ({ campaign: camp, id: governedFactionId } = createEntity(camp, { type: 'faction', name: 'Governed Faction' }));
+  let governedLocId; ({ campaign: camp, id: governedLocId } = createEntity(camp, { type: 'location', name: 'Conquered Outpost' }));
+  camp = updateEntity(camp, governedFactionId, { governedLocationIds: [governedLocId] });
+
+  let memberFactionId; ({ campaign: camp, id: memberFactionId } = createEntity(camp, { type: 'faction', name: 'Member Faction' }));
+  let memberLocId; ({ campaign: camp, id: memberLocId } = createEntity(camp, { type: 'location', name: 'Member World' }));
+  camp = setEntityFactionMembership(camp, memberLocId, memberFactionId);
+
+  let emptyLocId; ({ campaign: camp, id: emptyLocId } = createEntity(camp, { type: 'location', name: 'Empty World' }));
+
+  assert.deepEqual(factionsPresentAt(camp, homeLocId).map((f) => f.id), [assetFactionId]);
+  assert.deepEqual(factionsPresentAt(camp, governedLocId).map((f) => f.id), [governedFactionId]);
+  assert.deepEqual(factionsPresentAt(camp, memberLocId).map((f) => f.id), [memberFactionId]);
+  assert.deepEqual(factionsPresentAt(camp, emptyLocId), []);
+  assert.deepEqual(factionsPresentAt(camp, null), []);
+});
+
+test('getEntityFaction resolves a real member_of edge, falls back to a synthetic Unaligned descriptor when there is none, and degrades to Unaligned rather than returning a non-faction entity', () => {
+  let camp = defaultCampaign();
+  let npcId, factionId, otherNpcId;
+  ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Bystander' }));
+  ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'The Combine' }));
+  ({ campaign: camp, id: otherNpcId } = createEntity(camp, { type: 'npc', name: 'Mistyped Member' }));
+
+  assert.equal(getEntityFaction(camp, npcId).synthetic, true);
+  assert.equal(getEntityFaction(camp, npcId).name, 'Unaligned');
+
+  camp = addRelationship(camp, npcId, factionId, 'Member Of', 'member_of');
+  const resolved = getEntityFaction(camp, npcId);
+  assert.equal(resolved.synthetic, undefined);
+  assert.equal(resolved.id, factionId);
+
+  // member_of pointing at something that used to be a faction but no
+  // longer is (already flaggable via isRelationshipFlagged) degrades to
+  // Unaligned rather than returning the non-faction entity.
+  camp = addRelationship(camp, otherNpcId, factionId, 'Member Of', 'member_of');
+  camp = updateEntity(camp, factionId, { type: 'npc' });
+  assert.equal(getEntityFaction(camp, otherNpcId).synthetic, true);
+
+  assert.equal(getEntityFaction(camp, 'does-not-exist'), null);
+});
+
+test('setEntityFactionMembership replaces any existing member_of edge rather than adding a second one, and clearing it (null) falls back to Unaligned', () => {
+  let camp = defaultCampaign();
+  let npcId, factionAId, factionBId;
+  ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Drifter' }));
+  ({ campaign: camp, id: factionAId } = createEntity(camp, { type: 'faction', name: 'Faction A' }));
+  ({ campaign: camp, id: factionBId } = createEntity(camp, { type: 'faction', name: 'Faction B' }));
+
+  camp = setEntityFactionMembership(camp, npcId, factionAId);
+  assert.equal(getEntityFaction(camp, npcId).id, factionAId);
+  assert.equal(getEntity(camp, npcId).relationships.filter((r) => r.type === 'member_of').length, 1);
+
+  camp = setEntityFactionMembership(camp, npcId, factionBId);
+  assert.equal(getEntityFaction(camp, npcId).id, factionBId);
+  assert.equal(getEntity(camp, npcId).relationships.filter((r) => r.type === 'member_of').length, 1, 'replaced, not doubled');
+
+  camp = setEntityFactionMembership(camp, npcId, null);
+  assert.equal(getEntityFaction(camp, npcId).synthetic, true);
+});
+
+test('seizePlanet flips the conquered location\'s own faction membership (not just governedLocationIds), replacing any prior owner outright', () => {
+  let camp = defaultCampaign();
+  let factionId, locationId; ({ campaign: camp, factionId, locationId } = makeFactionWithHomeworld(camp, 'Invader'));
+  let priorOwnerId; ({ campaign: camp, id: priorOwnerId } = createEntity(camp, { type: 'faction', name: 'Prior Owner' }));
+  camp = setEntityFactionMembership(camp, locationId, priorOwnerId);
+  camp = updateEntity(camp, factionId, { seizeProgress: { locationId, remainingHp: 0 } });
+
+  const r = seizePlanet(camp, { factionId, locationId, rng: makeRng(1), turnNumber: 1 });
+  assert.equal(r.event.outcome, 'success');
+  assert.match(r.event.narrative, /is now under Invader's control/);
+  const owner = getEntityFaction(r.campaign, locationId);
+  assert.equal(owner.id, factionId);
+  assert.equal(getEntity(r.campaign, locationId).relationships.filter((rel) => rel.type === 'member_of').length, 1, 'old owner\'s edge replaced, not doubled');
+  assert.ok(getEntity(r.campaign, factionId).governedLocationIds.includes(locationId), 'governedLocationIds still updated too');
+});
+
+test('factionsInRegion finds a faction structurally deeper in the contains/located_at tree than isSameDistrict/factionsAtLocation reach, and does not infinite-loop on a cyclic fixture', () => {
+  let camp = defaultCampaign();
+  // Zone contains World A and World B (siblings); World A contains Outpost.
+  // World B <-> Outpost is genuinely two hops apart (via Zone, then via
+  // World A) — unlike two siblings sharing one parent, which isSameDistrict
+  // already treats as "same district" on its own.
+  let zoneId, worldAId, worldBId, outpostId;
+  ({ campaign: camp, id: zoneId } = createEntity(camp, { type: 'location', name: 'Zone' }));
+  ({ campaign: camp, id: worldAId } = createEntity(camp, { type: 'location', name: 'World A' }));
+  ({ campaign: camp, id: worldBId } = createEntity(camp, { type: 'location', name: 'World B' }));
+  ({ campaign: camp, id: outpostId } = createEntity(camp, { type: 'location', name: 'Outpost' }));
+  camp = addRelationship(camp, zoneId, worldAId, 'Contains', 'contains');
+  camp = updateRelationshipType(camp, worldAId, zoneId, 'located_at');
+  camp = addRelationship(camp, zoneId, worldBId, 'Contains', 'contains');
+  camp = updateRelationshipType(camp, worldBId, zoneId, 'located_at');
+  camp = addRelationship(camp, worldAId, outpostId, 'Contains', 'contains');
+  camp = updateRelationshipType(camp, outpostId, worldAId, 'located_at');
+
+  let farFactionId; ({ campaign: camp, id: farFactionId } = createEntity(camp, { type: 'faction', name: 'Zone Power' }));
+  camp = updateEntity(camp, farFactionId, { homeworldId: outpostId });
+
+  // isSameDistrict/factionsAtLocation are single-hop — they should NOT see it.
+  assert.equal(isSameDistrict(camp, worldBId, outpostId), false);
+  assert.equal(factionsAtLocation(camp, 'nobody', worldBId).length, 0);
+
+  const region = factionsInRegion(camp, worldBId);
+  assert.ok(region.some((e) => e.faction.id === farFactionId), 'factionsInRegion walks the full ancestor+descendant tree');
+
+  // Cyclic fixture (a contains b contains a) must not hang.
+  let aId, bId;
+  ({ campaign: camp, id: aId } = createEntity(camp, { type: 'location', name: 'Loop A' }));
+  ({ campaign: camp, id: bId } = createEntity(camp, { type: 'location', name: 'Loop B' }));
+  camp = addRelationship(camp, aId, bId, 'Contains', 'contains');
+  camp = updateRelationshipType(camp, bId, aId, 'located_at');
+  camp = addRelationship(camp, bId, aId, 'Contains', 'contains');
+  camp = updateRelationshipType(camp, aId, bId, 'located_at');
+  assert.doesNotThrow(() => factionsInRegion(camp, aId));
+});
+
+test('getFactionDossier aggregates member entities, governed locations, current goal, allies/rivals, and this faction\'s own slice of the event log', () => {
+  let camp = defaultCampaign();
+  let factionId, locationId; ({ campaign: camp, factionId, locationId } = makeFactionWithHomeworld(camp, 'Dossier Test'));
+  let memberNpcId; ({ campaign: camp, id: memberNpcId } = createEntity(camp, { type: 'npc', name: 'Loyal Agent' }));
+  camp = setEntityFactionMembership(camp, memberNpcId, factionId);
+  camp = updateEntity(camp, factionId, { governedLocationIds: [locationId], currentGoalId: 'expand-influence-goal' });
+  camp = ensureFactionGoalTrack(camp, factionId, 'expand-influence-goal');
+  let allyId; ({ campaign: camp, id: allyId } = createEntity(camp, { type: 'faction', name: 'Ally Faction' }));
+  camp = addRelationship(camp, factionId, allyId, 'Allied', 'allied_with');
+  let rivalId; ({ campaign: camp, id: rivalId } = createEntity(camp, { type: 'faction', name: 'Rival Faction' }));
+  camp = addRelationship(camp, factionId, rivalId, 'Rival', 'rival_of');
+  camp.factionEvents = [
+    { id: 'e1', factionId, action: 'buyAsset', outcome: 'success' },
+    { id: 'e2', factionId: rivalId, action: 'buyAsset', outcome: 'success' },
+  ];
+
+  const dossier = getFactionDossier(camp, factionId);
+  assert.equal(dossier.faction.id, factionId);
+  assert.deepEqual(dossier.memberEntities.map((e) => e.id), [memberNpcId]);
+  assert.deepEqual(dossier.governedLocations.map((e) => e.id), [locationId]);
+  assert.equal(dossier.goal.definition.id, 'expand-influence-goal');
+  assert.ok(dossier.goal.track);
+  assert.deepEqual(dossier.allies.map((f) => f.id), [allyId]);
+  assert.deepEqual(dossier.rivals.map((f) => f.id), [rivalId]);
+  assert.deepEqual(dossier.events.map((e) => e.id), ['e1']);
+  assert.equal(getFactionDossier(camp, 'does-not-exist'), null);
+});
+
+test('isFactionRoundDue compares scenesSinceLastRound against scenesPerRound (0/negative always false, never "always due"); resetFactionPacing zeroes the counter without touching the threshold', () => {
+  let camp = defaultCampaign();
+  assert.equal(isFactionRoundDue(camp), false);
+  camp.settings.factionPacing.scenesSinceLastRound = 2;
+  assert.equal(isFactionRoundDue(camp), false);
+  camp.settings.factionPacing.scenesSinceLastRound = 3;
+  assert.equal(isFactionRoundDue(camp), true);
+  camp.settings.factionPacing.scenesPerRound = 0;
+  assert.equal(isFactionRoundDue(camp), false, '0 is the "off" setting, not "always due"');
+
+  camp.settings.factionPacing = { scenesPerRound: 3, scenesSinceLastRound: 5 };
+  const reset = resetFactionPacing(camp);
+  assert.equal(reset.settings.factionPacing.scenesSinceLastRound, 0);
+  assert.equal(reset.settings.factionPacing.scenesPerRound, 3);
+  assert.equal(camp.settings.factionPacing.scenesSinceLastRound, 5, 'resetFactionPacing clones — input untouched');
+});
+
+test('factionEventsByRound groups the committed log by turnNumber, most recent round first', () => {
+  let camp = defaultCampaign();
+  camp.factionEvents = [
+    { id: 'a', turnNumber: 1, factionId: 'f1' },
+    { id: 'b', turnNumber: 2, factionId: 'f1' },
+    { id: 'c', turnNumber: 1, factionId: 'f2' },
+  ];
+  const rounds = factionEventsByRound(camp);
+  assert.deepEqual(rounds.map((r) => r.turnNumber), [2, 1]);
+  assert.deepEqual(rounds[1].events.map((e) => e.id), ['a', 'c']);
+
+  // Optional factionId scopes it to one faction's own campaign-wide turn
+  // history (the Entity Editor's "Turn History" section reuses this same
+  // function, not a second one).
+  const f1Rounds = factionEventsByRound(camp, { factionId: 'f1' });
+  assert.deepEqual(f1Rounds.map((r) => r.turnNumber), [2, 1]);
+  assert.deepEqual(f1Rounds[1].events.map((e) => e.id), ['a']);
+});
+
+// --- Faction Conflict (Living Faction Engine, docs/design/faction-
+// conflict-integration-plan.md): validated + simplified before build —
+// a hero path (status, escalation clock, cause fields, session hooks)
+// that alone is a usable conflict, plus an optional "Add depth" group.
+import {
+  addConflictSessionHook, toggleConflictSessionHookUsed, removeConflictSessionHook, addConflictIrreversibleFact,
+  setConflictFactionPosture, removeConflictFactionPosture, updateConflictInformationAsymmetry,
+  clearConflictInformationAsymmetry, revealConflictInformationAsymmetry,
+} from '../src/domain/entities.js';
+import { getConflictEscalationTrack, ensureConflictEscalationTrack } from '../src/domain/factionTurnEngine.js';
+import { generateConflictSeed } from '../src/domain/factionConflicts.js';
+
+test('a conflict entity defaults status to "cold", every hero-path field blank, sessionHooks/irreversibleFacts/factionPostures empty, informationAsymmetry null — nothing required to create one', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'conflict', name: 'The Kessler Strait Dispute' }));
+  const e = getEntity(camp, id);
+  assert.equal(e.status, 'cold');
+  assert.equal(e.statedCause, '');
+  assert.equal(e.rootCause, '');
+  assert.equal(e.thirdPartyCasualty, '');
+  assert.deepEqual(e.sessionHooks, []);
+  assert.deepEqual(e.irreversibleFacts, []);
+  assert.deepEqual(e.factionPostures, []);
+  assert.equal(e.informationAsymmetry, null);
+  assert.equal(getConflictEscalationTrack(camp, id), null, 'no clock until explicitly started');
+});
+
+test('ensureConflictEscalationTrack creates a 6-segment Thread on first call, no-ops on a second call, and no-ops for a non-conflict entity', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'conflict', name: 'Border Dispute' }));
+  camp = ensureConflictEscalationTrack(camp, id);
+  const track = getConflictEscalationTrack(camp, id);
+  assert.ok(track);
+  assert.equal(track.segments, 6);
+  assert.equal(track.filled, 0);
+  assert.equal(track.kind, 'faction-conflict-escalation');
+  assert.equal(track.conflictId, id);
+
+  const before = JSON.stringify(camp.threads);
+  camp = ensureConflictEscalationTrack(camp, id);
+  assert.equal(JSON.stringify(camp.threads), before, 'second call is a no-op, does not create a duplicate track');
+
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Not A Conflict' }));
+  const untouched = JSON.stringify(camp.threads);
+  camp = ensureConflictEscalationTrack(camp, npcId);
+  assert.equal(JSON.stringify(camp.threads), untouched);
+});
+
+test('the escalation clock advances/backs off via the existing generic Thread controls (advanceThread) — no bespoke escalation-specific mutator needed', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'conflict', name: 'Tariff War' }));
+  camp = ensureConflictEscalationTrack(camp, id);
+  const track = getConflictEscalationTrack(camp, id);
+  camp = advanceThread(camp, track.id, 2);
+  assert.equal(getConflictEscalationTrack(camp, id).filled, 2);
+});
+
+test('session hooks: add appends {id, text, used:false}; toggle flips used; remove drops just that one; all no-op on a non-conflict entity or blank text', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'conflict', name: 'Toll Dispute' }));
+  camp = addConflictSessionHook(camp, id, 'Party is hired to broker safe passage');
+  camp = addConflictSessionHook(camp, id, '   '); // blank, ignored
+  assert.equal(getEntity(camp, id).sessionHooks.length, 1);
+  const hookId = getEntity(camp, id).sessionHooks[0].id;
+  assert.equal(getEntity(camp, id).sessionHooks[0].used, false);
+
+  camp = toggleConflictSessionHookUsed(camp, id, hookId);
+  assert.equal(getEntity(camp, id).sessionHooks[0].used, true);
+  camp = toggleConflictSessionHookUsed(camp, id, hookId);
+  assert.equal(getEntity(camp, id).sessionHooks[0].used, false);
+
+  camp = addConflictSessionHook(camp, id, 'A second hook');
+  const secondId = getEntity(camp, id).sessionHooks[1].id;
+  camp = removeConflictSessionHook(camp, id, hookId);
+  assert.deepEqual(getEntity(camp, id).sessionHooks.map((h) => h.id), [secondId]);
+});
+
+test('irreversible facts append-only: addConflictIrreversibleFact only ever grows the list, never removed by anything in this module', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'conflict', name: 'Old Grudge' }));
+  camp = addConflictIrreversibleFact(camp, id, 'The impounded crew member died in custody', 'Hawks now have a martyr');
+  camp = addConflictIrreversibleFact(camp, id, '', 'blank summary ignored');
+  assert.equal(getEntity(camp, id).irreversibleFacts.length, 1);
+  assert.equal(getEntity(camp, id).irreversibleFacts[0].consequence, 'Hawks now have a martyr');
+});
+
+test('setConflictFactionPosture creates a default posture (cohesion 5, blank notes) on first touch, patches in place on later calls, clamps cohesion 0-10, and is stored on the CONFLICT not the shared faction entity (so two conflicts can disagree)', () => {
+  let camp = defaultCampaign();
+  let conflictAId; ({ campaign: camp, id: conflictAId } = createEntity(camp, { type: 'conflict', name: 'Conflict A' }));
+  let conflictBId; ({ campaign: camp, id: conflictBId } = createEntity(camp, { type: 'conflict', name: 'Conflict B' }));
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'House Vantry' }));
+
+  camp = setConflictFactionPosture(camp, conflictAId, factionId, { notes: 'Hawks want reclamation' });
+  const postureA = getEntity(camp, conflictAId).factionPostures[0];
+  assert.equal(postureA.cohesion, 5);
+  assert.equal(postureA.notes, 'Hawks want reclamation');
+  assert.equal(getEntity(camp, factionId).cohesion, undefined, 'never written onto the shared faction entity');
+
+  camp = setConflictFactionPosture(camp, conflictAId, factionId, { cohesion: 15 });
+  assert.equal(getEntity(camp, conflictAId).factionPostures[0].cohesion, 10, 'clamped');
+  assert.equal(getEntity(camp, conflictAId).factionPostures[0].notes, 'Hawks want reclamation', 'untouched by an unrelated patch');
+  assert.equal(getEntity(camp, conflictAId).factionPostures.length, 1, 'patched in place, not duplicated');
+
+  camp = setConflictFactionPosture(camp, conflictBId, factionId, { cohesion: 1 });
+  assert.equal(getEntity(camp, conflictAId).factionPostures[0].cohesion, 10, 'Conflict A unaffected by Conflict B\'s posture for the same faction');
+
+  camp = removeConflictFactionPosture(camp, conflictAId, factionId);
+  assert.equal(getEntity(camp, conflictAId).factionPostures.length, 0);
+});
+
+test('information asymmetry: update creates-or-patches in one function, reveal marks it revealed in place (kept, not deleted), clear removes it entirely', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'conflict', name: 'Ledger Secret' }));
+  camp = updateConflictInformationAsymmetry(camp, id, { whatTheyKnow: 'Bank Solenne\'s ledgers' });
+  assert.equal(getEntity(camp, id).informationAsymmetry.whatTheyKnow, 'Bank Solenne\'s ledgers');
+  assert.equal(getEntity(camp, id).informationAsymmetry.revealed, false);
+
+  camp = updateConflictInformationAsymmetry(camp, id, { holderFactionId: 'f1' });
+  assert.equal(getEntity(camp, id).informationAsymmetry.holderFactionId, 'f1');
+  assert.equal(getEntity(camp, id).informationAsymmetry.whatTheyKnow, 'Bank Solenne\'s ledgers', 'untouched by the second patch');
+
+  camp = revealConflictInformationAsymmetry(camp, id);
+  assert.equal(getEntity(camp, id).informationAsymmetry.revealed, true);
+  assert.equal(getEntity(camp, id).informationAsymmetry.whatTheyKnow, 'Bank Solenne\'s ledgers', 'kept, not deleted, once revealed');
+
+  camp = clearConflictInformationAsymmetry(camp, id);
+  assert.equal(getEntity(camp, id).informationAsymmetry, null);
+});
+
+test('generateConflictSeed rolls from the "Faction Conflict" oracle table group and returns plain strings only — never touches the campaign itself', () => {
+  const camp = defaultCampaign();
+  const before = JSON.stringify(camp);
+  const seed = generateConflictSeed(camp, { rng: makeRng(3) });
+  assert.equal(JSON.stringify(camp), before, 'pure — does not mutate its input');
+  assert.equal(typeof seed.statedCause, 'string');
+  assert.equal(typeof seed.rootCause, 'string');
+  assert.ok(seed.statedCause.length > 0);
+  assert.ok(seed.rootCause.length > 0);
+  assert.ok(seed.thirdPartyCasualty.length > 0);
+  assert.ok(seed.sessionHook.length > 0);
+});
+
+// --- Faction Conflict × Faction Turn Engine integration (docs/adr/0036
+// follow-up): a committed Attack/Expand Influence/Seize Planet event
+// whose factions are BOTH `involves`-linked to the same tracked Conflict
+// surfaces as a one-click escalation SUGGESTION — never applied
+// automatically (Article II). ---
+import { suggestedConflictEscalations } from '../src/domain/factionTurnEngine.js';
+
+test('suggestedConflictEscalations matches a faction-vs-faction (Attack) event via event.targets[0].factionId when BOTH the attacker and defender are involves-linked to the same conflict; no match if only one side is linked, or the event is self-scoped, or the eventId is unknown', () => {
+  let camp = defaultCampaign();
+  let attackerId, attackerLoc; ({ campaign: camp, factionId: attackerId, locationId: attackerLoc } = makeFactionWithHomeworld(camp, 'Attacker', { force: 10 }));
+  let defenderId; ({ campaign: camp, id: defenderId } = createEntity(camp, { type: 'faction', name: 'Defender' }));
+  camp = updateEntity(camp, defenderId, { force: 1, facCreds: 10, homeworldId: attackerLoc });
+  camp = buyAsset(camp, { factionId: defenderId, statType: 'force', catalogId: 'hitmen', locationId: attackerLoc }).campaign;
+  camp = updateEntity(camp, defenderId, { force: 0 });
+  camp = buyAsset(camp, { factionId: attackerId, statType: 'force', catalogId: 'security-personnel', locationId: attackerLoc }).campaign;
+  camp = updateEntity(camp, attackerId, { factionAssets: getEntity(camp, attackerId).factionAssets.map((a) => ({ ...a, status: 'active' })) });
+  camp = updateEntity(camp, defenderId, { factionAssets: getEntity(camp, defenderId).factionAssets.map((a) => ({ ...a, status: 'active' })) });
+  const attackerAssetId = getEntity(camp, attackerId).factionAssets[0].id;
+  const defenderAssetId = getEntity(camp, defenderId).factionAssets[0].id;
+
+  let conflictId; ({ campaign: camp, id: conflictId } = createEntity(camp, { type: 'conflict', name: 'Border Skirmish' }));
+  camp = addRelationship(camp, conflictId, attackerId, 'Involves', 'involves');
+  camp = addRelationship(camp, conflictId, defenderId, 'Involves', 'involves');
+
+  const r = attack(camp, { attackerId, attackerFactionAssetId: attackerAssetId, defenderId, defenderFactionAssetId: defenderAssetId, rng: makeRng(7) });
+  const committed = { ...r.campaign, factionEvents: [...(r.campaign.factionEvents || []), r.event] };
+  assert.equal(r.event.scope, 'faction-vs-faction');
+
+  const matches = suggestedConflictEscalations(committed, [r.event.id]);
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].conflictId, conflictId);
+  assert.equal(matches[0].eventId, r.event.id);
+  assert.equal(matches[0].factionName, 'Attacker');
+
+  // Only the attacker linked — no match.
+  const onlyAttackerLinked = { ...committed, entities: { ...committed.entities, items: committed.entities.items.map((e) => e.id === conflictId ? { ...e, relationships: e.relationships.filter((rel) => rel.to !== defenderId) } : e) } };
+  assert.deepEqual(suggestedConflictEscalations(onlyAttackerLinked, [r.event.id]), []);
+
+  assert.deepEqual(suggestedConflictEscalations(committed, ['not-a-real-event-id']), []);
+  assert.deepEqual(suggestedConflictEscalations(committed, []), []);
+});
+
+test('suggestedConflictEscalations matches a faction-vs-world event (Expand Influence) via a RIVAL entry in coLocatedFactions, ignores an ALLY co-located faction even if linked to the same conflict, and finds nothing when no conflict links either side', () => {
+  let camp = defaultCampaign();
+  let actingId, homeLoc; ({ campaign: camp, factionId: actingId, locationId: homeLoc } = makeFactionWithHomeworld(camp, 'Expander'));
+  let destId; ({ campaign: camp, id: destId } = createEntity(camp, { type: 'location', name: 'Contested World' }));
+  let rivalId; ({ campaign: camp, id: rivalId } = createEntity(camp, { type: 'faction', name: 'Rival Next Door' }));
+  camp = updateEntity(camp, rivalId, { homeworldId: destId });
+  camp = addRelationship(camp, actingId, rivalId, 'Rival', 'rival_of');
+  let allyId; ({ campaign: camp, id: allyId } = createEntity(camp, { type: 'faction', name: 'Ally Next Door' }));
+  camp = updateEntity(camp, allyId, { homeworldId: destId });
+  camp = addRelationship(camp, actingId, allyId, 'Allied', 'allied_with');
+
+  let conflictId; ({ campaign: camp, id: conflictId } = createEntity(camp, { type: 'conflict', name: 'Turf War' }));
+  camp = addRelationship(camp, conflictId, actingId, 'Involves', 'involves');
+  camp = addRelationship(camp, conflictId, rivalId, 'Involves', 'involves');
+  camp = addRelationship(camp, conflictId, allyId, 'Involves', 'involves'); // linked too, but ally stance should be ignored
+
+  const r = expandInfluence(camp, { factionId: actingId, locationId: destId, hp: 2, rng: makeRng(1) });
+  assert.equal(r.event.scope, 'faction-vs-world');
+  const committed = { ...r.campaign, factionEvents: [...(r.campaign.factionEvents || []), r.event] };
+
+  const matches = suggestedConflictEscalations(committed, [r.event.id]);
+  assert.equal(matches.length, 1, 'only the rival triggers a match, the ally does not, even though both are linked');
+  assert.equal(matches[0].conflictId, conflictId);
+
+  // No conflict links either side — no match.
+  let camp2 = defaultCampaign();
+  let actingId2, homeLoc2; ({ campaign: camp2, factionId: actingId2, locationId: homeLoc2 } = makeFactionWithHomeworld(camp2, 'Lone Expander'));
+  const r2 = expandInfluence(camp2, { factionId: actingId2, locationId: 'somewhere-else', hp: 2, rng: makeRng(1) });
+  const committed2 = { ...r2.campaign, factionEvents: [...(r2.campaign.factionEvents || []), r2.event] };
+  assert.deepEqual(suggestedConflictEscalations(committed2, [r2.event.id]), []);
+});
+
+test('suggestedConflictEscalations ignores self-scoped events (buyAsset) even if both an acting and unrelated faction are conflict-linked', () => {
+  let camp = defaultCampaign();
+  let factionId, locationId; ({ campaign: camp, factionId, locationId } = makeFactionWithHomeworld(camp, 'Buyer'));
+  let conflictId; ({ campaign: camp, id: conflictId } = createEntity(camp, { type: 'conflict', name: 'Unrelated Conflict' }));
+  camp = addRelationship(camp, conflictId, factionId, 'Involves', 'involves');
+
+  const r = buyAsset(camp, { factionId, statType: 'force', catalogId: 'militia-unit', locationId });
+  assert.equal(r.event.scope, 'self');
+  const committed = { ...r.campaign, factionEvents: [...(r.campaign.factionEvents || []), r.event] };
+  assert.deepEqual(suggestedConflictEscalations(committed, [r.event.id]), []);
 });

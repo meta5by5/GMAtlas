@@ -139,6 +139,30 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .workspace-card h2 { margin: 0 0 var(--sp-2); font-size: 1.2rem; }
 .workspace-card .lead { color: var(--text-dim); margin: 0 0 var(--sp-4); }
+
+/* WHERE's docked Faction Events card (direct request: a down-arrow on the
+   Faction Events card relocates it here as a right column; an up-arrow
+   there pops it back to the drawer tab group) — the only place today the
+   workspace ever shows two side-by-side panels, so this is its own rule
+   rather than a general-purpose grid class. Collapses to one column under
+   the same 1023px tier every other workspace/drawer layout already folds
+   at (see the @media block further down). */
+.workspace-with-side {
+  display: grid;
+  grid-template-columns: 1fr minmax(18rem, 26rem);
+  gap: var(--sp-4);
+  align-items: start;
+}
+.workspace-docked-panel {
+  background: var(--tier2-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--sp-4);
+  max-height: calc(100vh - var(--header-h) - var(--strip-h) - 2 * var(--sp-4));
+  overflow: auto;
+}
+.faction-events-dock-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+.faction-events-dock-row h3 { margin: 0; font-size: 1rem; }
 .ws-placeholder {
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-sm);
@@ -300,6 +324,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
     padding-right: var(--edge-w);
   }
   .mc-breadcrumb { display: none; }
+  .workspace-with-side { grid-template-columns: 1fr; }
+  .workspace-docked-panel { max-height: none; }
 }
 
 /* Phone (<768px): Co-Pilot is a bottom sheet, summoned from an edge tab.
@@ -523,6 +549,15 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
   color: var(--accent); border-bottom-color: var(--accent); cursor: pointer;
 }
 .mention-link.mention-link-active:hover { color: var(--accent-strong); border-bottom-color: var(--accent-strong); }
+
+/* A plain-text-styled clickable name (Faction Events' faction-name links
+   into the Entity Editor) — not a chip/button, just a link-colored,
+   underlined inline trigger inside otherwise plain text. */
+.link-button {
+  background: none; border: none; padding: 0; margin: 0; font: inherit;
+  color: var(--accent); border-bottom: 1px dotted var(--accent); cursor: pointer;
+}
+.link-button:hover { color: var(--accent-strong); border-bottom-color: var(--accent-strong); }
 
 /* An external link (Phase 11 backlog: "[label](url)", always a real,
    already-sanitized href — unlike a mention it can never be "unresolved,"
@@ -860,6 +895,15 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .faction-asset-list { display: inline-flex; flex-wrap: wrap; gap: var(--sp-1); }
 .faction-asset-chip { display: inline-flex; align-items: center; gap: 4px; }
 
+/* Living Faction Engine Phase D: Turn History (Entity Editor) grouped by
+   round, and the highlighted entry a specific-turn faction-name link
+   lands on (data-open-entity-event) — a subtle accent-bordered callout,
+   same "flag it, don't hide the rest" posture as this app's other
+   highlight treatments. */
+.faction-turn-history-round { margin-bottom: var(--sp-2); }
+.faction-turn-history-round .field-label-static { display: block; margin-bottom: var(--sp-1); }
+.thread-row.focused { border-left: 2px solid var(--accent); padding-left: var(--sp-2); background: var(--bg-inset); }
+
 /* Enhancements (CWN-inspired strain/augmentation; renamed from
    "Cybernetics" 2026-07-06, docs/adr/next-request.md) */
 .enhancements-card { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-3); }
@@ -1115,6 +1159,14 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .chip.stance-rival { border-color: #b33; color: #b33; }
 .chip.stance-neutral { opacity: 0.8; }
 .faction-event-news-tag { font-style: italic; color: var(--text-dim); }
+
+/* Living Faction Engine Phase D: structured "assets affected" and the
+   per-location recent-events context panel shown alongside a draft under
+   review — plain nested lists, same dim/small text treatment as every
+   other secondary detail line in this drawer. */
+.faction-event-impact ul, .faction-event-location-log p { margin: 0.15rem 0 0 1.1rem; }
+.faction-event-impact ul { padding: 0; }
+.faction-event-location-log { margin: var(--sp-2) 0; padding: var(--sp-2); background: var(--bg-inset); border-radius: var(--radius-sm); }
 
 /* Universal Search (Phase 8, pack 23) — a top-anchored overlay above
    everything else (drawer included) so a result stays reachable regardless

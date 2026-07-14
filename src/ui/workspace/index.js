@@ -9,6 +9,7 @@ import { listTagVocabulary, isSameDistrict, getEntity } from '../../domain/entit
 import { getCurrentWhereLocations } from '../../domain/factionTurnEngine.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { buildMentionEditorHTML, richToolbarHTML, toolbarCollapsed } from '../mentionEditor.js';
+import { renderFactionEvents } from '../drawers/factionEvents.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -92,10 +93,27 @@ const VIEWS = {
   },
 
   where(doc, ui) {
-    return card('WHERE it happens', 'The place the scene is set.', `
+    const mainCard = card('WHERE it happens', 'The place the scene is set.', `
       ${summaryField('where', doc.context.where.summary, 'Location and immediate surroundings…', doc, ui)}
       ${whereLocationPicker(doc, ui)}
       ${factionActivityHereBlock(doc)}`);
+    // Whole-card relocation (direct request): the Faction Events card can
+    // move OUT of the drawer tab stack and dock here as a right column,
+    // via its own down-arrow (data-faction-events-dock, shell.js) — the
+    // SAME pure renderFactionEvents() the drawer normally shows, called a
+    // second way with docked:true so it draws its own heading + an
+    // up-arrow instead of relying on the drawer's chrome for a title.
+    if (!ui.factionEventsDockedInWhere) return mainCard;
+    const dockedPanel = renderFactionEvents(doc, {
+      factionEventsDrafts: ui.factionEventsDrafts,
+      factionEventsFactionFilterId: ui.factionEventsFactionFilterId,
+      factionEventsLocationFilterId: ui.factionEventsLocationFilterId,
+      factionEventsStepFactionId: ui.factionEventsStepFactionId,
+      factionRoundHistoryOpen: ui.factionRoundHistoryOpen,
+      conflictEscalationSuggestions: ui.conflictEscalationSuggestions,
+      docked: true,
+    });
+    return `<div class="workspace-with-side">${mainCard}<aside class="workspace-docked-panel">${dockedPanel}</aside></div>`;
   },
 
   why(doc, ui) {

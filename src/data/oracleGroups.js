@@ -6,7 +6,7 @@
 // buildGroupedOracleTree), so a new table never disappears silently.
 export const ORACLE_GROUPS = [
   { label: '⭐ Core Solo', children: ['Campaign', 'Core Oracles', 'Core Solo Engine', 'Campaign Intelligence Engine'] },
-  { label: '☠ Threats & Conflict', children: ['Conflict', 'Conflict Architecture', 'Danger Situations', 'Fear and Dread', 'Horror Escalation', 'Miscellaneous'] },
+  { label: '☠ Threats & Conflict', children: ['Conflict', 'Conflict Architecture', 'Danger Situations', 'Fear and Dread', 'Horror Escalation', 'Miscellaneous', 'Faction Conflict'] },
   { label: '📚 Story Beats', children: ['Plot Engine', 'Story', 'Adventure', 'Adventure Seed', 'Missions', 'Mission Aftermath', 'Mysteries & Coverups', 'Scenario Framing', 'Starforged Oracles'] },
   { label: '👥 Characters & Society', children: ['Characters', 'Factions', 'Frontier Society', 'Corporate Powers', 'Stars Without Number', 'Augmentation', 'Crew & NPCs', 'Law, Marshals & Crime', 'Marines & Security', 'Androids & AI'] },
   { label: '🌌 Locations', children: ['Planets', 'Settlements', 'Districts', 'Location Themes', 'Site Concept', 'Sector & System Creation', 'Worlds & Colonies', 'Colonies and Expeditions', 'Vaults / Ruins', 'Derelicts'] },

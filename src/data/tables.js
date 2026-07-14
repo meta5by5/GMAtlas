@@ -2162,5 +2162,41 @@ Object.assign(SCENE_TABLES, {
       "local guides won't go past a certain point", "instruments interfere with each other", "the terrain has changed since the last survey",
       "something here isn't on any official record"
     ]
+  },
+  // Faction Conflict's one-click "quick-start" generator (Living Faction
+  // Engine, docs/design/faction-conflict-integration-plan.md) — original
+  // GMAtlas content, not a transcription of any sourcebook. Deliberately
+  // small (4 short tables, not the full "generation procedure" a fuller
+  // spec sketched) — validated against GM-community sentiment that a
+  // faction/conflict tool earns adoption by being a single low-friction
+  // roll a GM can accept as-is or edit, not a multi-table wizard.
+  "Faction Conflict": {
+    "Root Cause Category": [
+      "control of a jump point, trade lane, or border zone", "water rights, an ore vein, a fuel depot, or arable land",
+      "two claimants to the same charter or inheritance", "a religious or ideological schism within a formerly unified group",
+      "an unresolved betrayal, massacre, or broken treaty", "a patron who quietly benefits from both sides staying weak",
+      "debt, a tariff, a monopoly, or currency manipulation", "one side knows a secret that would destroy the other's legitimacy"
+    ],
+    "Cause Gap Flavor": [
+      "the public story is real but incomplete — the truth is a deeper, older version of the same issue",
+      "the public story is a deliberate lie by leadership, told to rally their own base",
+      "the public story was true once but has been overtaken by events nobody's updated the messaging for",
+      "the public story is true for one side and false for the other — they're fighting for different reasons entirely",
+      "a third party manufactured the public story specifically to obscure what's really going on",
+      "the public story and the real one have swapped in popular perception, thanks to years of propaganda"
+    ],
+    "Third-Party Casualty": [
+      "a neutral settlement caught in the contested zone", "a trade or supply line neither side intends to protect",
+      "a minority population within one side's own territory", "an allied faction whose treaty obligates them to a side they don't want",
+      "the resource or place being fought over, degrading no matter who wins", "a specific named NPC with real ties to the party"
+    ],
+    "Starter Session Hook": [
+      "the party is hired to broker safe passage before a deadline both sides are quietly dreading",
+      "the party finds evidence of the root cause during an unrelated job, and must decide who — if anyone — to show it",
+      "a sympathetic figure from one side tries to recruit the party for a deniable move, testing where their own line is",
+      "a neutral party the third-party casualty trusts asks the party to intervene before it's too late",
+      "an old grievance resurfaces publicly, and both sides quietly ask the party to make it go away",
+      "the party stumbles into the precipitating incident's aftermath before either side's official story has hardened"
+    ]
   }
 });

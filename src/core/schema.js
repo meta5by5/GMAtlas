@@ -77,6 +77,16 @@ export function defaultCampaign(now = new Date().toISOString()) {
     factionEvents: [],
     factionTurnNumber: 0,
 
+    // Living Faction Engine Phase C (domain/missions.js): a persisted,
+    // trackable job — distinct from generateMission()'s older one-shot
+    // journal-note path (still there, unchanged, for a GM who just wants
+    // flavor text). Optionally sourced from a faction
+    // (`sourceFactionId`) so a hot faction's activity can become
+    // something the party can actually accept/decline/resolve, not just
+    // Co-Pilot narration. Additive/lazy-init like factionEvents above —
+    // no migrate.js step needed.
+    missions: [],
+
     director: {},        // unified Story Director cascade state
     oracles: { overrides: {}, usage: {} },
     documents: { library: [], openTabs: [], activeTab: null, refOverrides: {} },
@@ -166,6 +176,14 @@ export function defaultCampaign(now = new Date().toISOString()) {
       // grandfathers this to `true` for a campaign that already has real
       // SWN faction-turn data, so nothing already built breaks.
       gameSystemActivations: { swn: false },
+      // Living Faction Engine Phase B: a scene is the closest proxy this
+      // app has for "a unit of party activity has passed" —
+      // scenesSinceLastRound increments once per scene generated
+      // (domain/session.js's continueStory/suggestNextWithLens);
+      // factionTurnEngine.js's isFactionRoundDue() compares it against
+      // scenesPerRound to surface a Co-Pilot nudge. Purely a reminder —
+      // never auto-advances a faction turn (Article II).
+      factionPacing: { scenesPerRound: 3, scenesSinceLastRound: 0 },
       form: {},          // legacy Story Director form fields, preserved verbatim
       ui: { activeCenterTab: 'journal', activeLeftTab: 'entityList', oracleFilter: '', entityFilter: '', docFilter: '', docTagFilter: [] },
     },

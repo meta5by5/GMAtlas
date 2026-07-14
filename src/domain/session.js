@@ -46,7 +46,21 @@ export function continueStory(campaign, { toJournal = true } = {}) {
 
   pushTimeline(next, { kind: 'scene', label: `Scene ${scene.number}` });
   if (toJournal) addJournal(next, scene.text, 'Scene');
+  bumpFactionPacing(next);
   return next;
+}
+
+/** Faction Turn pacing (Living Faction Engine Phase B): each scene
+ *  generated is the closest proxy this app has for "a unit of party
+ *  activity has passed" — bump the counter `factionTurnEngine.js`'s
+ *  `isFactionRoundDue()` compares against `settings.factionPacing.
+ *  scenesPerRound`. Purely a nudge (Co-Pilot surfaces it, the GM still
+ *  clicks Step/Full Round themselves) — never auto-advances a faction
+ *  turn on its own, matching Article II. */
+function bumpFactionPacing(campaign) {
+  campaign.settings = campaign.settings || {};
+  const p = campaign.settings.factionPacing || { scenesPerRound: 3, scenesSinceLastRound: 0 };
+  campaign.settings.factionPacing = { ...p, scenesSinceLastRound: (p.scenesSinceLastRound || 0) + 1 };
 }
 
 /** "What Happens Next?"'s lens-picker step (docs/adr/0009-situation-engine-
@@ -92,6 +106,7 @@ export function suggestNextWithLens(campaign, lensId, { toJournal = true, rng = 
   pushTimeline(next, { kind: 'scene', label: `Scene ${scene.number}` });
   const text = lens ? `${scene.text}\n\nLens: ${lens.label}` : scene.text;
   if (toJournal) addJournal(next, text, 'Scene');
+  bumpFactionPacing(next);
   return next;
 }
 

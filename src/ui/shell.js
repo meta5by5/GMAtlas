@@ -22,6 +22,9 @@ import {
   setEntityStatblockTrackValue, setEntityStatblockAttributeValue, updateRelationshipLabel, updateRelationshipType, updateRelationshipStrength,
   listEntities, ENTITY_TYPES, TYPE_LABEL, setFactionStat, addFactionAsset, removeFactionAsset, createItemFromCatalog,
   addLocationTradeCode, removeLocationTradeCode, addLocationBase, removeLocationBase,
+  addConflictSessionHook, toggleConflictSessionHookUsed, removeConflictSessionHook, addConflictIrreversibleFact,
+  setConflictFactionPosture, removeConflictFactionPosture, updateConflictInformationAsymmetry,
+  clearConflictInformationAsymmetry, revealConflictInformationAsymmetry,
 } from '../domain/entities.js';
 import { findCatalogItem } from '../data/gearCatalog.js';
 import { installEnhancement, removeEnhancement } from '../domain/enhancements.js';
@@ -49,12 +52,14 @@ import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors, reso
 import {
   ensureFactionGoalTrack, buyAsset, sellAsset, repairAssetOrFaction, useAssetAbility, expandInfluence,
   refitAsset, changeHomeworld, seizePlanet, toggleAssetStealth, expandEventReadAloud, setEventReadAloud,
-  proposeFactionStep, advanceFactionTurnRound, commitFactionTurn,
+  proposeFactionStep, advanceFactionTurnRound, commitFactionTurn, factionsPresentAt, getCurrentWhereLocations,
+  resetFactionPacing, ensureConflictEscalationTrack, getConflictEscalationTrack, suggestedConflictEscalations,
 } from '../domain/factionTurnEngine.js';
+import { generateConflictSeed } from '../domain/factionConflicts.js';
 import { importHostileLocations } from '../domain/hostileLocations.js';
 import { fetchHostileLocationsPack } from './hostileLocationsFetch.js';
 import { exportContentPack, importContentPack } from '../domain/contentPack.js';
-import { generateMission, formatMission } from '../domain/missions.js';
+import { generateMission, formatMission, addMission, updateMissionStatus, removeMission } from '../domain/missions.js';
 import {
   getActiveGuideDoc, setGuideDocText, setActiveGuideId, createGuideDoc, renameGuideDoc,
   countGuideDescendants, removeGuideDoc, moveGuideDoc,
@@ -263,6 +268,8 @@ let collapsedOverview = new Set(); // ephemeral — entity ids whose Overview fi
 let expandedContracts = new Set(); // ephemeral — contract (Thread) ids whose full row is expanded (collapsed to just the name by default, UX batch)
 let tradeLocationTagFilter = ''; // ephemeral — Trade tab's Location tag filter (UX batch), narrows the Location <select>'s options
 let expandedWorldProfile = new Set(); // ephemeral — entity ids whose World Profile (UWP) card is expanded (docs/adr/0026 follow-up, collapsed by default)
+let expandedConflictDepth = new Set(); // ephemeral — conflict entity ids whose "Add depth" section is expanded (Faction Conflict, collapsed by default per the validated hero-path/depth split)
+let conflictEscalationSuggestions = []; // ephemeral — computed right after a Faction Turn commit (suggestedConflictEscalations); a dismissible one-click "did this affect a tracked conflict?" prompt, never applied automatically (Article II)
 let mechanicsScanning = false; // ephemeral — true while scanMechanicsIndex()'s async PDF.js scan is in flight (docs/adr/0014)
 let hostileLocationsImporting = false; // ephemeral — true while fetchHostileLocationsPack()'s async fetch is in flight (docs/adr/0026 JSON-pack addendum)
 let tocScanning = false; // ephemeral — true while scanAndGenerateToc()'s async PDF.js outline scan is in flight (docs/adr/0020)
@@ -282,14 +289,32 @@ let tradeContractAddOpen = false; // ephemeral — the inline "+ Contract" creat
 // holds the current batch of proposed-but-not-yet-committed turn drafts
 // (Step mode: a 1-item array; Full Round: one per eligible faction,
 // chained — see domain/factionTurnEngine.js's module doc comment for why
-// a round's drafts commit as an all-or-nothing batch). `factionEventsFactionFilterId`/
-// `factionEventsLocationFilterId` narrow the committed-events feed by
-// faction and/or location ('' = no filter on that dimension) — WHO's
-// "Factions active nearby" jumps set the former, WHERE's "Faction
-// activity here" jumps set the latter.
+// a round's drafts commit as an all-or-nothing batch). `factionEventsFactionFilterId`
+// narrows the committed-events feed by faction ('' = no filter) — WHO's
+// "Factions active nearby" jumps set it. `factionEventsLocationFilterId`
+// starts `null` ("not yet touched this session" — factionEvents.js then
+// defaults it to WHERE's own Active Location on every render, so it
+// auto-updates as WHERE changes); once the GM explicitly picks a value
+// via the dropdown (including '' for a deliberate "All locations"), that
+// choice sticks and stops auto-following WHERE — WHERE's "Faction
+// activity here" jumps also count as an explicit pick. `factionEventsStepFactionId`
+// remembers which faction is picked in the Step dropdown so its name
+// stays visible on the form until changed (direct request) — cleared back
+// to unset by picking a different one; not persisted, same ephemeral
+// lifetime as every other filter here.
 let factionEventsDrafts = null;
 let factionEventsFactionFilterId = '';
-let factionEventsLocationFilterId = '';
+let factionEventsLocationFilterId = null;
+let factionEventsStepFactionId = '';
+// Whole-card relocation (direct request): the down-arrow on the Faction
+// Events card's own top row moves it OUT of the drawer tab stack and into
+// the WHERE workspace tab as a docked side panel; the up-arrow there pops
+// it back. Only one of "drawer tab" / "docked in WHERE" is ever true at
+// once — docking closes the drawer tab (data-faction-events-dock), and
+// undocking re-opens it (data-faction-events-undock) — so the same
+// renderFactionEvents() call never runs twice for one render pass.
+let factionEventsDockedInWhere = false;
+let factionRoundHistoryOpen = false; // ephemeral — "I want to see the history of faction turns per round" (Living Faction Engine Phase D), collapsed by default
 // The doc-viewer iframe reload guard (below) can't compare against the live
 // DOM `frame.src` readback — browsers always return that as a normalized
 // ABSOLUTE URL, while resolvedActive.src is a relative path for Reference
@@ -304,6 +329,7 @@ let lastDocViewerSrc = null;
 // (rollAction/rollFlat/rollTraveller's return shape) the window renders.
 let diceRollResult = null;
 let focusInspectorNameNextRender = false; // ephemeral — set by clicking any data-open-entity link/chip, so Entity Detail's name field is focused+selected the moment it renders
+let entityDetailFocusEventId = ''; // ephemeral — set when a data-open-entity link also carries data-open-entity-event (a Faction Events turn's faction-name link); factionTurnSectionHtml highlights/expands that one Turn History entry
 
 export function mountShell(el) {
   root = el;
@@ -488,6 +514,9 @@ function onClick(ev) {
   // shows exactly the roster this button implies, matching the pre-0032
   // behavior's intent without needing a second panel open at once.
   if (hit('[data-toggle-faction-events]')) {
+    // Docked in WHERE — the card already lives there, so jump to it
+    // instead of reopening a second copy as a drawer tab.
+    if (factionEventsDockedInWhere) return store.update((d) => { d.context.active = 'where'; return d; });
     entityTypeFilter = 'faction';
     entityTagFilters = new Set();
     return toggleDrawer('faction-events');
@@ -772,6 +801,12 @@ function onClick(ev) {
     // that reads this flag, so setting it after would always be one render
     // too late.
     focusInspectorNameNextRender = true;
+    // Living Faction Engine Phase D: a faction-name link from a specific
+    // turn (data-open-entity-event, factionEvents.js) also carries which
+    // event to highlight/expand once the Entity Editor opens — cleared to
+    // '' for every other entity-open trigger so a stale highlight never
+    // leaks in from a previous click.
+    entityDetailFocusEventId = openEnt.dataset.openEntityEvent || '';
     store.update((d) => setActiveEntity(d, openEnt.dataset.openEntity));
     return;
   }
@@ -1310,26 +1345,54 @@ function onClick(ev) {
   // held in ephemeral `factionEventsDrafts` (never persisted) until
   // "Commit All"/"Commit" applies them for real. ---
   if (hit('[data-faction-events-step-go]')) {
-    const select = root.querySelector('[data-faction-events-step-select]');
-    const factionId = select && select.value;
-    if (!factionId) return toast('Pick a faction to step first');
-    const draft = proposeFactionStep(store.get(), factionId);
+    if (!factionEventsStepFactionId) return toast('Pick a faction to step first');
+    const draft = proposeFactionStep(store.get(), factionEventsStepFactionId);
     factionEventsDrafts = draft ? [draft] : [];
     return renderDrawerBody();
   }
   if (hit('[data-faction-events-full-round]')) {
-    factionEventsDrafts = advanceFactionTurnRound(store.get());
+    const doc = store.get();
+    const activeLocation = getCurrentWhereLocations(doc)[0] || null;
+    if (!activeLocation) return toast('Select a Location on the WHERE tab first');
+    const factionIds = factionsPresentAt(doc, activeLocation.id).map((f) => f.id);
+    if (!factionIds.length) return toast(`No factions active at ${activeLocation.name} yet.`);
+    factionEventsDrafts = advanceFactionTurnRound(doc, { factionIds });
     return renderDrawerBody();
   }
   if (hit('[data-faction-events-discard]')) { factionEventsDrafts = null; return renderDrawerBody(); }
   if (hit('[data-faction-events-commit]')) {
     if (factionEventsDrafts && factionEventsDrafts.length) {
       const last = factionEventsDrafts[factionEventsDrafts.length - 1];
-      store.update(() => commitFactionTurn(last));
+      const committedEventIds = factionEventsDrafts.map((d) => d.event.id);
+      store.update(() => resetFactionPacing(commitFactionTurn(last)));
+      // Faction Conflict integration (docs/adr/0036 follow-up): does any
+      // just-committed event plausibly touch a tracked conflict? Suggestion
+      // only — nothing here advances a conflict's escalation clock itself.
+      conflictEscalationSuggestions = suggestedConflictEscalations(store.get(), committedEventIds);
     }
     factionEventsDrafts = null;
-    return; // store.update() already re-renders the whole shell, including the drawer body
+    // A full render (not just renderDrawerBody) — Faction Events may
+    // currently be docked in the WHERE workspace tab instead of the
+    // drawer (factionEventsDockedInWhere), and this needs to refresh
+    // whichever one is actually showing it.
+    return render();
   }
+  // Whole-card relocation (direct request) — see factionEventsDockedInWhere's
+  // own comment above. Docking closes the drawer tab and jumps WHERE's own
+  // Focus tab into view (store.update, since doc.context.active is real
+  // campaign state, not ephemeral); undocking re-opens the drawer tab and
+  // switches straight to it.
+  if (hit('[data-faction-events-dock]')) {
+    factionEventsDockedInWhere = true;
+    closeDrawerTab('faction-events');
+    return store.update((d) => { d.context.active = 'where'; return d; });
+  }
+  if (hit('[data-faction-events-undock]')) {
+    factionEventsDockedInWhere = false;
+    openDrawerTab('faction-events');
+    return render();
+  }
+  if (hit('[data-faction-round-history-toggle]')) { factionRoundHistoryOpen = !factionRoundHistoryOpen; return render(); }
   // WHO's "Factions active nearby" / WHERE's "Faction activity here" jump
   // chips — open the Faction Events tab pre-filtered.
   const factionEventsJump = hit('[data-faction-events-jump]');
@@ -1585,6 +1648,105 @@ function onClick(ev) {
   if (hit('[data-generate-mission]')) {
     store.update((d) => addNote(d, formatMission(generateMission(d)), 'Mission'));
     return toast('Mission generated');
+  }
+  // Living Faction Engine Phase C: a hot faction's activity becomes a
+  // real, trackable mission (campaign.missions[]) instead of only a
+  // Co-Pilot observation — one click, GM still decides whether to hand
+  // it to the party (Article II: nothing here auto-assigns anything).
+  const generateFactionMission = hit('[data-generate-faction-mission]');
+  if (generateFactionMission) {
+    const factionId = generateFactionMission.dataset.generateFactionMission;
+    store.update((d) => addMission(d, generateMission(d, { factionId })));
+    return toast('Mission generated — see Faction Events → Missions');
+  }
+  const missionStatus = hit('[data-mission-status]');
+  if (missionStatus) {
+    const [missionId, status] = missionStatus.dataset.missionStatus.split('::');
+    return store.update((d) => updateMissionStatus(d, missionId, status));
+  }
+  const missionRemove = hit('[data-mission-remove]');
+  if (missionRemove) return store.update((d) => removeMission(d, missionRemove.dataset.missionRemove));
+
+  // --- Faction Conflict (Living Faction Engine, docs/design/faction-
+  // conflict-integration-plan.md) — hero-path controls first. ---
+  const conflictStartClock = hit('[data-conflict-start-clock]');
+  if (conflictStartClock) return store.update((d) => ensureConflictEscalationTrack(d, conflictStartClock.dataset.conflictStartClock));
+  const conflictQuickstart = hit('[data-conflict-quickstart]');
+  if (conflictQuickstart) {
+    const id = conflictQuickstart.dataset.conflictQuickstart;
+    return store.update((d) => {
+      const seed = generateConflictSeed(d, {});
+      let next = ensureConflictEscalationTrack(d, id);
+      next = updateEntity(next, id, { statedCause: seed.statedCause, rootCause: seed.rootCause, causeGapHook: seed.causeGapHook, thirdPartyCasualty: seed.thirdPartyCasualty });
+      if (seed.sessionHook) next = addConflictSessionHook(next, id, seed.sessionHook);
+      return next;
+    });
+  }
+  const hookAdd = hit('[data-conflict-hook-add]');
+  if (hookAdd) {
+    const id = hookAdd.dataset.conflictHookAdd;
+    const input = root.querySelector(`[data-conflict-hook-input="${id}"]`);
+    const text = input && input.value;
+    if (!text) return;
+    input.value = '';
+    return store.update((d) => addConflictSessionHook(d, id, text));
+  }
+  const hookRemove = hit('[data-conflict-hook-remove]');
+  if (hookRemove) {
+    const [id, hookId] = hookRemove.dataset.conflictHookRemove.split('::');
+    return store.update((d) => removeConflictSessionHook(d, id, hookId));
+  }
+  const depthToggle = hit('[data-conflict-depth-toggle]');
+  if (depthToggle) {
+    const id = depthToggle.dataset.conflictDepthToggle;
+    expandedConflictDepth = new Set(expandedConflictDepth);
+    if (expandedConflictDepth.has(id)) expandedConflictDepth.delete(id); else expandedConflictDepth.add(id);
+    return renderDrawerBody();
+  }
+  const factAdd = hit('[data-conflict-fact-add]');
+  if (factAdd) {
+    const id = factAdd.dataset.conflictFactAdd;
+    const summaryInput = root.querySelector(`[data-conflict-fact-summary="${id}"]`);
+    const consequenceInput = root.querySelector(`[data-conflict-fact-consequence="${id}"]`);
+    const summary = summaryInput && summaryInput.value;
+    if (!summary) return;
+    const consequence = consequenceInput && consequenceInput.value;
+    if (summaryInput) summaryInput.value = '';
+    if (consequenceInput) consequenceInput.value = '';
+    return store.update((d) => addConflictIrreversibleFact(d, id, summary, consequence));
+  }
+  const postureRemove = hit('[data-conflict-posture-remove]');
+  if (postureRemove) {
+    const [id, factionId] = postureRemove.dataset.conflictPostureRemove.split('::');
+    return store.update((d) => removeConflictFactionPosture(d, id, factionId));
+  }
+  const asymmetryAdd = hit('[data-conflict-asymmetry-add]');
+  if (asymmetryAdd) return store.update((d) => updateConflictInformationAsymmetry(d, asymmetryAdd.dataset.conflictAsymmetryAdd, {}));
+  const asymmetryReveal = hit('[data-conflict-asymmetry-reveal]');
+  if (asymmetryReveal) return store.update((d) => revealConflictInformationAsymmetry(d, asymmetryReveal.dataset.conflictAsymmetryReveal));
+  const asymmetryClear = hit('[data-conflict-asymmetry-clear]');
+  if (asymmetryClear) return store.update((d) => clearConflictInformationAsymmetry(d, asymmetryClear.dataset.conflictAsymmetryClear));
+  // Faction Turn × Conflict escalation suggestions (docs/adr/0036
+  // follow-up) — computed right after a commit (see data-faction-events-
+  // commit above); Escalate applies it (starting the clock first if the
+  // GM never had — advancing a conflict they're now confirming matters
+  // implies they want it tracked), Dismiss just clears the prompt. Either
+  // way the suggestion is removed from the list once acted on.
+  const escalationApply = hit('[data-conflict-escalation-apply]');
+  if (escalationApply) {
+    const [conflictId, eventId] = escalationApply.dataset.conflictEscalationApply.split('::');
+    conflictEscalationSuggestions = conflictEscalationSuggestions.filter((s) => !(s.conflictId === conflictId && s.eventId === eventId));
+    return store.update((d) => {
+      const next = ensureConflictEscalationTrack(d, conflictId);
+      const track = getConflictEscalationTrack(next, conflictId);
+      return track ? advanceThread(next, track.id, 1) : next;
+    });
+  }
+  const escalationDismiss = hit('[data-conflict-escalation-dismiss]');
+  if (escalationDismiss) {
+    const [conflictId, eventId] = escalationDismiss.dataset.conflictEscalationDismiss.split('::');
+    conflictEscalationSuggestions = conflictEscalationSuggestions.filter((s) => !(s.conflictId === conflictId && s.eventId === eventId));
+    return render();
   }
   if (hit('[data-hostile-locations-import]')) {
     if (hostileLocationsImporting) return;
@@ -2056,6 +2218,8 @@ function onChange(ev) {
     store.update((d) => { const f = getEntity(d, factionId); const r = buyAsset(d, { factionId, statType, catalogId, locationId: f && f.homeworldId }); msg = r.event.narrative; return r.campaign; });
     return toast(msg);
   }
+  const factionEventsStepSelectChange = t.closest('[data-faction-events-step-select]');
+  if (factionEventsStepSelectChange) { factionEventsStepFactionId = t.value; return renderDrawerBody(); }
   const factionEventsFactionFilterChange = t.closest('[data-faction-events-faction-filter]');
   if (factionEventsFactionFilterChange) { factionEventsFactionFilterId = t.value; return renderDrawerBody(); }
   const factionEventsLocationFilterChange = t.closest('[data-faction-events-location-filter]');
@@ -2071,11 +2235,6 @@ function onChange(ev) {
     const [factionId, field] = factionField.dataset.factionField.split('::');
     const value = t.type === 'number' ? (Number(t.value) || 0) : t.value;
     return store.update((d) => updateEntity(d, factionId, { [field]: value }));
-  }
-  const factionProviderSelect = t.closest('[data-faction-provider-select]');
-  if (factionProviderSelect) {
-    const factionId = factionProviderSelect.dataset.factionProviderSelect;
-    return store.update((d) => updateEntity(d, factionId, { rulesProvider: t.value }));
   }
   const factionFaRefit = t.closest('[data-faction-fa-refit]');
   if (factionFaRefit) {
@@ -2101,6 +2260,29 @@ function onChange(ev) {
   if (gameSystemActivate) {
     const systemId = gameSystemActivate.dataset.gameSystemActivate;
     return store.update((d) => { d.settings.gameSystemActivations = { ...(d.settings.gameSystemActivations || {}), [systemId]: t.checked }; return d; });
+  }
+  if (t.closest('[data-faction-pacing-scenes-per-round]')) {
+    const n = Math.max(0, Number(t.value) || 0);
+    return store.update((d) => { d.settings.factionPacing = { ...(d.settings.factionPacing || {}), scenesPerRound: n }; return d; });
+  }
+
+  // --- Faction Conflict (Living Faction Engine) — change-triggered
+  // fields not covered by the generic data-entity-field handler above. ---
+  const hookToggle = t.closest('[data-conflict-hook-toggle]');
+  if (hookToggle) {
+    const [id, hookId] = hookToggle.dataset.conflictHookToggle.split('::');
+    return store.update((d) => toggleConflictSessionHookUsed(d, id, hookId));
+  }
+  const postureField = t.closest('[data-conflict-posture-field]');
+  if (postureField) {
+    const [id, factionId, field] = postureField.dataset.conflictPostureField.split('::');
+    const value = field === 'cohesion' ? Number(t.value) || 0 : t.value;
+    return store.update((d) => setConflictFactionPosture(d, id, factionId, { [field]: value }));
+  }
+  const asymmetryField = t.closest('[data-conflict-asymmetry-field]');
+  if (asymmetryField) {
+    const [id, field] = asymmetryField.dataset.conflictAsymmetryField.split('::');
+    return store.update((d) => updateConflictInformationAsymmetry(d, id, { [field]: t.value }));
   }
 
   const oev = t.closest('[data-oracle-entry-value]');
@@ -3456,7 +3638,7 @@ function render() {
     // data-drawer-open every other tile below uses.
     if (id === 'faction-events') {
       const d = drawerMeta('faction-events');
-      return `<button data-toggle-faction-events aria-expanded="${openDrawers.includes('faction-events')}" title="Faction Events — SWN faction turns, narrows Cast to Factions"><span class="glyph">${d.glyph}</span><b>${d.label}</b></button>`;
+      return `<button data-toggle-faction-events aria-expanded="${openDrawers.includes('faction-events')}" title="${factionEventsDockedInWhere ? 'Faction Events — currently docked in the WHERE tab' : 'Faction Events — SWN faction turns, narrows Cast to Factions'}"><span class="glyph">${d.glyph}</span><b>${d.label}</b>${factionEventsDockedInWhere ? ' <span class="dim small">(in WHERE)</span>' : ''}</button>`;
     }
     const d = drawerMeta(id);
     if (!d) return '';
@@ -3747,7 +3929,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw,
+    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,
@@ -3755,6 +3937,11 @@ function buildDrawerUi() {
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
     contentPackFlags, hostileLocationsImporting,
+    // Faction Events' own docked-in-WHERE state (see factionEventsDockedInWhere's
+    // comment above) — workspace/index.js's WHERE view reads these to render
+    // the same renderFactionEvents() body a second way when docked.
+    factionEventsDockedInWhere, factionEventsDrafts, factionEventsFactionFilterId, factionEventsLocationFilterId, factionEventsStepFactionId,
+    factionRoundHistoryOpen, entityDetailFocusEventId, conflictEscalationSuggestions,
   };
 }
 
@@ -3794,7 +3981,7 @@ function replaceBodyPreservingScroll(body, html) {
 function renderActiveDrawerHtml(doc) {
   if (!activeDrawer) return '';
   if (activeDrawer === 'faction-events') {
-    return renderFactionEvents(doc, { factionEventsDrafts, factionEventsFactionFilterId, factionEventsLocationFilterId });
+    return renderFactionEvents(doc, { factionEventsDrafts, factionEventsFactionFilterId, factionEventsLocationFilterId, factionEventsStepFactionId, factionRoundHistoryOpen, conflictEscalationSuggestions });
   }
   return renderDrawer(activeDrawer, doc, buildDrawerUi());
 }
