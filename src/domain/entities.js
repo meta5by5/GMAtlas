@@ -267,7 +267,26 @@ function ensureLocationFields(e) {
   if (e.type !== 'location') return;
   if (e.developmentLevel === undefined) e.developmentLevel = '';
   if (e.biome === undefined) e.biome = '';
+  // Location Story (docs/adr/0038): a GM's own free-text narrative note
+  // about faction dynamics here — mirrors Faction's scenarioSeed, edited
+  // from the WHERE workspace tab (workspace/index.js's locationStoryBlock)
+  // rather than the Entity Editor, since it's meant to be read/written in
+  // the flow of "what's happening at the current location," not while
+  // browsing Cast.
+  if (e.locationStory === undefined) e.locationStory = '';
   ensureWorldProfileFields(e);
+}
+
+// NPC "current goal" (docs/design/scene-story-integration-plan.md,
+// scoped down from the Scene/Story spec's `npc_scene_goals`): what this
+// NPC wants RIGHT NOW, distinct from `overview` (their general
+// description) — mirrors `faction.agenda`'s exact shape/reasoning
+// (a plain opt-in field, not a new mechanism). Plain NPCs had no
+// type-specific ensure-fields function before this; every other entity
+// type already had one.
+function ensureNpcFields(e) {
+  if (e.type !== 'npc') return;
+  if (e.currentGoal === undefined) e.currentGoal = '';
 }
 
 // Faction Conflict (docs/adr/0036, docs/design/faction-conflict-
@@ -530,6 +549,7 @@ function _create(campaign, { type = 'npc', name = '' } = {}) {
   ensureFactionFields(rec);
   ensureLocationFields(rec);
   ensureConflictFields(rec);
+  ensureNpcFields(rec);
   return rec;
 }
 
@@ -606,7 +626,7 @@ export function createItemFromCatalog(campaign, catalogEntry) {
 export function updateEntity(campaign, id, patch) {
   const next = clone(campaign);
   const e = getEntity(next, id);
-  if (e) { Object.assign(e, patch); ensureAutoStatblock(e, next.settings); ensureFactionFields(e); ensureLocationFields(e); ensureConflictFields(e); }
+  if (e) { Object.assign(e, patch); ensureAutoStatblock(e, next.settings); ensureFactionFields(e); ensureLocationFields(e); ensureConflictFields(e); ensureNpcFields(e); }
   return next;
 }
 

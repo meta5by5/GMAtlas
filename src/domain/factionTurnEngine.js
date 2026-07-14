@@ -178,17 +178,20 @@ function regionLocationIds(campaign, locationId, maxDepth) {
 }
 
 /** Every faction with ANY presence — an asset, homeworld, Base of
- *  Influence, a governed location, or a location whose own membership
- *  (entities.js's getEntityFaction) points at them — anywhere in
- *  `locationId`'s full region (regionLocationIds above), not just the
- *  single co-located location factionsAtLocation checks. This is the
- *  "location is the central determining factor in which factions are
- *  active" query: it's what a Region view or faction-driven mission/
- *  encounter generation (Phase C) reads from instead of reinventing a
- *  named Region entity type. Tags each with `.stance` relative to
- *  `anchorFactionId` when one is given (same shape as factionsAtLocation's
- *  own `.stance`); 'neutral' when no anchor is given, since there's
- *  nothing to compare against. */
+ *  Influence, a governed location, a location whose own membership
+ *  (entities.js's getEntityFaction) points at them, or a manual
+ *  `located_at` relationship (the generic relationship system, same one
+ *  the Entity Editor's own Relationships block already exposes — the
+ *  GM's own "this faction operates here" note when none of the
+ *  mechanical SWN fields apply) — anywhere in `locationId`'s full region
+ *  (regionLocationIds above), not just the single co-located location
+ *  factionsAtLocation checks. This is the "location is the central
+ *  determining factor in which factions are active" query: it's what a
+ *  Region view or faction-driven mission/encounter generation (Phase C)
+ *  reads from instead of reinventing a named Region entity type. Tags
+ *  each with `.stance` relative to `anchorFactionId` when one is given
+ *  (same shape as factionsAtLocation's own `.stance`); 'neutral' when no
+ *  anchor is given, since there's nothing to compare against. */
 export function factionsInRegion(campaign, locationId, { anchorFactionId = null, maxDepth = 6 } = {}) {
   const regionIds = regionLocationIds(campaign, locationId, maxDepth);
   const out = [];
@@ -198,11 +201,12 @@ export function factionsInRegion(campaign, locationId, { anchorFactionId = null,
     const viaHomeworld = regionIds.has(f.homeworldId);
     const viaBase = (f.basesOfInfluence || []).some((b) => regionIds.has(b.locationId));
     const viaGoverned = (f.governedLocationIds || []).some((id) => regionIds.has(id));
+    const viaRelationship = (f.relationships || []).some((r) => r.type === 'located_at' && regionIds.has(r.to));
     const viaMembership = Array.from(regionIds).some((id) => {
       const owner = getEntityFaction(campaign, id);
       return owner && !owner.synthetic && owner.id === f.id;
     });
-    if (viaAsset || viaHomeworld || viaBase || viaGoverned || viaMembership) {
+    if (viaAsset || viaHomeworld || viaBase || viaGoverned || viaRelationship || viaMembership) {
       const stance = anchorFactionId ? relationshipStanceBetween(campaign, anchorFactionId, f.id) : 'neutral';
       out.push({ faction: f, stance });
     }
@@ -211,12 +215,13 @@ export function factionsInRegion(campaign, locationId, { anchorFactionId = null,
 }
 
 /** Every faction actually present AT `locationId` specifically — active
- *  asset, homeworld, Base of Influence, a governed location, or the
- *  location's own faction membership (entities.js's getEntityFaction) —
- *  the single-location, no-exclusions counterpart to factionsAtLocation
- *  (which always excludes one anchor faction, for targeting) and
- *  factionsInRegion (which walks the whole containment tree, for a wider
- *  "active nearby" query). Used to scope the Faction Events panel to
+ *  asset, homeworld, Base of Influence, a governed location, a manual
+ *  `located_at` relationship, or the location's own faction membership
+ *  (entities.js's getEntityFaction) — the single-location, no-exclusions
+ *  counterpart to factionsAtLocation (which always excludes one anchor
+ *  faction, for targeting) and factionsInRegion (which walks the whole
+ *  containment tree, for a wider "active nearby" query). Used to scope
+ *  the Faction Events panel and WHO/WHERE's own presence displays to
  *  whoever's narratively active at WHERE's own current location, rather
  *  than listing every faction in the campaign regardless of relevance. */
 export function factionsPresentAt(campaign, locationId) {
@@ -227,8 +232,9 @@ export function factionsPresentAt(campaign, locationId) {
     const viaHomeworld = f.homeworldId === locationId;
     const viaBase = (f.basesOfInfluence || []).some((b) => b.locationId === locationId);
     const viaGoverned = (f.governedLocationIds || []).includes(locationId);
+    const viaRelationship = (f.relationships || []).some((r) => r.type === 'located_at' && r.to === locationId);
     const viaMembership = owner && !owner.synthetic && owner.id === f.id;
-    return viaAsset || viaHomeworld || viaBase || viaGoverned || viaMembership;
+    return viaAsset || viaHomeworld || viaBase || viaGoverned || viaRelationship || viaMembership;
   });
 }
 
@@ -865,6 +871,24 @@ export function expandInfluence(campaign, { factionId, locationId, hp, rng = Mat
   return result;
 }
 
+/** Removes one Base of Influence outright — a GM correction tool (e.g. a
+ *  mis-clicked Expand Influence, or a base that's fictionally gone but
+ *  wasn't mechanically destroyed), NOT a mechanical action: no FacCred
+ *  refund, no dice, no event logged, same "flag/fix, don't simulate"
+ *  posture as the other plain entity-field edits in this app. Leaves
+ *  `homeworldId` untouched even if it happens to equal `locationId` —
+ *  Homeworld is its own separate field, not derived from this array, so
+ *  removing a base a faction also calls home doesn't need a second
+ *  decision made for it here. No-op on a non-faction entity or an id not
+ *  actually in the faction's list. */
+export function removeFactionBase(campaign, factionId, locationId) {
+  const next = clone(campaign);
+  const f = getFaction(next, factionId);
+  if (!f || !Array.isArray(f.basesOfInfluence)) return next;
+  f.basesOfInfluence = f.basesOfInfluence.filter((b) => b.locationId !== locationId);
+  return next;
+}
+
 /** Move to a different homeworld — requires an existing Base of Influence
  *  there. Always a flat one-turn transit (busyUntilTurn), and swaps Base
  *  HP per SWN: the new homeworld's Base is set to the faction's max HP,
@@ -1100,6 +1124,44 @@ function candidateActions(campaign, f) {
   return out.length ? out : ['useAssetAbility'];
 }
 
+/** A specific, GM-legible reason a faction's turn produced no viable
+ *  action — "no Homeworld set" vs "not enough FacCreds" vs "nothing to
+ *  attack," instead of one generic message for every case (direct
+ *  request, following the real "stuck for 13 rounds" report this was
+ *  diagnosed from). `attemptedAction` is whichever action type
+ *  `pickActionHeuristic` actually chose before its `autoArgs` came back
+ *  null — with ANY active asset, sellAsset is always a viable fallback
+ *  (its own autoArgs never fails), so "no viable action" can only occur
+ *  once assets exist if the heuristic specifically landed on a
+ *  DIFFERENT, narrower action instead; the message is keyed to that
+ *  actual attempt rather than re-guessing independently, so it's always
+ *  accurate to what was actually tried. With zero assets, `homeworldId`/
+ *  affordability alone fully determine the reason (buyAsset/
+ *  expandInfluence's own autoArgs never fails once their candidateActions
+ *  gate passes), so `attemptedAction` isn't needed for those two cases. */
+export function explainNoViableAction(campaign, f, attemptedAction) {
+  const activeAssets = (f.factionAssets || []).filter((a) => a.status === 'active');
+  if (!activeAssets.length) {
+    if (!f.homeworldId) return "no Homeworld set — it can't buy its first asset or Expand Influence anywhere until one is chosen (Entity Editor → Faction Turn card)";
+    return `not enough FacCreds to buy its first asset (has ${f.facCreds || 0})`;
+  }
+  switch (attemptedAction) {
+    case 'attack':
+    case 'seizePlanet':
+      return 'nothing to attack or seize here — no rival or neutral faction has an asset at the same location';
+    case 'useAssetAbility':
+      return 'none of its assets have a usable ability';
+    case 'refitAsset':
+      return 'no alternative asset at its current rating to refit into';
+    case 'expandInfluence':
+      return 'no known location (Homeworld or a Base of Influence) to expand influence into';
+    case 'changeHomeworld':
+      return 'no other Base of Influence to relocate to';
+    default:
+      return 'nothing productive available this turn';
+  }
+}
+
 /** Weighted pick among plausible actions — favors whatever the faction's
  *  current goal counts toward, then falls back to a flat random choice.
  *  This is a heuristic "AI," not a claim of optimal play — the whole
@@ -1217,7 +1279,8 @@ export function proposeFactionTurn(campaign, factionId, { rng = Math.random, tur
     const actionType = pickActionHeuristic(working, f, f.currentGoalId, rng);
     const args = autoArgs(working, f, actionType, rng);
     if (!args) {
-      const event = makeEvent(working, { turnNumber: tn, factionId, factionName: f.name, action: 'none', locationId: f.homeworldId, outcome: 'info', narrative: `${f.name} has no viable action this turn.` });
+      const reason = explainNoViableAction(working, f, actionType);
+      const event = makeEvent(working, { turnNumber: tn, factionId, factionName: f.name, action: 'none', locationId: f.homeworldId, outcome: 'info', narrative: `${f.name} has no viable action this turn — ${reason}.` });
       result = { action: 'none', event, resultCampaign: working };
     } else {
       const fn = ACTIONS[actionType];

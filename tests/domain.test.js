@@ -3214,17 +3214,19 @@ test('a fresh campaign defaults settings.tradeEconomyModel to hostile, and Locat
 import { developmentLevelBiasAt, biomeBiasAt } from '../src/domain/trade.js';
 import { findBiome } from '../src/data/biomes.js';
 
-test('ensureLocationFields defaults a fresh Location\'s developmentLevel and biome to \'\', and leaves non-Locations untouched', () => {
+test('ensureLocationFields defaults a fresh Location\'s developmentLevel, biome, and locationStory to \'\', and leaves non-Locations untouched', () => {
   let camp = defaultCampaign();
   let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Prospect Station' }));
   const loc = getEntity(camp, locId);
   assert.equal(loc.developmentLevel, '');
   assert.equal(loc.biome, '');
+  assert.equal(loc.locationStory, '');
 
   let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Reyes' }));
   const npc = getEntity(camp, npcId);
   assert.equal(npc.developmentLevel, undefined);
   assert.equal(npc.biome, undefined);
+  assert.equal(npc.locationStory, undefined);
 });
 
 test('developmentLevelBiasAt prefers the Location\'s developmentLevel field over a tag match, but falls back to the tag scan when the field is unset', () => {
@@ -4200,7 +4202,8 @@ import { computeFactionMaxHp } from '../src/domain/entities.js';
 import {
   buyAsset, sellAsset, repairAssetOrFaction, refitAsset, expandInfluence, changeHomeworld, seizePlanet, attack,
   useAssetAbility, ensureFactionGoalTrack, getFactionGoalTrack, advanceGoalProgress, factionsWithGoalNearCompletion,
-  pickGoalIfNone, proposeFactionTurn, proposeFactionStep, advanceFactionTurnRound, commitFactionTurn,
+  pickGoalIfNone, proposeFactionTurn, proposeFactionStep, advanceFactionTurnRound, commitFactionTurn, explainNoViableAction,
+  removeFactionBase,
 } from '../src/domain/factionTurnEngine.js';
 
 test('SWN faction asset/tag/goal catalog: 24 assets per stat, no id collisions, every asset has a valid attack/counter shape', () => {
@@ -4376,6 +4379,36 @@ test('changeHomeworld requires an existing Base of Influence at the destination,
   assert.ok(oldBase, 'the old homeworld gets a Base of Influence recording its former Base\'s HP');
 });
 
+test('removeFactionBase drops just that one Base of Influence outright (no FacCred refund, no event), leaves homeworldId untouched even if it points at the removed base, and no-ops on a non-faction entity or an id not in the list', () => {
+  let camp = defaultCampaign();
+  let factionId, locationId; ({ campaign: camp, factionId, locationId } = makeFactionWithHomeworld(camp, 'Sable Cartel'));
+  let baseLocId; ({ campaign: camp, id: baseLocId } = createEntity(camp, { type: 'location', name: 'Outpost' }));
+  camp = expandInfluence(camp, { factionId, locationId: baseLocId, hp: 4, rng: makeRng(1) }).campaign;
+  const before = getEntity(camp, factionId);
+  assert.equal(before.basesOfInfluence.length, 1);
+  const facCredsBefore = before.facCreds;
+
+  const removed = removeFactionBase(camp, factionId, baseLocId);
+  const after = getEntity(removed, factionId);
+  assert.equal(after.basesOfInfluence.length, 0);
+  assert.equal(after.facCreds, facCredsBefore, 'no refund');
+  assert.equal(after.homeworldId, locationId, 'homeworldId untouched');
+
+  // Removing the base the faction's OWN homeworld points at leaves
+  // homeworldId as-is (a separate field, not derived from this array).
+  camp = expandInfluence(camp, { factionId, locationId: baseLocId, hp: 4, rng: makeRng(1) }).campaign;
+  camp = updateEntity(camp, factionId, { homeworldId: baseLocId });
+  const removedHome = removeFactionBase(camp, factionId, baseLocId);
+  assert.equal(getEntity(removedHome, factionId).homeworldId, baseLocId);
+  assert.equal(getEntity(removedHome, factionId).basesOfInfluence.length, 0);
+
+  // No-ops.
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Bystander' }));
+  assert.deepEqual(removeFactionBase(camp, npcId, baseLocId), camp);
+  const noopUnknown = removeFactionBase(camp, factionId, 'no-such-location');
+  assert.equal(getEntity(noopUnknown, factionId).basesOfInfluence.length, getEntity(camp, factionId).basesOfInfluence.length);
+});
+
 test('attack: a guaranteed-win matchup (attacker Force 10 vs defender Force 0) always succeeds, destroys a low-HP defender asset, and never triggers a counterattack', () => {
   let camp = defaultCampaign();
   let attackerId, attackerLoc; ({ campaign: camp, factionId: attackerId, locationId: attackerLoc } = makeFactionWithHomeworld(camp, 'Attacker', { force: 10 }));
@@ -4511,6 +4544,47 @@ test('proposeFactionTurn attaches an "impact" diff to its event — FacCreds/HP 
     }
   }
   assert.fail('no seed in range produced buyAsset — widen the search range');
+});
+
+test('a faction with no viable action names a specific reason — no Homeworld, not enough FacCreds, or (once assets exist) whichever specific action the heuristic actually tried and failed — instead of one generic message', () => {
+  // No Homeworld at all: blocks buyAsset/expandInfluence outright, which
+  // transitively blocks everything else that depends on having an asset.
+  // Deterministic regardless of rng seed — candidateActions has ZERO real
+  // candidates in this state, so the forced useAssetAbility fallback is
+  // the only thing pickActionHeuristic can ever choose.
+  let camp = defaultCampaign();
+  let noHomeId; ({ campaign: camp, id: noHomeId } = createEntity(camp, { type: 'faction', name: 'Homeless Cartel' }));
+  const noHome = proposeFactionTurn(camp, noHomeId, { rng: makeRng(1) });
+  assert.equal(noHome.action, 'none');
+  assert.match(noHome.event.narrative, /no Homeworld set/);
+
+  // Homeworld set, but 0 FacCreds/stats and nothing bought yet — same
+  // determinism: zero real candidates, forced fallback always fails.
+  let poorCamp = defaultCampaign();
+  let poorId; ({ campaign: poorCamp, id: poorId } = createEntity(poorCamp, { type: 'faction', name: 'Broke Combine' }));
+  let poorLocId; ({ campaign: poorCamp, id: poorLocId } = createEntity(poorCamp, { type: 'location', name: 'Broke Homeworld' }));
+  poorCamp = updateEntity(poorCamp, poorId, { homeworldId: poorLocId, force: 0, cunning: 0, wealth: 0, facCreds: 0 });
+  const poor = proposeFactionTurn(poorCamp, poorId, { rng: makeRng(1) });
+  assert.equal(poor.action, 'none');
+  assert.match(poor.event.narrative, /not enough FacCreds/);
+
+  // Once a faction has ANY active asset, sellAsset is always a viable
+  // fallback (its own autoArgs never fails) — so "no viable action" can
+  // only happen if the heuristic's random draw specifically lands on a
+  // narrower action instead. Rather than hunt for a seed that produces
+  // that by luck, call explainNoViableAction directly against a faction
+  // with an active asset for each attemptedAction it can be keyed to —
+  // exercises the exact reasons proposeFactionTurn wires through.
+  let campWithAsset = defaultCampaign();
+  let factionId, locationId; ({ campaign: campWithAsset, factionId, locationId } = makeFactionWithHomeworld(campWithAsset, 'Lone Faction'));
+  campWithAsset = buyAsset(campWithAsset, { factionId, statType: 'force', catalogId: 'militia-unit', locationId }).campaign;
+  campWithAsset = updateEntity(campWithAsset, factionId, { factionAssets: getEntity(campWithAsset, factionId).factionAssets.map((a) => ({ ...a, status: 'active' })) });
+  const withAsset = getEntity(campWithAsset, factionId);
+  assert.match(explainNoViableAction(campWithAsset, withAsset, 'attack'), /nothing to attack or seize/);
+  assert.match(explainNoViableAction(campWithAsset, withAsset, 'seizePlanet'), /nothing to attack or seize/);
+  assert.match(explainNoViableAction(campWithAsset, withAsset, 'useAssetAbility'), /no usable ability|none of its assets have a usable ability/);
+  assert.match(explainNoViableAction(campWithAsset, withAsset, 'refitAsset'), /refit/);
+  assert.match(explainNoViableAction(campWithAsset, withAsset, 'changeHomeworld'), /Base of Influence/);
 });
 
 test('commitFactionTurn just hands back the draft\'s resultCampaign; proposeFactionStep logs one committed-ready event with the right turn number', () => {
@@ -4983,6 +5057,23 @@ test('factionsPresentAt lists every faction present exactly at a location — as
   assert.deepEqual(factionsPresentAt(camp, null), []);
 });
 
+test('factionsPresentAt also recognizes a manual `located_at` relationship (docs/adr/0038 — a GM saying "this faction operates here" with no SWN mechanical presence), and factionsInRegion recognizes it anywhere in the region tree', () => {
+  let camp = defaultCampaign();
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Cartel' }));
+  let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Dustbowl' }));
+  assert.deepEqual(factionsPresentAt(camp, locId), [], 'not present before any relationship is set');
+
+  camp = addRelationship(camp, factionId, locId, 'Located At', 'located_at');
+  assert.deepEqual(factionsPresentAt(camp, locId).map((f) => f.id), [factionId]);
+
+  // Region-wide: a parent location one hop up the containment tree.
+  let parentId; ({ campaign: camp, id: parentId } = createEntity(camp, { type: 'location', name: 'Frontier Sector' }));
+  camp = addRelationship(camp, parentId, locId, 'Contains', 'contains');
+  camp = updateRelationshipType(camp, locId, parentId, 'located_at');
+  const region = factionsInRegion(camp, parentId);
+  assert.ok(region.some((e) => e.faction.id === factionId), 'factionsInRegion sees the manually-linked faction via the region tree');
+});
+
 test('getEntityFaction resolves a real member_of edge, falls back to a synthetic Unaligned descriptor when there is none, and degrades to Unaligned rather than returning a non-faction entity', () => {
   let camp = defaultCampaign();
   let npcId, factionId, otherNpcId;
@@ -5372,4 +5463,96 @@ test('suggestedConflictEscalations ignores self-scoped events (buyAsset) even if
   assert.equal(r.event.scope, 'self');
   const committed = { ...r.campaign, factionEvents: [...(r.campaign.factionEvents || []), r.event] };
   assert.deepEqual(suggestedConflictEscalations(committed, [r.event.id]), []);
+});
+
+// --- Scene & Story Data Model reconciliation (docs/design/scene-story-
+// integration-plan.md): Foreshadowing tracking, World State Flags, and an
+// NPC "current goal" field — scoped down from the source spec's fuller
+// branching-scene-graph model, which this app deliberately doesn't build
+// (see the reconciliation doc for why). ---
+import { addForeshadowing, markForeshadowingPaidOff, removeForeshadowing, openForeshadowing } from '../src/domain/foreshadowing.js';
+import { addWorldFlag, updateWorldFlagValue, updateWorldFlagNotes, removeWorldFlag, WORLD_FLAG_VALUES } from '../src/domain/worldFlags.js';
+
+test('addForeshadowing appends {id, text, payoffNote, paidOff:false, plantedAt}, no-ops on blank text; markForeshadowingPaidOff sets paidOff/paidOffNote/paidOffAt in place and no-ops on an unknown id or an already-paid-off entry; removeForeshadowing drops just that one', () => {
+  let camp = defaultCampaign();
+  camp = addForeshadowing(camp, 'The sealed crate hums faintly', 'It\'s a dormant AI core');
+  camp = addForeshadowing(camp, '   '); // blank, ignored
+  assert.equal(camp.foreshadowing.length, 1);
+  const f = camp.foreshadowing[0];
+  assert.equal(f.text, 'The sealed crate hums faintly');
+  assert.equal(f.payoffNote, 'It\'s a dormant AI core');
+  assert.equal(f.paidOff, false);
+  assert.ok(f.plantedAt);
+
+  camp = markForeshadowingPaidOff(camp, 'not-a-real-id', 'no-op');
+  assert.equal(camp.foreshadowing[0].paidOff, false);
+
+  camp = markForeshadowingPaidOff(camp, f.id, 'It wakes up and starts talking');
+  assert.equal(camp.foreshadowing[0].paidOff, true);
+  assert.equal(camp.foreshadowing[0].paidOffNote, 'It wakes up and starts talking');
+  assert.ok(camp.foreshadowing[0].paidOffAt);
+
+  const alreadyPaid = JSON.stringify(camp.foreshadowing[0]);
+  camp = markForeshadowingPaidOff(camp, f.id, 'a different note');
+  assert.equal(JSON.stringify(camp.foreshadowing[0]), alreadyPaid, 'already-paid-off entry is untouched, not overwritten');
+
+  camp = addForeshadowing(camp, 'A second plant');
+  const secondId = camp.foreshadowing[1].id;
+  camp = removeForeshadowing(camp, f.id);
+  assert.deepEqual(camp.foreshadowing.map((x) => x.id), [secondId]);
+});
+
+test('openForeshadowing returns only not-yet-paid-off entries, oldest first', () => {
+  let camp = defaultCampaign();
+  camp = addForeshadowing(camp, 'Oldest plant');
+  const oldestId = camp.foreshadowing[0].id;
+  camp = addForeshadowing(camp, 'Newer plant');
+  const newerId = camp.foreshadowing[1].id;
+  camp = addForeshadowing(camp, 'Already resolved');
+  camp = markForeshadowingPaidOff(camp, camp.foreshadowing[2].id);
+  // Force a real ordering difference regardless of clock resolution.
+  camp.foreshadowing[0].plantedAt = '2026-01-01T00:00:00.000Z';
+  camp.foreshadowing[1].plantedAt = '2026-01-02T00:00:00.000Z';
+
+  const open = openForeshadowing(camp);
+  assert.deepEqual(open.map((f) => f.id), [oldestId, newerId]);
+});
+
+test('World State Flags: addWorldFlag defaults to "unknown" and clamps an invalid value to it; updateWorldFlagValue/-Notes patch in place; removeWorldFlag drops just that one; no-ops on blank description or an unknown id', () => {
+  let camp = defaultCampaign();
+  camp = addWorldFlag(camp, 'The Duke knows about the ledger', 'suspected');
+  camp = addWorldFlag(camp, '   ', 'confirmed'); // blank description, ignored
+  assert.equal(camp.worldFlags.length, 1);
+  assert.equal(camp.worldFlags[0].value, 'suspected');
+
+  camp = addWorldFlag(camp, 'Invalid value defaults to unknown', 'not-a-real-value');
+  assert.equal(camp.worldFlags[1].value, 'unknown');
+
+  const flagId = camp.worldFlags[0].id;
+  camp = updateWorldFlagValue(camp, flagId, 'confirmed');
+  assert.equal(camp.worldFlags[0].value, 'confirmed');
+  camp = updateWorldFlagValue(camp, flagId, 'not-a-real-value');
+  assert.equal(camp.worldFlags[0].value, 'confirmed', 'invalid value is ignored, not applied');
+  camp = updateWorldFlagValue(camp, 'not-a-real-id', 'false');
+  assert.equal(camp.worldFlags.length, 2, 'unknown id is a no-op, not an error');
+
+  camp = updateWorldFlagNotes(camp, flagId, 'Revealed during the audit scene');
+  assert.equal(camp.worldFlags[0].notes, 'Revealed during the audit scene');
+
+  const secondId = camp.worldFlags[1].id;
+  camp = removeWorldFlag(camp, flagId);
+  assert.deepEqual(camp.worldFlags.map((f) => f.id), [secondId]);
+
+  assert.deepEqual(WORLD_FLAG_VALUES, ['unknown', 'suspected', 'confirmed', 'false']);
+});
+
+test('an NPC entity defaults currentGoal to "" (ensureNpcFields), mirroring faction.agenda\'s exact shape; a non-NPC entity is untouched', () => {
+  let camp = defaultCampaign();
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Captain Reyes' }));
+  assert.equal(getEntity(camp, npcId).currentGoal, '');
+  camp = updateEntity(camp, npcId, { currentGoal: 'Get the crew off this rock before the patrol arrives' });
+  assert.equal(getEntity(camp, npcId).currentGoal, 'Get the crew off this rock before the patrol arrives');
+
+  let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Some Place' }));
+  assert.equal(getEntity(camp, locId).currentGoal, undefined, 'currentGoal is NPC-only, not a generic entity field');
 });

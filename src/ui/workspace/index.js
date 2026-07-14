@@ -5,11 +5,14 @@
 import { listShifts } from '../../domain/context.js';
 import { listThreads, THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { ACTIVITIES, suggestRulesLens } from '../../domain/activities.js';
-import { listTagVocabulary, isSameDistrict, getEntity } from '../../domain/entities.js';
-import { getCurrentWhereLocations } from '../../domain/factionTurnEngine.js';
+import { listTagVocabulary, isSameDistrict, getEntity, listEntities, getContainingLocation, getContainedLocations } from '../../domain/entities.js';
+import { getCurrentWhereLocations, factionsPresentAt, factionsInRegion } from '../../domain/factionTurnEngine.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { buildMentionEditorHTML, richToolbarHTML, toolbarCollapsed } from '../mentionEditor.js';
 import { renderFactionEvents } from '../drawers/factionEvents.js';
+import { CONFLICT_STATUS_OPTIONS } from '../drawers/index.js';
+import { openForeshadowing } from '../../domain/foreshadowing.js';
+import { WORLD_FLAG_VALUES, WORLD_FLAG_VALUE_LABEL } from '../../domain/worldFlags.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -21,6 +24,21 @@ const WHAT_ACTIONS = ['Reveal Clue', 'Complicate', 'Reward', 'Raise Threat', 'Lo
 
 function card(title, lead, body) {
   return `<article class="workspace-card"><h2>${title}</h2><p class="lead">${lead}</p>${body}</article>`;
+}
+
+// WHERE-only variant: title+lead on the left, a read-only quick-awareness
+// summary top-right on the SAME row (direct request) — everywhere else
+// uses plain card() (title/lead stacked, no right-side slot); special-cased
+// here rather than widening card() itself, since no other tab needs a
+// header-row slot and this keeps every other view's markup untouched.
+function cardWithHeaderRight(title, lead, headerRight, body) {
+  return `<article class="workspace-card">
+    <div class="workspace-card-head-row">
+      <div class="workspace-card-head-text"><h2>${title}</h2><p class="lead">${lead}</p></div>
+      ${headerRight}
+    </div>
+    ${body}
+  </article>`;
 }
 
 // Suggestion Lens chip picker (docs/adr/0009-situation-engine-revisited.md,
@@ -79,7 +97,8 @@ const VIEWS = {
       <div class="shift-actions" aria-label="Shift story">
         ${WHAT_ACTIONS.map((a) => `<button class="chip" data-shift="${esc(a)}">⚡ ${esc(a)}</button>`).join('')}
       </div>
-      ${lastScene(doc, ui)}`);
+      ${lastScene(doc, ui)}
+      ${worldFlagsBlock(doc)}`);
   },
 
   who(doc, ui) {
@@ -89,14 +108,21 @@ const VIEWS = {
         <button class="chip" data-shift-prompt="Introduce NPC">＋ Introduce NPC</button>
       </div>
       ${whoEntityPicker(doc, ui)}
-      ${factionsActiveNearbyBlock(doc)}`);
+      ${factionsActiveNearbyBlock(doc)}
+      ${activeConflictLocationPicker(doc)}`);
   },
 
   where(doc, ui) {
-    const mainCard = card('WHERE it happens', 'The place the scene is set.', `
+    const mainCard = cardWithHeaderRight('WHERE it happens', 'The place the scene is set.', locationSummaryHeader(doc), `
       ${summaryField('where', doc.context.where.summary, 'Location and immediate surroundings…', doc, ui)}
       ${whereLocationPicker(doc, ui)}
-      ${factionActivityHereBlock(doc)}`);
+      ${currentLocationBanner(doc)}
+      ${locationFactionsBlock(doc)}
+      ${locationConflictsBlock(doc)}
+      ${nearbyLocationsBlock(doc)}
+      ${factionActivityHereBlock(doc)}
+      ${storyInspirationBlock()}
+      ${locationStoryBlock(doc, ui)}`);
     // Whole-card relocation (direct request): the Faction Events card can
     // move OUT of the drawer tab stack and dock here as a right column,
     // via its own down-arrow (data-faction-events-dock, shell.js) — the
@@ -122,7 +148,8 @@ const VIEWS = {
       <div class="shift-actions">
         <button class="chip" data-shift-prompt="Set Objective">◎ Set Objective</button>
       </div>
-      ${threadsBlock(doc)}`);
+      ${threadsBlock(doc)}
+      ${foreshadowingBlock(doc)}`);
   },
 
   how(doc, ui) {
@@ -168,6 +195,22 @@ function summaryField(key, val, placeholder, doc, ui) {
   </div>`;
 }
 
+// Shared candidates-panel renderer for WHERE/WHO's tag pickers — a
+// <select size> listbox, same box aesthetic as the Location/NPC-Faction
+// tag listbox right next to it (direct follow-up request: chips read as
+// inconsistent with that listbox and take more vertical space). Picking
+// an option inserts an @mention (the select's own change handler,
+// shell.js) then resets back to the placeholder — same "pick, act, reset"
+// shape as data-conflict-faction-link/data-where-faction-link, not a
+// persistent filter selection like the tag listbox itself.
+function candidateListbox(candidates, selectAttr, tagFilter, noun) {
+  if (!candidates.length) return `<div class="ws-placeholder">${tagFilter ? `No ${noun} tagged #${esc(tagFilter)}.` : `No ${noun} yet.`}</div>`;
+  return `<select size="${Math.min(8, Math.max(3, candidates.length))}" ${selectAttr}>
+      <option value="">— insert into Focus —</option>
+      ${candidates.map((e) => `<option value="${esc(e.id)}">${esc(e.name || 'Unnamed')}</option>`).join('')}
+    </select>`;
+}
+
 // WHERE tab redesign ("USER CHANGES" batch): a Location tag listbox (not
 // chips, per direct user request) filters a candidate panel of matching
 // Locations. Per direct follow-up feedback, the earlier "Present Here"
@@ -175,7 +218,7 @@ function summaryField(key, val, placeholder, doc, ui) {
 // field — a Location already belongs to the scene once it's mentioned in
 // Focus text, so a second, separate present-here list was redundant
 // bookkeeping. Picking a candidate now inserts a real @mention into Focus
-// directly (data-insert-where-mention, handled in shell.js via
+// directly (data-insert-where-mention-select, handled in shell.js via
 // insertMentionNode/serializeMentionEditor) instead of adding to a list.
 // context.where.entityIds/addContextEntity/removeContextEntity (session.js)
 // still exist (harmless, tested, generic) but are no longer driven from
@@ -192,9 +235,7 @@ function whereLocationPicker(doc, ui) {
 
   const allLocations = (doc.entities.items || []).filter((e) => e.type === 'location');
   const candidates = tagFilter ? allLocations.filter((e) => (e.tags || []).includes(tagFilter)) : allLocations;
-  const candidatePanel = candidates.length
-    ? `<div class="entity-chips">${candidates.map((e) => `<button type="button" class="entity-chip" data-insert-where-mention="${esc(e.id)}" title="Insert @${esc(e.name || 'Unnamed')} into Focus">${esc(e.name || 'Unnamed')}</button>`).join('')}</div>`
-    : `<div class="ws-placeholder">${tagFilter ? 'No Locations tagged #' + esc(tagFilter) + '.' : 'No Locations yet.'}</div>`;
+  const candidatePanel = candidateListbox(candidates, 'data-insert-where-mention-select', tagFilter, 'Locations');
 
   return `
     <div class="entity-tag-picker">
@@ -206,8 +247,9 @@ function whereLocationPicker(doc, ui) {
     </div>`;
 }
 
-// WHO tab: the exact same tag-picker -> click-to-mention pattern as
-// WHERE's whereLocationPicker above, applied to people instead of places —
+// WHO tab: the exact same tag-picker -> listbox -> select-to-mention
+// pattern as WHERE's whereLocationPicker above, applied to people instead
+// of places —
 // NPC and Faction tags pooled together (not a separate type-filter chip
 // row; kept as close to WHERE's own shape as possible, one type at a time
 // was WHERE's whole design, this just widens "one type" to "two related
@@ -226,9 +268,7 @@ function whoEntityPicker(doc, ui) {
 
   const allPeople = (doc.entities.items || []).filter((e) => e.type === 'npc' || e.type === 'faction');
   const candidates = tagFilter ? allPeople.filter((e) => (e.tags || []).includes(tagFilter)) : allPeople;
-  const candidatePanel = candidates.length
-    ? `<div class="entity-chips">${candidates.map((e) => `<button type="button" class="entity-chip" data-insert-who-mention="${esc(e.id)}" title="Insert @${esc(e.name || 'Unnamed')} into Focus">${esc(e.name || 'Unnamed')}</button>`).join('')}</div>`
-    : `<div class="ws-placeholder">${tagFilter ? 'No NPCs/Factions tagged #' + esc(tagFilter) + '.' : 'No NPCs/Factions yet.'}</div>`;
+  const candidatePanel = candidateListbox(candidates, 'data-insert-who-mention-select', tagFilter, 'NPCs/Factions');
 
   return `
     <div class="entity-tag-picker">
@@ -246,35 +286,75 @@ function whoEntityPicker(doc, ui) {
 // Faction Events tie-in (docs/adr/0031's Faction Events follow-up): a
 // small, read-only summary + jump link, not a new place to enter data —
 // same posture as the tag-jump chips elsewhere in this app. "Nearby" here
-// means present at (or in the same district as) whichever Location(s)
-// are currently @mentioned in WHERE's own Focus text
-// (getCurrentWhereLocations) — the same "Focus text is the single source
-// of truth for what's in the scene" reasoning the WHO/WHERE redesign
-// already established, not a new structured pointer.
-function presenceLocationsOf(faction) {
-  const set = new Set();
-  if (faction.homeworldId) set.add(faction.homeworldId);
-  for (const b of faction.basesOfInfluence || []) set.add(b.locationId);
-  for (const a of faction.factionAssets || []) if (a.status === 'active') set.add(a.locationId);
-  return set;
-}
-
+// means present anywhere in the region (factionsInRegion, factionTurnEngine.js
+// — the full location containment tree, region-hop and all, not just a
+// single district) of whichever Location(s) are currently @mentioned in
+// WHERE's own Focus text (getCurrentWhereLocations) — the same "Focus
+// text is the single source of truth for what's in the scene" reasoning
+// the WHO/WHERE redesign already established, not a new structured
+// pointer. Direct request follow-up: this block is also the ONE place a
+// GM can manually say "this faction operates here" — via a `located_at`
+// relationship (the generic relationship system, already surfaced in the
+// Entity Editor's own Relationships block; factionsInRegion/
+// factionsPresentAt already recognize it) — for factions with no SWN
+// Faction Turn Engine presence fields set. The ✕ only appears on a
+// faction whose presence at the PRIMARY current location is via that
+// manual relationship — a homeworld/Base/asset/governed presence isn't
+// removable from here, same "curated convenience, not a restriction"
+// posture as the Conflict picker below.
 function factionsActiveNearbyBlock(doc) {
   const whereLocations = getCurrentWhereLocations(doc);
   if (!whereLocations.length) return '';
-  const whereIds = whereLocations.map((l) => l.id);
-  const factions = (doc.entities.items || []).filter((e) => e.type === 'faction');
-  const active = factions.filter((f) => {
-    const locs = presenceLocationsOf(f);
-    for (const locId of locs) for (const whereId of whereIds) if (isSameDistrict(doc, locId, whereId)) return true;
-    return false;
-  });
-  if (!active.length) return '';
-  const chips = active.map((f) => `<button type="button" class="entity-chip" data-faction-events-jump="${esc(f.id)}" title="Open Faction Events, filtered to ${esc(f.name || 'this faction')}">${esc(f.name || 'Unnamed faction')}</button>`).join('');
+  const primary = whereLocations[0];
+  const seen = new Map();
+  for (const loc of whereLocations) {
+    for (const { faction } of factionsInRegion(doc, loc.id, { maxDepth: 6 })) {
+      if (!seen.has(faction.id)) seen.set(faction.id, faction);
+    }
+  }
+  const active = Array.from(seen.values());
+  const manualHere = new Set((factionsPresentAt(doc, primary.id) || [])
+    .filter((f) => (f.relationships || []).some((r) => r.type === 'located_at' && r.to === primary.id))
+    .map((f) => f.id));
+  const chips = active.map((f) => `<span class="entity-chip-row">
+      <button type="button" class="entity-chip" data-faction-events-jump="${esc(f.id)}" title="Open Faction Events, filtered to ${esc(f.name || 'this faction')}">${esc(f.name || 'Unnamed faction')}</button>
+      ${manualHere.has(f.id) ? `<button type="button" class="icon-btn" data-where-faction-unlink="${esc(primary.id)}::${esc(f.id)}" title="Remove — no longer operating here">✕</button>` : ''}
+    </span>`).join('');
+  const presentIds = new Set(active.map((f) => f.id));
+  const linkable = listEntities(doc, ['faction']).filter((f) => !presentIds.has(f.id));
   return `
     <div class="workspace-mini-section">
       <span class="field-label-static">Factions active nearby</span>
-      <div class="entity-chips">${chips}</div>
+      <div class="entity-chips">${chips || '<span class="dim small">None yet.</span>'}</div>
+      ${linkable.length ? `<select data-where-faction-link="${esc(primary.id)}">
+        <option value="">— faction operating here —</option>
+        ${linkable.map((f) => `<option value="${esc(f.id)}">${esc(f.name) || 'Unnamed'}</option>`).join('')}
+      </select>` : ''}
+    </div>`;
+}
+
+/** Faction Conflict's Location (contested zone) picker — lives on WHO,
+ *  not tucked inside the Conflict's own Entity Editor card, per direct
+ *  request: scoping "which factions are eligible to link" is a WHO-tab
+ *  concern, not an entity-detail-form concern. Renders only when a
+ *  Conflict is the currently active/open entity (Cast/Entity Editor) —
+ *  still just `data-entity-field="locationId"`, the same generic handler
+ *  every other entity field already uses (it always targets whichever
+ *  entity is active, regardless of which tab the control is rendered
+ *  on), so no new shell.js wiring is needed for the field itself. */
+function activeConflictLocationPicker(doc) {
+  const active = getEntity(doc, doc.entities && doc.entities.activeId);
+  if (!active || active.type !== 'conflict') return '';
+  const locations = (doc.entities.items || []).filter((e) => e.type === 'location');
+  return `
+    <div class="workspace-mini-section">
+      <label class="field-label">${esc(active.name || 'This conflict')} — Location (contested zone)
+        <select data-entity-field="locationId">
+          <option value="">— unset —</option>
+          ${locations.map((l) => `<option value="${esc(l.id)}" ${active.locationId === l.id ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
+        </select>
+      </label>
+      <p class="dim small">Scopes which factions are offered as "local" when linking this conflict's Involved factions.</p>
     </div>`;
 }
 
@@ -298,6 +378,159 @@ function factionActivityHereBlock(doc) {
       <span class="field-label-static">Faction activity here</span>
       <div class="entity-chips">${rows}</div>
     </div>`;
+}
+
+// Read-only quick-awareness summary, top-right of WHERE's own header row
+// (direct request) — System/Star/Colony-Base/District for the PRIMARY
+// current WHERE location (whereLocations[0], same "first is primary"
+// convention factionsActiveNearbyBlock's add-select already uses).
+// Deliberately reuses existing World Profile fields rather than inventing
+// new schema: `zone` (free text, e.g. "Near Earth Zone") -> System,
+// `starSystem` (confusingly labeled "Star System" in the World Profile
+// card, but actually stores the NAME of a #star-tagged Location) -> Star,
+// `bases[]` (curated base-name strings) -> Colony/Base, and the
+// structural parent one hop up the contains/located_at entity graph
+// (getContainingLocation — the same relationship isSameDistrict/
+// getContainedLocations read) -> District, distinct from the `zone`/
+// `starSystem` text fields since a Location may have one, both, or
+// neither set up.
+function locationSummaryHeader(doc) {
+  const locs = getCurrentWhereLocations(doc);
+  if (!locs.length) return '';
+  const loc = locs[0];
+  const district = getContainingLocation(doc, loc.id);
+  const row = (label, value) => `<span class="location-summary-item"><span class="dim small">${esc(label)}</span> ${value ? esc(value) : '<span class="dim small">—</span>'}</span>`;
+  return `<div class="location-summary" title="Quick reference for ${esc(loc.name || 'the current location')}">
+    ${row('System', loc.zone)}
+    ${row('Star', loc.starSystem)}
+    ${row('Colony/Base', (loc.bases || []).join(', '))}
+    ${row('District', district ? district.name : '')}
+  </div>`;
+}
+
+// A persistent "this is what's selected" indicator (direct feedback,
+// docs/adr/0038) — WHERE's own location "selection" is still just an
+// @mention inserted into Focus (whereLocationPicker above; a past
+// redesign deliberately removed a separate curated list as duplicative of
+// that text), so this is read-only derived display, not a second storage
+// mechanism — it just makes the already-real current location(s)
+// (getCurrentWhereLocations) visible without having to read the Focus
+// prose itself.
+function currentLocationBanner(doc) {
+  const locs = getCurrentWhereLocations(doc);
+  if (!locs.length) return '';
+  const chips = locs.map((l) => `<button type="button" class="entity-chip" data-open-entity="${esc(l.id)}" title="Open ${esc(l.name || 'Unnamed')}">${esc(l.name || 'Unnamed')}</button>`).join('');
+  return `
+    <div class="workspace-mini-section current-location-banner">
+      <span class="field-label-static">📍 Current location</span>
+      <div class="entity-chips">${chips}</div>
+    </div>`;
+}
+
+// Read-only digest: factions actually present AT the current location(s)
+// specifically (factionsPresentAt — the exact-location counterpart to
+// WHO's region-wide factionsActiveNearbyBlock), each with a truncated
+// Agenda snippet so "what is this faction doing here" reads at a glance
+// without opening the Entity Editor.
+function locationFactionsBlock(doc) {
+  const whereLocations = getCurrentWhereLocations(doc);
+  if (!whereLocations.length) return '';
+  const seen = new Map();
+  for (const loc of whereLocations) for (const f of factionsPresentAt(doc, loc.id)) if (!seen.has(f.id)) seen.set(f.id, f);
+  const factions = Array.from(seen.values());
+  if (!factions.length) return '';
+  const rows = factions.map((f) => {
+    const agenda = (f.agenda || '').replace(/<[^>]+>/g, ' ').trim();
+    const snippet = agenda ? agenda.slice(0, 80) + (agenda.length > 80 ? '…' : '') : '';
+    return `<div class="thread-row">
+      <span class="thread-name"><button type="button" class="entity-chip" data-open-entity="${esc(f.id)}">${esc(f.name || 'Unnamed')}</button>${snippet ? ` <span class="dim small">— ${esc(snippet)}</span>` : ''}</span>
+    </div>`;
+  }).join('');
+  return `<div class="threads">
+    <div class="threads-head"><h3>Factions here</h3></div>
+    ${rows}
+  </div>`;
+}
+
+// Read-only digest: Conflicts (docs/adr/0036) whose `locationId` (the
+// contested zone, set from this same WHO/WHERE pairing —
+// activeConflictLocationPicker above) matches the current location(s).
+function locationConflictsBlock(doc) {
+  const whereLocations = getCurrentWhereLocations(doc);
+  if (!whereLocations.length) return '';
+  const whereIds = new Set(whereLocations.map((l) => l.id));
+  const conflicts = listEntities(doc, ['conflict']).filter((c) => whereIds.has(c.locationId));
+  if (!conflicts.length) return '';
+  const statusLabel = Object.fromEntries(CONFLICT_STATUS_OPTIONS);
+  const rows = conflicts.map((c) => `<div class="thread-row">
+      <span class="thread-name"><button type="button" class="entity-chip" data-open-entity="${esc(c.id)}">${esc(c.name || 'Unnamed conflict')}</button> <span class="dim small">— ${esc(statusLabel[c.status] || c.status)}</span></span>
+    </div>`).join('');
+  return `<div class="threads">
+    <div class="threads-head"><h3>Conflicts here</h3></div>
+    ${rows}
+  </div>`;
+}
+
+// Read-only jump list: every OTHER Location sharing the same immediate
+// structural parent as the current one (getContainedLocations on
+// getContainingLocation's result — i.e. its siblings, same "district"
+// concept isSameDistrict already established one hop out) — a quick
+// "what else is around here" reference so a GM can eyeball or jump to a
+// nearby option without leaving WHERE. A Location with no parent set (no
+// `located_at` edge yet) simply shows nothing, same posture as every
+// other block here that's silent until there's real structure to show.
+function nearbyLocationsBlock(doc) {
+  const whereLocations = getCurrentWhereLocations(doc);
+  if (!whereLocations.length) return '';
+  const loc = whereLocations[0];
+  const parent = getContainingLocation(doc, loc.id);
+  if (!parent) return '';
+  const siblings = getContainedLocations(doc, parent.id).filter((l) => l.id !== loc.id);
+  if (!siblings.length) return '';
+  const chips = siblings.map((l) => `<button type="button" class="entity-chip" data-open-entity="${esc(l.id)}" title="Open ${esc(l.name || 'Unnamed')}">${esc(l.name || 'Unnamed')}</button>`).join('');
+  return `
+    <div class="workspace-mini-section">
+      <span class="field-label-static">Nearby locations (${esc(parent.name || 'Unnamed')})</span>
+      <div class="entity-chips">${chips}</div>
+    </div>`;
+}
+
+// GM inspiration for moving the activity forward — reuses the existing
+// oracle-driven Site Concept (feature/danger/wonder) and Adventure Seed
+// (hook/twist/complication) generators verbatim (domain/worldbuilding.js,
+// already wired to data-generate-site/-seed in shell.js, appends straight
+// to the Journal) rather than inventing a second generator — this is
+// just a second, WHERE-scoped entry point to the exact same buttons
+// already available elsewhere (Article IX: extend via what exists).
+function storyInspirationBlock() {
+  return `
+    <div class="workspace-mini-section">
+      <span class="field-label-static">Need inspiration?</span>
+      <div class="shift-actions">
+        <button class="chip" data-generate-site title="Roll a site concept: a feature, a danger, and a wonder">🎲 Site Concept</button>
+        <button class="chip" data-generate-seed title="Roll an adventure seed: a hook, a twist, and a complication">🎲 Adventure Seed</button>
+      </div>
+    </div>`;
+}
+
+// A GM's own free-text narrative note per Location — "Location Story"
+// (docs/design/GMAtlas_Scene_Story_Data_Model.md via docs/adr/0038),
+// mirrors Faction's Scenario Seed but bound to whichever Location(s) are
+// currently mentioned in WHERE's Focus rather than the Cast-active
+// entity — `data-entity-field` always targets `entities.activeId`
+// (confirmed via activeConflictLocationPicker's own comment above), which
+// isn't necessarily the WHERE-mentioned location, so this uses its own
+// `data-location-story` attribute instead (shell.js's onFocusOut reads
+// the location id straight off the element).
+function locationStoryBlock(doc, ui) {
+  const whereLocations = getCurrentWhereLocations(doc);
+  if (!whereLocations.length) return '';
+  return whereLocations.map((loc) => {
+    const toolbarKey = `location:${loc.id}:story`;
+    return `<div class="field-label">${esc(loc.name || 'Unnamed location')} — Location Story
+      <div class="rich-field">${richToolbarHTML(toolbarKey, toolbarCollapsed(doc, ui, toolbarKey))}<div class="mention-editor" contenteditable="true" data-location-story="${esc(loc.id)}" data-placeholder="How are factions operating here? What's brewing?">${buildMentionEditorHTML(doc, loc.locationStory)}</div></div>
+    </div>`;
+  }).join('');
 }
 
 const ACTION_LABEL_FOR_WHERE = {
@@ -344,6 +577,46 @@ function threadsBlock(doc) {
   return `<div class="threads">
     <div class="threads-head"><h3>Threads</h3><span class="threads-head-actions"><button class="chip" data-thread-add>＋ New thread</button><button class="chip" data-expedition-add>＋ Expedition</button></span></div>
     ${threads.length ? rows : '<div class="ws-placeholder">No threads yet. Add a clock for each open question or looming danger.</div>'}
+  </div>`;
+}
+
+/** Foreshadowing tracking (docs/design/scene-story-integration-plan.md,
+ *  scoped down from the Scene/Story spec's own highest-value-flagged
+ *  feature) — "I just planted this, remind me to pay it off." Lives on
+ *  WHY, next to Threads (both are "things to track and eventually pay
+ *  off"), open-only (paid-off entries stay in the record but aren't
+ *  shown here — same "don't clutter the live view with resolved things"
+ *  posture Threads' own done-filtering already uses elsewhere). */
+function foreshadowingBlock(doc) {
+  const open = openForeshadowing(doc);
+  const rows = open.map((f) => `<div class="thread-row">
+      <span class="thread-name">${esc(f.text)}${f.payoffNote ? ` <span class="dim small">— ${esc(f.payoffNote)}</span>` : ''}</span>
+      <span class="thread-actions">
+        <button class="icon-btn" data-foreshadowing-paidoff="${esc(f.id)}" title="Mark paid off">✓</button>
+        <button class="icon-btn" data-foreshadowing-remove="${esc(f.id)}" title="Remove">✕</button>
+      </span>
+    </div>`).join('');
+  return `<div class="threads">
+    <div class="threads-head"><h3>Foreshadowing</h3><span class="threads-head-actions"><button class="chip" data-foreshadowing-add>＋ Plant a detail</button></span></div>
+    ${open.length ? rows : '<div class="ws-placeholder">Nothing planted yet — jot down anything you drop into a scene that you\'ll want to pay off later.</div>'}
+  </div>`;
+}
+
+function worldFlagsBlock(doc) {
+  const flags = doc.worldFlags || [];
+  const rows = flags.map((f) => `<div class="thread-row">
+      <span class="thread-name">${esc(f.description)}</span>
+      <select class="thread-status-select" data-worldflag-value="${esc(f.id)}">
+        ${WORLD_FLAG_VALUES.map((v) => `<option value="${esc(v)}" ${v === f.value ? 'selected' : ''}>${esc(WORLD_FLAG_VALUE_LABEL[v])}</option>`).join('')}
+      </select>
+      <input type="text" class="thread-name-input" data-worldflag-notes="${esc(f.id)}" value="${esc(f.notes)}" placeholder="Notes…">
+      <span class="thread-actions">
+        <button class="icon-btn" data-worldflag-remove="${esc(f.id)}" title="Remove">✕</button>
+      </span>
+    </div>`).join('');
+  return `<div class="threads">
+    <div class="threads-head"><h3>World State Flags</h3><span class="threads-head-actions"><button class="chip" data-worldflag-add>＋ Add fact</button></span></div>
+    ${flags.length ? rows : '<div class="ws-placeholder">Nothing tracked yet — log a fact whose known/unknown state matters later (e.g. "does the party know X").</div>'}
   </div>`;
 }
 

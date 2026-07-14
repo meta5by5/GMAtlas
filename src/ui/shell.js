@@ -12,6 +12,8 @@ import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable,
 import { oracleLinkTagsFor } from '../data/entityFieldOracleLinks.js';
 import { addThread, advanceThread, removeThread, setThreadStatus, setThreadPriority } from '../domain/threads.js';
 import { createExpedition, setExpeditionDial } from '../domain/expeditions.js';
+import { addForeshadowing, markForeshadowingPaidOff, removeForeshadowing } from '../domain/foreshadowing.js';
+import { addWorldFlag, updateWorldFlagValue, updateWorldFlagNotes, removeWorldFlag } from '../domain/worldFlags.js';
 import {
   rollAction, formatRollText, formatRollCopyText, rollFlat, formatFlatRollText, formatFlatRollCopyText,
   rollTraveller, formatTravellerRollText, formatTravellerRollCopyText,
@@ -53,7 +55,7 @@ import {
   ensureFactionGoalTrack, buyAsset, sellAsset, repairAssetOrFaction, useAssetAbility, expandInfluence,
   refitAsset, changeHomeworld, seizePlanet, toggleAssetStealth, expandEventReadAloud, setEventReadAloud,
   proposeFactionStep, advanceFactionTurnRound, commitFactionTurn, factionsPresentAt, getCurrentWhereLocations,
-  resetFactionPacing, ensureConflictEscalationTrack, getConflictEscalationTrack, suggestedConflictEscalations,
+  resetFactionPacing, ensureConflictEscalationTrack, getConflictEscalationTrack, suggestedConflictEscalations, removeFactionBase,
 } from '../domain/factionTurnEngine.js';
 import { generateConflictSeed } from '../domain/factionConflicts.js';
 import { importHostileLocations } from '../domain/hostileLocations.js';
@@ -268,6 +270,7 @@ let collapsedOverview = new Set(); // ephemeral — entity ids whose Overview fi
 let expandedContracts = new Set(); // ephemeral — contract (Thread) ids whose full row is expanded (collapsed to just the name by default, UX batch)
 let tradeLocationTagFilter = ''; // ephemeral — Trade tab's Location tag filter (UX batch), narrows the Location <select>'s options
 let expandedWorldProfile = new Set(); // ephemeral — entity ids whose World Profile (UWP) card is expanded (docs/adr/0026 follow-up, collapsed by default)
+let basesOfInfluenceToggled = new Set(); // ephemeral — faction ids whose Bases of Influence section has been explicitly flipped away from its DATA-driven default (open if empty, collapsed if any bases exist — direct request)
 let expandedConflictDepth = new Set(); // ephemeral — conflict entity ids whose "Add depth" section is expanded (Faction Conflict, collapsed by default per the validated hero-path/depth split)
 let conflictEscalationSuggestions = []; // ephemeral — computed right after a Faction Turn commit (suggestedConflictEscalations); a dismissible one-click "did this affect a tracked conflict?" prompt, never applied automatically (Article II)
 let mechanicsScanning = false; // ephemeral — true while scanMechanicsIndex()'s async PDF.js scan is in flight (docs/adr/0014)
@@ -844,15 +847,11 @@ function onClick(ev) {
   if (whereAddLoc) { store.update((d) => createEntity(d, { type: 'location' }).campaign); return toast('Location added — name and tag it in Cast'); }
   // WHERE's "Present Here" curated list (context.where.entityIds) was
   // duplicative of Focus — a Location already belongs to the scene once
-  // it's mentioned there. Clicking a matching Location (or, on WHO, a
+  // it's mentioned there. Picking a matching Location (or, on WHO, a
   // matching NPC/Faction — same picker pattern, insertContextMention
-  // below is shared by both) now inserts a real @mention at the end of
-  // Focus directly, same insertMentionNode path the drag-and-drop mention
-  // handler above uses.
-  const insertWhereMention = hit('[data-insert-where-mention]');
-  if (insertWhereMention) { insertContextMention('where', insertWhereMention.dataset.insertWhereMention); return; }
-  const insertWhoMention = hit('[data-insert-who-mention]');
-  if (insertWhoMention) { insertContextMention('who', insertWhoMention.dataset.insertWhoMention); return; }
+  // below is shared by both) from the candidates listbox (onChange, below)
+  // now inserts a real @mention at the end of Focus directly, same
+  // insertMentionNode path the drag-and-drop mention handler above uses.
   // Revealed/hidden (GM) starts collapsed on every entity, but once a GM
   // opens it, docs/adr/next-request.md (2026-07-06) asks that it "stay
   // revealed on future loading of the given entity" — a real persisted
@@ -862,6 +861,15 @@ function onClick(ev) {
   if (revealToggle) { const id = revealToggle.dataset.revealToggle; return store.update((d) => updateEntity(d, id, { revealedOpen: !getEntity(d, id).revealedOpen })); }
   const unlink = hit('[data-entity-unlink]');
   if (unlink) { const active = store.get().entities.activeId; return store.update((d) => removeRelationship(d, active, unlink.dataset.entityUnlink)); }
+  // WHO's ✕ on a manually-linked "faction operating here" chip
+  // (factionsActiveNearbyBlock, workspace/index.js, docs/adr/0038) — only
+  // ever rendered for a `located_at` relationship the GM added themselves,
+  // so this is always safe to remove outright.
+  const whereFactionUnlink = hit('[data-where-faction-unlink]');
+  if (whereFactionUnlink) {
+    const [locationId, factionId] = whereFactionUnlink.dataset.whereFactionUnlink.split('::');
+    return store.update((d) => removeRelationship(d, factionId, locationId));
+  }
   const entTagRemove = hit('[data-entity-tag-remove]');
   if (entTagRemove) { const active = store.get().entities.activeId; return store.update((d) => removeEntityTag(d, active, entTagRemove.dataset.entityTagRemove)); }
   // A tag on an entity's own tagEditor is clickable — jumps to Cast
@@ -947,6 +955,17 @@ function onClick(ev) {
     const id = worldProfileToggle.dataset.worldProfileToggle;
     if (expandedWorldProfile.has(id)) expandedWorldProfile.delete(id); else expandedWorldProfile.add(id);
     return renderDrawerBody();
+  }
+  const basesToggle = hit('[data-bases-toggle]');
+  if (basesToggle) {
+    const id = basesToggle.dataset.basesToggle;
+    if (basesOfInfluenceToggled.has(id)) basesOfInfluenceToggled.delete(id); else basesOfInfluenceToggled.add(id);
+    return renderDrawerBody();
+  }
+  const factionBaseRemove = hit('[data-faction-base-remove]');
+  if (factionBaseRemove) {
+    const [factionId, locationId] = factionBaseRemove.dataset.factionBaseRemove.split('::');
+    return store.update((d) => removeFactionBase(d, factionId, locationId));
   }
   const sceneFieldToggle = hit('[data-scene-field-toggle]');
   if (sceneFieldToggle) {
@@ -1615,6 +1634,37 @@ function onClick(ev) {
   if (back) return store.update((d) => advanceThread(d, back.dataset.threadBack, -1));
   const tdel = hit('[data-thread-del]');
   if (tdel) return store.update((d) => removeThread(d, tdel.dataset.threadDel));
+
+  const foreshadowingAdd = hit('[data-foreshadowing-add]');
+  if (foreshadowingAdd) {
+    openInlinePrompt('foreshadowing-add', {
+      fields: [
+        { key: 'text', label: 'What did you plant?', placeholder: 'e.g. the sealed crate in the cargo hold' },
+        { key: 'payoffNote', label: 'Payoff idea (optional)', placeholder: 'How might this pay off?' },
+      ],
+      anchorRect: foreshadowingAdd.getBoundingClientRect(),
+    });
+    return;
+  }
+  const foreshadowingPaidoff = hit('[data-foreshadowing-paidoff]');
+  if (foreshadowingPaidoff) {
+    openInlinePrompt('foreshadowing-paidoff', {
+      label: 'How did it pay off? (optional)', placeholder: 'What actually happened…',
+      meta: { id: foreshadowingPaidoff.dataset.foreshadowingPaidoff },
+      anchorRect: foreshadowingPaidoff.getBoundingClientRect(),
+    });
+    return;
+  }
+  const foreshadowingRemove = hit('[data-foreshadowing-remove]');
+  if (foreshadowingRemove) return store.update((d) => removeForeshadowing(d, foreshadowingRemove.dataset.foreshadowingRemove));
+
+  const worldFlagAdd = hit('[data-worldflag-add]');
+  if (worldFlagAdd) {
+    openInlinePrompt('worldflag-add', { label: 'What fact?', placeholder: 'e.g. Does the party know the Duke has the ledger?', anchorRect: worldFlagAdd.getBoundingClientRect() });
+    return;
+  }
+  const worldFlagRemove = hit('[data-worldflag-remove]');
+  if (worldFlagRemove) return store.update((d) => removeWorldFlag(d, worldFlagRemove.dataset.worldflagRemove));
   const contractToggle = hit('[data-contract-toggle]');
   if (contractToggle) {
     const id = contractToggle.dataset.contractToggle;
@@ -1850,6 +1900,22 @@ function performFieldRoll(f, label) {
 // open Universal Search from anywhere, matching the convention comparable
 // tools already use for a search/command action.
 function onKeydown(ev) {
+  // Ctrl+Left/Right cycles the WHO/WHERE/WHAT/WHY/HOW Adaptive Workspace
+  // tabs (direct request: "navigate between cards open on the menu" — the
+  // [data-strip] question strip these render from, CONTEXT_QUESTIONS'
+  // order, wrapping around both ends). Skipped while focus is in any text
+  // field/contenteditable — Ctrl+Left/Right is the standard OS/browser
+  // "jump a word" shortcut there, and this app must not steal it out from
+  // under someone typing.
+  if (ev.ctrlKey && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') && !ev.target.closest('input, textarea, [contenteditable="true"]')) {
+    ev.preventDefault();
+    const cur = store.get().context.active;
+    const idx = Math.max(0, CONTEXT_QUESTIONS.indexOf(cur));
+    const dir = ev.key === 'ArrowRight' ? 1 : -1;
+    const next = CONTEXT_QUESTIONS[(idx + dir + CONTEXT_QUESTIONS.length) % CONTEXT_QUESTIONS.length];
+    return store.update((d) => { d.context.active = next; return d; });
+  }
+
   // Generic inline text-entry prompt (see openInlinePrompt et al.): Enter
   // submits from EITHER field when there are two (Link's description/URL),
   // Escape cancels from either — it has no <form> element to give Enter a
@@ -1965,6 +2031,13 @@ function onChange(ev) {
   if (whereTagSelect) { whereLocationTagFilter = whereTagSelect.value || null; return render(); }
   const whoTagSelect = t.closest('[data-who-tag-select]');
   if (whoTagSelect) { whoTagFilter = whoTagSelect.value || null; return render(); }
+  // WHERE/WHO's candidates listbox (candidateListbox, workspace/index.js) —
+  // picking an option inserts the @mention then resets to the placeholder,
+  // same "pick, act, reset" pattern as data-where-faction-link.
+  const insertWhereMentionSelect = t.closest('[data-insert-where-mention-select]');
+  if (insertWhereMentionSelect) { const id = t.value; t.value = ''; if (id) insertContextMention('where', id); return; }
+  const insertWhoMentionSelect = t.closest('[data-insert-who-mention-select]');
+  if (insertWhoMentionSelect) { const id = t.value; t.value = ''; if (id) insertContextMention('who', id); return; }
 
   // --- Planetfall Grid Battlemap (Phase 11, docs/adr/0023) ------------------
   const bmRename = t.closest('[data-battlemap-rename]');
@@ -2284,6 +2357,31 @@ function onChange(ev) {
     const [id, field] = asymmetryField.dataset.conflictAsymmetryField.split('::');
     return store.update((d) => updateConflictInformationAsymmetry(d, id, { [field]: t.value }));
   }
+  // The Location-scoped "+ add a local faction" dropdown (conflictSection,
+  // drawers/index.js) — same select-picks-then-immediately-links pattern
+  // as data-entity-base-add/-tradecode-add; links via the ordinary
+  // relationship system (Involves), so it shows up in the generic
+  // Relationships block too, not a separate storage mechanism.
+  const conflictFactionLink = t.closest('[data-conflict-faction-link]');
+  if (conflictFactionLink) {
+    const conflictId = conflictFactionLink.dataset.conflictFactionLink;
+    const factionId = t.value;
+    t.value = '';
+    if (!factionId) return;
+    return store.update((d) => addRelationship(d, conflictId, factionId, 'Involves', 'involves'));
+  }
+  // WHO's own "+ faction operating here" dropdown (factionsActiveNearbyBlock,
+  // workspace/index.js) — same select-picks-then-immediately-links pattern
+  // as data-conflict-faction-link above, a `located_at` relationship
+  // instead of `involves` (docs/adr/0038).
+  const whereFactionLink = t.closest('[data-where-faction-link]');
+  if (whereFactionLink) {
+    const locationId = whereFactionLink.dataset.whereFactionLink;
+    const factionId = t.value;
+    t.value = '';
+    if (!factionId) return;
+    return store.update((d) => addRelationship(d, factionId, locationId, 'Located At', 'located_at'));
+  }
 
   const oev = t.closest('[data-oracle-entry-value]');
   if (oev) {
@@ -2353,6 +2451,10 @@ function onChange(ev) {
   if (threadStatus) return store.update((d) => setThreadStatus(d, threadStatus.dataset.threadStatus, t.value));
   const threadPriority = t.closest('[data-thread-priority]');
   if (threadPriority) return store.update((d) => setThreadPriority(d, threadPriority.dataset.threadPriority, t.value));
+  const worldFlagValue = t.closest('[data-worldflag-value]');
+  if (worldFlagValue) return store.update((d) => updateWorldFlagValue(d, worldFlagValue.dataset.worldflagValue, t.value));
+  const worldFlagNotes = t.closest('[data-worldflag-notes]');
+  if (worldFlagNotes) return store.update((d) => updateWorldFlagNotes(d, worldFlagNotes.dataset.worldflagNotes, t.value));
   const tplMax = t.closest('[data-tpl-field-max]');
   if (tplMax) { const [sys, idx] = tplMax.dataset.tplFieldMax.split('::'); return store.update((d) => updateTemplateField(d, sys, Number(idx), { max: Number(t.value) || 5 })); }
   const tplTarget = t.closest('[data-tpl-field-target]');
@@ -3299,6 +3401,20 @@ function onFocusOut(ev) {
     if (current && value !== (current[field] || '')) store.update((d) => updateEntity(d, active, { [field]: value }));
   }
 
+  // WHERE's "Location Story" field (locationStoryBlock, workspace/index.js,
+  // docs/adr/0038) — a rich mention-editor field like richEntityField
+  // above, but bound to whichever Location(s) are currently @mentioned in
+  // WHERE's own Focus, NOT necessarily the Cast-active entity, so it
+  // reads the target id straight off its own dataset instead of
+  // entities.activeId.
+  const locationStoryField = ev.target.closest('[data-location-story]');
+  if (locationStoryField) {
+    const id = locationStoryField.dataset.locationStory;
+    const value = serializeMentionEditor(locationStoryField);
+    const current = getEntity(store.get(), id);
+    if (current && value !== (current.locationStory || '')) store.update((d) => updateEntity(d, id, { locationStory: value }));
+  }
+
   // Editing an existing journal entry (the ✎ icon) — auto-saves on blur,
   // same as every other field here; "✓ Done" (data-journal-edit-toggle)
   // just closes edit mode afterward, it's not a separate save step.
@@ -3463,6 +3579,12 @@ function commitInlinePrompt() {
     if (value) { store.update((d) => addThread(d, value)); toast('Thread added'); }
   } else if (kind === 'expedition-add') {
     if (value) { store.update((d) => createExpedition(d, value)); toast('Expedition added'); }
+  } else if (kind === 'foreshadowing-add') {
+    if (values.text) { store.update((d) => addForeshadowing(d, values.text, values.payoffNote)); toast('Planted'); }
+  } else if (kind === 'foreshadowing-paidoff') {
+    store.update((d) => markForeshadowingPaidOff(d, meta.id, value)); toast('Paid off');
+  } else if (kind === 'worldflag-add') {
+    if (value) { store.update((d) => addWorldFlag(d, value)); toast('Flag added'); }
   } else if (kind === 'ext-link') {
     const url = sanitizeExternalLinkUrl(values.url);
     if (!url) { toast('Not a valid link — use a plain http(s) address'); return; }
@@ -3929,7 +4051,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw,
+    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,

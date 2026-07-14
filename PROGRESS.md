@@ -14,6 +14,73 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-14 WHERE/WHO polish batch, no-viable-action diagnostics, Bases
+of Influence cleanup, sticky Entity Editor header, Ctrl+arrow tab nav**
+(same-day follow-up to `docs/adr/0038`, several direct requests): (1)
+WHO's "Matching people" and WHERE's "Matching locations" candidate
+panels are now `<select size>` listboxes, matching the adjacent tag
+listbox's aesthetic instead of a chip cloud (consistency + less vertical
+space, direct request). (2) `factionTurnEngine.js`'s "no viable action"
+narrative now names a specific reason — no Homeworld set, not enough
+FacCreds for a first asset, or (once assets exist) exactly which
+specific action the heuristic tried and why it failed (e.g. "nothing to
+attack or seize here") — instead of one generic message; diagnosed from
+a real report of 13 stuck rounds, traced to a faction with no Homeworld
+set (which blocks buyAsset/expandInfluence outright, and transitively
+everything else). (3) WHERE gained a header-row quick-awareness summary
+(System/Star/Colony-Base/District), a nearby-locations jump list, and
+Site Concept/Adventure Seed inspiration buttons — see `docs/adr/0038`'s
+same-day follow-up section for the full mapping. (4) A Faction's Bases
+of Influence list now has a ✕ remove button (a plain list edit, no
+FacCred refund) and collapses under its own toggle by default once any
+exist (expanded by default when empty, so the "expand influence to"
+picker is immediately visible) — new `removeFactionBase`. (5) The
+Entity Editor's name/type header now stays visible ("freeze pane") while
+the rest of a long entity form scrolls underneath it. (6) Ctrl+Left/
+Right now cycles the WHO/WHERE/WHAT/WHY/HOW workspace tabs, skipped
+while focus is in any text field (so it doesn't steal the OS/browser
+"jump a word" shortcut from someone typing). 2 new domain tests (434
+total).
+
+**2026-07-14 Location ↔ Faction presence, Conflicts, and a Location
+Story** (`docs/adr/0038-location-faction-story.md`): closed a direct
+report that WHERE doesn't "select" a location and WHO can't associate
+factions with one, with no digest of what's happening there. Mostly a
+wiring job — `factionsInRegion` (the full location containment-tree
+"who's active nearby," Living Faction Engine Phase C) existed but was
+wired to no UI, and the generic relationship system's `located_at` type
+was an already-correct, unused way for a GM to say "this faction
+operates here." `factionsPresentAt`/`factionsInRegion` now recognize a
+manual `located_at` link; WHO's "Factions active nearby" gained a
+"+ faction operating here" picker (mirrors the Conflict card's existing
+local-faction select) and a ✕ for manually-linked ones; WHERE gained a
+persistent "current location" indicator, read-only Factions-here/
+Conflicts-here digests, and a new per-location "Location Story"
+free-text field. 1 new domain test (432 total).
+
+**2026-07-14 Foreshadowing, World State Flags, NPC current goal**
+(`docs/adr/0037-foreshadowing-worldflags-npc-goal.md`): reviewed an
+external Scene & Story data-model spec against the actual architecture
+(`docs/design/scene-story-integration-plan.md`) before building — most of
+it already existed under different names, and its pre-authored branching
+scene graph was flagged as a genuine philosophical mismatch (this app's
+scene generation is 100% live/oracle-driven, no `resolveScene()`,
+consistent with Article II) and deliberately not built. Shipped the three
+genuinely-missing pieces instead: Foreshadowing (a GM's own plant/pay-off
+to-do list, WHY tab), World State Flags (a lightweight fact ledger —
+unknown/suspected/confirmed/false — WHAT tab), and an NPC `currentGoal`
+field (mirrors Faction's `agenda`, Entity Editor). 4 new domain tests (431
+total).
+
+**2026-07-13 Faction Conflict: Location-scoped faction picker** (`docs/
+adr/0036` second same-day follow-up): closed a real gap between the
+design doc and the shipped build — `conflict.locationId` had a data slot
+but no UI or filtering behavior. Added a "+ add a local faction" dropdown
+(filtered by `factionsPresentAt`) to the Conflict card's Involved
+section; per direct correction, the Location picker itself lives on the
+WHO workspace tab (shown only while a Conflict is the active entity), not
+the Conflict's own Entity Editor card.
+
 **2026-07-13 Faction Conflict × Faction Turn Engine escalation
 suggestions** (`docs/adr/0036` same-day follow-up): closed the one gap a
 narrower SWN-specific research pass flagged as likely to read as

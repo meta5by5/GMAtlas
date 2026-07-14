@@ -60,6 +60,20 @@ export function defaultCampaign(now = new Date().toISOString()) {
     timeline: [],        // breadcrumbs: campaign > act > scene > beat
     threads: [],         // progress clocks (NEW): [{id,name,filled,segments,done}]
 
+    // Foreshadowing tracking (docs/design/scene-story-integration-plan.md):
+    // "I just planted this, remind me to pay it off" — a GM's own
+    // lightweight to-do list for setups made live during play, not a
+    // pre-authored branching-scene concept (this app deliberately has
+    // none). domain/foreshadowing.js. Additive/lazy-init like
+    // factionEvents/missions above — no migrate.js step needed.
+    foreshadowing: [],
+
+    // World State Flags (docs/design/scene-story-integration-plan.md): a
+    // lightweight ledger of individual facts ("does the party know X"),
+    // separate from any one entity's own fields — domain/worldFlags.js.
+    // Additive/lazy-init, same posture as the section above.
+    worldFlags: [],
+
     // SWN Faction Turn Engine (docs/adr/0031-swn-faction-turn-engine.md,
     // renamed "Faction Events" in its location-pairing follow-up): a
     // campaign-wide, reverse-chronological feed of every committed

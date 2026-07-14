@@ -24,7 +24,7 @@ import { getMarket, priceAt, listCargoManifest, listContracts } from '../../doma
 import { COMMODITIES, findCommodity } from '../../data/commodities.js';
 import { THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { getPressureTrack } from '../../domain/factions.js';
-import { getFactionGoalTrack, factionEventsByRound, getConflictEscalationTrack } from '../../domain/factionTurnEngine.js';
+import { getFactionGoalTrack, factionEventsByRound, getConflictEscalationTrack, factionsPresentAt } from '../../domain/factionTurnEngine.js';
 import { generateConflictSeed } from '../../domain/factionConflicts.js';
 import { factionProviderFor } from '../../data/factionRulesProviders.js';
 import { getEnhancements, strainUsed, strainCapacity, isOverStrained } from '../../domain/enhancements.js';
@@ -315,6 +315,7 @@ function inspector(doc, e, ui) {
       ${oracleLinkIcon(e.type, 'revealed')}
       ${e.revealedOpen ? `<div class="rich-field">${richToolbarHTML(`entity:${e.id}:revealed`, toolbarCollapsed(doc, ui, `entity:${e.id}:revealed`))}<div class="mention-editor" contenteditable="true" data-entity-field="revealed" data-placeholder="Secrets, twists, true motives.">${buildMentionEditorHTML(doc, e.revealed)}</div></div>` : ''}
     </div>`}
+    ${npcSection(e)}
     ${factionSection(doc, e, ui)}
     ${conflictSection(doc, e, ui)}
     ${worldProfileSection(doc, e, ui)}
@@ -331,6 +332,22 @@ function inspector(doc, e, ui) {
         <input data-entity-link-label placeholder="label (ally, rival…)">
         <button class="btn sm" data-entity-link-add title="Link" aria-label="Link">🔗 Link</button>
       </div>` : '<p class="dim small">Add another entity to create relationships.</p>'}
+    </div>`;
+}
+
+// NPC "current goal" (docs/design/scene-story-integration-plan.md) — one
+// free-text field, the smallest possible version of the Scene/Story
+// spec's fuller NPC Roster (role/status/disposition/voice notes, all
+// postponed as not-yet-validated). Mirrors a Faction's own Agenda field
+// one section up, just plain text rather than a rich mention field since
+// this is meant as a quick "what are they after right now" jot, not prose.
+function npcSection(e) {
+  if (e.type !== 'npc') return '';
+  return `
+    <div class="faction-card">
+      <label class="field-label">Current goal
+        <input data-entity-field="currentGoal" value="${esc(e.currentGoal)}" placeholder="What are they after right now?">
+      </label>
     </div>`;
 }
 
@@ -365,10 +382,10 @@ function factionSection(doc, e, ui) {
       ${factionStatsHtml(e)}
       ${factionPressureHtml(e, track)}
     </div>
-    ${factionTurnSectionHtml(doc, e, ui && ui.entityDetailFocusEventId)}`;
+    ${factionTurnSectionHtml(doc, e, ui)}`;
 }
 
-const CONFLICT_STATUS_OPTIONS = [
+export const CONFLICT_STATUS_OPTIONS = [
   ['cold', 'Cold'], ['simmering', 'Simmering'], ['active', 'Active'], ['escalated', 'Escalated'], ['open_war', 'Open War'], ['resolved', 'Resolved'],
 ];
 
@@ -406,14 +423,34 @@ function conflictSection(doc, e, ui) {
       <span class="thread-actions"><button class="icon-btn" data-conflict-hook-remove="${esc(e.id)}::${esc(h.id)}" title="Remove">✕</button></span>
     </div>`).join('');
   const depthOpen = (ui.expandedConflictDepth || new Set()).has(e.id);
+  // Location (contested zone) is set from WHO's own tab, not here (direct
+  // request — scoping "which factions are eligible" is a WHO-tab
+  // concern), via workspace/index.js's activeConflictLocationPicker; this
+  // card just READS e.locationId to scope the "Involved" faction picker
+  // below to whoever's actually PRESENT there (factionsPresentAt, Living
+  // Faction Engine Phase A). The generic Relationships block further down
+  // can still link ANY faction regardless (Article II — this dropdown is
+  // a curated convenience, not a restriction).
+  const localFactions = e.locationId ? factionsPresentAt(doc, e.locationId) : listEntities(doc, 'faction');
+  const involvedIds = new Set(involvedFactions.map((f) => f.id));
+  const linkableFactions = localFactions.filter((f) => !involvedIds.has(f.id));
   return `
     <div class="faction-card">
       <h4>Conflict</h4>
       <label class="field-label">Status
         <select data-entity-field="status">${CONFLICT_STATUS_OPTIONS.map(([v, l]) => `<option value="${v}" ${e.status === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
       </label>
+      ${e.locationId ? '' : '<p class="dim small">Set this conflict\'s Location on the WHO tab to narrow the faction picker below to local factions.</p>'}
       ${clockHtml}
-      ${involvedFactions.length ? `<div class="faction-assets"><span class="field-label-static">Involved</span><span class="faction-asset-list">${involvedFactions.map((f) => `<button type="button" class="entity-chip" data-open-entity="${esc(f.id)}">${esc(f.name) || 'Unnamed'}</button>`).join('')}</span></div>` : '<p class="dim small">Link this conflict to at least one faction below (Relationships → Involves).</p>'}
+      <div class="faction-assets">
+        <span class="field-label-static">Involved</span>
+        <span class="faction-asset-list">${involvedFactions.map((f) => `<button type="button" class="entity-chip" data-open-entity="${esc(f.id)}">${esc(f.name) || 'Unnamed'}</button>`).join('') || '<span class="dim small">None yet.</span>'}</span>
+        <select data-conflict-faction-link="${esc(e.id)}">
+          <option value="">${e.locationId ? '— add a local faction —' : '— add a faction —'}</option>
+          ${linkableFactions.map((f) => `<option value="${esc(f.id)}">${esc(f.name) || 'Unnamed'}</option>`).join('')}
+        </select>
+      </div>
+      ${!e.locationId ? '<p class="dim small">Set a Location above to narrow this list to factions actually present there.</p>' : (!linkableFactions.length ? '<p class="dim small">No other factions present at this location yet — link one from Relationships below if it belongs anyway.</p>' : '')}
       <label class="field-label">What people say it's about
         <input data-entity-field="statedCause" value="${esc(e.statedCause)}" placeholder="The public story">
       </label>
@@ -530,8 +567,44 @@ function conflictDepthHtml(doc, e, ui, involvedFactions) {
 // (factionEvents.js's own factionActivitySummaryHtml) with a link back to
 // this full card (data-open-entity, the same universal "open this entity's
 // full editor" mechanism every other entity chip in the app already uses).
-export function factionTurnSectionHtml(doc, e, focusEventId) {
+// Bases of Influence — collapsed under its own toggle by default once
+// any exist (direct request: a populated list is reference clutter most
+// of the time; an empty one should show its "expand influence to" picker
+// right away since that's the only way to get a first base at all).
+// `ui.basesOfInfluenceToggled` tracks entities whose state has been
+// explicitly flipped AWAY from that data-driven default — same inverted-
+// tracking shape as `collapsedOverview` (open by default, tracks explicit
+// closes) — so `open` XORs the toggle against "has any bases" rather than
+// reading a single fixed default the way expandedWorldProfile/
+// expandedWorldDemographics do. Each base chip now also has a ✕
+// (data-faction-base-remove) — a plain list-edit, not a mechanical action
+// (no FacCred refund, no dice), for correcting a mis-added base.
+function basesOfInfluenceHtml(doc, e, ui, locations) {
+  const bases = e.basesOfInfluence || [];
+  const hasBases = bases.length > 0;
+  const toggled = (ui && ui.basesOfInfluenceToggled) || new Set();
+  const dataDefaultOpen = !hasBases;
+  const open = toggled.has(e.id) ? !dataDefaultOpen : dataDefaultOpen;
+  const chips = bases.map((b) => {
+    const l = locations.find((x) => x.id === b.locationId);
+    const homeworldBtn = b.locationId !== e.homeworldId ? ` <button type="button" class="icon-btn" data-faction-base-homeworld="${esc(e.id)}::${esc(b.locationId)}" title="Make Homeworld">🏠</button>` : '';
+    return `<span class="chip sm">${esc(l ? l.name : 'unknown')} (${b.hp}/${b.maxHp} HP)${homeworldBtn} <button type="button" class="icon-btn" data-faction-base-remove="${esc(e.id)}::${esc(b.locationId)}" title="Remove Base of Influence">✕</button></span>`;
+  }).join('');
+  return `
+    <div class="faction-assets">
+      <h4 class="section-head-row"><button type="button" class="btn ghost sm" data-bases-toggle="${esc(e.id)}">${open ? '▾' : '▸'} Bases of Influence${hasBases ? ` (${bases.length})` : ''}</button></h4>
+      ${open ? `
+      <span class="faction-asset-list">${chips || '<span class="dim small">None yet.</span>'}</span>
+      <select data-faction-base-add="${esc(e.id)}">
+        <option value="">— expand influence to —</option>
+        ${locations.filter((l) => !bases.some((b) => b.locationId === l.id)).map((l) => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('')}
+      </select>` : ''}
+    </div>`;
+}
+
+export function factionTurnSectionHtml(doc, e, ui = {}) {
   if (e.type !== 'faction') return '';
+  const focusEventId = ui && ui.entityDetailFocusEventId;
   const maxHp = computeFactionMaxHp(e);
   const locations = listEntities(doc, 'location');
   const provider = factionProviderFor(doc, e);
@@ -588,14 +661,7 @@ export function factionTurnSectionHtml(doc, e, focusEventId) {
           ${locations.map((l) => `<option value="${esc(l.id)}" ${e.homeworldId === l.id ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
         </select>
       </label>
-      <div class="faction-assets">
-        <span class="field-label-static">Bases of Influence</span>
-        <span class="faction-asset-list">${(e.basesOfInfluence || []).map((b) => { const l = locations.find((x) => x.id === b.locationId); return `<span class="chip sm">${esc(l ? l.name : 'unknown')} (${b.hp}/${b.maxHp} HP)${b.locationId !== e.homeworldId ? ` <button type="button" class="icon-btn" data-faction-base-homeworld="${esc(e.id)}::${esc(b.locationId)}" title="Make Homeworld">🏠</button>` : ''}</span>`; }).join('') || '<span class="dim small">None yet.</span>'}</span>
-        <select data-faction-base-add="${esc(e.id)}">
-          <option value="">— expand influence to —</option>
-          ${locations.filter((l) => !(e.basesOfInfluence || []).some((b) => b.locationId === l.id)).map((l) => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('')}
-        </select>
-      </div>
+      ${basesOfInfluenceHtml(doc, e, ui, locations)}
       <div class="faction-assets">
         <span class="field-label-static">Tags</span>
         <span class="faction-asset-list">${tagChips || '<span class="dim small">None yet.</span>'}</span>

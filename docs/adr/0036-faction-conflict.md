@@ -23,6 +23,15 @@ directly damage or aid Factions" rather than narrative-only state
 tracking. Closed the same day — see the new "Escalation suggestions"
 decision below.
 
+**Second same-day follow-up**: on direct question ("where is the
+selected Location for filtering... local-only factions"), found that
+`conflict.locationId` (the "contested zone" field this ADR's own Decision
+section describes composing with `factionsPresentAt`) had a data-model
+slot but no UI control and no actual filtering behavior in the first
+build pass — a real gap between the design doc and what shipped, not a
+deliberate cut. Closed the same day, then relocated per direct follow-up
+correction — see "Location-scoped faction picker" below.
+
 ## Context
 
 The source spec (18+ fields per conflict, per-faction posture objects,
@@ -109,6 +118,26 @@ escalation Thread by 1, starting the clock first via
 `ensureConflictEscalationTrack` if the GM never had) or a Dismiss (✕,
 clears the prompt with no state change) — Article II: the dice informed
 this, they didn't decide it.
+
+**Location-scoped faction picker (second same-day follow-up)**: the
+Conflict card's "Involved" section gained a "+ add a local faction"
+`<select>`, populated by `factionsPresentAt(doc, e.locationId)` when a
+Location is set (falls back to every faction, with a hint, when unset) —
+wired via a new `data-conflict-faction-link` change handler that just
+calls the existing `addRelationship(..., 'involves')`, so a link made
+this way is indistinguishable from one made through the generic
+Relationships block further down (which still works unfiltered, for any
+faction, regardless — Article II, this is a curated convenience, never a
+restriction). Per a direct follow-up correction, the Location `<select>`
+itself does NOT live on the Conflict's own Entity Editor card — it was
+moved to the WHO workspace tab (`activeConflictLocationPicker`,
+`workspace/index.js`), rendered only while a Conflict is the active/open
+entity, since scoping "which factions are eligible" was judged a WHO-tab
+concern (who's in play), not an entity-detail-form one. The field is
+still plain `data-entity-field="locationId"` — that handler already
+targets whichever entity is active regardless of which tab renders the
+control, so relocating it needed no new handler, only the addition
+itself did.
 
 ## Alternatives considered
 

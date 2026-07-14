@@ -140,6 +140,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .workspace-card h2 { margin: 0 0 var(--sp-2); font-size: 1.2rem; }
 .workspace-card .lead { color: var(--text-dim); margin: 0 0 var(--sp-4); }
 
+/* WHERE's header-row summary (docs/adr/0038 follow-up) — title/lead on
+   the left, a read-only System/Star/Colony-Base/District readout
+   top-right on the same row; wraps under the title on narrow viewports
+   rather than overflowing. */
+.workspace-card-head-row { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-4); flex-wrap: wrap; }
+.workspace-card-head-text { flex: 1 1 14rem; }
+.workspace-card-head-row .workspace-card-head-text h2,
+.workspace-card-head-row .workspace-card-head-text .lead { margin-bottom: 0; }
+.location-summary { display: flex; flex-direction: column; gap: 0.15rem; text-align: right; font-size: 0.8rem; flex: 0 0 auto; }
+.location-summary-item .dim { margin-right: 0.3rem; }
+
 /* WHERE's docked Faction Events card (direct request: a down-arrow on the
    Faction Events card relocates it here as a right column; an up-arrow
    there pops it back to the drawer tab group) — the only place today the
@@ -579,6 +590,14 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 .entity-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
 .entity-chip { background: var(--tier2-bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.25rem 0.6rem; font-size: 0.8rem; }
 .entity-chip .icon-btn { margin-left: 0.3rem; padding: 0 0.2rem; }
+/* A chip paired with its own icon-button action (e.g. a "faction operating
+   here" chip's ✕), NOT nested inside the chip itself — docs/adr/0038. */
+.entity-chip-row { display: inline-flex; align-items: center; gap: 0.15rem; }
+
+/* WHERE's persistent "current location" indicator (docs/adr/0038) — a
+   thin accent-colored left border is enough emphasis to read as "this is
+   selected" without a new layout system. */
+.current-location-banner { border-left: 2px solid var(--accent); padding-left: var(--sp-2); }
 
 /* WHERE tab's tag-listbox + candidate-panel redesign ("USER CHANGES"
    batch, docs/adr/0019) — a listbox (not chips, per explicit request) on
@@ -821,6 +840,10 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .pip.on { background: var(--accent-strong); border-color: var(--accent-strong); }
 .thread-actions { display: inline-flex; gap: 2px; }
 .thread-status-select, .thread-priority-select { font-size: 0.72rem; padding: 1px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-inset); color: var(--text-dim); }
+/* World State Flags reuse .thread-row's grid; the notes field is the one
+   free-text cell in that row, so it gets its own narrow input style
+   rather than a full field-label block. */
+.thread-name-input { font-size: 0.78rem; width: 8rem; padding: 2px 5px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-inset); color: var(--text); }
 /* A quiet/settled stage dims the row without the strikethrough .done reserves for a full clock. */
 .thread-row.thread-status-dormant .thread-name, .thread-row.thread-status-archived .thread-name { color: var(--text-dim); }
 .thread-row.thread-priority-high .thread-status-select { border-color: var(--accent-strong); }
@@ -846,7 +869,23 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .entity-type-tag { font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--border); border-radius: 999px; padding: 0.05rem 0.4rem; }
 .entity-list-name { flex: 1; font-size: 0.85rem; }
 .entity-inspector { border-top: 1px solid var(--border); padding-top: var(--sp-3); }
-.inspector-head { display: flex; align-items: center; gap: var(--sp-2); }
+/* Entity Editor "freeze pane" (direct request): the name/type header
+   stays visible while the rest of the (often long) entity form scrolls
+   underneath it, inside .mc-drawer (the scroll container). Negative
+   margin pulls the header out to .mc-drawer's own padding edge (through
+   .entity-inspector's border-top/padding-top too) and re-pads by the same
+   amount, so it looks identical unscrolled but sticks flush — without
+   this, position:sticky's `top` offset is measured from the scroll
+   container's padding edge, not this element's own ancestor spacing, so
+   a plain `top: 0` alone would leave a visible gap collapse oddly on stick. */
+.inspector-head {
+  display: flex; align-items: center; gap: var(--sp-2);
+  position: sticky; top: 0; z-index: 5;
+  background: var(--tier3-bg);
+  margin: calc(-1 * (var(--sp-4) + var(--sp-3) + 1px)) calc(-1 * var(--sp-4)) 0;
+  padding: calc(var(--sp-4) + var(--sp-3) + 1px) var(--sp-4) var(--sp-2);
+  border-bottom: 1px solid var(--border);
+}
 .inspector-name { flex: 1; font-size: 1rem; font-weight: 600; }
 
 /* Entity thumbnail (Phase 11, docs/adr/0021-gallery.md) — left-aligned

@@ -5,6 +5,7 @@ src/data/docsManifest.js
 *.log
 .vscode/
 .idea/
+assets/data-packs/gmatlas-*.json
 requirements/Saga_Atlas_Merchant_Campaign_Engine_Development_Reference.txt
 requirements/Saga_Atlas_Merchant_Game_Architecture_Roadmap.txt
 requirements/Saga_Atlas_Merchant_Integration_Guide.txt
