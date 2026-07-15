@@ -14,6 +14,15 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-14 Story Options Phase 2: accept/dismiss tracking** (same-day
+follow-up to `docs/adr/0039` — closes out the Phase 2 roadmap): a new
+ephemeral `dismissedStoryOptionIds` (shell.js, mirrors ADR 0036's
+dismissible-suggestion pattern — not persisted, cleared on reload) is
+filtered out of both WHY's full list and the Co-Pilot's condensed card,
+both now fetching a deeper pool than they display so a used/dismissed
+option makes room for the next-ranked one. Rolling 🔮 or adding ＋
+Journal both count as "accept"; a new explicit ✕ covers "not interested."
+
 **2026-07-14 Story Options Phase 2: condensed card in the Co-Pilot panel**
 (same-day follow-up to `docs/adr/0039`): the always-visible Co-Pilot
 `<aside>` (not tab-scoped) now shows the top 3 `buildStoryOptions()`

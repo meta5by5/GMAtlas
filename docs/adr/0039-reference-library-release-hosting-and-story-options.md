@@ -223,11 +223,29 @@ id, so they don't care which DOM location triggered them; zero new
 wiring needed for this card, only a new render function
 (`storyOptionsCard`) and ~5 lines of CSS.
 
-**Not built this session**:
-- Track which suggested options a GM actually used (accept/dismiss),
-  mirroring the Conflict-escalation-suggestion dismissible-prompt pattern
-  from ADR 0036, instead of the list being purely re-computed/stateless
-  every render.
+Accept/dismiss tracking closes out the Phase 2 list — a new
+`dismissedStoryOptionIds` (shell.js, ephemeral, mirrors ADR 0036's
+dismissible-suggestion `conflictEscalationSuggestions` pattern exactly:
+not persisted to the campaign, cleared on page reload) is filtered out of
+both `storyOptionsBlock` (WHY) and the Co-Pilot's `storyOptionsCard`,
+both now fetching a deeper pool (`limit: 12`) than they display (6/3) so
+a used or dismissed option makes room for the next-ranked one instead of
+the list just shrinking. "Accept" and "Dismiss" both close an option out
+the same way ADR 0036's Escalate/Dismiss pair does: rolling 🔮 or adding
+to ＋ Journal both count as accept (the GM DID something with it — a new
+`data-story-option-id` attribute alongside the existing `data-story-
+option-roll` path so the roll handler can also record which option it
+came from), a new explicit ✕ (`data-story-option-dismiss`) covers "not
+interested." All three reuse the exact same `dismissedStoryOptionIds.
+add(id)` call in shell.js.
+
+This closes every Phase 2 item named for Story Options. Remaining ideas
+are genuinely Phase 3 (not scoped/named yet):
+- Persisting dismissals across a reload, if ephemeral-only ever proves
+  too forgetful in real play (not requested; ADR 0036's own precedent is
+  ephemeral too, so this isn't assumed to be a real gap).
+- Extending the same accept/dismiss pattern to `advise()`'s own
+  observation/consequence/opportunity, if that's ever wanted.
 
 ## Consequences
 

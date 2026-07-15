@@ -282,6 +282,7 @@ let lensPickerOpen = false; // ephemeral — "What Happens Next?"'s Suggestion L
 let lensDraw = []; // ephemeral — the current random draw of lens chips, fixed until re-opened (not redrawn on every unrelated re-render)
 let whyLensPickerOpen = false; // ephemeral — WHY's own "Suggest a Lens" picker (docs/adr/0039 Phase 2) — separate from lensPickerOpen/lensDraw above so the two never interfere
 let whyLensDraw = []; // ephemeral — WHY's scene-context-weighted lens draw, fixed until re-opened
+let dismissedStoryOptionIds = new Set(); // ephemeral — Story Option ids the GM has accepted (rolled/journaled) or explicitly dismissed (docs/adr/0039 Phase 2, mirrors ADR 0036's dismissible-suggestion pattern) — filtered out of both storyOptionsBlock (WHY) and the Co-Pilot's condensed card so a used/dismissed option makes room for the next-ranked one instead of lingering
 let catalogSearch = ''; // ephemeral — the catalog picker's own name/tag search
 let partyTrackerAddOpen = false; // ephemeral — the inline "+ Tracker" name/type creation form, open or not
 let partyTrackerDraftKind = 'meter'; // ephemeral — the creation form's in-progress type pick, so its size/difficulty sub-field can react before the tracker actually exists
@@ -1853,25 +1854,40 @@ function onClick(ev) {
     store.update((d) => addNote(d, formatAdventureSeed(generateAdventureSeed(d)), 'Adventure Seed'));
     return toast('Adventure seed generated');
   }
-  // WHY's Story Options (storyOptionsBlock, workspace/index.js, docs/adr/0039)
-  // — 🔮 rolls the option's linked Oracle table for real inspiration (the
-  // same rollOracle every other roll-and-log button in this app uses);
-  // ＋ Journal recomputes buildStoryOptions (deterministic given current
-  // campaign state, so re-finding the same option by id is safe) and drops
-  // its label+detail straight into the session log. Neither ever applies
-  // anything to the campaign beyond the roll/note itself (Article II).
+  // WHY's Story Options (storyOptionsBlock, workspace/index.js, and the
+  // Co-Pilot panel's condensed storyOptionsCard — docs/adr/0039) — 🔮 rolls
+  // the option's linked Oracle table for real inspiration (the same
+  // rollOracle every other roll-and-log button in this app uses); ＋
+  // Journal recomputes buildStoryOptions (deterministic given current
+  // campaign state, so re-finding the same option by id is safe — a
+  // generous limit so an option pushed past the display cap by dismissals
+  // is still found) and drops its label+detail straight into the session
+  // log. Both count as "accept" (docs/adr/0039 Phase 2: accept/dismiss
+  // tracking, mirroring ADR 0036's dismissible-suggestion pattern) — the
+  // GM DID something with it, so it's added to dismissedStoryOptionIds the
+  // same as an explicit ✕ would, making room for the next-ranked option.
+  // Neither ever applies anything to the campaign beyond the roll/note
+  // itself (Article II).
   const storyOptionRoll = hit('[data-story-option-roll]');
   if (storyOptionRoll) {
     const path = storyOptionRoll.dataset.storyOptionRoll.split('>');
+    const optionId = storyOptionRoll.dataset.storyOptionId;
+    if (optionId) dismissedStoryOptionIds.add(optionId);
     let text = '';
     store.update((d) => { const r = rollOracle(d, path); text = r.text; return r.campaign; });
     return toast(text || 'Rolled');
   }
+  const storyOptionDismiss = hit('[data-story-option-dismiss]');
+  if (storyOptionDismiss) {
+    dismissedStoryOptionIds.add(storyOptionDismiss.dataset.storyOptionDismiss);
+    return render();
+  }
   const storyOptionJournal = hit('[data-story-option-journal]');
   if (storyOptionJournal) {
     const optionId = storyOptionJournal.dataset.storyOptionJournal;
-    const option = buildStoryOptions(store.get()).find((o) => o.id === optionId);
+    const option = buildStoryOptions(store.get(), { limit: 20 }).find((o) => o.id === optionId);
     if (!option) return;
+    dismissedStoryOptionIds.add(optionId);
     store.update((d) => addNote(d, `${option.label}: ${option.detail}`, 'Story Option'));
     return toast('Added to Journal');
   }
@@ -3781,14 +3797,15 @@ function render() {
   const crumbs = doc.timeline.length ? doc.timeline : [{ label: doc.meta.title }, { label: `Scene ${doc.scenes.length}` }];
   bc.innerHTML = crumbs.map((c, i) => `${i ? '<span class="sep">▸</span>' : ''}<span class="crumb">${escapeHtml(c.label || '')}</span>`).join(' ');
 
-  root.querySelector('[data-workspace]').innerHTML = renderWorkspace(doc, doc.context.active, buildDrawerUi());
+  const workspaceUi = buildDrawerUi();
+  root.querySelector('[data-workspace]').innerHTML = renderWorkspace(doc, doc.context.active, workspaceUi);
   // A freshly-rendered Scene field textarea starts at its rows="1" default
   // regardless of how much text it holds — only typing into it fires the
   // 'input' event that would otherwise trigger autoGrowSceneField, so a
   // field that already holds a long value needs this one-time sizing pass
   // to open at its real height instead of waiting for the next keystroke.
   root.querySelectorAll('[data-scene-field]').forEach(autoGrowSceneField);
-  root.querySelector('[data-copilot-body]').innerHTML = renderCopilot(doc);
+  root.querySelector('[data-copilot-body]').innerHTML = renderCopilot(doc, workspaceUi);
   root.querySelector('[data-copilot]').dataset.open = String(copilotOpen);
 
   const edge = root.querySelector('[data-edge]');
@@ -4092,7 +4109,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw,
+    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, dismissedStoryOptionIds,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,

@@ -156,7 +156,7 @@ const VIEWS = {
         <button class="chip" data-shift-prompt="Set Objective">◎ Set Objective</button>
       </div>
       ${whyEntityPicker(doc, ui)}
-      ${storyOptionsBlock(doc)}
+      ${storyOptionsBlock(doc, ui)}
       ${whyLensSuggestBlock(doc, ui)}
       ${threadsBlock(doc)}
       ${foreshadowingBlock(doc)}`);
@@ -558,18 +558,25 @@ function storyInspirationBlock() {
 // Co-Pilot observation) — every row is a distinct angle the GM can act on.
 // 🔮 rolls that option's linked Oracle table for real inspiration (the
 // existing rollOracle, same mechanism Site Concept/Adventure Seed use);
-// ＋ Journal drops the option's own text straight into the session log —
-// neither is ever applied automatically (Article II), both are one click.
-function storyOptionsBlock(doc) {
-  const options = buildStoryOptions(doc);
+// ＋ Journal drops the option's own text straight into the session log;
+// ✕ dismisses without acting on it. All three (docs/adr/0039 Phase 2)
+// add the option's id to dismissedStoryOptionIds (shell.js, ephemeral,
+// mirrors ADR 0036's dismissible-suggestion pattern) so it makes room for
+// the next-ranked option instead of lingering — fetched from a deeper
+// pool (limit 12) than what's actually shown (6) so there's a "next" to
+// reveal. Nothing here is ever applied automatically (Article II).
+function storyOptionsBlock(doc, ui) {
+  const dismissed = (ui && ui.dismissedStoryOptionIds) || new Set();
+  const options = buildStoryOptions(doc, { limit: 12 }).filter((o) => !dismissed.has(o.id)).slice(0, 6);
   const rows = options.map((o) => `<div class="thread-row story-option-row">
       <span class="thread-name">
         ${o.entityId ? `<button type="button" class="entity-chip" data-open-entity="${esc(o.entityId)}">${esc(o.label)}</button>` : esc(o.label)}
         <span class="dim small">— ${esc(o.detail)}</span>
       </span>
       <span class="thread-actions">
-        <button class="icon-btn" data-story-option-roll="${esc(o.oracleGroup)}>${esc(o.oracleTable)}" title="Roll ${esc(o.oracleGroup)} → ${esc(o.oracleTable)} for inspiration">🔮</button>
+        <button class="icon-btn" data-story-option-roll="${esc(o.oracleGroup)}>${esc(o.oracleTable)}" data-story-option-id="${esc(o.id)}" title="Roll ${esc(o.oracleGroup)} → ${esc(o.oracleTable)} for inspiration">🔮</button>
         <button class="icon-btn" data-story-option-journal="${esc(o.id)}" title="Add to Journal">＋</button>
+        <button class="icon-btn" data-story-option-dismiss="${esc(o.id)}" title="Dismiss">✕</button>
       </span>
     </div>`).join('');
   return `<div class="threads">
