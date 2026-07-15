@@ -14,6 +14,16 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-14 Story Options Phase 2: oracles.usage tie-break** (same-day
+follow-up to `docs/adr/0039`): `buildStoryOptions` now reads
+`campaign.oracles.usage` (already tracked on every real roll, previously
+read by nothing) to break an EXACT weight tie between two options — e.g.
+a non-negotiating faction's agenda vs. an open World Flag, both weight 5
+— in favor of whichever option's `oracleGroup` the GM actually rolls
+from more. Never overrides a real weight difference (Negotiate's
+fear/need-over-agenda boost is unaffected). 1 new domain test (440
+total).
+
 **2026-07-14 Story Options Phase 2: weighted lens draw wired to WHY**
 (same-day follow-up to `docs/adr/0039`): the `sceneContext`-weighted
 `drawSuggestionLenses` param built (and tested) alongside Story Options

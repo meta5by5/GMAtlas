@@ -5118,6 +5118,31 @@ test('buildStoryOptions respects `limit` and is empty (not throwing) on a campai
   assert.equal(buildStoryOptions(camp, { limit: 2 }).length, 2);
 });
 
+test('buildStoryOptions breaks an exact weight tie using campaign.oracles.usage (docs/adr/0039 Phase 2 — previously-unread instrumentation, now a tie-break only, never an outranking of a higher-weighted option)', () => {
+  // A non-negotiating faction agenda (weight 5, oracleGroup "Factions")
+  // and an open World Flag (weight 5, oracleGroup "Plot Engine") are an
+  // EXACT weight tie by design (see buildStoryOptions' own weights).
+  let camp = defaultCampaign();
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Rust Cartel' }));
+  let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Docking Bay' }));
+  camp = updateEntity(camp, factionId, { agenda: 'Corner the water trade', homeworldId: locId });
+  camp = addWorldFlag(camp, 'Does the party know the well was poisoned?');
+  camp.context.where.summary = 'At the @[Docking Bay]';
+
+  const idxOf = (opts, source) => opts.findIndex((o) => o.source === source);
+
+  const campFactionsUsed = structuredClone(camp);
+  campFactionsUsed.oracles = { overrides: {}, usage: { Factions: 5, 'Plot Engine': 0 } };
+  const factionsFavored = buildStoryOptions(campFactionsUsed);
+  assert.ok(idxOf(factionsFavored, 'faction-agenda') < idxOf(factionsFavored, 'world-flag'), 'higher Factions usage ranks the agenda option first');
+
+  const campPlotUsed = structuredClone(camp);
+  campPlotUsed.oracles = { overrides: {}, usage: { Factions: 0, 'Plot Engine': 5 } };
+  const plotFavored = buildStoryOptions(campPlotUsed);
+  assert.ok(idxOf(plotFavored, 'world-flag') < idxOf(plotFavored, 'faction-agenda'), 'higher Plot Engine usage ranks the world-flag option first');
+  assert.notDeepEqual(factionsFavored.map((o) => o.id), plotFavored.map((o) => o.id), 'usage genuinely changes the ranking, not just coincidentally matching the baseline');
+});
+
 test('drawSuggestionLenses with no sceneContext is unaffected by this change (pure-random, exact prior behavior); with a sceneContext, a boosted lens (negotiation, while Activity is Negotiate) is drawn strictly more often across many seeds than without one', () => {
   const withoutContext = drawSuggestionLenses(defaultCampaign(), { rng: makeRng(7) });
   assert.equal(withoutContext.length, 4);

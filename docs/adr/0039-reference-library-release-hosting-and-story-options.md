@@ -203,9 +203,17 @@ lens closes whichever one was open and always calls the same, completely
 unchanged `suggestNextWithLens`. WHAT's own "What Happens Next?" button
 is untouched — same pure-random draw as always.
 
+`buildStoryOptions` now also reads `campaign.oracles.usage` (already
+tracked on every real roll via `session.js`'s `rollOracle`, previously
+read by nothing at all — its own write-site comment says "drives Co-Pilot
+suggestions later," this is that later) as a tie-break, not a ranking
+override: two options with the exact same `weight` (e.g. a non-negotiating
+faction's agenda and an open World Flag, both weight 5) now sort with the
+one whose `oracleGroup` the GM rolls from more often ranked first. Never
+outranks a higher-weighted option — Negotiate's fear/need-over-agenda
+boost is completely unaffected by usage either way.
+
 **Not built this session**:
-- Surface `oracles.usage` (already tracked, currently read by nothing) to
-  further bias which oracle groups `buildStoryOptions` links to.
 - A WHAT-tab or Co-Pilot-panel condensed version of the same ranked
   Story Options list.
 - Track which suggested options a GM actually used (accept/dismiss),
@@ -222,12 +230,12 @@ is untouched — same pure-random draw as always.
   exactly as it did before this ADR. A machine without them (CI, a fresh
   clone) now gets a complete, correct Reference Library pointing at the
   Release instead of an incomplete/broken one.
-- Verified: 6 new domain tests (439 total) — `releaseAssetUrl`'s encoding,
+- Verified: 7 new domain tests (440 total) — `releaseAssetUrl`'s encoding,
   `gatherSceneContext`'s shape (including the empty-campaign case),
   `buildStoryOptions`'s cumulative-ness/ranking/real-oracle-path
-  invariant/limit, and `drawSuggestionLenses`'s weighting (a 40-seed
-  frequency comparison) plus its exact-prior-behavior guarantee when
-  unweighted. `node scripts/build.js` stays clean (77 modules). Part A was
+  invariant/limit/usage-tie-break, and `drawSuggestionLenses`'s weighting
+  (a 40-seed frequency comparison) plus its exact-prior-behavior guarantee
+  when unweighted. `node scripts/build.js` stays clean (77 modules). Part A was
   additionally proven end-to-end by hand: renamed a real PDF to simulate a
   missing file, wrote a synthetic LFS-pointer stub in its place, rebuilt,
   confirmed the manifest entry switched to the correct `releaseAssetUrl`

@@ -264,8 +264,16 @@ export function buildStoryOptions(campaign, { limit = 6 } = {}) {
     }
   }
 
+  // Tie-break by oracle usage (docs/adr/0039 Phase 2) — campaign.oracles.
+  // usage[topLevelGroup] is already tracked on every real roll
+  // (session.js's rollOracle), previously read by nothing ("drives
+  // Co-Pilot suggestions later," per its own write-site comment — this is
+  // that later). Only breaks an EXACT weight tie; it never outranks a
+  // higher-weighted option just because its table gets rolled more, so
+  // e.g. Negotiate's fear/need-over-agenda boost above is unaffected.
+  const usage = (campaign.oracles && campaign.oracles.usage) || {};
   return options
-    .sort((a, b) => b.weight - a.weight)
+    .sort((a, b) => (b.weight - a.weight) || ((usage[b.oracleGroup] || 0) - (usage[a.oracleGroup] || 0)))
     .slice(0, limit)
     .map(({ weight, ...rest }) => rest);
 }
