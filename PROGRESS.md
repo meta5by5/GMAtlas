@@ -14,6 +14,35 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-15 Phase 12a/12b built: the Story Dashboard + Narrative
+Composer** (`docs/adr/0040-story-dashboard.md`, same-day follow-up to
+the roadmap below): a new `dashboard` view — a 6th strip button
+alongside WHO/WHERE/WHAT/WHY/HOW, additive (the five focused tabs are
+byte-for-byte unchanged). Deliberately NOT added to `schema.js`'s
+`CONTEXT_QUESTIONS` (that array is the persisted 5-question model;
+Dashboard has no `context.dashboard` sub-object of its own) — the strip
+appends one more button reusing the exact same generic click handler
+instead. Layout: a header (current location, WHAT's Threat/Mystery/
+Stress dials, HOW's Activity — all the SAME editable controls those tabs
+already use, zero new wiring) over a 2-column grid — WHO/WHERE context
+digests on the left, the full `buildStoryOptions()` list (now with a
+`selectable` mode — a checkbox per row) plus the new **Narrative
+Composer** on the right. `copilot.js`'s new `composeNarrativeDraft()`
+generalizes `recomposeSceneText` + `buildSessionRecap` into one draft
+paragraph seeded by WHO/WHERE/WHAT/WHY plus whichever Story Options are
+checked, preserving raw `@[Name]`/markup verbatim (both consumers —
+`buildMentionEditorHTML` for the preview, `addNote` for the Journal —
+already expect that format). Shipped as a **read-only** live preview
+rather than the ADR's originally-sketched editable field — implementation
+surfaced a real conflict (a live-recomputed contenteditable would
+silently clobber a hand-edit on the very next unrelated re-render);
+polishing happens after "＋ Send to Journal," in the Journal note itself.
+3 new domain tests (441 total) plus a direct Node smoke test of the
+dashboard's render output against both a bare and populated campaign (no
+browser automation available in this environment). 12c–12e (oracle-
+tailored dropdowns beyond WHY, closing the SHIFTS reachability gap,
+dead-export housekeeping) remain roadmap-only.
+
 **2026-07-15 Phase 12 roadmap (Story Dashboard) + doc rebaseline**
 (`docs/adr/0040-story-dashboard.md`): direct request for a genuinely
 interactive, narrative-building 5-W workspace — oracle suggestions and

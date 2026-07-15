@@ -13,7 +13,7 @@ import { renderFactionEvents } from '../drawers/factionEvents.js';
 import { CONFLICT_STATUS_OPTIONS } from '../drawers/index.js';
 import { openForeshadowing } from '../../domain/foreshadowing.js';
 import { WORLD_FLAG_VALUES, WORLD_FLAG_VALUE_LABEL } from '../../domain/worldFlags.js';
-import { buildStoryOptions } from '../../domain/copilot.js';
+import { buildStoryOptions, composeNarrativeDraft } from '../../domain/copilot.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -175,6 +175,56 @@ const VIEWS = {
       ${summaryField('how', doc.context.how.summary, 'Exploration, combat, social, downtime…', doc, ui)}
       <div class="shift-actions">
         <button class="chip" data-shift="Advance Time">⏱ Advance Time</button>
+      </div>`);
+  },
+
+  // Story Dashboard (docs/adr/0040, Phase 12a/12b) — a consolidated view
+  // ALONGSIDE who/where/what/why/how above, not a replacement (those keep
+  // their exact current behavior; this is additive, reachable as a 6th
+  // strip button, ui/shell.js's render()). Deliberately reuses every
+  // piece verbatim rather than re-deriving anything: WHAT's threat/
+  // mystery/stress dials are the same data-ctx-num inputs (still directly
+  // editable here, same generic handler, zero new wiring), HOW's Activity
+  // select is the same data-ctx select, WHO's picker/WHERE's factions-
+  // conflicts-nearby blocks are the exact functions those tabs already
+  // call. The two genuinely new pieces are storyOptionsBlock's
+  // `selectable` mode (a checkbox per row, "include this in the draft
+  // below") and narrativeComposerBlock (Phase 12b) underneath it.
+  dashboard(doc, ui) {
+    const activity = doc.context.how.activity || '';
+    const c = doc.context.what;
+    const mystery = c.mystery == null ? 0 : c.mystery;
+    const stress = c.stress == null ? 5 : c.stress;
+    return card('Story Dashboard', 'Everything currently in play, at a glance.', `
+      ${currentLocationBanner(doc)}
+      <div class="field-row-3col">
+        <label class="field-label sm">Threat <b class="metric">${c.threat}/10</b>
+          <input type="range" min="0" max="10" value="${c.threat}" data-ctx-num="what.threat">
+        </label>
+        <label class="field-label sm">Mystery <b class="metric">${mystery}/10</b>
+          <input type="range" min="0" max="10" value="${mystery}" data-ctx-num="what.mystery">
+        </label>
+        <label class="field-label sm">Stress <b class="metric">${stress}/10</b>
+          <input type="range" min="0" max="10" value="${stress}" data-ctx-num="what.stress">
+        </label>
+      </div>
+      <label class="field-label sm">Activity
+        <select data-ctx="how.activity">
+          <option value="">— none set —</option>
+          ${ACTIVITIES.map((a) => `<option value="${a.id}" ${a.id === activity ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}
+        </select>
+      </label>
+      <div class="dashboard-grid">
+        <div class="dashboard-col">
+          ${whoEntityPicker(doc, ui)}
+          ${locationFactionsBlock(doc)}
+          ${locationConflictsBlock(doc)}
+          ${nearbyLocationsBlock(doc)}
+        </div>
+        <div class="dashboard-col dashboard-col-wide">
+          ${storyOptionsBlock(doc, ui, { selectable: true, limit: 10 })}
+          ${narrativeComposerBlock(doc, ui)}
+        </div>
       </div>`);
   },
 };
@@ -565,11 +615,19 @@ function storyInspirationBlock() {
 // the next-ranked option instead of lingering — fetched from a deeper
 // pool (limit 12) than what's actually shown (6) so there's a "next" to
 // reveal. Nothing here is ever applied automatically (Article II).
-function storyOptionsBlock(doc, ui) {
+// `selectable` (docs/adr/0040 Phase 12b, dashboard-only) adds a checkbox
+// per row — data-story-option-select, checked state read from
+// ui.selectedStoryOptionIds — so a GM can mark which options are "in
+// play" for the Narrative Composer below, on top of (not instead of) the
+// existing roll/journal/dismiss actions every row already has. `limit`
+// lets the dashboard show more rows than WHY's own default 6.
+function storyOptionsBlock(doc, ui, { selectable = false, limit = 6 } = {}) {
   const dismissed = (ui && ui.dismissedStoryOptionIds) || new Set();
-  const options = buildStoryOptions(doc, { limit: 12 }).filter((o) => !dismissed.has(o.id)).slice(0, 6);
+  const selected = (ui && ui.selectedStoryOptionIds) || new Set();
+  const options = buildStoryOptions(doc, { limit: Math.max(12, limit * 2) }).filter((o) => !dismissed.has(o.id)).slice(0, limit);
   const rows = options.map((o) => `<div class="thread-row story-option-row">
       <span class="thread-name">
+        ${selectable ? `<input type="checkbox" data-story-option-select="${esc(o.id)}" ${selected.has(o.id) ? 'checked' : ''} title="Include in the Narrative Composer draft">` : ''}
         ${o.entityId ? `<button type="button" class="entity-chip" data-open-entity="${esc(o.entityId)}">${esc(o.label)}</button>` : esc(o.label)}
         <span class="dim small">— ${esc(o.detail)}</span>
       </span>
@@ -582,6 +640,31 @@ function storyOptionsBlock(doc, ui) {
   return `<div class="threads">
     <div class="threads-head"><h3>Story Options</h3></div>
     ${options.length ? rows : '<div class="ws-placeholder">Nothing to suggest yet — mention someone in WHO, set a Location in WHERE, or open a Conflict/Thread/Foreshadowing entry, and options will show up here.</div>'}
+  </div>`;
+}
+
+// Narrative Composer (docs/adr/0040 Phase 12b) — composeNarrativeDraft()
+// (copilot.js) pulls WHO/WHERE/WHAT/WHY's current state plus whichever
+// Story Options are checked above into one composed paragraph, recomputed
+// fresh on every render (same as storyOptionsBlock itself). Deliberately
+// NOT a real contenteditable — a live-recomputed field a GM was mid-edit
+// in would get silently clobbered the moment anything else on the
+// dashboard changed (ticking another checkbox, editing a WHO field) — so
+// this renders read-only (via the same buildMentionEditorHTML every rich
+// field already uses, so @mentions still show as real badges) with
+// Copy/Send-to-Journal actions instead; hand-polishing happens after
+// Send, in the Journal note itself (a real editable field there).
+function narrativeComposerBlock(doc, ui) {
+  const selected = (ui && ui.selectedStoryOptionIds) || new Set();
+  const draft = composeNarrativeDraft(doc, { selectedOptionIds: Array.from(selected) });
+  return `<div class="threads narrative-composer">
+    <div class="threads-head"><h3>Narrative Composer</h3></div>
+    <p class="dim small">Check Story Options above to weave them in — this updates live as WHO/WHERE/WHAT/WHY and your selections change.</p>
+    <div class="mention-editor narrative-composer-preview">${draft ? buildMentionEditorHTML(doc, draft) : '<span class="ws-placeholder">Nothing to compose yet — mention someone in WHO, set a Location in WHERE, or check a Story Option above.</span>'}</div>
+    <div class="shift-actions">
+      <button class="chip" data-composer-copy title="Copy the draft to your clipboard">📋 Copy</button>
+      <button class="chip" data-composer-journal title="Add the draft to the Journal">＋ Send to Journal</button>
+    </div>
   </div>`;
 }
 

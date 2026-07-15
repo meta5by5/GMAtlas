@@ -467,6 +467,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
    the 3-up Intent/Threat/Mystery layout above. */
 .field-row-2col { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); align-items: end; }
 .field-row-3col { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--sp-3); align-items: end; }
+/* Story Dashboard (docs/adr/0040) — a narrower fixed left column (WHO/
+   WHERE context digests) beside a wider right column (Story Options +
+   Narrative Composer); collapses to one column on narrow viewports via
+   the same auto-fit/minmax technique .field-row-3col already uses, no
+   separate breakpoint media query needed. */
+.dashboard-grid { display: grid; grid-template-columns: minmax(14rem, 1fr) minmax(18rem, 2fr); gap: var(--sp-4); margin-top: var(--sp-3); align-items: start; }
+@media (max-width: 767px) {
+  .dashboard-grid { grid-template-columns: 1fr; }
+}
+.dashboard-col-wide .threads { margin-bottom: var(--sp-4); }
+.mc-q-dashboard { background: var(--tier2-bg); }
+.narrative-composer-preview { min-height: 3rem; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--sp-3); background: var(--bg-inset); margin: var(--sp-2) 0; }
 /* Latest Scene's split fields (Opening/Driver/Clue/Complication/Decision
    point/Likely Consequence/Current thread) — single column, not a
    multi-column grid: a scene field is often a full sentence or two, and

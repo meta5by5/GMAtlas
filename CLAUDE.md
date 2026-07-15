@@ -34,7 +34,7 @@ for writing code are: a new *interactive control* goes through the
 delegated-listener rules below, and a new *tertiary feature* is a drawer
 (edge-tab, zero space until opened), not a new top-level surface.
 **One recorded exception**: `docs/adr/0040-story-dashboard.md` (Phase 12,
-proposed) deliberately reverses "the workspace changes, not the
+12a/12b built) deliberately reverses "the workspace changes, not the
 application" for one new `dashboard` view only — a consolidated,
 multi-W-question surface, additive alongside the five existing WHO/WHERE/
 WHAT/WHY/HOW tabs, not a replacement for them. Don't flag that view as
@@ -350,8 +350,9 @@ hand-maintained source of truth for phase/version, updated alongside
 ## Current status
 
 Phases 0–11 built; Phase 12 (Story Dashboard, `docs/adr/0040-story-
-dashboard.md`) proposed, not started. This number is the only status fact
-worth duplicating here — for what shipped, what's next, and why, read
+dashboard.md`) in progress — 12a/12b (the `dashboard` view + Narrative
+Composer) built, 12c–12e still proposed. This number is the only status
+fact worth duplicating here — for what shipped, what's next, and why, read
 `PROGRESS.md` (short status ledger) or `DESIGN-NEW-FUNCTIONALITY.md`
 (current roadmap; `docs/archive/DESIGN-NEW-FUNCTIONALITY-2026-07-15.md`
 has the full per-phase historical detail this file used to carry inline);

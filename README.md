@@ -43,6 +43,7 @@ Open the served URL. On first launch the store migrates any legacy data, then re
 - [x] Phase 9 — Activity-driven gameplay (HOW → Rules Lens recommender, genre packs: Hostile/Cyberpunk-Shadowrun/Fantasy)
 - [ ] Phase 10 — Merchant Rules Lens (contract-driven trade, Trade drawer, tag-driven Location economy types), Faction Pressure Track, Mission generator, Traveller/SWN/CWN content, Enhancements (renamed from Cybernetics), Game Mechanics Index, Expedition trackers, Diplomacy fields, Suggestion Lenses, lightweight rich text (toolbars everywhere, mention page-editing, tables, Journal editing), a WHERE tab tag-filter redesign, split Latest Scene fields, and Reference Library Table of Contents generation all done; Shipyard companion link and a sync adapter still open (both blocked on external input, not effort)
 - [ ] Phase 11 (in progress) — Visual & Tactical Tools: Gallery (per-entity thumbnails + a tagged image collection), external rich-text links, and the Planetfall Grid Battlemap done; Planetfall Base Builder, Encounter Manager, and Interactive Maps still open
+- [ ] Phase 12 (in progress) — Story Dashboard (`docs/adr/0040-story-dashboard.md`): a new consolidated `dashboard` view + Narrative Composer done; oracle-tailored dropdowns beyond WHY, closing the Shift-reducer reachability gap, and dead-export housekeeping still open
 
 Each phase's actual feature list, plus what's still open per phase, is in
 `DESIGN-NEW-FUNCTIONALITY.md` — not repeated here to avoid two copies

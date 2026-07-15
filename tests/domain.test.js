@@ -5044,7 +5044,7 @@ test('advise() names whichever faction signal is actually driving the observatio
 });
 
 // --- docs/adr/0039: Story Options — cumulative, WHO/WHERE/WHY-aware suggestions
-import { gatherSceneContext, buildStoryOptions } from '../src/domain/copilot.js';
+import { gatherSceneContext, buildStoryOptions, composeNarrativeDraft } from '../src/domain/copilot.js';
 
 test('gatherSceneContext reads WHO/WHERE @mentions, WHERE-scoped factions/conflicts, and open Threads/Foreshadowing/World Flags — all empty/zeroed on a bare campaign', () => {
   const bare = gatherSceneContext(defaultCampaign());
@@ -5141,6 +5141,39 @@ test('buildStoryOptions breaks an exact weight tie using campaign.oracles.usage 
   const plotFavored = buildStoryOptions(campPlotUsed);
   assert.ok(idxOf(plotFavored, 'world-flag') < idxOf(plotFavored, 'faction-agenda'), 'higher Plot Engine usage ranks the world-flag option first');
   assert.notDeepEqual(factionsFavored.map((o) => o.id), plotFavored.map((o) => o.id), 'usage genuinely changes the ranking, not just coincidentally matching the baseline');
+});
+
+test('composeNarrativeDraft (docs/adr/0040 Phase 12b) is empty on a bare campaign, and combines WHERE/WHO/WHAT/selected-Story-Option/WHY into one composed string — preserving raw @[Name] mention syntax and rich markup verbatim (no stripping), re-wrapping entity names as real mentions', () => {
+  assert.equal(composeNarrativeDraft(defaultCampaign()), '');
+
+  let camp = defaultCampaign();
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Rust Cartel' }));
+  let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Docking Bay' }));
+  camp = updateEntity(camp, factionId, { agenda: 'Corner the **water** trade', homeworldId: locId });
+  camp.context.where.summary = 'At the @[Docking Bay]';
+  camp.context.who.summary = 'Talking to @[Rust Cartel]';
+  camp.context.what.situation = 'The docking clamps just failed.';
+  camp.context.why.summary = 'Get the ship spaceworthy again';
+
+  // No options selected: location/who/situation/objective still compose.
+  const bare = composeNarrativeDraft(camp);
+  assert.match(bare, /@\[Docking Bay\]/);
+  assert.match(bare, /@\[Rust Cartel\]/);
+  assert.match(bare, /The docking clamps just failed\./);
+  assert.match(bare, /Get the ship spaceworthy again/);
+
+  // Selecting the faction's agenda option weaves its raw (unstripped)
+  // detail text into the draft too.
+  const options = buildStoryOptions(camp);
+  const agendaOption = options.find((o) => o.source === 'faction-agenda');
+  assert.ok(agendaOption, 'the agenda option exists for this fixture');
+  const withOption = composeNarrativeDraft(camp, { selectedOptionIds: [agendaOption.id] });
+  assert.match(withOption, /Corner the \*\*water\*\* trade/, 'rich markup preserved verbatim, not stripped');
+  assert.ok(withOption.length > bare.length, 'selecting an option adds to the draft');
+
+  // An unselected/unknown option id contributes nothing.
+  const unselected = composeNarrativeDraft(camp, { selectedOptionIds: ['not-a-real-id'] });
+  assert.equal(unselected, bare);
 });
 
 test('drawSuggestionLenses with no sceneContext is unaffected by this change (pure-random, exact prior behavior); with a sceneContext, a boosted lens (negotiation, while Activity is Negotiate) is drawn strictly more often across many seeds than without one', () => {

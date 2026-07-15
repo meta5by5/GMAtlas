@@ -8,7 +8,7 @@ import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { contextSummary } from '../domain/context.js';
 import { continueStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, updateSceneField } from '../domain/session.js';
-import { buildStoryOptions, gatherSceneContext } from '../domain/copilot.js';
+import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag } from '../domain/oracles.js';
 import { oracleLinkTagsFor } from '../data/entityFieldOracleLinks.js';
 import { addThread, advanceThread, removeThread, setThreadStatus, setThreadPriority } from '../domain/threads.js';
@@ -283,6 +283,7 @@ let lensDraw = []; // ephemeral — the current random draw of lens chips, fixed
 let whyLensPickerOpen = false; // ephemeral — WHY's own "Suggest a Lens" picker (docs/adr/0039 Phase 2) — separate from lensPickerOpen/lensDraw above so the two never interfere
 let whyLensDraw = []; // ephemeral — WHY's scene-context-weighted lens draw, fixed until re-opened
 let dismissedStoryOptionIds = new Set(); // ephemeral — Story Option ids the GM has accepted (rolled/journaled) or explicitly dismissed (docs/adr/0039 Phase 2, mirrors ADR 0036's dismissible-suggestion pattern) — filtered out of both storyOptionsBlock (WHY) and the Co-Pilot's condensed card so a used/dismissed option makes room for the next-ranked one instead of lingering
+let selectedStoryOptionIds = new Set(); // ephemeral — Story Option ids checked "in play" for the Story Dashboard's Narrative Composer (docs/adr/0040 Phase 12b) — a DIFFERENT concept from dismissedStoryOptionIds above ("used/not interested" vs. "include in the draft"), never persisted
 let catalogSearch = ''; // ephemeral — the catalog picker's own name/tag search
 let partyTrackerAddOpen = false; // ephemeral — the inline "+ Tracker" name/type creation form, open or not
 let partyTrackerDraftKind = 'meter'; // ephemeral — the creation form's in-progress type pick, so its size/difficulty sub-field can react before the tracker actually exists
@@ -1891,6 +1892,27 @@ function onClick(ev) {
     store.update((d) => addNote(d, `${option.label}: ${option.detail}`, 'Story Option'));
     return toast('Added to Journal');
   }
+  // Story Dashboard's Narrative Composer (docs/adr/0040 Phase 12b) —
+  // recomputes the exact same draft narrativeComposerBlock just rendered
+  // (deterministic given current campaign state + selectedStoryOptionIds,
+  // so there's nothing to read back off the DOM) and either copies it or
+  // files it to the Journal verbatim (raw @[Name]/markup intact, same as
+  // every other Journal entry — addNote's own mention auto-linking picks
+  // it up from there).
+  const composerCopy = hit('[data-composer-copy]');
+  if (composerCopy) {
+    const draft = composeNarrativeDraft(store.get(), { selectedOptionIds: Array.from(selectedStoryOptionIds) });
+    if (!draft) return toast('Nothing to copy yet');
+    navigator.clipboard.writeText(draft).then(() => toast('Copied'), () => toast('Could not copy'));
+    return;
+  }
+  const composerJournal = hit('[data-composer-journal]');
+  if (composerJournal) {
+    const draft = composeNarrativeDraft(store.get(), { selectedOptionIds: Array.from(selectedStoryOptionIds) });
+    if (!draft) return toast('Nothing to send yet');
+    store.update((d) => addNote(d, draft, 'Narrative Composer'));
+    return toast('Added to Journal');
+  }
   if (hit('[data-new-campaign]')) return confirmNewCampaign();
   if (hit('[data-bind-file]')) return store.bindFile().then(() => toast('Save file bound')).catch(() => {});
   if (hit('[data-restore-backup]')) {
@@ -2095,6 +2117,15 @@ function onChange(ev) {
   if (insertWhoMentionSelect) { const id = t.value; t.value = ''; if (id) insertContextMention('who', id); return; }
   const insertWhyMentionSelect = t.closest('[data-insert-why-mention-select]');
   if (insertWhyMentionSelect) { const id = t.value; t.value = ''; if (id) insertContextMention('why', id); return; }
+  // Story Dashboard's per-option "include in the draft" checkbox
+  // (docs/adr/0040 Phase 12b) — toggles selectedStoryOptionIds, read live
+  // by narrativeComposerBlock on the next render.
+  const storyOptionSelect = t.closest('[data-story-option-select]');
+  if (storyOptionSelect) {
+    const id = storyOptionSelect.dataset.storyOptionSelect;
+    if (storyOptionSelect.checked) selectedStoryOptionIds.add(id); else selectedStoryOptionIds.delete(id);
+    return render();
+  }
 
   // --- Planetfall Grid Battlemap (Phase 11, docs/adr/0023) ------------------
   const bmRename = t.closest('[data-battlemap-rename]');
@@ -3785,13 +3816,26 @@ function render() {
   root.querySelector('.campaign-title').textContent = doc.meta.title;
 
   const strip = root.querySelector('[data-strip]');
+  // Story Dashboard (docs/adr/0040 Phase 12a) is appended after the 5 real
+  // CONTEXT_QUESTIONS chips, not one of them — it has no persisted
+  // context.dashboard sub-object (schema.js's CONTEXT_QUESTIONS comment
+  // is explicit: that array IS the stored WHO/WHERE/WHAT/WHY/HOW model),
+  // it's a view mode that reads the other 5. Reuses the exact same
+  // data-question click handler (generic — just sets context.active to
+  // whatever string) with zero shell.js click-handler changes; Ctrl+Left/
+  // Right cycling deliberately still only cycles the 5 real questions
+  // (unchanged) — Dashboard is a direct click for now.
+  const dashboardSel = doc.context.active === 'dashboard';
   strip.innerHTML = CONTEXT_QUESTIONS.map((k) => {
     const sel = doc.context.active === k;
     return `<button class="mc-q" data-question="${k}" role="tab" aria-selected="${sel}">
       <span class="q-key">${QUESTION_LABELS[k]}</span>
       <span class="q-val">${escapeHtml(contextSummary(doc.context, k)) || '—'}</span>
     </button>`;
-  }).join('');
+  }).join('') + `<button class="mc-q mc-q-dashboard" data-question="dashboard" role="tab" aria-selected="${dashboardSel}" title="Story Dashboard — everything at a glance">
+      <span class="q-key">📊 DASHBOARD</span>
+      <span class="q-val">All 5 at a glance</span>
+    </button>`;
 
   const bc = root.querySelector('[data-breadcrumb]');
   const crumbs = doc.timeline.length ? doc.timeline : [{ label: doc.meta.title }, { label: `Scene ${doc.scenes.length}` }];
@@ -4109,7 +4153,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, dismissedStoryOptionIds,
+    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, dismissedStoryOptionIds, selectedStoryOptionIds,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,

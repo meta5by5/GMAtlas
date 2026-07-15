@@ -277,3 +277,66 @@ export function buildStoryOptions(campaign, { limit = 6 } = {}) {
     .slice(0, limit)
     .map(({ weight, ...rest }) => rest);
 }
+
+/** Story Dashboard's Narrative Composer (docs/adr/0040 Phase 12b) —
+ *  generalizes two existing, proven precedents into one reusable
+ *  composer: `scenes.js`'s `recomposeSceneText` (structured fields →
+ *  live narrative text) and `recap.js`'s `buildSessionRecap`/
+ *  `formatSessionRecap` (assemble several signals → readable prose).
+ *  Pulls WHERE's current location(s), WHO's in-scene entities, WHAT's
+ *  situation, whichever Story Option(s) the GM has marked "in play"
+ *  (`selectedOptionIds` — UI-layer ephemeral state, NOT persisted;
+ *  distinct from `docs/adr/0039`'s `dismissedStoryOptionIds`, a
+ *  different concept), and WHY's objective into one composed paragraph.
+ *
+ *  Deliberately returns a PLAIN STRING carrying the exact same raw
+ *  markup (`@[Name]` mentions, `**bold**`/etc.) the source fields
+ *  already use — no stripping/cleaning — because that format is already
+ *  what both consumers of this string expect: `mentionEditor.js`'s
+ *  `buildMentionEditorHTML` (for a live preview that renders mentions as
+ *  real clickable badges) and `session.js`'s `addNote` (which auto-links
+ *  any `@[Name]` mention on save, same as every other Journal entry).
+ *  Entity references are re-wrapped in `@[Name]` on the way out
+ *  specifically so a name mentioned once in WHO/WHERE's own Focus text
+ *  stays a real, clickable mention in the composed draft too.
+ *
+ *  Deliberately NOT live-editable in place on the dashboard (the ADR's
+ *  original sketch called for an editable field) — this function is
+ *  recomputed fresh on every render (same as `buildStoryOptions`), and a
+ *  contenteditable field showing its output would have its content
+ *  silently clobbered by the next unrelated re-render (ticking a
+ *  different Story Option's checkbox, editing a WHO/WHERE field
+ *  elsewhere) the moment the GM started hand-editing it. The UI instead
+ *  offers a read-only live preview (via `buildMentionEditorHTML`, not a
+ *  real `contenteditable`) with Copy/Send-to-Journal — hand-polishing
+ *  happens after Send, in the Journal note itself (already a real,
+ *  fully-editable field), matching Article II at that stage instead. */
+export function composeNarrativeDraft(campaign, { selectedOptionIds = [] } = {}) {
+  const ctx = gatherSceneContext(campaign);
+  const parts = [];
+
+  if (ctx.whereLocations.length) {
+    const names = ctx.whereLocations.map((l) => `@[${l.name || 'Unnamed'}]`);
+    parts.push(`The scene is set at ${names.join(' and ')}.`);
+  }
+
+  if (ctx.whoEntities.length) {
+    const names = ctx.whoEntities.map((e) => `@[${e.name || 'Unnamed'}]`);
+    parts.push(`${names.join(', ')} ${names.length > 1 ? 'are' : 'is'} present.`);
+  }
+
+  const situation = String((campaign.context && campaign.context.what && campaign.context.what.situation) || '').trim();
+  if (situation) parts.push(situation);
+
+  const selected = new Set(selectedOptionIds);
+  if (selected.size) {
+    for (const o of buildStoryOptions(campaign, { limit: 20 })) {
+      if (selected.has(o.id) && o.detail) parts.push(o.detail);
+    }
+  }
+
+  const objective = String((campaign.context && campaign.context.why && campaign.context.why.summary) || '').trim();
+  if (objective) parts.push(`The party's aim right now: ${objective}`);
+
+  return parts.join(' ');
+}

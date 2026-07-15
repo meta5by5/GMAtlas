@@ -25,19 +25,20 @@ Phases 0–11 complete (session loop, Story-shift reducers, Co-Pilot,
 Threads, entities/relationships/Graph, statblocks, Document Library,
 Party/Colony/Guide, Context Graph depth, Universal Search, Activity-
 driven gameplay + genre packs, Trade/Missions/Faction depth, Gallery +
-Battlemap). **Phase 12 (Story Dashboard) is proposed, not started** —
-see below. For what shipped and why, `PROGRESS.md`'s Status Summary is
-current; `docs/archive/DESIGN-NEW-FUNCTIONALITY-2026-07-15.md` has the
-full per-phase detail this file used to carry inline.
+Battlemap). **Phase 12 (Story Dashboard) is in progress** — 12a/12b
+shipped 2026-07-15, 12c–12e still proposed — see below. For what shipped
+and why, `PROGRESS.md`'s Status Summary is current; `docs/archive/
+DESIGN-NEW-FUNCTIONALITY-2026-07-15.md` has the full per-phase detail
+this file used to carry inline.
 
 ---
 
-## Proposed next — Phase 12: Story Dashboard
+## Phase 12: Story Dashboard (in progress)
 
-Full design in `docs/adr/0040-story-dashboard.md` (Status: Proposed —
-none of this is built yet). Direct request: the 5-W workspace needed a
-genuinely interactive, narrative-building surface — oracle suggestions
-and cumulative story options the GM can steer live at the table, not
+Full design in `docs/adr/0040-story-dashboard.md` (12a/12b implemented
+2026-07-15; 12c–12e still proposed). Direct request: the 5-W workspace
+needed a genuinely interactive, narrative-building surface — oracle
+suggestions and cumulative story options the GM can steer live at the table, not
 just entity pickers and text fields. Confirmed via direct question: this
 **deliberately reverses Article X** ("the workspace changes, not the
 application," one question at a time) for one new surface — recorded as
@@ -56,25 +57,30 @@ WHY-only Story Options, `docs/adr/0039`), 8 of `context.js`'s 17
 confirmed-dead exports (see the ADR for the full list). Phase 12 turns
 these into one coherent surface rather than inventing new mechanics:
 
-- **12a — New `dashboard` view**: a 6th tab alongside WHO/WHERE/WHAT/
-  WHY/HOW, composing already-built pieces (location summary, factions/
-  conflicts-here, the full Story Options list) into one page.
-- **12b — Narrative Composer**: a new `composeNarrativeDraft()`,
-  generalizing `recomposeSceneText` + `buildSessionRecap` into a live,
-  editable draft paragraph seeded by the dashboard's current selections
-  — "📋 Copy" / "＋ Send to Journal," never auto-applied.
-- **12c — Oracle-tailored dropdowns beyond WHY**: extend the
-  Activity→Lens/Story-Options lookup-table pattern to WHAT's `Intent`
+- **12a — New `dashboard` view — done**: a 6th tab alongside WHO/WHERE/
+  WHAT/WHY/HOW (additive, appended to the strip, deliberately NOT folded
+  into `CONTEXT_QUESTIONS` — see the ADR), composing already-built pieces
+  (location summary, factions/conflicts-here, the full Story Options
+  list) into one page.
+- **12b — Narrative Composer — done**: `composeNarrativeDraft()`,
+  generalizing `recomposeSceneText` + `buildSessionRecap` into a draft
+  paragraph seeded by the dashboard's current selections — "📋 Copy" /
+  "＋ Send to Journal," never auto-applied. Shipped as a read-only live
+  preview rather than the originally-sketched editable field — a live-
+  recomputed field would clobber a hand-edit on the next unrelated
+  re-render; polishing happens after Send, in the Journal note itself.
+- **12c — Oracle-tailored dropdowns beyond WHY** (not yet built): extend
+  the Activity→Lens/Story-Options lookup-table pattern to WHAT's `Intent`
   and the dashboard's own selections.
-- **12d — Close the SHIFTS reachability gap**: quick-action chips for
-  the 8 orphaned reducers — a pure UI gap, `applyShift` already handles
-  all 17 uniformly.
-- **12e — Dead-export housekeeping**: wire up `getFactionDossier` (the
-  one orphan worth it — a full faction profile, already built and
-  tested); remove the rest (no surfaced use).
+- **12d — Close the SHIFTS reachability gap** (not yet built): quick-
+  action chips for the 8 orphaned reducers — a pure UI gap, `applyShift`
+  already handles all 17 uniformly.
+- **12e — Dead-export housekeeping** (not yet built): wire up
+  `getFactionDossier` (the one orphan worth it — a full faction profile,
+  already built and tested); remove the rest (no surfaced use).
 
-Scoped for incremental follow-up, same rhythm as this session's Story
-Options phases — none of 12a–12e landed alongside this ADR.
+12a/12b landed same-day; 12c–12e scoped for incremental follow-up, same
+rhythm as this session's Story Options phases.
 
 ---
 

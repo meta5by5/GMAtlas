@@ -2,7 +2,12 @@
 
 ## Status
 
-Proposed (roadmap only — none of 12a–12e is built yet). Direct request:
+**12a (new `dashboard` view) and 12b (Narrative Composer) implemented
+2026-07-15, same day as this ADR.** 12c (oracle-tailored dropdowns beyond
+WHY), 12d (SHIFTS reachability gap), and 12e (dead-export housekeeping)
+remain proposed, not built — see each sub-section below for status.
+
+Original request:
 the 5-W workspace "is still missing a comprehensive and interactive
 narrative-building GM guide that offers/suggests oracles and directive
 story options while allowing the GM to adjust the options on the fly."
@@ -86,53 +91,75 @@ below composes existing, tested domain functions.
 
 ## Decision
 
-### 12a — New `dashboard` view
+### 12a — New `dashboard` view — **Implemented**
 
 A 6th entry in `ui/workspace/index.js`'s `VIEWS` map, alongside `who`/
-`where`/`what`/`why`/`how`, reachable from the same `[data-strip]` tab
-strip mechanism (`ui/shell.js`) — additive, not a replacement. The five
-focused tabs keep their exact current behavior and stay necessary for
-what doesn't fit a dashboard grid without becoming clutter: a full rich-
-text Journal note, a deep entity edit, the Oracle drawer's whole tree.
-Likely becomes the new default landing tab (`context.active`'s initial
-value), but that's a small, separate decision at build time, not part of
-this ADR's scope.
+`where`/`what`/`why`/`how`, additive not a replacement — the five
+focused tabs are byte-for-byte unchanged. **Deliberately not added to
+`schema.js`'s `CONTEXT_QUESTIONS`** (considered, then rejected mid-
+implementation): that array's own doc comment calls it "the canonical
+WHO/WHERE/WHAT/WHY/HOW context — a first-class stored model," and
+Dashboard has no persisted `context.dashboard` sub-object of its own —
+it's a view mode reading the other 5, not a 6th question. Instead the
+strip (`ui/shell.js`'s `render()`) appends one more `[data-question]`
+button after the `CONTEXT_QUESTIONS.map(...)` loop, reusing the exact
+same generic click handler with zero changes (it already just sets
+`context.active` to whatever string) — Ctrl+Left/Right cycling
+deliberately still only cycles the 5 real questions, unchanged; Dashboard
+is a direct click for now. Did not change the default landing tab
+(`context.active` still defaults to `'what'`) — a separate, easy call for
+later if wanted.
 
-Layout, top to bottom:
-- **Header strip**: current Location(s) + System/Star/District (reuses
-  `locationSummaryHeader`, already built for WHERE), current Activity,
-  WHAT's 5 dials shown compactly (reuses existing slider markup).
-- **Left column**: WHO's entity picker (condensed) + WHERE's factions/
-  conflicts-here digest (reuses `locationFactionsBlock`/
-  `locationConflictsBlock`, already built, zero new domain code).
-- **Center column**: the FULL `buildStoryOptions()` list (not condensed
-  to 3 the way the Co-Pilot panel's card is) — this is the dashboard's
-  primary "cumulative option-building" surface.
-- **Right column**: the Narrative Composer (12b).
-- **Bottom**: condensed Threads/Foreshadowing/World Flags (reuses
-  existing blocks).
+Layout, implemented as a header row + 2-column grid (simplified from the
+original 3-column + bottom sketch above, since WHO/WHERE's digests read
+naturally as one column rather than needing their own):
+- **Header**: `currentLocationBanner`, WHAT's Threat/Mystery/Stress
+  dials (the exact same `data-ctx-num` inputs WHAT's own tab uses — still
+  directly editable here, zero new wiring), HOW's Activity `<select>`
+  (same `data-ctx` select).
+- **Left column**: `whoEntityPicker`, `locationFactionsBlock`,
+  `locationConflictsBlock`, `nearbyLocationsBlock` — all reused verbatim.
+- **Right column**: `storyOptionsBlock` in a new `selectable` mode (a
+  checkbox per row, `limit: 10` instead of WHY's default 6) + the
+  Narrative Composer (12b).
 
-Every piece listed above already exists as a render function — 12a is
-primarily a new layout/composition pass, not new domain logic.
+Every piece is a reused render function except `storyOptionsBlock`'s new
+`selectable` param and the Composer itself — confirmed via a direct
+Node smoke test (no browser needed, these are pure string-returning
+functions): both a bare `defaultCampaign()` and a populated one render
+without throwing, with every expected element present.
 
-### 12b — Narrative Composer
+### 12b — Narrative Composer — **Implemented, with one deliberate
+deviation from this ADR's original sketch**
 
 New `domain/copilot.js` export, `composeNarrativeDraft(campaign,
 { selectedOptionIds })`, generalizing `recomposeSceneText`'s live-
-recompose-on-edit pattern and `buildSessionRecap`'s multi-signal-
-assembly pattern into one reusable composer: reads WHO/WHERE/WHAT/WHY/
-HOW's current field values plus whichever Story Option(s) the GM has
-marked "in play right now" (`selectedOptionIds`, new ephemeral dashboard
-state — a Set, same shape as `docs/adr/0039`'s `dismissedStoryOptionIds`,
-but a distinct concept: "selected for this composition" isn't "used/not
-interested"), and template-composes a draft paragraph the same way
-`recomposeSceneText` assembles a Scene's fields.
+recompose pattern and `buildSessionRecap`'s multi-signal-assembly pattern
+into one reusable composer: WHERE's current location(s), WHO's in-scene
+entities, WHAT's situation, whichever Story Option(s) are checked
+(`selectedOptionIds` — new `selectedStoryOptionIds` ephemeral Set,
+shell.js, same shape as `docs/adr/0039`'s `dismissedStoryOptionIds` but a
+distinct concept: "include in the draft," not "used/not interested"),
+and WHY's objective, joined into one paragraph. Returns the raw
+`@[Name]`/`**bold**` markup verbatim — no stripping — since that's
+exactly what both consumers already expect: `buildMentionEditorHTML`
+(real mention badges in the preview) and `addNote` (auto-links `@[Name]`
+on save, same as every other Journal entry); entity references are
+re-wrapped in `@[Name]` on the way out so a name mentioned in WHO/WHERE's
+own Focus text stays a real, clickable mention in the composed draft too.
 
-Rendered as an editable mention-editor field on the dashboard — never
-read-only-final (Article II: the GM always has the last word on what
-actually happened) — with a "📋 Copy" action and a "＋ Send to Journal"
-action (the existing `addNote`), mirroring Session Recap's own explicit-
-save posture exactly. Nothing here writes to the campaign automatically.
+**Deviation, found during implementation**: this ADR's original sketch
+called for an *editable* mention-editor field. Building it surfaced a
+real conflict — `composeNarrativeDraft` is recomputed fresh on every
+render (same as `buildStoryOptions`), so a live `contenteditable` field
+showing its output would have any hand-edit silently clobbered by the
+next unrelated re-render (ticking a different checkbox, editing a WHO
+field elsewhere). Shipped instead as a **read-only** live preview
+(rendered via `buildMentionEditorHTML`, not a real `contenteditable`)
+with "📋 Copy" and "＋ Send to Journal" — hand-polishing happens after
+Send, in the Journal note itself (already a real, fully-editable field),
+which still satisfies Article II (the GM has final say), just one step
+later than the original sketch assumed.
 
 ### 12c — Oracle-tailored dropdowns beyond WHY
 
@@ -214,9 +241,17 @@ this is a pure UI gap, zero domain changes needed.
 - This ADR is the recorded exception to Article X for the `dashboard`
   view specifically — CLAUDE.md is updated alongside this ADR to say so,
   per this repo's "no two docs get to disagree" discipline.
-- None of 12a–12e is built in the same pass as this ADR — it's a roadmap,
-  scoped for incremental follow-up work, same rhythm as this session's
-  own Story Options phases (`docs/adr/0039`).
+- 12a/12b landed the same day as this ADR (not deferred, unlike 12c–12e)
+  — verified via 3 new domain tests (441 total: `composeNarrativeDraft`'s
+  empty-campaign case, full composition with a selected option and raw-
+  markup preservation, and an unknown-option-id no-op) plus a direct Node
+  smoke test of `renderWorkspace(doc, 'dashboard', ui)` against both a
+  bare and a populated campaign (no browser automation available in this
+  environment, same limitation noted throughout this session — this is
+  the same "exercise the pure render function directly" substitute used
+  elsewhere). `node scripts/build.js` stays clean (77 modules). 12c–12e
+  remain roadmap only, scoped for incremental follow-up, same rhythm as
+  this session's own Story Options phases (`docs/adr/0039`).
 
 ## Related packs / ADRs
 
