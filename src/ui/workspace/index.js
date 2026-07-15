@@ -13,6 +13,7 @@ import { renderFactionEvents } from '../drawers/factionEvents.js';
 import { CONFLICT_STATUS_OPTIONS } from '../drawers/index.js';
 import { openForeshadowing } from '../../domain/foreshadowing.js';
 import { WORLD_FLAG_VALUES, WORLD_FLAG_VALUE_LABEL } from '../../domain/worldFlags.js';
+import { buildStoryOptions } from '../../domain/copilot.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -148,6 +149,8 @@ const VIEWS = {
       <div class="shift-actions">
         <button class="chip" data-shift-prompt="Set Objective">◎ Set Objective</button>
       </div>
+      ${whyEntityPicker(doc, ui)}
+      ${storyOptionsBlock(doc)}
       ${threadsBlock(doc)}
       ${foreshadowingBlock(doc)}`);
   },
@@ -279,6 +282,34 @@ function whoEntityPicker(doc, ui) {
       <div class="entity-add-row">
         <button class="chip" data-entity-add="npc">＋ New NPC</button>
         <button class="chip" data-entity-add="faction">＋ New Faction</button>
+      </div>
+    </div>`;
+}
+
+// WHY tab: the same tag-picker -> listbox -> select-to-mention pattern as
+// WHO/WHERE above, applied to "who/what this objective is actually about"
+// — NPCs, Factions, and Conflicts pooled together (docs/adr/0039). WHY had
+// NO entity-selection UI at all before this (unlike WHO/WHERE, both
+// upgraded earlier this session) — direct complaint this closes.
+function whyEntityPicker(doc, ui) {
+  const tagFilter = ui.whyTagFilter || null;
+  const vocab = [...new Set([...listTagVocabulary(doc, 'npc'), ...listTagVocabulary(doc, 'faction'), ...listTagVocabulary(doc, 'conflict')])].sort((a, b) => a.localeCompare(b));
+  const tagListbox = vocab.length
+    ? `<select size="${Math.min(8, Math.max(3, vocab.length))}" data-why-tag-select>
+        <option value="" ${!tagFilter ? 'selected' : ''}>— all tags —</option>
+        ${vocab.map((t) => `<option value="${esc(t)}" ${t === tagFilter ? 'selected' : ''}>#${esc(t)}</option>`).join('')}
+      </select>`
+    : '<p class="ws-placeholder">No NPC/Faction/Conflict tags yet — tag one in Cast to start filtering.</p>';
+
+  const allRelevant = (doc.entities.items || []).filter((e) => e.type === 'npc' || e.type === 'faction' || e.type === 'conflict');
+  const candidates = tagFilter ? allRelevant.filter((e) => (e.tags || []).includes(tagFilter)) : allRelevant;
+  const candidatePanel = candidateListbox(candidates, 'data-insert-why-mention-select', tagFilter, 'NPCs/Factions/Conflicts');
+
+  return `
+    <div class="entity-tag-picker">
+      <div class="entity-tag-picker-row">
+        <div class="entity-tag-picker-tags"><span class="field-label-static">NPC/Faction/Conflict tags</span>${tagListbox}</div>
+        <div class="entity-tag-picker-candidates"><span class="field-label-static">Matching entities</span>${candidatePanel}</div>
       </div>
     </div>`;
 }
@@ -511,6 +542,33 @@ function storyInspirationBlock() {
         <button class="chip" data-generate-seed title="Roll an adventure seed: a hook, a twist, and a complication">🎲 Adventure Seed</button>
       </div>
     </div>`;
+}
+
+// Story Options (docs/adr/0039) — buildStoryOptions() (copilot.js)
+// combines whoever's in scene (WHO's @mentions + WHERE's present factions),
+// WHERE's Conflicts-here, and WHY's own Threads/Foreshadowing/World Flags
+// into a ranked, CUMULATIVE list (as opposed to advise()'s single-pick
+// Co-Pilot observation) — every row is a distinct angle the GM can act on.
+// 🔮 rolls that option's linked Oracle table for real inspiration (the
+// existing rollOracle, same mechanism Site Concept/Adventure Seed use);
+// ＋ Journal drops the option's own text straight into the session log —
+// neither is ever applied automatically (Article II), both are one click.
+function storyOptionsBlock(doc) {
+  const options = buildStoryOptions(doc);
+  const rows = options.map((o) => `<div class="thread-row story-option-row">
+      <span class="thread-name">
+        ${o.entityId ? `<button type="button" class="entity-chip" data-open-entity="${esc(o.entityId)}">${esc(o.label)}</button>` : esc(o.label)}
+        <span class="dim small">— ${esc(o.detail)}</span>
+      </span>
+      <span class="thread-actions">
+        <button class="icon-btn" data-story-option-roll="${esc(o.oracleGroup)}>${esc(o.oracleTable)}" title="Roll ${esc(o.oracleGroup)} → ${esc(o.oracleTable)} for inspiration">🔮</button>
+        <button class="icon-btn" data-story-option-journal="${esc(o.id)}" title="Add to Journal">＋</button>
+      </span>
+    </div>`).join('');
+  return `<div class="threads">
+    <div class="threads-head"><h3>Story Options</h3></div>
+    ${options.length ? rows : '<div class="ws-placeholder">Nothing to suggest yet — mention someone in WHO, set a Location in WHERE, or open a Conflict/Thread/Foreshadowing entry, and options will show up here.</div>'}
+  </div>`;
 }
 
 // A GM's own free-text narrative note per Location — "Location Story"

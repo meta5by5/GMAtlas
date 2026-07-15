@@ -660,7 +660,11 @@ export function resolveDocumentTab(campaign, tabKey) {
     if (!ref) return null;
     const overrides = (campaign.documents && campaign.documents.refOverrides) || {};
     const title = (overrides[ref.file] && overrides[ref.file].title) || ref.title;
-    return { title, src: withPageAnchor(ref.file, page), kind: 'ref', page };
+    // ref.src (docs/adr/0039) is the actual fetch target — a local
+    // relative path, or a GitHub Release asset URL when the real file
+    // isn't present on this machine; ref.file stays the stable identity
+    // (refOverrides above is keyed by it) regardless of which one is used.
+    return { title, src: withPageAnchor(ref.src || ref.file, page), kind: 'ref', page };
   }
   const entry = getDocument(campaign, id);
   if (!entry) return null;

@@ -75,7 +75,7 @@ export async function scanMechanicsIndex(store) {
   for (const doc of docs) {
     let pdf;
     try {
-      pdf = await pdfjsLib.getDocument(doc.file).promise;
+      pdf = await pdfjsLib.getDocument(doc.src || doc.file).promise;
     } catch {
       continue; // an unreadable/missing PDF shouldn't abort the whole scan
     }

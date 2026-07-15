@@ -55,8 +55,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
+        # No `lfs: true` (docs/adr/0039-reference-library-release-hosting.md,
+        # 2026-07-14) — this checkout used to pull the full ~469MB of
+        # assets/docs/*.pdf via Git LFS on EVERY push, which is what burned
+        # the repo's monthly LFS bandwidth quota. Reference Library PDFs now
+        # live in a GitHub Release instead (releaseConfig.js); this checkout
+        # gets LFS pointer-stub text files at those paths, which
+        # scripts/build.js's isRealFile() check correctly treats as "not
+        # present," falling the manifest back to the Release URL. Do not
+        # re-add lfs: true without re-reading that ADR first.
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -71,6 +78,12 @@ jobs:
           cp manifest.webmanifest _site/manifest.webmanifest
           cp -r styles _site/styles
           cp -r assets _site/assets
+          # assets/docs/ is LFS pointer stubs on this runner (no lfs: true
+          # above, docs/adr/0039) and nothing in the app points at a local
+          # assets/docs/ path on the deployed site anymore (docsManifest.js's
+          # `src` field resolves to a GitHub Release URL instead) — dead
+          # weight, so drop it rather than publish stub text files.
+          rm -rf _site/assets/docs
           cp dist/app.bundle.js _site/app.bundle.js
           sed 's|\./dist/app\.bundle\.js|./app.bundle.js|' index.html > _site/index.html
           sed 's|\./dist/app\.bundle\.js|./app.bundle.js|' sw.js > _site/sw.js
@@ -105,19 +118,21 @@ jobs:
             echo "::error::$BUNDLE_URL returned $code (expected 200) — the app would show a black screen"
             exit 1
           fi
-          # LFS-tracked files (assets/docs/*.pdf) must be the real content, not
-          # a pointer file — checkout needs `lfs: true` for this to hold; a
-          # forgotten flag here served pointer text as "the PDF" once already.
-          PDF_URL="${URL%/}/assets/docs/Hostile%20setting.pdf"
-          if ! curl -sf "$PDF_URL" -o /tmp/live-sample.pdf; then
-            echo "::error::$PDF_URL did not download"
-            exit 1
+          # Reference Library PDFs are Release-hosted now (docs/adr/0039),
+          # not served from this deploy at all — spot-check one resolves to
+          # real content there instead of checking a local assets/docs/ path
+          # (which is deliberately NOT published anymore, see the assemble
+          # step above). Soft-fails (warning, not a build-breaking error)
+          # until the GitHub Release itself has actually been created and
+          # the PDFs uploaded — tighten to `exit 1` once that's confirmed
+          # done, so an incomplete migration can't block every deploy.
+          PDF_URL="https://github.com/meta5by5/GMAtlas/releases/download/reference-library-v1/Hostile%20setting.pdf"
+          if curl -sfL "$PDF_URL" -o /tmp/live-sample.pdf && head -c 4 /tmp/live-sample.pdf | grep -q '%PDF'; then
+            echo "Reference Library Release asset verified: $PDF_URL resolves to a real PDF."
+          else
+            echo "::warning::$PDF_URL did not resolve to a real PDF yet — expected until the GitHub Release is created and the PDFs are uploaded (see docs/adr/0039). Not failing the deploy for this."
           fi
-          if ! head -c 4 /tmp/live-sample.pdf | grep -q '%PDF'; then
-            echo "::error::$PDF_URL is not a real PDF (likely an unresolved Git LFS pointer — checkout needs lfs: true)"
-            exit 1
-          fi
-          echo "Deploy verified: $URL loads, app.bundle.js is reachable, and an LFS-tracked PDF resolves to real content (HTTP $code)."
+          echo "Deploy verified: $URL loads and app.bundle.js is reachable (HTTP $code)."
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

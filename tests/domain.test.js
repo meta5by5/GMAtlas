@@ -326,6 +326,20 @@ import {
   parseTextBlocks, parseInlineNodes, sanitizeExternalLinkUrl, sanitizeColorValue,
 } from '../src/domain/documents.js';
 import { titleFromFilename } from '../src/domain/titleCase.js';
+import { releaseAssetUrl, REFERENCE_LIBRARY_RELEASE_TAG } from '../src/data/releaseConfig.js';
+
+// --- docs/adr/0039: Reference Library Release hosting ----------------------
+test('releaseAssetUrl builds a GitHub Release download URL, URL-encoding filenames with spaces/parens, and defaults to REFERENCE_LIBRARY_RELEASE_TAG', () => {
+  assert.equal(
+    releaseAssetUrl('Hostile setting.pdf'),
+    `https://github.com/meta5by5/GMAtlas/releases/download/${REFERENCE_LIBRARY_RELEASE_TAG}/Hostile%20setting.pdf`
+  );
+  assert.equal(
+    releaseAssetUrl('Intergalactic Space Trader (IST) 01_PlanetEconomy.pdf'),
+    `https://github.com/meta5by5/GMAtlas/releases/download/${REFERENCE_LIBRARY_RELEASE_TAG}/Intergalactic%20Space%20Trader%20(IST)%2001_PlanetEconomy.pdf`
+  );
+  assert.equal(releaseAssetUrl('plain.pdf', 'v2'), 'https://github.com/meta5by5/GMAtlas/releases/download/v2/plain.pdf');
+});
 
 // --- lightweight rich text (ADR 0018) --------------------------------------
 test('parseTextBlocks: a plain single-line/multi-line paragraph stays one text block', () => {
@@ -5027,6 +5041,97 @@ test('advise() names whichever faction signal is actually driving the observatio
   const bare = advise(defaultCampaign());
   assert.equal(bare.hotFactionId, null);
   assert.equal(bare.hotFactionName, null);
+});
+
+// --- docs/adr/0039: Story Options — cumulative, WHO/WHERE/WHY-aware suggestions
+import { gatherSceneContext, buildStoryOptions } from '../src/domain/copilot.js';
+
+test('gatherSceneContext reads WHO/WHERE @mentions, WHERE-scoped factions/conflicts, and open Threads/Foreshadowing/World Flags — all empty/zeroed on a bare campaign', () => {
+  const bare = gatherSceneContext(defaultCampaign());
+  assert.deepEqual(bare.whoEntities, []);
+  assert.deepEqual(bare.whereLocations, []);
+  assert.deepEqual(bare.factionsHere, []);
+  assert.deepEqual(bare.conflictsHere, []);
+  assert.deepEqual(bare.openThreads, []);
+  assert.deepEqual(bare.foreshadowing, []);
+  assert.deepEqual(bare.worldFlags, []);
+  assert.equal(bare.activity, '');
+
+  let camp = defaultCampaign();
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Rust Cartel' }));
+  camp = updateEntity(camp, factionId, { agenda: 'Corner the water trade' });
+  let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Docking Bay' }));
+  camp = updateEntity(camp, factionId, { homeworldId: locId });
+  camp.context.who.summary = 'Talking to @[Rust Cartel]';
+  camp.context.where.summary = 'At the @[Docking Bay]';
+  camp.context.how.activity = 'negotiate';
+
+  const ctx = gatherSceneContext(camp);
+  assert.deepEqual(ctx.whoEntities.map((e) => e.id), [factionId]);
+  assert.deepEqual(ctx.whereLocations.map((l) => l.id), [locId]);
+  assert.deepEqual(ctx.factionsHere.map((f) => f.id), [factionId]);
+  assert.equal(ctx.activity, 'negotiate');
+});
+
+test('buildStoryOptions is genuinely cumulative — a faction agenda, a Conflict here, and an open Foreshadowing entry each contribute their OWN option in the same call, ranked by weight, with a real (data/tables.js-verified) oracle path on every entry', () => {
+  let camp = defaultCampaign();
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Rust Cartel' }));
+  let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Docking Bay' }));
+  camp = updateEntity(camp, factionId, { agenda: 'Corner the water trade', homeworldId: locId });
+  let conflictId; ({ campaign: camp, id: conflictId } = createEntity(camp, { type: 'conflict', name: 'Water Rights Dispute' }));
+  camp = updateEntity(camp, conflictId, { locationId: locId, causeGapHook: 'The Cartel poisoned the well themselves' });
+  camp = addForeshadowing(camp, 'A stranger asked about the old cistern', 'Reveals the Cartel\'s sabotage');
+  camp.context.where.summary = 'At the @[Docking Bay]';
+
+  const options = buildStoryOptions(camp);
+  const sources = options.map((o) => o.source);
+  assert.ok(sources.includes('faction-agenda'), 'faction agenda contributes its own option');
+  assert.ok(sources.includes('conflict'), 'the Conflict here contributes its own option');
+  assert.ok(sources.includes('foreshadowing'), 'the open Foreshadowing entry contributes its own option');
+  for (const o of options) {
+    assert.ok(SCENE_TABLES[o.oracleGroup], `oracleGroup "${o.oracleGroup}" is a real table group`);
+    assert.ok(SCENE_TABLES[o.oracleGroup][o.oracleTable], `oracleTable "${o.oracleTable}" is real within "${o.oracleGroup}"`);
+  }
+
+  // Negotiate boosts a present faction's fear/need angle above its agenda
+  // (docs/adr/0009's deferred idea, finally realized) — set fear/need,
+  // confirm the fear-need option outranks the agenda option once negotiating.
+  camp = updateEntity(camp, factionId, { fear: 'Losing the well to a rival', need: 'A quiet buyer' });
+  camp.context.how.activity = 'negotiate';
+  const negotiating = buildStoryOptions(camp);
+  const fearNeedIdx = negotiating.findIndex((o) => o.source === 'faction-fear-need');
+  const agendaIdx = negotiating.findIndex((o) => o.source === 'faction-agenda');
+  assert.ok(fearNeedIdx >= 0 && agendaIdx >= 0);
+  assert.ok(fearNeedIdx < agendaIdx, 'fear/need ranks above agenda while negotiating');
+});
+
+test('buildStoryOptions respects `limit` and is empty (not throwing) on a campaign with nothing to suggest', () => {
+  assert.deepEqual(buildStoryOptions(defaultCampaign()), []);
+
+  let camp = defaultCampaign();
+  let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Docking Bay' }));
+  for (let i = 0; i < 3; i++) {
+    let fid; ({ campaign: camp, id: fid } = createEntity(camp, { type: 'faction', name: `Faction ${i}` }));
+    camp = updateEntity(camp, fid, { agenda: `Agenda ${i}`, homeworldId: locId });
+  }
+  camp.context.where.summary = 'At the @[Docking Bay]';
+  assert.equal(buildStoryOptions(camp, { limit: 2 }).length, 2);
+});
+
+test('drawSuggestionLenses with no sceneContext is unaffected by this change (pure-random, exact prior behavior); with a sceneContext, a boosted lens (negotiation, while Activity is Negotiate) is drawn strictly more often across many seeds than without one', () => {
+  const withoutContext = drawSuggestionLenses(defaultCampaign(), { rng: makeRng(7) });
+  assert.equal(withoutContext.length, 4);
+  assert.equal(new Set(withoutContext.map((l) => l.id)).size, 4, 'no duplicate lens ids even under the hood\'s weighted-pool machinery');
+
+  const sceneContext = { activity: 'negotiate', conflictsHere: [], factionsHere: [] };
+  let boostedHits = 0, plainHits = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const boosted = drawSuggestionLenses(defaultCampaign(), { rng: makeRng(seed), sceneContext });
+    if (boosted.some((l) => l.id === 'negotiation')) boostedHits++;
+    const plain = drawSuggestionLenses(defaultCampaign(), { rng: makeRng(seed) });
+    if (plain.some((l) => l.id === 'negotiation')) plainHits++;
+  }
+  assert.ok(boostedHits > plainHits, `negotiation lens should be drawn more often when boosted (${boostedHits} vs ${plainHits} over 40 seeds)`);
 });
 
 // --- Living Faction Engine, Phase A: universal membership, conquest flips,

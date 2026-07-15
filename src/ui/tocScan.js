@@ -61,7 +61,7 @@ async function scanOutline(pdfjsLib, source) {
  *  resolved to whatever PDF.js's getDocument() can open directly (a file
  *  path or a data: URL alike). */
 function combinedScannableDocs(campaign) {
-  const refs = listReferenceDocuments(campaign).map((r) => ({ title: r.title, source: r.file }));
+  const refs = listReferenceDocuments(campaign).map((r) => ({ title: r.title, source: r.src || r.file }));
   const uploaded = ((campaign.documents && campaign.documents.library) || [])
     .filter((d) => d.kind === 'file' && d.dataUrl)
     .map((d) => ({ title: d.title || d.fileName, source: d.dataUrl }));

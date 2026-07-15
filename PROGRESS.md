@@ -14,6 +14,30 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-14 Reference Library → GitHub Releases (code side), WHY Story
+Options** (`docs/adr/0039-reference-library-release-hosting-and-story-
+options.md`): two direct requests landed together. **Part A**: diagnosed
+`deploy-pages.yml` checking out with `lfs: true` on every push (pulling
+~469MB of PDFs each run) as the actual cause of the reported 10GB LFS
+bandwidth exhaustion. New committed `referenceLibraryManifest.js` +
+`releaseConfig.js`; `scripts/build.js` now resolves each PDF to a local
+path (real bytes present, incl. LFS-pointer-stub detection) or a GitHub
+Release asset URL (`reference-library-v1`) otherwise — decided once per
+build, per machine, zero runtime fallback logic needed. Workflow no
+longer pulls LFS at all; verifies against the Release instead (soft-warns
+until the Release actually exists). No `gh` CLI/token available in this
+environment, so the actual Release creation/upload is a short manual
+walkthrough the user still needs to run. **Part B**: WHY gained
+`whyEntityPicker` (parity with WHO/WHERE, WHY previously had NO entity
+picker) and a new "Story Options" block — `copilot.js`'s new
+`gatherSceneContext`/`buildStoryOptions` combine WHO's in-scene cast,
+WHERE's present factions/Conflicts, and WHY's own Threads/Foreshadowing/
+World Flags into a genuinely cumulative ranked list (unlike `advise()`'s
+single first-match-wins pick), each option linking a real Oracle table to
+roll or a one-click Journal add. Finally realizes ADR 0009's
+long-deferred "surface a faction's fear/need when negotiating" idea,
+generalized to every in-scene faction. 6 new domain tests (439 total).
+
 **2026-07-14 WHERE/WHO polish batch, no-viable-action diagnostics, Bases
 of Influence cleanup, sticky Entity Editor header, Ctrl+arrow tab nav**
 (same-day follow-up to `docs/adr/0038`, several direct requests): (1)

@@ -8,6 +8,7 @@ import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { contextSummary } from '../domain/context.js';
 import { continueStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, updateSceneField } from '../domain/session.js';
+import { buildStoryOptions } from '../domain/copilot.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag } from '../domain/oracles.js';
 import { oracleLinkTagsFor } from '../data/entityFieldOracleLinks.js';
 import { addThread, advanceThread, removeThread, setThreadStatus, setThreadPriority } from '../domain/threads.js';
@@ -173,6 +174,7 @@ let docTagListOpen = false; // ephemeral — collapses the Documents drawer's ta
 let journalEditOpen = new Set(); // ephemeral — which journal entries are showing an editable mention-editor instead of their static rendered text
 let whereLocationTagFilter = null; // ephemeral — the Location tag currently selected in the WHERE view's listbox (null = no filter/candidate panel shown)
 let whoTagFilter = null; // ephemeral — same as whereLocationTagFilter, for the WHO view's NPC/Faction tag listbox
+let whyTagFilter = null; // ephemeral — same as whoTagFilter, for the WHY view's NPC/Faction/Conflict tag listbox (docs/adr/0039)
 let galleryFilter = ''; // ephemeral — Gallery drawer search box
 // Gallery's own "+ Upload" flow (as opposed to an entity's "+ Photo"): the
 // resize already happened (canvas work, ui/imageResize.js) by the time
@@ -1838,6 +1840,28 @@ function onClick(ev) {
     store.update((d) => addNote(d, formatAdventureSeed(generateAdventureSeed(d)), 'Adventure Seed'));
     return toast('Adventure seed generated');
   }
+  // WHY's Story Options (storyOptionsBlock, workspace/index.js, docs/adr/0039)
+  // — 🔮 rolls the option's linked Oracle table for real inspiration (the
+  // same rollOracle every other roll-and-log button in this app uses);
+  // ＋ Journal recomputes buildStoryOptions (deterministic given current
+  // campaign state, so re-finding the same option by id is safe) and drops
+  // its label+detail straight into the session log. Neither ever applies
+  // anything to the campaign beyond the roll/note itself (Article II).
+  const storyOptionRoll = hit('[data-story-option-roll]');
+  if (storyOptionRoll) {
+    const path = storyOptionRoll.dataset.storyOptionRoll.split('>');
+    let text = '';
+    store.update((d) => { const r = rollOracle(d, path); text = r.text; return r.campaign; });
+    return toast(text || 'Rolled');
+  }
+  const storyOptionJournal = hit('[data-story-option-journal]');
+  if (storyOptionJournal) {
+    const optionId = storyOptionJournal.dataset.storyOptionJournal;
+    const option = buildStoryOptions(store.get()).find((o) => o.id === optionId);
+    if (!option) return;
+    store.update((d) => addNote(d, `${option.label}: ${option.detail}`, 'Story Option'));
+    return toast('Added to Journal');
+  }
   if (hit('[data-new-campaign]')) return confirmNewCampaign();
   if (hit('[data-bind-file]')) return store.bindFile().then(() => toast('Save file bound')).catch(() => {});
   if (hit('[data-restore-backup]')) {
@@ -2031,13 +2055,17 @@ function onChange(ev) {
   if (whereTagSelect) { whereLocationTagFilter = whereTagSelect.value || null; return render(); }
   const whoTagSelect = t.closest('[data-who-tag-select]');
   if (whoTagSelect) { whoTagFilter = whoTagSelect.value || null; return render(); }
-  // WHERE/WHO's candidates listbox (candidateListbox, workspace/index.js) —
+  const whyTagSelect = t.closest('[data-why-tag-select]');
+  if (whyTagSelect) { whyTagFilter = whyTagSelect.value || null; return render(); }
+  // WHERE/WHO/WHY's candidates listbox (candidateListbox, workspace/index.js) —
   // picking an option inserts the @mention then resets to the placeholder,
   // same "pick, act, reset" pattern as data-where-faction-link.
   const insertWhereMentionSelect = t.closest('[data-insert-where-mention-select]');
   if (insertWhereMentionSelect) { const id = t.value; t.value = ''; if (id) insertContextMention('where', id); return; }
   const insertWhoMentionSelect = t.closest('[data-insert-who-mention-select]');
   if (insertWhoMentionSelect) { const id = t.value; t.value = ''; if (id) insertContextMention('who', id); return; }
+  const insertWhyMentionSelect = t.closest('[data-insert-why-mention-select]');
+  if (insertWhyMentionSelect) { const id = t.value; t.value = ''; if (id) insertContextMention('why', id); return; }
 
   // --- Planetfall Grid Battlemap (Phase 11, docs/adr/0023) ------------------
   const bmRename = t.closest('[data-battlemap-rename]');
@@ -4055,7 +4083,7 @@ function buildDrawerUi() {
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,
-    journalEditOpen, whereLocationTagFilter, whoTagFilter, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
+    journalEditOpen, whereLocationTagFilter, whoTagFilter, whyTagFilter, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
     contentPackFlags, hostileLocationsImporting,

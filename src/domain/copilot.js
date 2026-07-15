@@ -4,11 +4,12 @@
 // Testable in Node; swappable for an LLM-backed advisor later behind the same
 // signature. Phase 0 ships a competent heuristic seeded from the ChatGPT design.
 
-import { overlookedThreads } from './threads.js';
-import { listFlaggedRelationships } from './entities.js';
+import { overlookedThreads, listThreads } from './threads.js';
+import { listFlaggedRelationships, findMentions, listEntities } from './entities.js';
 import { factionsUnderPressure } from './factions.js';
-import { factionsWithGoalNearCompletion, isFactionRoundDue } from './factionTurnEngine.js';
+import { factionsWithGoalNearCompletion, isFactionRoundDue, getCurrentWhereLocations, factionsPresentAt } from './factionTurnEngine.js';
 import { expeditionsInDanger } from './expeditions.js';
+import { openForeshadowing } from './foreshadowing.js';
 
 export function advise(doc) {
   const c = (doc && doc.context && doc.context.what) || { threat: 0, mystery: 0, resources: 5, reputation: 5, stress: 5 };
@@ -156,4 +157,115 @@ export function advise(doc) {
   const flaggedRelationships = listFlaggedRelationships(doc).map((r) => `${r.entityName} —${r.type}→ ${r.toName}`);
 
   return { observation, consequence, opportunity, suggestedOracle, suggestedOraclePath, quickActions, overlooked, flaggedRelationships, hotFactionId, hotFactionName };
+}
+
+// --- Story Options (docs/adr/0039): a WHO×WHERE×WHY-aware suggestion layer,
+// distinct from advise() above. advise() is a single first-match-wins
+// priority chain over WHAT's own dials/threads — it never reads entity
+// data, Foreshadowing, or World Flags, and never combines signals.
+// buildStoryOptions below is genuinely CUMULATIVE: every signal currently
+// in play contributes its own option to the same ranked list, all in one
+// call, reusing existing per-tab queries rather than re-deriving them
+// (WHO/WHERE's own @mention-parsing and presence machinery, this session's
+// Location Story work's Conflicts-here query, Foreshadowing/Threads as
+// already exposed on WHY). Read-only — nothing here writes to the
+// campaign; rolling an option's linked oracle table or turning one into a
+// Journal note both go through the existing generic mechanisms
+// (session.js's rollOracle/addNote), triggered from the UI, never here. ---
+
+/** One pure snapshot of "what's actually in the scene right now," reusing
+ *  the exact same queries WHO/WHERE/WHY's own workspace blocks already use
+ *  (`getCurrentWhereLocations`, `factionsPresentAt`, the generic Threads/
+ *  Foreshadowing lists) rather than re-deriving any of them — WHO's own
+ *  in-scene NPCs/Factions are read the same way WHERE's current
+ *  location(s) already are: @mentions parsed out of the Focus field, not
+ *  the largely-vestigial `context.who.entityIds` (see ADR 0039 for why —
+ *  the WHO/WHERE redesign earlier this session already established
+ *  mention-parsing as the one source of truth for "who/where is in the
+ *  scene," this just extends the same convention to WHY). */
+export function gatherSceneContext(campaign) {
+  const whoText = (campaign.context && campaign.context.who && campaign.context.who.summary) || '';
+  const whoEntities = findMentions(campaign, whoText).filter((e) => e.type === 'npc' || e.type === 'faction');
+  const whereLocations = getCurrentWhereLocations(campaign);
+  const factionsHere = new Map();
+  for (const loc of whereLocations) for (const f of factionsPresentAt(campaign, loc.id)) factionsHere.set(f.id, f);
+  const whereIds = new Set(whereLocations.map((l) => l.id));
+  const conflictsHere = listEntities(campaign, ['conflict']).filter((c) => whereIds.has(c.locationId));
+  const openThreads = listThreads(campaign).filter((t) => !t.done && !t.kind);
+  const foreshadowing = openForeshadowing(campaign);
+  const worldFlags = (campaign.worldFlags || []).filter((f) => f.value !== 'confirmed' && f.value !== 'false');
+  const activity = (campaign.context && campaign.context.how && campaign.context.how.activity) || '';
+  const what = (campaign.context && campaign.context.what) || {};
+  return {
+    whoEntities, whereLocations, conflictsHere, openThreads, foreshadowing, worldFlags, activity,
+    factionsHere: Array.from(factionsHere.values()),
+    threat: what.threat || 0,
+    mystery: what.mystery || 0,
+    resources: what.resources == null ? 5 : what.resources,
+    reputation: what.reputation == null ? 5 : what.reputation,
+    stress: what.stress == null ? 5 : what.stress,
+  };
+}
+
+/** Turns gatherSceneContext's snapshot into a ranked list of concrete
+ *  story options — `{id, label, detail, source, entityId?, oracleGroup,
+ *  oracleTable}`. Every signal that's currently ACTUALLY present
+ *  contributes its own entry (this is the "cumulative" part: a scene with
+ *  an agenda-bearing faction present, an open Conflict here, AND an unpaid
+ *  Foreshadowing plant gets three distinct options in one call, not just
+ *  the single highest-priority one advise() would pick). Each option
+ *  names an Oracle table already used elsewhere in this app (Suggestion
+ *  Lenses/Faction Conflict/Scene generation all draw from the same
+ *  `data/tables.js` groups) so a GM can roll for inspiration on that
+ *  specific angle — the UI is responsible for actually rolling it
+ *  (session.js's existing `rollOracle`), never this function. Weighted,
+ *  not randomized: `activity === 'negotiate'` boosts a present faction's
+ *  fear/need angle to the top, realizing the idea named but not built in
+ *  docs/adr/0009 ("surface the active faction's fear/need as a suggested
+ *  angle when Activity is Negotiate") — generalized here to every in-scene
+ *  faction, not just one. */
+export function buildStoryOptions(campaign, { limit = 6 } = {}) {
+  const ctx = gatherSceneContext(campaign);
+  const negotiating = ctx.activity === 'negotiate';
+  const options = [];
+
+  for (const f of ctx.factionsHere) {
+    if (f.agenda) {
+      options.push({ id: `faction-agenda-${f.id}`, label: `${f.name || 'Unnamed faction'} — agenda`, detail: f.agenda, source: 'faction-agenda', entityId: f.id, weight: negotiating ? 9 : 5, oracleGroup: 'Factions', oracleTable: 'Relationship' });
+    }
+    const fearNeed = [f.fear, f.need].filter(Boolean).join(' / ');
+    if (fearNeed) {
+      options.push({ id: `faction-fearneed-${f.id}`, label: `${f.name || 'Unnamed faction'} — fear/need`, detail: fearNeed, source: 'faction-fear-need', entityId: f.id, weight: negotiating ? 10 : 4, oracleGroup: 'Factions', oracleTable: 'Relationship' });
+    }
+  }
+
+  for (const e of ctx.whoEntities) {
+    if (e.type === 'npc' && e.currentGoal) {
+      options.push({ id: `npc-goal-${e.id}`, label: `${e.name || 'Unnamed'} — current goal`, detail: e.currentGoal, source: 'npc-goal', entityId: e.id, weight: 6, oracleGroup: 'Characters', oracleTable: 'Goal' });
+    }
+  }
+
+  for (const c of ctx.conflictsHere) {
+    const gap = c.causeGapHook || (c.statedCause && c.rootCause ? `${c.statedCause} vs. ${c.rootCause}` : '');
+    options.push({ id: `conflict-${c.id}`, label: `${c.name || 'Unnamed conflict'} — the gap`, detail: gap || 'What people say is happening vs. what actually is.', source: 'conflict', entityId: c.id, weight: 7, oracleGroup: 'Faction Conflict', oracleTable: 'Starter Session Hook' });
+  }
+
+  for (const fs of ctx.foreshadowing) {
+    options.push({ id: `foreshadowing-${fs.id}`, label: 'Pay off a planted detail', detail: fs.text, source: 'foreshadowing', weight: 6, oracleGroup: 'Miscellaneous', oracleTable: 'Story Clue' });
+  }
+
+  for (const wf of ctx.worldFlags) {
+    options.push({ id: `worldflag-${wf.id}`, label: 'Surface a known/unknown fact', detail: wf.description, source: 'world-flag', weight: 5, oracleGroup: 'Plot Engine', oracleTable: 'Plot Reveals' });
+  }
+
+  for (const t of ctx.openThreads) {
+    if (t.segments > 0 && t.filled / t.segments >= 0.6) {
+      options.push({ id: `thread-${t.id}`, label: `“${t.name}” is under pressure`, detail: `${t.filled}/${t.segments} filled — consider a scene that pays it off or forces a cost.`, source: 'thread-pressure', weight: 8, oracleGroup: 'Miscellaneous', oracleTable: 'Pay the Price' });
+    }
+  }
+
+  return options
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, limit)
+    .map(({ weight, ...rest }) => rest);
 }

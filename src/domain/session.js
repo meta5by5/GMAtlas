@@ -70,13 +70,46 @@ function bumpFactionPacing(campaign) {
  *  Not deterministic-count in a way that matters narratively (3-4, same
  *  "not exhaustive" spirit as this app's other small random draws); the GM
  *  can also just re-open the picker for a different draw if none appeal. */
-export function drawSuggestionLenses(campaign, { rng = Math.random, count = 4 } = {}) {
-  const pool = [...SUGGESTION_LENSES];
+// Which lens ids read as more relevant to a given scene snapshot
+// (copilot.js's gatherSceneContext — passed in by the caller, not computed
+// here, so this module doesn't need to depend on copilot.js at all) —
+// realizes docs/adr/0009's named-but-never-built idea ("surface the active
+// faction's fear/need when Activity is Negotiate"), generalized: any
+// in-scene faction boosts trade/politics/economics too, any Conflict here
+// boosts violence/politics. A lookup, not a formula, same "data over
+// mechanism" posture LENS_ORACLE_CATEGORIES above already established.
+function boostedLensIdsFor(sceneContext) {
+  const ids = new Set();
+  if (sceneContext.activity === 'negotiate') { ids.add('negotiation'); ids.add('social-leverage'); }
+  if ((sceneContext.conflictsHere || []).length) { ids.add('violence'); ids.add('politics'); }
+  if ((sceneContext.factionsHere || []).length) { ids.add('trade'); ids.add('economics'); ids.add('politics'); }
+  return ids;
+}
+
+/** `sceneContext` (optional — gatherSceneContext(campaign)'s snapshot) is
+ *  purely additive: omitted (the existing WHAT-tab "What Happens Next?"
+ *  call site), the draw is exactly as pure-random as it always was. Given,
+ *  a boosted lens id (boostedLensIdsFor above) gets extra tickets in the
+ *  sampling pool instead of a flat one-each — still drawn without
+ *  replacement (a `seen` guard, needed now that a lens can appear more
+ *  than once in the pool; harmless/never triggered in the unweighted case,
+ *  where duplicates are structurally impossible). */
+export function drawSuggestionLenses(campaign, { rng = Math.random, count = 4, sceneContext = null } = {}) {
+  const boosted = sceneContext ? boostedLensIdsFor(sceneContext) : null;
+  const pool = [];
+  for (const lens of SUGGESTION_LENSES) {
+    const tickets = boosted && boosted.has(lens.id) ? 3 : 1;
+    for (let i = 0; i < tickets; i++) pool.push(lens);
+  }
   const drawn = [];
-  const n = Math.min(count, pool.length);
-  for (let i = 0; i < n; i++) {
+  const seen = new Set();
+  const n = Math.min(count, SUGGESTION_LENSES.length);
+  while (drawn.length < n && pool.length) {
     const idx = Math.floor(rng() * pool.length);
-    drawn.push(pool.splice(idx, 1)[0]);
+    const lens = pool.splice(idx, 1)[0];
+    if (seen.has(lens.id)) continue;
+    seen.add(lens.id);
+    drawn.push(lens);
   }
   return drawn;
 }
