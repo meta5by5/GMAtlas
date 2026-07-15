@@ -44,13 +44,19 @@ function cardWithHeaderRight(title, lead, headerRight, body) {
 
 // Suggestion Lens chip picker (docs/adr/0009-situation-engine-revisited.md,
 // Decision item 3) — "What Happens Next?" opens this instead of generating
-// immediately; ui.lensDraw is the fixed random draw from drawSuggestionLenses
-// (session.js, via shell.js), not recomputed on every render.
-function lensPickerHtml(ui) {
-  if (!ui || !ui.lensPickerOpen) return '';
-  const chips = (ui.lensDraw || []).map((l) => `<button class="chip" data-lens-pick="${esc(l.id)}" title="${l.kind === 'discovery' ? 'Discovery Lens' : 'Approach Lens'}">${esc(l.label)}</button>`).join('');
+// immediately; `draw` is the fixed random draw from drawSuggestionLenses
+// (session.js, via shell.js), not recomputed on every render. Generalized
+// (docs/adr/0039 Phase 2) to take `open`/`draw` as plain params instead of
+// always reading `ui.lensPickerOpen`/`ui.lensDraw` directly, so WHY's own
+// scene-context-weighted picker below can reuse the exact same rendering
+// with its own separate ephemeral state — picking a lens is the identical
+// action (suggestNextWithLens) either way, only which draw produced the
+// offered chips differs.
+function lensPickerHtml(open, draw, { intro = 'Pick a lens to steer what happens next, instead of generating blind:' } = {}) {
+  if (!open) return '';
+  const chips = (draw || []).map((l) => `<button class="chip" data-lens-pick="${esc(l.id)}" title="${l.kind === 'discovery' ? 'Discovery Lens' : 'Approach Lens'}">${esc(l.label)}</button>`).join('');
   return `<div class="lens-picker">
-    <p class="dim small">Pick a lens to steer what happens next, instead of generating blind:</p>
+    <p class="dim small">${esc(intro)}</p>
     <div class="lens-picker-chips">${chips}</div>
   </div>`;
 }
@@ -94,7 +100,7 @@ const VIEWS = {
         <button class="btn" data-what-next>What Happens Next?</button>
         <button class="btn ghost sm" data-continue-story title="Generate the next scene">▶ Scene</button>
       </div>
-      ${lensPickerHtml(ui)}
+      ${lensPickerHtml(ui.lensPickerOpen, ui.lensDraw)}
       <div class="shift-actions" aria-label="Shift story">
         ${WHAT_ACTIONS.map((a) => `<button class="chip" data-shift="${esc(a)}">⚡ ${esc(a)}</button>`).join('')}
       </div>
@@ -151,6 +157,7 @@ const VIEWS = {
       </div>
       ${whyEntityPicker(doc, ui)}
       ${storyOptionsBlock(doc)}
+      ${whyLensSuggestBlock(doc, ui)}
       ${threadsBlock(doc)}
       ${foreshadowingBlock(doc)}`);
   },
@@ -569,6 +576,24 @@ function storyOptionsBlock(doc) {
     <div class="threads-head"><h3>Story Options</h3></div>
     ${options.length ? rows : '<div class="ws-placeholder">Nothing to suggest yet — mention someone in WHO, set a Location in WHERE, or open a Conflict/Thread/Foreshadowing entry, and options will show up here.</div>'}
   </div>`;
+}
+
+// Suggestion Lens, weighted to the current scene (docs/adr/0039 Phase 2) —
+// a second entry point into the exact same lens-picker → suggestNextWithLens
+// flow WHAT's "What Happens Next?" already offers (session.js's
+// drawSuggestionLenses/suggestNextWithLens are completely unchanged by
+// this), just drawn with `sceneContext` (gatherSceneContext) so a Conflict/
+// faction/Negotiate-activity currently in play gives matching lenses (e.g.
+// negotiation, violence, politics) better odds of being offered — never a
+// GUARANTEE, still a random draw, just no longer context-blind. Separate
+// ephemeral state from WHAT's own ui.lensPickerOpen/lensDraw (shell.js) so
+// the two pickers never interfere with each other.
+function whyLensSuggestBlock(doc, ui) {
+  return `
+    <div class="workspace-mini-section">
+      <button class="chip" data-why-lens-suggest title="Draw lens chips weighted toward who/what is currently in scene">🎭 Suggest a Lens</button>
+      ${lensPickerHtml(ui.whyLensPickerOpen, ui.whyLensDraw, { intro: 'Weighted toward what’s currently in scene — pick a lens to steer what happens next:' })}
+    </div>`;
 }
 
 // A GM's own free-text narrative note per Location — "Location Story"

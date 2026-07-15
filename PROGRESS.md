@@ -14,6 +14,17 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-14 Story Options Phase 2: weighted lens draw wired to WHY**
+(same-day follow-up to `docs/adr/0039`): the `sceneContext`-weighted
+`drawSuggestionLenses` param built (and tested) alongside Story Options
+had no UI trigger — closed the gap with a new "🎭 Suggest a Lens" button
+on WHY, a second entry point into the same lens-picker → generate-scene
+flow WHAT's "What Happens Next?" already offers, just weighted toward
+who/what's currently in scene instead of pure-random. `lensPickerHtml`
+generalized to take explicit `(open, draw)` params so both buttons share
+one render function with separate ephemeral state; WHAT's own button and
+its pure-random draw are completely unchanged.
+
 **2026-07-14 Reference Library → GitHub Releases (code side), WHY Story
 Options** (`docs/adr/0039-reference-library-release-hosting-and-story-
 options.md`): two direct requests landed together. **Part A**: diagnosed

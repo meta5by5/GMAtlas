@@ -185,19 +185,33 @@ fetch target beyond reading a new field:
   same pass.** Deferred (Phase 2 below) — the direct complaint was
   specifically about WHY.
 
-## Phase 2/3 (named, not built this session)
+## Phase 2/3
 
+**Done, same-day follow-up**: `drawSuggestionLenses`'s `sceneContext` param
+is now wired to a real trigger — WHY gained its own "🎭 Suggest a Lens"
+button (`whyLensSuggestBlock`, workspace/index.js), a second entry point
+into the exact same lens-picker → `suggestNextWithLens` flow WHAT's
+"What Happens Next?" already offers, just drawn with
+`gatherSceneContext(campaign)` so a Conflict/faction/Negotiate-activity
+currently in play gets matching lenses better odds — never a guarantee,
+still a random draw, just no longer context-blind. `lensPickerHtml`
+(workspace/index.js) was generalized to take `(open, draw, {intro})` as
+plain params instead of always reading `ui.lensPickerOpen`/`ui.lensDraw`,
+so both WHAT's and WHY's pickers reuse identical rendering with separate
+ephemeral state (`whyLensPickerOpen`/`whyLensDraw`, shell.js) — picking a
+lens closes whichever one was open and always calls the same, completely
+unchanged `suggestNextWithLens`. WHAT's own "What Happens Next?" button
+is untouched — same pure-random draw as always.
+
+**Not built this session**:
 - Surface `oracles.usage` (already tracked, currently read by nothing) to
   further bias which oracle groups `buildStoryOptions` links to.
 - A WHAT-tab or Co-Pilot-panel condensed version of the same ranked
-  options.
+  Story Options list.
 - Track which suggested options a GM actually used (accept/dismiss),
   mirroring the Conflict-escalation-suggestion dismissible-prompt pattern
   from ADR 0036, instead of the list being purely re-computed/stateless
   every render.
-- Wire `drawSuggestionLenses`'s new `sceneContext` param to an actual UI
-  trigger (WHY's own lens draw, or upgrading WHAT's existing one) — built
-  and tested this session, not yet consumed by any button.
 
 ## Consequences
 

@@ -8,7 +8,7 @@ import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { contextSummary } from '../domain/context.js';
 import { continueStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, updateSceneField } from '../domain/session.js';
-import { buildStoryOptions } from '../domain/copilot.js';
+import { buildStoryOptions, gatherSceneContext } from '../domain/copilot.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag } from '../domain/oracles.js';
 import { oracleLinkTagsFor } from '../data/entityFieldOracleLinks.js';
 import { addThread, advanceThread, removeThread, setThreadStatus, setThreadPriority } from '../domain/threads.js';
@@ -280,6 +280,8 @@ let hostileLocationsImporting = false; // ephemeral — true while fetchHostileL
 let tocScanning = false; // ephemeral — true while scanAndGenerateToc()'s async PDF.js outline scan is in flight (docs/adr/0020)
 let lensPickerOpen = false; // ephemeral — "What Happens Next?"'s Suggestion Lens chip picker, open or not (docs/adr/0009)
 let lensDraw = []; // ephemeral — the current random draw of lens chips, fixed until re-opened (not redrawn on every unrelated re-render)
+let whyLensPickerOpen = false; // ephemeral — WHY's own "Suggest a Lens" picker (docs/adr/0039 Phase 2) — separate from lensPickerOpen/lensDraw above so the two never interfere
+let whyLensDraw = []; // ephemeral — WHY's scene-context-weighted lens draw, fixed until re-opened
 let catalogSearch = ''; // ephemeral — the catalog picker's own name/tag search
 let partyTrackerAddOpen = false; // ephemeral — the inline "+ Tracker" name/type creation form, open or not
 let partyTrackerDraftKind = 'meter'; // ephemeral — the creation form's in-progress type pick, so its size/difficulty sub-field can react before the tracker actually exists
@@ -604,10 +606,21 @@ function onClick(ev) {
     if (lensPickerOpen) lensDraw = drawSuggestionLenses(store.get());
     return render();
   }
+  // WHY's own "Suggest a Lens" (docs/adr/0039 Phase 2, whyLensSuggestBlock,
+  // workspace/index.js) — same picker mechanism as data-what-next above,
+  // just weighted via gatherSceneContext instead of pure-random; separate
+  // ephemeral state (whyLensPickerOpen/whyLensDraw) so the two pickers
+  // never collide.
+  if (hit('[data-why-lens-suggest]')) {
+    whyLensPickerOpen = !whyLensPickerOpen;
+    if (whyLensPickerOpen) whyLensDraw = drawSuggestionLenses(store.get(), { sceneContext: gatherSceneContext(store.get()) });
+    return render();
+  }
   const lensPick = hit('[data-lens-pick]');
   if (lensPick) {
     const lensId = lensPick.dataset.lensPick;
     lensPickerOpen = false;
+    whyLensPickerOpen = false;
     store.update((d) => suggestNextWithLens(d, lensId));
     return toast('Scene generated → Journal');
   }
@@ -4079,7 +4092,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw,
+    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,
