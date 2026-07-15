@@ -14,6 +14,54 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-15 Phase 12 roadmap (Story Dashboard) + doc rebaseline**
+(`docs/adr/0040-story-dashboard.md`): direct request for a genuinely
+interactive, narrative-building 5-W workspace — oracle suggestions and
+cumulative story options the GM steers live at the table, not just entity
+pickers and text fields. A full audit (grepping every `src/domain/*.js`
+export against `src/ui/**/*.js`) found the building blocks already exist,
+underused: `scenes.js`'s `recomposeSceneText` (a proven live field→
+narrative composer, scoped only to Scenes), `recap.js`'s
+`buildSessionRecap` (a proven multi-signal→prose assembler, one fixed
+shape), `activities.js`'s `suggestRulesLens` (the only other "selection→
+oracle suggestion" hook besides this session's own WHY-only Story
+Options), 8 of `context.js`'s 17 `SHIFTS` reducers reachable from no UI
+control at all, and five confirmed-dead exports (`getFactionDossier`,
+`relationshipCount`, `toggleEntityStatblockFieldAttribute`,
+`setEntityTags`, `oraclePathsWithAnyTag`). Asked directly whether to
+strengthen the existing always-visible strip/Co-Pilot instead of merging
+tabs (lower-risk, preserves Article X) or design a real merged dashboard
+despite that reversal — **confirmed: a real merged dashboard**, recorded
+as a deliberate, ADR-scoped exception (additive — the five focused
+W-tabs are untouched). ADR 0040 phases the result: 12a a new `dashboard`
+view composing already-built pieces; 12b a `composeNarrativeDraft()`
+generalizing the two proven composer precedents into a live, editable,
+Copy/Send-to-Journal narrative preview; 12c oracle-tailored dropdowns
+beyond WHY; 12d closing the SHIFTS reachability gap; 12e dead-export
+housekeeping. **Roadmap only — none of 12a-12e built this session.**
+
+Alongside the roadmap, on direct request: `DESIGN-NEW-FUNCTIONALITY.md`
+and `CLAUDE.md` archived verbatim to `docs/archive/` (`-2026-07-15.md`
+suffix) and rebaselined. `DESIGN-NEW-FUNCTIONALITY.md`'s ~250-line
+phase-by-phase "Already built" section — which had drifted into
+duplicating both this file's own Status Summary and the individual ADRs
+— collapsed to a short pointer; its "Proposed next" section now leads
+with Phase 12 in full. `CLAUDE.md` was NOT rewritten wholesale (too
+much of it — the 5 non-negotiable architectural rules, every "Known
+non-issue," the style/contribution notes — is load-bearing correctness
+guidance for future sessions, not historical narrative to trim); only 5
+targeted fixes landed: a stale "Phase 0-6, Phase 7 in progress" status
+line (badly out of date — actually Phases 0-11), a directory-map update
+for this session's new files and the Reference Library's LFS→Release
+change, a Playwright-availability note actually confirmed absent (not
+just "may not be" — direct `curl`/GitHub-API checks are the workable
+substitute for external-resource verification, per this session's
+Release migration work), a stale cross-reference to
+`DESIGN-NEW-FUNCTIONALITY.md`'s now-archived attribute-field history,
+and a new one-paragraph note recording the Article X exception for the
+`dashboard` view. Diffed against the archived original to confirm: zero
+changes to any architectural rule or Known non-issue.
+
 **2026-07-15 Reference Library Release migration complete, with a real
 gotcha caught by actually verifying** (`docs/adr/0039`): the
 `reference-library-v1` GitHub Release now has all 29 PDFs uploaded. Live
