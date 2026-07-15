@@ -204,6 +204,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .copilot-card h3 { margin: 0 0 var(--sp-1); font-size: 0.72rem; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; }
 .copilot-card p { margin: 0; font-size: 0.85rem; }
+/* Condensed Story Options card (docs/adr/0039 Phase 2) — several stacked
+   suggestions inside one .copilot-card, each with its own roll/journal
+   chips right under it. */
+.copilot-story-option { margin-top: var(--sp-2); }
+.copilot-story-option:first-child { margin-top: 0; }
+.copilot-story-option p { margin-bottom: 0.25rem; }
 
 /* Cast's "Generate…" select (2026-07-06: Cast is now a real drawer, so this
    is the one case of a drawer-specific head control — see shell.js's

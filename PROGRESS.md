@@ -14,6 +14,14 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-14 Story Options Phase 2: condensed card in the Co-Pilot panel**
+(same-day follow-up to `docs/adr/0039`): the always-visible Co-Pilot
+`<aside>` (not tab-scoped) now shows the top 3 `buildStoryOptions()`
+results directly, so a GM working any tab sees the cumulative WHO/WHERE/
+WHY suggestion without switching to WHY. Reuses WHY's own roll/journal
+click attributes verbatim — no new shell.js wiring needed, just a new
+render function and a few lines of CSS.
+
 **2026-07-14 Story Options Phase 2: oracles.usage tie-break** (same-day
 follow-up to `docs/adr/0039`): `buildStoryOptions` now reads
 `campaign.oracles.usage` (already tracked on every real roll, previously

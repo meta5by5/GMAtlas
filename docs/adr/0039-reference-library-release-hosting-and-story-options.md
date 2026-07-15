@@ -213,9 +213,17 @@ one whose `oracleGroup` the GM rolls from more often ranked first. Never
 outranks a higher-weighted option — Negotiate's fear/need-over-agenda
 boost is completely unaffected by usage either way.
 
+The Co-Pilot panel (`copilotPanel.js`, an always-visible `<aside>`, not
+tab-scoped) gained a condensed "Story Options" card — the top 3 of the
+same `buildStoryOptions()` list WHY shows in full, so a GM working any
+tab sees the cumulative suggestion without switching to WHY. Reuses WHY's
+own `data-story-option-roll`/`-journal` attributes verbatim — shell.js's
+handlers already recompute `buildStoryOptions` and look an option up by
+id, so they don't care which DOM location triggered them; zero new
+wiring needed for this card, only a new render function
+(`storyOptionsCard`) and ~5 lines of CSS.
+
 **Not built this session**:
-- A WHAT-tab or Co-Pilot-panel condensed version of the same ranked
-  Story Options list.
 - Track which suggested options a GM actually used (accept/dismiss),
   mirroring the Conflict-escalation-suggestion dismissible-prompt pattern
   from ADR 0036, instead of the list being purely re-computed/stateless
