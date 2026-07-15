@@ -14,6 +14,19 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-15 Reference Library Release migration complete, with a real
+gotcha caught by actually verifying** (`docs/adr/0039`): the
+`reference-library-v1` GitHub Release now has all 29 PDFs uploaded. Live
+verification (not just trusting the plan) caught that GitHub sanitizes
+an uploaded release asset's filename — spaces/parens collapse to `.`
+(`"Hostile setting.pdf"` → `Hostile.setting.pdf`) — which the original
+`releaseAsset` catalog values didn't account for; the very first spot
+check 404'd. Confirmed via the real `assets[].name`/`size` values from
+GitHub's API (sizes matched byte-for-byte — same content, sanitized name
+only), fixed the 5 affected `referenceLibraryManifest.js` entries,
+re-verified all 29 URLs resolve to real PDF content. `deploy-pages.yml`'s
+verification step is back to a hard failure.
+
 **2026-07-14 Story Options Phase 2: accept/dismiss tracking** (same-day
 follow-up to `docs/adr/0039` — closes out the Phase 2 roadmap): a new
 ephemeral `dismissedStoryOptionIds` (shell.js, mirrors ADR 0036's

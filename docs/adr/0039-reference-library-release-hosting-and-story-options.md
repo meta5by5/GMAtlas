@@ -84,20 +84,30 @@ fetch target beyond reading a new field:
   push. A storage-reclaiming history rewrite is a separate, genuinely
   destructive step, not recommended here, and not done.
 
-### What still needs a human (I have no `gh` CLI or token here)
+### Migration status: done (2026-07-15)
 
-1. Create the release: `gh release create reference-library-v1 --title
-   "Reference Library v1" --notes "PDF rulebooks hosted here instead of
-   Git LFS — see docs/adr/0039."`
-2. Upload all 29 PDFs: `gh release upload reference-library-v1
-   assets/docs/*.pdf` (or the same via the web UI at
-   `https://github.com/meta5by5/GMAtlas/releases/new` for anyone without
-   `gh` set up).
-3. Confirm one resolves: `curl -sfL "https://github.com/meta5by5/GMAtlas/
-   releases/download/reference-library-v1/Hostile%20setting.pdf" | head -c4`
-   should print `%PDF`.
-4. Tell me it's live so the deploy workflow's soft warning can be
-   tightened back to a hard failure.
+The Release was created and all 29 PDFs uploaded via the web UI (`https://
+github.com/meta5by5/GMAtlas/releases/new`, tag `reference-library-v1`).
+One real surprise, caught by actually verifying every asset URL rather
+than trusting the plan: **GitHub sanitizes an uploaded release asset's
+filename** — whitespace and characters like parentheses collapse to a
+single `.` (`"Hostile setting.pdf"` → `Hostile.setting.pdf`,
+`"Intergalactic Space Trader (IST) 01_PlanetEconomy.pdf"` →
+`Intergalactic.Space.Trader.IST.01_PlanetEconomy.pdf`), which my original
+`releaseAsset` values (naively "the local filename, URL-encoded") didn't
+account for — the very first live check (`Hostile%20setting.pdf`) 404'd
+because of this. Found by comparing `GET /repos/meta5by5/GMAtlas/
+releases/tags/reference-library-v1`'s real `assets[].name` values against
+the catalog, confirmed the 5 affected files' `size` fields matched
+byte-for-byte (same content, sanitized name only), then corrected
+`referenceLibraryManifest.js`'s `releaseAsset` field for exactly those 5
+entries — no code/algorithm change needed, since `releaseAsset` was
+already designed as plain data, just wrong data for 5 rows. All 29 now
+verified resolving (`HTTP 200`, real `%PDF` content, via a HEAD-request
+sweep — a byte-range request confirmed actual PDF bytes on one to rule
+out a disguised HTML error page). The deploy workflow's verification step
+is back to a hard failure (using the corrected `Hostile.setting.pdf`
+URL), same as the pre-ADR-0039 local-PDF check used to be.
 
 ## Decision — Part B: Story Options (WHY tab)
 

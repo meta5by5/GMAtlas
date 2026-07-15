@@ -122,16 +122,23 @@ jobs:
           # not served from this deploy at all — spot-check one resolves to
           # real content there instead of checking a local assets/docs/ path
           # (which is deliberately NOT published anymore, see the assemble
-          # step above). Soft-fails (warning, not a build-breaking error)
-          # until the GitHub Release itself has actually been created and
-          # the PDFs uploaded — tighten to `exit 1` once that's confirmed
-          # done, so an incomplete migration can't block every deploy.
-          PDF_URL="https://github.com/meta5by5/GMAtlas/releases/download/reference-library-v1/Hostile%20setting.pdf"
-          if curl -sfL "$PDF_URL" -o /tmp/live-sample.pdf && head -c 4 /tmp/live-sample.pdf | grep -q '%PDF'; then
-            echo "Reference Library Release asset verified: $PDF_URL resolves to a real PDF."
-          else
-            echo "::warning::$PDF_URL did not resolve to a real PDF yet — expected until the GitHub Release is created and the PDFs are uploaded (see docs/adr/0039). Not failing the deploy for this."
+          # step above). The Release is confirmed live (2026-07-15) — a hard
+          # failure again, same as the pre-ADR-0039 local-PDF check used to
+          # be. NOTE: GitHub sanitizes an uploaded release asset's filename
+          # (spaces/parens collapse to `.` — verified against the real
+          # upload, see referenceLibraryManifest.js's own comment) — this
+          # URL uses the asset's ACTUAL name, not the original local
+          # filename naively URL-encoded.
+          PDF_URL="https://github.com/meta5by5/GMAtlas/releases/download/reference-library-v1/Hostile.setting.pdf"
+          if ! curl -sfL "$PDF_URL" -o /tmp/live-sample.pdf; then
+            echo "::error::$PDF_URL did not download"
+            exit 1
           fi
+          if ! head -c 4 /tmp/live-sample.pdf | grep -q '%PDF'; then
+            echo "::error::$PDF_URL is not a real PDF"
+            exit 1
+          fi
+          echo "Reference Library Release asset verified: $PDF_URL resolves to a real PDF."
           echo "Deploy verified: $URL loads and app.bundle.js is reachable (HTTP $code)."
     environment:
       name: github-pages
