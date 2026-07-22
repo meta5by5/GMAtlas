@@ -1,3 +1,8 @@
+> ARCHIVED 2026-07-21. Superseded by `docs/adr/0036-faction-conflict.md`
+> — the decisions this plan drove shipped as that ADR. Retained for
+> history; its community-research citations survive independently in
+> `docs/design/RESEARCH-AND-DECISIONS.md`.
+
 # Faction Conflict — integration plan (validated + simplified)
 
 > Source spec: `docs/design/FACTION-CONFLICT.md`. This revision validates

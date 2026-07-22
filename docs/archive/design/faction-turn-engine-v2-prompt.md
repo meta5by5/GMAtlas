@@ -1,3 +1,9 @@
+> ARCHIVED 2026-07-21. Superseded by `docs/adr/0035-faction-engine-
+> pacing-missions-turn-ui.md` (the pacing/missions/turn-UI work this
+> prompt drove shipped as that ADR) and, for its still-open per-decision-
+> dropdown idea, carried forward into `docs/design/living-faction-engine-
+> build-prompt.md` Phase 3. Retained for history; not current.
+
 # Faction Turn Engine — clean processing UI, a build prompt
 
 > **How to use this document.** This is a self-contained prompt for a
