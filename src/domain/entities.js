@@ -245,6 +245,16 @@ export function computeFactionMaxHp(e) {
 // both: a Location can carry a UWP alongside or instead of an ADR-0013/
 // ADR-0025 developmentLevel/biome — the UWP fields are reference/
 // descriptive, not another Trade price bias.
+// Sector + Object Type (docs/adr/0041 Phase 13a): the two extra pieces the
+// Location Details title needs — `[immediate location] at/on the
+// [objectType] in the [starSystem] [sector]` — alongside the already-
+// existing `starSystem`/`zone`/`bases`. `objectType` classifies what kind
+// of body/structure the location itself IS (planet, station, derelict,
+// ...) — a Location is never the star itself, only a system object or
+// something finer inside one (a facility/building/street), per direct
+// design constraint. Both blank by default, same lazy-set-on-touch shape
+// as every other World Profile field here.
+export const LOCATION_OBJECT_TYPES = ['Planet', 'Moon', 'Station', 'Derelict', 'Comet', 'Asteroid', 'Ship', 'Colony', 'Facility', 'Other'];
 function ensureWorldProfileFields(e) {
   if (e.type !== 'location') return;
   if (e.hex === undefined) e.hex = '';
@@ -261,8 +271,23 @@ function ensureWorldProfileFields(e) {
   if (!Array.isArray(e.tradeCodes)) e.tradeCodes = [];
   if (e.gasGiant === undefined) e.gasGiant = false;
   if (e.starSystem === undefined) e.starSystem = '';
+  if (e.sector === undefined) e.sector = '';
+  if (e.objectType === undefined) e.objectType = '';
 }
 
+// Sights/Smells/Sounds (docs/adr/0041 Phase 13a) — oracle-populated scene
+// flavor text (Location Themes > Sight/Smell/Sound, session.js's
+// rollLocationSensoryField), distinct from `locationStory` below (a GM's
+// own free-text narrative about faction dynamics, not sensory detail).
+// `sensorySource` is a side-channel (mirrors oracles.overrides' own
+// "layer on top of the base data" posture) recording which oracle
+// table+index each field's CURRENT value came from, if any — so an edit
+// (session.js's editLocationSensoryField) can write back through
+// oracles.overrides ("remembered" per docs/adr/0041's scoped-down
+// learning decision) instead of only ever overwriting this one field.
+// null per-field until a roll actually sources it; typing a value
+// directly (never rolled) leaves it null, so a hand-typed sight/smell/
+// sound is never mistaken for something a table roll should "remember."
 function ensureLocationFields(e) {
   if (e.type !== 'location') return;
   if (e.developmentLevel === undefined) e.developmentLevel = '';
@@ -274,8 +299,21 @@ function ensureLocationFields(e) {
   // the flow of "what's happening at the current location," not while
   // browsing Cast.
   if (e.locationStory === undefined) e.locationStory = '';
+  if (e.sights === undefined) e.sights = '';
+  if (e.smells === undefined) e.smells = '';
+  if (e.sounds === undefined) e.sounds = '';
+  if (!e.sensorySource || typeof e.sensorySource !== 'object') e.sensorySource = { sights: null, smells: null, sounds: null };
   ensureWorldProfileFields(e);
 }
+
+/** Oracle table path for each of Location's sensory fields — session.js's
+ *  rollLocationSensoryField/editLocationSensoryField read this to know
+ *  which table a field rolls from / writes an edit back to. */
+export const LOCATION_SENSORY_ORACLE_PATH = {
+  sights: ['Location Themes', 'Sight'],
+  smells: ['Location Themes', 'Smell'],
+  sounds: ['Location Themes', 'Sound'],
+};
 
 // NPC "current goal" (docs/design/scene-story-integration-plan.md,
 // scoped down from the Scene/Story spec's `npc_scene_goals`): what this

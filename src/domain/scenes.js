@@ -4,6 +4,8 @@
 
 import { getTable, pick } from './oracles.js';
 
+function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
+
 function safePick(tables, rng, ...path) {
   const t = getTable(tables, ...path);
   return Array.isArray(t) && t.length ? pick(t, rng) : null;
@@ -70,6 +72,16 @@ export function generateScene(campaign, tables, rng = Math.random, lensCategorie
     decisionPoint: 'Weigh immediate safety, mission progress, and leverage over whoever is behind this.',
     consequence: consequence || 'Pay the price — something is lost or complicated.',
     situationLine: what.situation ? what.situation.split('\n')[0] : '',
+    // Scene-scoped NPC state (docs/adr/0041 Phase 13b) — WHO's per-NPC
+    // Disposition/Motivation/Threat Rank/Challenges/Opportunities, keyed
+    // by entity id; and the GM-curated Bystanders list (Protagonists/
+    // Antagonists are derived live from WHO's @mentions + the #character
+    // tag, not stored here — see getNpcSceneState's own comment).
+    // Deliberately lives on the scene object, not a permanent entity
+    // mutation or a new top-level campaign array — "specific to this
+    // situation," same reasoning as the split Latest Scene fields above.
+    npcStates: {},
+    bystanderIds: [],
   };
   scene.text = recomposeSceneText(scene);
   return scene;
@@ -144,4 +156,74 @@ export function generateWorldSeed(campaign, tables, rng = Math.random) {
     `Dominant Faction: ${p('Factions', 'Faction Type')}`,
     `Planetside Peril: ${p('Planets', 'Planetside Peril')}`,
   ].filter((l) => !/: null$/.test(l)).join('\n');
+}
+
+// --- Scene-scoped NPC state (docs/adr/0041 Phase 13b) ----------------------
+// A scene's own npcStates/bystanderIds, added above generateScene(). Every
+// mutator here is defensive about older scenes (created before this
+// shipped) missing either field entirely — same "derive on read, no
+// migration needed" posture every other lazy-backfilled field in this app
+// already uses.
+
+/** Oracle table path for each of a scene NPC's rollable fields —
+ *  session.js's rollNpcSceneField/editNpcSceneField read this to know
+ *  which table a field rolls from / writes an edit back to. `currentGoal`
+ *  is deliberately NOT here — it's the already-existing, permanent
+ *  `npc.currentGoal` entity field (entities.js), reused as-is rather than
+ *  reinvented as scene-scoped state. */
+export const NPC_SCENE_FIELD_ORACLE_PATH = {
+  disposition: ['Characters', 'Disposition'],
+  motivation: ['Characters', 'Want'],
+  threatRank: ['Characters', 'Threat Rank'],
+  challenges: ['Characters', 'Complication'],
+  opportunities: ['Characters', 'Opportunity'],
+};
+
+function emptySceneNpcField() { return { value: '', sourcePath: null, sourceIndex: null }; }
+
+function defaultNpcSceneState() {
+  const s = {};
+  for (const field of Object.keys(NPC_SCENE_FIELD_ORACLE_PATH)) s[field] = emptySceneNpcField();
+  return s;
+}
+
+/** Read-only: an NPC's current scene state, or the all-blank default shape
+ *  if they have none yet — never mutates `scene`. UI rendering should
+ *  always go through this rather than reading `scene.npcStates[id]`
+ *  directly, so a not-yet-touched NPC still renders blank fields instead
+ *  of throwing. */
+export function getNpcSceneState(scene, npcId) {
+  return (scene.npcStates && scene.npcStates[npcId]) || defaultNpcSceneState();
+}
+
+/** Mutating: ensures `scene.npcStates[npcId]` exists and returns it —
+ *  session.js's roll/edit functions use this (never the read-only getter
+ *  above) since they need a real object to write into. Exported so
+ *  session.js doesn't have to duplicate the default-shape/backfill logic. */
+export function ensureNpcSceneState(scene, npcId) {
+  if (!scene.npcStates || typeof scene.npcStates !== 'object') scene.npcStates = {};
+  if (!scene.npcStates[npcId]) scene.npcStates[npcId] = defaultNpcSceneState();
+  return scene.npcStates[npcId];
+}
+
+/** Bystanders (docs/adr/0041 Phase 13b) — the one NPC group that's GM-
+ *  curated rather than derived from WHO's @mentions + the #character tag
+ *  (there's no existing "who's physically nearby but unmentioned" query
+ *  safe to auto-derive this from). Plain id list, deduped; add is a no-op
+ *  if already present. */
+export function addSceneBystander(campaign, sceneId, npcId) {
+  const next = clone(campaign);
+  const scene = (next.scenes || []).find((s) => s.id === sceneId);
+  if (!scene || !npcId) return next;
+  if (!Array.isArray(scene.bystanderIds)) scene.bystanderIds = [];
+  if (!scene.bystanderIds.includes(npcId)) scene.bystanderIds.push(npcId);
+  return next;
+}
+
+export function removeSceneBystander(campaign, sceneId, npcId) {
+  const next = clone(campaign);
+  const scene = (next.scenes || []).find((s) => s.id === sceneId);
+  if (!scene || !Array.isArray(scene.bystanderIds)) return next;
+  scene.bystanderIds = scene.bystanderIds.filter((id) => id !== npcId);
+  return next;
 }

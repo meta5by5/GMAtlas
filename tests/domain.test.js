@@ -5056,6 +5056,8 @@ test('gatherSceneContext reads WHO/WHERE @mentions, WHERE-scoped factions/confli
   assert.deepEqual(bare.foreshadowing, []);
   assert.deepEqual(bare.worldFlags, []);
   assert.equal(bare.activity, '');
+  assert.equal(bare.whoSummary, '');
+  assert.equal(bare.whereSummary, '');
 
   let camp = defaultCampaign();
   let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Rust Cartel' }));
@@ -5071,6 +5073,8 @@ test('gatherSceneContext reads WHO/WHERE @mentions, WHERE-scoped factions/confli
   assert.deepEqual(ctx.whereLocations.map((l) => l.id), [locId]);
   assert.deepEqual(ctx.factionsHere.map((f) => f.id), [factionId]);
   assert.equal(ctx.activity, 'negotiate');
+  assert.equal(ctx.whoSummary, 'Talking to @[Rust Cartel]');
+  assert.equal(ctx.whereSummary, 'At the @[Docking Bay]');
 });
 
 test('buildStoryOptions is genuinely cumulative — a faction agenda, a Conflict here, and an open Foreshadowing entry each contribute their OWN option in the same call, ranked by weight, with a real (data/tables.js-verified) oracle path on every entry', () => {
@@ -5174,6 +5178,118 @@ test('composeNarrativeDraft (docs/adr/0040 Phase 12b) is empty on a bare campaig
   // An unselected/unknown option id contributes nothing.
   const unselected = composeNarrativeDraft(camp, { selectedOptionIds: ['not-a-real-id'] });
   assert.equal(unselected, bare);
+});
+
+test('composeNarrativeDraft (docs/adr/0040 Phase 12f fix) uses WHO/WHERE\'s raw Focus text verbatim, not just the @mentions parsed out of it — free prose the GM actually typed must reach the draft, not just entity names', () => {
+  let camp = defaultCampaign();
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Rust Cartel' }));
+  camp.context.who.summary = 'Talking to @[Rust Cartel] about the missing shipment, tense and evasive';
+  camp.context.where.summary = 'A cramped cargo bay reeking of coolant, crates stacked to the ceiling';
+
+  const draft = composeNarrativeDraft(camp);
+  assert.match(draft, /about the missing shipment, tense and evasive/, 'WHO Focus prose beyond the @mention itself reaches the draft');
+  assert.match(draft, /A cramped cargo bay reeking of coolant, crates stacked to the ceiling/, 'WHERE Focus prose reaches the draft verbatim, not a synthetic "the scene is set at" sentence');
+  assert.match(draft, /@\[Rust Cartel\]/, 'the @mention inside the Focus text is still present');
+});
+
+// --- docs/adr/0041 Phase 13a/13b: Location Details + scene-scoped NPC state ---
+import { getNpcSceneState, addSceneBystander, removeSceneBystander, NPC_SCENE_FIELD_ORACLE_PATH } from '../src/domain/scenes.js';
+import { rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField } from '../src/domain/session.js';
+
+test('a location entity defaults sector/objectType (World Profile) and sights/smells/sounds + sensorySource (all null) — nothing required to create one', () => {
+  let camp = defaultCampaign();
+  let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Docking Bay' }));
+  const loc = getEntity(camp, locId);
+  assert.equal(loc.sector, '');
+  assert.equal(loc.objectType, '');
+  assert.equal(loc.sights, '');
+  assert.equal(loc.smells, '');
+  assert.equal(loc.sounds, '');
+  assert.deepEqual(loc.sensorySource, { sights: null, smells: null, sounds: null });
+});
+
+test('generateScene seeds npcStates:{} and bystanderIds:[] on every new scene; getNpcSceneState returns an all-blank default shape for an NPC with no state yet', () => {
+  const camp = defaultCampaign();
+  const tables = tablesWithOverrides(camp.oracles?.overrides, camp.settings?.genrePack);
+  const scene = generateScene(camp, tables, makeRng(1));
+  assert.deepEqual(scene.npcStates, {});
+  assert.deepEqual(scene.bystanderIds, []);
+
+  const blank = getNpcSceneState(scene, 'npc_unknown');
+  for (const field of Object.keys(NPC_SCENE_FIELD_ORACLE_PATH)) {
+    assert.deepEqual(blank[field], { value: '', sourcePath: null, sourceIndex: null }, `${field} defaults blank`);
+  }
+});
+
+test('addSceneBystander/removeSceneBystander: adds deduped, removes just the one, no-ops on a missing scene', () => {
+  let camp = defaultCampaign();
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Dock Worker' }));
+  const tables = tablesWithOverrides(camp.oracles?.overrides, camp.settings?.genrePack);
+  const scene = generateScene(camp, tables, makeRng(2));
+  camp.scenes = [scene];
+
+  camp = addSceneBystander(camp, scene.id, npcId);
+  camp = addSceneBystander(camp, scene.id, npcId); // dedupe
+  assert.deepEqual(camp.scenes[0].bystanderIds, [npcId]);
+
+  camp = removeSceneBystander(camp, scene.id, npcId);
+  assert.deepEqual(camp.scenes[0].bystanderIds, []);
+
+  const unchanged = addSceneBystander(camp, 'not-a-real-scene', npcId);
+  assert.deepEqual(unchanged.scenes[0].bystanderIds, [], 'no-op on an unknown scene id');
+});
+
+test('rollNpcSceneField picks a real entry from the mapped oracle table and records its source; editNpcSceneField writes an edit back through oracles.overrides ONLY when the field was actually rolled, never for a hand-typed value', () => {
+  let camp = defaultCampaign();
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Reyes' }));
+  const tables = tablesWithOverrides(camp.oracles?.overrides, camp.settings?.genrePack);
+  const scene = generateScene(camp, tables, makeRng(3));
+  camp.scenes = [scene];
+
+  camp = rollNpcSceneField(camp, scene.id, npcId, 'disposition', { rng: makeRng(5) });
+  const rolled = getNpcSceneState(camp.scenes[0], npcId).disposition;
+  assert.ok(SCENE_TABLES.Characters.Disposition.includes(rolled.value), 'rolled value is a real table entry');
+  assert.deepEqual(rolled.sourcePath, ['Characters', 'Disposition']);
+  assert.equal(typeof rolled.sourceIndex, 'number');
+
+  // Editing a ROLLED field writes back to that exact oracle entry —
+  // "remembered and applied to subsequent suggestions."
+  camp = editNpcSceneField(camp, scene.id, npcId, 'disposition', 'wary but willing to talk');
+  assert.equal(getNpcSceneState(camp.scenes[0], npcId).disposition.value, 'wary but willing to talk');
+  const entries = currentTableEntries(camp, ['Characters', 'Disposition']);
+  assert.equal(entries[rolled.sourceIndex], 'wary but willing to talk', 'the SAME table entry now reads the edited phrasing');
+
+  // A field edited WITHOUT ever being rolled has no source — no override
+  // is written, only the scene-state value changes.
+  camp = editNpcSceneField(camp, scene.id, npcId, 'motivation', 'wants off this station');
+  assert.equal(getNpcSceneState(camp.scenes[0], npcId).motivation.value, 'wants off this station');
+  assert.equal(hasOracleOverride(camp, ['Characters', 'Want']), false, 'never rolled, so nothing to remember');
+});
+
+test('rollLocationSensoryField/editLocationSensoryField mirror the NPC-field version for a Location entity — sourced edits update oracles.overrides, hand-typed edits do not', () => {
+  let camp = defaultCampaign();
+  let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Cargo Bay 4' }));
+
+  camp = rollLocationSensoryField(camp, locId, 'smells', { rng: makeRng(9) });
+  const loc = getEntity(camp, locId);
+  assert.ok(SCENE_TABLES['Location Themes'].Smell.includes(loc.smells));
+  assert.deepEqual(loc.sensorySource.smells.path, ['Location Themes', 'Smell']);
+
+  camp = editLocationSensoryField(camp, locId, 'smells', 'burnt coolant and fear');
+  assert.equal(getEntity(camp, locId).smells, 'burnt coolant and fear');
+  const entries = currentTableEntries(camp, ['Location Themes', 'Smell']);
+  assert.equal(entries[loc.sensorySource.smells.index], 'burnt coolant and fear');
+
+  // Hand-typed sight (never rolled) — no override written.
+  camp = editLocationSensoryField(camp, locId, 'sights', 'flickering red emergency lights');
+  assert.equal(getEntity(camp, locId).sights, 'flickering red emergency lights');
+  assert.equal(hasOracleOverride(camp, ['Location Themes', 'Sight']), false);
+
+  // No-ops: a non-location entity, an unmapped field.
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Bystander' }));
+  const beforeNpcRoll = camp;
+  const afterNpcRoll = rollLocationSensoryField(camp, npcId, 'smells', { rng: makeRng(1) });
+  assert.deepEqual(getEntity(afterNpcRoll, npcId), getEntity(beforeNpcRoll, npcId), 'no-op on a non-location entity');
 });
 
 test('drawSuggestionLenses with no sceneContext is unaffected by this change (pure-random, exact prior behavior); with a sceneContext, a boosted lens (negotiation, while Activity is Negotiate) is drawn strictly more often across many seeds than without one', () => {

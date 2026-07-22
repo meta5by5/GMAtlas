@@ -4,9 +4,9 @@
 // through store.update(); they never touch the store or the DOM themselves.
 
 import { applyShift } from './context.js';
-import { generateScene, recomposeSceneText } from './scenes.js';
-import { tablesWithOverrides, rollTable, rollGroup, formatRoll, pick } from './oracles.js';
-import { linkMentions, parseMentions, createEntity, updateEntity, getEntity } from './entities.js';
+import { generateScene, recomposeSceneText, ensureNpcSceneState, NPC_SCENE_FIELD_ORACLE_PATH } from './scenes.js';
+import { tablesWithOverrides, rollTable, rollGroup, formatRoll, pick, currentTableEntries, updateOracleEntry } from './oracles.js';
+import { linkMentions, parseMentions, createEntity, updateEntity, getEntity, LOCATION_SENSORY_ORACLE_PATH } from './entities.js';
 import { linkDocumentMentions, parseDocumentMentions, resolvedDocumentMentionNames } from './documents.js';
 import { SUGGESTION_LENSES, findLens, lensOracleCategories } from '../data/suggestionLenses.js';
 
@@ -246,6 +246,91 @@ export function updateSceneField(campaign, sceneId, field, value) {
   if (!scene) return next;
   scene[field] = value;
   scene.text = recomposeSceneText(scene);
+  return next;
+}
+
+// --- Scene NPC fields + Location sensory fields (docs/adr/0041 Phase
+// 13b/13a): "oracles that autopopulate details... then remembered and
+// applied to subsequent suggestions" — the roll/edit pair below is the
+// one mechanism both features share. Rolling picks a real entry from the
+// relevant oracle table (scenes.js's NPC_SCENE_FIELD_ORACLE_PATH /
+// entities.js's LOCATION_SENSORY_ORACLE_PATH) and remembers exactly which
+// table+index it came from; editing afterward writes that SAME index back
+// through oracles.js's updateOracleEntry — the already-proven "an edited
+// table entry becomes its new default" mechanism (docs/adr/0031) — so the
+// same roll produces the GM's own phrasing from then on, campaign-wide,
+// not just for this one NPC/location. A hand-typed value that was never
+// rolled has no source to write back to, so it's just a plain field edit,
+// same as any other. This mirrors generateNpc/deepenNpc's existing
+// "roll from oracles.js, then patch via entities.js" shape — the only
+// reason it lives here instead of scenes.js/entities.js directly is that,
+// like those two, it composes across domain modules. ---
+
+/** Roll one of an NPC's scene-scoped fields (Disposition/Motivation/
+ *  Threat Rank/Challenges/Opportunities) from its mapped oracle table.
+ *  No-ops (returns campaign unchanged) if the scene doesn't exist, `field`
+ *  isn't one of the five, or the mapped table has no entries (e.g. a
+ *  non-default genre pack that hasn't authored these tables yet). */
+export function rollNpcSceneField(campaign, sceneId, npcId, field, { rng = Math.random } = {}) {
+  const next = clone(campaign);
+  const scene = (next.scenes || []).find((s) => s.id === sceneId);
+  const path = NPC_SCENE_FIELD_ORACLE_PATH[field];
+  if (!scene || !path) return next;
+  const entries = currentTableEntries(next, path);
+  if (!entries.length) return next;
+  const index = Math.floor(rng() * entries.length);
+  const state = ensureNpcSceneState(scene, npcId);
+  state[field] = { value: entries[index], sourcePath: path, sourceIndex: index };
+  return next;
+}
+
+/** Edit an NPC's scene-scoped field directly. If the current value came
+ *  from a roll (rollNpcSceneField above), the new text is ALSO written
+ *  back to that exact oracle table entry (oracles.js's updateOracleEntry)
+ *  — the "remembered, applied to subsequent suggestions" half. A value
+ *  that was typed by hand (never rolled) just updates in place. */
+export function editNpcSceneField(campaign, sceneId, npcId, field, value) {
+  let next = clone(campaign);
+  const scene = (next.scenes || []).find((s) => s.id === sceneId);
+  if (!scene || !NPC_SCENE_FIELD_ORACLE_PATH[field]) return next;
+  const state = ensureNpcSceneState(scene, npcId);
+  const clean = String(value || '');
+  const prior = state[field];
+  state[field] = { value: clean, sourcePath: prior.sourcePath, sourceIndex: prior.sourceIndex };
+  if (prior.sourcePath && prior.sourceIndex != null) next = updateOracleEntry(next, prior.sourcePath, prior.sourceIndex, clean);
+  return next;
+}
+
+/** Roll one of a Location's sensory fields (Sights/Smells/Sounds) from its
+ *  mapped oracle table — same shape as rollNpcSceneField above, just
+ *  targeting a permanent entity field (entities.js's `sensorySource` side-
+ *  channel) instead of scene-scoped state. No-ops on a missing/non-
+ *  location entity, an unmapped field, or an empty table. */
+export function rollLocationSensoryField(campaign, locationId, field, { rng = Math.random } = {}) {
+  const next = clone(campaign);
+  const e = getEntity(next, locationId);
+  const path = LOCATION_SENSORY_ORACLE_PATH[field];
+  if (!e || e.type !== 'location' || !path) return next;
+  const entries = currentTableEntries(next, path);
+  if (!entries.length) return next;
+  const index = Math.floor(rng() * entries.length);
+  e[field] = entries[index];
+  if (!e.sensorySource || typeof e.sensorySource !== 'object') e.sensorySource = { sights: null, smells: null, sounds: null };
+  e.sensorySource[field] = { path, index };
+  return next;
+}
+
+/** Edit a Location's sensory field directly — writes back to the sourcing
+ *  oracle table entry if the current value came from a roll, same
+ *  "remembered" mechanism as editNpcSceneField above. */
+export function editLocationSensoryField(campaign, locationId, field, value) {
+  let next = clone(campaign);
+  const e = getEntity(next, locationId);
+  if (!e || e.type !== 'location' || !LOCATION_SENSORY_ORACLE_PATH[field]) return next;
+  const clean = String(value || '');
+  e[field] = clean;
+  const source = e.sensorySource && e.sensorySource[field];
+  if (source && source.path && source.index != null) next = updateOracleEntry(next, source.path, source.index, clean);
   return next;
 }
 

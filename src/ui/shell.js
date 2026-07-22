@@ -6,8 +6,8 @@
 import { store } from '../core/store.js';
 import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
-import { contextSummary } from '../domain/context.js';
-import { continueStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, updateSceneField } from '../domain/session.js';
+import { continueStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField } from '../domain/session.js';
+import { addSceneBystander, removeSceneBystander } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag } from '../domain/oracles.js';
 import { oracleLinkTagsFor } from '../data/entityFieldOracleLinks.js';
@@ -78,7 +78,6 @@ import { renderFactionEvents } from './drawers/factionEvents.js';
 import { renderSearchPanel } from './searchPanel.js';
 import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
 
-const QUESTION_LABELS = { who: 'WHO', where: 'WHERE', what: 'WHAT', why: 'WHY', how: 'HOW' };
 // localStorage's shared per-origin quota is commonly 5-10MB for the WHOLE
 // campaign document, not just one file — 5MB of raw file (~6.7MB once
 // base64-encoded) is a conservative line under that, leaving room for the
@@ -324,6 +323,20 @@ let factionEventsStepFactionId = '';
 // renderFactionEvents() call never runs twice for one render pass.
 let factionEventsDockedInWhere = false;
 let factionRoundHistoryOpen = false; // ephemeral — "I want to see the history of faction turns per round" (Living Faction Engine Phase D), collapsed by default
+// Story Dashboard section accordion (docs/adr/0040 Phase 12f, replacing
+// the retired WHO/WHERE/WHAT/WHY/HOW tab strip) — which of the 5 former
+// tabs are currently expanded; default all open so nothing looks like it
+// vanished on first load after the tabs were retired. dashboardSectionCursor
+// is a separate "which section did Ctrl+Left/Right last land on" pointer
+// (not itself an expand/collapse state) — the shortcut's own former home,
+// `context.active`, was persisted campaign state; this replacement is
+// intentionally ephemeral, same as every other UI-only cursor in this file.
+let expandedDashboardSections = new Set(['who', 'where', 'what', 'why', 'how']);
+let dashboardSectionCursor = 'who';
+// docs/adr/0041 Phase 13a/13b — ephemeral, collapsed by default: which
+// NPC scene-cards (WHO) and Location Details blocks (WHERE) are expanded.
+let expandedSceneNpcs = new Set();
+let expandedLocationDetails = new Set();
 // The doc-viewer iframe reload guard (below) can't compare against the live
 // DOM `frame.src` readback — browsers always return that as a normalized
 // ABSOLUTE URL, while resolvedActive.src is a relative path for Reference
@@ -368,7 +381,6 @@ export function mountShell(el) {
           <p class="dim small">A campaign operating system for solo and GM-run sci-fi tabletop play — local-first, installable as a PWA.</p>
         </div>
       </div>
-      <nav class="mc-strip" aria-label="Context questions" data-strip role="tablist"></nav>
       <div class="mc-breadcrumb" data-breadcrumb></div>
       <main class="mc-workspace" data-workspace aria-live="polite"></main>
       <aside class="mc-copilot" data-copilot aria-label="Co-Pilot"><h2>Co-Pilot</h2><div data-copilot-body></div></aside>
@@ -498,8 +510,14 @@ function onClick(ev) {
   if (hit('[data-inline-prompt-submit]')) { commitInlinePrompt(); return; }
   if (hit('[data-inline-prompt-cancel]')) { closeInlinePrompt(); return; }
 
-  const q = hit('[data-question]');
-  if (q) return store.update((d) => { d.context.active = q.dataset.question; return d; });
+  // Story Dashboard section accordion (docs/adr/0040 Phase 12f — mirrors
+  // drawers/index.js's data-bases-toggle convention exactly).
+  const dashSectionToggle = hit('[data-dashboard-section-toggle]');
+  if (dashSectionToggle) {
+    const key = dashSectionToggle.dataset.dashboardSectionToggle;
+    if (expandedDashboardSections.has(key)) expandedDashboardSections.delete(key); else expandedDashboardSections.add(key);
+    return render();
+  }
 
   const edge = hit('[data-drawer-open]');
   if (edge) return toggleDrawer(edge.dataset.drawerOpen);
@@ -523,9 +541,11 @@ function onClick(ev) {
   // shows exactly the roster this button implies, matching the pre-0032
   // behavior's intent without needing a second panel open at once.
   if (hit('[data-toggle-faction-events]')) {
-    // Docked in WHERE — the card already lives there, so jump to it
-    // instead of reopening a second copy as a drawer tab.
-    if (factionEventsDockedInWhere) return store.update((d) => { d.context.active = 'where'; return d; });
+    // Docked in WHERE — the card already lives there (now the Dashboard's
+    // WHERE section, docs/adr/0040 Phase 12f), so just make sure that
+    // section is expanded instead of reopening a second copy as a drawer
+    // tab.
+    if (factionEventsDockedInWhere) { expandedDashboardSections.add('where'); return render(); }
     entityTypeFilter = 'faction';
     entityTagFilters = new Set();
     return toggleDrawer('faction-events');
@@ -1414,14 +1434,15 @@ function onClick(ev) {
     return render();
   }
   // Whole-card relocation (direct request) — see factionEventsDockedInWhere's
-  // own comment above. Docking closes the drawer tab and jumps WHERE's own
-  // Focus tab into view (store.update, since doc.context.active is real
-  // campaign state, not ephemeral); undocking re-opens the drawer tab and
-  // switches straight to it.
+  // own comment above. Docking closes the drawer tab and expands the
+  // Dashboard's WHERE section (docs/adr/0040 Phase 12f — ephemeral, not
+  // store.update, now that there's no persisted "active tab" to switch);
+  // undocking re-opens the drawer tab and switches straight to it.
   if (hit('[data-faction-events-dock]')) {
     factionEventsDockedInWhere = true;
+    expandedDashboardSections.add('where');
     closeDrawerTab('faction-events');
-    return store.update((d) => { d.context.active = 'where'; return d; });
+    return render();
   }
   if (hit('[data-faction-events-undock]')) {
     factionEventsDockedInWhere = false;
@@ -1913,6 +1934,40 @@ function onClick(ev) {
     store.update((d) => addNote(d, draft, 'Narrative Composer'));
     return toast('Added to Journal');
   }
+
+  // --- WHO's scene-scoped NPC cards + WHERE's Location Details (docs/adr/
+  // 0041 Phase 13a/13b) ---
+  const sceneNpcToggle = hit('[data-scene-npc-toggle]');
+  if (sceneNpcToggle) {
+    const id = sceneNpcToggle.dataset.sceneNpcToggle;
+    if (expandedSceneNpcs.has(id)) expandedSceneNpcs.delete(id); else expandedSceneNpcs.add(id);
+    return render();
+  }
+  const sceneNpcRoll = hit('[data-scene-npc-roll]');
+  if (sceneNpcRoll) {
+    const [npcId, field] = sceneNpcRoll.dataset.sceneNpcRoll.split('::');
+    const sceneId = currentSceneId();
+    if (!sceneId) return;
+    return store.update((d) => rollNpcSceneField(d, sceneId, npcId, field));
+  }
+  const bystanderRemove = hit('[data-scene-bystander-remove]');
+  if (bystanderRemove) {
+    const sceneId = currentSceneId();
+    if (!sceneId) return;
+    return store.update((d) => removeSceneBystander(d, sceneId, bystanderRemove.dataset.sceneBystanderRemove));
+  }
+  const locationDetailsToggle = hit('[data-location-details-toggle]');
+  if (locationDetailsToggle) {
+    const id = locationDetailsToggle.dataset.locationDetailsToggle;
+    if (expandedLocationDetails.has(id)) expandedLocationDetails.delete(id); else expandedLocationDetails.add(id);
+    return render();
+  }
+  const locationSensoryRoll = hit('[data-location-sensory-roll]');
+  if (locationSensoryRoll) {
+    const [locId, field] = locationSensoryRoll.dataset.locationSensoryRoll.split('::');
+    return store.update((d) => rollLocationSensoryField(d, locId, field));
+  }
+
   if (hit('[data-new-campaign]')) return confirmNewCampaign();
   if (hit('[data-bind-file]')) return store.bindFile().then(() => toast('Save file bound')).catch(() => {});
   if (hit('[data-restore-backup]')) {
@@ -1975,20 +2030,25 @@ function performFieldRoll(f, label) {
 // open Universal Search from anywhere, matching the convention comparable
 // tools already use for a search/command action.
 function onKeydown(ev) {
-  // Ctrl+Left/Right cycles the WHO/WHERE/WHAT/WHY/HOW Adaptive Workspace
-  // tabs (direct request: "navigate between cards open on the menu" — the
-  // [data-strip] question strip these render from, CONTEXT_QUESTIONS'
-  // order, wrapping around both ends). Skipped while focus is in any text
-  // field/contenteditable — Ctrl+Left/Right is the standard OS/browser
-  // "jump a word" shortcut there, and this app must not steal it out from
-  // under someone typing.
+  // Ctrl+Left/Right cycles which Story Dashboard section is expanded
+  // (direct request: "navigate between cards open on the menu" — originally
+  // cycled the now-retired WHO/WHERE/WHAT/WHY/HOW tab strip; docs/adr/0040
+  // Phase 12f repurposes it to expand-and-scroll-to the next/previous
+  // Dashboard section instead, same CONTEXT_QUESTIONS order, wrapping
+  // around both ends, so the shortcut survives the tabs it was written
+  // for). Skipped while focus is in any text field/contenteditable —
+  // Ctrl+Left/Right is the standard OS/browser "jump a word" shortcut
+  // there, and this app must not steal it out from under someone typing.
   if (ev.ctrlKey && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') && !ev.target.closest('input, textarea, [contenteditable="true"]')) {
     ev.preventDefault();
-    const cur = store.get().context.active;
-    const idx = Math.max(0, CONTEXT_QUESTIONS.indexOf(cur));
+    const idx = Math.max(0, CONTEXT_QUESTIONS.indexOf(dashboardSectionCursor));
     const dir = ev.key === 'ArrowRight' ? 1 : -1;
-    const next = CONTEXT_QUESTIONS[(idx + dir + CONTEXT_QUESTIONS.length) % CONTEXT_QUESTIONS.length];
-    return store.update((d) => { d.context.active = next; return d; });
+    dashboardSectionCursor = CONTEXT_QUESTIONS[(idx + dir + CONTEXT_QUESTIONS.length) % CONTEXT_QUESTIONS.length];
+    expandedDashboardSections.add(dashboardSectionCursor);
+    render();
+    const section = root.querySelector(`[data-dashboard-section="${dashboardSectionCursor}"]`);
+    if (section) section.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    return;
   }
 
   // Generic inline text-entry prompt (see openInlinePrompt et al.): Enter
@@ -2396,6 +2456,42 @@ function onChange(ev) {
     const [factionId, field] = factionField.dataset.factionField.split('::');
     const value = t.type === 'number' ? (Number(t.value) || 0) : t.value;
     return store.update((d) => updateEntity(d, factionId, { [field]: value }));
+  }
+
+  // --- WHO's scene-scoped NPC fields + WHERE's Location Details (docs/
+  // adr/0041 Phase 13a/13b) — same explicit-id "id::field" shape as
+  // data-faction-field above, since these edit a specific NPC/Location,
+  // not necessarily Cast's active entity. ---
+  const sceneNpcField = t.closest('[data-scene-npc-field]');
+  if (sceneNpcField) {
+    const [npcId, field] = sceneNpcField.dataset.sceneNpcField.split('::');
+    const sceneId = currentSceneId();
+    if (!sceneId) return;
+    return store.update((d) => editNpcSceneField(d, sceneId, npcId, field, t.value));
+  }
+  const npcCurrentGoal = t.closest('[data-npc-current-goal]');
+  if (npcCurrentGoal) {
+    return store.update((d) => updateEntity(d, npcCurrentGoal.dataset.npcCurrentGoal, { currentGoal: t.value }));
+  }
+  const bystanderAdd = t.closest('[data-scene-bystander-add]');
+  if (bystanderAdd) {
+    const npcId = t.value;
+    t.value = '';
+    if (!npcId) return;
+    const sceneId = currentSceneId();
+    if (!sceneId) return;
+    return store.update((d) => addSceneBystander(d, sceneId, npcId));
+  }
+  const locationField = t.closest('[data-location-field]');
+  if (locationField) {
+    const [locId, field] = locationField.dataset.locationField.split('::');
+    // Sights/Smells/Sounds route through editLocationSensoryField (writes
+    // an edit back to the sourcing oracle entry if the current value was
+    // rolled, not typed); Object type/Star system/Sector are plain fields.
+    if (field === 'sights' || field === 'smells' || field === 'sounds') {
+      return store.update((d) => editLocationSensoryField(d, locId, field, t.value));
+    }
+    return store.update((d) => updateEntity(d, locId, { [field]: t.value }));
   }
   const factionFaRefit = t.closest('[data-faction-fa-refit]');
   if (factionFaRefit) {
@@ -3815,34 +3911,12 @@ function render() {
 
   root.querySelector('.campaign-title').textContent = doc.meta.title;
 
-  const strip = root.querySelector('[data-strip]');
-  // Story Dashboard (docs/adr/0040 Phase 12a) is appended after the 5 real
-  // CONTEXT_QUESTIONS chips, not one of them — it has no persisted
-  // context.dashboard sub-object (schema.js's CONTEXT_QUESTIONS comment
-  // is explicit: that array IS the stored WHO/WHERE/WHAT/WHY/HOW model),
-  // it's a view mode that reads the other 5. Reuses the exact same
-  // data-question click handler (generic — just sets context.active to
-  // whatever string) with zero shell.js click-handler changes; Ctrl+Left/
-  // Right cycling deliberately still only cycles the 5 real questions
-  // (unchanged) — Dashboard is a direct click for now.
-  const dashboardSel = doc.context.active === 'dashboard';
-  strip.innerHTML = CONTEXT_QUESTIONS.map((k) => {
-    const sel = doc.context.active === k;
-    return `<button class="mc-q" data-question="${k}" role="tab" aria-selected="${sel}">
-      <span class="q-key">${QUESTION_LABELS[k]}</span>
-      <span class="q-val">${escapeHtml(contextSummary(doc.context, k)) || '—'}</span>
-    </button>`;
-  }).join('') + `<button class="mc-q mc-q-dashboard" data-question="dashboard" role="tab" aria-selected="${dashboardSel}" title="Story Dashboard — everything at a glance">
-      <span class="q-key">📊 DASHBOARD</span>
-      <span class="q-val">All 5 at a glance</span>
-    </button>`;
-
   const bc = root.querySelector('[data-breadcrumb]');
   const crumbs = doc.timeline.length ? doc.timeline : [{ label: doc.meta.title }, { label: `Scene ${doc.scenes.length}` }];
   bc.innerHTML = crumbs.map((c, i) => `${i ? '<span class="sep">▸</span>' : ''}<span class="crumb">${escapeHtml(c.label || '')}</span>`).join(' ');
 
   const workspaceUi = buildDrawerUi();
-  root.querySelector('[data-workspace]').innerHTML = renderWorkspace(doc, doc.context.active, workspaceUi);
+  root.querySelector('[data-workspace]').innerHTML = renderWorkspace(doc, workspaceUi);
   // A freshly-rendered Scene field textarea starts at its rows="1" default
   // regardless of how much text it holds — only typing into it fires the
   // 'input' event that would otherwise trigger autoGrowSceneField, so a
@@ -4153,7 +4227,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, dismissedStoryOptionIds, selectedStoryOptionIds,
+    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,
@@ -4281,4 +4355,14 @@ function stamp() { return new Date().toISOString().slice(0, 19).replace(/:/g, '-
 function stripHtml(s) { return String(s || '').replace(/<[^>]+>/g, ''); }
 function escapeHtml(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// docs/adr/0041 Phase 13b — the scene WHO's NPC groups/scene-fields hang
+// off, resolved fresh at click/change time (never stale — this app fully
+// re-renders after every mutation, so "the latest scene" is always
+// consistent between a render and the next click on it). Null before the
+// first Continue Story, same as `doc.scenes` being empty.
+function currentSceneId() {
+  const scenes = store.get().scenes || [];
+  return scenes.length ? scenes[scenes.length - 1].id : null;
 }

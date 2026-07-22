@@ -33,12 +33,17 @@ workspace changes, not the application"). Full description in `README.md`'s
 for writing code are: a new *interactive control* goes through the
 delegated-listener rules below, and a new *tertiary feature* is a drawer
 (edge-tab, zero space until opened), not a new top-level surface.
-**One recorded exception**: `docs/adr/0040-story-dashboard.md` (Phase 12,
-12a/12b built) deliberately reverses "the workspace changes, not the
-application" for one new `dashboard` view only — a consolidated,
-multi-W-question surface, additive alongside the five existing WHO/WHERE/
-WHAT/WHY/HOW tabs, not a replacement for them. Don't flag that view as
-contradicting this principle; the ADR is the recorded, deliberate call.
+**One recorded exception, now the primary workspace**:
+`docs/adr/0040-story-dashboard.md` (Phase 12) deliberately reverses "the
+workspace changes, not the application." 12a shipped it narrowly (one new
+`dashboard` view, additive alongside the five WHO/WHERE/WHAT/WHY/HOW
+tabs); a direct follow-up (12f) went further and **retired the five tabs
+entirely** — `ui/workspace/index.js` now renders a single consolidated
+Story Dashboard (the former tabs live on as open/collapsible sections),
+with every suggestion/oracle-generating control moved into the
+always-visible Co-Pilot panel. Don't flag this as contradicting the
+principle, and don't go looking for a WHO/WHERE/WHAT/WHY/HOW tab strip —
+it's gone; the ADR is the recorded, deliberate call.
 
 Also: **genre-aware, not genre-locked**. Nothing in the domain layer should
 hardcode one ruleset's stat names or tables — statblock fields, oracle
@@ -218,9 +223,9 @@ src/
     recap.js       Session Recap ("Previously on...") — buildSessionRecap()/formatSessionRecap(), read-only
   ui/
     shell.js       mountShell(), ALL delegated event handlers, render()
-    workspace/     center-panel Adaptive Workspace rendering
+    workspace/     center-panel Story Dashboard (renderWorkspace(doc, ui) — the former 5 W-tabs, now open/collapsible sections, plus the Narrative Composer)
     drawers/       Journal/Oracle/Cast/Party/Colony/Guide/Graph/Documents/Settings drawer rendering
-    copilotPanel.js
+    copilotPanel.js  the always-visible Co-Pilot — advise() + the full "decision sandbox" (Story Options, Suggestion Lenses, oracle generators, Rules Lens)
   main.js          boot: migrate -> render -> subscribe
 styles/
   tokens.css       three-tier design tokens (colors, spacing vars)
@@ -350,8 +355,10 @@ hand-maintained source of truth for phase/version, updated alongside
 ## Current status
 
 Phases 0–11 built; Phase 12 (Story Dashboard, `docs/adr/0040-story-
-dashboard.md`) in progress — 12a/12b (the `dashboard` view + Narrative
-Composer) built, 12c–12e still proposed. This number is the only status
+dashboard.md`) in progress — 12a/12b/12f built (the 5 WHO/WHERE/WHAT/WHY/
+HOW tabs are retired; the Dashboard + Narrative Composer + a Co-Pilot
+"decision sandbox" are the workspace now), 12c/12e still proposed, 12d
+partial. This number is the only status
 fact worth duplicating here — for what shipped, what's next, and why, read
 `PROGRESS.md` (short status ledger) or `DESIGN-NEW-FUNCTIONALITY.md`
 (current roadmap; `docs/archive/DESIGN-NEW-FUNCTIONALITY-2026-07-15.md`

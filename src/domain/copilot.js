@@ -23,7 +23,6 @@ export function advise(doc) {
   // Stress/Tension (Hostile Setting pp.211-219: uncertainty/isolation/timing
   // as the three horror levers) — same neutral-midpoint pattern.
   const stress = c.stress == null ? 5 : c.stress;
-  const active = (doc && doc.context && doc.context.active) || 'what';
 
   // Thread awareness (NEW): a clock nearly full is the most actionable signal.
   // Excludes any thread carrying a `kind` tag (a Trade contract, a faction's
@@ -127,12 +126,13 @@ export function advise(doc) {
     ? 'The calm holds — a quiet scene here costs nothing and can set up the next scare.'
     : 'An alternate route or ally could open if the party spends time or leverage.';
 
-  // Suggested oracle adapts to the active question and pressure. Returns a
-  // rollable path so the UI can wire a one-click roll.
-  const suggestedOraclePath = active === 'who' ? ['Characters', 'Disposition']
-    : active === 'where' ? ['Location Themes', 'Sensory Detail']
-    : active === 'why' ? ['Plot Engine', 'Plot Target']
-    : threat >= 6 ? ['Miscellaneous', 'Story Complication']
+  // Suggested oracle adapts to current pressure. Returns a rollable path so
+  // the UI can wire a one-click roll. (Phase 12f: dropped the former
+  // active==='who'/'where'/'why' branches — there's no longer a single
+  // "currently active W" concept once the 5 tabs were retired in favor of
+  // the Dashboard's independent collapsible sections; this dial-based
+  // chain was already the general-purpose fallback and now applies always.)
+  const suggestedOraclePath = threat >= 6 ? ['Miscellaneous', 'Story Complication']
     : stress >= 6 ? ['Horror Escalation', 'Escalation Beat']
     : resources <= 2 ? ['Trade & Cargo', 'Cargo Problem']
     : mystery >= 5 ? ['Miscellaneous', 'Story Clue']
@@ -185,6 +185,7 @@ export function advise(doc) {
  *  scene," this just extends the same convention to WHY). */
 export function gatherSceneContext(campaign) {
   const whoText = (campaign.context && campaign.context.who && campaign.context.who.summary) || '';
+  const whereText = (campaign.context && campaign.context.where && campaign.context.where.summary) || '';
   const whoEntities = findMentions(campaign, whoText).filter((e) => e.type === 'npc' || e.type === 'faction');
   const whereLocations = getCurrentWhereLocations(campaign);
   const factionsHere = new Map();
@@ -198,6 +199,13 @@ export function gatherSceneContext(campaign) {
   const what = (campaign.context && campaign.context.what) || {};
   return {
     whoEntities, whereLocations, conflictsHere, openThreads, foreshadowing, worldFlags, activity,
+    // Raw Focus text (docs/adr/0040 Phase 12f) — whoEntities/whereLocations
+    // above are themselves ALWAYS derived by parsing this exact text, so
+    // it's the true source of "what the GM actually wrote," not just the
+    // entities mentioned inside it. composeNarrativeDraft below uses this
+    // directly instead of re-deriving a synthetic sentence from it.
+    whoSummary: whoText.trim(),
+    whereSummary: whereText.trim(),
     factionsHere: Array.from(factionsHere.values()),
     threat: what.threat || 0,
     mystery: what.mystery || 0,
@@ -278,16 +286,24 @@ export function buildStoryOptions(campaign, { limit = 6 } = {}) {
     .map(({ weight, ...rest }) => rest);
 }
 
-/** Story Dashboard's Narrative Composer (docs/adr/0040 Phase 12b) —
- *  generalizes two existing, proven precedents into one reusable
- *  composer: `scenes.js`'s `recomposeSceneText` (structured fields →
- *  live narrative text) and `recap.js`'s `buildSessionRecap`/
+/** Story Dashboard's Narrative Composer (docs/adr/0040 Phase 12b, fixed in
+ *  Phase 12f) — generalizes two existing, proven precedents into one
+ *  reusable composer: `scenes.js`'s `recomposeSceneText` (structured
+ *  fields → live narrative text) and `recap.js`'s `buildSessionRecap`/
  *  `formatSessionRecap` (assemble several signals → readable prose).
- *  Pulls WHERE's current location(s), WHO's in-scene entities, WHAT's
- *  situation, whichever Story Option(s) the GM has marked "in play"
- *  (`selectedOptionIds` — UI-layer ephemeral state, NOT persisted;
- *  distinct from `docs/adr/0039`'s `dismissedStoryOptionIds`, a
- *  different concept), and WHY's objective into one composed paragraph.
+ *  Pulls WHERE/WHO's raw Focus text verbatim, WHAT's situation, whichever
+ *  Story Option(s) the GM has marked "in play" (`selectedOptionIds` —
+ *  UI-layer ephemeral state, NOT persisted; distinct from
+ *  `docs/adr/0039`'s `dismissedStoryOptionIds`, a different concept), and
+ *  WHY's objective into one composed paragraph.
+ *
+ *  Phase 12f fix: originally re-derived a synthetic "the scene is set at
+ *  X"/"Y is present" sentence from WHO/WHERE's parsed @mentions instead
+ *  of using the Focus text itself — so any free prose the GM actually
+ *  typed (not just an @mention) was silently dropped from the draft. Since
+ *  the mention list is itself always parsed FROM that same text (there is
+ *  no other source), using the raw text directly is strictly more
+ *  complete, not just a different derivation.
  *
  *  Deliberately returns a PLAIN STRING carrying the exact same raw
  *  markup (`@[Name]` mentions, `**bold**`/etc.) the source fields
@@ -296,9 +312,6 @@ export function buildStoryOptions(campaign, { limit = 6 } = {}) {
  *  `buildMentionEditorHTML` (for a live preview that renders mentions as
  *  real clickable badges) and `session.js`'s `addNote` (which auto-links
  *  any `@[Name]` mention on save, same as every other Journal entry).
- *  Entity references are re-wrapped in `@[Name]` on the way out
- *  specifically so a name mentioned once in WHO/WHERE's own Focus text
- *  stays a real, clickable mention in the composed draft too.
  *
  *  Deliberately NOT live-editable in place on the dashboard (the ADR's
  *  original sketch called for an editable field) — this function is
@@ -315,15 +328,13 @@ export function composeNarrativeDraft(campaign, { selectedOptionIds = [] } = {})
   const ctx = gatherSceneContext(campaign);
   const parts = [];
 
-  if (ctx.whereLocations.length) {
-    const names = ctx.whereLocations.map((l) => `@[${l.name || 'Unnamed'}]`);
-    parts.push(`The scene is set at ${names.join(' and ')}.`);
-  }
-
-  if (ctx.whoEntities.length) {
-    const names = ctx.whoEntities.map((e) => `@[${e.name || 'Unnamed'}]`);
-    parts.push(`${names.join(', ')} ${names.length > 1 ? 'are' : 'is'} present.`);
-  }
+  // WHERE/WHO's own raw Focus text (docs/adr/0040 Phase 12f fix) — used
+  // verbatim instead of a synthetic "the scene is set at X"/"Y is present"
+  // sentence, so the GM's own written context (not just the @mentions
+  // inside it) actually reaches the draft. Falls back to nothing when a
+  // Focus field is empty, same as before.
+  if (ctx.whereSummary) parts.push(ctx.whereSummary);
+  if (ctx.whoSummary) parts.push(ctx.whoSummary);
 
   const situation = String((campaign.context && campaign.context.what && campaign.context.what.situation) || '').trim();
   if (situation) parts.push(situation);

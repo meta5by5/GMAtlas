@@ -2,10 +2,19 @@
 
 ## Status
 
-**12a (new `dashboard` view) and 12b (Narrative Composer) implemented
-2026-07-15, same day as this ADR.** 12c (oracle-tailored dropdowns beyond
-WHY), 12d (SHIFTS reachability gap), and 12e (dead-export housekeeping)
-remain proposed, not built — see each sub-section below for status.
+**12a/12b implemented 2026-07-15 (same day as this ADR); 12f (full
+consolidation — the 5 W tabs retired, Co-Pilot becomes the decision
+sandbox, and the Focus-text bug fixed) implemented 2026-07-15/16,
+superseding 12a's "additive, not a replacement" framing below — see 12f's
+own section, and CLAUDE.md's "no two docs get to disagree" rule (the
+later decision wins outright).** 12c (oracle-tailored dropdowns beyond
+WHY) is **superseded by `docs/adr/0041-scene-operating-model.md`'s 13d**
+(2026-07-16 — Phase 13, a much larger follow-up roadmap; see 0041 for
+what's actually built vs. still proposed there). 12e (dead-export
+housekeeping) remains proposed, not built. 12d (SHIFTS reachability gap)
+is partially done — 12f relocated the 6 `WHAT_ACTIONS` chips into
+Co-Pilot's Quick Apply, but the 8 *other* orphaned reducers named below
+are still not surfaced anywhere.
 
 Original request:
 the 5-W workspace "is still missing a comprehensive and interactive
@@ -91,7 +100,12 @@ below composes existing, tested domain functions.
 
 ## Decision
 
-### 12a — New `dashboard` view — **Implemented**
+### 12a — New `dashboard` view — **Implemented, then superseded by 12f**
+
+*(Historical record of what 12a originally shipped as, 2026-07-15 — see
+12f below for the current shape; kept here rather than rewritten in place
+per this repo's "say so explicitly, don't silently overwrite" doc
+discipline.)*
 
 A 6th entry in `ui/workspace/index.js`'s `VIEWS` map, alongside `who`/
 `where`/`what`/`why`/`how`, additive not a replacement — the five
@@ -109,6 +123,13 @@ deliberately still only cycles the 5 real questions, unchanged; Dashboard
 is a direct click for now. Did not change the default landing tab
 (`context.active` still defaults to `'what'`) — a separate, easy call for
 later if wanted.
+
+**12f note**: every claim in the rest of this sub-section (the strip, the
+five separate tabs, `context.active`-based routing) no longer describes
+current behavior — the strip is gone and `context.active` is unused. This
+paragraph is left as-is intentionally, as a record of the original,
+lower-risk shape this shipped as before the direct follow-up request to
+go further.
 
 Layout, implemented as a header row + 2-column grid (simplified from the
 original 3-column + bottom sketch above, since WHO/WHERE's digests read
@@ -161,7 +182,11 @@ Send, in the Journal note itself (already a real, fully-editable field),
 which still satisfies Article II (the GM has final say), just one step
 later than the original sketch assumed.
 
-### 12c — Oracle-tailored dropdowns beyond WHY
+### 12c — Oracle-tailored dropdowns beyond WHY — **superseded by `docs/adr/0041-scene-operating-model.md`'s 13d**
+
+*(Left as historical record of the original sketch, per this repo's "say
+so explicitly, don't silently overwrite" doc discipline — ADR 0041's 13d
+is now the authority on this specific piece of work; don't build both.)*
 
 Extends the two existing "selection → tailored oracle" hooks with the
 same static-lookup-table architecture `GAMEPLAY_AREAS`/
@@ -201,6 +226,73 @@ this is a pure UI gap, zero domain changes needed.
   named explicitly here so a future pass doesn't have to re-derive that
   they're dead before deciding.
 
+### 12f — Full consolidation: tabs retired, Co-Pilot becomes the decision sandbox, Focus-text bug fixed — **Implemented**
+
+Direct follow-up feedback, two parts:
+
+1. **Bug**: Story Options/the Narrative Composer weren't reflecting what
+   was actually typed into WHO/WHERE's own Focus fields. Root cause:
+   `gatherSceneContext`/`composeNarrativeDraft` only ever read parsed
+   `@mentions` and specific structured entity fields
+   (`faction.agenda`/`.fear`/`.need`, `npc.currentGoal`) out of Focus
+   text — never the surrounding free prose. `composeNarrativeDraft`
+   specifically synthesized its own generic sentences ("The scene is set
+   at X.", "Y is present.") instead of using what the GM wrote. Fixed:
+   `gatherSceneContext` now also returns `whoSummary`/`whereSummary` (the
+   raw trimmed Focus text), and `composeNarrativeDraft` uses those
+   directly instead of re-deriving a synthetic sentence — a strict
+   simplification, not just a fix, since the entity list a synthetic
+   sentence would summarize was itself always parsed from this same text.
+2. **Design**: asked directly whether the 5 individual W tabs should stay
+   alongside the Dashboard (12a's original "additive, not a replacement"
+   framing) now that WHO/WHERE/WHAT/WHY/HOW's full editable content was
+   being folded into open/collapsible Dashboard sections — answer:
+   **retire them entirely**, and fold all suggestion/oracle-generating
+   logic into the always-visible Co-Pilot panel as "an active decision
+   sandbox." This is a genuine reversal of 12a's own decision, recorded
+   here rather than silently overwritten (12a's section above is kept as
+   historical record).
+
+**What changed:**
+- `ui/workspace/index.js`'s `VIEWS` map and the `who`/`where`/`what`/
+  `why`/`how` top-level views are gone. `renderWorkspace(doc, ui)` (the
+  `active` param dropped — there's only one view now) renders a single
+  Story Dashboard: a header (location banner, Threat/Mystery/Stress/
+  Resources/Reputation dials, Activity select) + 5 collapsible sections
+  (one per former tab, same toggle-button convention `drawers/index.js`'s
+  Bases of Influence already established) + the Narrative Composer,
+  **moved to the workspace's top-right** (`.dashboard-composer-col`,
+  `position: sticky`, direct request) instead of the bottom of a column.
+  Section open/closed state is ephemeral (`ui.expandedDashboardSections`,
+  default all open).
+- `ui/copilotPanel.js` absorbs every suggestion-generating control that
+  used to live on a W tab: the full (not condensed-to-3) Story Options
+  list with its selection checkboxes, both Suggestion Lens pickers (blind
+  "What Happens Next?" and scene-weighted "Suggest a Lens"), the Site
+  Concept/Adventure Seed generators, the Activity → Rules Lens suggestion,
+  "▶ Continue Story," and the 6 `WHAT_ACTIONS` shift chips. Every
+  relocated control keeps its exact original `data-*` attribute/handler —
+  this was a markup relocation, not new wiring, since shell.js's delegated
+  handlers never cared which DOM location triggered them.
+- `ui/shell.js`: the `<nav class="mc-strip">` element, its `render()`-time
+  population, and the `[data-question]` click handler are deleted (nothing
+  emits that attribute anymore). The Faction-Events-docked-in-WHERE jump
+  and Ctrl+Left/Right (formerly both `context.active`-based) now target
+  `expandedDashboardSections` instead — ephemeral, not persisted, since
+  there's no longer a single "active tab" concept to store.
+- `domain/copilot.js`'s `advise()` drops its `active === 'who'|'where'|
+  'why'`-based `suggestedOraclePath` branches — with no "currently active
+  W," the existing dial-based fallback chain (already the general-purpose
+  default) is now the only path.
+- `schema.js`'s `context.active` field is left untouched (harmless, now
+  unused, same treatment as the already-noted "largely vestigial
+  `context.who.entityIds`") — no migration needed, old saves load fine.
+- `styles/cockpit.css`: the `.mc-strip`/`.mc-q`/`.mc-q-dashboard` rules
+  and their responsive breakpoints are removed; the `.cockpit` grid's
+  "strip" row/area is gone (breadcrumb now spans full width in that row);
+  `.dashboard-grid`'s column ratio flips (left = wide, the 5 sections;
+  right = narrow, the sticky Composer).
+
 ## Alternatives considered
 
 - **Strengthen the existing strip/Co-Pilot instead of merging tabs**
@@ -209,12 +301,16 @@ this is a pure UI gap, zero domain changes needed.
   making surface, not an incremental strengthening of what already
   exists. Recorded here because it's the lower-risk path a future
   reviewer might reasonably ask "why wasn't this enough" about.
-- **Replace the five W-tabs with the dashboard entirely.** Rejected —
-  a dashboard grid has no room for a full rich-text Journal note editor,
-  a deep entity inspector, or the Oracle drawer's whole tree without
-  becoming unusable clutter; the five tabs stay for that work. The
-  dashboard is a new "big picture / decision-making" mode, not a
-  replacement for focused editing.
+- **Replace the five W-tabs with the dashboard entirely.** Originally
+  rejected at 12a time — a dashboard grid has no room for a full rich-text
+  Journal note editor, a deep entity inspector, or the Oracle drawer's
+  whole tree without becoming unusable clutter. **Reconsidered and done
+  anyway at 12f**, per direct follow-up request: the concern about clutter
+  is addressed by making each W's content collapsible (open/closed per
+  section) rather than by keeping a separate tab per W — the Journal,
+  Entity Editor, and Oracle drawer were never W-tab content in the first
+  place (they're tertiary-tier edge drawers, untouched by this decision)
+  so the original worry doesn't actually apply to them.
 - **A literal step-by-step wizard for "randomly generated scene-
   development steps"** (a modal/state-machine walking the GM through
   WHO→WHERE→WHY→compose in sequence). Considered and set aside in favor
@@ -241,17 +337,22 @@ this is a pure UI gap, zero domain changes needed.
 - This ADR is the recorded exception to Article X for the `dashboard`
   view specifically — CLAUDE.md is updated alongside this ADR to say so,
   per this repo's "no two docs get to disagree" discipline.
-- 12a/12b landed the same day as this ADR (not deferred, unlike 12c–12e)
-  — verified via 3 new domain tests (441 total: `composeNarrativeDraft`'s
-  empty-campaign case, full composition with a selected option and raw-
-  markup preservation, and an unknown-option-id no-op) plus a direct Node
-  smoke test of `renderWorkspace(doc, 'dashboard', ui)` against both a
-  bare and a populated campaign (no browser automation available in this
-  environment, same limitation noted throughout this session — this is
-  the same "exercise the pure render function directly" substitute used
-  elsewhere). `node scripts/build.js` stays clean (77 modules). 12c–12e
-  remain roadmap only, scoped for incremental follow-up, same rhythm as
-  this session's own Story Options phases (`docs/adr/0039`).
+- 12a/12b landed the same day as this ADR; 12f landed the next day,
+  reversing 12a's "additive" framing as described above — verified via
+  442 domain tests (3 new: `gatherSceneContext`'s `whoSummary`/
+  `whereSummary` fields, and a dedicated regression test asserting free
+  Focus prose beyond an `@mention` reaches the composed draft — the exact
+  bug being fixed) plus a direct Node smoke test of the new
+  `renderWorkspace(doc, ui)`/`renderCopilot(doc, ui)` signatures against
+  both a bare and a populated campaign, confirming: all 5 accordion
+  sections render and toggle, the Composer contains raw WHO/WHERE Focus
+  prose verbatim, Co-Pilot's full Story Options list renders with working
+  checkboxes, and a checked option's text flows into the Composer (no
+  browser automation available in this environment, same limitation noted
+  throughout this session — this is the same "exercise the pure render
+  function directly" substitute used elsewhere). `node scripts/build.js`
+  stays clean (77 modules). 12c/12e remain roadmap only; 12d is partially
+  done (see Status).
 
 ## Related packs / ADRs
 

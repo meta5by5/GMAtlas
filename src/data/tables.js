@@ -724,6 +724,21 @@ export const SCENE_TABLES = {
       "made an enemy of someone who hasn't acted yet", "is caught between two people they can't afford to disappoint",
       "took something that wasn't theirs to take", "is running out of time to fix a mistake",
       "trusts the wrong person completely"
+    ],
+    "Opportunity": [
+      "owes the party a favor they haven't called in yet", "has information they'd trade for the right price",
+      "could vouch for the party somewhere that matters", "controls access to something the party needs",
+      "is looking for exactly the help the party can offer", "would owe a debt for a small, low-risk kindness",
+      "has a grudge against someone the party also distrusts", "is one good reason away from switching sides",
+      "knows a shortcut nobody else is using", "would talk freely if approached alone"
+    ],
+    "Threat Rank": [
+      "Harmless — no real capacity to hurt anyone",
+      "Nuisance — can complicate things but not seriously hurt anyone",
+      "Dangerous — can hurt or kill a single party member in a bad moment",
+      "Severe — could kill or seriously injure more than one",
+      "Lethal — can kill multiple party members if unopposed",
+      "Catastrophic — threatens the whole party or the scene itself"
     ]
   },
   "Creatures": {
@@ -1047,6 +1062,42 @@ export const SCENE_TABLES = {
       "chemical flowers under grow lamps",
       "cold biting through gloves",
       "hydraulics sighing like breath"
+    ],
+    "Sight": [
+      "flickering emergency lighting strobing across scuffed walls",
+      "condensation trails running down a cracked viewport",
+      "a maintenance drone stalled mid-task, blinking amber",
+      "handprints in dust on an otherwise clean console",
+      "cargo netting swaying with no obvious draft",
+      "a warning placard peeling at the corners",
+      "shadows pooling where a light fixture is dark",
+      "scorch marks someone tried and failed to scrub away",
+      "a viewscreen looping the same stale advisory",
+      "personal effects left behind mid-task"
+    ],
+    "Smell": [
+      "hot ozone from overworked electronics",
+      "recycled air gone slightly stale",
+      "solvent and scorched plastic",
+      "something organic decaying behind a bulkhead",
+      "fresh coolant masking an older smell",
+      "gun oil and metal polish",
+      "burnt coffee substitute left too long",
+      "antiseptic over something it can't fully cover",
+      "damp fabric and old sweat",
+      "a chemical sweetness that shouldn't be there"
+    ],
+    "Sound": [
+      "the irregular clank of a failing pump",
+      "distant voices arguing, too muffled to make out",
+      "static bursts from an unattended comm channel",
+      "a slow, rhythmic dripping somewhere unseen",
+      "the low hum of overtaxed life support",
+      "boots on grating, receding, then stopping",
+      "a door cycling that shouldn't be cycling",
+      "an alarm chirping once and going silent",
+      "wind or vents moaning through a loose seal",
+      "sudden total silence where machinery should be running"
     ]
   },
   "Missions": {

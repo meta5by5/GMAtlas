@@ -1,11 +1,15 @@
-// workspace/index.js — the Adaptive Workspace. One interactive view per context
-// question. Editing dispatches through the shell's delegated handlers (change +
-// click) so this stays a pure render function.
+// workspace/index.js — the Adaptive Workspace, now a single consolidated
+// Story Dashboard (docs/adr/0040 Phase 12f — the former WHO/WHERE/WHAT/WHY/
+// HOW tabs were retired in favor of open/collapsible sections here; the
+// suggestion/oracle logic that used to live on those tabs moved to
+// copilotPanel.js instead, see that file's own header comment). Editing
+// dispatches through the shell's delegated handlers (change + click) so
+// this stays a pure render function.
 
-import { listShifts } from '../../domain/context.js';
+import { contextSummary } from '../../domain/context.js';
 import { listThreads, THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
-import { ACTIVITIES, suggestRulesLens } from '../../domain/activities.js';
-import { listTagVocabulary, isSameDistrict, getEntity, listEntities, getContainingLocation, getContainedLocations } from '../../domain/entities.js';
+import { ACTIVITIES } from '../../domain/activities.js';
+import { listTagVocabulary, isSameDistrict, getEntity, listEntities, getContainingLocation, getContainedLocations, LOCATION_OBJECT_TYPES } from '../../domain/entities.js';
 import { getCurrentWhereLocations, factionsPresentAt, factionsInRegion } from '../../domain/factionTurnEngine.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { buildMentionEditorHTML, richToolbarHTML, toolbarCollapsed } from '../mentionEditor.js';
@@ -13,239 +17,323 @@ import { renderFactionEvents } from '../drawers/factionEvents.js';
 import { CONFLICT_STATUS_OPTIONS } from '../drawers/index.js';
 import { openForeshadowing } from '../../domain/foreshadowing.js';
 import { WORLD_FLAG_VALUES, WORLD_FLAG_VALUE_LABEL } from '../../domain/worldFlags.js';
-import { buildStoryOptions, composeNarrativeDraft } from '../../domain/copilot.js';
+import { composeNarrativeDraft, gatherSceneContext } from '../../domain/copilot.js';
+import { getNpcSceneState } from '../../domain/scenes.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 const INTENTS = ['Discovery', 'Travel', 'Social encounter', 'Investigation', 'Resource pressure', 'Combat pressure', 'Moral choice', 'Faction complication', 'Exploration hazard', 'Trade opportunity'];
 
-// The "Shift Story" actions surfaced on the WHAT view — the manual control layer.
-const WHAT_ACTIONS = ['Reveal Clue', 'Complicate', 'Reward', 'Raise Threat', 'Lower Threat', 'Advance Time'];
-
 function card(title, lead, body) {
   return `<article class="workspace-card"><h2>${title}</h2><p class="lead">${lead}</p>${body}</article>`;
 }
 
-// WHERE-only variant: title+lead on the left, a read-only quick-awareness
-// summary top-right on the SAME row (direct request) — everywhere else
-// uses plain card() (title/lead stacked, no right-side slot); special-cased
-// here rather than widening card() itself, since no other tab needs a
-// header-row slot and this keeps every other view's markup untouched.
-function cardWithHeaderRight(title, lead, headerRight, body) {
-  return `<article class="workspace-card">
-    <div class="workspace-card-head-row">
-      <div class="workspace-card-head-text"><h2>${title}</h2><p class="lead">${lead}</p></div>
-      ${headerRight}
+// One collapsible Dashboard section per former W-tab (docs/adr/0040 Phase
+// 12f) — same toggle-button convention already established by
+// `basesOfInfluenceHtml` in drawers/index.js (a `.section-head-row` +
+// `▾/▸` toggle button + conditional body), not a new pattern. Collapsed
+// state is ephemeral (`ui.expandedDashboardSections`, shell.js), default
+// open on first load. The collapsed-state summary reuses `contextSummary`
+// (domain/context.js) — the exact function that used to label the old tab
+// strip buttons — stripped of HTML/mention-bracket markup and truncated,
+// since it's plain header text here, not a rich field.
+function dashboardSection(key, title, lead, bodyHtml, doc, ui) {
+  const expanded = ((ui && ui.expandedDashboardSections) || new Set()).has(key);
+  const rawSummary = contextSummary(doc.context, key)
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/@\[([^\]|]+)(?:\|[^\]]*)?\]/g, '$1')
+    .replace(/@([A-Za-z0-9_'-]+)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const summary = rawSummary.length > 70 ? `${rawSummary.slice(0, 70)}…` : rawSummary;
+  return `<section class="dashboard-section" data-dashboard-section="${esc(key)}">
+    <div class="section-head-row">
+      <button type="button" class="btn ghost sm dashboard-section-toggle" data-dashboard-section-toggle="${esc(key)}">${expanded ? '▾' : '▸'} ${esc(title)}</button>
+      ${!expanded && summary ? `<span class="dim small dashboard-section-summary">${esc(summary)}</span>` : ''}
     </div>
-    ${body}
-  </article>`;
+    ${expanded ? `<p class="lead dashboard-section-lead">${esc(lead)}</p><div class="dashboard-section-body">${bodyHtml}</div>` : ''}
+  </section>`;
 }
 
-// Suggestion Lens chip picker (docs/adr/0009-situation-engine-revisited.md,
-// Decision item 3) — "What Happens Next?" opens this instead of generating
-// immediately; `draw` is the fixed random draw from drawSuggestionLenses
-// (session.js, via shell.js), not recomputed on every render. Generalized
-// (docs/adr/0039 Phase 2) to take `open`/`draw` as plain params instead of
-// always reading `ui.lensPickerOpen`/`ui.lensDraw` directly, so WHY's own
-// scene-context-weighted picker below can reuse the exact same rendering
-// with its own separate ephemeral state — picking a lens is the identical
-// action (suggestNextWithLens) either way, only which draw produced the
-// offered chips differs.
-function lensPickerHtml(open, draw, { intro = 'Pick a lens to steer what happens next, instead of generating blind:' } = {}) {
-  if (!open) return '';
-  const chips = (draw || []).map((l) => `<button class="chip" data-lens-pick="${esc(l.id)}" title="${l.kind === 'discovery' ? 'Discovery Lens' : 'Approach Lens'}">${esc(l.label)}</button>`).join('');
-  return `<div class="lens-picker">
-    <p class="dim small">${esc(intro)}</p>
-    <div class="lens-picker-chips">${chips}</div>
+function whoSectionBody(doc, ui) {
+  return `
+    ${summaryField('who', doc.context.who.summary, 'Party, NPCs, factions present…', doc, ui)}
+    <div class="shift-actions">
+      <button class="chip" data-shift-prompt="Introduce NPC">＋ Introduce NPC</button>
+    </div>
+    ${npcSceneGroupsBlock(doc, ui)}
+    ${whoEntityPicker(doc, ui)}
+    ${factionsActiveNearbyBlock(doc)}
+    ${activeConflictLocationPicker(doc)}`;
+}
+
+// Shared label + 🎲-roll + editable-text row (docs/adr/0041 Phase 13a/13b)
+// — used for both an NPC's 5 scene-scoped fields below and WHERE's
+// Location Details sensory fields further down. `value` is whatever's
+// currently rolled/typed; the roll button re-rolls from the field's
+// mapped oracle table (session.js), the input commits an edit on blur/
+// change, which — if the current value came from a roll — ALSO writes
+// back through oracles.overrides (the "remembered" half).
+function oracleFieldRow(label, value, rollAttr, fieldAttr) {
+  return `<div class="oracle-field-row">
+    <span class="field-label-static">${esc(label)}</span>
+    <button type="button" class="icon-btn" ${rollAttr} title="Roll ${esc(label)}">🎲</button>
+    <input type="text" class="thread-name-input" ${fieldAttr} value="${esc(value)}" placeholder="—">
   </div>`;
 }
 
-const VIEWS = {
-  what(doc, ui) {
-    const c = doc.context.what;
-    const resources = c.resources == null ? 5 : c.resources;
-    const reputation = c.reputation == null ? 5 : c.reputation;
-    const stress = c.stress == null ? 5 : c.stress;
-    return card('WHAT is happening', 'The active situation — your primary workspace.', `
-      <div class="field-label">Situation
-        <div class="rich-field">${richToolbarHTML('what:situation', toolbarCollapsed(doc, ui, 'what:situation'))}<div class="mention-editor" contenteditable="true" data-ctx="what.situation" data-placeholder="What is unresolved right now?">${buildMentionEditorHTML(doc, c.situation)}</div></div>
-      </div>
-      <div class="field-row">
-        <label class="field-label">Intent
-          <select data-ctx="what.intent">
-            ${INTENTS.map((i) => `<option ${i === c.intent ? 'selected' : ''}>${i}</option>`).join('')}
-          </select>
-        </label>
-        <label class="field-label">Threat <b class="metric">${c.threat}/10</b>
-          <input type="range" min="0" max="10" value="${c.threat}" data-ctx-num="what.threat">
-        </label>
-        <label class="field-label">Mystery <b class="metric">${c.mystery}/10</b>
-          <input type="range" min="0" max="10" value="${c.mystery}" data-ctx-num="what.mystery">
-        </label>
-      </div>
-      <div class="field-row-3col">
-        <label class="field-label">Resources <b class="metric">${resources}/10</b>
-          <input type="range" min="0" max="10" value="${resources}" data-ctx-num="what.resources">
-        </label>
-        <label class="field-label">Reputation <b class="metric">${reputation}/10</b>
-          <input type="range" min="0" max="10" value="${reputation}" data-ctx-num="what.reputation">
-        </label>
-        <label class="field-label">Stress <b class="metric">${stress}/10</b>
-          <input type="range" min="0" max="10" value="${stress}" data-ctx-num="what.stress">
-        </label>
-      </div>
-      <div class="action-bar">
-        <button class="btn primary" data-continue-story>▶ Continue Story</button>
-        <button class="btn" data-what-next>What Happens Next?</button>
-        <button class="btn ghost sm" data-continue-story title="Generate the next scene">▶ Scene</button>
-      </div>
-      ${lensPickerHtml(ui.lensPickerOpen, ui.lensDraw)}
-      <div class="shift-actions" aria-label="Shift story">
-        ${WHAT_ACTIONS.map((a) => `<button class="chip" data-shift="${esc(a)}">⚡ ${esc(a)}</button>`).join('')}
-      </div>
-      ${lastScene(doc, ui)}
-      ${worldFlagsBlock(doc)}`);
-  },
-
-  who(doc, ui) {
-    return card('WHO is here', 'People and factions in play.', `
-      ${summaryField('who', doc.context.who.summary, 'Party, NPCs, factions present…', doc, ui)}
-      <div class="shift-actions">
-        <button class="chip" data-shift-prompt="Introduce NPC">＋ Introduce NPC</button>
-      </div>
-      ${whoEntityPicker(doc, ui)}
-      ${factionsActiveNearbyBlock(doc)}
-      ${activeConflictLocationPicker(doc)}`);
-  },
-
-  where(doc, ui) {
-    const mainCard = cardWithHeaderRight('WHERE it happens', 'The place the scene is set.', locationSummaryHeader(doc), `
-      ${summaryField('where', doc.context.where.summary, 'Location and immediate surroundings…', doc, ui)}
-      ${whereLocationPicker(doc, ui)}
-      ${currentLocationBanner(doc)}
-      ${locationFactionsBlock(doc)}
-      ${locationConflictsBlock(doc)}
-      ${nearbyLocationsBlock(doc)}
-      ${factionActivityHereBlock(doc)}
-      ${storyInspirationBlock()}
-      ${locationStoryBlock(doc, ui)}`);
-    // Whole-card relocation (direct request): the Faction Events card can
-    // move OUT of the drawer tab stack and dock here as a right column,
-    // via its own down-arrow (data-faction-events-dock, shell.js) — the
-    // SAME pure renderFactionEvents() the drawer normally shows, called a
-    // second way with docked:true so it draws its own heading + an
-    // up-arrow instead of relying on the drawer's chrome for a title.
-    if (!ui.factionEventsDockedInWhere) return mainCard;
-    const dockedPanel = renderFactionEvents(doc, {
-      factionEventsDrafts: ui.factionEventsDrafts,
-      factionEventsFactionFilterId: ui.factionEventsFactionFilterId,
-      factionEventsLocationFilterId: ui.factionEventsLocationFilterId,
-      factionEventsStepFactionId: ui.factionEventsStepFactionId,
-      factionRoundHistoryOpen: ui.factionRoundHistoryOpen,
-      conflictEscalationSuggestions: ui.conflictEscalationSuggestions,
-      docked: true,
-    });
-    return `<div class="workspace-with-side">${mainCard}<aside class="workspace-docked-panel">${dockedPanel}</aside></div>`;
-  },
-
-  why(doc, ui) {
-    return card('WHY they are here', 'The objective driving the party, tracked as progress clocks.', `
-      ${summaryField('why', doc.context.why.summary, 'The current goal or stakes…', doc, ui)}
-      <div class="shift-actions">
-        <button class="chip" data-shift-prompt="Set Objective">◎ Set Objective</button>
-      </div>
-      ${whyEntityPicker(doc, ui)}
-      ${storyOptionsBlock(doc, ui)}
-      ${whyLensSuggestBlock(doc, ui)}
-      ${threadsBlock(doc)}
-      ${foreshadowingBlock(doc)}`);
-  },
-
-  how(doc, ui) {
-    const activity = doc.context.how.activity || '';
-    return card('HOW it plays', 'Mode, pacing, and the Rules Lens it suggests.', `
-      <label class="field-label">Activity
-        <select data-ctx="how.activity">
-          <option value="">— none set —</option>
-          ${ACTIVITIES.map((a) => `<option value="${a.id}" ${a.id === activity ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}
-        </select>
+// One NPC's scene-scoped card (docs/adr/0041 Phase 13b) — collapsed to
+// just its name chip by default (ui.expandedSceneNpcs, ephemeral),
+// expanding to the already-existing permanent `currentGoal` field
+// (entities.js, reused as-is) plus the 5 new scene-scoped fields
+// (Disposition/Motivation/Threat Rank/Challenges/Opportunities), each
+// oracle-seedable and edited in place. `removable` (Bystanders only —
+// Protagonists/Antagonists are derived from WHO's own @mentions + the
+// #character tag, not a GM-curated list, so there's nothing to remove
+// them FROM) adds a ✕ that drops the NPC from this scene's bystander list
+// without touching the entity itself.
+function npcSceneCard(doc, ui, scene, npc, { removable = false } = {}) {
+  const expanded = ((ui && ui.expandedSceneNpcs) || new Set()).has(npc.id);
+  const state = getNpcSceneState(scene, npc.id);
+  return `<div class="npc-scene-card">
+    <div class="section-head-row">
+      <button type="button" class="entity-chip" data-open-entity="${esc(npc.id)}">${esc(npc.name || 'Unnamed')}</button>
+      <span class="npc-scene-card-actions">
+        ${removable ? `<button type="button" class="icon-btn" data-scene-bystander-remove="${esc(npc.id)}" title="Remove from this scene">✕</button>` : ''}
+        <button type="button" class="icon-btn" data-scene-npc-toggle="${esc(npc.id)}" title="${expanded ? 'Collapse' : 'Expand'}">${expanded ? '▾' : '▸'}</button>
+      </span>
+    </div>
+    ${expanded ? `<div class="npc-scene-card-body">
+      <label class="field-label sm">Current goal
+        <input type="text" data-npc-current-goal="${esc(npc.id)}" value="${esc(npc.currentGoal || '')}" placeholder="What do they want right now?">
       </label>
-      ${rulesLensSuggestion(doc, activity)}
-      ${summaryField('how', doc.context.how.summary, 'Exploration, combat, social, downtime…', doc, ui)}
-      <div class="shift-actions">
-        <button class="chip" data-shift="Advance Time">⏱ Advance Time</button>
-      </div>`);
-  },
+      ${oracleFieldRow('Disposition', state.disposition.value, `data-scene-npc-roll="${esc(npc.id)}::disposition"`, `data-scene-npc-field="${esc(npc.id)}::disposition"`)}
+      ${oracleFieldRow('Motivation', state.motivation.value, `data-scene-npc-roll="${esc(npc.id)}::motivation"`, `data-scene-npc-field="${esc(npc.id)}::motivation"`)}
+      ${oracleFieldRow('Threat Rank', state.threatRank.value, `data-scene-npc-roll="${esc(npc.id)}::threatRank"`, `data-scene-npc-field="${esc(npc.id)}::threatRank"`)}
+      ${oracleFieldRow('Challenges', state.challenges.value, `data-scene-npc-roll="${esc(npc.id)}::challenges"`, `data-scene-npc-field="${esc(npc.id)}::challenges"`)}
+      ${oracleFieldRow('Opportunities', state.opportunities.value, `data-scene-npc-roll="${esc(npc.id)}::opportunities"`, `data-scene-npc-field="${esc(npc.id)}::opportunities"`)}
+    </div>` : ''}
+  </div>`;
+}
 
-  // Story Dashboard (docs/adr/0040, Phase 12a/12b) — a consolidated view
-  // ALONGSIDE who/where/what/why/how above, not a replacement (those keep
-  // their exact current behavior; this is additive, reachable as a 6th
-  // strip button, ui/shell.js's render()). Deliberately reuses every
-  // piece verbatim rather than re-deriving anything: WHAT's threat/
-  // mystery/stress dials are the same data-ctx-num inputs (still directly
-  // editable here, same generic handler, zero new wiring), HOW's Activity
-  // select is the same data-ctx select, WHO's picker/WHERE's factions-
-  // conflicts-nearby blocks are the exact functions those tabs already
-  // call. The two genuinely new pieces are storyOptionsBlock's
-  // `selectable` mode (a checkbox per row, "include this in the draft
-  // below") and narrativeComposerBlock (Phase 12b) underneath it.
-  dashboard(doc, ui) {
-    const activity = doc.context.how.activity || '';
-    const c = doc.context.what;
-    const mystery = c.mystery == null ? 0 : c.mystery;
-    const stress = c.stress == null ? 5 : c.stress;
-    return card('Story Dashboard', 'Everything currently in play, at a glance.', `
-      ${currentLocationBanner(doc)}
-      <div class="field-row-3col">
-        <label class="field-label sm">Threat <b class="metric">${c.threat}/10</b>
-          <input type="range" min="0" max="10" value="${c.threat}" data-ctx-num="what.threat">
-        </label>
-        <label class="field-label sm">Mystery <b class="metric">${mystery}/10</b>
-          <input type="range" min="0" max="10" value="${mystery}" data-ctx-num="what.mystery">
-        </label>
-        <label class="field-label sm">Stress <b class="metric">${stress}/10</b>
-          <input type="range" min="0" max="10" value="${stress}" data-ctx-num="what.stress">
-        </label>
+// WHO's three scene-scoped NPC groups (docs/adr/0041 Phase 13b) —
+// Protagonists (#character-tagged NPCs mentioned in WHO's Focus) /
+// Antagonists (every other NPC mentioned in WHO's Focus) are DERIVED
+// live from gatherSceneContext's whoEntities + the existing tag
+// mechanism, never stored — the same "Focus text is the single source of
+// truth for who's in the scene" convention WHO/WHERE's own redesign
+// already established. Bystanders are the one GM-curated list (there's
+// no safe existing query for "physically nearby but unmentioned"). All
+// three need an active scene to hang per-NPC state on — before the first
+// "Continue Story," there's nothing to track yet.
+function npcSceneGroupsBlock(doc, ui) {
+  const scenes = doc.scenes || [];
+  if (!scenes.length) return '<div class="ws-placeholder">Continue Story (Co-Pilot) to start a scene — NPC roles and scene-specific details track per scene.</div>';
+  const scene = scenes[scenes.length - 1];
+  const ctx = gatherSceneContext(doc);
+  const protagonists = ctx.whoEntities.filter((e) => e.type === 'npc' && (e.tags || []).includes('character'));
+  const antagonists = ctx.whoEntities.filter((e) => e.type === 'npc' && !(e.tags || []).includes('character'));
+  const bystanderIds = scene.bystanderIds || [];
+  const bystanders = bystanderIds.map((id) => getEntity(doc, id)).filter(Boolean);
+  const bystanderCandidates = listEntities(doc, ['npc']).filter((n) => !bystanderIds.includes(n.id));
+
+  const group = (label, hint, npcs, opts) => `<div class="workspace-mini-section npc-scene-group">
+    <span class="field-label-static">${esc(label)} (${npcs.length})</span>
+    <p class="dim small">${esc(hint)}</p>
+    ${npcs.length ? npcs.map((n) => npcSceneCard(doc, ui, scene, n, opts)).join('') : '<p class="dim small">None yet.</p>'}
+  </div>`;
+
+  return `
+    ${group('Protagonists', "NPCs mentioned in WHO's Focus, tagged #character.", protagonists)}
+    ${group('Antagonists', "Every other NPC mentioned in WHO's Focus.", antagonists)}
+    <div class="workspace-mini-section npc-scene-group">
+      <span class="field-label-static">Bystanders (${bystanders.length})</span>
+      <p class="dim small">Observers you've added to this scene — react to events, not directly involved.</p>
+      ${bystanders.length ? bystanders.map((n) => npcSceneCard(doc, ui, scene, n, { removable: true })).join('') : '<p class="dim small">None yet.</p>'}
+      ${bystanderCandidates.length ? `<select data-scene-bystander-add>
+        <option value="">— add a bystander —</option>
+        ${bystanderCandidates.map((n) => `<option value="${esc(n.id)}">${esc(n.name || 'Unnamed')}</option>`).join('')}
+      </select>` : '<p class="dim small">No other NPCs exist yet to add.</p>'}
+    </div>`;
+}
+
+// WHERE's docked-Faction-Events side panel (whole-card relocation, direct
+// request — see factionEventsDockedInWhere's original comment history)
+// keeps its exact logic, just returns a fragment now instead of wrapping
+// a whole top-level view — `locationSummaryHeader`'s quick-reference strip
+// renders inline at the top instead of in a special header-row slot (that
+// slot doesn't exist anymore now that `dashboardSection` supplies the
+// section's own header).
+function whereSectionBody(doc, ui) {
+  const body = `
+    ${locationSummaryHeader(doc)}
+    ${locationDetailsBlock(doc, ui)}
+    ${summaryField('where', doc.context.where.summary, 'Location and immediate surroundings…', doc, ui)}
+    ${whereLocationPicker(doc, ui)}
+    ${currentLocationBanner(doc)}
+    ${locationFactionsBlock(doc)}
+    ${locationConflictsBlock(doc)}
+    ${nearbyLocationsBlock(doc)}
+    ${factionActivityHereBlock(doc)}
+    ${locationStoryBlock(doc, ui)}`;
+  if (!ui.factionEventsDockedInWhere) return body;
+  const dockedPanel = renderFactionEvents(doc, {
+    factionEventsDrafts: ui.factionEventsDrafts,
+    factionEventsFactionFilterId: ui.factionEventsFactionFilterId,
+    factionEventsLocationFilterId: ui.factionEventsLocationFilterId,
+    factionEventsStepFactionId: ui.factionEventsStepFactionId,
+    factionRoundHistoryOpen: ui.factionRoundHistoryOpen,
+    conflictEscalationSuggestions: ui.conflictEscalationSuggestions,
+    docked: true,
+  });
+  return `<div class="workspace-with-side">${body}<aside class="workspace-docked-panel">${dockedPanel}</aside></div>`;
+}
+
+// Location Details (docs/adr/0041 Phase 13a) — an expander (collapsed by
+// default, ui.expandedLocationDetails) on each current WHERE location
+// showing the hierarchy the request asked for: "[immediate location]
+// at/on the [object type] in the [star system] [sector]." A location is
+// never the star itself, only a system object or something finer inside
+// one (a facility/building/street) — a modeling constraint on what a GM
+// creates as a Location entity, not new schema. Every field here (Object
+// type/Star system/Sector, plus Sights/Smells/Sounds below) is a plain
+// flat field on the location entity itself (entities.js's
+// ensureWorldProfileFields/ensureLocationFields) — no structural parent
+// walk needed for the title, unlike locationSummaryHeader's own District
+// field just above this block, which DOES walk one hop via
+// getContainingLocation.
+function locationDetailsBlock(doc, ui) {
+  const whereLocations = getCurrentWhereLocations(doc);
+  if (!whereLocations.length) return '';
+  return whereLocations.map((loc) => {
+    const expanded = ((ui && ui.expandedLocationDetails) || new Set()).has(loc.id);
+    const title = [
+      esc(loc.name || 'Unnamed'),
+      loc.objectType ? `at/on the ${esc(loc.objectType)}` : '',
+      loc.starSystem ? `in the ${esc(loc.starSystem)}` : '',
+      loc.sector ? `— ${esc(loc.sector)} Sector` : '',
+    ].filter(Boolean).join(' ');
+    return `<div class="workspace-mini-section location-details">
+      <div class="section-head-row">
+        <button type="button" class="btn ghost sm" data-location-details-toggle="${esc(loc.id)}">${expanded ? '▾' : '▸'} Location Details</button>
       </div>
-      <label class="field-label sm">Activity
-        <select data-ctx="how.activity">
-          <option value="">— none set —</option>
-          ${ACTIVITIES.map((a) => `<option value="${a.id}" ${a.id === activity ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}
-        </select>
-      </label>
-      <div class="dashboard-grid">
-        <div class="dashboard-col">
-          ${whoEntityPicker(doc, ui)}
-          ${locationFactionsBlock(doc)}
-          ${locationConflictsBlock(doc)}
-          ${nearbyLocationsBlock(doc)}
+      ${expanded ? `
+        <p class="location-details-title">${title}</p>
+        <div class="field-row-3col">
+          <label class="field-label sm">Object type
+            <select data-location-field="${esc(loc.id)}::objectType">
+              <option value="">— unset —</option>
+              ${LOCATION_OBJECT_TYPES.map((t) => `<option value="${esc(t)}" ${t === loc.objectType ? 'selected' : ''}>${esc(t)}</option>`).join('')}
+            </select>
+          </label>
+          <label class="field-label sm">Star system
+            <input type="text" data-location-field="${esc(loc.id)}::starSystem" value="${esc(loc.starSystem || '')}" placeholder="Sol, Alpha Centauri…">
+          </label>
+          <label class="field-label sm">Sector
+            <input type="text" data-location-field="${esc(loc.id)}::sector" value="${esc(loc.sector || '')}" placeholder="Outer Rim…">
+          </label>
         </div>
-        <div class="dashboard-col dashboard-col-wide">
-          ${storyOptionsBlock(doc, ui, { selectable: true, limit: 10 })}
-          ${narrativeComposerBlock(doc, ui)}
-        </div>
-      </div>`);
-  },
-};
-
-function rulesLensSuggestion(doc, activity) {
-  if (!activity) return '';
-  const suggestion = suggestRulesLens(activity);
-  if (!suggestion) return '';
-  const current = doc.settings.statRuleset || 'starforged';
-  const chips = suggestion.providers.map((p) => {
-    const applyBtn = p.rulesetId
-      ? (p.rulesetId === current
-        ? '<span class="dim small">(current)</span>'
-        : `<button class="chip sm" data-apply-ruleset="${esc(p.rulesetId)}" title="${esc(p.note || '')}">Use as default ▸</button>`)
-      : `<span class="dim small" title="${esc(p.note || '')}">(${esc(p.status || 'reference only')})</span>`;
-    return `<span class="rules-lens-row"><span class="chip sm rules-provider-chip">${esc(p.label || p.id)}</span> ${applyBtn}</span>`;
+        ${oracleFieldRow('Sights', loc.sights || '', `data-location-sensory-roll="${esc(loc.id)}::sights"`, `data-location-field="${esc(loc.id)}::sights"`)}
+        ${oracleFieldRow('Smells', loc.smells || '', `data-location-sensory-roll="${esc(loc.id)}::smells"`, `data-location-field="${esc(loc.id)}::smells"`)}
+        ${oracleFieldRow('Sounds', loc.sounds || '', `data-location-sensory-roll="${esc(loc.id)}::sounds"`, `data-location-field="${esc(loc.id)}::sounds"`)}
+      ` : ''}
+    </div>`;
   }).join('');
-  return `<div class="rules-lens-suggestion">
-    <span class="dim small">Suggested Rules Lens for ${esc(suggestion.area)}:</span>
-    <div class="rules-lens-chips">${chips}</div>
-  </div>`;
+}
+
+// Threat/Mystery/Stress/Resources/Reputation dials now live once, in the
+// Dashboard's own header (below) — not duplicated here.
+function whatSectionBody(doc, ui) {
+  const c = doc.context.what;
+  return `
+    <div class="field-label">Situation
+      <div class="rich-field">${richToolbarHTML('what:situation', toolbarCollapsed(doc, ui, 'what:situation'))}<div class="mention-editor" contenteditable="true" data-ctx="what.situation" data-placeholder="What is unresolved right now?">${buildMentionEditorHTML(doc, c.situation)}</div></div>
+    </div>
+    <label class="field-label">Intent
+      <select data-ctx="what.intent">
+        ${INTENTS.map((i) => `<option ${i === c.intent ? 'selected' : ''}>${i}</option>`).join('')}
+      </select>
+    </label>
+    ${lastScene(doc, ui)}
+    ${worldFlagsBlock(doc)}`;
+}
+
+function whySectionBody(doc, ui) {
+  return `
+    ${summaryField('why', doc.context.why.summary, 'The current goal or stakes…', doc, ui)}
+    <div class="shift-actions">
+      <button class="chip" data-shift-prompt="Set Objective">◎ Set Objective</button>
+    </div>
+    ${whyEntityPicker(doc, ui)}
+    ${threadsBlock(doc)}
+    ${foreshadowingBlock(doc)}`;
+}
+
+// Activity itself is edited once, in the Dashboard header (below); the
+// Suggested Rules Lens it drives now lives in Co-Pilot (copilotPanel.js)
+// alongside every other suggestion-generating control.
+function howSectionBody(doc, ui) {
+  return `
+    ${summaryField('how', doc.context.how.summary, 'Exploration, combat, social, downtime…', doc, ui)}
+    <div class="shift-actions">
+      <button class="chip" data-shift="Advance Time">⏱ Advance Time</button>
+    </div>`;
+}
+
+// Story Dashboard (docs/adr/0040, Phase 12a/12b/12f) — the sole workspace
+// view. Phase 12f retired the 5 individual WHO/WHERE/WHAT/WHY/HOW tabs
+// entirely (direct request) in favor of this: a header of always-visible
+// dials/Activity, then the 5 former tabs as open/collapsible
+// `dashboardSection`s (left column) plus the Narrative Composer pinned at
+// the top-right (right column, `styles/cockpit.css`'s sticky
+// `.dashboard-composer-col`).
+export function renderWorkspace(doc, ui) {
+  const activity = doc.context.how.activity || '';
+  const c = doc.context.what;
+  const mystery = c.mystery == null ? 0 : c.mystery;
+  const stress = c.stress == null ? 5 : c.stress;
+  const resources = c.resources == null ? 5 : c.resources;
+  const reputation = c.reputation == null ? 5 : c.reputation;
+  return card('Story Dashboard', 'Everything currently in play, at a glance.', `
+    ${currentLocationBanner(doc)}
+    <div class="field-row-3col">
+      <label class="field-label sm">Threat <b class="metric">${c.threat}/10</b>
+        <input type="range" min="0" max="10" value="${c.threat}" data-ctx-num="what.threat">
+      </label>
+      <label class="field-label sm">Mystery <b class="metric">${mystery}/10</b>
+        <input type="range" min="0" max="10" value="${mystery}" data-ctx-num="what.mystery">
+      </label>
+      <label class="field-label sm">Stress <b class="metric">${stress}/10</b>
+        <input type="range" min="0" max="10" value="${stress}" data-ctx-num="what.stress">
+      </label>
+    </div>
+    <div class="field-row-3col">
+      <label class="field-label sm">Resources <b class="metric">${resources}/10</b>
+        <input type="range" min="0" max="10" value="${resources}" data-ctx-num="what.resources">
+      </label>
+      <label class="field-label sm">Reputation <b class="metric">${reputation}/10</b>
+        <input type="range" min="0" max="10" value="${reputation}" data-ctx-num="what.reputation">
+      </label>
+    </div>
+    <label class="field-label sm">Activity
+      <select data-ctx="how.activity">
+        <option value="">— none set —</option>
+        ${ACTIVITIES.map((a) => `<option value="${a.id}" ${a.id === activity ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}
+      </select>
+    </label>
+    <div class="dashboard-grid">
+      <div class="dashboard-col">
+        ${dashboardSection('who', 'WHO is here', 'People and factions in play.', whoSectionBody(doc, ui), doc, ui)}
+        ${dashboardSection('where', 'WHERE it happens', 'The place the scene is set.', whereSectionBody(doc, ui), doc, ui)}
+        ${dashboardSection('what', 'WHAT is happening', 'The active situation.', whatSectionBody(doc, ui), doc, ui)}
+        ${dashboardSection('why', 'WHY they are here', 'The objective driving the party, tracked as progress clocks.', whySectionBody(doc, ui), doc, ui)}
+        ${dashboardSection('how', 'HOW it plays', 'Mode and pacing for the current scene.', howSectionBody(doc, ui), doc, ui)}
+      </div>
+      <div class="dashboard-composer-col">
+        ${narrativeComposerBlock(doc, ui)}
+      </div>
+    </div>`);
 }
 
 function summaryField(key, val, placeholder, doc, ui) {
@@ -313,9 +401,10 @@ function whereLocationPicker(doc, ui) {
 // NPC and Faction tags pooled together (not a separate type-filter chip
 // row; kept as close to WHERE's own shape as possible, one type at a time
 // was WHERE's whole design, this just widens "one type" to "two related
-// ones"). "Introduce NPC" (the data-shift-prompt chip above this in who())
-// is left as-is — narrating a brand-new introduction in prose is a
-// different action from mentioning an entity that already exists.
+// ones"). "Introduce NPC" (the data-shift-prompt chip above this in
+// whoSectionBody) is left as-is — narrating a brand-new introduction in
+// prose is a different action from mentioning an entity that already
+// exists.
 function whoEntityPicker(doc, ui) {
   const tagFilter = ui.whoTagFilter || null;
   const vocab = [...new Set([...listTagVocabulary(doc, 'npc'), ...listTagVocabulary(doc, 'faction')])].sort((a, b) => a.localeCompare(b));
@@ -468,17 +557,16 @@ function factionActivityHereBlock(doc) {
     </div>`;
 }
 
-// Read-only quick-awareness summary, top-right of WHERE's own header row
-// (direct request) — System/Star/Colony-Base/District for the PRIMARY
-// current WHERE location (whereLocations[0], same "first is primary"
-// convention factionsActiveNearbyBlock's add-select already uses).
-// Deliberately reuses existing World Profile fields rather than inventing
-// new schema: `zone` (free text, e.g. "Near Earth Zone") -> System,
-// `starSystem` (confusingly labeled "Star System" in the World Profile
-// card, but actually stores the NAME of a #star-tagged Location) -> Star,
-// `bases[]` (curated base-name strings) -> Colony/Base, and the
-// structural parent one hop up the contains/located_at entity graph
-// (getContainingLocation — the same relationship isSameDistrict/
+// Read-only quick-awareness summary (direct request) — System/Star/Colony-
+// Base/District for the PRIMARY current WHERE location (whereLocations[0],
+// same "first is primary" convention factionsActiveNearbyBlock's add-
+// select already uses). Deliberately reuses existing World Profile fields
+// rather than inventing new schema: `zone` (free text, e.g. "Near Earth
+// Zone") -> System, `starSystem` (confusingly labeled "Star System" in the
+// World Profile card, but actually stores the NAME of a #star-tagged
+// Location) -> Star, `bases[]` (curated base-name strings) -> Colony/Base,
+// and the structural parent one hop up the contains/located_at entity
+// graph (getContainingLocation — the same relationship isSameDistrict/
 // getContainedLocations read) -> District, distinct from the `zone`/
 // `starSystem` text fields since a Location may have one, both, or
 // neither set up.
@@ -583,107 +671,32 @@ function nearbyLocationsBlock(doc) {
     </div>`;
 }
 
-// GM inspiration for moving the activity forward — reuses the existing
-// oracle-driven Site Concept (feature/danger/wonder) and Adventure Seed
-// (hook/twist/complication) generators verbatim (domain/worldbuilding.js,
-// already wired to data-generate-site/-seed in shell.js, appends straight
-// to the Journal) rather than inventing a second generator — this is
-// just a second, WHERE-scoped entry point to the exact same buttons
-// already available elsewhere (Article IX: extend via what exists).
-function storyInspirationBlock() {
-  return `
-    <div class="workspace-mini-section">
-      <span class="field-label-static">Need inspiration?</span>
-      <div class="shift-actions">
-        <button class="chip" data-generate-site title="Roll a site concept: a feature, a danger, and a wonder">🎲 Site Concept</button>
-        <button class="chip" data-generate-seed title="Roll an adventure seed: a hook, a twist, and a complication">🎲 Adventure Seed</button>
-      </div>
-    </div>`;
-}
-
-// Story Options (docs/adr/0039) — buildStoryOptions() (copilot.js)
-// combines whoever's in scene (WHO's @mentions + WHERE's present factions),
-// WHERE's Conflicts-here, and WHY's own Threads/Foreshadowing/World Flags
-// into a ranked, CUMULATIVE list (as opposed to advise()'s single-pick
-// Co-Pilot observation) — every row is a distinct angle the GM can act on.
-// 🔮 rolls that option's linked Oracle table for real inspiration (the
-// existing rollOracle, same mechanism Site Concept/Adventure Seed use);
-// ＋ Journal drops the option's own text straight into the session log;
-// ✕ dismisses without acting on it. All three (docs/adr/0039 Phase 2)
-// add the option's id to dismissedStoryOptionIds (shell.js, ephemeral,
-// mirrors ADR 0036's dismissible-suggestion pattern) so it makes room for
-// the next-ranked option instead of lingering — fetched from a deeper
-// pool (limit 12) than what's actually shown (6) so there's a "next" to
-// reveal. Nothing here is ever applied automatically (Article II).
-// `selectable` (docs/adr/0040 Phase 12b, dashboard-only) adds a checkbox
-// per row — data-story-option-select, checked state read from
-// ui.selectedStoryOptionIds — so a GM can mark which options are "in
-// play" for the Narrative Composer below, on top of (not instead of) the
-// existing roll/journal/dismiss actions every row already has. `limit`
-// lets the dashboard show more rows than WHY's own default 6.
-function storyOptionsBlock(doc, ui, { selectable = false, limit = 6 } = {}) {
-  const dismissed = (ui && ui.dismissedStoryOptionIds) || new Set();
-  const selected = (ui && ui.selectedStoryOptionIds) || new Set();
-  const options = buildStoryOptions(doc, { limit: Math.max(12, limit * 2) }).filter((o) => !dismissed.has(o.id)).slice(0, limit);
-  const rows = options.map((o) => `<div class="thread-row story-option-row">
-      <span class="thread-name">
-        ${selectable ? `<input type="checkbox" data-story-option-select="${esc(o.id)}" ${selected.has(o.id) ? 'checked' : ''} title="Include in the Narrative Composer draft">` : ''}
-        ${o.entityId ? `<button type="button" class="entity-chip" data-open-entity="${esc(o.entityId)}">${esc(o.label)}</button>` : esc(o.label)}
-        <span class="dim small">— ${esc(o.detail)}</span>
-      </span>
-      <span class="thread-actions">
-        <button class="icon-btn" data-story-option-roll="${esc(o.oracleGroup)}>${esc(o.oracleTable)}" data-story-option-id="${esc(o.id)}" title="Roll ${esc(o.oracleGroup)} → ${esc(o.oracleTable)} for inspiration">🔮</button>
-        <button class="icon-btn" data-story-option-journal="${esc(o.id)}" title="Add to Journal">＋</button>
-        <button class="icon-btn" data-story-option-dismiss="${esc(o.id)}" title="Dismiss">✕</button>
-      </span>
-    </div>`).join('');
-  return `<div class="threads">
-    <div class="threads-head"><h3>Story Options</h3></div>
-    ${options.length ? rows : '<div class="ws-placeholder">Nothing to suggest yet — mention someone in WHO, set a Location in WHERE, or open a Conflict/Thread/Foreshadowing entry, and options will show up here.</div>'}
-  </div>`;
-}
-
-// Narrative Composer (docs/adr/0040 Phase 12b) — composeNarrativeDraft()
-// (copilot.js) pulls WHO/WHERE/WHAT/WHY's current state plus whichever
-// Story Options are checked above into one composed paragraph, recomputed
-// fresh on every render (same as storyOptionsBlock itself). Deliberately
-// NOT a real contenteditable — a live-recomputed field a GM was mid-edit
-// in would get silently clobbered the moment anything else on the
-// dashboard changed (ticking another checkbox, editing a WHO field) — so
-// this renders read-only (via the same buildMentionEditorHTML every rich
-// field already uses, so @mentions still show as real badges) with
-// Copy/Send-to-Journal actions instead; hand-polishing happens after
-// Send, in the Journal note itself (a real editable field there).
+// Narrative Composer (docs/adr/0040 Phase 12b, moved to the workspace's
+// top-right in Phase 12f) — composeNarrativeDraft() (copilot.js) pulls
+// WHO/WHERE/WHAT/WHY's current state plus whichever Story Options are
+// checked (in Co-Pilot now, copilotPanel.js) into one composed paragraph,
+// recomputed fresh on every render. Deliberately NOT a real
+// contenteditable — a live-recomputed field a GM was mid-edit in would get
+// silently clobbered the moment anything else on the dashboard changed
+// (ticking a checkbox in Co-Pilot, editing a WHO field) — so this renders
+// read-only (via the same buildMentionEditorHTML every rich field already
+// uses, so @mentions still show as real badges) with Copy/Send-to-Journal
+// actions instead; hand-polishing happens after Send, in the Journal note
+// itself (a real editable field there). Pinned via CSS `position: sticky`
+// (`.dashboard-composer-col`, styles/cockpit.css) so it stays visible
+// while the GM scrolls the 5 sections to its left.
 function narrativeComposerBlock(doc, ui) {
   const selected = (ui && ui.selectedStoryOptionIds) || new Set();
   const draft = composeNarrativeDraft(doc, { selectedOptionIds: Array.from(selected) });
   return `<div class="threads narrative-composer">
     <div class="threads-head"><h3>Narrative Composer</h3></div>
-    <p class="dim small">Check Story Options above to weave them in — this updates live as WHO/WHERE/WHAT/WHY and your selections change.</p>
-    <div class="mention-editor narrative-composer-preview">${draft ? buildMentionEditorHTML(doc, draft) : '<span class="ws-placeholder">Nothing to compose yet — mention someone in WHO, set a Location in WHERE, or check a Story Option above.</span>'}</div>
+    <p class="dim small">Reflects WHO/WHERE's Focus text live, plus whichever Story Options you check in Co-Pilot.</p>
+    <div class="mention-editor narrative-composer-preview">${draft ? buildMentionEditorHTML(doc, draft) : '<span class="ws-placeholder">Nothing to compose yet — write something in WHO/WHERE\'s Focus field, or check a Story Option in Co-Pilot.</span>'}</div>
     <div class="shift-actions">
       <button class="chip" data-composer-copy title="Copy the draft to your clipboard">📋 Copy</button>
       <button class="chip" data-composer-journal title="Add the draft to the Journal">＋ Send to Journal</button>
     </div>
   </div>`;
-}
-
-// Suggestion Lens, weighted to the current scene (docs/adr/0039 Phase 2) —
-// a second entry point into the exact same lens-picker → suggestNextWithLens
-// flow WHAT's "What Happens Next?" already offers (session.js's
-// drawSuggestionLenses/suggestNextWithLens are completely unchanged by
-// this), just drawn with `sceneContext` (gatherSceneContext) so a Conflict/
-// faction/Negotiate-activity currently in play gives matching lenses (e.g.
-// negotiation, violence, politics) better odds of being offered — never a
-// GUARANTEE, still a random draw, just no longer context-blind. Separate
-// ephemeral state from WHAT's own ui.lensPickerOpen/lensDraw (shell.js) so
-// the two pickers never interfere with each other.
-function whyLensSuggestBlock(doc, ui) {
-  return `
-    <div class="workspace-mini-section">
-      <button class="chip" data-why-lens-suggest title="Draw lens chips weighted toward who/what is currently in scene">🎭 Suggest a Lens</button>
-      ${lensPickerHtml(ui.whyLensPickerOpen, ui.whyLensDraw, { intro: 'Weighted toward what’s currently in scene — pick a lens to steer what happens next:' })}
-    </div>`;
 }
 
 // A GM's own free-text narrative note per Location — "Location Story"
@@ -809,9 +822,9 @@ function sceneFieldIcon(field) {
 // better than either a cramped single line or a field that's always tall.
 // Collapsed by default (ui.expandedSceneFields, ephemeral — same Set
 // shape as drawers/index.js's expandedEnhancements) — clicking the label
-// expands just that one field; the WHAT tab opens with all 7 collapsed
-// to their labels so it reads as a scannable list, not a wall of text
-// boxes, until the GM picks one to look at.
+// expands just that one field; WHAT's own section opens with all 7
+// collapsed to their labels so it reads as a scannable list, not a wall
+// of text boxes, until the GM picks one to look at.
 function sceneField(scene, key, label, placeholder, ui) {
   const open = ((ui && ui.expandedSceneFields) || new Set()).has(`${scene.id}::${key}`);
   return `<div class="field-label sm">
@@ -834,7 +847,7 @@ function sceneField(scene, key, label, placeholder, ui) {
 // combined text below.
 function lastScene(doc, ui) {
   const scenes = doc.scenes || [];
-  if (!scenes.length) return '<div class="ws-placeholder">No scenes yet. Continue Story to generate the opening beat.</div>';
+  if (!scenes.length) return '<div class="ws-placeholder">No scenes yet. Continue Story (Co-Pilot) to generate the opening beat.</div>';
   const s = scenes[scenes.length - 1];
   return `<details class="last-scene" open>
     <summary>Latest: Scene ${s.number} — ${esc(s.summary)}</summary>
@@ -851,8 +864,4 @@ function lastScene(doc, ui) {
       </div>
     </div>
   </details>`;
-}
-
-export function renderWorkspace(doc, active, ui) {
-  return (VIEWS[active] || VIEWS.what)(doc, ui);
 }

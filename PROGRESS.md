@@ -14,6 +14,93 @@ or the ADRs under `docs/adr/` — check those first). Full history is also in
 
 ## Status Summary
 
+**2026-07-16 Phase 13a/13b built: Location Details + WHO's scene-scoped
+NPC groups** (`docs/adr/0041-scene-operating-model.md`, same-day follow-up
+to the roadmap below — the confirmed first increment). **13a**: WHERE's
+IL chip gains a "Location Details" expander — `[immediate location]
+at/on the [object type] in the [star system] [sector]`, all flat fields
+on the location entity itself (`entities.js` gained `sector`/
+`objectType`/`sights`/`smells`/`sounds`) — plus oracle-populated Sights/
+Smells/Sounds (new `Location Themes.Sight/Smell/Sound` tables). **13b**:
+WHO now shows three scene-scoped NPC groups — Protagonists (`#character`-
+tagged, derived from WHO's own @mentions) / Antagonists (everyone else
+mentioned) / Bystanders (a GM-curated add-list) — each NPC expandable to
+its already-existing `currentGoal` plus 5 new oracle-seedable fields
+(Disposition/Motivation/Threat Rank/Challenges/Opportunities, new
+`scenes.js` `npcStates` living on the current scene object, not a
+permanent entity mutation). Both features share the "auto-populate, then
+remember my edits" mechanism the roadmap scoped down to: rolling a field
+records which oracle table+index it came from; editing it afterward
+writes that SAME index back through `oracles.js`'s already-proven
+`updateOracleEntry` — so the same roll produces the GM's own phrasing
+campaign-wide from then on. A hand-typed value (never rolled) has no
+source to remember, so it's just a plain edit. New `session.js`
+orchestration functions (`rollNpcSceneField`/`editNpcSceneField`/
+`rollLocationSensoryField`/`editLocationSensoryField`) mirror
+`generateNpc`/`deepenNpc`'s existing "roll then patch" shape. 5 new
+domain tests (447 total) plus a direct Node smoke test of the full round
+trip (tag → mention → generate scene → add bystander → roll → edit →
+re-render) against both collapsed and expanded UI states. `npm test`/
+`node scripts/build.js` both clean.
+
+**2026-07-16 Phase 13 roadmap (Scene Operating Model), `docs/adr/0041-
+scene-operating-model.md`** — direct follow-up, much larger than Phase
+12: the Dashboard/Co-Pilot shell is right, but still mostly empty of the
+actual scene content a GM needs — a real WHERE location hierarchy, WHO
+NPCs organized into three scene-scoped groups (Protagonists/Antagonists/
+Bystanders) with per-NPC situational fields, WHAT's tracker-linked News
+Events/cross-scene Dangers/an algorithmic Shared Circumstances generator,
+WHY's carried-over-situation oracle filtering, HOW's asset/gear
+suggestions, an oracle "auto-populate, then remember my edits" loop, an
+optional low-effort guided walkthrough mode, manual-physical-dice-result
+input driving calculated consequences, and Co-Pilot merged into the same
+persistent drawer tab group instead of its own always-there column (with
+a responsive 3-column layout and Ctrl+Left/Right retargeted to cycle that
+group's tabs). Roughly 10 separable pieces; asked 3 direct questions
+before writing anything: (1) this pass is **roadmap + ADR only**, no
+workspace code — several pieces (oracle learning, the guided mode, the
+Co-Pilot/drawer-tab-group merge) have no existing pattern to extend and
+building blind risks redoing work; (2) oracle "learning" is scoped down
+to extending the already-proven `oracles.overrides` mechanism (an edited
+auto-populated field becomes that oracle table entry's new default going
+forward), not a new weighted-preference layer; (3) the first phase to
+actually build next is the **scene data model** — WHO's three NPC groups
++ per-NPC fields (13b) and WHERE's Location Details hierarchy (13a) —
+since every other piece reads or writes this data. New ADR 0041 records
+the full phased roadmap (13a-13k); `docs/adr/0040-story-dashboard.md`'s
+still-open 12c is recorded as superseded by 13d rather than tracked
+twice. Documentation-only pass — `npm test`/`node scripts/build.js`
+unaffected (442 passing, 77 modules).
+
+**2026-07-16 Phase 12f: 5 W tabs retired, Co-Pilot becomes the decision
+sandbox, Focus-text bug fixed** (`docs/adr/0040-story-dashboard.md`,
+direct follow-up — supersedes 12a's "additive, not a replacement" framing
+below): two-part request. (1) Bug: Story Options/the Narrative Composer
+weren't reflecting free prose actually typed into WHO/WHERE's Focus
+fields — `gatherSceneContext`/`composeNarrativeDraft` only ever read
+parsed `@mentions` and specific structured entity fields, never the
+surrounding text itself. Fixed by having `composeNarrativeDraft` use the
+raw Focus text (`gatherSceneContext`'s new `whoSummary`/`whereSummary`)
+directly instead of re-deriving a synthetic "the scene is set at X"
+sentence from it. (2) Design: confirmed via direct follow-up — retire the
+5 individual WHO/WHERE/WHAT/WHY/HOW tabs entirely (not keep them
+alongside Dashboard) and fold every suggestion/oracle-generating control
+into the always-visible Co-Pilot panel as "an active decision sandbox."
+`ui/workspace/index.js` is now a single Story Dashboard: header dials/
+Activity + 5 open/collapsible sections (one per former tab) + the
+Narrative Composer moved to the workspace's top-right (sticky). Co-Pilot
+(`ui/copilotPanel.js`) absorbs the full Story Options list (was condensed
+to 3), both Suggestion Lens pickers, Site Concept/Adventure Seed, the
+Activity → Rules Lens suggestion, "▶ Continue Story," and the 6
+`WHAT_ACTIONS` shift chips — every relocated control keeps its original
+`data-*` handler, markup relocation only. `ui/shell.js`'s tab strip and
+`[data-question]` handler are deleted; Ctrl+Left/Right and the docked-
+Faction-Events jump now target the new `expandedDashboardSections`
+ephemeral state instead of the retired `context.active`. 2 new/updated
+domain tests (442 total), plus a direct Node smoke test confirming the
+bug fix and the Co-Pilot↔Composer selection wiring. `npm test`/
+`node scripts/build.js` both clean.
+
 **2026-07-15 Phase 12a/12b built: the Story Dashboard + Narrative
 Composer** (`docs/adr/0040-story-dashboard.md`, same-day follow-up to
 the roadmap below): a new `dashboard` view — a 6th strip button
