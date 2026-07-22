@@ -2,6 +2,13 @@
 
 ## Status
 
+**Design superseded by `docs/design/LIVING-FACTION-ENGINE.md`** (via
+`docs/adr/0042-design-doc-consolidation.md`, 2026-07-21) — the new
+canonical doc continues this same "Living Faction Engine" name/roadmap;
+membership resolution here (a `member_of` edge or derived "Unaligned")
+gains a second, tag-driven signal there. Kept below verbatim as the
+historical record.
+
 Accepted and implemented. Phase A of the "Living Faction Engine" roadmap
 (a direct ask to make factions in `docs/adr/0031`/`0032`'s SWN Faction Turn
 Engine behave as an independent, living regional engine, paced by party

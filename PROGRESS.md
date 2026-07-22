@@ -333,7 +333,8 @@ II; the dice inform it, they don't decide it). 3 new domain tests (427
 total).
 
 **2026-07-13 Faction Conflict** (`docs/adr/0036-faction-conflict.md`):
-an external subsystem spec (`docs/design/FACTION-CONFLICT.md`) validated
+an external subsystem spec (`docs/archive/design/FACTION-CONFLICT.md` as
+of the 2026-07-21 doc consolidation, `docs/adr/0042`) validated
 against real GM-community sentiment on faction/conflict tooling
 complexity (SWN's own faction system reviewed as tolerated-not-loved;
 Blades in the Dark's Progress Clock as the most consistently praised

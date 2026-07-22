@@ -2,6 +2,14 @@
 
 ## Status
 
+**Design superseded by `docs/design/LIVING-FACTION-ENGINE.md`** (via
+`docs/adr/0042-design-doc-consolidation.md`, 2026-07-21) — the provider
+seam this ADR establishes is *reinforced*, not reversed, but the
+Reputation/Heat cut it records (§below) is reversed there. This ADR's
+"WHAT tab" reference also predates Phase 12f's tab retirement (ADR 0040)
+— read as a Dashboard section now. Kept below verbatim as the historical
+record.
+
 Accepted and implemented (2026-07-10). Extends `docs/adr/0031-swn-faction-
 turn-engine.md` (the SWN Faction Turn Engine this ADR adds a second content
 provider to) and revises `docs/adr/0011-swn-cwn-content.md`'s copyright

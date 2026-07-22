@@ -2,6 +2,8 @@
 
 ## Status
 
+**Superseded by `docs/adr/0039-reference-library-release-hosting-and-story-options.md`** (2026-07-15) — LFS bandwidth ran out in practice (see 0039's Part A), and the Reference Library now ships via GitHub Release-hosted assets instead. Kept below verbatim as the historical record of why LFS was chosen originally; the mechanism it describes is no longer how the app serves these PDFs.
+
 Accepted
 
 ## Context

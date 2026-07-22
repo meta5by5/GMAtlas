@@ -130,6 +130,36 @@ Traveller and Stars Without Number are named providers with **zero authored
 data** right now (`RULES_PROVIDERS[id].status` says so honestly) — don't
 assume they're integrated because they're listed.
 
+### Design docs map
+
+Where to look for "what's the current design of X," in priority order —
+added by `docs/adr/0042-design-doc-consolidation.md`, which reconciled the
+faction subsystem's design history as the first subsystem to get this
+treatment; other subsystems may gain their own `docs/design/*.md`
+canonical spec the same way if they ever accumulate a comparable number of
+overlapping ADRs.
+
+1. **`docs/design/*.md`** — a canonical, living spec for a subsystem
+   that's accumulated enough ADRs to need one consolidated read, e.g.
+   `docs/design/LIVING-FACTION-ENGINE.md` (the faction subsystem — current
+   verified reality *and* the agreed forward design, clearly separated).
+   Not every subsystem has one; most don't need it (see 2).
+2. **`docs/adr/NNNN-*.md`** — the default source of truth for *why* a
+   decision was made, for any subsystem without a canonical spec. Immutable
+   once accepted (only a `Status` line may later point to a superseding
+   doc — never rewrite the body).
+3. **`PROGRESS.md`** — *what shipped when*, the status ledger. Not a
+   design doc; check it to find which ADR/spec is current when a phase
+   number is ambiguous.
+4. **`requirements/design-principles/`** — the 77-document Design
+   Constitution, the long-range vision every ADR reconciles *to* (see
+   above). Read for aspiration/rationale, not for "what's built" — check
+   `src/` or an ADR for that.
+5. **`docs/archive/`** — superseded docs, kept for history, pointer-linked
+   from `docs/archive/INDEX.md` to whatever superseded them. Never the
+   current answer to "how does X work," but useful for "why did we used to
+   do it differently."
+
 ## Non-negotiable architectural rules
 
 These were deliberately chosen to structurally exclude v0.53's failure
