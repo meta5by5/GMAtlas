@@ -198,19 +198,9 @@ slice, defer the rest with reasons) already established.
 
 ## Alternatives Considered
 
-- **Build a literal `domain/situations.js`** formalizing Objective/
-  Pressure/Unknown/Decision/Consequence as a stored, structured record per
-  scene. Rejected — that state already exists, spread across
-  `context.what` (Objective/Pressure), Threads (long-running Unknowns), and
-  the Co-Pilot (Consequence). A parallel structured record would duplicate
-  state that already lives elsewhere — the same objection ADR 0004 raised
-  against a separate `domain/contracts.js`.
-- **Mechanize the 35/25/20/15/5 session-focus ratio** as an enforced or
-  tracked budget. Rejected per Article II — see Decision item 5.
-- **Give each of the four new oracle chains its own new oracle group.**
-  Rejected — `Derelicts`, `Exploration`, `Trade & Cargo`, and `Mysteries &
-  Coverups` already exist and are exactly where each chain belongs; a new
-  group per chain would fragment the tree for no reason.
+See `docs/archive/adr/0008-situation-engine.md` (a standalone `domain/
+situations.js`, a mechanized session-focus ratio, and a dedicated oracle
+group per new chain were each considered and rejected).
 
 ## Consequences
 

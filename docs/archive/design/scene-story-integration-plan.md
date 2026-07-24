@@ -1,3 +1,17 @@
+> ARCHIVED 2026-07-23. Every "Building this" item below shipped as
+> `docs/adr/0037-foreshadowing-worldflags-npc-goal.md` (Foreshadowing,
+> World State Flags, NPC current goal). The "Full NPC Roster fields...
+> worth a future, focused pass" item this plan postponed shipped
+> (partially — disposition/motivation/threat rank/challenges/
+> opportunities, scene-scoped rather than a permanent entity field) as
+> `docs/adr/0041-scene-operating-model.md` Phase 13b. **Still open, not
+> carried forward anywhere else:** the Thread `type` taxonomy, and the
+> remaining NPC Roster fields (role/status/voice notes/plot_significance)
+> — worth a future look if anyone wants them. The branching-scene-graph
+> rejection and the "no dedicated Session Prep UI" decision both stand
+> permanently (superseded by nothing — they were never meant to be
+> revisited). Retained for history; not current.
+
 # Scene & Story Data Model — reconciliation
 
 > Source spec: `docs/design/GMAtlas_Scene_Story_Data_Model.md`. Like

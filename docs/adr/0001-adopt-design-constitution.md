@@ -122,23 +122,10 @@ and recommend next steps, not to build Phase 6 immediately.
 
 ## Alternatives Considered
 
-- **Rewrite the domain layer to match the corpus's object model and engine
-  names literally** (Storage Kernel, Context Graph class, Story Engine
-  class, etc.). Rejected: high risk/high churn for a rename with no
-  behavior change, and the corpus itself isn't consistent enough to copy
-  verbatim without first making its own internal decisions (which this ADR
-  now makes for our purposes only).
-- **Ignore the corpus and keep the existing architecture unchanged.**
-  Rejected: the corpus contains genuinely high-value, concrete features not
-  yet built (richer Threads, Narrative Trackers, session recap/Narrative
-  Recall, Universal Search) that directly serve the existing "Frictionless
-  Empowerment" principle this repo already commits to — treating 7,600
-  lines of design work as inert reference material would waste it.
-- **Implement the full corpus immediately as one large phase.** Rejected:
-  disproportionate to the request (a design review + roadmap, not a build
-  sprint) and against the corpus's own guidance (pack 58: "architecture
-  evolves by refinement... not replacement"; pack 66: prioritize
-  continuity work before new features).
+See `docs/archive/adr/0001-adopt-design-constitution.md` (rewriting the
+domain layer to match the corpus's literal terminology, ignoring the
+corpus entirely, and implementing it all as one large phase were each
+considered and rejected).
 
 ## Consequences
 

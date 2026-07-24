@@ -300,7 +300,8 @@ free-text field. 1 new domain test (432 total).
 **2026-07-14 Foreshadowing, World State Flags, NPC current goal**
 (`docs/adr/0037-foreshadowing-worldflags-npc-goal.md`): reviewed an
 external Scene & Story data-model spec against the actual architecture
-(`docs/design/scene-story-integration-plan.md`) before building — most of
+(`docs/archive/design/scene-story-integration-plan.md` as of the
+2026-07-23 doc consolidation) before building — most of
 it already existed under different names, and its pre-authored branching
 scene graph was flagged as a genuine philosophical mismatch (this app's
 scene generation is 100% live/oracle-driven, no `resolveScene()`,
@@ -333,7 +334,8 @@ II; the dice inform it, they don't decide it). 3 new domain tests (427
 total).
 
 **2026-07-13 Faction Conflict** (`docs/adr/0036-faction-conflict.md`):
-an external subsystem spec (`docs/design/FACTION-CONFLICT.md`) validated
+an external subsystem spec (`docs/archive/design/FACTION-CONFLICT.md` as
+of the 2026-07-21 doc consolidation, `docs/adr/0042`) validated
 against real GM-community sentiment on faction/conflict tooling
 complexity (SWN's own faction system reviewed as tolerated-not-loved;
 Blades in the Dark's Progress Clock as the most consistently praised

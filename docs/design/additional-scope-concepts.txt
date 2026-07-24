@@ -1,0 +1,19 @@
+The SWN specific functionality and descriptions must be modular and allow for swapping out with another faction module that performs the same capabilities without breaking any other app features or dependencies. Eventually we want to have SWN-exact rules and a duplicate generic version that doesn't violate copyright and incorporates more ideas and conent from content creators.
+
+Faction Turn decisions are automated, but are displayed in dropdowns that give the GM creative authority to manually change the decisions before committing the turn to apply consequences such as adjusting trackers and to produce a more tailored experience for the players.
+
+NPCs are all tied to Factions as indicated in the Entity tags that map to Faction Entity types. NPCs of the same faction can be in different roles.
+
+If a Faction Turn indicates a conflict with another faction, then NPCs of the rival faction could be in the Bystanders since they are not directly involved in the Player scene goals or objectives. This offers roleplay options for the GM to incorporate the Rival Faction NPCs as an additional challenge or opportunity to the scene.
+
+Make Faction Turn calculations for all involved or nearby factions in the system. 
+
+Faction Turns spawning events are only calculated for the local system, and those factions spanning worlds are considered as not evolving in a way that affects the story. However, news of factions on other worlds could be incorporated as something eventually cascading into the local system to affect the players.
+
+Develop a detailed Faction Turn system using the SWN rules for Faction Turns that performs calculations and tracks assets and progress without GM interaction. The growth, conflict, opportunities and challenges faced by a Faction and cause to affect others by its actions must be fully automated so that the players see and feel the impact.
+
+Player actions and scene outcomes should affect subsequent Faction Turns, relationships, and future opportunities and challenges between the players and the faction (i.e. Faction Reputation). 
+
+Faction Turn outcomes are committed and applied to NPC and Location Entity records such as Heat trackers, colony ownership, assets owned, etc.
+
+Faction Turn calculations must factor in point-in-time Entity details for Location, Asset, NPC and other Faction entity records. Case in point, an attack on Faction B by Faction A might damage vehicles owned by Faction B which should be determined by assessing the assets owned by Faction b and applying consequences to the assets.

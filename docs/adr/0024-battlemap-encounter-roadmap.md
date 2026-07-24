@@ -78,8 +78,9 @@ tokens.
 separate Encounter Manager backlog item)
 
 Reuses 11a's existing `icons[]` array — a token gains a few more optional
-fields (`hp`, `maxHp`, `initiative`, `statusEffects: []`) rather than a
-second combatant list living somewhere else. New:
+fields (`hp`, `maxHp`, `initiative`, `statusEffects: []`). The rejected
+alternative this ruled out is recorded in
+`docs/archive/adr/0024-battlemap-encounter-roadmap.md`. New:
 
 - A per-map **initiative/round tracker**: sort tokens by `initiative`,
   step through turns, a round counter — a small header bar above the
@@ -199,26 +200,10 @@ project's convention on recording a real "no," not silence)
 
 ## Alternatives considered
 
-- **Build the wishlist's three original tools (Battlemap, Base Builder,
-  Interactive Maps) as three separate drawers/domain modules**, as
-  Phase 11's original backlog entry framed them. Rejected — once ADR 0023
-  was actually scoped, all three turned out to need the same data shape
-  (a named map, a background, placed icons, an optional grid); building
-  three would mean three copies of drag/placement/rendering code to keep
-  in sync, the exact "parallel systems" Article IX exists to prevent.
-- **Take the wishlist's 14 categories at face value and build all of
-  them.** Rejected — several (infinite canvas, dynamic lighting, VTT
-  export) are disproportionate to this app's zero-dependency/DOM
-  architecture for the value they'd add, and the request's own framing
-  ("an encounter and gameplay tool, not a map designer") argues against
-  chasing full VTT parity in the first place.
-- **Keep the asset/room library Planetfall-specific**, matching the
-  original ask's literal wording. Rejected — would hardcode one
-  ruleset's building list into `battlemaps.js`/UI code, the exact thing
-  "genre-aware, not genre-locked" and `data/genrePacks.js`'s existing
-  precedent both argue against; generalizing costs nothing extra (it's
-  still just data) and keeps the next genre pack from having to work
-  around Planetfall-only assumptions.
+See `docs/archive/adr/0024-battlemap-encounter-roadmap.md` (three separate
+drawers/domain modules, building the wishlist's 14 categories at face
+value, and a Planetfall-specific asset library were each considered and
+rejected).
 
 ## Consequences
 

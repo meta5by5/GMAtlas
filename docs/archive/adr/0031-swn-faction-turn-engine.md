@@ -1,6 +1,19 @@
+> ARCHIVED 2026-07-23 (moved from `docs/adr/`, per `docs/adr/0042-design-
+> doc-consolidation.md`). Design superseded by `docs/design/LIVING-
+> FACTION-ENGINE.md`; the shipped code is almost entirely reused. Retained
+> for history; not current — see the Status section below for detail.
+
 # ADR 0031 — SWN Faction Turn Engine
 
 ## Status
+
+**Design superseded by `docs/design/LIVING-FACTION-ENGINE.md`** (via
+`docs/adr/0042-design-doc-consolidation.md`, 2026-07-21) — the shipped
+*code* below is almost entirely reused; the *design* (automation depth,
+cross-faction impact, turn scope) is extended/reversed there. This ADR's
+"WHO/WHERE tab" references also predate Phase 12f's tab retirement (ADR
+0040) — read as Dashboard sections now. Kept below verbatim as the
+historical record.
 
 Accepted and implemented (2026-07-09). Supersedes `docs/adr/0011-swn-cwn-
 content.md`'s copyright stance for factions specifically (see that ADR's

@@ -1,6 +1,20 @@
+> ARCHIVED 2026-07-23 (moved from `docs/adr/`, per `docs/adr/0042-design-
+> doc-consolidation.md`). Design superseded by `docs/design/LIVING-
+> FACTION-ENGINE.md`. Retained for history; not current — see the Status
+> section below for detail.
+
 # ADR 0035 — Faction Engine: activity pacing, faction-driven missions, and a clean turn-processing UI
 
 ## Status
+
+**Design superseded by `docs/design/LIVING-FACTION-ENGINE.md`** (via
+`docs/adr/0042-design-doc-consolidation.md`, 2026-07-21) — the new
+canonical doc continues this same roadmap name; the Active-Location-only
+turn scope and the single-sided `event.impact` this ADR records are both
+reversed there (system-wide scope + two-sided impact). The cancelled
+retcon/command-log design this ADR also records **stays cancelled** — the
+new two-sided impact is still a frozen diff, never replayed. Kept below
+verbatim as the historical record.
 
 Accepted and implemented. Phases B, C, and D of the "Living Faction Engine"
 roadmap (`docs/adr/0034` was Phase A), on direct request, landed together

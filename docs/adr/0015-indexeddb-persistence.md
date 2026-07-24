@@ -24,12 +24,11 @@ here: the error came from the PRIMARY write (`localStorage.setItem(
 STORAGE_KEY, json)`), not the backup.
 
 The user's proposed fix — a Postgres database plus a migration path — was
-evaluated and rejected as disproportionate: it would require a running
-server (breaking "double-click `index.html`, works offline," this app's
-defining constraint), user accounts/auth, hosting, and an online/offline
-sync-conflict strategy, none of which the actual problem (a storage quota,
-not a lack of a network backend) needs. `IndexedDB` was chosen instead and
-verified directly before committing to it (not assumed): a throwaway script
+evaluated and rejected as disproportionate to the actual problem (a
+storage quota, not a lack of a network backend). The rejected alternative
+this ruled out is recorded in `docs/archive/adr/0015-indexeddb-
+persistence.md`. `IndexedDB` was chosen instead and verified directly
+before committing to it (not assumed): a throwaway script
 opened `gmatlas-test-db`, wrote a 1MB record, and read it back
 successfully under both `file://` and `http://localhost:8080`, with
 `navigator.storage.estimate()` reporting a ~3.2GB quota in this
@@ -107,20 +106,10 @@ already computed from the in-memory `doc` and needed no change.
 
 ## Alternatives considered
 
-- **Postgres + a server backend.** Rejected — see Context above. Solves a
-  problem (a storage ceiling) with a solution sized for a different one
-  (no shared backend at all), at the cost of this app's defining
-  local-first/offline/zero-server properties.
-- **Rewrite every `store.update()` call site to `async`/`await`.**
-  Technically the "purest" async design, but would have touched ~100
-  call sites across `ui/shell.js` for no behavioral gain over the
-  optimistic-update-then-async-persist approach actually chosen — the
-  in-memory-first design gives identical instant UI feedback with a much
-  smaller, lower-risk diff.
-- **Drop the one-slot backup entirely**, reasoning that IndexedDB's much
-  bigger quota makes running out of room to double-write unlikely. Kept it
-  instead — it costs little now that quota isn't scarce, and it's the
-  existing restore-backup UI's only data source.
+See `docs/archive/adr/0015-indexeddb-persistence.md` (a Postgres server
+backend, rewriting every `store.update()` call site to `async`/`await`,
+and dropping the one-slot backup entirely were each considered and
+rejected or declined).
 
 ## Consequences
 

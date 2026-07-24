@@ -1,3 +1,10 @@
+> ARCHIVED 2026-07-21. Superseded by `docs/adr/0036-faction-conflict.md`
+> (the validated hero-path/add-depth split that shipped instead of this
+> flat schema) and `docs/design/LIVING-FACTION-ENGINE.md` §13. Retained
+> for history and as an idea bank for future "Add depth" fields — not
+> current. See `docs/design/RESEARCH-AND-DECISIONS.md` for the community
+> research that justified simplifying away from this spec.
+
 # FACTION CONFLICT — GMAtlas Subsystem Spec
 
 **Module name:** `faction-conflict`

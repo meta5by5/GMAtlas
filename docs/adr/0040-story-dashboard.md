@@ -295,12 +295,13 @@ Direct follow-up feedback, two parts:
 
 ## Alternatives considered
 
-- **Strengthen the existing strip/Co-Pilot instead of merging tabs**
-  (this ADR's own default recommendation going in). Rejected per direct
-  instruction — the ask was for a genuinely merged, visual decision-
-  making surface, not an incremental strengthening of what already
-  exists. Recorded here because it's the lower-risk path a future
-  reviewer might reasonably ask "why wasn't this enough" about.
+See `docs/archive/adr/0040-story-dashboard.md` for two genuinely rejected
+alternatives (strengthening the existing strip/Co-Pilot instead of
+merging tabs; a literal step-by-step wizard) and a confirmed-still-
+declined older item (a mechanized session-composition ratio). One more
+alternative is kept here rather than in the companion, since it documents
+current architecture's own history, not a rejected path:
+
 - **Replace the five W-tabs with the dashboard entirely.** Originally
   rejected at 12a time — a dashboard grid has no room for a full rich-text
   Journal note editor, a deep entity inspector, or the Oracle drawer's
@@ -311,17 +312,6 @@ Direct follow-up feedback, two parts:
   Entity Editor, and Oracle drawer were never W-tab content in the first
   place (they're tertiary-tier edge drawers, untouched by this decision)
   so the original worry doesn't actually apply to them.
-- **A literal step-by-step wizard for "randomly generated scene-
-  development steps"** (a modal/state-machine walking the GM through
-  WHO→WHERE→WHY→compose in sequence). Considered and set aside in favor
-  of the dashboard's own top-to-bottom layout reading as that same
-  sequence naturally, with no new state machine — matches "reduce
-  cognitive effort" (Article X) even while adding a new surface; can be
-  revisited if the layout alone doesn't read as guided enough once built.
-- **A mechanized session-composition ratio** (35/25/20/15/5, `docs/
-  adr/0008`'s explicitly-declined item). Not revisited — nothing in this
-  request asks for it, and it was declined for reasons unrelated to this
-  ADR's scope.
 
 ## Consequences
 

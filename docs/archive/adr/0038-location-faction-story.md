@@ -1,6 +1,20 @@
+> ARCHIVED 2026-07-23 (moved from `docs/adr/`, per `docs/adr/0042-design-
+> doc-consolidation.md`). Design superseded by `docs/design/LIVING-
+> FACTION-ENGINE.md`; the presence machinery is reused wholesale. Retained
+> for history; not current — see the Status section below for detail.
+
 # ADR 0038 — Location ↔ Faction presence, Conflicts, and a Location Story
 
 ## Status
+
+**Design superseded by `docs/design/LIVING-FACTION-ENGINE.md`** (via
+`docs/adr/0042-design-doc-consolidation.md`, 2026-07-21) — the location/
+faction presence machinery here is reused wholesale (Heat is added
+alongside it, not replacing it). Every "WHO tab"/"WHERE tab" reference
+below predates Phase 12f's tab retirement (ADR 0040) — read as Dashboard
+sections now; the functions named (`factionsActiveNearbyBlock`, etc.) are
+still real and still called, just from a Dashboard section body instead
+of a tab body. Kept below verbatim as the historical record.
 
 Accepted and implemented. Direct report: on the WHERE tab, picking a
 location "doesn't select a location," and WHO "does not select factions

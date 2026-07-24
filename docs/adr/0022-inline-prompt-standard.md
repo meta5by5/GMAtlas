@@ -65,9 +65,9 @@ a captured Selection `Range` (see below). Enter (in the shared `onKeydown`)
 and clicking ✓ both call `commitInlinePrompt()`; Escape and ✕ both call
 `closeInlinePrompt()`. Deliberately **no** close-on-blur — the input
 losing focus to its own ✓/✕ buttons is a classic blur-before-click race,
-and skipping close-on-blur entirely sidesteps it rather than working
-around it with a timer (which this app's architecture already treats as
-something to avoid).
+and skipping close-on-blur entirely sidesteps it. The rejected alternative
+this ruled out is recorded in
+`docs/archive/adr/0022-inline-prompt-standard.md`.
 
 Nine call sites converted, one existing helper adjusted to support the
 one case that needed it:
@@ -107,22 +107,9 @@ one case that needed it:
 
 ## Alternatives considered
 
-- **A bespoke inline form per remaining site**, matching the Party
-  Tracker/Contract precedent exactly. Rejected — nine near-identical
-  single-string forms is the opposite of "done the same way"; a shared
-  mechanism for the shared shape (one line of text, submit/cancel) is a
-  smaller, more consistent surface, while the genuinely multi-field forms
-  (Party Tracker, Contract) correctly stay bespoke, since they aren't this
-  shape at all.
-- **A modal/dialog element** (`<dialog>` or a full-screen overlay) instead
-  of a small anchored popup. Rejected — the explicit ask was against
-  *popup windows*; a small field anchored right next to its trigger reads
-  as part of the page, the same way this app's other inline forms already
-  do, not as an interruption.
-- **Closing on blur**, matching how some existing bespoke forms behave.
-  Rejected due to the blur-before-click race against the prompt's own ✓/✕
-  buttons; Escape/✕/✓ are unambiguous and cost nothing in practice since
-  the prompt is small and rarely left open by accident.
+See `docs/archive/adr/0022-inline-prompt-standard.md` (a bespoke inline
+form per site, a modal/dialog element, and closing on blur were each
+considered and rejected).
 
 ## Consequences
 

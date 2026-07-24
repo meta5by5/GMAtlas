@@ -95,26 +95,11 @@ handler needed at all for that one).
 
 ## Alternatives considered
 
-- **The spec's full branching scene graph.** Rejected — see Context.
-  Flagged explicitly rather than silently ignored, per this repo's "no
-  two docs get to disagree about current reality" rule: `docs/design/
-  scene-story-integration-plan.md` records the mismatch so a future
-  reader doesn't re-propose it without re-deriving why it doesn't fit.
-- **Linking Foreshadowing/World State Flags to a scene or journal entry
-  by id.** Rejected — no stable scene identity exists to link to; free-
-  text/`@mention` covers the same need without inventing one.
-- **A fuller NPC Roster (role/status/disposition/voice notes) up front.**
-  Rejected for now as unvalidated scope — `currentGoal` alone answers the
-  concrete "what does this NPC want" question the spec raises; the rest
-  can be added later if it proves to earn its keep in play, same
-  incremental-ADR posture as every other phase in this Living Faction
-  Engine arc.
-- **A Co-Pilot signal surfacing the oldest open Foreshadowing entry**
-  (mirroring `hotFaction`/`threadUnderPressure`). Postponed, not built —
-  the three primitives above were the validated subset; a Co-Pilot signal
-  is a natural next increment once these see actual play, not required
-  for the feature to be usable today (a GM can already see open items
-  directly on the WHY tab).
+See `docs/archive/adr/0037-foreshadowing-worldflags-npc-goal.md` (the
+spec's full branching scene graph, scene/journal-id linkage, a fuller NPC
+Roster up front, and a Co-Pilot oldest-Foreshadowing signal were each
+considered and postponed or rejected — the companion notes which of
+these have since shipped a different way).
 
 ## Consequences
 

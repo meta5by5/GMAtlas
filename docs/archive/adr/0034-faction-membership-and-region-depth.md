@@ -1,6 +1,18 @@
+> ARCHIVED 2026-07-23 (moved from `docs/adr/`, per `docs/adr/0042-design-
+> doc-consolidation.md`). Design superseded by `docs/design/LIVING-
+> FACTION-ENGINE.md`. Retained for history; not current — see the Status
+> section below for detail.
+
 # ADR 0034 — Faction Membership, Conquest Flips, and Region-Depth Queries
 
 ## Status
+
+**Design superseded by `docs/design/LIVING-FACTION-ENGINE.md`** (via
+`docs/adr/0042-design-doc-consolidation.md`, 2026-07-21) — the new
+canonical doc continues this same "Living Faction Engine" name/roadmap;
+membership resolution here (a `member_of` edge or derived "Unaligned")
+gains a second, tag-driven signal there. Kept below verbatim as the
+historical record.
 
 Accepted and implemented. Phase A of the "Living Faction Engine" roadmap
 (a direct ask to make factions in `docs/adr/0031`/`0032`'s SWN Faction Turn

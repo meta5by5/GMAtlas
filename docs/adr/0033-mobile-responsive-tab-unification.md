@@ -65,11 +65,9 @@ open tab returns to whatever drawer tab was active. This is a real, known
 trade-off: while reading a document, the drawer tab-stack is temporarily
 inaccessible (previously it stayed visible beside the viewer). Accepted
 because documents already have their own multi-tab reading experience
-(open several at once, switch, close), and the alternative — a real
-literal merge of the viewer into `openDrawers`/`renderDrawer()` — would
-require rewriting the iframe's own careful reload-guard logic
-(`lastDocViewerSrc`, a past-fixed real bug around blank-then-reload
-sequencing) for no functional gain toward "every tab fits the window."
+(open several at once, switch, close). The rejected alternative this
+ruled out is recorded in
+`docs/archive/adr/0033-mobile-responsive-tab-unification.md`.
 
 **A new phone breakpoint (`@media (max-width: 480px)`)**, layered under
 the existing 1023px/767px tiers in `styles/cockpit.css`, not replacing
@@ -140,16 +138,10 @@ panel's/Mission Control's own fields.
 
 ## Alternatives considered
 
-- **Literally merging the document viewer into `openDrawers`/
-  `renderDrawer()`.** Rejected — would require rewriting its iframe
-  reload-guard logic for a real risk of regressing a previously-fixed bug,
-  for no functional difference over the simpler mutual-exclusivity
-  approach actually shipped.
-- **Keeping the anchor panel but auto-collapsing it below some width.**
-  Rejected per the direct instruction that anchored windows shouldn't be
-  used "in favor of just tab groups" — a conditional anchor would still
-  need all the same removal work for the case that actually matters
-  (phone width) while adding complexity for the desktop case that doesn't.
+See `docs/archive/adr/0033-mobile-responsive-tab-unification.md`
+(literally merging the document viewer into the drawer system, and
+keeping the anchor panel with an auto-collapse threshold, were each
+considered and rejected).
 
 ## Consequences
 

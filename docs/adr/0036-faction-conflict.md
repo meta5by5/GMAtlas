@@ -141,22 +141,11 @@ itself did.
 
 ## Alternatives considered
 
-- **The spec's literal schema, built as-is.** Rejected — this is exactly
-  the shape of design the research found gets abandoned in practice
-  (SWN's own tolerated-not-loved complexity, the "desert" devlogs'
-  concrete redesign-twice story).
-- **`power_symmetry` and `escalation_appetite` as separate enumerated
-  fields.** Dropped entirely rather than demoted — the two fields
-  research most directly flags as "spreadsheet-feeling," and nothing
-  else in this design depends on them.
-- **A second, date-based "clock" distinct from the escalation ladder**
-  (the spec's own `clock` object). Folded into the one escalation clock
-  instead — this app has no calendar/date system, and "the fewer things
-  a GM has to track, the better it lands" argues against a second
-  parallel clock even if one could be built.
-- **A separate `campaign.factionConflicts[]` record type**, as the
-  spec's own "Implementation Notes" section suggested. Rejected in favor
-  of a first-class entity type — see Decision above.
+See `docs/archive/adr/0036-faction-conflict.md` (the spec's literal
+schema built as-is, `power_symmetry`/`escalation_appetite` as separate
+fields, a second date-based clock, and a separate
+`campaign.factionConflicts[]` record type were each considered and
+rejected).
 
 ## Consequences
 
