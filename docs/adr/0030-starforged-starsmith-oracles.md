@@ -24,12 +24,11 @@ CONCEPTS from the Ironsworn/Starforged oracle family ("plot twist" and
 not exclusive to one book) — it does not transcribe Starforged's or
 StarSmith's actual table entries, wording, or exact oracle names.
 
-A separate `AskUserQuestion` resolved the navigation-structure fork ahead
-of implementation: keep the same merged Oracle tree (matching the existing
-Stars Without Number precedent, ADR 0010/0011) rather than a second
-per-system tree, since a GM already has one tree with tags/search and a
-second parallel navigation mode would add a mode switch for one small
-content group.
+A separate `AskUserQuestion` confirmed the navigation structure ahead of
+implementation: the same merged Oracle tree (matching the existing Stars
+Without Number precedent, ADR 0010/0011). The rejected alternative this
+ruled out is recorded in `docs/archive/adr/0030-starforged-starsmith-
+oracles.md`.
 
 ## Decision
 
@@ -57,17 +56,9 @@ content group.
 
 ## Alternatives Considered
 
-- **A second, per-system navigation tree/tab.** Rejected per the resolved
-  `AskUserQuestion` — one small content group doesn't justify a parallel
-  browsing mode; the existing tree + search already scales to this.
-- **Bake the source into `label` itself** (e.g. store the key as
-  `'Starforged Oracles (Starforged/StarSmith-inspired)'`). Rejected —
-  `label`/`path` double as functional identifiers for roll dispatch and
-  search; changing them risks breaking `rollGroup`/`filterOracleTree`
-  call sites and would make the suffix show up inside search-match
-  highlighting instead of being purely cosmetic.
-- **Transcribe Starforged's/StarSmith's actual oracle tables.** Rejected —
-  the same line ADR 0010/0011 already drew.
+See `docs/archive/adr/0030-starforged-starsmith-oracles.md` (a second
+per-system navigation tree, baking the source into `label` itself, and
+transcribing the actual source tables were each considered and rejected).
 
 ## Consequences
 
