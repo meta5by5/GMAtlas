@@ -16,6 +16,7 @@ whenever a future pass archives another doc (don't create a second index).
 | `docs/archive/CLAUDE-2026-07-15.md` | `CLAUDE.md` (root) | Pre-Phase-12f/13 snapshot, archived during the 2026-07-15 doc rebaseline (pre-existing archive convention, unrelated to this pass) |
 | `docs/archive/DESIGN-NEW-FUNCTIONALITY-2026-07-15.md` | `DESIGN-NEW-FUNCTIONALITY.md` (root) | Same 2026-07-15 rebaseline — its ~250-line phase-by-phase history collapsed to a short pointer in the live doc |
 | `docs/archive/progress-log-2026-07.md` | `PROGRESS.md` (root) | Pre-2026-07-03 investigation notes/superseded discussion moved out of the live status ledger |
+| `requirements/archive/initial design inputs/SagaAtlas-Design-Recommendations.md` | `CLAUDE.md` + `PROGRESS.md` | Parts 2-5 (v0.53 assessment, target architecture, phased roadmap) described a re-architecture that is now fully built and has diverged in specifics; Part 1 (enduring design principles) stays in the live doc |
 
 ## Superseded ADRs — physically moved to `docs/archive/adr/`
 
@@ -40,6 +41,20 @@ file itself can move. An ADR that's merely extended/reinforced (like
 `docs/adr/0036-faction-conflict.md` — incorporated into `docs/design/
 LIVING-FACTION-ENGINE.md` §13 by reference, not reversed. No Status-line
 change, not moved.
+
+## Design-doc reconciliation companions — `docs/archive/design/<same filename>.md`
+
+**New pattern, 2026-07-23** (same discipline as the ADR companions below,
+applied to `docs/design/`): where a live design doc carried a working
+audit-trail section that only restated facts the doc already states in
+its own relevant sections (e.g. a "reconciled against doc X" table), that
+section moved to a same-named companion under `docs/archive/design/`,
+leaving a short pointer behind. Not a full supersession (the doc itself
+stays live and current) — just de-duplication within one doc. Worked
+example: `docs/design/LIVING-FACTION-ENGINE.md` (its original §17,
+reconciliation against `DESIGN-NEW-FUNCTIONALITY.md`, restated facts
+already stated in §7/§10/§11/§12/§14) ↔ `docs/archive/design/
+LIVING-FACTION-ENGINE.md`.
 
 ## Rejected-alternatives companions — `docs/archive/adr/<same filename>.md`
 

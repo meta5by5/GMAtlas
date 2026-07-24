@@ -17,9 +17,10 @@
 > acceptance), and this document reverses the relevant prior scope cuts
 > explicitly. The reversals are enumerated in §3.
 >
-> **Supersedes the *design* of ADRs 0031, 0032, 0034, 0035, 0038** (their
-> Status lines point here; their bodies are untouched — ADRs are immutable
-> history) — the shipped *code* those ADRs describe is almost entirely
+> **Supersedes the *design* of ADRs 0031, 0032, 0034, 0035, 0038** (now
+> physically archived at `docs/archive/adr/`, preserved verbatim as the
+> accurate historical record of what shipped at the time) — the shipped
+> *code* those ADRs describe is almost entirely
 > reused, per §2. **Does not supersede ADR 0036** (Faction Conflict) — its
 > hero-path/add-depth design is adopted wholesale and incorporated by
 > reference (§13); only wired to this design's new outputs, never
@@ -36,23 +37,16 @@
 > sourcing) that justified specific choices below, so it survives
 > independently of any one host doc.
 >
-> **Reconciled with `DESIGN-NEW-FUNCTIONALITY.md` (DNF):** DNF has been
-> read and folded in (see §17 for the full reconciliation). `CLAUDE.md`'s
-> core architectural rules are honored verbatim in §4. The three formerly-
-> open **[reconcile: DNF]** items are resolved in place: (a) there is no
-> per-faction reputation field in DNF — only a campaign-wide
-> `context.what.reputation` with orphaned Raise/Lower Reputation reducers —
-> so this design's per-faction `partyStanding` is genuinely new and wires
-> *to* the ambient one (§10); (b) no Heat/Hazard field exists, so `heat` is
-> new (§11); (c) DNF is silent on `event.impact`, so the two-sided reversal
-> stands (§7). **One material drift DNF surfaced:** Phase 12f (2026-07-16)
-> **retired the five W-tabs**, folding their content into a Story Dashboard
-> + always-visible Co-Pilot — so every "WHO/WHERE/WHAT/WHY tab" reference in
-> the source ADRs (including 0038) and in this document means a **Dashboard
-> section / Co-Pilot control** now, not a tab (§14, §17). **Also confirmed
-> since (Phase 13a/13b, ADR 0041, 2026-07-16):** the scene NPC Bystanders
-> group this design's §12.2 feeds into is now real, shipped code, not a
-> forward assumption — `scenes.js`'s `npcStates`/`bystanderIds`.
+> **Reconciled with `DESIGN-NEW-FUNCTIONALITY.md` (DNF)** — `CLAUDE.md`'s
+> core architectural rules are honored verbatim in §4; the material
+> conclusion is that Phase 12f (2026-07-16) **retired the five W-tabs**,
+> folding their content into a Story Dashboard + always-visible Co-Pilot —
+> so every "WHO/WHERE/WHAT/WHY tab" reference in the source ADRs (including
+> 0038) and in this document means a **Dashboard section / Co-Pilot
+> control** now, not a tab (§14). The scene NPC Bystanders group §12.2
+> feeds into is real, shipped code (Phase 13a/13b, ADR 0041), not a forward
+> assumption — `scenes.js`'s `npcStates`/`bystanderIds`. Full reconciliation
+> detail: §17.
 
 ---
 
@@ -777,25 +771,14 @@ to the outputs of Phases 2–6.
 
 ## 17. Reconciliation with `DESIGN-NEW-FUNCTIONALITY.md`
 
-DNF is a short roadmap doc (rebaselined 2026-07-15) that points to
-`PROGRESS.md` for status and `docs/adr/` for reasoning, and references a
-77-document **Design Constitution** under `requirements/` (adopted in ADR
-0001). Reading it changed or confirmed the following:
-
-| DNF finding | Effect on this design |
-|---|---|
-| **Phase 12f (2026-07-16) retired the five W-tabs**, folding content into a Story Dashboard + always-visible Co-Pilot (explicit Article X reversal). | **Material.** Every "WHO/WHERE/WHAT/WHY tab" in the source faction ADRs (0031/0038) and in earlier drafts of this doc now means a Dashboard section / Co-Pilot control. §14 rewritten; §2.1 annotated. This is the top drift item for the doc cleanup. |
-| **Phase 13a/13b (ADR 0041) shipped a scene NPC model** — `npcStates` with Protagonists/Antagonists/**Bystanders (GM-added)**, scene-scoped fields, `oracles.overrides` memory. | **Reuse, don't invent.** §12.2 Bystanders now *feeds the existing 13b group* rather than adding a scene-generator slot. |
-| Campaign-wide `context.what.reputation` exists with **orphaned Raise/Lower Reputation `SHIFTS` reducers** (item 12d, unsurfaced). | Per-faction `partyStanding` (§10) is new and complementary; the loop nudges the ambient value via the existing `applyShift` mechanism, incidentally giving those orphaned reducers a live driver. |
-| **No Heat/Hazard field** exists (`context.what` = threat/mystery/resources/reputation/stress only). | `heat` (§11) confirmed new; justified as per-entity where the ambient values can't be. |
-| `getFactionDossier` is **built and tested but unwired** (item 12e, "the one orphan worth it"). | Surfacing it on the faction card (§14) aligns with a decision DNF already made — free win, not new scope. |
-| DNF is **silent on `event.impact`** (a 0035 concern). | Two-sided impact reversal (§7) stands with no DNF conflict. |
-| A **Design Constitution** (77 docs, `requirements/`, ADR 0001) sits above these ADRs, with numbered Articles (II = GM authority, IX = extend-via-existing, X = workspace-not-app, reversed by P12). | This design honors II and IX throughout and inherits P12's X-reversal (§14). The Constitution is a higher authority the doc cleanup must also account for. |
-| Testing posture: pure domain fn + unit tests → thin view → browser smoke check. | Matches §4/`CLAUDE.md` and the per-phase test lists in the build prompt; no change. |
-
-Net: no reversal of any decision in this document, one significant surface
-correction (Dashboard/Co-Pilot, not tabs), and two "reuse the shipped thing"
-tightenings (13b Bystanders, the ambient-reputation wiring).
+This design was checked against DNF (the roadmap doc) and the Design
+Constitution (`requirements/`, ADR 0001) before acceptance; net result: no
+reversal of any decision in this document, one significant surface
+correction (Dashboard/Co-Pilot, not tabs — §14), and two "reuse the
+shipped thing" tightenings (13b Bystanders §12.2, the ambient-reputation
+wiring §10.1). See `docs/archive/design/LIVING-FACTION-ENGINE.md` for the
+full finding-by-finding reconciliation table (every row there restates a
+fact this doc already states in its own relevant section, above).
 
 ## Appendix A — Requirement → section traceability
 
