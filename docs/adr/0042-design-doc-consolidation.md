@@ -73,12 +73,13 @@ design doc — without deleting or rewriting any prior ADR's decision body.
    DECISIONS.md` (new) carries forward the community-sentiment findings
    and other supplemental research that justified ADR 0036's simplification
    and other design choices, so archiving their host docs loses nothing.
-7. **W-tab surface drift**: ADRs 0031/0032/0038 are not rewritten (ADR
-   bodies are immutable, `CLAUDE.md` §0.3/repo convention) — their "WHO/
-   WHERE/WHAT tab" language is left as the accurate historical record of
-   what shipped *at the time*. `docs/design/LIVING-FACTION-ENGINE.md`
-   describes every current UI surface in Dashboard-section/Co-Pilot terms
-   only, and is the doc a reader should trust for current vocabulary.
+7. **W-tab surface drift**: ADRs 0031/0032/0038 are archived, not rewritten
+   (archived docs are preserved verbatim — the "moved, not deleted"
+   convention above) — their "WHO/WHERE/WHAT tab" language stands as the
+   accurate historical record of what shipped *at the time*. `docs/design/
+   LIVING-FACTION-ENGINE.md` describes every current UI surface in
+   Dashboard-section/Co-Pilot terms only, and is the doc a reader should
+   trust for current vocabulary.
 8. **One additional supersession found during discovery, outside the
    faction cluster**: ADR 0007 (Git LFS for the Reference Library) is
    superseded by ADR 0039 (Release-hosted assets) — LFS bandwidth ran out

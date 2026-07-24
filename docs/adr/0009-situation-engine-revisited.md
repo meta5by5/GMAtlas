@@ -2,9 +2,7 @@
 
 ## Status
 
-**Implemented** (2026-07-06 — all three of Decision items 1-3 built as
-scoped below; item 4 needed no code, only recording the reconfirmed
-decline). Expedition trackers: `domain/expeditions.js`
+Accepted and implemented. Expedition trackers: `domain/expeditions.js`
 (`createExpedition`/`getExpedition`/`setExpeditionDial`/`expeditionsInDanger`),
 a "+ Expedition" button and 3-slider block in the WHY workspace's Threads
 list, and a `copilot.js` threshold observation. Diplomacy fields: `fear`/
@@ -12,34 +10,27 @@ list, and a `copilot.js` threshold observation. Diplomacy fields: `fear`/
 Suggestion Lenses: `data/suggestionLenses.js`'s Discovery/Approach lens
 lists plus a lens → real-Oracle-table mapping, `session.js`'s
 `drawSuggestionLenses`/`suggestNextWithLens`, and *What Happens Next?* now
-opens a lens-chip picker instead of aliasing Continue Story. Originally
-accepted design-only; amends ADR 0008's
-Decision item 6: **reverses** two of its five declines (Expedition
-Structure, Diplomacy Engine fields), **redirects** two others into a
-different, more specific mechanism than either `gameplay-mechanics.md` or
-ADR 0008 first considered (Discovery Quality, Noncombat Resolution — both
-become inputs to a new "Suggestion Lens" step in the *What Happens Next?*
-flow, not a stored field or a resolution mechanic), and **reconfirms**
-ADR 0008's fifth decline (the mechanized session-composition ratio)
-unchanged. ADR 0008's Decision items 1–5 and its Faction Pressure Track
-reconciliation (a *different* four-dial proposal — Influence/Resources/
-Patience/Agenda Progress — kept as a single clock) are untouched by this
-ADR.
+opens a lens-chip picker instead of aliasing Continue Story. The
+mechanized session-composition ratio from `gameplay-mechanics.md` stays
+declined (`docs/adr/0008-situation-engine.md` item 5) — unaffected by
+this ADR. ADR 0008's Faction Pressure Track design (a *different*
+four-dial proposal — Influence/Resources/Patience/Agenda Progress — kept
+as a single clock) is also unaffected.
 
 ## Context
 
-ADR 0008 explicitly declined five `gameplay-mechanics.md` proposals, each
-with reasoning. Rather than treat those calls as final, each was put back
-to the user individually, non-binding and suggestive ("is this relevant to
-revisit and pursue more deeply?") — the same posture ADR 0008 itself
-modeled toward the source document, now applied a level deeper to ADR
-0008's own conclusions. Four of five came back with a direction; one
-(session-composition ratio) reconfirmed the original decline.
+Beyond ADR 0008's naming/content-table decisions, `gameplay-mechanics.md`
+raised several proposals that were put back to the user individually,
+non-binding and suggestive ("is this relevant to revisit and pursue more
+deeply?"). Expedition Structure, Diplomacy Engine fields, Discovery
+Quality, and Noncombat Resolution each came back with a direction to
+build; the session-composition ratio reconfirmed its original decline.
 
 ## Decision
 
-1. **Expedition Structure — reversed.** The user's direction: *"treat those
-   four as trackers and not lifecycle states"* — real, separate numeric
+1. **Expedition Structure: real per-expedition dials.** The user's
+   direction: *"treat those four as trackers and not lifecycle states"* —
+   real, separate numeric
    dials, not a stored lifecycle status. The rejected alternative this
    ruled out is recorded in `docs/archive/adr/0009-situation-engine-
    revisited.md`. Scoped as: a Thread tagged
@@ -62,7 +53,7 @@ modeled toward the source document, now applied a level deeper to ADR
    low-medium* — one new small domain module reusing an established
    pattern, one Co-Pilot rule, one UI block.
 
-2. **Diplomacy Engine's structured per-faction fields — reversed.** Plain
+2. **Diplomacy Engine: structured per-faction fields.** Plain
    "pursue further," so scoped as specified: three new fields — `fear`,
    `need`, `secret` — on the Faction card, alongside the existing `hq`/
    `leadership`/`scenarioSeed` (`ensureFactionFields` in `domain/
@@ -73,8 +64,8 @@ modeled toward the source document, now applied a level deeper to ADR
    suggested angle — named here so it isn't lost, not committed to. *Effort:
    low* — three fields, same shape as the existing three.
 
-3. **Discovery Quality + Noncombat Resolution — redirected, not simply
-   reversed.** The user's direction for both was the same shape: *"these
+3. **Discovery Quality + Noncombat Resolution: Suggestion Lenses.** The
+   user's direction for both was the same shape: *"these
    should be options presented as creative suggestions during the course of
    an unfolding storyline"* / *"options to stimulate creativity and frame
    suggestions for what happens next"* — explicitly **not** a stored
@@ -120,11 +111,9 @@ modeled toward the source document, now applied a level deeper to ADR
    phase given explicit user interest, but not moved out of Phase 10
    itself" (ADR 0003).
 
-4. **Session-composition ratio — reconfirmed declined.** ADR 0008's
-   Decision item 5 stands unchanged: the 35/25/20/15/5 ratio stays
-   background design guidance, not a tracked or enforced meter. No new
-   decision needed here beyond recording that the user was asked again and
-   gave the same answer.
+4. **Session-composition ratio: stays declined.** ADR 0008's Decision
+   item 5 stands unchanged: the 35/25/20/15/5 ratio stays background
+   design guidance, not a tracked or enforced meter.
 
 ## Alternatives Considered
 
@@ -136,21 +125,18 @@ picker too were each considered and rejected).
 
 ## Consequences
 
-**Positive:** two real gaps get concrete, scoped designs — Expeditions gain
-actual multi-dial tracking (matching the user's explicit correction, not
-ADR 0008's lighter alternative), Diplomacy gets its structured fields, and
-*What Happens Next?* stops being a dead-duplicate button and becomes this
-repo's answer to `gameplay-mechanics.md`'s Discovery Quality and Noncombat
-Resolution ideas simultaneously, via one shared mechanism instead of two
-unrelated ones. The session-composition ratio stays correctly out of
-scope.
+**Positive:** two real gaps got concrete, scoped designs — Expeditions
+have actual multi-dial tracking, Diplomacy has its structured fields, and
+*What Happens Next?* is no longer a dead-duplicate of Continue Story — it's
+this repo's answer to `gameplay-mechanics.md`'s Discovery Quality and
+Noncombat Resolution ideas simultaneously, via one shared mechanism
+instead of two unrelated ones. The session-composition ratio stays
+correctly out of scope.
 
-**Negative/risk:** items 1 and 3 are real new mechanism work (a new domain
-module; a new lens-filtered suggestion path), not free — both are
+**Negative/risk:** items 1 and 3 were real new mechanism work (a new
+domain module; a new lens-filtered suggestion path), not free — both were
 Phase-10-shaped (new feature, lowest pack-66 priority) despite being
 user-prioritized, the same tension Trade & Logistics already navigated.
-Neither is built by this ADR; it only fixes the scope so a future
-implementation pass has a concrete target instead of re-deriving one.
 
 ## Related Packs / Documents
 

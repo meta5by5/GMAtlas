@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. **Partially superseded by `docs/adr/0010-traveller-swn-content.md`** (2026-07-06): this ADR's "Alternatives Considered" rejected giving Traveller a `data/rulesets.js` character template — ADR 0010 reverses that one specific call on direct user request, while keeping everything else here (the area/provider table, the honesty-status requirement, SWN staying a Factions/World-generation-only provider) unchanged.
+Accepted.
 
 ## Context
 
@@ -67,16 +67,9 @@ principle is already structurally honored, just not yet made *visible* or
    system's actual integration state rather than presenting all six as
    equally "supported" — Starforged and Five Parsecs From Home have
    character sheets (Phase 4); Planetfall has the Colony drawer; Hostile is
-   the default genre and oracle-table flavor. (Correction, 2026-07-03: this
-   entry originally said "Traveller is reference PDFs only" — the ruleset
-   library review that day found no Traveller sourcebook anywhere in
-   `assets/docs/`, so its status moved from `'reference only'` to
-   `'not yet integrated'` in `rulesConstitution.js`, matching SWN.)
-   (Further correction, 2026-07-06, see `docs/adr/0010`: Traveller and SWN
-   both gained honestly-labeled original content — Traveller a character
-   ruleset, SWN a Factions/World-generation oracle group — neither is
-   "no data authored at all" anymore; `rulesConstitution.js`'s status
-   strings reflect this.)
+   the default genre and oracle-table flavor; Traveller has an authored
+   character ruleset and SWN an authored Factions/World-generation oracle
+   group (`docs/adr/0010`).
 
 4. **Fold "services to automate" into the existing roadmap rather than
    inventing a parallel one.** Faction turns, trade, and colony automation
@@ -96,11 +89,8 @@ principle is already structurally honored, just not yet made *visible* or
 ## Alternatives Considered
 
 See `docs/archive/adr/0002-rules-constitution.md` (building the Activity →
-Rules Lens recommender immediately, giving Traveller/SWN full
-character-sheet entries at the time, and treating the document as
-redundant with Article III were each considered and rejected — the
-Traveller call was later reversed by `docs/adr/0010-traveller-swn-
-content.md`, per this ADR's own Status line).
+Rules Lens recommender immediately, and treating the document as
+redundant with Article III were each considered and rejected).
 
 ## Consequences
 

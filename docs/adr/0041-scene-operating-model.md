@@ -167,9 +167,9 @@ a new scene-scoped list rather than a schema change.
 
 Reuses Threads/Foreshadowing/World Flags — already this app's "what
 carries over between scenes" mechanism — as the filter input for which
-oracle tables get suggested. **This absorbs `docs/adr/0040`'s still-open
-12c** ("oracle-tailored dropdowns beyond WHY") — 12c is recorded there as
-superseded by this phase, not tracked twice.
+oracle tables get suggested. **This absorbs the "oracle-tailored
+dropdowns beyond WHY" work `docs/adr/0040` originally scoped** — tracked
+here, not twice.
 
 ### 13e — HOW: suggestions + asset/gear associations (roadmap only)
 
@@ -343,10 +343,9 @@ considered and rejected).
   updates (`PROGRESS.md`, `DESIGN-NEW-FUNCTIONALITY.md`) are the entire
   deliverable. `npm test`/`node scripts/build.js` are unaffected (442
   passing, 77 modules — unchanged from before this pass).
-- `docs/adr/0040-story-dashboard.md`'s 12c is recorded as superseded by
-  13d, per CLAUDE.md's "no two docs get to disagree" rule — it stays
-  listed there for history, not silently dropped, but this ADR is now the
-  authority on that specific piece of work.
+- `docs/adr/0040-story-dashboard.md`'s oracle-tailored-dropdowns item is
+  tracked here (13d) instead, per CLAUDE.md's "no two docs get to
+  disagree" rule — this ADR is the authority on that piece of work.
 - 13a/13b's scene-scoped `npcStates` living on the current `doc.scenes[]`
   entry (rather than a new top-level `campaign` array) is a real
   precedent-setting choice for the rest of Phase 13 — 13c's Shared
@@ -357,7 +356,8 @@ considered and rejected).
 ## Related packs / ADRs
 
 `docs/adr/0040-story-dashboard.md` (Phase 12 — the Dashboard/Co-Pilot
-skeleton this phase fills in; 12c superseded by 13d above),
+skeleton this phase fills in; the oracle-tailored-dropdowns work it
+originally scoped is tracked here as 13d instead),
 `docs/adr/0039-reference-library-release-hosting-and-story-options.md`
 (Story Options/`gatherSceneContext` — the pattern 13c's Shared
 Circumstances and 13e's suggestions extend), `docs/adr/0037-

@@ -132,12 +132,7 @@ assume they're integrated because they're listed.
 
 ### Design docs map
 
-Where to look for "what's the current design of X," in priority order —
-added by `docs/adr/0042-design-doc-consolidation.md`, which reconciled the
-faction subsystem's design history as the first subsystem to get this
-treatment; other subsystems may gain their own `docs/design/*.md`
-canonical spec the same way if they ever accumulate a comparable number of
-overlapping ADRs.
+Where to look for "what's the current design of X," in priority order.
 
 1. **`docs/design/*.md`** — a canonical, living spec for a subsystem
    that's accumulated enough ADRs to need one consolidated read, e.g.
@@ -146,32 +141,48 @@ overlapping ADRs.
    Not every subsystem has one; most don't need it (see 2).
 2. **`docs/adr/NNNN-*.md`** — the default source of truth for *why* a
    decision was made, for any subsystem without a canonical spec.
-   Immutable once accepted (only a `Status` line may later point to a
-   superseding doc — never rewrite the Decision/Context/Consequences
-   body). Its "Alternatives Considered" section, though, is deliberately
-   *not* inline — see the ADR-writing convention under "Style/
-   contribution notes" below. If an ADR's design is *fully* superseded
-   (not just extended), the whole file physically relocates to
+   **Living, not immutable (policy as of 2026-07-23):** an ADR is kept
+   current — it describes what IS built, what IS planned, and open
+   questions still to be answered, and nothing else. When a later
+   decision reverses an earlier one, the earlier ADR is edited to remove
+   the reversed content outright (not marked "superseded," not left with
+   a note that a reversal happened) — an ADR should never read as a
+   history of changing its mind, only as the present truth plus the
+   forward plan. When a "planned" item ships, the ADR is edited again to
+   describe it as simply built (drop the "planned" framing). If the
+   *code* turns out to disagree with what an ADR currently says, that's
+   drift, not something to silently patch into the ADR — log it in
+   `docs/CONFLICTS.md` (file/ADR/line references both ways) for a human
+   to reconcile, and leave the ADR's text alone until that's resolved.
+   An ADR's "Alternatives Considered" section is deliberately *not*
+   inline — see the ADR-writing convention under "Style/contribution
+   notes" below. If an ADR's design is *fully* superseded by a newer one
+   covering the same ground, the whole file physically relocates to
    `docs/archive/adr/NNNN-*.md` (same number, `docs/archive/INDEX.md`
-   records the move) — a number is never reused, but as of the 2026-07-23
-   consolidation-ADR addendum, the file itself can move once nothing
-   about it is still current.
+   records the move) — a number is never reused, but the file itself can
+   move once nothing about it is still current.
 3. **`PROGRESS.md`** — *what shipped when*, the status ledger. Not a
    design doc; check it to find which ADR/spec is current when a phase
    number is ambiguous.
-4. **`requirements/design-principles/`** — the 77-document Design
+4. **`docs/CONFLICTS.md`** — the live ledger of confirmed drift between
+   an ADR's stated design and what the code actually does. Not a design
+   doc either — it's the "known discrepancy, not yet reconciled" list;
+   check it before trusting an ADR's text at face value on something that
+   looks off.
+5. **`requirements/design-principles/`** — the 77-document Design
    Constitution, the long-range vision every ADR reconciles *to* (see
    above). Read for aspiration/rationale, not for "what's built" — check
    `src/` or an ADR for that.
-5. **`docs/archive/`** — superseded/fully-archived docs (`docs/archive/
-   design/`, `docs/archive/adr/`, ...) kept for history, pointer-linked
-   from `docs/archive/INDEX.md` to whatever superseded them — **plus**
-   every live ADR's rejected-alternatives companion (`docs/archive/adr/
+6. **`docs/archive/`** — fully-superseded docs (`docs/archive/design/`,
+   `docs/archive/adr/`, ...) kept for history, pointer-linked from
+   `docs/archive/INDEX.md` to whatever superseded them — **plus** every
+   live ADR's rejected-alternatives companion (`docs/archive/adr/
    NNNN-*.md`, same number as its still-live counterpart in `docs/adr/`
-   — not a superseded doc, just the "what didn't make the cut" half of
-   an otherwise-current ADR). Never the current answer to "how does X
-   work," but useful for "why did we used to do it differently" or "what
-   else was on the table."
+   — not a superseded doc, just the "what didn't make the cut at
+   decision time" half of an otherwise-current ADR). Never the current
+   answer to "how does X work" or "what changed" — a live ADR never
+   points back here to explain itself; this is purely for a reader who
+   wants the road not taken.
 
 ## Non-negotiable architectural rules
 
@@ -510,6 +521,23 @@ reality.
   comparison against Y in the companion. Worked example:
   `docs/adr/0030-starforged-starsmith-oracles.md` ↔ `docs/archive/adr/
   0030-starforged-starsmith-oracles.md`.
+  **ADRs are living documents (2026-07-23), not a decision journal:**
+  when you land a change that reverses or extends a *prior* ADR's
+  decision, edit that prior ADR in place — remove the reversed content
+  outright, don't add a "superseded"/"reversed by" note describing that
+  a change happened. The live ADR set should always read as "what's true
+  now + what's planned + open questions," never as a history of changing
+  its mind (that history still exists in `git log`/`git blame` if anyone
+  needs it — an ADR isn't the place for it). When a "planned"/"proposed"
+  item ships, edit the ADR again to describe it as simply built. If you
+  find the *code* disagreeing with what an ADR currently states, don't
+  silently rewrite the ADR to match (you might have the wrong read of
+  which one's actually correct) — log it in `docs/CONFLICTS.md` instead,
+  citing the ADR + line number and the conflicting file/line in `src/`,
+  and leave the ADR's text as-is until a human reconciles it. (This
+  doesn't apply to fully-superseded ADRs, which physically move to
+  `docs/archive/adr/` per item 2 of the Design docs map above — that's
+  archival, not an edit.)
 - **No two docs get to disagree about current reality.** Design principles
   and requirements accumulated over many sessions; when a newer one
   conflicts with an older one, the newer one wins outright — it replaces

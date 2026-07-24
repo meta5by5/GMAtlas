@@ -2,23 +2,14 @@
 
 ## Status
 
-Accepted. Split three ways: (1) a naming/documentation decision with no
+Accepted. Split two ways: (1) a naming/documentation decision with no
 code changes — this repo already implements the pattern the source
 document proposes, years before the document arrived; (2) four small
 Oracle content additions, unblocked by phase order (same reasoning Phase 8
 already used for the NPC-generation chain and the two hazard/dilemma
 tables — see `DESIGN-NEW-FUNCTIONALITY.md`'s "Why these aren't all dumped
-in as one flat list"); (3) everything else, explicitly deferred with
-reasoning (Decision item 6), same discipline as ADR 0004.
-
-**Partially superseded by `docs/adr/0009-situation-engine-revisited.md`**:
-Decision item 6's Expedition Structure and Diplomacy Engine declines were
-put back to the user and reversed; its Discovery Quality and Noncombat
-Resolution declines were redirected into a different mechanism (a
-Suggestion Lens step in *What Happens Next?*, not a stored field or a
-resolution mechanic). Item 6's session-composition-ratio decline and every
-other Decision item here (1–5, and the separate Faction Pressure Track
-reconciliation) are unaffected — see ADR 0009 for exactly what changed.
+in as one flat list"). A mechanized session-composition ratio is declined
+(Decision item 5), same discipline as ADR 0004.
 
 ## Context
 
@@ -169,33 +160,6 @@ slice, defer the rest with reasons) already established.
    creative authority); the ratio is background research informing what
    content gets authored, not a budget to enforce.
 
-6. **Explicitly deferred, not designed here** (same posture as ADR 0004
-   item 5 — none of this blocks the content additions in item 2):
-   - **Expedition Structure's four-pressure-dial** (Progress/Supplies/
-     Exposure/Morale) as a new tracked entity or mechanism. An expedition
-     is already well-modeled as an ordinary Thread — its progress clock
-     covers "Progress," and the existing 7-state lifecycle's `Escalating`
-     already covers rising danger/dwindling supply. A GM can narrate a
-     supply-vs-route dilemma by hand once a Thread crosses into
-     `Escalating`, exactly like every other Thread-driven complication in
-     this app; no second multi-dial primitive needed alongside Threads and
-     `context.what`'s existing dials.
-   - **Diplomacy Engine's structured per-faction Fear/Need/Secret fields.**
-     The existing Faction card's free-text `scenarioSeed` (Phase 7) already
-     carries this — "wants security, fears the independence movement"
-     costs nothing new to write there. No new structured fields.
-   - **Discovery Quality's eight-category "this changes..."
-     classification** as a field on Lore/discovery entities. Free-text
-     `overview` already covers it, the same reasoning ADR 0004 used for
-     colony richness fields — add a structured field only once a concrete
-     mechanic reads it.
-   - **Noncombat Resolution's eight-approach taxonomy** (Violence/
-     Negotiation/Stealth/Science/Engineering/Economics/Social leverage/
-     Exploration) as a new mechanic. There's no dice-mechanic gap to fill
-     — a GM already narrates whatever approach the players choose and
-     calls for the ruleset's matching skill roll. This is a GM-technique
-     essay, not a missing feature.
-
 ## Alternatives Considered
 
 See `docs/archive/adr/0008-situation-engine.md` (a standalone `domain/
@@ -209,15 +173,16 @@ small oracle-content additions) are scoped concretely and don't need to
 wait for Phase 10; its already-matched patterns (GM Prompt Hierarchy,
 Oracle Prompt Chains, Campaign Momentum, "crew with a ship") are documented
 as already-shipped so nobody re-derives them as gaps in a future review;
-its longer-range/mechanized ideas (Expedition dials, Diplomacy fields,
-Discovery classification, Noncombat taxonomy, session-ratio enforcement)
-are explicitly declined with reasons, so they don't get silently rebuilt
-later without this context.
+its mechanized session-ratio idea is explicitly declined with reasons
+(item 5), so it doesn't get silently rebuilt later without this context.
 
 **Negative/risk:** a reader of the source document expecting a distinct
-"Situation Engine" subsystem, an Expedition tracker, or a Diplomacy
-mini-game will find all three explicitly deferred here. Intentional — same
-posture as ADR 0004 toward the Merchant documents' larger vision.
+"Situation Engine" subsystem will find it's a naming/documentation
+decision, not a new subsystem. Intentional — same posture as ADR 0004
+toward the Merchant documents' larger vision. (Expedition tracking and
+per-faction Diplomacy fields, both raised by the source document, are
+real, shipped features — see `docs/adr/0009-situation-engine-
+revisited.md`, not this ADR.)
 
 ## Related Packs / Documents
 
