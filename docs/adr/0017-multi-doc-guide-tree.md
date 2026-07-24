@@ -93,20 +93,10 @@ the mouse path, since touch support was explicitly in scope this time.
 
 ## Alternatives considered
 
-- **A random id for the migration-bootstrap root doc**, matching every
-  other `newId()` call. Rejected once the read/write id-mismatch bug (see
-  above) was found — the fixed `'gd_root'` id is the actual fix, not a
-  stylistic choice.
-- **Migrating eagerly** (e.g. inside `core/migrate.js`'s `migrateDocument`,
-  which already runs on every load) instead of lazily inside `domain/
-  guide.js`'s write mutators. Rejected — `core/*.js` has no existing
-  precedent of importing from `domain/*.js`, and introducing one here
-  would reverse this repo's established layering (core is foundational,
-  domain builds on it) for a problem the fixed-id fix already solves
-  without that dependency.
-- **Cascading delete without confirmation**, or the reverse (promoting
-  children up instead of deleting them). Asked directly rather than
-  assumed; confirm-then-cascade was the user's explicit choice.
+See `docs/archive/adr/0017-multi-doc-guide-tree.md` (a random id for the
+migration-bootstrap root doc, migrating eagerly inside `core/migrate.js`,
+and cascading delete without confirmation were each considered and
+rejected).
 
 ## Consequences
 

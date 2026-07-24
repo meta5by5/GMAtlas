@@ -39,9 +39,10 @@ modeled toward the source document, now applied a level deeper to ADR
 ## Decision
 
 1. **Expedition Structure — reversed.** The user's direction: *"treat those
-   four as trackers and not lifecycle states"* — explicitly rejecting ADR
-   0008's "fold it into a Thread's `Escalating` status" alternative in favor
-   of real, separate numeric dials. Scoped as: a Thread tagged
+   four as trackers and not lifecycle states"* — real, separate numeric
+   dials, not a stored lifecycle status. The rejected alternative this
+   ruled out is recorded in `docs/archive/adr/0009-situation-engine-
+   revisited.md`. Scoped as: a Thread tagged
    `kind: 'expedition'` (the same tagged-Thread convention Contracts and the
    Faction Pressure Track already established — see ADR 0004 and the
    Faction Pressure Track item in `DESIGN-NEW-FUNCTIONALITY.md`) gains three
@@ -127,31 +128,11 @@ modeled toward the source document, now applied a level deeper to ADR
 
 ## Alternatives Considered
 
-- **Fold Expedition dials into `context.what`'s existing campaign-wide
-  dials** (a sixth/seventh/eighth slider next to Resources/Reputation/
-  Stress). Rejected — those dials are deliberately campaign-global (one
-  value for the whole campaign at a time); an expedition is scoped to one
-  Thread, and multiple expeditions could plausibly run in parallel (a
-  survey team in the field while a separate salvage run is also underway).
-  A per-Thread home is the only one of the two shapes that doesn't break
-  under that case.
-- **Store Discovery Quality's category as a field on Lore/discovery
-  entities**, then have the Co-Pilot read it back later. Rejected — this is
-  exactly the framing ADR 0008 already declined and the user redirected
-  away from just now; a stored classification answers "what did this
-  discovery already turn out to mean," not "what should happen next,"
-  which is the actual ask.
-- **Build Noncombat Resolution as a real resolution mechanic** (an explicit
-  "choose your approach, then roll" UI competing with each ruleset's own
-  skill list). Rejected for the same reason ADR 0008 originally gave (no
-  dice-mechanic gap exists) — the redirected framing (a suggestion lens,
-  not a resolution step) avoids inventing mechanics a ruleset already owns.
-- **Give "Continue Story" the lens picker too, instead of only "What
-  Happens Next?"** Rejected — the whole point of having two buttons is that
-  one stays the fast, no-input path (today's unchanged behavior) and the
-  other becomes the deliberate, GM-steered path; collapsing them back to
-  identical behavior with an extra step would just relocate the "these do
-  the same thing" problem instead of fixing it.
+See `docs/archive/adr/0009-situation-engine-revisited.md` (folding
+Expedition dials into `context.what`'s campaign-wide dials, storing
+Discovery Quality as a stored entity field, building Noncombat Resolution
+as a formal resolution mechanic, and giving "Continue Story" the lens
+picker too were each considered and rejected).
 
 ## Consequences
 

@@ -321,19 +321,21 @@ fields before this ADR were ADR 0013's `developmentLevel` and ADR 0025's
 Four scoping questions (via `AskUserQuestion`, all "Recommended" chosen)
 resolved the design:
 
-1. **Import, not read-only reference or auto-seed.** A Settings button
-   bulk-creates real, fully-editable Location entities in the GM's
-   current campaign — matches "build an entities database" literally,
-   and nothing is forced on a campaign that doesn't want it.
+1. **Import.** A Settings button bulk-creates real, fully-editable
+   Location entities in the GM's current campaign — matches "build an
+   entities database" literally, and nothing is forced on a campaign
+   that doesn't want it.
 2. **A full UWP "World Profile" card** — ~13 new optional Location
    fields, same additive/blank-by-default posture ADR 0013/0025 already
    established.
-3. **Condensed prose**, not verbatim paragraphs — a few GM-scannable
-   sentences per world rather than the book's full multi-paragraph
-   write-ups, so 108 (eventually) entities stay usable at the table.
+3. **Condensed prose** — a few GM-scannable sentences per world, so 108
+   (eventually) entities stay usable at the table.
 4. **Incremental rollout** — build the mechanism once, then populate the
    canon data file zone by zone. The import action is idempotent (dedup
    by name), so each new zone's data just needs appending.
+
+The rejected alternatives ruled out by items 1 and 3 above are recorded
+in `docs/archive/adr/0026-hostile-canon-locations.md`.
 
 ## Decision
 
@@ -422,22 +424,11 @@ legible directly in each dropdown's own `code — label` options).
 
 ## Alternatives considered
 
-- **Auto-seed all 108 into every new Hostile-genre campaign.** Rejected
-  — most automatic, but clutters a fresh campaign a GM might want empty,
-  and isn't reversible without a bespoke "undo the seed" mechanism.
-- **Read-only reference table only, no entity creation.** Rejected —
-  doesn't satisfy "build an entities database" and leaves a GM
-  hand-typing 30+ Locations to actually use any of this.
-- **Merge World Profile into the existing "Location card" as one
-  undifferentiated block.** Rejected in favor of a visually distinct
-  sub-card — 13 fields is a lot to mix into the 2-field Development
-  Level/Biome block without making that block's own "these two dials
-  bias Trade" framing harder to scan.
-- **Verbatim paragraph capture.** Rejected per the resolved scoping
-  question — a full Planetology+Development paragraph pair runs several
-  times longer per world than a usable at-the-table summary; the `page`
-  citation lets a GM pull the original from the Reference Library when
-  they want the full text.
+See `docs/archive/adr/0026-hostile-canon-locations.md` (auto-seeding
+every new Hostile-genre campaign, a read-only reference table with no
+entity creation, merging World Profile into the Location card as one
+undifferentiated block, and verbatim paragraph capture were each
+considered and rejected).
 
 ## Consequences
 

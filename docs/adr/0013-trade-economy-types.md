@@ -110,22 +110,10 @@ the existing Rules Constitution reference table's shape exactly.
 
 ## Alternatives considered
 
-- **A new structured `location.economyType` field** instead of a tag. Would
-  have needed its own dropdown UI, its own migration story, and its own
-  "what happens when the model changes" logic. Rejected: the tag system
-  already solves discovery (suggested vocabulary), display (chips), and
-  cross-model survival (a string, not an enum reference) for free.
-- **A literal Tech Level number per Location.** Directly contradicted the
-  request's explicit instruction to avoid this; also would have coupled
-  Hostile's setting to a Traveller-specific concept it doesn't otherwise
-  use anywhere.
-- **A full "available commodities" allow/deny list per economy type**
-  (hard exclusion rather than a price bias). Rejected for this pass as
-  more data-entry-heavy than the request's actual ask, and less safe under
-  a model switch — a hard-excluded commodity would need its own migration
-  story if a GM later wanted it back. A strong (0.6x-1.4x) price bias
-  achieves the same "scarce here" GM signal without ever making a
-  commodity un-tradeable.
+See `docs/archive/adr/0013-trade-economy-types.md` (a structured
+`location.economyType` field, a literal Tech Level number per Location,
+and a full available-commodities allow/deny list per economy type were
+each considered and rejected).
 
 ## Consequences
 

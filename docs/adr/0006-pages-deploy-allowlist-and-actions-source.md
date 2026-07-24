@@ -69,21 +69,10 @@ none of which were visible from the workflow's own "success" status:
 
 ## Alternatives Considered
 
-- **Un-gitignore `dist/`** so it's a normal tracked file the branch-based
-  Pages source could serve directly, avoiding a build step in CI
-  entirely. Rejected: `CLAUDE.md` is explicit that `dist/` is a build
-  artifact, never committed (`git status` showing no changes there after
-  a rebuild is the expected, documented state) — inverting that for
-  deploy convenience would mean two different mental models depending on
-  which context you're building the site for.
-- **Investigate exactly why `.gitignore`'d-but-freshly-generated paths get
-  excluded from the artifact upload**, rather than routing around it.
-  Deferred: once the Pages source turned out to be branch-based all along,
-  that specific question stopped mattering for *this* bug (the artifact
-  was never being consulted at all) — the allowlist approach is a strict
-  improvement regardless (fixes bug 1 too) and isn't worth further
-  investigation purely to satisfy curiosity about a GitHub Actions
-  implementation detail.
+See `docs/archive/adr/0006-pages-deploy-allowlist-and-actions-source.md`
+(un-gitignoring `dist/` was considered and rejected; investigating the
+artifact-upload exclusion further, rather than routing around it, was
+considered and deferred once the branch-based Pages source was found).
 
 ## Consequences
 

@@ -64,26 +64,15 @@ document — every time.
 (`shell.js`'s upload handler), for a `.pdf` file only, `window.confirm`
 asks "Generate a Table of Contents entry for "<name>"?" — accepting scans
 just that one document (`{onlyDoc: {title, source: dataUrl}}`), matching
-the user's explicit "prompt the user... for the choice" answer rather than
-firing silently.
+the user's explicit "prompt the user... for the choice" answer. The
+rejected alternative this ruled out is recorded in
+`docs/archive/adr/0020-reference-toc-generation.md`.
 
 ## Alternatives considered
 
-- **True nested Guide lists for a multi-level bookmark tree.** Rejected —
-  this app's list renderer is deliberately one level deep (ADR 0018); the
-  em-dash depth prefix conveys structure without needing a new nesting
-  mechanism.
-- **A live "Import" button seeding hardcoded content**, considered and
-  rejected for the earlier 5PFH Guide-content ask (ADR 0018) for the same
-  reason it doesn't apply here either — moot for THIS feature specifically,
-  since the whole point is generating content from the GM's own PDFs, not
-  shipping any fixed content in app code.
-- **Scanning only the Reference Library**, matching the button's name
-  literally. Rejected in favor of also including uploaded PDFs — "each doc
-  in the library" (the user's own phrasing) reads as the combined library,
-  not just the bundled reference set, and the per-upload path already
-  needs to handle an uploaded file's bytes (a `data:` URL) directly, so
-  supporting that source for the manual scan too was no extra work.
+See `docs/archive/adr/0020-reference-toc-generation.md` (true nested Guide
+lists, a live "Import" button, and scanning only the Reference Library
+were each considered and rejected).
 
 ## Consequences
 
