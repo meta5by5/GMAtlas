@@ -5,7 +5,7 @@
 
 import { applyShift } from './context.js';
 import { generateScene, recomposeSceneText, ensureNpcSceneState, NPC_SCENE_FIELD_ORACLE_PATH } from './scenes.js';
-import { tablesWithOverrides, rollTable, rollGroup, formatRoll, pick, currentTableEntries, updateOracleEntry } from './oracles.js';
+import { tablesWithOverrides, rollTable, rollGroup, formatRoll, pick, getTable, currentTableEntries, updateOracleEntry } from './oracles.js';
 import { linkMentions, parseMentions, createEntity, updateEntity, getEntity, LOCATION_SENSORY_ORACLE_PATH } from './entities.js';
 import { linkDocumentMentions, parseDocumentMentions, resolvedDocumentMentionNames } from './documents.js';
 import { SUGGESTION_LENSES, findLens, lensOracleCategories } from '../data/suggestionLenses.js';
@@ -143,10 +143,43 @@ export function suggestNextWithLens(campaign, lensId, { toJournal = true, rng = 
   return next;
 }
 
-/** Apply a named "Shift Story" action and record it on the timeline. */
-export function applyStoryShift(campaign, shiftName, payload) {
+// Reveal Clue/Complicate/Reward's own SHIFTS reducers (context.js) fall
+// back to one FIXED sentence whenever called with no payload — that
+// fallback exists so `applyShift` still produces a sensible note if
+// nothing else supplies one, but it was never meant to be the only
+// possible text (real user report: Quick Apply always producing the
+// identical line). `context.js` stays a pure, oracle-free module by
+// design (it takes a bare `context`, not a whole `campaign`, so it has no
+// `campaign.oracles.overrides`/genre-pack to read) — so the variety is
+// generated HERE instead, where the full campaign is already in hand, and
+// passed down as an explicit `payload`, the exact same mechanism the
+// shift-prompt chips (Introduce NPC, Set Objective, ...) already use to
+// override the fixed fallback. A genre pack without these tables (only
+// 'hostile' has them so far) degrades gracefully to the original fixed
+// line, same posture as every other genre-pack-specific gap in this app.
+const SHIFT_ORACLE_DEFAULT = {
+  'Reveal Clue': { path: ['Miscellaneous', 'Story Clue'], wrap: (v) => `A clue surfaces: ${v}.` },
+  'Complicate': { path: ['Miscellaneous', 'Story Complication'], wrap: (v) => `${v.charAt(0).toUpperCase()}${v.slice(1)}.` },
+  'Reward': { path: ['Missions', 'Reward'], wrap: (v) => `The party gains ${v}.` },
+};
+
+function defaultShiftPayload(campaign, shiftName, rng) {
+  const cfg = SHIFT_ORACLE_DEFAULT[shiftName];
+  if (!cfg) return undefined;
+  const tables = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides, campaign.settings && campaign.settings.genrePack);
+  const entries = getTable(tables, ...cfg.path);
+  return Array.isArray(entries) && entries.length ? cfg.wrap(pick(entries, rng)) : undefined;
+}
+
+/** Apply a named "Shift Story" action and record it on the timeline. An
+ *  explicit `payload` (from a shift-prompt chip's typed text) always wins;
+ *  otherwise Reveal Clue/Complicate/Reward roll a real oracle entry
+ *  (see defaultShiftPayload above) instead of always reusing their one
+ *  fixed fallback sentence — every other shift is unaffected. */
+export function applyStoryShift(campaign, shiftName, payload, { rng = Math.random } = {}) {
   const next = clone(campaign);
-  const { context, event } = applyShift(next.context, shiftName, payload);
+  const resolvedPayload = payload || defaultShiftPayload(next, shiftName, rng);
+  const { context, event } = applyShift(next.context, shiftName, resolvedPayload);
   next.context = context;
   if (event) pushTimeline(next, { kind: 'shift', label: event.label });
   return next;

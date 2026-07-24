@@ -282,48 +282,25 @@ function howSectionBody(doc, ui) {
 }
 
 // Story Dashboard (docs/adr/0040, Phase 12a/12b/12f) — the sole workspace
-// view. Phase 12f retired the 5 individual WHO/WHERE/WHAT/WHY/HOW tabs
-// entirely (direct request) in favor of this: a header of always-visible
-// dials/Activity, then the 5 former tabs as open/collapsible
-// `dashboardSection`s (left column) plus the Narrative Composer pinned at
-// the top-right (right column, `styles/cockpit.css`'s sticky
-// `.dashboard-composer-col`).
+// view. Reorganized per direct mockup (2026-07-23): the left column now
+// leads with Current Location + Activity, then the 5 former tabs as
+// open/collapsible `dashboardSection`s; the right column leads with the
+// Narrative Composer, with the Threat/Mystery/Stress/Resources/Reputation
+// trackers now living BELOW it (`dashboardTrackersBlock`) instead of in a
+// shared header row above both columns — matches the mockup's "trackers
+// under the Narrative Composer in the right column" placement exactly.
 export function renderWorkspace(doc, ui) {
   const activity = doc.context.how.activity || '';
-  const c = doc.context.what;
-  const mystery = c.mystery == null ? 0 : c.mystery;
-  const stress = c.stress == null ? 5 : c.stress;
-  const resources = c.resources == null ? 5 : c.resources;
-  const reputation = c.reputation == null ? 5 : c.reputation;
   return card('Story Dashboard', 'Everything currently in play, at a glance.', `
-    ${currentLocationBanner(doc)}
-    <div class="field-row-3col">
-      <label class="field-label sm">Threat <b class="metric">${c.threat}/10</b>
-        <input type="range" min="0" max="10" value="${c.threat}" data-ctx-num="what.threat">
-      </label>
-      <label class="field-label sm">Mystery <b class="metric">${mystery}/10</b>
-        <input type="range" min="0" max="10" value="${mystery}" data-ctx-num="what.mystery">
-      </label>
-      <label class="field-label sm">Stress <b class="metric">${stress}/10</b>
-        <input type="range" min="0" max="10" value="${stress}" data-ctx-num="what.stress">
-      </label>
-    </div>
-    <div class="field-row-3col">
-      <label class="field-label sm">Resources <b class="metric">${resources}/10</b>
-        <input type="range" min="0" max="10" value="${resources}" data-ctx-num="what.resources">
-      </label>
-      <label class="field-label sm">Reputation <b class="metric">${reputation}/10</b>
-        <input type="range" min="0" max="10" value="${reputation}" data-ctx-num="what.reputation">
-      </label>
-    </div>
-    <label class="field-label sm">Activity
-      <select data-ctx="how.activity">
-        <option value="">— none set —</option>
-        ${ACTIVITIES.map((a) => `<option value="${a.id}" ${a.id === activity ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}
-      </select>
-    </label>
     <div class="dashboard-grid">
       <div class="dashboard-col">
+        ${currentLocationBanner(doc)}
+        <label class="field-label sm">Activity
+          <select data-ctx="how.activity">
+            <option value="">— none set —</option>
+            ${ACTIVITIES.map((a) => `<option value="${a.id}" ${a.id === activity ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}
+          </select>
+        </label>
         ${dashboardSection('who', 'WHO is here', 'People and factions in play.', whoSectionBody(doc, ui), doc, ui)}
         ${dashboardSection('where', 'WHERE it happens', 'The place the scene is set.', whereSectionBody(doc, ui), doc, ui)}
         ${dashboardSection('what', 'WHAT is happening', 'The active situation.', whatSectionBody(doc, ui), doc, ui)}
@@ -332,8 +309,32 @@ export function renderWorkspace(doc, ui) {
       </div>
       <div class="dashboard-composer-col">
         ${narrativeComposerBlock(doc, ui)}
+        ${dashboardTrackersBlock(doc)}
       </div>
     </div>`);
+}
+
+// Threat/Mystery/Stress/Resources/Reputation — moved out of the shared
+// header (2026-07-23 mockup) to sit directly under the Narrative Composer
+// in the right column, one full-width slider per row (not the 3-up grid
+// the header used) so it reads as a compact tracker stack alongside the
+// draft it's informing, not a separate dashboard region.
+function dashboardTrackersBlock(doc) {
+  const c = doc.context.what;
+  const mystery = c.mystery == null ? 0 : c.mystery;
+  const stress = c.stress == null ? 5 : c.stress;
+  const resources = c.resources == null ? 5 : c.resources;
+  const reputation = c.reputation == null ? 5 : c.reputation;
+  const dial = (key, label, value) => `<label class="field-label sm dashboard-tracker">${esc(label)} <b class="metric">${value}/10</b>
+    <input type="range" min="0" max="10" value="${value}" data-ctx-num="what.${key}">
+  </label>`;
+  return `<div class="dashboard-trackers">
+    ${dial('threat', 'Threat', c.threat)}
+    ${dial('mystery', 'Mystery', mystery)}
+    ${dial('stress', 'Stress', stress)}
+    ${dial('resources', 'Resources', resources)}
+    ${dial('reputation', 'Reputation', reputation)}
+  </div>`;
 }
 
 function summaryField(key, val, placeholder, doc, ui) {

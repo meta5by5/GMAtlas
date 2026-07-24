@@ -99,17 +99,35 @@ function suggestLensBlock(ui) {
 
 // GM inspiration for moving the activity forward — reuses the existing
 // oracle-driven Site Concept (feature/danger/wonder) and Adventure Seed
-// (hook/twist/complication) generators verbatim (domain/worldbuilding.js,
-// already wired to data-generate-site/-seed in shell.js, appends straight
-// to the Journal) rather than inventing a second generator.
-function inspirationBlock() {
+// (hook/twist/complication) generators verbatim (domain/worldbuilding.js)
+// rather than inventing a second one. Direct follow-up (2026-07-23): these
+// used to roll straight into the Journal with no review step; now the
+// roll lands in ephemeral `ui.inspirationDrafts` (never persisted) and
+// renders right here as an editable draft — same "preview, then explicit
+// commit" posture as the Narrative Composer's own Copy/Send-to-Journal.
+function inspirationDraftCard(kind, draft) {
+  if (!draft) return '';
+  return `<div class="inspiration-draft">
+    <textarea data-inspiration-field="${kind}" rows="4">${esc(draft)}</textarea>
+    <div class="copilot-quick">
+      <button class="chip sm" data-inspiration-copy="${kind}" title="Copy to clipboard">📋 Copy</button>
+      <button class="chip sm" data-inspiration-journal="${kind}" title="Add to Journal">＋ Send to Journal</button>
+      <button class="icon-btn" data-inspiration-dismiss="${kind}" title="Discard">✕</button>
+    </div>
+  </div>`;
+}
+
+function inspirationBlock(ui) {
+  const drafts = (ui && ui.inspirationDrafts) || {};
   return `
     <div class="copilot-card">
       <h3>Need inspiration?</h3>
       <div class="copilot-quick">
-        <button class="chip" data-generate-site title="Roll a site concept: a feature, a danger, and a wonder">🎲 Site Concept</button>
-        <button class="chip" data-generate-seed title="Roll an adventure seed: a hook, a twist, and a complication">🎲 Adventure Seed</button>
+        <button class="chip" data-generate-site-draft title="Roll a site concept: a feature, a danger, and a wonder">🎲 Site Concept</button>
+        <button class="chip" data-generate-seed-draft title="Roll an adventure seed: a hook, a twist, and a complication">🎲 Adventure Seed</button>
       </div>
+      ${inspirationDraftCard('site', drafts.site)}
+      ${inspirationDraftCard('seed', drafts.seed)}
     </div>`;
 }
 
@@ -149,7 +167,7 @@ export function renderCopilot(doc, ui) {
     ${suggestLensBlock(ui)}
     <div class="copilot-card"><h3>If nothing changes…</h3><p>${esc(a.consequence)}</p></div>
     <div class="copilot-card"><h3>Opportunity</h3><p>${esc(a.opportunity)}</p></div>
-    ${inspirationBlock()}
+    ${inspirationBlock(ui)}
     <div class="copilot-card">
       <h3>Suggested oracle</h3>
       <button class="copilot-action" data-roll="${esc(a.suggestedOraclePath.join('>'))}">🎲 ${esc(a.suggestedOracle)}</button>

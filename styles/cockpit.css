@@ -456,6 +456,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .dashboard-grid { grid-template-columns: 1fr; }
 }
 .dashboard-composer-col { position: sticky; top: var(--sp-3); align-self: start; }
+/* Trackers below the Narrative Composer (2026-07-23 mockup) — one
+   full-width slider per row, not the 3-up .field-row-3col grid the
+   header used, so the stack reads as compact and reuses .field-label.sm's
+   existing dial styling with no new rules beyond this spacing wrapper. */
+.dashboard-trackers { margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--border); }
+.dashboard-tracker { margin-top: var(--sp-2); }
+.dashboard-tracker:first-child { margin-top: 0; }
 /* Each former W-tab, now a collapsible section (dashboardSection(),
    ui/workspace/index.js) — reuses .section-head-row (drawers/index.js's
    Bases of Influence toggle already established this exact convention)
@@ -466,6 +473,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .dashboard-section-summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
 .dashboard-section-lead { margin-top: var(--sp-1); }
 .narrative-composer-preview { min-height: 3rem; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--sp-3); background: var(--bg-inset); margin: var(--sp-2) 0; }
+/* Co-Pilot's Site Concept/Adventure Seed draft cards (2026-07-23) — same
+   bordered-box treatment as .narrative-composer-preview, but a real
+   editable <textarea> since the draft isn't live-recomputed each render
+   (a one-time roll held in ephemeral state) so there's no clobber risk. */
+.inspiration-draft { margin-top: var(--sp-2); }
+.inspiration-draft textarea { width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--sp-3); background: var(--bg-inset); color: var(--text); font: inherit; resize: vertical; }
 
 /* WHO's scene-scoped NPC groups + WHERE's Location Details (docs/adr/0041
    Phase 13a/13b). .npc-scene-group reuses .workspace-mini-section's own

@@ -337,6 +337,11 @@ let dashboardSectionCursor = 'who';
 // NPC scene-cards (WHO) and Location Details blocks (WHERE) are expanded.
 let expandedSceneNpcs = new Set();
 let expandedLocationDetails = new Set();
+// Co-Pilot's Site Concept / Adventure Seed generators — ephemeral, never
+// persisted (a discarded/un-sent draft leaves no trace, same as a lens
+// picker's own draw). Keyed by kind ('site'/'seed') rather than two
+// separate variables so shell.js's handlers can stay generic.
+let inspirationDrafts = { site: null, seed: null };
 // The doc-viewer iframe reload guard (below) can't compare against the live
 // DOM `frame.src` readback — browsers always return that as a normalized
 // ABSOLUTE URL, while resolvedActive.src is a relative path for Reference
@@ -615,9 +620,17 @@ function onClick(ev) {
     return;
   }
 
+  // Direct follow-up: Quick Apply's generated content belongs in its own
+  // 5-W section, not duplicated into the Journal — a scene already gets
+  // its permanent home in campaign.scenes[] (WHAT's own lastScene()
+  // block), so the redundant auto-journal copy is switched off for this
+  // UI path specifically. continueStory/suggestNextWithLens's own
+  // toJournal:true default is untouched (still tested, still the right
+  // default for any other caller) — only these two Quick Apply call
+  // sites opt out.
   if (hit('[data-continue-story]')) {
-    store.update((d) => continueStory(d));
-    return toast('Scene generated → Journal');
+    store.update((d) => continueStory(d, { toJournal: false }));
+    return toast('Scene generated');
   }
   // "What Happens Next?" (docs/adr/0009-situation-engine-revisited.md,
   // Decision item 3): no longer an alias for Continue Story — it now opens
@@ -643,8 +656,8 @@ function onClick(ev) {
     const lensId = lensPick.dataset.lensPick;
     lensPickerOpen = false;
     whyLensPickerOpen = false;
-    store.update((d) => suggestNextWithLens(d, lensId));
-    return toast('Scene generated → Journal');
+    store.update((d) => suggestNextWithLens(d, lensId, { toJournal: false }));
+    return toast('Scene generated');
   }
 
   const shift = hit('[data-shift]');
@@ -1876,6 +1889,47 @@ function onClick(ev) {
     store.update((d) => addNote(d, formatAdventureSeed(generateAdventureSeed(d)), 'Adventure Seed'));
     return toast('Adventure seed generated');
   }
+  // Co-Pilot's OWN "Need inspiration?" buttons (copilotPanel.js) — distinct
+  // data-* from the Journal drawer's identical-looking pair just above
+  // (which stays auto-journaling — a GM clicking it from inside the
+  // Journal already wants it there, no preview needed). Direct follow-up:
+  // Co-Pilot's copy used to also roll straight into the Journal with no
+  // review step, unlike every other generator on that panel (Story
+  // Options, the Narrative Composer). Now the roll lands in ephemeral
+  // `inspirationDrafts` (never persisted) and renders as an editable
+  // draft card right where the button was clicked; the GM edits/copies/
+  // sends it explicitly, or dismisses it — same "preview, then explicit
+  // commit" posture as the Narrative Composer's own Copy/Send.
+  if (hit('[data-generate-site-draft]')) {
+    inspirationDrafts.site = formatSiteConcept(generateSiteConcept(store.get()));
+    return render();
+  }
+  if (hit('[data-generate-seed-draft]')) {
+    inspirationDrafts.seed = formatAdventureSeed(generateAdventureSeed(store.get()));
+    return render();
+  }
+  const inspirationCopy = hit('[data-inspiration-copy]');
+  if (inspirationCopy) {
+    const kind = inspirationCopy.dataset.inspirationCopy;
+    const draft = inspirationDrafts[kind];
+    if (!draft) return;
+    navigator.clipboard.writeText(draft).then(() => toast('Copied'), () => toast('Could not copy'));
+    return;
+  }
+  const inspirationJournal = hit('[data-inspiration-journal]');
+  if (inspirationJournal) {
+    const kind = inspirationJournal.dataset.inspirationJournal;
+    const draft = inspirationDrafts[kind];
+    if (!draft) return;
+    inspirationDrafts[kind] = null;
+    store.update((d) => addNote(d, draft, kind === 'site' ? 'Site Concept' : 'Adventure Seed'));
+    return toast('Added to Journal');
+  }
+  const inspirationDismiss = hit('[data-inspiration-dismiss]');
+  if (inspirationDismiss) {
+    inspirationDrafts[inspirationDismiss.dataset.inspirationDismiss] = null;
+    return render();
+  }
   // WHY's Story Options (storyOptionsBlock, workspace/index.js, and the
   // Co-Pilot panel's condensed storyOptionsCard — docs/adr/0039) — 🔮 rolls
   // the option's linked Oracle table for real inspiration (the same
@@ -2481,6 +2535,15 @@ function onChange(ev) {
     const sceneId = currentSceneId();
     if (!sceneId) return;
     return store.update((d) => addSceneBystander(d, sceneId, npcId));
+  }
+  // Co-Pilot's Site Concept/Adventure Seed draft cards — plain textarea,
+  // no re-render needed on edit (the DOM already shows what was typed);
+  // just keep the ephemeral draft in sync so Copy/Send-to-Journal use the
+  // edited text.
+  const inspirationField = t.closest('[data-inspiration-field]');
+  if (inspirationField) {
+    inspirationDrafts[inspirationField.dataset.inspirationField] = t.value;
+    return;
   }
   const locationField = t.closest('[data-location-field]');
   if (locationField) {
@@ -4227,7 +4290,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails,
+    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, inspirationDrafts,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,

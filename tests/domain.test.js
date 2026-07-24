@@ -287,6 +287,45 @@ test('applyStoryShift updates context and logs a breadcrumb', () => {
   assert.ok(next.timeline.some((t) => t.kind === 'shift'));
 });
 
+test('applyStoryShift: Reveal Clue/Complicate/Reward draw a REAL oracle entry (not always the same fixed sentence) when called with no payload, across many seeds', () => {
+  const camp = defaultCampaign();
+  const seen = new Set();
+  for (let seed = 0; seed < 20; seed++) {
+    const next = applyStoryShift(camp, 'Reveal Clue', undefined, { rng: makeRng(seed) });
+    const line = next.context.what.situation.split('\n').pop();
+    seen.add(line);
+  }
+  assert.ok(seen.size >= 5, `expected real variety across 20 seeds, got ${seen.size} distinct lines: ${[...seen].join(' | ')}`);
+  // Every produced line is a real table entry wrapped in the expected sentence, not the old single fixed line.
+  for (const line of seen) {
+    assert.match(line, /^• A clue surfaces: .+\.$/);
+    assert.notEqual(line, '• A clue surfaces that points at the current thread.');
+  }
+});
+
+test('applyStoryShift: Complicate and Reward also vary, and an explicit payload still overrides the oracle roll (shift-prompt chips keep working)', () => {
+  const camp = defaultCampaign();
+  const complications = new Set();
+  const rewards = new Set();
+  for (let seed = 0; seed < 20; seed++) {
+    complications.add(applyStoryShift(camp, 'Complicate', undefined, { rng: makeRng(seed) }).context.what.situation.split('\n').pop());
+    rewards.add(applyStoryShift(camp, 'Reward', undefined, { rng: makeRng(seed) }).context.what.situation.split('\n').pop());
+  }
+  assert.ok(complications.size >= 5, `expected variety in Complicate, got: ${[...complications].join(' | ')}`);
+  assert.ok(rewards.size >= 5, `expected variety in Reward, got: ${[...rewards].join(' | ')}`);
+  for (const r of rewards) assert.match(r, /^• The party gains .+\.$/);
+
+  const withPayload = applyStoryShift(camp, 'Reveal Clue', 'a hand-typed clue from a shift-prompt chip');
+  assert.match(withPayload.context.what.situation, /a hand-typed clue from a shift-prompt chip/);
+});
+
+test('applyStoryShift: a genre pack with no matching oracle table degrades gracefully to the original fixed sentence, not a throw', () => {
+  const camp = defaultCampaign();
+  camp.settings.genrePack = 'not-a-real-pack-id'; // falls back to the default ('hostile') pack per findGenrePack — still exercises the "no crash" path for an unmapped shift too
+  const next = applyStoryShift(camp, 'Advance Time', undefined, { rng: makeRng(1) });
+  assert.ok(next.context.how.summary); // unaffected shift still works — defaultShiftPayload returns undefined for it, no error
+});
+
 test('rollOracle records usage and journals the result', () => {
   const camp = defaultCampaign();
   const { campaign, text } = rollOracle(camp, ['Core Oracles', 'Action']);
