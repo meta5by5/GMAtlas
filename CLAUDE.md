@@ -145,9 +145,17 @@ overlapping ADRs.
    verified reality *and* the agreed forward design, clearly separated).
    Not every subsystem has one; most don't need it (see 2).
 2. **`docs/adr/NNNN-*.md`** — the default source of truth for *why* a
-   decision was made, for any subsystem without a canonical spec. Immutable
-   once accepted (only a `Status` line may later point to a superseding
-   doc — never rewrite the body).
+   decision was made, for any subsystem without a canonical spec.
+   Immutable once accepted (only a `Status` line may later point to a
+   superseding doc — never rewrite the Decision/Context/Consequences
+   body). Its "Alternatives Considered" section, though, is deliberately
+   *not* inline — see the ADR-writing convention under "Style/
+   contribution notes" below. If an ADR's design is *fully* superseded
+   (not just extended), the whole file physically relocates to
+   `docs/archive/adr/NNNN-*.md` (same number, `docs/archive/INDEX.md`
+   records the move) — a number is never reused, but as of the 2026-07-23
+   consolidation-ADR addendum, the file itself can move once nothing
+   about it is still current.
 3. **`PROGRESS.md`** — *what shipped when*, the status ledger. Not a
    design doc; check it to find which ADR/spec is current when a phase
    number is ambiguous.
@@ -155,10 +163,15 @@ overlapping ADRs.
    Constitution, the long-range vision every ADR reconciles *to* (see
    above). Read for aspiration/rationale, not for "what's built" — check
    `src/` or an ADR for that.
-5. **`docs/archive/`** — superseded docs, kept for history, pointer-linked
-   from `docs/archive/INDEX.md` to whatever superseded them. Never the
-   current answer to "how does X work," but useful for "why did we used to
-   do it differently."
+5. **`docs/archive/`** — superseded/fully-archived docs (`docs/archive/
+   design/`, `docs/archive/adr/`, ...) kept for history, pointer-linked
+   from `docs/archive/INDEX.md` to whatever superseded them — **plus**
+   every live ADR's rejected-alternatives companion (`docs/archive/adr/
+   NNNN-*.md`, same number as its still-live counterpart in `docs/adr/`
+   — not a superseded doc, just the "what didn't make the cut" half of
+   an otherwise-current ADR). Never the current answer to "how does X
+   work," but useful for "why did we used to do it differently" or "what
+   else was on the table."
 
 ## Non-negotiable architectural rules
 
@@ -486,6 +499,17 @@ reality.
   worked example. Not every feature needs one — a new drawer or domain
   module following existing patterns doesn't; a new cross-cutting
   mechanism (e.g. the Event Bus, if it's ever built) does.
+  **Alternatives Considered convention (2026-07-23):** write the section
+  as a one-line pointer to a same-named companion file in
+  `docs/archive/adr/NNNN-*.md` (create that companion alongside the ADR)
+  rather than inlining the rejected options — the live ADR should read as
+  pure accepted architecture, with "what was considered and rejected"
+  one hop away. Same for any rejected-option comparison you're tempted to
+  narrate inline in Context/Decision prose ("X rather than Y, because...")
+  — state the decision and its own rationale in the live ADR, put the
+  comparison against Y in the companion. Worked example:
+  `docs/adr/0030-starforged-starsmith-oracles.md` ↔ `docs/archive/adr/
+  0030-starforged-starsmith-oracles.md`.
 - **No two docs get to disagree about current reality.** Design principles
   and requirements accumulated over many sessions; when a newer one
   conflicts with an older one, the newer one wins outright — it replaces

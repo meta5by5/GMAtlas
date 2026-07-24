@@ -1,3 +1,15 @@
+> ARCHIVED 2026-07-23. Superseded by `docs/design/scene-story-integration-
+> plan.md` (its own reconciliation, archived alongside it) and, for the
+> fields that shipped, `docs/adr/0037-foreshadowing-worldflags-npc-goal.md`
+> (Foreshadowing/World State Flags/NPC current goal) and
+> `docs/adr/0041-scene-operating-model.md` (scene-scoped NPC Disposition/
+> Motivation/Threat Rank/Challenges/Opportunities — the "future, focused
+> pass" the reconciliation plan explicitly deferred). The full branching
+> scene graph this spec assumes was deliberately rejected (see the
+> reconciliation plan); Thread `type` taxonomy and the remaining NPC
+> Roster fields (role/status/voice/plot_significance) were never built —
+> still open if anyone wants them. Retained for history; not current.
+
 # GMAtlas — Scene & Story Data Model
 
 **Subsystem:** Story Engine (Scene / Thread / Continuity tracking)

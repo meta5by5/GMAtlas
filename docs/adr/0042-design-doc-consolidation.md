@@ -100,22 +100,45 @@ design doc — without deleting or rewriting any prior ADR's decision body.
   instructions, now executed; `docs/_cleanup/REPORT.md` is the durable
   record of what it produced.
 
+## Addendum (2026-07-23) — physical ADR relocation, and a rejected-alternatives extraction pattern for every live ADR
+
+Two direct follow-up instructions, same day, extending this ADR rather
+than replacing any part of it:
+
+1. **The 6 already-superseded ADRs (0007, 0031, 0032, 0034, 0035, 0038)
+   are physically moved to `docs/archive/adr/<same filename>.md`**,
+   reversing this ADR's own original point 7 framing ("ADRs are not
+   rewritten... left as the accurate historical record" — that part still
+   holds, only *location* changes, never the decision body) and the
+   Alternatives-Considered entry below that rejected "rewriting" the six
+   ADRs (rewriting was and remains rejected; *moving* the unmodified file
+   is a different action, confirmed via direct question before proceeding
+   given the reversal of a documented convention). Each gained an
+   ARCHIVED banner matching every other archived doc's convention.
+   `docs/archive/INDEX.md` updated accordingly — its own former "ADRs are
+   never physically moved" sentence is now explicitly scoped to *ADRs that
+   are only partially superseded/extended* (like 0036, which stays in
+   `docs/adr/` untouched).
+2. **Every remaining live ADR in `docs/adr/`** (all except the 6 above and
+   0036, 0037, 0039, 0040, 0041, and this ADR itself, each handled
+   individually — see their own files) **has its "Alternatives
+   Considered" section, plus any rejected-option comparison narrated
+   inline in Context/Decision prose, split into a same-named companion
+   file in `docs/archive/adr/`** — so a live ADR reads as pure accepted
+   architecture (what was built and why), with "what was considered and
+   rejected" one hop away for a reader who wants it, never deleted.
+   Worked example and exact pattern: `docs/adr/0030-starforged-starsmith-
+   oracles.md` ↔ `docs/archive/adr/0030-starforged-starsmith-oracles.md`.
+   `CLAUDE.md`'s ADR-writing guidance is updated so a *new* ADR follows
+   this split from the start rather than drifting back to inlining
+   alternatives.
+
 ## Alternatives considered
 
-- **Rewrite the six faction ADRs in place to reflect the new design.**
-  Rejected — violates this repo's own "ADRs are immutable history" rule
-  (`CLAUDE.md`, and this cleanup's own ground rule 0.3); an ADR records a
-  decision *at the time it was made*, and rewriting 0031's body to
-  describe two-sided impact would make it lie about what actually shipped
-  in July.
-- **Leave the six ADRs standing with no consolidation.** Rejected — a
-  reader hitting 0031 first has no way to discover that 0032/0034/0035/
-  0038 modify its behavior, or that a scope document exists which reverses
-  specific cuts it made. The fragmentation was the actual problem this ADR
-  fixes.
-- **Delete the superseded `docs/design/` docs instead of archiving.**
-  Rejected outright by the cleanup's own ground rules (archive, never
-  delete — git history is a backstop, not the primary provenance record).
+See `docs/archive/adr/0042-design-doc-consolidation.md` (rewriting the six
+faction ADRs in place, leaving them standing with no consolidation, and
+deleting the superseded design docs instead of archiving were each
+considered and rejected).
 
 ## Consequences
 

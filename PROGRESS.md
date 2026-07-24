@@ -300,7 +300,8 @@ free-text field. 1 new domain test (432 total).
 **2026-07-14 Foreshadowing, World State Flags, NPC current goal**
 (`docs/adr/0037-foreshadowing-worldflags-npc-goal.md`): reviewed an
 external Scene & Story data-model spec against the actual architecture
-(`docs/design/scene-story-integration-plan.md`) before building — most of
+(`docs/archive/design/scene-story-integration-plan.md` as of the
+2026-07-23 doc consolidation) before building — most of
 it already existed under different names, and its pre-authored branching
 scene graph was flagged as a genuine philosophical mismatch (this app's
 scene generation is 100% live/oracle-driven, no `resolveScene()`,

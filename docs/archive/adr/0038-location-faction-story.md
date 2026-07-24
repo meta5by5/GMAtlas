@@ -1,3 +1,8 @@
+> ARCHIVED 2026-07-23 (moved from `docs/adr/`, per `docs/adr/0042-design-
+> doc-consolidation.md`). Design superseded by `docs/design/LIVING-
+> FACTION-ENGINE.md`; the presence machinery is reused wholesale. Retained
+> for history; not current — see the Status section below for detail.
+
 # ADR 0038 — Location ↔ Faction presence, Conflicts, and a Location Story
 
 ## Status

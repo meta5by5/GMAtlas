@@ -1,3 +1,9 @@
+> ARCHIVED 2026-07-23 (moved from `docs/adr/`, per `docs/adr/0042-design-
+> doc-consolidation.md`). Design superseded by `docs/design/LIVING-
+> FACTION-ENGINE.md`; the provider seam is reinforced there, not reversed.
+> Retained for history; not current — see the Status section below for
+> detail.
+
 # ADR 0032 — GMAtlas Core Faction Provider, Game System Activation, Event Scope/Response Logging, Read-Aloud Narrative, WHAT-tab Consequence Hook
 
 ## Status

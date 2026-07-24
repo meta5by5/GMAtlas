@@ -1,3 +1,8 @@
+> ARCHIVED 2026-07-23 (moved from `docs/adr/`, per `docs/adr/0042-design-
+> doc-consolidation.md`). Design superseded by `docs/design/LIVING-
+> FACTION-ENGINE.md`. Retained for history; not current — see the Status
+> section below for detail.
+
 # ADR 0035 — Faction Engine: activity pacing, faction-driven missions, and a clean turn-processing UI
 
 ## Status

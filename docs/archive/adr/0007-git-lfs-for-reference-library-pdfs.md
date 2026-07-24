@@ -1,3 +1,8 @@
+> ARCHIVED 2026-07-23 (moved from `docs/adr/`, per `docs/adr/0042-design-
+> doc-consolidation.md`). Superseded by `docs/adr/0039-reference-library-
+> release-hosting-and-story-options.md`. Retained for history; not
+> current — see the Status section below for detail.
+
 # ADR 0007 — Git LFS for the Reference Library's PDFs (with a history rewrite)
 
 ## Status
