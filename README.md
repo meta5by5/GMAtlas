@@ -6,7 +6,7 @@ A campaign operating system for solo and GM-run sci-fi tabletop play. Static, lo
 
 The app exists to let a GM run a four-hour session without thinking about the software. Everything is organized into three visual tiers:
 
-- **Primary (~85% of the screen):** Mission Control, the WHO / WHERE / WHAT / WHY / HOW context strip, the Adaptive Workspace, and the always-visible Co-Pilot.
+- **Primary (~85% of the screen):** Storyboard, the WHO / WHERE / WHAT / WHY / HOW context strip, the Adaptive Workspace, and the always-visible Narrative Composer (or "Composer").
 - **Secondary:** current recommendation, breadcrumb timeline, story-shift actions.
 - **Tertiary:** Journal, Oracle, Entity inspector, Graph, Documents, Settings — all edge-tab drawers, taking zero space until summoned.
 
@@ -33,18 +33,18 @@ Open the served URL. On first launch the store migrates any legacy data, then re
 
 - [x] Phase 0 — foundation (single campaign document, three-tier shell, PWA)
 - [x] Phase 1 — oracle/scene/context engine ported as pure, tested modules
-- [x] Phase 2 — the interactive cockpit (Continue Story, Shift Story, Co-Pilot, timeline)
+- [x] Phase 2 — the interactive cockpit (Continue Story, Shift Story, Composer, timeline)
 - [x] Phase 3 (A–D) — entities, relationship graph, statblocks, drag-and-drop, numeric tracks
 - [x] Phase 4 — Document Library, ruleset-driven Character Sheets
 - [x] Phase 5 — Party/Colony/Guide drawers, Bestiary templates, Oracle tree, Document upload/tags/PDF viewer
-- [x] Phase 6 — Campaign Continuity (Session Recap, Thread lifecycle, Narrative Trackers, Co-Pilot "what did I overlook?")
+- [x] Phase 6 — Campaign Continuity (Session Recap, Thread lifecycle, Narrative Trackers, Composer "what did I overlook?")
 - [x] Phase 7 — Context Graph depth (tag dropdowns, `@`-doc-pointers-with-page-anchors, typed/weighted relationships, "flag don't delete", Faction card template)
 - [x] Phase 8 — Unified Discovery (Universal Search, Oracle table editor, Cast filter/search, NPC-generation oracle chain)
 - [x] Phase 9 — Activity-driven gameplay (HOW → Rules Lens recommender, genre packs: Hostile/Cyberpunk-Shadowrun/Fantasy)
 - [ ] Phase 10 — Merchant Rules Lens (contract-driven trade, Trade drawer, tag-driven Location economy types), Faction Pressure Track, Mission generator, Traveller/SWN/CWN content, Enhancements (renamed from Cybernetics), Game Mechanics Index, Expedition trackers, Diplomacy fields, Suggestion Lenses, lightweight rich text (toolbars everywhere, mention page-editing, tables, Journal editing), a WHERE tab tag-filter redesign, split Latest Scene fields, and Reference Library Table of Contents generation all done; Shipyard companion link and a sync adapter still open (both blocked on external input, not effort)
 - [ ] Phase 11 (in progress) — Visual & Tactical Tools: Gallery (per-entity thumbnails + a tagged image collection), external rich-text links, and the Planetfall Grid Battlemap done; Planetfall Base Builder, Encounter Manager, and Interactive Maps still open
-- [x] Phase 12 — Story Dashboard (`docs/adr/0040-story-dashboard.md`): the 5 WHO/WHERE/WHAT/WHY/HOW tabs are retired — a single consolidated Dashboard (open/collapsible sections + a top-right Narrative Composer) plus a Co-Pilot "decision sandbox" (Story Options, Suggestion Lenses, Rules Lens, oracle generators) done; the small remainder (dead-export housekeeping, 8 orphaned Shift reducers) folded into Phase 13's tracking
-- [ ] Phase 13 (in progress) — Scene Operating Model (`docs/adr/0041-scene-operating-model.md`): WHERE's Location Details hierarchy + WHO's three scene-scoped NPC groups (Protagonists/Antagonists/Bystanders, each with oracle-seeded Disposition/Motivation/Threat Rank/Challenges/Opportunities that remember GM edits via `oracles.overrides`) done; WHAT's News Events/Dangers/Shared Circumstances, WHY/HOW oracle work, a guided walkthrough mode, manual-dice-result consequences, and folding Co-Pilot into the drawer tab group still open
+- [x] Phase 12 — Story Dashboard (`docs/adr/0040-story-dashboard.md`): the 5 WHO/WHERE/WHAT/WHY/HOW tabs are retired — a single consolidated Dashboard (open/collapsible sections + a top-right Narrative Composer) plus a Composer "decision sandbox" (Story Options, Suggestion Lenses, Rules Lens, oracle generators) done; the small remainder (dead-export housekeeping, 8 orphaned Shift reducers) folded into Phase 13's tracking
+- [ ] Phase 13 (in progress) — Scene Operating Model (`docs/adr/0041-scene-operating-model.md`): WHERE's Location Details hierarchy + WHO's three scene-scoped NPC groups (Protagonists/Antagonists/Bystanders, each with oracle-seeded Disposition/Motivation/Threat Rank/Challenges/Opportunities that remember GM edits via `oracles.overrides`) done; WHAT's News Events/Dangers/Shared Circumstances, WHY/HOW oracle work, a guided walkthrough mode, manual-dice-result consequences, and folding Composer into the drawer tab group still open
 
 Each phase's actual feature list, plus what's still open per phase, is in
 `DESIGN-NEW-FUNCTIONALITY.md` — not repeated here to avoid two copies
