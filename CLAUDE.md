@@ -42,6 +42,8 @@ non-trivial change; this file only covers day-to-day mechanics.
   spec (what the app should do, written spec-complete enough to rebuild
   from). Sections marked `#### NEW!` are not yet built; sections marked
   `%%  %%` carry no new requirement beyond current behavior.
+- **`DESIGN-NEW-FUNCTIONALITY.md`** — the live forward-looking roadmap:
+  phased plan for closing the gap to `Functional-Requirements-v2.md`.
 - **`PROGRESS.md`** — the phase-by-phase status ledger. Check it when a
   phase number is ambiguous.
 - New architectural decisions (a new engine, a schema shape change, a
