@@ -301,18 +301,21 @@ function howSectionBody(doc, ui) {
 // collapsible `dashboardSection`s) and Navigator (everything tracked
 // outside a PC's own sheet, plus a scene-at-a-glance summary). Previously
 // one combined "Story Dashboard" card with an internal 2-column grid; now
-// two real sibling cards so each can be addressed (and, on a narrow
+// two real sibling cards so each can be addressed (and, at a compact
 // viewport, shown/hidden) independently. `.storyboard-grid` (styles/
-// cockpit.css) lays them out side by side on desktop/tablet.
+// cockpit.css) lays them out side by side — desktop only now.
 //
-// Phone-only (design/UX-ROADMAP.md Step 5): this whole render is hidden by
-// CSS and shell.js skips calling it at all (isPhoneTab()) — Composer and
-// Navigator instead render via their own exported *BodyHtml functions
-// below, as permanently-pinned tabs sharing the same panel drawers use, so
-// each is reachable on its own instead of requiring a very long scroll
-// past whichever card is taller (the bug two-column position:sticky had,
-// and the bug plain stacking still had — a phone user could reach
-// Composer but Navigator was effectively unreachable below it).
+// Compact widths — phone AND tablet (design/UX-ROADMAP.md Steps 4/5): this
+// whole render is hidden by CSS and shell.js skips calling it at all
+// (isCompactTab()) — Composer and Navigator instead render via their own
+// exported *BodyHtml functions below, as permanently-pinned tabs sharing
+// the same panel drawers use, so each is reachable on its own instead of
+// requiring a very long scroll past whichever card is taller (the bug
+// two-column position:sticky had, and the bug plain stacking still had —
+// a phone user could reach Composer but Navigator was effectively
+// unreachable below it; tablet has the same "no room for 3 columns plus a
+// drawer side by side" problem desktop doesn't, so it gets the identical
+// treatment rather than a third, separate layout).
 export function renderWorkspace(doc, ui) {
   return `<div class="storyboard-grid">${composerCard(doc, ui)}${navigatorCard(doc, ui)}</div>`;
 }

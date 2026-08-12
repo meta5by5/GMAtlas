@@ -118,23 +118,28 @@ const DRAWER_META = {
   'entity-detail': { id: 'entity-detail', glyph: '👤', label: 'Entity' },
   // None of these three are real pinned drawers (never added to
   // `openDrawers`) — see renderActiveDrawerHtml/the drawer-tabs render
-  // below. On phone (isPhoneTab()) 'composer'/'navigator'/'advisor' are
-  // ALWAYS in the tab strip, permanently pinned, unclosable — the phone
-  // tab menu IS how the Storyboard is reached there, since .mc-workspace's
-  // own always-both-visible rendering is phone-only hidden (styles/
-  // cockpit.css) in favor of this. On desktop/tablet only 'advisor' rides
-  // along, and only once a real drawer is open (design/UX-ROADMAP.md
-  // Step 3) — Composer/Navigator stay their own permanent columns there.
+  // below. At compact widths (isCompactTab() — phone AND tablet, design/
+  // UX-ROADMAP.md Steps 4/5) 'composer'/'navigator'/'advisor' are ALWAYS in
+  // the tab strip, permanently pinned, unclosable — this tab menu IS how
+  // the Storyboard is reached there, since .mc-workspace's own always-
+  // both-visible rendering is hidden at that tier (styles/cockpit.css) in
+  // favor of this. On desktop only 'advisor' rides along, and only once a
+  // real drawer is open (Step 3) — Composer/Navigator stay their own
+  // permanent columns there.
   composer: { id: 'composer', glyph: '📝', label: 'Composer' },
   navigator: { id: 'navigator', glyph: '🧭', label: 'Navigator' },
   advisor: { id: 'advisor', glyph: '💡', label: 'Advisor' },
 };
 function drawerMeta(id) { return DRAWERS.find((d) => d.id === id) || DRAWER_META[id] || null; }
-// Phone tier boundary — matches styles/cockpit.css's own `max-width: 767px`
-// breakpoint for .mc-workspace/.storyboard-grid exactly; keep these two in
-// sync if either changes.
-const PHONE_TAB_BREAKPOINT = 767;
-function isPhoneTab() { return window.innerWidth <= PHONE_TAB_BREAKPOINT; }
+// Compact tier boundary (phone AND tablet) — matches styles/cockpit.css's
+// own `max-width: 1023px` breakpoint for .mc-workspace/.mc-copilot exactly;
+// keep these two in sync if either changes. Widened from phone-only
+// (767px) to also cover tablet (design/UX-ROADMAP.md Step 4) — tablet has
+// the same "no room for 3 columns plus a drawer side by side" problem
+// desktop doesn't, so it gets the same tab-menu treatment rather than a
+// third, separate layout.
+const COMPACT_TAB_BREAKPOINT = 1023;
+function isCompactTab() { return window.innerWidth <= COMPACT_TAB_BREAKPOINT; }
 // Edge nav button order top-down: Guide, Oracle, Cast, Trade, Docs, Graph,
 // Co-Pilot, Settings — Co-Pilot is the one remaining non-drawer button
 // interleaved into the same array DRAWERS.map() used to render alone,
@@ -303,6 +308,8 @@ let whyLensDraw = []; // ephemeral — WHY's scene-context-weighted lens draw, f
 let dismissedStoryOptionIds = new Set(); // ephemeral — Story Option ids the GM has accepted (rolled/journaled) or explicitly dismissed (docs/adr/0039 Phase 2, mirrors ADR 0036's dismissible-suggestion pattern) — filtered out of both storyOptionsBlock (WHY) and the Co-Pilot's condensed card so a used/dismissed option makes room for the next-ranked one instead of lingering
 let selectedStoryOptionIds = new Set(); // ephemeral — Story Option ids checked "in play" for the Story Dashboard's Narrative Composer (docs/adr/0040 Phase 12b) — a DIFFERENT concept from dismissedStoryOptionIds above ("used/not interested" vs. "include in the draft"), never persisted
 let catalogSearch = ''; // ephemeral — the catalog picker's own name/tag search
+let relPickerOpen = false; // ephemeral — the Entity Editor Relationships section's "Find entity to link" searchable overlay (design/UX-ROADMAP.md, phone-focused), open or not
+let relPickerFilter = ''; // ephemeral — that overlay's own name/type/tags search
 let partyTrackerAddOpen = false; // ephemeral — the inline "+ Tracker" name/type creation form, open or not
 let partyTrackerDraftKind = 'meter'; // ephemeral — the creation form's in-progress type pick, so its size/difficulty sub-field can react before the tracker actually exists
 let partyTrackerDraftName = ''; // ephemeral — mirrors the creation form's name input so a kind-change re-render (which rebuilds that input from scratch) doesn't wipe out whatever the GM already typed
@@ -502,7 +509,7 @@ export function mountShell(el) {
   window.addEventListener('beforeunload', flushFocusedField);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushFocusedField(); });
 
-  // Crossing the phone breakpoint (isPhoneTab(), above) changes whether
+  // Crossing the compact breakpoint (isCompactTab(), above) changes whether
   // Composer/Navigator/Advisor are permanently-pinned tabs or their own
   // desktop columns — a rotate/resize needs a re-render to pick that up;
   // nothing else in render() reacts to viewport size on its own. Debounced
@@ -970,6 +977,24 @@ function onClick(ev) {
     const label = root.querySelector('[data-entity-link-label]');
     const type = root.querySelector('[data-entity-link-type]');
     if (active && target && target.value) { store.update((d) => addRelationship(d, active, target.value, (label && label.value.trim()) || 'linked', type && type.value)); toast('Linked'); }
+    return;
+  }
+  // "Find entity to link" — a searchable overlay alternative to the plain
+  // <select> above (design/UX-ROADMAP.md, phone-focused: Cast can't be
+  // open side-by-side with the Entity Editor at compact widths to drag
+  // from, so tapping a result here does the same addRelationship() a
+  // desktop drag-drop onto this tab already does — same default label/type
+  // ('linked'), so a relationship created either way behaves identically
+  // afterward (editable via the same type/label controls on its chip).
+  if (hit('[data-rel-picker-open]')) { relPickerOpen = true; relPickerFilter = ''; return renderDrawerBody(); }
+  if (hit('[data-rel-picker-close]')) { relPickerOpen = false; relPickerFilter = ''; return renderDrawerBody(); }
+  const relPick = hit('[data-rel-picker-pick]');
+  if (relPick) {
+    const active = store.get().entities.activeId;
+    const targetId = relPick.dataset.relPickerPick;
+    relPickerOpen = false; relPickerFilter = '';
+    if (active && targetId) { store.update((d) => addRelationship(d, active, targetId, 'linked')); toast('Linked'); }
+    else renderDrawerBody();
     return;
   }
 
@@ -2941,6 +2966,9 @@ function onInput(ev) {
   const catSrch = t.closest('[data-catalog-search]');
   if (catSrch) { catalogSearch = t.value; renderDrawerBody(); restoreFocus('[data-catalog-search]'); return; }
 
+  const relSrch = t.closest('[data-rel-picker-search]');
+  if (relSrch) { relPickerFilter = t.value; renderDrawerBody(); restoreFocus('[data-rel-picker-search]'); return; }
+
   // Mirrors the Party Tracker creation form's name field into ephemeral
   // state, not for its own sake (the DOM already shows what was typed) but
   // so a kind-change 'change' event — which re-renders the whole form,
@@ -4021,12 +4049,13 @@ function render() {
   bc.innerHTML = crumbs.map((c, i) => `${i ? '<span class="sep">▸</span>' : ''}<span class="crumb">${escapeHtml(c.label || '')}</span>`).join(' ');
 
   const workspaceUi = buildDrawerUi();
-  // Phone (design/UX-ROADMAP.md Step 5): Composer/Navigator render inside
-  // the drawer panel instead (as permanently-pinned tabs, see the tab-strip
-  // computation below) — .mc-workspace itself is hidden by CSS there, so
-  // skip populating it rather than duplicating the same fields into two
-  // places in the DOM at once.
-  root.querySelector('[data-workspace]').innerHTML = isPhoneTab() ? '' : renderWorkspace(doc, workspaceUi);
+  // Compact widths — phone AND tablet (design/UX-ROADMAP.md Steps 4/5):
+  // Composer/Navigator render inside the drawer panel instead (as
+  // permanently-pinned tabs, see the tab-strip computation below) —
+  // .mc-workspace itself is hidden by CSS there, so skip populating it
+  // rather than duplicating the same fields into two places in the DOM at
+  // once.
+  root.querySelector('[data-workspace]').innerHTML = isCompactTab() ? '' : renderWorkspace(doc, workspaceUi);
   // A freshly-rendered Scene field textarea starts at its rows="1" default
   // regardless of how much text it holds — only typing into it fires the
   // 'input' event that would otherwise trigger autoGrowSceneField, so a
@@ -4086,17 +4115,19 @@ function render() {
   // closing its last open tab (or it never having one) returns to the
   // normal drawer tab-stack.
   const docViewerOpenTabs = (doc.documents && doc.documents.openTabs) || [];
-  const phone = isPhoneTab();
-  // Phone (design/UX-ROADMAP.md Step 5): Composer/Navigator/Advisor are
-  // ALWAYS pinned tabs there (see PINNED_TAB_IDS below) — the drawer
-  // panel is the only way the Storyboard is reachable at all on phone, so
-  // it's always considered "open" (never gated on a real drawer being
-  // pinned) and never starts with nothing active.
-  if (phone && !activeDrawer) activeDrawer = 'composer';
+  const compact = isCompactTab();
+  // Compact widths — phone AND tablet (design/UX-ROADMAP.md Steps 4/5):
+  // Composer/Navigator/Advisor are ALWAYS pinned tabs there (see
+  // PINNED_TAB_IDS below) — the drawer panel is the only way the
+  // Storyboard is reachable at all at this tier, so it's always considered
+  // "open" (never gated on a real drawer being pinned) and never starts
+  // with nothing active.
+  if (compact && !activeDrawer) activeDrawer = 'composer';
   const drawer = root.querySelector('[data-drawer]');
-  // drawerCollapsed ("peek behind the drawer") is ignored on phone — there
-  // is nothing behind it to peek at once .mc-workspace is hidden there.
-  drawer.dataset.open = String((phone || openDrawers.length > 0) && (phone || !drawerCollapsed) && docViewerOpenTabs.length === 0);
+  // drawerCollapsed ("peek behind the drawer") is ignored at compact
+  // widths — there is nothing behind it to peek at once .mc-workspace is
+  // hidden there.
+  drawer.dataset.open = String((compact || openDrawers.length > 0) && (compact || !drawerCollapsed) && docViewerOpenTabs.length === 0);
   // Desktop-only (styles/cockpit.css): hides the Advisor's own standalone
   // panel while a real drawer covers/replaces it, since its content is
   // reachable from the tab strip instead now (design/UX-ROADMAP.md Step 3).
@@ -4115,21 +4146,22 @@ function render() {
   // full-width switch now).
   //
   // Two different pinning rules share this one strip (design/UX-ROADMAP.md
-  // Steps 3 and 5): on phone, Composer/Navigator/Advisor are ALWAYS present,
-  // permanently pinned, unclosable — real opened drawers (Guide, Oracle,
-  // ...) follow behind them. On desktop/tablet, only the Advisor rides
-  // along this way, and only once a real drawer is pinned open (its own
-  // standalone panel, .mc-copilot, is hidden by CSS at that point,
-  // .cockpit.has-open-drawer, desktop tier only). None of the pinned ids
-  // are ever part of `openDrawers` itself (never individually closed/
-  // reordered) — computed fresh for this render, never persisted.
+  // Steps 3 and 4/5): at compact widths (phone AND tablet), Composer/
+  // Navigator/Advisor are ALWAYS present, permanently pinned, unclosable —
+  // real opened drawers (Guide, Oracle, ...) follow behind them. On
+  // desktop, only the Advisor rides along this way, and only once a real
+  // drawer is pinned open (its own standalone panel, .mc-copilot, is
+  // hidden by CSS at that point, .cockpit.has-open-drawer, desktop tier
+  // only). None of the pinned ids are ever part of `openDrawers` itself
+  // (never individually closed/reordered) — computed fresh for this
+  // render, never persisted.
   const PINNED_TAB_IDS = ['composer', 'navigator', 'advisor'];
-  const tabIds = phone
+  const tabIds = compact
     ? [...PINNED_TAB_IDS, ...openDrawers]
     : (openDrawers.length ? [...openDrawers, 'advisor'] : []);
   const drawerTabsEl = root.querySelector('[data-drawer-tabs]');
-  drawerTabsEl.hidden = phone ? false : tabIds.length < 2;
-  drawerTabsEl.innerHTML = (!phone && tabIds.length < 2) ? '' : (
+  drawerTabsEl.hidden = compact ? false : tabIds.length < 2;
+  drawerTabsEl.innerHTML = (!compact && tabIds.length < 2) ? '' : (
     `<div class="drawer-tabs-scroll">${tabIds.map((id) => {
       const m = drawerMeta(id);
       const pending = id === 'advisor' && hasPendingAdvisorDecision(doc);
@@ -4140,14 +4172,14 @@ function render() {
         ${close}
       </button>`;
     }).join('')}</div>
-    ${phone ? '' : '<button class="drawer-tabs-collapse" data-drawer-collapse title="Hide the drawer (keeps its tabs open — click the floating icon to bring it back)" aria-label="Hide drawer">⌄</button>'}
+    ${compact ? '' : '<button class="drawer-tabs-collapse" data-drawer-collapse title="Hide the drawer (keeps its tabs open — click the floating icon to bring it back)" aria-label="Hide drawer">⌄</button>'}
     <button class="drawer-tabs-close-all" data-close-all-drawers title="Close all open tabs" aria-label="Close all open tabs">✕</button>`
   );
-  // No collapse-to-peek-behind on phone (above) — there's nothing behind
-  // the drawer to peek at once .mc-workspace is hidden there (Step 5), so
-  // the restore icon has nothing to restore either.
+  // No collapse-to-peek-behind at compact widths (above) — there's nothing
+  // behind the drawer to peek at once .mc-workspace is hidden there (Steps
+  // 4/5), so the restore icon has nothing to restore either.
   const restoreBtn = root.querySelector('[data-drawer-restore]');
-  if (restoreBtn) restoreBtn.hidden = phone || !(drawerCollapsed && openDrawers.length > 0);
+  if (restoreBtn) restoreBtn.hidden = compact || !(drawerCollapsed && openDrawers.length > 0);
   renderDrawerBody();
 
   const viewer = root.querySelector('[data-doc-viewer]');
@@ -4368,7 +4400,7 @@ function headExtraForDrawer(id) {
 function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
-    entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, storageInfo: store.storageInfo(),
+    entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
     enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, inspirationDrafts,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
@@ -4417,10 +4449,11 @@ function replaceBodyPreservingScroll(body, html) {
 // its Roster section), so routing renderDrawer() through it too would be a
 // circular import between the two files. This is the one drawer id with a
 // special case here; 'advisor'/'composer'/'navigator' (design/UX-ROADMAP.md
-// Steps 3 and 5 — Advisor rides along in the tab strip whenever a real
-// drawer is pinned open on desktop/tablet, and all three are permanently
-// pinned tabs on phone) are the others; everything else (open/close/
-// tab-switch/width) is identical to any other DRAWERS entry.
+// Steps 3 and 4/5 — Advisor rides along in the tab strip whenever a real
+// drawer is pinned open on desktop, and all three are permanently pinned
+// tabs at compact widths, phone AND tablet) are the others; everything
+// else (open/close/tab-switch/width) is identical to any other DRAWERS
+// entry.
 function renderActiveDrawerHtml(doc) {
   if (!activeDrawer) return '';
   if (activeDrawer === 'faction-events') {

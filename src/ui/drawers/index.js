@@ -164,6 +164,43 @@ function catalogPickerBlock(ui) {
   </div>`;
 }
 
+// "Find entity to link" — a searchable alternative to the plain <select>
+// picker below it in the Relationships section, mainly for a long Cast
+// (a native dropdown has no search of its own) and for compact/phone
+// widths specifically, where Cast can't be open side-by-side with the
+// Entity Editor to drag from the way desktop can (design/UX-ROADMAP.md
+// Steps 4/5 made the drawer the one visible panel there). Deliberately
+// tap-to-link, not drag-to-link — cross-panel touch drag is one of the
+// more fragile mobile interactions to get right without a real device to
+// verify it on, and a floating list the GM can just tap an entity in
+// reaches the same "link this to the open entity" outcome with one fewer
+// gesture regardless of device. Positioned as a smaller window over the
+// top half of the panel (styles/cockpit.css's `.rel-picker`), so the
+// Relationships section stays visible in spirit even though tapping here
+// doesn't need it to be reachable underneath. Uses the same shared
+// filterEntities() Cast's own search bar does, so "find X" behaves
+// identically everywhere it's asked.
+function relPickerBlock(doc, e, ui) {
+  if (!ui.relPickerOpen) return '';
+  const q = ui.relPickerFilter || '';
+  const items = filterEntities(doc, { search: q }).filter((x) => x.id !== e.id);
+  const rows = items.map((x) => `
+    <button class="catalog-item-row" data-rel-picker-pick="${esc(x.id)}" title="Link ${esc(x.name) || 'Unnamed'} to ${esc(e.name) || 'this entity'}">
+      <span class="entity-type-tag">${TYPE_LABEL[x.type] || 'Entity'}</span>
+      <span class="catalog-item-name">${esc(x.name) || '<em>Unnamed</em>'}</span>
+      <span class="catalog-item-tags">${(x.tags || []).map((t) => `<span class="chip sm">${esc(t)}</span>`).join('')}</span>
+    </button>`).join('');
+  return `<div class="rel-picker">
+    <div class="catalog-picker-head">
+      <input class="drawer-search" data-rel-picker-search value="${esc(q)}" placeholder="Find an entity to link…" autofocus>
+      <button class="icon-btn" data-rel-picker-close title="Close" aria-label="Close">✕</button>
+    </div>
+    <div class="catalog-picker-list">
+      ${rows || '<p class="ws-placeholder">No entities match that search.</p>'}
+    </div>
+  </div>`;
+}
+
 // Entity Detail (2026-07-05 restructure): the name/type/tags/overview/
 // statblocks/relationships form Cast used to show inline, now its own tab —
 // opened only by clicking an entity somewhere (never picked from the edge
@@ -324,14 +361,15 @@ function inspector(doc, e, ui) {
     ${enhancementsSection(e, ui)}
     <div class="rel-block">
       <h4>Relationships</h4>
-      <p class="dim small">Drag another entity's ⠿ handle onto this one (or vice versa), or pick one below, to link them.</p>
+      <p class="dim small">Drag another entity's ⠿ handle onto this one (or vice versa), pick one below, or find one to link.</p>
       <div class="rel-chips">${rels || '<span class="dim small">None yet.</span>'}</div>
       ${others.length ? `<div class="rel-add">
         <select data-entity-link-type>${relTypeOptions('linked')}</select>
         <select data-entity-link-target>${others.map((o) => `<option value="${esc(o.id)}">${esc(o.name) || 'Unnamed'}</option>`).join('')}</select>
         <input data-entity-link-label placeholder="label (ally, rival…)">
         <button class="btn sm" data-entity-link-add title="Link" aria-label="Link">🔗 Link</button>
-      </div>` : '<p class="dim small">Add another entity to create relationships.</p>'}
+        <button class="btn ghost sm" data-rel-picker-open title="Search Cast for an entity to link">🔍 Find entity to link</button>
+      </div>${relPickerBlock(doc, e, ui)}` : '<p class="dim small">Add another entity to create relationships.</p>'}
     </div>`;
 }
 
