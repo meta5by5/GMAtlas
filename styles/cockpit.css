@@ -149,10 +149,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .workspace-card-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .workspace-card-body-inner { padding-right: var(--sp-6); }
 @media (max-width: 767px) {
-  .mc-workspace { overflow: auto; display: block; }
-  .workspace-card { display: block; padding-right: var(--sp-6); }
-  .workspace-card-body { overflow: visible; }
-  .workspace-card-body-inner { padding-right: 0; }
+  /* Composer/Navigator render inside the drawer panel instead now
+     (design/UX-ROADMAP.md Step 5 — permanently-pinned, unclosable tabs
+     shared with Advisor and any opened drawer) — shell.js's render()
+     also skips populating this element's innerHTML on phone
+     (isPhoneTab()), so this is belt-and-suspenders against an empty box
+     still taking up layout space. Previously this tier stacked both cards
+     and let the whole page scroll past whichever was taller — reachable
+     in theory, but a real phone test found Navigator effectively
+     unreachable in practice below a long Composer. */
+  .mc-workspace { display: none; }
 }
 
 /* WHERE's header-row summary (docs/adr/0038 follow-up) — title/lead on

@@ -303,15 +303,23 @@ function howSectionBody(doc, ui) {
 // one combined "Story Dashboard" card with an internal 2-column grid; now
 // two real sibling cards so each can be addressed (and, on a narrow
 // viewport, shown/hidden) independently. `.storyboard-grid` (styles/
-// cockpit.css) lays them out side by side on desktop/tablet and stacks
-// them on phone.
+// cockpit.css) lays them out side by side on desktop/tablet.
+//
+// Phone-only (design/UX-ROADMAP.md Step 5): this whole render is hidden by
+// CSS and shell.js skips calling it at all (isPhoneTab()) — Composer and
+// Navigator instead render via their own exported *BodyHtml functions
+// below, as permanently-pinned tabs sharing the same panel drawers use, so
+// each is reachable on its own instead of requiring a very long scroll
+// past whichever card is taller (the bug two-column position:sticky had,
+// and the bug plain stacking still had — a phone user could reach
+// Composer but Navigator was effectively unreachable below it).
 export function renderWorkspace(doc, ui) {
   return `<div class="storyboard-grid">${composerCard(doc, ui)}${navigatorCard(doc, ui)}</div>`;
 }
 
-function composerCard(doc, ui) {
+export function composerBodyHtml(doc, ui) {
   const activity = doc.context.how.activity || '';
-  return card('Composer', '', `
+  return `
     ${currentLocationBanner(doc)}
     <label class="field-label sm">Activity
       <select data-ctx="how.activity">
@@ -324,16 +332,22 @@ function composerCard(doc, ui) {
     ${dashboardSection('what', 'WHAT is happening', 'The active situation.', whatSectionBody(doc, ui), doc, ui)}
     ${dashboardSection('why', 'WHY they are here', 'The objective driving the party, tracked as progress clocks.', whySectionBody(doc, ui), doc, ui)}
     ${dashboardSection('how', 'HOW it plays', 'Mode and pacing for the current scene.', howSectionBody(doc, ui), doc, ui)}
-  `);
+  `;
 }
 
-// Sticky (`.navigator-card`, styles/cockpit.css) so it stays visible while
-// Composer's sections scroll beside it.
-function navigatorCard(doc, ui) {
-  return card('Navigator', '', `
+function composerCard(doc, ui) {
+  return card('Composer', '', composerBodyHtml(doc, ui));
+}
+
+export function navigatorBodyHtml(doc, ui) {
+  return `
     ${narrativeComposerBlock(doc, ui)}
     ${dashboardTrackersBlock(doc)}
-  `, 'navigator-card');
+  `;
+}
+
+function navigatorCard(doc, ui) {
+  return card('Navigator', '', navigatorBodyHtml(doc, ui), 'navigator-card');
 }
 
 // Threat/Mystery/Stress/Resources/Reputation — moved out of the shared

@@ -1,17 +1,28 @@
 # GMAtlas — UX & Mobile Design Roadmap
 
-**Build status (2026-08-11): Steps 1–3 are built and verified** (450
-domain tests pass unaffected; a jsdom-driven mount of the real built bundle
-confirmed the Advisor tab-strip behavior end-to-end — open a drawer →
-Advisor joins the tab strip with no close button → switching to it renders
-its content and marks it active → closing the last real drawer resets
-correctly). **Steps 4–7 are not built** — Step 5 in particular (the phone
-unified tab menu) is a genuinely larger change than 1–3 and this session's
-tooling has no real device or browser to visually verify a mobile layout
-against, only jsdom (structural checks, not visual ones) — so it's left for
-a pass with real device/browser QA available, per the same discipline this
-project's own ADR 0033 already documented once before. Steps 1–3's detail
-below is now a description of what shipped, not a plan; Steps 4–7 are
+**Build status (2026-08-12): Steps 1, 2, 3, and 5 are built and verified.**
+Step 5 landed after real-device testing (on a phone, via the deployed
+GitHub Pages build) found the original Step 1–3 phone behavior genuinely
+broken — Composer and Navigator stacked as one long scrollable page, and in
+practice Navigator was unreachable below a long Composer, not merely
+inconvenient to reach. The fix actually built is the real Step 5 design:
+Composer, Navigator, and Advisor are now permanently pinned, unclosable
+tabs in a tab strip that's always open on phone (<768px) — opening any
+other drawer (Guide, Oracle, ...) adds a fourth, closable tab alongside
+them rather than replacing them. Verified via 450 passing domain tests
+(unaffected) plus two jsdom-driven mounts of the real built bundle at both
+a phone viewport (375×720 — confirmed the 3 pinned tabs, no close buttons
+on them, Composer as the default landing tab, switching to Navigator and
+back, a real drawer correctly adding a 4th closable tab and the 3 pinned
+ones surviving its close) and a desktop viewport (1440×900 — confirmed
+nothing about Steps 1–3's existing desktop behavior regressed: Composer/
+Navigator still render inline, the tab strip still starts hidden, opening
+a drawer still shows only that drawer + Advisor, not the phone pins).
+**Steps 4, 6, and 7 remain open** — Step 4 (tablet's own placement decision)
+and Step 6 (a dedicated touch-target/gesture polish pass) still have no
+real-device visual verification behind them; Step 7 depends on the
+still-unbuilt Moves menu. Steps 1, 2, 3, 5's detail below is now a
+description of what shipped, not a plan; Steps 4, 6, 7 are
 still the plan.
 
 Scope: **navigation and layout only** — the Storyboard's panel model
@@ -48,10 +59,13 @@ it, it doesn't replace it:
   (holding a drag over a tab or the header for ~500ms switches to it
   without ending the drag) that already makes cross-panel drag-and-drop
   work on a touchscreen.
-- What's genuinely missing is the Composer/Navigator split (today they're
-  one scrolling column with a sticky corner, not two panels) and a version
-  of the tab-strip mechanism that also covers Composer and Navigator on a
-  phone, not just the Advisor and the drawers.
+- Steps 1, 2, 3, and 5 (below) are now built on top of that infrastructure:
+  Composer and Navigator are two real independently-scrolling panels
+  (Step 2), the Advisor shares the desktop drawer tab strip when a drawer
+  is open (Step 3), and on phone all three are permanently pinned tabs in
+  a tab strip that's always open, with real drawers adding closable tabs
+  alongside them (Step 5). What's still missing is covered by Steps 4, 6,
+  and 7 below.
 
 Each step below ships something independently visible and testable on a
 real phone — none of them require the others to be finished first except
@@ -100,24 +114,34 @@ before committing — a large tablet in landscape may have enough room to
 behave like desktop instead, and that's a five-minute check worth doing
 before writing the tablet-specific CSS.
 
-## Step 5 — Phone: build the unified tab menu
+## Step 5 — Phone: the unified tab menu (built)
 
-The biggest step, and the one that actually delivers "usable on a phone."
-Today, Composer and Navigator content is always on-screen (just reflowed to
-one column) — it isn't behind a toggle the way the Advisor already is. This
-step gives it one:
+The step that actually delivers "usable on a phone" — and the one real
+device testing proved was necessary, not optional: the original plan
+("Composer and Navigator content is always on-screen, just reflowed to one
+column") shipped as part of Steps 1–3 and turned out not to work in
+practice — Navigator was effectively unreachable below a long Composer, not
+merely inconvenient to scroll to. What's actually built now:
 
-- One panel visible at a time, full width.
-- Composer, Navigator, Advisor, and every drawer become equal tabs in one
-  tab menu — the same mechanism, extended to cover panels that aren't
-  drawers today.
-- Composer and Navigator are pinned first in the tab order, since they're
-  used every scene; the Advisor and drawers follow behind them.
-- Opening a drawer behaves exactly like it does today, just full-screen
-  instead of the current edge-panel width.
+- One panel visible at a time, full width, inside the same drawer panel
+  drawers already use.
+- Composer, Navigator, and Advisor are permanently pinned, unclosable tabs,
+  always present — not "equal tabs among everything," specifically
+  pinned-and-protected so they can never be closed out from under the GM
+  the way an ordinary drawer can.
+- Any other opened drawer (Guide, Oracle, ...) adds its own closable tab
+  alongside the 3 pinned ones, exactly like the desktop tab strip already
+  worked (Step 3) — never replaces them.
+- `.mc-workspace` (the old always-on-screen Composer/Navigator rendering)
+  is hidden entirely on phone and its content isn't even generated there,
+  rather than existing invisibly in the DOM alongside the tab version.
+- The drawer's "collapse to peek behind it" control is hidden on phone —
+  there's nothing behind it to peek at once `.mc-workspace` is hidden, so
+  collapsing would just show a blank screen.
 
-Depends on Step 2 (Composer and Navigator have to exist as two separable
-things before they can become two separate tabs).
+Depended on Step 2 (Composer and Navigator had to exist as two separable
+things before they could become two separate tabs) — done first, as
+planned.
 
 ## Step 6 — Phone-tier polish pass
 
@@ -154,14 +178,13 @@ first.
 
 ---
 
-## Suggested build order
+## Build order — actual
 
-1 → 2 → 3 can ship independently and in any order relative to each other
-(none touches phone/tablet CSS). 4 depends on deciding tablet's behavior,
-which is cheapest to decide *after* Step 5 exists, since "tablet = phone's
-tab menu" becomes a one-line CSS-tier change once that menu is built — so
-in practice: **1, then 2, then 5 (using 2's output), then 3, then 4, then
-6, then 7.**
+**1, then 2, then 3, then 5 (using 2's output) — all built, in that order.**
+4 is next: it's cheap now that Step 5 exists ("tablet = phone's tab menu"
+is close to a one-line CSS-tier change, since the machinery Step 5 built is
+already generic) — real-device confirmation on an actual tablet is the only
+reason it hasn't shipped yet. 6 and 7 follow behind it.
 
 ## Non-goals (explicitly out of scope)
 

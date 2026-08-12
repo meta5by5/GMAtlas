@@ -71,7 +71,7 @@ import { titleFromFilename } from '../domain/titleCase.js';
 import { buildSessionRecap, formatSessionRecap } from '../domain/recap.js';
 import { addTemplateSystem, addTemplateField, updateTemplateField, removeTemplateField, moveTemplateField } from '../domain/statblockTemplates.js';
 import { universalSearch } from '../domain/search.js';
-import { renderWorkspace } from './workspace/index.js';
+import { renderWorkspace, composerBodyHtml, navigatorBodyHtml } from './workspace/index.js';
 import { renderCopilot } from './copilotPanel.js';
 import { renderDrawer, formatBytes, helpToggle } from './drawers/index.js';
 import { renderFactionEvents } from './drawers/factionEvents.js';
@@ -116,13 +116,25 @@ const DRAWERS = [
 // come up empty for those.
 const DRAWER_META = {
   'entity-detail': { id: 'entity-detail', glyph: '👤', label: 'Entity' },
-  // Not a real pinned drawer — see renderActiveDrawerHtml/the drawer-tabs
-  // render below. Rides along in the tab strip whenever a real drawer is
-  // open (Advisor's own standalone panel is hidden by CSS at that point,
-  // .cockpit.has-open-drawer), so it needs a label/glyph here too.
+  // None of these three are real pinned drawers (never added to
+  // `openDrawers`) — see renderActiveDrawerHtml/the drawer-tabs render
+  // below. On phone (isPhoneTab()) 'composer'/'navigator'/'advisor' are
+  // ALWAYS in the tab strip, permanently pinned, unclosable — the phone
+  // tab menu IS how the Storyboard is reached there, since .mc-workspace's
+  // own always-both-visible rendering is phone-only hidden (styles/
+  // cockpit.css) in favor of this. On desktop/tablet only 'advisor' rides
+  // along, and only once a real drawer is open (design/UX-ROADMAP.md
+  // Step 3) — Composer/Navigator stay their own permanent columns there.
+  composer: { id: 'composer', glyph: '📝', label: 'Composer' },
+  navigator: { id: 'navigator', glyph: '🧭', label: 'Navigator' },
   advisor: { id: 'advisor', glyph: '💡', label: 'Advisor' },
 };
 function drawerMeta(id) { return DRAWERS.find((d) => d.id === id) || DRAWER_META[id] || null; }
+// Phone tier boundary — matches styles/cockpit.css's own `max-width: 767px`
+// breakpoint for .mc-workspace/.storyboard-grid exactly; keep these two in
+// sync if either changes.
+const PHONE_TAB_BREAKPOINT = 767;
+function isPhoneTab() { return window.innerWidth <= PHONE_TAB_BREAKPOINT; }
 // Edge nav button order top-down: Guide, Oracle, Cast, Trade, Docs, Graph,
 // Co-Pilot, Settings — Co-Pilot is the one remaining non-drawer button
 // interleaved into the same array DRAWERS.map() used to render alone,
@@ -489,6 +501,19 @@ export function mountShell(el) {
   };
   window.addEventListener('beforeunload', flushFocusedField);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushFocusedField(); });
+
+  // Crossing the phone breakpoint (isPhoneTab(), above) changes whether
+  // Composer/Navigator/Advisor are permanently-pinned tabs or their own
+  // desktop columns — a rotate/resize needs a re-render to pick that up;
+  // nothing else in render() reacts to viewport size on its own. Debounced
+  // (same 500ms-class delay as the touch-drag hover dwell elsewhere in
+  // this file) since 'resize' fires continuously while dragging a window
+  // edge or during an orientation-change animation, not once at the end.
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(render, 150);
+  });
 
   store.subscribe(render);
   // A background persist failure (docs/adr/0015-indexeddb-persistence.md) —
@@ -3996,7 +4021,12 @@ function render() {
   bc.innerHTML = crumbs.map((c, i) => `${i ? '<span class="sep">▸</span>' : ''}<span class="crumb">${escapeHtml(c.label || '')}</span>`).join(' ');
 
   const workspaceUi = buildDrawerUi();
-  root.querySelector('[data-workspace]').innerHTML = renderWorkspace(doc, workspaceUi);
+  // Phone (design/UX-ROADMAP.md Step 5): Composer/Navigator render inside
+  // the drawer panel instead (as permanently-pinned tabs, see the tab-strip
+  // computation below) — .mc-workspace itself is hidden by CSS there, so
+  // skip populating it rather than duplicating the same fields into two
+  // places in the DOM at once.
+  root.querySelector('[data-workspace]').innerHTML = isPhoneTab() ? '' : renderWorkspace(doc, workspaceUi);
   // A freshly-rendered Scene field textarea starts at its rows="1" default
   // regardless of how much text it holds — only typing into it fires the
   // 'input' event that would otherwise trigger autoGrowSceneField, so a
@@ -4056,8 +4086,17 @@ function render() {
   // closing its last open tab (or it never having one) returns to the
   // normal drawer tab-stack.
   const docViewerOpenTabs = (doc.documents && doc.documents.openTabs) || [];
+  const phone = isPhoneTab();
+  // Phone (design/UX-ROADMAP.md Step 5): Composer/Navigator/Advisor are
+  // ALWAYS pinned tabs there (see PINNED_TAB_IDS below) — the drawer
+  // panel is the only way the Storyboard is reachable at all on phone, so
+  // it's always considered "open" (never gated on a real drawer being
+  // pinned) and never starts with nothing active.
+  if (phone && !activeDrawer) activeDrawer = 'composer';
   const drawer = root.querySelector('[data-drawer]');
-  drawer.dataset.open = String(openDrawers.length > 0 && !drawerCollapsed && docViewerOpenTabs.length === 0);
+  // drawerCollapsed ("peek behind the drawer") is ignored on phone — there
+  // is nothing behind it to peek at once .mc-workspace is hidden there.
+  drawer.dataset.open = String((phone || openDrawers.length > 0) && (phone || !drawerCollapsed) && docViewerOpenTabs.length === 0);
   // Desktop-only (styles/cockpit.css): hides the Advisor's own standalone
   // panel while a real drawer covers/replaces it, since its content is
   // reachable from the tab strip instead now (design/UX-ROADMAP.md Step 3).
@@ -4075,31 +4114,40 @@ function render() {
   // side-by-side panel this used to pin a tab into — every tab is a
   // full-width switch now).
   //
-  // The Advisor rides along as an extra, unclosable tab (design/UX-
-  // ROADMAP.md Step 3) whenever at least one real drawer is pinned open —
-  // its own standalone panel (.mc-copilot) is hidden by CSS at that point
-  // (.cockpit.has-open-drawer, desktop tier only) so it doesn't sit
-  // underneath the drawer unreachable. Not part of `openDrawers` itself
-  // (it's never individually closed/reordered), so it's appended only for
-  // this render, not persisted.
-  const tabIds = openDrawers.length ? [...openDrawers, 'advisor'] : [];
+  // Two different pinning rules share this one strip (design/UX-ROADMAP.md
+  // Steps 3 and 5): on phone, Composer/Navigator/Advisor are ALWAYS present,
+  // permanently pinned, unclosable — real opened drawers (Guide, Oracle,
+  // ...) follow behind them. On desktop/tablet, only the Advisor rides
+  // along this way, and only once a real drawer is pinned open (its own
+  // standalone panel, .mc-copilot, is hidden by CSS at that point,
+  // .cockpit.has-open-drawer, desktop tier only). None of the pinned ids
+  // are ever part of `openDrawers` itself (never individually closed/
+  // reordered) — computed fresh for this render, never persisted.
+  const PINNED_TAB_IDS = ['composer', 'navigator', 'advisor'];
+  const tabIds = phone
+    ? [...PINNED_TAB_IDS, ...openDrawers]
+    : (openDrawers.length ? [...openDrawers, 'advisor'] : []);
   const drawerTabsEl = root.querySelector('[data-drawer-tabs]');
-  drawerTabsEl.hidden = tabIds.length < 2;
-  drawerTabsEl.innerHTML = tabIds.length < 2 ? '' : (
+  drawerTabsEl.hidden = phone ? false : tabIds.length < 2;
+  drawerTabsEl.innerHTML = (!phone && tabIds.length < 2) ? '' : (
     `<div class="drawer-tabs-scroll">${tabIds.map((id) => {
       const m = drawerMeta(id);
       const pending = id === 'advisor' && hasPendingAdvisorDecision(doc);
-      const close = id === 'advisor' ? '' : `<span class="drawer-tab-close" data-drawer-tab-close="${id}" aria-label="Close ${m ? m.label : id}">✕</span>`;
+      const pinned = PINNED_TAB_IDS.includes(id);
+      const close = pinned ? '' : `<span class="drawer-tab-close" data-drawer-tab-close="${id}" aria-label="Close ${m ? m.label : id}">✕</span>`;
       return `<button class="drawer-tab ${id === activeDrawer ? 'active' : ''} ${pending ? 'pending' : ''}" data-drawer-tab="${id}" title="${m ? m.label : id}${pending ? ' — a decision is waiting' : ''}">
         <span class="glyph">${m ? m.glyph : ''}</span><span class="drawer-tab-label">${m ? m.label : id}${pending ? ' ★' : ''}</span>
         ${close}
       </button>`;
     }).join('')}</div>
-    <button class="drawer-tabs-collapse" data-drawer-collapse title="Hide the drawer (keeps its tabs open — click the floating icon to bring it back)" aria-label="Hide drawer">⌄</button>
+    ${phone ? '' : '<button class="drawer-tabs-collapse" data-drawer-collapse title="Hide the drawer (keeps its tabs open — click the floating icon to bring it back)" aria-label="Hide drawer">⌄</button>'}
     <button class="drawer-tabs-close-all" data-close-all-drawers title="Close all open tabs" aria-label="Close all open tabs">✕</button>`
   );
+  // No collapse-to-peek-behind on phone (above) — there's nothing behind
+  // the drawer to peek at once .mc-workspace is hidden there (Step 5), so
+  // the restore icon has nothing to restore either.
   const restoreBtn = root.querySelector('[data-drawer-restore]');
-  if (restoreBtn) restoreBtn.hidden = !(drawerCollapsed && openDrawers.length > 0);
+  if (restoreBtn) restoreBtn.hidden = phone || !(drawerCollapsed && openDrawers.length > 0);
   renderDrawerBody();
 
   const viewer = root.querySelector('[data-doc-viewer]');
@@ -4368,16 +4416,19 @@ function replaceBodyPreservingScroll(body, html) {
 // drawers/index.js (to reuse the exact same live Faction Turn card inside
 // its Roster section), so routing renderDrawer() through it too would be a
 // circular import between the two files. This is the one drawer id with a
-// special case here; 'advisor' (design/UX-ROADMAP.md Step 3 — the Advisor
-// riding along in the tab strip whenever a real drawer is pinned open) is
-// the other; everything else (open/close/tab-switch/width) is identical to
-// any other DRAWERS entry.
+// special case here; 'advisor'/'composer'/'navigator' (design/UX-ROADMAP.md
+// Steps 3 and 5 — Advisor rides along in the tab strip whenever a real
+// drawer is pinned open on desktop/tablet, and all three are permanently
+// pinned tabs on phone) are the others; everything else (open/close/
+// tab-switch/width) is identical to any other DRAWERS entry.
 function renderActiveDrawerHtml(doc) {
   if (!activeDrawer) return '';
   if (activeDrawer === 'faction-events') {
     return renderFactionEvents(doc, { factionEventsDrafts, factionEventsFactionFilterId, factionEventsLocationFilterId, factionEventsStepFactionId, factionRoundHistoryOpen, conflictEscalationSuggestions });
   }
   if (activeDrawer === 'advisor') return renderCopilot(doc, buildDrawerUi());
+  if (activeDrawer === 'composer') return composerBodyHtml(doc, buildDrawerUi());
+  if (activeDrawer === 'navigator') return navigatorBodyHtml(doc, buildDrawerUi());
   return renderDrawer(activeDrawer, doc, buildDrawerUi());
 }
 
