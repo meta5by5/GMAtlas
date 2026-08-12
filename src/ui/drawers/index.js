@@ -1702,7 +1702,7 @@ function factionPacingSection(doc) {
       <label class="field-label">Scenes per faction round
         <input type="number" min="0" data-faction-pacing-scenes-per-round value="${Number(p.scenesPerRound) || 0}">
       </label>
-      <p class="dim small">Co-Pilot suggests a Step or Full Round in Faction Events once this many scenes have passed since the last one committed (currently ${Number(p.scenesSinceLastRound) || 0} since). Set to 0 to turn the reminder off.</p>
+      <p class="dim small">The Advisor suggests a Step or Full Round in Faction Events once this many scenes have passed since the last one committed (currently ${Number(p.scenesSinceLastRound) || 0} since). Set to 0 to turn the reminder off.</p>
     </div>`;
 }
 

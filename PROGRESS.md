@@ -3,14 +3,14 @@
 ## Overview
 
 Phase-level roadmap and current status for GMAtlas (rebranded from Saga
-Atlas). For the full per-phase design detail and rationale, see
-`DESIGN-NEW-FUNCTIONALITY.md` — that's the canonical roadmap doc; this file
-is the shorter status ledger plus the open backlog. Detailed investigation
-notes, root-cause writeups, and superseded design discussion from earlier
-in the project are archived in `docs/archive/progress-log-2026-07.md`
-(nothing there is more current than this file, `DESIGN-NEW-FUNCTIONALITY.md`,
-or the ADRs under `docs/adr/` — check those first). Full history is also in
-`git log`.
+Atlas). For the full functional spec and forward roadmap, see
+`requirements/functional-requirements-v3.md` — that's the canonical doc now;
+this file is the shorter status ledger plus dated history. Nothing below is
+more current than that file or `design/adr/GMAtlas-Design-Constitution.md` —
+check those first. Full history is also in `git log`. The entries below this
+point are a dated log, kept as written even where they reference paths
+(`docs/adr/`, `DESIGN-NEW-FUNCTIONALITY.md`) that have since been
+reorganized — treat them as history, not current pointers.
 
 ## Status Summary
 

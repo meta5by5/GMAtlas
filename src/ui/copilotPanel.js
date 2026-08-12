@@ -1,13 +1,13 @@
-// copilotPanel.js — the app's "thinking", as a PURE function, PLUS (as of
-// docs/adr/0040 Phase 12f) every suggestion/oracle-generating control that
-// used to live on the now-retired WHO/WHERE/WHAT/WHY/HOW tabs: the full
-// Story Options list, both Suggestion Lens pickers (blind + scene-weighted),
-// the Site Concept/Adventure Seed generators, and the Activity → Rules
-// Lens suggestion. Co-Pilot is now the one "active decision sandbox" —
-// everywhere a GM goes to ask "what should happen next" — while the
-// Dashboard (ui/workspace/index.js) stays pure data display/entry. Every
-// relocated piece keeps its exact original `data-*` attribute and shell.js
-// handler — this is a markup relocation, not new wiring.
+// copilotPanel.js — the Advisor, the app's "thinking," as a PURE function,
+// plus every suggestion/oracle-generating control that used to live on the
+// now-retired WHO/WHERE/WHAT/WHY/HOW tabs: the full Story Options list,
+// both Suggestion Lens pickers (blind + scene-weighted), the Site Concept/
+// Adventure Seed generators, and the Activity → Rules Lens suggestion. The
+// Advisor is the one "active decision sandbox" — everywhere a GM goes to
+// ask "what should happen next" — while the Composer and Navigator (ui/
+// workspace/index.js) stay pure data display/entry. Every relocated piece
+// keeps its exact original `data-*` attribute and shell.js handler — this
+// is a markup relocation, not new wiring.
 
 import { advise, buildStoryOptions } from '../domain/copilot.js';
 import { suggestRulesLens } from '../domain/activities.js';
@@ -59,7 +59,7 @@ function storyOptionsBlock(doc, ui, { limit = 8 } = {}) {
   const options = buildStoryOptions(doc, { limit: Math.max(12, limit * 2) }).filter((o) => !dismissed.has(o.id)).slice(0, limit);
   const rows = options.map((o) => `<div class="thread-row story-option-row">
       <span class="thread-name">
-        <input type="checkbox" data-story-option-select="${esc(o.id)}" ${selected.has(o.id) ? 'checked' : ''} title="Include in the Narrative Composer draft">
+        <input type="checkbox" data-story-option-select="${esc(o.id)}" ${selected.has(o.id) ? 'checked' : ''} title="Include in the Navigator's scene summary">
         ${o.entityId ? `<button type="button" class="entity-chip" data-open-entity="${esc(o.entityId)}">${esc(o.label)}</button>` : esc(o.label)}
         <span class="dim small">— ${esc(o.detail)}</span>
       </span>
@@ -72,7 +72,7 @@ function storyOptionsBlock(doc, ui, { limit = 8 } = {}) {
   return `
     <div class="copilot-card">
       <h3>Story Options</h3>
-      <p class="dim small">Who/where/why, combined — check one to weave it into the Narrative Composer.</p>
+      <p class="dim small">Who/where/why, combined — check one to weave it into the Navigator's scene summary.</p>
       ${options.length ? rows : '<p class="dim small">Nothing to suggest yet — mention someone in WHO, set a Location in WHERE, or open a Conflict/Thread/Foreshadowing entry.</p>'}
     </div>`;
 }
@@ -104,7 +104,7 @@ function suggestLensBlock(ui) {
 // used to roll straight into the Journal with no review step; now the
 // roll lands in ephemeral `ui.inspirationDrafts` (never persisted) and
 // renders right here as an editable draft — same "preview, then explicit
-// commit" posture as the Narrative Composer's own Copy/Send-to-Journal.
+// commit" posture as the Navigator's own Scene Summary Copy/Send-to-Journal.
 function inspirationDraftCard(kind, draft) {
   if (!draft) return '';
   return `<div class="inspiration-draft">

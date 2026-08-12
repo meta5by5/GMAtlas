@@ -104,20 +104,56 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .mc-breadcrumb .sep { opacity: 0.5; }
 
 /* --- Adaptive workspace (primary) ----------------------------------- */
+/* Desktop/tablet (≥768px): .mc-workspace no longer scrolls itself — it's a
+   fixed-height flex column so .storyboard-grid's row can stretch to fill
+   it, giving Composer and Navigator each their OWN scrollbar
+   (.workspace-card-body, below) instead of sharing one via
+   position:sticky. Sticky quietly clipped whichever card's content was
+   taller than the viewport (a real reported bug — Navigator's own bottom
+   was unreachable until Composer had been scrolled all the way down,
+   since a stuck element has no scroll of its own and only releases once
+   the taller column next to it runs out). Phone (<768px, media query
+   below) reverts to the simple everything-stacks-and-the-whole-page-
+   scrolls behavior — there's no split pane to give independent scroll to
+   once the two cards stack into one column. */
 .mc-workspace {
   grid-area: work;
   padding: var(--sp-4);
-  overflow: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
+/* Padding is deliberately tight on three sides now, on direct request:
+   5px top/left (the title sits right in the corner) and 2px right (so
+   .workspace-card-body's scrollbar sits right at the panel's own edge
+   instead of inset by a full padding) — only the bottom keeps the normal
+   spacious padding. The title's own 10px bottom margin is the gap to
+   whatever comes right under it (the body, now that neither card has a
+   lead paragraph). The scrolling content's own inner wrapper
+   (.workspace-card-body-inner, below) restores a normal right padding of
+   its own, so text still reads with comfortable spacing — only the
+   scrollbar track itself extends all the way to the edge. */
 .workspace-card {
   background: var(--tier1-bg);
   border: 1px solid var(--tier1-border);
   border-radius: var(--radius);
-  padding: var(--sp-6);
+  padding: 5px 2px var(--sp-6) 5px;
   box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
-.workspace-card h2 { margin: 0 0 var(--sp-2); font-size: 1.2rem; }
-.workspace-card .lead { color: var(--text-dim); margin: 0 0 var(--sp-4); }
+.workspace-card h2 { margin: 0 var(--sp-6) 10px 0; font-size: 1.2rem; flex: 0 0 auto; }
+.workspace-card .lead { color: var(--text-dim); margin: 0 var(--sp-6) var(--sp-4) 0; flex: 0 0 auto; }
+.workspace-card-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.workspace-card-body-inner { padding-right: var(--sp-6); }
+@media (max-width: 767px) {
+  .mc-workspace { overflow: auto; display: block; }
+  .workspace-card { display: block; padding-right: var(--sp-6); }
+  .workspace-card-body { overflow: visible; }
+  .workspace-card-body-inner { padding-right: 0; }
+}
 
 /* WHERE's header-row summary (docs/adr/0038 follow-up) — title/lead on
    the left, a read-only System/Star/Colony-Base/District readout
@@ -266,6 +302,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font-size: 0.78rem; color: var(--text-dim); cursor: pointer;
 }
 .drawer-tab.active { background: var(--tier3-bg); color: var(--accent); }
+/* The Advisor's pseudo-tab flagged with a decision waiting (design/UX-
+   ROADMAP.md Step 3) — a warm highlight plus the ★ shell.js already adds to
+   the label text, so the signal survives even where color alone wouldn't
+   (a11y: never color-only). */
+.drawer-tab.pending { color: var(--warn); }
+.drawer-tab.pending.active { background: var(--tier3-bg); color: var(--warn); }
 .drawer-tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .drawer-tab-close { border-radius: 3px; padding: 0 3px; }
 .drawer-tab-close:hover { background: var(--bg-inset); color: var(--text); }
@@ -353,8 +395,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 @media (min-width: 1024px) {
-  /* Co-Pilot is a permanent region on desktop — never a sheet/edge-tab. */
+  /* Advisor is a permanent region on desktop — never a sheet/edge-tab. */
   .mc-copilot { transform: none; }
+  /* ...except while a real drawer is pinned open (design/UX-ROADMAP.md
+     Step 3): the drawer already visually covers this column (.mc-drawer's
+     default width exceeds --copilot-w), so the standalone panel is hidden
+     rather than sitting duplicated/unreachable underneath it — its content
+     is reachable from the drawer's own tab strip instead (the 'advisor'
+     pseudo-tab, see shell.js's renderActiveDrawerHtml/hasPendingAdvisorDecision). */
+  .cockpit.has-open-drawer .mc-copilot { display: none; }
 }
 
 /* Phone tier (<=480px), docs/adr/0032 — layered under the three-way
@@ -444,19 +493,31 @@ button { font: inherit; color: inherit; cursor: pointer; }
    the 3-up Intent/Threat/Mystery layout above. */
 .field-row-2col { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); align-items: end; }
 .field-row-3col { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--sp-3); align-items: end; }
-/* Story Dashboard (docs/adr/0040 Phase 12f) — a wide left column (the 5
-   former W-tabs, now open/collapsible sections) beside a narrower right
-   column holding only the Narrative Composer, pinned via position: sticky
-   so it stays visible ("top right of the workspace," direct request)
-   while the left column scrolls. Collapses to one column on narrow
-   viewports via the same auto-fit/minmax technique .field-row-3col
-   already uses, no separate breakpoint media query needed. */
-.dashboard-grid { display: grid; grid-template-columns: minmax(20rem, 2fr) minmax(16rem, 1fr); gap: var(--sp-4); margin-top: var(--sp-3); align-items: start; }
+/* The Storyboard's two persistent panels (design/UX-ROADMAP.md Step 2) —
+   Composer (the 5 former W-tabs, now open/collapsible sections) beside
+   Navigator (Scene Summary + trackers), equal-width on direct request
+   (previously a 2:1 split), as two genuinely independent columns, each
+   scrolling on its own (.workspace-card-body, above) rather than sharing
+   one scrollbar. `align-items: stretch` (not
+   the CSS default `start`) is what lets both columns fill the row's full
+   height so each has real room to scroll within — a fixed-height row via
+   the flex/min-height chain on .mc-workspace above it. Previously
+   Navigator used position: sticky instead, which clipped its own content
+   whenever Navigator was taller than the viewport (a real reported bug —
+   its bottom was unreachable until Composer had been scrolled all the way
+   down, since a stuck element has no scroll of its own). Collapses to a
+   plain stacked single column below 768px, matching .mc-workspace's own
+   phone-tier reversion to ordinary whole-page scrolling above — this is
+   deliberately still the OLD collapse behavior (not yet the tab-menu
+   design/UX-ROADMAP.md Step 5 describes — that's a bigger, separate
+   change; tablet's own placement is an open question, Step 4, left
+   unchanged here pending real-device verification neither this pass nor
+   its authoring environment could do). */
+.storyboard-grid { display: grid; grid-template-columns: minmax(18rem, 1fr) minmax(18rem, 1fr); gap: var(--sp-4); margin-top: var(--sp-3); align-items: stretch; flex: 1 1 auto; min-height: 0; }
 @media (max-width: 767px) {
-  .dashboard-grid { grid-template-columns: 1fr; }
+  .storyboard-grid { grid-template-columns: 1fr; display: block; flex: none; }
 }
-.dashboard-composer-col { position: sticky; top: var(--sp-3); align-self: start; }
-/* Trackers below the Narrative Composer (2026-07-23 mockup) — one
+/* Trackers below the Scene Summary — one
    full-width slider per row, not the 3-up .field-row-3col grid the
    header used, so the stack reads as compact and reuses .field-label.sm's
    existing dial styling with no new rules beyond this spacing wrapper. */

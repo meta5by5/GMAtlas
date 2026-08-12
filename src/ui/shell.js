@@ -114,7 +114,14 @@ const DRAWERS = [
 // Tab-strip label/glyph lookup that also covers drawer ids with no edge
 // button (currently just entity-detail) — DRAWERS.find(...) alone would
 // come up empty for those.
-const DRAWER_META = { 'entity-detail': { id: 'entity-detail', glyph: '👤', label: 'Entity' } };
+const DRAWER_META = {
+  'entity-detail': { id: 'entity-detail', glyph: '👤', label: 'Entity' },
+  // Not a real pinned drawer — see renderActiveDrawerHtml/the drawer-tabs
+  // render below. Rides along in the tab strip whenever a real drawer is
+  // open (Advisor's own standalone panel is hidden by CSS at that point,
+  // .cockpit.has-open-drawer), so it needs a label/glyph here too.
+  advisor: { id: 'advisor', glyph: '💡', label: 'Advisor' },
+};
 function drawerMeta(id) { return DRAWERS.find((d) => d.id === id) || DRAWER_META[id] || null; }
 // Edge nav button order top-down: Guide, Oracle, Cast, Trade, Docs, Graph,
 // Co-Pilot, Settings — Co-Pilot is the one remaining non-drawer button
@@ -388,7 +395,7 @@ export function mountShell(el) {
       </div>
       <div class="mc-breadcrumb" data-breadcrumb></div>
       <main class="mc-workspace" data-workspace aria-live="polite"></main>
-      <aside class="mc-copilot" data-copilot aria-label="Co-Pilot"><h2>Co-Pilot</h2><div data-copilot-body></div></aside>
+      <aside class="mc-copilot" data-copilot aria-label="Advisor"><h2>Advisor</h2><div data-copilot-body></div></aside>
       <div class="mc-doc-viewer" data-doc-viewer hidden>
         <div class="doc-viewer-tabs" data-doc-viewer-tabs></div>
         <div class="doc-viewer-empty" data-doc-viewer-empty hidden></div>
@@ -1985,7 +1992,12 @@ function onClick(ev) {
   if (composerJournal) {
     const draft = composeNarrativeDraft(store.get(), { selectedOptionIds: Array.from(selectedStoryOptionIds) });
     if (!draft) return toast('Nothing to send yet');
-    store.update((d) => addNote(d, draft, 'Narrative Composer'));
+    store.update((d) => addNote(d, draft, 'Navigator'));
+    // The Navigator's "add to Journal" button also opens the Journal drawer
+    // into the tab group, so the GM sees the note land (design/UX-ROADMAP.md
+    // Step 2/3's Navigator spec) — not just a toast with no visible result.
+    openDrawerTab('journal');
+    render();
     return toast('Added to Journal');
   }
 
@@ -2967,6 +2979,11 @@ function openDrawerTab(id) {
 function closeDrawerTab(id) {
   openDrawers = openDrawers.filter((d) => d !== id);
   if (activeDrawer === id) activeDrawer = openDrawers[openDrawers.length - 1] || null;
+  // The Advisor pseudo-tab only exists riding along with a real pinned
+  // drawer (see the tab-strip render in render()) — if the last real
+  // drawer just closed while it was active, there's nothing left for it to
+  // ride along with.
+  if (!openDrawers.length && activeDrawer === 'advisor') activeDrawer = null;
   render();
 }
 
@@ -3991,7 +4008,7 @@ function render() {
 
   const edge = root.querySelector('[data-edge]');
   edge.innerHTML = EDGE_ORDER.map((id) => {
-    if (id === 'copilot') return `<button data-toggle-copilot title="Co-Pilot"><span class="glyph">💡</span><b>Co-Pilot</b></button>`;
+    if (id === 'copilot') return `<button data-toggle-copilot title="Advisor"><span class="glyph">💡</span><b>Advisor</b></button>`;
     // Faction Events (docs/adr/0031/0032) is an ordinary DRAWERS entry now
     // (see renderDrawer()'s switch) — special-cased ONLY because opening it
     // also narrows Cast's own type filter to Faction (see the click
@@ -4041,6 +4058,10 @@ function render() {
   const docViewerOpenTabs = (doc.documents && doc.documents.openTabs) || [];
   const drawer = root.querySelector('[data-drawer]');
   drawer.dataset.open = String(openDrawers.length > 0 && !drawerCollapsed && docViewerOpenTabs.length === 0);
+  // Desktop-only (styles/cockpit.css): hides the Advisor's own standalone
+  // panel while a real drawer covers/replaces it, since its content is
+  // reachable from the tab strip instead now (design/UX-ROADMAP.md Step 3).
+  root.querySelector('.cockpit').classList.toggle('has-open-drawer', openDrawers.length > 0);
   const titleEl = drawer.querySelector('[data-drawer-title]');
   titleEl.textContent = titleForDrawer(doc, activeDrawer);
   titleEl.classList.remove('drawer-title-toggle'); // Cast's own collapse-via-title is gone — Cast isn't a drawer tab anymore
@@ -4050,18 +4071,28 @@ function render() {
   if (drawerHeadExtra) drawerHeadExtra.innerHTML = headExtraForDrawer(activeDrawer);
   // Tab strip — same pattern as the doc viewer's own tabs below: one pinned
   // drawer per tab, click to switch, ✕ to close without needing to make it
-  // active first. Hidden entirely when only one (or zero) drawers are open,
-  // so the common case looks identical to the old single-drawer UI. No
-  // anchor icon (docs/adr/0032 removed the second, side-by-side panel this
-  // used to pin a tab into — every tab is a full-width switch now).
+  // active first. No anchor icon (docs/adr/0032 removed the second,
+  // side-by-side panel this used to pin a tab into — every tab is a
+  // full-width switch now).
+  //
+  // The Advisor rides along as an extra, unclosable tab (design/UX-
+  // ROADMAP.md Step 3) whenever at least one real drawer is pinned open —
+  // its own standalone panel (.mc-copilot) is hidden by CSS at that point
+  // (.cockpit.has-open-drawer, desktop tier only) so it doesn't sit
+  // underneath the drawer unreachable. Not part of `openDrawers` itself
+  // (it's never individually closed/reordered), so it's appended only for
+  // this render, not persisted.
+  const tabIds = openDrawers.length ? [...openDrawers, 'advisor'] : [];
   const drawerTabsEl = root.querySelector('[data-drawer-tabs]');
-  drawerTabsEl.hidden = openDrawers.length < 2;
-  drawerTabsEl.innerHTML = openDrawers.length < 2 ? '' : (
-    `<div class="drawer-tabs-scroll">${openDrawers.map((id) => {
+  drawerTabsEl.hidden = tabIds.length < 2;
+  drawerTabsEl.innerHTML = tabIds.length < 2 ? '' : (
+    `<div class="drawer-tabs-scroll">${tabIds.map((id) => {
       const m = drawerMeta(id);
-      return `<button class="drawer-tab ${id === activeDrawer ? 'active' : ''}" data-drawer-tab="${id}" title="${m ? m.label : id}">
-        <span class="glyph">${m ? m.glyph : ''}</span><span class="drawer-tab-label">${m ? m.label : id}</span>
-        <span class="drawer-tab-close" data-drawer-tab-close="${id}" aria-label="Close ${m ? m.label : id}">✕</span>
+      const pending = id === 'advisor' && hasPendingAdvisorDecision(doc);
+      const close = id === 'advisor' ? '' : `<span class="drawer-tab-close" data-drawer-tab-close="${id}" aria-label="Close ${m ? m.label : id}">✕</span>`;
+      return `<button class="drawer-tab ${id === activeDrawer ? 'active' : ''} ${pending ? 'pending' : ''}" data-drawer-tab="${id}" title="${m ? m.label : id}${pending ? ' — a decision is waiting' : ''}">
+        <span class="glyph">${m ? m.glyph : ''}</span><span class="drawer-tab-label">${m ? m.label : id}${pending ? ' ★' : ''}</span>
+        ${close}
       </button>`;
     }).join('')}</div>
     <button class="drawer-tabs-collapse" data-drawer-collapse title="Hide the drawer (keeps its tabs open — click the floating icon to bring it back)" aria-label="Hide drawer">⌄</button>
@@ -4337,14 +4368,26 @@ function replaceBodyPreservingScroll(body, html) {
 // drawers/index.js (to reuse the exact same live Faction Turn card inside
 // its Roster section), so routing renderDrawer() through it too would be a
 // circular import between the two files. This is the one drawer id with a
-// special case here; everything else (open/close/tab-switch/width) is
-// identical to any other DRAWERS entry.
+// special case here; 'advisor' (design/UX-ROADMAP.md Step 3 — the Advisor
+// riding along in the tab strip whenever a real drawer is pinned open) is
+// the other; everything else (open/close/tab-switch/width) is identical to
+// any other DRAWERS entry.
 function renderActiveDrawerHtml(doc) {
   if (!activeDrawer) return '';
   if (activeDrawer === 'faction-events') {
     return renderFactionEvents(doc, { factionEventsDrafts, factionEventsFactionFilterId, factionEventsLocationFilterId, factionEventsStepFactionId, factionRoundHistoryOpen, conflictEscalationSuggestions });
   }
+  if (activeDrawer === 'advisor') return renderCopilot(doc, buildDrawerUi());
   return renderDrawer(activeDrawer, doc, buildDrawerUi());
+}
+
+// A live Story Option the GM hasn't yet rolled/journaled/dismissed is
+// exactly "a decision waiting for GM confirmation" per the Advisor's own
+// definition (functional-requirements-v3.md's Terminology table) — the
+// most direct existing signal for the tab strip's pending-decision flag
+// (design/UX-ROADMAP.md Step 3), without inventing a new tracked flag.
+function hasPendingAdvisorDecision(doc) {
+  return buildStoryOptions(doc, { limit: 20 }).some((o) => !dismissedStoryOptionIds.has(o.id));
 }
 
 function renderDrawerBody() {

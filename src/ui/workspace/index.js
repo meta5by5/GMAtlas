@@ -1,10 +1,10 @@
-// workspace/index.js — the Adaptive Workspace, now a single consolidated
-// Story Dashboard (docs/adr/0040 Phase 12f — the former WHO/WHERE/WHAT/WHY/
-// HOW tabs were retired in favor of open/collapsible sections here; the
-// suggestion/oracle logic that used to live on those tabs moved to
-// copilotPanel.js instead, see that file's own header comment). Editing
-// dispatches through the shell's delegated handlers (change + click) so
-// this stays a pure render function.
+// workspace/index.js — the Storyboard's Composer and Navigator cards (the
+// former WHO/WHERE/WHAT/WHY/HOW tabs were retired in favor of open/
+// collapsible sections inside Composer; the suggestion/oracle logic that
+// used to live on those tabs moved to copilotPanel.js — the Advisor —
+// instead, see that file's own header comment). Editing dispatches through
+// the shell's delegated handlers (change + click) so this stays a pure
+// render function.
 
 import { contextSummary } from '../../domain/context.js';
 import { listThreads, THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
@@ -25,8 +25,22 @@ const esc = (s) => String(s == null ? '' : s)
 
 const INTENTS = ['Discovery', 'Travel', 'Social encounter', 'Investigation', 'Resource pressure', 'Combat pressure', 'Moral choice', 'Faction complication', 'Exploration hazard', 'Trade opportunity'];
 
-function card(title, lead, body) {
-  return `<article class="workspace-card"><h2>${title}</h2><p class="lead">${lead}</p>${body}</article>`;
+// The title/lead stay fixed at the top of the card; only .workspace-card-body
+// scrolls (styles/cockpit.css) — this is what lets Composer and Navigator
+// each be independently scrolled to their own bottom on desktop/tablet,
+// instead of one sharing a scrollbar with the other via position:sticky
+// (which silently clips whichever content is taller than the viewport,
+// a real reported bug — Navigator's bottom was unreachable until Composer
+// was scrolled all the way down). `lead` is optional — a falsy value omits
+// the paragraph entirely rather than rendering an empty one (Navigator has
+// no lead, on direct request). The body's own inner wrapper
+// (.workspace-card-body-inner) carries the normal right padding the card
+// itself no longer does, so .workspace-card-body's scrollbar can sit right
+// at the panel's edge (also direct request) without the actual text
+// touching it.
+function card(title, lead, body, extraClass) {
+  const leadHtml = lead ? `<p class="lead">${lead}</p>` : '';
+  return `<article class="workspace-card${extraClass ? ` ${extraClass}` : ''}"><h2>${title}</h2>${leadHtml}<div class="workspace-card-body"><div class="workspace-card-body-inner">${body}</div></div></article>`;
 }
 
 // One collapsible Dashboard section per former W-tab (docs/adr/0040 Phase
@@ -129,7 +143,7 @@ function npcSceneCard(doc, ui, scene, npc, { removable = false } = {}) {
 // "Continue Story," there's nothing to track yet.
 function npcSceneGroupsBlock(doc, ui) {
   const scenes = doc.scenes || [];
-  if (!scenes.length) return '<div class="ws-placeholder">Continue Story (Co-Pilot) to start a scene — NPC roles and scene-specific details track per scene.</div>';
+  if (!scenes.length) return '<div class="ws-placeholder">Continue Story (Advisor) to start a scene — NPC roles and scene-specific details track per scene.</div>';
   const scene = scenes[scenes.length - 1];
   const ctx = gatherSceneContext(doc);
   const protagonists = ctx.whoEntities.filter((e) => e.type === 'npc' && (e.tags || []).includes('character'));
@@ -270,8 +284,8 @@ function whySectionBody(doc, ui) {
     ${foreshadowingBlock(doc)}`;
 }
 
-// Activity itself is edited once, in the Dashboard header (below); the
-// Suggested Rules Lens it drives now lives in Co-Pilot (copilotPanel.js)
+// Activity itself is edited once, in the Composer header (below); the
+// Suggested Rules Lens it drives now lives in the Advisor (copilotPanel.js)
 // alongside every other suggestion-generating control.
 function howSectionBody(doc, ui) {
   return `
@@ -281,37 +295,45 @@ function howSectionBody(doc, ui) {
     </div>`;
 }
 
-// Story Dashboard (docs/adr/0040, Phase 12a/12b/12f) — the sole workspace
-// view. Reorganized per direct mockup (2026-07-23): the left column now
-// leads with Current Location + Activity, then the 5 former tabs as
-// open/collapsible `dashboardSection`s; the right column leads with the
-// Narrative Composer, with the Threat/Mystery/Stress/Resources/Reputation
-// trackers now living BELOW it (`dashboardTrackersBlock`) instead of in a
-// shared header row above both columns — matches the mockup's "trackers
-// under the Narrative Composer in the right column" placement exactly.
+// The Storyboard's two persistent panels (design/UX-ROADMAP.md Step 2;
+// terminology per requirements/functional-requirements-v3.md): Composer
+// (build the scene — the 5 former WHO/WHERE/WHAT/WHY/HOW tabs, now open/
+// collapsible `dashboardSection`s) and Navigator (everything tracked
+// outside a PC's own sheet, plus a scene-at-a-glance summary). Previously
+// one combined "Story Dashboard" card with an internal 2-column grid; now
+// two real sibling cards so each can be addressed (and, on a narrow
+// viewport, shown/hidden) independently. `.storyboard-grid` (styles/
+// cockpit.css) lays them out side by side on desktop/tablet and stacks
+// them on phone.
 export function renderWorkspace(doc, ui) {
+  return `<div class="storyboard-grid">${composerCard(doc, ui)}${navigatorCard(doc, ui)}</div>`;
+}
+
+function composerCard(doc, ui) {
   const activity = doc.context.how.activity || '';
-  return card('Story Dashboard', 'Everything currently in play, at a glance.', `
-    <div class="dashboard-grid">
-      <div class="dashboard-col">
-        ${currentLocationBanner(doc)}
-        <label class="field-label sm">Activity
-          <select data-ctx="how.activity">
-            <option value="">— none set —</option>
-            ${ACTIVITIES.map((a) => `<option value="${a.id}" ${a.id === activity ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}
-          </select>
-        </label>
-        ${dashboardSection('who', 'WHO is here', 'People and factions in play.', whoSectionBody(doc, ui), doc, ui)}
-        ${dashboardSection('where', 'WHERE it happens', 'The place the scene is set.', whereSectionBody(doc, ui), doc, ui)}
-        ${dashboardSection('what', 'WHAT is happening', 'The active situation.', whatSectionBody(doc, ui), doc, ui)}
-        ${dashboardSection('why', 'WHY they are here', 'The objective driving the party, tracked as progress clocks.', whySectionBody(doc, ui), doc, ui)}
-        ${dashboardSection('how', 'HOW it plays', 'Mode and pacing for the current scene.', howSectionBody(doc, ui), doc, ui)}
-      </div>
-      <div class="dashboard-composer-col">
-        ${narrativeComposerBlock(doc, ui)}
-        ${dashboardTrackersBlock(doc)}
-      </div>
-    </div>`);
+  return card('Composer', '', `
+    ${currentLocationBanner(doc)}
+    <label class="field-label sm">Activity
+      <select data-ctx="how.activity">
+        <option value="">— none set —</option>
+        ${ACTIVITIES.map((a) => `<option value="${a.id}" ${a.id === activity ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}
+      </select>
+    </label>
+    ${dashboardSection('who', 'WHO is here', 'People and factions in play.', whoSectionBody(doc, ui), doc, ui)}
+    ${dashboardSection('where', 'WHERE it happens', 'The place the scene is set.', whereSectionBody(doc, ui), doc, ui)}
+    ${dashboardSection('what', 'WHAT is happening', 'The active situation.', whatSectionBody(doc, ui), doc, ui)}
+    ${dashboardSection('why', 'WHY they are here', 'The objective driving the party, tracked as progress clocks.', whySectionBody(doc, ui), doc, ui)}
+    ${dashboardSection('how', 'HOW it plays', 'Mode and pacing for the current scene.', howSectionBody(doc, ui), doc, ui)}
+  `);
+}
+
+// Sticky (`.navigator-card`, styles/cockpit.css) so it stays visible while
+// Composer's sections scroll beside it.
+function navigatorCard(doc, ui) {
+  return card('Navigator', '', `
+    ${narrativeComposerBlock(doc, ui)}
+    ${dashboardTrackersBlock(doc)}
+  `, 'navigator-card');
 }
 
 // Threat/Mystery/Stress/Resources/Reputation — moved out of the shared
@@ -672,27 +694,27 @@ function nearbyLocationsBlock(doc) {
     </div>`;
 }
 
-// Narrative Composer (docs/adr/0040 Phase 12b, moved to the workspace's
-// top-right in Phase 12f) — composeNarrativeDraft() (copilot.js) pulls
-// WHO/WHERE/WHAT/WHY's current state plus whichever Story Options are
-// checked (in Co-Pilot now, copilotPanel.js) into one composed paragraph,
-// recomputed fresh on every render. Deliberately NOT a real
-// contenteditable — a live-recomputed field a GM was mid-edit in would get
-// silently clobbered the moment anything else on the dashboard changed
-// (ticking a checkbox in Co-Pilot, editing a WHO field) — so this renders
-// read-only (via the same buildMentionEditorHTML every rich field already
-// uses, so @mentions still show as real badges) with Copy/Send-to-Journal
-// actions instead; hand-polishing happens after Send, in the Journal note
-// itself (a real editable field there). Pinned via CSS `position: sticky`
-// (`.dashboard-composer-col`, styles/cockpit.css) so it stays visible
-// while the GM scrolls the 5 sections to its left.
+// Scene Summary, the Navigator card's top block — composeNarrativeDraft()
+// (copilot.js) pulls WHO/WHERE/WHAT/WHY's current state plus whichever
+// Story Options are checked (in the Advisor, copilotPanel.js) into one
+// composed paragraph, recomputed fresh on every render. Deliberately NOT a
+// real contenteditable — a live-recomputed field a GM was mid-edit in
+// would get silently clobbered the moment anything else on the Composer
+// changed (ticking a checkbox in the Advisor, editing a WHO field) — so
+// this renders read-only (via the same buildMentionEditorHTML every rich
+// field already uses, so @mentions still show as real badges) with
+// Copy/Send-to-Journal actions instead; hand-polishing happens after Send,
+// in the Journal note itself (a real editable field there). The Navigator
+// card itself is pinned via CSS `position: sticky` (`.navigator-card`,
+// styles/cockpit.css) so it stays visible while the GM scrolls Composer's
+// sections beside it.
 function narrativeComposerBlock(doc, ui) {
   const selected = (ui && ui.selectedStoryOptionIds) || new Set();
   const draft = composeNarrativeDraft(doc, { selectedOptionIds: Array.from(selected) });
   return `<div class="threads narrative-composer">
-    <div class="threads-head"><h3>Narrative Composer</h3></div>
-    <p class="dim small">Reflects WHO/WHERE's Focus text live, plus whichever Story Options you check in Co-Pilot.</p>
-    <div class="mention-editor narrative-composer-preview">${draft ? buildMentionEditorHTML(doc, draft) : '<span class="ws-placeholder">Nothing to compose yet — write something in WHO/WHERE\'s Focus field, or check a Story Option in Co-Pilot.</span>'}</div>
+    <div class="threads-head"><h3>Scene Summary</h3></div>
+    <p class="dim small">Reflects WHO/WHERE's Focus text live, plus whichever Story Options you check in the Advisor.</p>
+    <div class="mention-editor narrative-composer-preview">${draft ? buildMentionEditorHTML(doc, draft) : '<span class="ws-placeholder">Nothing to compose yet — write something in WHO/WHERE\'s Focus field, or check a Story Option in the Advisor.</span>'}</div>
     <div class="shift-actions">
       <button class="chip" data-composer-copy title="Copy the draft to your clipboard">📋 Copy</button>
       <button class="chip" data-composer-journal title="Add the draft to the Journal">＋ Send to Journal</button>
@@ -848,7 +870,7 @@ function sceneField(scene, key, label, placeholder, ui) {
 // combined text below.
 function lastScene(doc, ui) {
   const scenes = doc.scenes || [];
-  if (!scenes.length) return '<div class="ws-placeholder">No scenes yet. Continue Story (Co-Pilot) to generate the opening beat.</div>';
+  if (!scenes.length) return '<div class="ws-placeholder">No scenes yet. Continue Story (Advisor) to generate the opening beat.</div>';
   const s = scenes[scenes.length - 1];
   return `<details class="last-scene" open>
     <summary>Latest: Scene ${s.number} — ${esc(s.summary)}</summary>

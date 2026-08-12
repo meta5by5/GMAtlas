@@ -1,10 +1,13 @@
 # The GMAtlas Design Constitution
 
 **Status:** Living document. **Written:** 2026-08-09, from a direct audit of the
-source tree (`src/`, `tests/`, `scripts/`) cross-referenced against
-`requirements/Functional-Requirements-v2.md`. This is an original synthesis,
-not a copy of any prior design document — it describes GMAtlas as it actually
-exists today, plus the intent that shaped it.
+source tree (`src/`, `tests/`, `scripts/`) cross-referenced against the spec
+now at `requirements/previous-design-principles/Functional-Requirements-v2.md`
+(superseded 2026-08-10 by `requirements/functional-requirements-v3.md`, which
+carries the current functional requirements and roadmap forward — this
+document's architecture content is unaffected by that change). This is an
+original synthesis, not a copy of any prior design document — it describes
+GMAtlas as it actually exists today, plus the intent that shaped it.
 
 This document has three parts: **why** the application exists (Part I), **how**
 it is actually built (Part II), and **what it does and does not yet do**
@@ -432,8 +435,8 @@ posture.
 
 ## Part IV — What Does Not Exist
 
-Everything below is described in either `requirements/Functional-Requirements-v2.md`
-or the legacy design corpus but has no working implementation in the current
+Everything below is described in either `requirements/functional-requirements-v3.md`
+(and the v2 spec it superseded) or the legacy design corpus, but has no working implementation in the current
 codebase, as of this audit. This list states absence only — see
 `deviations.md` for where each item originates.
 

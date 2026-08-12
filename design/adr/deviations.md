@@ -1,13 +1,21 @@
 # Deviations
 
+**Status note:** Part I documented conflicts in `Functional-Requirements-v2.md`,
+which has since been superseded by `requirements/functional-requirements-v3.md`
+and moved to `requirements/previous-design-principles/` as reference. Every
+conflict Part I lists below was resolved in v3 (the Composer/Navigator naming
+swap and the drawer-visibility contradiction — items 4–6 — by v3's
+Terminology and Storyboard sections). Part I is kept as a historical record
+of what was found and fixed, not a live issue list. Part II is unaffected —
+it's still an accurate account of legacy-corpus concepts absent from the
+codebase.
+
 Companion to `GMAtlas-Design-Constitution.md`. Two kinds of finding live here:
-**Part I** — internal conflicts or errors found within
-`requirements/Functional-Requirements-v2.md` itself. **Part II** — concepts
-described in the legacy design corpus (`requirements/previous-design-principles/`)
-that have no equivalent anywhere in the current codebase. Neither part
-explains *why* something is missing or wrong — only that it is, and where it
-was found. A separate, manually-authored requirements document will decide
-what (if anything) to do about any of this.
+**Part I** — internal conflicts or errors found within the now-superseded v2
+spec. **Part II** — concepts described in the legacy design corpus
+(`requirements/previous-design-principles/`) that have no equivalent
+anywhere in the current codebase. Neither part explains *why* something is
+missing or wrong — only that it is, and where it was found.
 
 ---
 

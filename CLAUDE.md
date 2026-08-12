@@ -34,16 +34,20 @@ non-trivial change; this file only covers day-to-day mechanics.
   document: design philosophy, the five non-negotiable rules, a module-by-
   module map of `src/`, and a clear "what exists / what doesn't" split.
   Start here for "how does X work" or "is Y built."
-- **`design/adr/deviations.md`** — known conflicts inside
-  `requirements/Functional-Requirements-v2.md` itself, and legacy-only
-  concepts with no code equivalent. Check before treating anything in that
-  spec as unambiguous.
-- **`requirements/Functional-Requirements-v2.md`** — the target functional
-  spec (what the app should do, written spec-complete enough to rebuild
-  from). Sections marked `#### NEW!` are not yet built; sections marked
-  `%%  %%` carry no new requirement beyond current behavior.
-- **`DESIGN-NEW-FUNCTIONALITY.md`** — the live forward-looking roadmap:
-  phased plan for closing the gap to `Functional-Requirements-v2.md`.
+- **`design/adr/deviations.md`** — a historical record of conflicts found in
+  the now-superseded v2 spec (resolved by v3, above) and legacy-only
+  concepts with no code equivalent.
+- **`requirements/functional-requirements-v3.md`** — the one functional
+  spec and forward roadmap, combined: what the app does, what's missing per
+  feature, and the design steps to close each gap, in priority order. This
+  supersedes both the old `Functional-Requirements-v2.md` (moved to
+  `requirements/previous-design-principles/` as superseded reference) and
+  the old `DESIGN-NEW-FUNCTIONALITY.md` (retired, fully absorbed into v3).
+- **`design/UX-ROADMAP.md`** — a narrower, sequenced build plan for just the
+  Storyboard's navigation/layout work (the Composer/Navigator/Advisor panel
+  model and making it work on a phone) — the "how to build it in order"
+  detail behind v3's Storyboard section, kept separate so UX work can
+  proceed without waiting on unrelated mechanics changes.
 - **`PROGRESS.md`** — the phase-by-phase status ledger. Check it when a
   phase number is ambiguous.
 - New architectural decisions (a new engine, a schema shape change, a
