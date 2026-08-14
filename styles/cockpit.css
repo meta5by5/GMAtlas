@@ -445,22 +445,33 @@ button { font: inherit; color: inherit; cursor: pointer; }
      field kinds (plain text, attribute/roll, track) share the same
      label-column width so a group's rows still line up with each other. */
   .statblock-block { display: block; }
+  /* Plain text fields (Role, Notable Gear, ...) stack label above value
+     across two rows — direct request: shrinking the label column to widen
+     the value field only goes so far before the label itself gets tight
+     again, and free text (unlike a track's boxes or an attribute's short
+     number) genuinely needs the room. Track/attribute fields keep a
+     side-by-side single row (their controls are inherently small — boxes,
+     a short number — so stacking them would just waste vertical space)
+     with a narrower label column than before, giving their controls more
+     room too. */
   .statblock-row {
-    display: grid; grid-template-columns: minmax(6rem, 42%) 1fr;
-    align-items: center; gap: var(--sp-2);
-    width: auto; min-height: 2.75rem;
+    display: flex; flex-direction: column; align-items: stretch; gap: 0.3rem;
+    width: auto; min-height: auto;
     padding: 0.55rem 0.15rem;
     margin-bottom: 0;
     background: none; border: none; border-radius: 0;
     border-bottom: 1px solid var(--border);
   }
   .statblock-key {
-    font-size: 0.74rem; letter-spacing: 0.02em; text-transform: uppercase;
+    font-size: 0.72rem; letter-spacing: 0.02em; text-transform: uppercase;
     white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.3;
   }
   .statblock-val { font-size: 0.95rem; width: 100%; min-height: 2.25rem; padding: 0.4rem 0.5rem; }
 
-  .statblock-row.track-row { grid-template-columns: minmax(6rem, 42%) 1fr; }
+  .statblock-row.track-row, .statblock-row.attr-row {
+    display: grid; grid-template-columns: minmax(5rem, 34%) 1fr;
+    align-items: center; gap: var(--sp-2);
+  }
   .track-row .track-widget { justify-content: flex-end; }
   .track-row .track-box { width: 1.75rem; height: 1.75rem; font-size: 0.78rem; }
   .track-row .track-value-badge { font-size: 0.88rem; padding: 0.3rem 0.65rem; }
@@ -1106,6 +1117,17 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .enhancement-list { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin: var(--sp-1) 0; }
 .enhancement-chip { display: inline-flex; align-items: center; gap: 4px; }
 .enhancement-chip.over-strain, .over-strain { color: var(--danger); }
+/* Strain meter — a read-only fill bar (drawers/index.js's strainMeter()),
+   not a click-to-set control like a Party meter tracker; strain is a
+   derived sum of installed enhancements' costs, not a value set directly.
+   The label sits ON the bar (centered, its own stacking layer) rather than
+   beside it, so the meter reads at a glance without needing extra width
+   next to it — useful now that statblock/character-sheet rows are already
+   tight on horizontal room at compact widths. */
+.strain-meter { position: relative; height: 1.5rem; border-radius: 999px; overflow: hidden; background: var(--bg-inset); border: 1px solid var(--border); margin: var(--sp-1) 0 var(--sp-2); }
+.strain-meter-fill { position: absolute; inset: 0; width: 0; background: var(--accent-strong); transition: width 0.15s ease; }
+.strain-meter.over-strain .strain-meter-fill { background: var(--danger); }
+.strain-meter-label { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; height: 100%; font-size: 0.72rem; font-weight: 600; color: var(--text); text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
 .enhancement-add { display: flex; gap: var(--sp-1); margin-top: var(--sp-1); }
 .enhancement-add input[data-enhancement-name-input] { flex: 1; }
 .enhancement-add input[data-enhancement-strain-input] { width: 4rem; }
@@ -1226,15 +1248,19 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
   padding: var(--sp-2); margin-bottom: var(--sp-3);
   background: var(--tier2-bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
+/* Widened from 4.4rem/0.6rem (direct request — tracker/meter names need to
+   actually be readable) — .character-sheet-stats' own overflow-x:auto is
+   the escape valve if a ruleset's full stat row now runs past the visible
+   width, same as before, just scrolling a little sooner. */
 .track-row-compact {
   display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 0 auto;
-  width: 4.4rem; margin-bottom: 0; padding: 0.35rem;
+  width: 5.2rem; margin-bottom: 0; padding: 0.4rem 0.3rem;
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset);
 }
-.track-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.6rem; }
+.track-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.68rem; white-space: normal; line-height: 1.2; }
 .track-row-compact .track-widget { flex-direction: column-reverse; align-items: center; }
-.track-row-compact .track-boxes { flex-wrap: wrap; justify-content: center; width: 3.6rem; }
-.track-row-compact .track-box { width: 15px; height: 15px; font-size: 0.56rem; }
+.track-row-compact .track-boxes { flex-wrap: wrap; justify-content: center; width: 4.2rem; }
+.track-row-compact .track-box { width: 18px; height: 18px; font-size: 0.62rem; }
 .character-sheet-resources .statblock-row.track-row { margin-bottom: var(--sp-2); }
 
 /* Compact attribute pill (Edge/Heart/... stat row atop a character sheet) —
@@ -1242,11 +1268,11 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    instead of boxes. */
 .attr-row-compact {
   display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 0 auto;
-  width: 4.4rem; margin-bottom: 0; padding: 0.35rem;
+  width: 5.2rem; margin-bottom: 0; padding: 0.4rem 0.3rem;
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset);
 }
-.attr-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.6rem; }
-.attr-row-compact .attr-val-input { width: 100%; padding: 2px 4px; font-size: 0.78rem; }
+.attr-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.68rem; white-space: normal; line-height: 1.2; }
+.attr-row-compact .attr-val-input { width: 100%; padding: 3px 4px; font-size: 0.85rem; }
 
 /* Drag-and-drop (entity ↔ entity, entity → text) */
 [data-drag-entity] { cursor: grab; }

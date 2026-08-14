@@ -305,8 +305,8 @@ function inspector(doc, e, ui) {
       ? `<span class="rel-bond-value" title="Bond progress — tracked on the Character Sheet below, not editable here">${bond.field.value}<small>/${bond.field.max}</small></span>
          <button type="button" class="icon-btn" data-view-bond-track="${bond.gi}" title="View in Character Sheet">↧</button>`
       : `<input type="number" class="rel-strength-input" data-entity-rel-strength="${esc(r.to)}" min="0" max="10" value="${Number(r.strength) || 0}" title="Strength/weight 0-10">`);
-    return `<span class="rel-chip ${flagged ? 'rel-flagged' : ''}">${flagged ? `<span class="rel-flag" title="Flagged: ${RELATIONSHIP_TYPE_LABEL[r.type]} doesn't usually apply between ${withArticle(TYPE_LABEL[e.type] || e.type)} entity and ${withArticle(TYPE_LABEL[other.type] || other.type)} entity — nothing changed, just worth a review">⚠</span>` : ''}<button type="button" class="rel-chip-name" data-open-entity="${esc(other.id)}" title="Open ${esc(other.name) || 'Unnamed'}">${esc(other.name) || 'Unnamed'}</button>
-      <select class="rel-type-select" data-entity-rel-type="${esc(r.to)}" title="Relationship type">${relTypeOptions(r.type)}</select>
+    return `<span class="rel-chip ${flagged ? 'rel-flagged' : ''}">${flagged ? `<span class="rel-flag" title="Flagged: ${RELATIONSHIP_TYPE_LABEL[r.type]} doesn't usually apply between ${withArticle(TYPE_LABEL[e.type] || e.type)} entity and ${withArticle(TYPE_LABEL[other.type] || other.type)} entity — nothing changed, just worth a review">⚠</span>` : ''}<select class="rel-type-select" data-entity-rel-type="${esc(r.to)}" title="Relationship type">${relTypeOptions(r.type)}</select>
+      <button type="button" class="rel-chip-name" data-open-entity="${esc(other.id)}" title="Open ${esc(other.name) || 'Unnamed'}">${esc(other.name) || 'Unnamed'}</button>
       <input class="rel-label-input" data-entity-rel-label="${esc(r.to)}" value="${esc(r.label)}" placeholder="note (ally, rival…)" title="Edit this relationship's note">
       ${strengthOrBond}
       <button class="icon-btn" data-entity-unlink="${esc(r.to)}" title="Remove link" aria-label="Remove link">✕</button></span>`;
@@ -345,13 +345,14 @@ function inspector(doc, e, ui) {
         <button type="button" class="overview-toggle" data-overview-toggle="${esc(e.id)}">${overviewOpen ? '▾' : '▸'} Overview</button>
         ${oracleLinkIcon(e.type, 'overview')}
       </span>
-      ${overviewOpen ? `<div class="rich-field">${richToolbarHTML(`entity:${e.id}:overview`, toolbarCollapsed(doc, ui, `entity:${e.id}:overview`))}<div class="mention-editor" contenteditable="true" data-entity-field="overview" data-placeholder="What the party knows.">${buildMentionEditorHTML(doc, e.overview)}</div></div>` : ''}
+      ${overviewOpen ? `
+      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:overview`, toolbarCollapsed(doc, ui, `entity:${e.id}:overview`))}<div class="mention-editor" contenteditable="true" data-entity-field="overview" data-placeholder="What the party knows.">${buildMentionEditorHTML(doc, e.overview)}</div></div>
+      ${isPartyCharacter ? '' : `<div class="revealed-block">
+        <button class="btn ghost sm" data-reveal-toggle="${esc(e.id)}">${e.revealedOpen ? '▾' : '▸'} Revealed / hidden (GM)</button>
+        ${oracleLinkIcon(e.type, 'revealed')}
+        ${e.revealedOpen ? `<div class="rich-field">${richToolbarHTML(`entity:${e.id}:revealed`, toolbarCollapsed(doc, ui, `entity:${e.id}:revealed`))}<div class="mention-editor" contenteditable="true" data-entity-field="revealed" data-placeholder="Secrets, twists, true motives.">${buildMentionEditorHTML(doc, e.revealed)}</div></div>` : ''}
+      </div>`}` : ''}
     </div>
-    ${isPartyCharacter ? '' : `<div class="revealed-block">
-      <button class="btn ghost sm" data-reveal-toggle="${esc(e.id)}">${e.revealedOpen ? '▾' : '▸'} Revealed / hidden (GM)</button>
-      ${oracleLinkIcon(e.type, 'revealed')}
-      ${e.revealedOpen ? `<div class="rich-field">${richToolbarHTML(`entity:${e.id}:revealed`, toolbarCollapsed(doc, ui, `entity:${e.id}:revealed`))}<div class="mention-editor" contenteditable="true" data-entity-field="revealed" data-placeholder="Secrets, twists, true motives.">${buildMentionEditorHTML(doc, e.revealed)}</div></div>` : ''}
-    </div>`}
     ${npcSection(e)}
     ${factionSection(doc, e, ui)}
     ${conflictSection(doc, e, ui)}
@@ -1006,6 +1007,20 @@ function factionPressureHtml(e, track) {
     </div>`;
 }
 
+// A visual fill bar for Strain vs capacity, replacing a plain "Strain: X/Y"
+// line — read-only (strain is a derived sum of installed enhancements'
+// costs, never a value the GM sets directly the way a Party meter is), so
+// this is a display, not a click-to-set control. Exceeding capacity is
+// still only ever a visible flag (the fill turns the same --danger red
+// .over-strain already uses elsewhere) — never an automatic penalty.
+function strainMeter(used, cap, over) {
+  const pct = cap > 0 ? Math.min(100, Math.round((used / cap) * 100)) : 0;
+  return `<div class="strain-meter ${over ? 'over-strain' : ''}" title="Strain ${used}/${cap}${over ? ' — over capacity' : ''}">
+    <div class="strain-meter-fill" style="width:${pct}%"></div>
+    <span class="strain-meter-label">Strain ${used}/${cap}${over ? ' — over capacity' : ''}</span>
+  </div>`;
+}
+
 // Enhancements (renamed from "Cybernetics" 2026-07-06, docs/adr/next-
 // request.md — originally 2026-07-06, docs/adr/0011-swn-cwn-content.md,
 // Cities Without Number's best-known subsystem, an original
@@ -1038,7 +1053,7 @@ function enhancementsSection(e, ui) {
         <button class="icon-btn" data-roll-into-enhancement="${esc(e.id)}" title="Roll a Cyberware Concept into the name field below">🎲</button>
       </h4>
       ${open ? `
-      <p class="dim small ${isOverStrained(e) ? 'over-strain' : ''}">Strain: ${used}/${cap}${isOverStrained(e) ? ' — over capacity' : ''}</p>
+      ${strainMeter(used, cap, isOverStrained(e))}
       <div class="enhancement-list">${chips || '<span class="dim small">None installed.</span>'}</div>
       <div class="enhancement-add">
         <input data-enhancement-name-input="${esc(e.id)}" placeholder="Enhancement name" value="${esc(draftName)}">

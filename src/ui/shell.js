@@ -389,7 +389,7 @@ export function mountShell(el) {
   el.innerHTML = `
     <div class="cockpit">
       <header class="mc-header">
-        <div class="brand"><h1>GMAtlas</h1><span class="tagline">Frictionless Empowerment</span></div>
+        <div class="brand"><h1>GMAtlas</h1></div>
         <div class="header-actions">
           <button class="btn ghost sm" data-search-toggle title="Search everything (Cast, Journal, Oracle, Documents, Party, Colony) — Ctrl/Cmd+K">🔍 Search</button>
           <span class="campaign-title" title="Campaign name"></span>
