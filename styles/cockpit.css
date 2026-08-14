@@ -468,13 +468,21 @@ button { font: inherit; color: inherit; cursor: pointer; }
   }
   .statblock-val { font-size: 0.95rem; width: 100%; min-height: 2.25rem; padding: 0.4rem 0.5rem; }
 
+  /* Label column narrowed again (5rem/34% -> 4.5rem/28%, direct request) so
+     a full track's worth of boxes (Health, Strain, ...) has the best
+     chance of fitting in one line on a real phone width without wrapping;
+     track-box shrunk slightly too (1.75rem -> 1.55rem) for the same
+     reason. align-self:center on the label is redundant with the grid's
+     own align-items:center but stated explicitly (direct request to
+     ensure it) rather than relying only on the inherited value. */
   .statblock-row.track-row, .statblock-row.attr-row {
-    display: grid; grid-template-columns: minmax(5rem, 34%) 1fr;
+    display: grid; grid-template-columns: minmax(4.5rem, 28%) 1fr;
     align-items: center; gap: var(--sp-2);
   }
+  .track-row .statblock-key, .attr-row .statblock-key { align-self: center; }
   .track-row .track-widget { justify-content: flex-end; }
-  .track-row .track-box { width: 1.75rem; height: 1.75rem; font-size: 0.78rem; }
-  .track-row .track-value-badge { font-size: 0.88rem; padding: 0.3rem 0.65rem; }
+  .track-row .track-box { width: 1.55rem; height: 1.55rem; font-size: 0.72rem; }
+  .track-row .track-value-badge { font-size: 0.85rem; padding: 0.28rem 0.6rem; }
 
   .statblock-row.attr-row .attr-val-input { width: 100%; max-width: 6rem; min-height: 2.25rem; font-size: 1rem; justify-self: end; }
 
@@ -616,7 +624,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
    the toggle is a <button> standing in for the field's own label text,
    so it needs the label's font reset instead of a default button look. */
 .scene-field-toggle { background: none; border: none; padding: 0; margin: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; text-align: left; }
-.overview-toggle { background: none; border: none; padding: 0; margin: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; text-align: left; }
+/* Shared collapsible-section-header look (direct request: every such
+   header in the Entity Editor — Overview, Revealed/hidden, World Profile,
+   World Demographics, Conflict's "Add depth", Enhancements, Add a
+   Statblock — reads the same way, small/dim/uppercase like a field label,
+   not a boxy .btn). Explicit properties rather than `inherit` (Overview's
+   original approach) so it looks identical regardless of which element
+   wraps it (a bare <span>, an <h4>, ...) instead of picking up whatever
+   font/color that wrapper happens to have. */
+.section-toggle {
+  background: none; border: none; padding: 0; margin: 0; cursor: pointer; text-align: left;
+  font-size: 0.7rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim);
+}
+.section-toggle:hover { color: var(--accent); }
 /* Latest Scene: the combined text view sits at 70% width, its split
    fields at 30%, side by side instead of stacked — the fields are edited
    far less often than the text is read, so giving the text the larger
@@ -1036,6 +1056,9 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    doesn't jump once a photo is added. */
 .inspector-photo { flex: 0 0 40%; max-width: 40%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); }
 .inspector-photo-fields { flex: 1 1 auto; min-width: 0; }
+/* Entity Type dropdown — matched to .rel-label-input's font size (direct
+   request), same reasoning as .rel-add select above. */
+.inspector-photo-fields select[data-entity-field="type"] { font-size: 0.72rem; }
 .inspector-photo .gallery-thumb-circle { width: 4.5rem; height: 4.5rem; }
 .inspector-photo-empty {
   display: flex; align-items: center; justify-content: center; width: 100%;
@@ -1060,6 +1083,11 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .rel-bond-value { font-size: 0.72rem; font-weight: 600; color: var(--accent); white-space: nowrap; }
 .rel-bond-value small { font-weight: 400; color: var(--text-dim); }
 .rel-add { display: grid; grid-template-columns: 1fr auto 1fr auto; gap: var(--sp-2); align-items: center; }
+/* Match the relationship type/target dropdowns to .rel-label-input's font
+   size (direct request) — the generic textarea/select/input rule further
+   up defaults every <select> to 0.9rem, noticeably larger than this row's
+   own note field once it's the only one left unstyled. */
+.rel-add select { font-size: 0.72rem; }
 /* "Find entity to link" sits on its own full-width row below the 4-column
    type/target/label/Link form above it, rather than awkwardly starting a
    5th implicit column. */
@@ -1117,17 +1145,10 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .enhancement-list { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin: var(--sp-1) 0; }
 .enhancement-chip { display: inline-flex; align-items: center; gap: 4px; }
 .enhancement-chip.over-strain, .over-strain { color: var(--danger); }
-/* Strain meter — a read-only fill bar (drawers/index.js's strainMeter()),
-   not a click-to-set control like a Party meter tracker; strain is a
-   derived sum of installed enhancements' costs, not a value set directly.
-   The label sits ON the bar (centered, its own stacking layer) rather than
-   beside it, so the meter reads at a glance without needing extra width
-   next to it — useful now that statblock/character-sheet rows are already
-   tight on horizontal room at compact widths. */
-.strain-meter { position: relative; height: 1.5rem; border-radius: 999px; overflow: hidden; background: var(--bg-inset); border: 1px solid var(--border); margin: var(--sp-1) 0 var(--sp-2); }
-.strain-meter-fill { position: absolute; inset: 0; width: 0; background: var(--accent-strong); transition: width 0.15s ease; }
-.strain-meter.over-strain .strain-meter-fill { background: var(--danger); }
-.strain-meter-label { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; height: 100%; font-size: 0.72rem; font-weight: 600; color: var(--text); text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+/* Strain now reuses .statblock-row.track-row's own markup/CSS wholesale
+   (drawers/index.js's strainMeter()) instead of a bespoke fill-bar, so it
+   looks and behaves exactly like Health/XP/Momentum's counters (direct
+   request) and inherits every track-row layout fix automatically. */
 .enhancement-add { display: flex; gap: var(--sp-1); margin-top: var(--sp-1); }
 .enhancement-add input[data-enhancement-name-input] { flex: 1; }
 .enhancement-add input[data-enhancement-strain-input] { width: 4rem; }

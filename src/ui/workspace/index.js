@@ -175,13 +175,14 @@ function npcSceneGroupsBlock(doc, ui) {
 // WHERE's docked-Faction-Events side panel (whole-card relocation, direct
 // request — see factionEventsDockedInWhere's original comment history)
 // keeps its exact logic, just returns a fragment now instead of wrapping
-// a whole top-level view — `locationSummaryHeader`'s quick-reference strip
-// renders inline at the top instead of in a special header-row slot (that
-// slot doesn't exist anymore now that `dashboardSection` supplies the
-// section's own header).
+// a whole top-level view. The System/Star/Colony-Base/District quick-
+// reference strip that used to render inline at the top of this section
+// (a special header-row slot that doesn't exist anymore now that
+// `dashboardSection` supplies the section's own header) now lives inside
+// `currentLocationBanner` instead — direct request, grouped under Current
+// Location rather than its own separate block.
 function whereSectionBody(doc, ui) {
   const body = `
-    ${locationSummaryHeader(doc)}
     ${locationDetailsBlock(doc, ui)}
     ${summaryField('where', doc.context.where.summary, 'Location and immediate surroundings…', doc, ui)}
     ${whereLocationPicker(doc, ui)}
@@ -214,9 +215,8 @@ function whereSectionBody(doc, ui) {
 // type/Star system/Sector, plus Sights/Smells/Sounds below) is a plain
 // flat field on the location entity itself (entities.js's
 // ensureWorldProfileFields/ensureLocationFields) — no structural parent
-// walk needed for the title, unlike locationSummaryHeader's own District
-// field just above this block, which DOES walk one hop via
-// getContainingLocation.
+// walk needed for the title, unlike currentLocationBanner's own District
+// field, which DOES walk one hop via getContainingLocation.
 function locationDetailsBlock(doc, ui) {
   const whereLocations = getCurrentWhereLocations(doc);
   if (!whereLocations.length) return '';
@@ -597,33 +597,6 @@ function factionActivityHereBlock(doc) {
     </div>`;
 }
 
-// Read-only quick-awareness summary (direct request) — System/Star/Colony-
-// Base/District for the PRIMARY current WHERE location (whereLocations[0],
-// same "first is primary" convention factionsActiveNearbyBlock's add-
-// select already uses). Deliberately reuses existing World Profile fields
-// rather than inventing new schema: `zone` (free text, e.g. "Near Earth
-// Zone") -> System, `starSystem` (confusingly labeled "Star System" in the
-// World Profile card, but actually stores the NAME of a #star-tagged
-// Location) -> Star, `bases[]` (curated base-name strings) -> Colony/Base,
-// and the structural parent one hop up the contains/located_at entity
-// graph (getContainingLocation — the same relationship isSameDistrict/
-// getContainedLocations read) -> District, distinct from the `zone`/
-// `starSystem` text fields since a Location may have one, both, or
-// neither set up.
-function locationSummaryHeader(doc) {
-  const locs = getCurrentWhereLocations(doc);
-  if (!locs.length) return '';
-  const loc = locs[0];
-  const district = getContainingLocation(doc, loc.id);
-  const row = (label, value) => `<span class="location-summary-item"><span class="dim small">${esc(label)}</span> ${value ? esc(value) : '<span class="dim small">—</span>'}</span>`;
-  return `<div class="location-summary" title="Quick reference for ${esc(loc.name || 'the current location')}">
-    ${row('System', loc.zone)}
-    ${row('Star', loc.starSystem)}
-    ${row('Colony/Base', (loc.bases || []).join(', '))}
-    ${row('District', district ? district.name : '')}
-  </div>`;
-}
-
 // A persistent "this is what's selected" indicator (direct feedback,
 // docs/adr/0038) — WHERE's own location "selection" is still just an
 // @mention inserted into Focus (whereLocationPicker above; a past
@@ -632,14 +605,38 @@ function locationSummaryHeader(doc) {
 // mechanism — it just makes the already-real current location(s)
 // (getCurrentWhereLocations) visible without having to read the Focus
 // prose itself.
+//
+// Also carries the System/Star/Colony-Base/District quick-awareness
+// summary (direct request: grouped under Current Location instead of its
+// own separate block above it) for the PRIMARY current WHERE location
+// (whereLocations[0], same "first is primary" convention
+// factionsActiveNearbyBlock's add-select already uses). Deliberately
+// reuses existing World Profile fields rather than inventing new schema:
+// `zone` (free text, e.g. "Near Earth Zone") -> System, `starSystem`
+// (confusingly labeled "Star System" in the World Profile card, but
+// actually stores the NAME of a #star-tagged Location) -> Star, `bases[]`
+// (curated base-name strings) -> Colony/Base, and the structural parent
+// one hop up the contains/located_at entity graph (getContainingLocation —
+// the same relationship isSameDistrict/getContainedLocations read) ->
+// District, distinct from the `zone`/`starSystem` text fields since a
+// Location may have one, both, or neither set up.
 function currentLocationBanner(doc) {
   const locs = getCurrentWhereLocations(doc);
   if (!locs.length) return '';
   const chips = locs.map((l) => `<button type="button" class="entity-chip" data-open-entity="${esc(l.id)}" title="Open ${esc(l.name || 'Unnamed')}">${esc(l.name || 'Unnamed')}</button>`).join('');
+  const loc = locs[0];
+  const district = getContainingLocation(doc, loc.id);
+  const row = (label, value) => `<span class="location-summary-item"><span class="dim small">${esc(label)}</span> ${value ? esc(value) : '<span class="dim small">—</span>'}</span>`;
   return `
     <div class="workspace-mini-section current-location-banner">
       <span class="field-label-static">📍 Current location</span>
       <div class="entity-chips">${chips}</div>
+      <div class="location-summary" title="Quick reference for ${esc(loc.name || 'the current location')}">
+        ${row('System', loc.zone)}
+        ${row('Star', loc.starSystem)}
+        ${row('Colony/Base', (loc.bases || []).join(', '))}
+        ${row('District', district ? district.name : '')}
+      </div>
     </div>`;
 }
 

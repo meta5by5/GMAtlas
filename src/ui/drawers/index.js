@@ -342,13 +342,13 @@ function inspector(doc, e, ui) {
     </div>
     <div class="field-label">
       <span class="field-label-row">
-        <button type="button" class="overview-toggle" data-overview-toggle="${esc(e.id)}">${overviewOpen ? '▾' : '▸'} Overview</button>
+        <button type="button" class="section-toggle" data-overview-toggle="${esc(e.id)}">${overviewOpen ? '▾' : '▸'} Overview</button>
         ${oracleLinkIcon(e.type, 'overview')}
       </span>
       ${overviewOpen ? `
       <div class="rich-field">${richToolbarHTML(`entity:${e.id}:overview`, toolbarCollapsed(doc, ui, `entity:${e.id}:overview`))}<div class="mention-editor" contenteditable="true" data-entity-field="overview" data-placeholder="What the party knows.">${buildMentionEditorHTML(doc, e.overview)}</div></div>
       ${isPartyCharacter ? '' : `<div class="revealed-block">
-        <button class="btn ghost sm" data-reveal-toggle="${esc(e.id)}">${e.revealedOpen ? '▾' : '▸'} Revealed / hidden (GM)</button>
+        <button class="section-toggle" data-reveal-toggle="${esc(e.id)}">${e.revealedOpen ? '▾' : '▸'} Revealed / hidden (GM)</button>
         ${oracleLinkIcon(e.type, 'revealed')}
         ${e.revealedOpen ? `<div class="rich-field">${richToolbarHTML(`entity:${e.id}:revealed`, toolbarCollapsed(doc, ui, `entity:${e.id}:revealed`))}<div class="mention-editor" contenteditable="true" data-entity-field="revealed" data-placeholder="Secrets, twists, true motives.">${buildMentionEditorHTML(doc, e.revealed)}</div></div>` : ''}
       </div>`}` : ''}
@@ -359,7 +359,6 @@ function inspector(doc, e, ui) {
     ${worldProfileSection(doc, e, ui)}
     ${worldDemographicsSection(doc, e, ui)}
     ${statblockSection(e, doc, ui)}
-    ${enhancementsSection(e, ui)}
     <div class="rel-block">
       <h4>Relationships</h4>
       <p class="dim small">Drag another entity's ⠿ handle onto this one (or vice versa), pick one below, or find one to link.</p>
@@ -511,7 +510,7 @@ function conflictSection(doc, e, ui) {
         <input data-conflict-hook-input="${esc(e.id)}" placeholder="New session hook…">
         <button class="btn ghost sm" data-conflict-hook-add="${esc(e.id)}">+ Add</button>
       </div>
-      <button class="btn ghost sm" data-conflict-depth-toggle="${esc(e.id)}">${depthOpen ? '▾' : '▸'} Add depth</button>
+      <button class="section-toggle" data-conflict-depth-toggle="${esc(e.id)}">${depthOpen ? '▾' : '▸'} Add depth</button>
       ${depthOpen ? conflictDepthHtml(doc, e, ui, involvedFactions) : ''}
     </div>`;
 }
@@ -829,7 +828,7 @@ function worldProfileSection(doc, e, ui = {}) {
   const biomes = biomesForGenrePack(doc.settings.genrePack || 'hostile');
   return `
     <div class="faction-card">
-      <h4><button class="btn ghost sm" data-world-profile-toggle="${esc(e.id)}">${open ? '▾' : '▸'} World Profile (UWP)</button></h4>
+      <h4><button class="section-toggle" data-world-profile-toggle="${esc(e.id)}">${open ? '▾' : '▸'} World Profile (UWP)</button></h4>
       ${open ? `
       <p class="dim small">HOSTILE's own Universal World Profile format — reference only, doesn't affect Trade pricing. See Settings → Trade Economy Model for the full digit-meaning legend.</p>
       <div class="faction-stats-row">
@@ -894,7 +893,7 @@ function worldDemographicsSection(doc, e, ui = {}) {
     <span class="chip sm">${esc(b)} <button type="button" class="icon-btn" data-entity-base-remove="${esc(e.id)}::${esc(b)}" title="Remove">✕</button></span>`).join('');
   return `
     <div class="faction-card">
-      <h4><button class="btn ghost sm" data-world-demographics-toggle="${esc(e.id)}">${open ? '▾' : '▸'} World Demographics</button></h4>
+      <h4><button class="section-toggle" data-world-demographics-toggle="${esc(e.id)}">${open ? '▾' : '▸'} World Demographics</button></h4>
       ${open ? `
       ${codeSelect('starport', 'Starport', STARPORT_CLASSES, e.starport)}
       <div class="faction-assets">
@@ -1007,17 +1006,27 @@ function factionPressureHtml(e, track) {
     </div>`;
 }
 
-// A visual fill bar for Strain vs capacity, replacing a plain "Strain: X/Y"
-// line — read-only (strain is a derived sum of installed enhancements'
-// costs, never a value the GM sets directly the way a Party meter is), so
-// this is a display, not a click-to-set control. Exceeding capacity is
-// still only ever a visible flag (the fill turns the same --danger red
-// .over-strain already uses elsewhere) — never an automatic penalty.
+// Strain vs capacity, rendered as the SAME counter/track widget Health, XP,
+// Momentum and every other statblock track use (direct request — this
+// previously had its own bespoke fill-bar) — the exact .statblock-row
+// .track-row/.track-widget/.track-boxes/.track-value-badge shape, just
+// built from plain <span>s instead of trackRow()'s <button>s, since Strain
+// is read-only here (a derived sum of installed enhancements' costs, never
+// a value the GM sets directly the way a real track field is). Sharing the
+// markup means it automatically picks up every track-row layout fix
+// (label width, box size, vertical centering) instead of needing its own
+// copy kept in sync by hand. Exceeding capacity is still only ever a
+// visible flag (the badge turns the same --danger red .over-strain
+// already uses elsewhere) — never an automatic penalty.
 function strainMeter(used, cap, over) {
-  const pct = cap > 0 ? Math.min(100, Math.round((used / cap) * 100)) : 0;
-  return `<div class="strain-meter ${over ? 'over-strain' : ''}" title="Strain ${used}/${cap}${over ? ' — over capacity' : ''}">
-    <div class="strain-meter-fill" style="width:${pct}%"></div>
-    <span class="strain-meter-label">Strain ${used}/${cap}${over ? ' — over capacity' : ''}</span>
+  const boxes = Array.from({ length: Math.max(cap, 0) }, (_, k) => k + 1)
+    .map((n) => `<span class="track-box ${n <= used ? 'on' : ''}" aria-hidden="true">${n}</span>`).join('');
+  return `<div class="statblock-row track-row">
+    <span class="statblock-key">Strain</span>
+    <div class="track-widget">
+      <div class="track-boxes">${boxes}</div>
+      <span class="track-value-badge track-value-badge-static ${over ? 'over-strain' : ''}" title="Strain — not rollable${over ? ', over capacity' : ''}">${used}<small>/${cap}</small></span>
+    </div>
   </div>`;
 }
 
@@ -1049,7 +1058,7 @@ function enhancementsSection(e, ui) {
   return `
     <div class="enhancements-card">
       <h4>
-        <button class="btn ghost sm" data-enhancements-toggle="${esc(e.id)}">${open ? '▾' : '▸'} Enhancements (${items.length})</button>
+        <button class="section-toggle" data-enhancements-toggle="${esc(e.id)}">${open ? '▾' : '▸'} Enhancements (${items.length})</button>
         <button class="icon-btn" data-roll-into-enhancement="${esc(e.id)}" title="Roll a Cyberware Concept into the name field below">🎲</button>
       </h4>
       ${open ? `
@@ -1120,23 +1129,53 @@ function tagEditor(doc, e) {
 // rendered as its own row, sorted per sortStatblockGroups (Settings' system
 // registration order). Adding a group is additive (statblockAddChoices);
 // removing one is a single explicit action per group — there is no
-// "toggle/switch" that replaces one group's data with another's. The add
-// row itself is collapsed behind a gear icon (ui.statblockAddOpen) so it
-// doesn't dominate the inspector once several rulesets/templates exist.
+// "toggle/switch" that replaces one group's data with another's.
+//
+// "+ Field"/"+ Track" (one picker per existing group, so the GM chooses
+// which group to extend) and the whole Enhancements section now live here
+// too, consolidated under this one gear-icon toggle (direct request) —
+// previously +Field/+Track sat always-visible under every single group
+// card, and Enhancements was its own always-visible section regardless of
+// this toggle's state; both are secondary/setup actions a GM reaches for
+// far less often than just reading or rolling a field, so they're tucked
+// behind "Add a Statblock or Attribute" (collapsed by default,
+// ui.statblockAddOpen) alongside the existing "add a whole new statblock
+// group" chips, instead of competing for attention with the fields
+// themselves.
 function statblockSection(e, doc, ui = {}) {
   const groups = e.statblocks || [];
   const sorted = sortStatblockGroups(groups, doc.settings);
   const rows = sorted.map(({ group, index }) => statblockGroupBlock(e, group, index, doc, ui)).join('');
   const addChoices = statblockAddChoices(e, groups, doc);
+  const fieldAddRows = sorted.map(({ group, index }) => `
+    <div class="statblock-add-row">
+      <span class="dim small">${statblockGroupLabel(group, doc)}</span>
+      <button class="chip" data-statblock-add-field="${index}">＋ Field</button>
+      <button class="chip" data-statblock-add-track-field="${index}">＋ Track</button>
+    </div>`).join('');
+  const enhancements = enhancementsSection(e, ui);
   const open = !!ui.statblockAddOpen;
-  const toggle = addChoices
+  const toggle = (addChoices || fieldAddRows || enhancements)
     ? `<div class="statblock-add-toggle-row">
-        <button class="icon-btn" data-statblock-add-toggle title="${open ? 'Hide statblock options' : 'Add a statblock'}">⚙</button>
-        <span class="dim small">Add a statblock</span>
+        <button class="icon-btn" data-statblock-add-toggle title="${open ? 'Hide statblock options' : 'Add a Statblock or Attribute'}">⚙</button>
+        <span class="dim small">Add a Statblock or Attribute</span>
       </div>
-      ${open ? addChoices : ''}`
+      ${open ? `${fieldAddRows}${addChoices}${enhancements}` : ''}`
     : '';
   return `${rows}${toggle}`;
+}
+
+// Shared by statblockGroupBlock/characterSheetGroupBlock's own headers AND
+// the consolidated "+ Field"/"+ Track" picker under Add a Statblock or
+// Attribute (statblockSection, below) — one label-computing place instead
+// of three copies drifting apart.
+function statblockGroupLabel(group, doc) {
+  if (group.kind === 'character') return `Character Sheet · ${esc(findRuleset(group.ruleset).label)}`;
+  if (group.kind === 'vehicle') return 'Vehicle Statblock';
+  if (group.kind === 'gear') return `Gear Stats · ${esc(findGearTemplate(group.ruleset).label)}`;
+  // Bestiary (or LifeForm, genre-dependent — see bestiaryTerm) is a subtype
+  // of NPC (like Character) — its label reflects that.
+  return `${bestiaryTerm(doc.settings.genrePack)} (NPC) · ${esc(templateLabel(group.templateId, doc.settings))}`;
 }
 
 function statblockGroupBlock(e, group, gi, doc, ui = {}) {
@@ -1144,26 +1183,15 @@ function statblockGroupBlock(e, group, gi, doc, ui = {}) {
   const key = `${e.id}::${gi}`;
   const collapsed = !!(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
   const rows = group.fields.map((f, fi) => statblockFieldRow(f, gi, fi)).join('');
-  // Bestiary (or LifeForm, genre-dependent — see bestiaryTerm) is a subtype
-  // of NPC (like Character) — its label reflects that. Gear (ADR 0012,
-  // Item entities) is discriminated by `ruleset` like Character, not
-  // `templateId` like Bestiary/Vehicle.
-  const label = group.kind === 'vehicle' ? 'Vehicle Statblock'
-    : group.kind === 'gear' ? `Gear Stats · ${esc(findGearTemplate(group.ruleset).label)}`
-    : `${bestiaryTerm(doc.settings.genrePack)} (NPC) · ${esc(templateLabel(group.templateId, doc.settings))}`;
   return `<div class="statblock-block">
     <div class="statblock-head">
       <button class="icon-btn statblock-collapse-toggle" data-statblock-group-toggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button>
-      <h4>${label}</h4>
+      <h4>${statblockGroupLabel(group, doc)}</h4>
       <button class="icon-btn" data-statblock-remove-group="${gi}" title="Remove this statblock">🗑</button>
     </div>
     ${collapsed ? '' : `
     ${attributeBadges(group.fields)}
-    ${rows}
-    <div class="statblock-add-row">
-      <button class="chip" data-statblock-add-field="${gi}">＋ Field</button>
-      <button class="chip" data-statblock-add-track-field="${gi}">＋ Track</button>
-    </div>`}
+    ${rows}`}
   </div>`;
 }
 
@@ -1224,11 +1252,7 @@ function characterSheetGroupBlock(e, group, gi, doc, ui = {}) {
     </div>
     ${collapsed ? '' : `
     ${stats.length ? `<div class="character-sheet-stats">${stats.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { compact: true })).join('')}</div>` : ''}
-    ${resources.length ? `<div class="character-sheet-resources">${resources.map(({ f, fi }) => statblockFieldRow(f, gi, fi)).join('')}</div>` : ''}
-    <div class="statblock-add-row">
-      <button class="chip" data-statblock-add-field="${gi}">＋ Field</button>
-      <button class="chip" data-statblock-add-track-field="${gi}">＋ Track</button>
-    </div>`}
+    ${resources.length ? `<div class="character-sheet-resources">${resources.map(({ f, fi }) => statblockFieldRow(f, gi, fi)).join('')}</div>` : ''}`}
   </div>`;
 }
 
