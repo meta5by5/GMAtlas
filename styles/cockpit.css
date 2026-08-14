@@ -432,25 +432,49 @@ button { font: inherit; color: inherit; cursor: pointer; }
     grid-template-columns: 1fr;
   }
 
-  /* Statblock fields: compact label-over-value badges instead of a full-
-     width label|value row, reusing the exact shape Party's own
-     .attr-badge already proved out for the same "5+ fit on one line, no
-     horizontal scroll" problem — a `.statblock-block` child that ISN'T a
-     field row (the head, the "+ Add" controls, ...) keeps its own full-
-     width line via flex-basis:100%; every `.statblock-row` (plain/attr/
-     track — all three share this one class) wraps into the wider grid.
-     Targets ~5 plain-field badges per row on a typical phone width. */
-  .statblock-block { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: flex-start; }
-  .statblock-block > *:not(.statblock-row) { flex-basis: 100%; }
+  /* Statblock fields — reworked from cramped ~4.4rem flex-wrap badges (real
+     reported bug, screenshot-confirmed: a genuine field name like
+     "Disposition" or "Notable Gear" ellipsis-truncated to 1-3 letters, its
+     value box barely wide enough to tap) to one full-width row per field,
+     label left / control right, deliberately bypassing the desktop density
+     goal in favor of every label being fully readable and every control
+     being a comfortable tap target — the point of a phone layout is data
+     entry working, not matching how many fields fit on a desktop screen.
+     A bottom-border list (no per-row background/border box) reads as a
+     familiar native settings-list rather than a grid of pills. All three
+     field kinds (plain text, attribute/roll, track) share the same
+     label-column width so a group's rows still line up with each other. */
+  .statblock-block { display: block; }
   .statblock-row {
-    display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
-    flex: 0 0 auto; width: 4.4rem; min-height: 2.6rem;
-    gap: 0; margin-bottom: 0; padding: 0.3rem 0.35rem;
-    background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.22); border-radius: 8px;
+    display: grid; grid-template-columns: minmax(6rem, 42%) 1fr;
+    align-items: center; gap: var(--sp-2);
+    width: auto; min-height: 2.75rem;
+    padding: 0.55rem 0.15rem;
+    margin-bottom: 0;
+    background: none; border: none; border-radius: 0;
+    border-bottom: 1px solid var(--border);
   }
-  .statblock-row.track-row { width: 7.5rem; }
-  .statblock-key { font-size: 0.58rem; letter-spacing: 0.03em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-  .statblock-val { font-size: 0.78rem; width: 100%; }
+  .statblock-key {
+    font-size: 0.74rem; letter-spacing: 0.02em; text-transform: uppercase;
+    white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.3;
+  }
+  .statblock-val { font-size: 0.95rem; width: 100%; min-height: 2.25rem; padding: 0.4rem 0.5rem; }
+
+  .statblock-row.track-row { grid-template-columns: minmax(6rem, 42%) 1fr; }
+  .track-row .track-widget { justify-content: flex-end; }
+  .track-row .track-box { width: 1.75rem; height: 1.75rem; font-size: 0.78rem; }
+  .track-row .track-value-badge { font-size: 0.88rem; padding: 0.3rem 0.65rem; }
+
+  .statblock-row.attr-row .attr-val-input { width: 100%; max-width: 6rem; min-height: 2.25rem; font-size: 1rem; justify-self: end; }
+
+  /* The read-only Combat/Danger-style summary badges above the field list
+     (attributeBadges()) get the same "room to breathe" treatment, so a
+     multi-word key like "Combat / Danger" wraps cleanly instead of
+     crowding a fixed-width pill. */
+  .attribute-badges { gap: var(--sp-2); }
+  .attr-badge { min-width: 5.5rem; min-height: 2.75rem; padding: 0.45rem 0.65rem; }
+  .attr-key { font-size: 0.66rem; }
+  .attr-val { font-size: 0.95rem; }
 }
 
 /* ============================================================
