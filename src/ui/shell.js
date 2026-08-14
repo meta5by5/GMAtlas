@@ -274,6 +274,12 @@ let collapsedStatblockGroups = new Set(); // ephemeral — keyed `${entityId}::$
 let recapOpen = false; // ephemeral — collapses the "Previously on..." session recap panel
 let searchOpen = false; // ephemeral — Universal Search overlay
 let searchQuery = '';
+// ephemeral — WHO's Actors "+" entity picker (Focus/Bystanders, workspace/
+// index.js). null when closed; { mode: 'focus'|'bystander', query } when
+// open. 'focus' inserts a mention into who.summary (insertContextMention);
+// 'bystander' calls addSceneBystander for the current scene, excluding
+// whoever's already on it.
+let entityPicker = null;
 let oracleEditorOpen = new Set(); // ephemeral — which oracle tables' entry editors are expanded
 let oracleTagEditorOpen = new Set(); // ephemeral — which oracle tables' TAG editors are expanded (docs/adr/0016), hidden by default
 let oracleTagFilter = null; // ephemeral — array of tags a field's 🔮 link jumped here with, or null for the ordinary text-filtered view (mutually exclusive with oracleFilter)
@@ -427,6 +433,15 @@ export function mountShell(el) {
             <button class="icon-btn" data-search-close aria-label="Close search">✕</button>
           </div>
           <div class="search-results" data-search-results></div>
+        </div>
+      </div>
+      <div class="mc-search-overlay" data-entity-picker-overlay hidden aria-label="Add NPC">
+        <div class="search-panel">
+          <div class="search-panel-head">
+            <input type="text" class="search-input" data-entity-picker-query placeholder="Search NPCs…" autocomplete="off">
+            <button class="icon-btn" data-entity-picker-close aria-label="Close">✕</button>
+          </div>
+          <div class="search-results" data-entity-picker-results></div>
         </div>
       </div>
       <div class="mention-suggest" data-mention-suggest hidden></div>
@@ -2072,6 +2087,32 @@ function onClick(ev) {
     if (!sceneId) return;
     return store.update((d) => removeSceneBystander(d, sceneId, bystanderRemove.dataset.sceneBystanderRemove));
   }
+  // WHO's Actors "+" picker (workspace/index.js summaryField/
+  // npcSceneGroupsBlock) — opens/closes/selects from the shared NPC
+  // picker overlay; see renderEntityPickerOverlay/entityPicker above.
+  const entityPickerOpenBtn = hit('[data-entity-picker-open]');
+  if (entityPickerOpenBtn) {
+    entityPicker = { mode: entityPickerOpenBtn.dataset.entityPickerOpen, query: '' };
+    renderEntityPickerOverlay();
+    const inp = root.querySelector('[data-entity-picker-query]');
+    if (inp) { inp.value = ''; inp.focus(); }
+    return;
+  }
+  const entityPickerCloseBtn = hit('[data-entity-picker-close]');
+  if (entityPickerCloseBtn) { entityPicker = null; return renderEntityPickerOverlay(); }
+  const entityPickerSelectBtn = hit('[data-entity-picker-select]');
+  if (entityPickerSelectBtn) {
+    const id = entityPickerSelectBtn.dataset.entityPickerSelect;
+    const mode = entityPicker && entityPicker.mode;
+    entityPicker = null;
+    if (mode === 'focus') { insertContextMention('who', id); return; }
+    if (mode === 'bystander') {
+      const sceneId = currentSceneId();
+      if (!sceneId) return renderEntityPickerOverlay();
+      return store.update((d) => addSceneBystander(d, sceneId, id));
+    }
+    return renderEntityPickerOverlay();
+  }
   const locationDetailsToggle = hit('[data-location-details-toggle]');
   if (locationDetailsToggle) {
     const id = locationDetailsToggle.dataset.locationDetailsToggle;
@@ -2995,6 +3036,9 @@ function onInput(ev) {
   // updating, so focus/caret never needs restoring in the first place.
   const si = t.closest('[data-search-input]');
   if (si) { searchQuery = t.value; renderSearchOverlay(); return; }
+
+  const epq = t.closest('[data-entity-picker-query]');
+  if (epq) { if (entityPicker) entityPicker.query = t.value; renderEntityPickerOverlay(); return; }
 
   const mf = t.closest(MENTION_FIELD_SELECTOR);
   if (mf) updateMentionSuggest(mf);
@@ -4243,6 +4287,7 @@ function render() {
   }
 
   renderSearchOverlay();
+  renderEntityPickerOverlay();
   renderDiceRollOverlay();
 }
 
@@ -4255,6 +4300,31 @@ function renderSearchOverlay() {
   overlay.hidden = !searchOpen;
   const resultsEl = overlay.querySelector('[data-search-results]');
   if (resultsEl) resultsEl.innerHTML = searchOpen ? renderSearchPanel(store.get(), searchQuery) : '';
+}
+
+// WHO's Actors "+" picker (Focus/Bystanders, workspace/index.js) — same
+// static-skeleton/targeted-update shape as renderSearchOverlay above.
+// Candidates are always NPCs; 'bystander' mode additionally excludes
+// whoever's already on the current scene's bystander list.
+function renderEntityPickerOverlay() {
+  const overlay = root && root.querySelector('[data-entity-picker-overlay]');
+  if (!overlay) return;
+  overlay.hidden = !entityPicker;
+  const resultsEl = overlay.querySelector('[data-entity-picker-results]');
+  if (!resultsEl) return;
+  if (!entityPicker) { resultsEl.innerHTML = ''; return; }
+  const doc = store.get();
+  const scenes = doc.scenes || [];
+  const scene = scenes[scenes.length - 1];
+  const excludeIds = entityPicker.mode === 'bystander' && scene ? new Set(scene.bystanderIds || []) : new Set();
+  const query = (entityPicker.query || '').trim().toLowerCase();
+  const candidates = listEntities(doc, ['npc'])
+    .filter((n) => !excludeIds.has(n.id))
+    .filter((n) => !query || (n.name || '').toLowerCase().includes(query))
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  resultsEl.innerHTML = candidates.length
+    ? candidates.map((n) => `<button type="button" class="entity-picker-row" data-entity-picker-select="${escapeHtml(n.id)}">${escapeHtml(n.name || 'Unnamed')}</button>`).join('')
+    : '<p class="dim small">No matching NPCs.</p>';
 }
 
 // The dice roll window (performFieldRoll's replacement for a plain toast) —

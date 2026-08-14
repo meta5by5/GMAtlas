@@ -14,7 +14,8 @@ import { getCurrentWhereLocations, factionsPresentAt, factionsInRegion } from '.
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { buildMentionEditorHTML, richToolbarHTML, toolbarCollapsed } from '../mentionEditor.js';
 import { renderFactionEvents } from '../drawers/factionEvents.js';
-import { CONFLICT_STATUS_OPTIONS } from '../drawers/index.js';
+import { CONFLICT_STATUS_OPTIONS, helpToggle } from '../drawers/index.js';
+import { getGalleryImage } from '../../domain/gallery.js';
 import { openForeshadowing } from '../../domain/foreshadowing.js';
 import { WORLD_FLAG_VALUES, WORLD_FLAG_VALUE_LABEL } from '../../domain/worldFlags.js';
 import { composeNarrativeDraft, gatherSceneContext } from '../../domain/copilot.js';
@@ -22,6 +23,14 @@ import { getNpcSceneState } from '../../domain/scenes.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// Companion to imported helpToggle (drawers/index.js) — that module keeps
+// its own helpBody private, so this is a local equivalent reading the same
+// shared, flat `ui.helpOpen` Set. `text` is already-escaped/trusted HTML,
+// matching helpBody's own contract.
+function wsHelpBody(key, text, ui) {
+  return (ui && ui.helpOpen && ui.helpOpen.has(key)) ? `<p class="dim small help-text">${text}</p>` : '';
+}
 
 const INTENTS = ['Discovery', 'Travel', 'Social encounter', 'Investigation', 'Resource pressure', 'Combat pressure', 'Moral choice', 'Faction complication', 'Exploration hazard', 'Trade opportunity'];
 
@@ -61,12 +70,14 @@ function dashboardSection(key, title, lead, bodyHtml, doc, ui) {
     .replace(/\s+/g, ' ')
     .trim();
   const summary = rawSummary.length > 70 ? `${rawSummary.slice(0, 70)}…` : rawSummary;
+  const helpKey = `dash:${key}`;
   return `<section class="dashboard-section" data-dashboard-section="${esc(key)}">
     <div class="section-head-row">
       <button type="button" class="btn ghost sm dashboard-section-toggle" data-dashboard-section-toggle="${esc(key)}">${expanded ? '▾' : '▸'} ${esc(title)}</button>
+      ${expanded && lead ? helpToggle(helpKey) : ''}
       ${!expanded && summary ? `<span class="dim small dashboard-section-summary">${esc(summary)}</span>` : ''}
     </div>
-    ${expanded ? `<p class="lead dashboard-section-lead">${esc(lead)}</p><div class="dashboard-section-body">${bodyHtml}</div>` : ''}
+    ${expanded ? `${wsHelpBody(helpKey, esc(lead), ui)}<div class="dashboard-section-body">${bodyHtml}</div>` : ''}
   </section>`;
 }
 
@@ -97,28 +108,46 @@ function oracleFieldRow(label, value, rollAttr, fieldAttr) {
   </div>`;
 }
 
-// One NPC's scene-scoped card (docs/adr/0041 Phase 13b) — collapsed to
-// just its name chip by default (ui.expandedSceneNpcs, ephemeral),
-// expanding to the already-existing permanent `currentGoal` field
-// (entities.js, reused as-is) plus the 5 new scene-scoped fields
-// (Disposition/Motivation/Threat Rank/Challenges/Opportunities), each
-// oracle-seedable and edited in place. `removable` (Bystanders only —
-// Protagonists/Antagonists are derived from WHO's own @mentions + the
-// #character tag, not a GM-curated list, so there's nothing to remove
-// them FROM) adds a ✕ that drops the NPC from this scene's bystander list
-// without touching the entity itself.
-function npcSceneCard(doc, ui, scene, npc, { removable = false } = {}) {
-  const expanded = ((ui && ui.expandedSceneNpcs) || new Set()).has(npc.id);
+// Read-only, mention-style thumbnail for an NPC "Actor" (Focus/
+// Protagonists/Antagonists/Bystanders — "USER CHANGES" WHO redesign,
+// replacing the old always-visible name-chip rows). The thumbnail itself
+// only opens the entity (data-open-entity, same as any other mention
+// click); scene-scoped controls (the 5-field expand toggle, Bystanders'
+// remove) sit below it in their own row so they never intercept that
+// click. `expandable`/`expanded` gate the scene-detail toggle — Focus's
+// own mentioned-NPCs row passes neither, since a mention alone carries no
+// scene-scoped state to expand.
+function actorThumb(doc, npc, { removable = false, expandable = false, expanded = false } = {}) {
+  const img = npc.thumbnailId ? getGalleryImage(doc, npc.thumbnailId) : null;
+  const photo = img
+    ? `<img class="actor-thumb-photo" src="${esc(img.dataUrl)}" alt="">`
+    : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((npc.name || '?').trim().slice(0, 1).toUpperCase())}</span>`;
+  return `<div class="actor-thumb-wrap">
+    <button type="button" class="actor-thumb" data-open-entity="${esc(npc.id)}" title="${esc(npc.name || 'Unnamed')}">
+      ${photo}<span class="actor-thumb-name">${esc(npc.name || 'Unnamed')}</span>
+    </button>
+    ${(removable || expandable) ? `<span class="actor-thumb-actions">
+      ${expandable ? `<button type="button" class="icon-btn" data-scene-npc-toggle="${esc(npc.id)}" title="${expanded ? 'Collapse scene details' : 'Scene details'}">${expanded ? '▾' : '▸'}</button>` : ''}
+      ${removable ? `<button type="button" class="icon-btn" data-scene-bystander-remove="${esc(npc.id)}" title="Remove from this scene">✕</button>` : ''}
+    </span>` : ''}
+  </div>`;
+}
+
+// An expanded NPC's scene-scoped detail body (the already-existing
+// permanent `currentGoal` field, entities.js, reused as-is, plus the 5
+// scene-scoped fields — Disposition/Motivation/Threat Rank/Challenges/
+// Opportunities — each oracle-seedable and edited in place). Split out
+// from the thumbnail itself (actorThumb, above) so the thumbnail row
+// stays compact and a detail body, when toggled open, renders full-width
+// below the whole row instead of cramped inside one flex item.
+function npcSceneDetailBody(doc, ui, scene, npc) {
   const state = getNpcSceneState(scene, npc.id);
-  return `<div class="npc-scene-card">
+  return `<div class="npc-scene-card npc-scene-card-detail">
     <div class="section-head-row">
       <button type="button" class="entity-chip" data-open-entity="${esc(npc.id)}">${esc(npc.name || 'Unnamed')}</button>
-      <span class="npc-scene-card-actions">
-        ${removable ? `<button type="button" class="icon-btn" data-scene-bystander-remove="${esc(npc.id)}" title="Remove from this scene">✕</button>` : ''}
-        <button type="button" class="icon-btn" data-scene-npc-toggle="${esc(npc.id)}" title="${expanded ? 'Collapse' : 'Expand'}">${expanded ? '▾' : '▸'}</button>
-      </span>
+      <button type="button" class="icon-btn" data-scene-npc-toggle="${esc(npc.id)}" title="Collapse">▾</button>
     </div>
-    ${expanded ? `<div class="npc-scene-card-body">
+    <div class="npc-scene-card-body">
       <label class="field-label sm">Current goal
         <input type="text" data-npc-current-goal="${esc(npc.id)}" value="${esc(npc.currentGoal || '')}" placeholder="What do they want right now?">
       </label>
@@ -127,20 +156,22 @@ function npcSceneCard(doc, ui, scene, npc, { removable = false } = {}) {
       ${oracleFieldRow('Threat Rank', state.threatRank.value, `data-scene-npc-roll="${esc(npc.id)}::threatRank"`, `data-scene-npc-field="${esc(npc.id)}::threatRank"`)}
       ${oracleFieldRow('Challenges', state.challenges.value, `data-scene-npc-roll="${esc(npc.id)}::challenges"`, `data-scene-npc-field="${esc(npc.id)}::challenges"`)}
       ${oracleFieldRow('Opportunities', state.opportunities.value, `data-scene-npc-roll="${esc(npc.id)}::opportunities"`, `data-scene-npc-field="${esc(npc.id)}::opportunities"`)}
-    </div>` : ''}
+    </div>
   </div>`;
 }
 
-// WHO's three scene-scoped NPC groups (docs/adr/0041 Phase 13b) —
-// Protagonists (#character-tagged NPCs mentioned in WHO's Focus) /
-// Antagonists (every other NPC mentioned in WHO's Focus) are DERIVED
-// live from gatherSceneContext's whoEntities + the existing tag
-// mechanism, never stored — the same "Focus text is the single source of
-// truth for who's in the scene" convention WHO/WHERE's own redesign
-// already established. Bystanders are the one GM-curated list (there's
-// no safe existing query for "physically nearby but unmentioned"). All
-// three need an active scene to hang per-NPC state on — before the first
-// "Continue Story," there's nothing to track yet.
+// WHO's three scene-scoped NPC groups (docs/adr/0041 Phase 13b; thumbnail
+// redesign per direct request) — Protagonists (#character-tagged NPCs
+// mentioned in WHO's Focus) / Antagonists (every other NPC mentioned in
+// WHO's Focus) are DERIVED live from gatherSceneContext's whoEntities +
+// the existing tag mechanism, never stored — the same "Focus text is the
+// single source of truth for who's in the scene" convention WHO/WHERE's
+// own redesign already established, so neither gets its own add control.
+// Bystanders are the one GM-curated list (there's no safe existing query
+// for "physically nearby but unmentioned") and gets the "+" entity picker
+// (data-entity-picker-open="bystander", shell.js) in place of the old
+// native <select>. All three need an active scene to hang per-NPC state
+// on — before the first "Continue Story," there's nothing to track yet.
 function npcSceneGroupsBlock(doc, ui) {
   const scenes = doc.scenes || [];
   if (!scenes.length) return '<div class="ws-placeholder">Continue Story (Advisor) to start a scene — NPC roles and scene-specific details track per scene.</div>';
@@ -150,25 +181,32 @@ function npcSceneGroupsBlock(doc, ui) {
   const antagonists = ctx.whoEntities.filter((e) => e.type === 'npc' && !(e.tags || []).includes('character'));
   const bystanderIds = scene.bystanderIds || [];
   const bystanders = bystanderIds.map((id) => getEntity(doc, id)).filter(Boolean);
-  const bystanderCandidates = listEntities(doc, ['npc']).filter((n) => !bystanderIds.includes(n.id));
+  const expandedSet = (ui && ui.expandedSceneNpcs) || new Set();
 
-  const group = (label, hint, npcs, opts) => `<div class="workspace-mini-section npc-scene-group">
-    <span class="field-label-static">${esc(label)} (${npcs.length})</span>
-    <p class="dim small">${esc(hint)}</p>
-    ${npcs.length ? npcs.map((n) => npcSceneCard(doc, ui, scene, n, opts)).join('') : '<p class="dim small">None yet.</p>'}
+  const group = (label, helpKey, hint, npcs, opts) => `<div class="workspace-mini-section npc-scene-group">
+    <div class="section-head-row">
+      <span class="field-label-static">${esc(label)} (${npcs.length})</span>
+      ${helpToggle(helpKey)}
+    </div>
+    ${wsHelpBody(helpKey, esc(hint), ui)}
+    ${npcs.length ? `<div class="actor-thumb-row">${npcs.map((n) => actorThumb(doc, n, { ...opts, expandable: true, expanded: expandedSet.has(n.id) })).join('')}</div>` : '<p class="dim small">None yet.</p>'}
+    ${npcs.filter((n) => expandedSet.has(n.id)).map((n) => npcSceneDetailBody(doc, ui, scene, n)).join('')}
   </div>`;
 
   return `
-    ${group('Protagonists', "NPCs mentioned in WHO's Focus, tagged #character.", protagonists)}
-    ${group('Antagonists', "Every other NPC mentioned in WHO's Focus.", antagonists)}
+    ${group('Protagonists', 'who:protagonists', "NPCs mentioned in WHO's Focus, tagged #character.", protagonists)}
+    ${group('Antagonists', 'who:antagonists', "Every other NPC mentioned in WHO's Focus.", antagonists)}
     <div class="workspace-mini-section npc-scene-group">
-      <span class="field-label-static">Bystanders (${bystanders.length})</span>
-      <p class="dim small">Observers you've added to this scene — react to events, not directly involved.</p>
-      ${bystanders.length ? bystanders.map((n) => npcSceneCard(doc, ui, scene, n, { removable: true })).join('') : '<p class="dim small">None yet.</p>'}
-      ${bystanderCandidates.length ? `<select data-scene-bystander-add>
-        <option value="">— add a bystander —</option>
-        ${bystanderCandidates.map((n) => `<option value="${esc(n.id)}">${esc(n.name || 'Unnamed')}</option>`).join('')}
-      </select>` : '<p class="dim small">No other NPCs exist yet to add.</p>'}
+      <div class="section-head-row">
+        <span class="field-label-static">Bystanders (${bystanders.length})</span>
+        <span class="entity-chip-row">
+          <button type="button" class="icon-btn" data-entity-picker-open="bystander" title="Add a bystander">＋</button>
+          ${helpToggle('who:bystanders')}
+        </span>
+      </div>
+      ${wsHelpBody('who:bystanders', "Observers you've added to this scene — react to events, not directly involved.", ui)}
+      ${bystanders.length ? `<div class="actor-thumb-row">${bystanders.map((n) => actorThumb(doc, n, { removable: true, expandable: true, expanded: expandedSet.has(n.id) })).join('')}</div>` : '<p class="dim small">None yet.</p>'}
+      ${bystanders.filter((n) => expandedSet.has(n.id)).map((n) => npcSceneDetailBody(doc, ui, scene, n)).join('')}
     </div>`;
 }
 
@@ -376,10 +414,23 @@ function dashboardTrackersBlock(doc) {
   </div>`;
 }
 
+// WHO's Focus keeps its free-text @mention editor as the source of truth
+// (composeNarrativeDraft/gatherSceneContext both read it) — the "+" picker
+// (data-entity-picker-open="focus", shell.js) is an ADDITIONAL, faster way
+// to insert a mention, not a replacement for typing one, and the thumbnail
+// row below just mirrors whichever NPCs are currently mentioned (direct
+// request). WHERE/WHY reuse this same field with no picker/thumbnails —
+// only WHO asked for the Actors treatment.
 function summaryField(key, val, placeholder, doc, ui) {
   const toolbarKey = `${key}:summary`;
-  return `<div class="field-label">Focus
+  const mentionedNpcs = key === 'who' ? gatherSceneContext(doc).whoEntities.filter((e) => e.type === 'npc') : [];
+  return `<div class="field-label">
+    <div class="section-head-row">
+      <span>Focus</span>
+      ${key === 'who' ? `<button type="button" class="icon-btn" data-entity-picker-open="focus" title="Add NPC to Focus">＋</button>` : ''}
+    </div>
     <div class="rich-field">${richToolbarHTML(toolbarKey, toolbarCollapsed(doc, ui, toolbarKey))}<div class="mention-editor" contenteditable="true" data-ctx="${key}.summary" data-placeholder="${esc(placeholder)}">${buildMentionEditorHTML(doc, val)}</div></div>
+    ${mentionedNpcs.length ? `<div class="actor-thumb-row">${mentionedNpcs.map((n) => actorThumb(doc, n)).join('')}</div>` : ''}
   </div>`;
 }
 

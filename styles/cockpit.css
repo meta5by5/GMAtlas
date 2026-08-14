@@ -606,6 +606,22 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .npc-scene-card-body { margin-top: var(--sp-2); display: flex; flex-direction: column; gap: var(--sp-2); }
 .oracle-field-row { display: grid; grid-template-columns: auto 1.6rem 1fr; align-items: center; gap: var(--sp-2); }
 .oracle-field-row input { width: 100%; }
+/* Actor thumbnails (Composer WHO redesign) — a mention-style, read-only
+   photo+name button for Focus/Protagonists/Antagonists/Bystanders, replacing
+   the old always-visible chip rows. Sized well below .gallery-thumb-circle's
+   5rem so several fit per row. .actor-thumb-actions holds the optional
+   scene-detail expand toggle (Protagonists/Antagonists/Bystanders only) and
+   remove button (Bystanders only) below the thumbnail itself, not on it, so
+   the thumbnail's own click always means "open like a mention". */
+.actor-thumb-row { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-2); }
+.actor-thumb-wrap { display: flex; flex-direction: column; align-items: center; width: 4.5rem; }
+.actor-thumb { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; background: none; border: none; color: var(--text); padding: 0; width: 100%; }
+.actor-thumb:hover .actor-thumb-name { color: var(--accent); }
+.actor-thumb-photo { width: 2.75rem; height: 2.75rem; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); background: var(--bg-inset); }
+.actor-thumb-photo-empty { display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 600; color: var(--text-dim); }
+.actor-thumb-name { font-size: 0.7rem; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.actor-thumb-actions { display: flex; gap: 0.1rem; margin-top: 0.1rem; }
+.npc-scene-card-detail { width: 100%; }
 .location-details { border-top: 1px dashed var(--border); padding-top: var(--sp-2); }
 .location-details-title { font-style: italic; color: var(--text-dim); margin: var(--sp-2) 0; }
 /* Latest Scene's split fields (Opening/Driver/Clue/Complication/Decision
@@ -1429,6 +1445,13 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
   box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden;
 }
 .search-panel-head { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-3); border-bottom: 1px solid var(--border); }
+/* Entity picker overlay (Composer WHO redesign) — reuses the .mc-search-
+   overlay/.search-panel/.search-panel-head/.search-input/.search-results
+   shell wholesale (same centered-modal shape, same typed-filter behavior);
+   only the candidate row differs from a search result, so it's the only
+   new rule needed here. */
+.entity-picker-row { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--text); padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); font-size: 0.85rem; }
+.entity-picker-row:hover { background: var(--tier2-bg); color: var(--accent); }
 .search-input { flex: 1; font-size: 1rem; padding: 0.5rem 0.7rem; background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); }
 .search-results { overflow-y: auto; padding: var(--sp-2) var(--sp-3) var(--sp-3); }
 .search-group-head { margin: var(--sp-3) 0 var(--sp-1); font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
