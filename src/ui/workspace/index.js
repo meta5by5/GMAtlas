@@ -18,7 +18,7 @@ import { CONFLICT_STATUS_OPTIONS, helpToggle } from '../drawers/index.js';
 import { getGalleryImage } from '../../domain/gallery.js';
 import { openForeshadowing } from '../../domain/foreshadowing.js';
 import { WORLD_FLAG_VALUES, WORLD_FLAG_VALUE_LABEL } from '../../domain/worldFlags.js';
-import { composeNarrativeDraft, gatherSceneContext } from '../../domain/copilot.js';
+import { composeNarrativeDraft } from '../../domain/copilot.js';
 import { getNpcSceneState } from '../../domain/scenes.js';
 
 const esc = (s) => String(s == null ? '' : s)
@@ -81,14 +81,21 @@ function dashboardSection(key, title, lead, bodyHtml, doc, ui) {
   </section>`;
 }
 
+// WHO no longer has a Focus free-text field (direct follow-up request —
+// entity selection happens exclusively through each Actor group's own
+// "+" picker below, never by typing an @mention into a textbox). "+ New
+// NPC"/"+ New Faction" (formerly whoEntityPicker's quick-create row,
+// otherwise now-dead since that function's tag-listbox/mention-insert
+// machinery had no reason to exist without Focus) move up next to
+// "Introduce NPC" so creating a brand-new entity is still one click away.
 function whoSectionBody(doc, ui) {
   return `
-    ${summaryField('who', doc.context.who.summary, 'Party, NPCs, factions present…', doc, ui)}
     <div class="shift-actions">
       <button class="chip" data-shift-prompt="Introduce NPC">＋ Introduce NPC</button>
+      <button class="chip" data-entity-add="npc">＋ New NPC</button>
+      <button class="chip" data-entity-add="faction">＋ New Faction</button>
     </div>
     ${npcSceneGroupsBlock(doc, ui)}
-    ${whoEntityPicker(doc, ui)}
     ${factionsActiveNearbyBlock(doc)}
     ${activeConflictLocationPicker(doc)}`;
 }
@@ -108,27 +115,31 @@ function oracleFieldRow(label, value, rollAttr, fieldAttr) {
   </div>`;
 }
 
-// Read-only, mention-style thumbnail for an NPC "Actor" (Focus/
-// Protagonists/Antagonists/Bystanders — "USER CHANGES" WHO redesign,
-// replacing the old always-visible name-chip rows). The thumbnail itself
-// only opens the entity (data-open-entity, same as any other mention
-// click); scene-scoped controls (the 5-field expand toggle, Bystanders'
-// remove) sit below it in their own row so they never intercept that
-// click. `expandable`/`expanded` gate the scene-detail toggle — Focus's
-// own mentioned-NPCs row passes neither, since a mention alone carries no
-// scene-scoped state to expand.
-function actorThumb(doc, npc, { removable = false, expandable = false, expanded = false } = {}) {
+// Read-only, mention-style thumbnail for an NPC "Actor" (Protagonists/
+// Antagonists/Bystanders — WHO redesign, replacing the old always-visible
+// name-chip rows AND the free-text Focus mention-editor). The thumbnail
+// itself only opens the entity (data-open-entity, same as any other
+// mention click); scene-scoped controls (the 5-field expand toggle, the
+// remove button) sit below it in their own row so they never intercept
+// that click. `removeKind` ('protagonist'|'antagonist'|'bystander', or
+// null) picks which data-scene-*-remove attribute to render — all three
+// Actor lists are equally GM-curated now (scenes.js), so all three are
+// removable.
+function actorThumb(doc, npc, { removeKind = null, expandable = false, expanded = false } = {}) {
   const img = npc.thumbnailId ? getGalleryImage(doc, npc.thumbnailId) : null;
   const photo = img
     ? `<img class="actor-thumb-photo" src="${esc(img.dataUrl)}" alt="">`
     : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((npc.name || '?').trim().slice(0, 1).toUpperCase())}</span>`;
+  const removeAttr = removeKind === 'protagonist' ? 'data-scene-protagonist-remove'
+    : removeKind === 'antagonist' ? 'data-scene-antagonist-remove'
+    : removeKind === 'bystander' ? 'data-scene-bystander-remove' : null;
   return `<div class="actor-thumb-wrap">
     <button type="button" class="actor-thumb" data-open-entity="${esc(npc.id)}" title="${esc(npc.name || 'Unnamed')}">
       ${photo}<span class="actor-thumb-name">${esc(npc.name || 'Unnamed')}</span>
     </button>
-    ${(removable || expandable) ? `<span class="actor-thumb-actions">
+    ${(removeAttr || expandable) ? `<span class="actor-thumb-actions">
       ${expandable ? `<button type="button" class="icon-btn" data-scene-npc-toggle="${esc(npc.id)}" title="${expanded ? 'Collapse scene details' : 'Scene details'}">${expanded ? '▾' : '▸'}</button>` : ''}
-      ${removable ? `<button type="button" class="icon-btn" data-scene-bystander-remove="${esc(npc.id)}" title="Remove from this scene">✕</button>` : ''}
+      ${removeAttr ? `<button type="button" class="icon-btn" ${removeAttr}="${esc(npc.id)}" title="Remove from this scene">✕</button>` : ''}
     </span>` : ''}
   </div>`;
 }
@@ -160,54 +171,43 @@ function npcSceneDetailBody(doc, ui, scene, npc) {
   </div>`;
 }
 
-// WHO's three scene-scoped NPC groups (docs/adr/0041 Phase 13b; thumbnail
-// redesign per direct request) — Protagonists (#character-tagged NPCs
-// mentioned in WHO's Focus) / Antagonists (every other NPC mentioned in
-// WHO's Focus) are DERIVED live from gatherSceneContext's whoEntities +
-// the existing tag mechanism, never stored — the same "Focus text is the
-// single source of truth for who's in the scene" convention WHO/WHERE's
-// own redesign already established, so neither gets its own add control.
-// Bystanders are the one GM-curated list (there's no safe existing query
-// for "physically nearby but unmentioned") and gets the "+" entity picker
-// (data-entity-picker-open="bystander", shell.js) in place of the old
-// native <select>. All three need an active scene to hang per-NPC state
-// on — before the first "Continue Story," there's nothing to track yet.
+// WHO's three scene-scoped Actor groups (docs/adr/0041 Phase 13b; WHO
+// redesign, direct follow-up request — Focus's free-text @mention editor
+// is gone, along with the old "derive Protagonists/Antagonists by parsing
+// it" mechanism). All three — Protagonists/Antagonists/Bystanders — are
+// now equally GM-curated id lists on the current scene (scenes.js), each
+// with its own "+" entity picker (data-entity-picker-open="protagonist"|
+// "antagonist"|"bystander", shell.js) filtered to NPCs (Protagonists to
+// #character-tagged NPCs, Antagonists to everyone else, Bystanders to any
+// NPC) and its own remove control on every thumbnail. All three need an
+// active scene to hang per-NPC state on — before the first "Continue
+// Story," there's nothing to track yet.
 function npcSceneGroupsBlock(doc, ui) {
   const scenes = doc.scenes || [];
   if (!scenes.length) return '<div class="ws-placeholder">Continue Story (Advisor) to start a scene — NPC roles and scene-specific details track per scene.</div>';
   const scene = scenes[scenes.length - 1];
-  const ctx = gatherSceneContext(doc);
-  const protagonists = ctx.whoEntities.filter((e) => e.type === 'npc' && (e.tags || []).includes('character'));
-  const antagonists = ctx.whoEntities.filter((e) => e.type === 'npc' && !(e.tags || []).includes('character'));
-  const bystanderIds = scene.bystanderIds || [];
-  const bystanders = bystanderIds.map((id) => getEntity(doc, id)).filter(Boolean);
+  const protagonists = (scene.protagonistIds || []).map((id) => getEntity(doc, id)).filter(Boolean);
+  const antagonists = (scene.antagonistIds || []).map((id) => getEntity(doc, id)).filter(Boolean);
+  const bystanders = (scene.bystanderIds || []).map((id) => getEntity(doc, id)).filter(Boolean);
   const expandedSet = (ui && ui.expandedSceneNpcs) || new Set();
 
-  const group = (label, helpKey, hint, npcs, opts) => `<div class="workspace-mini-section npc-scene-group">
+  const group = (label, singular, helpKey, hint, npcs, pickerMode, removeKind) => `<div class="workspace-mini-section npc-scene-group">
     <div class="section-head-row">
       <span class="field-label-static">${esc(label)} (${npcs.length})</span>
-      ${helpToggle(helpKey)}
+      <span class="entity-chip-row">
+        <button type="button" class="icon-btn" data-entity-picker-open="${esc(pickerMode)}" title="Add ${esc(singular)}">＋</button>
+        ${helpToggle(helpKey)}
+      </span>
     </div>
     ${wsHelpBody(helpKey, esc(hint), ui)}
-    ${npcs.length ? `<div class="actor-thumb-row">${npcs.map((n) => actorThumb(doc, n, { ...opts, expandable: true, expanded: expandedSet.has(n.id) })).join('')}</div>` : '<p class="dim small">None yet.</p>'}
+    ${npcs.length ? `<div class="actor-thumb-row">${npcs.map((n) => actorThumb(doc, n, { removeKind, expandable: true, expanded: expandedSet.has(n.id) })).join('')}</div>` : '<p class="dim small">None yet.</p>'}
     ${npcs.filter((n) => expandedSet.has(n.id)).map((n) => npcSceneDetailBody(doc, ui, scene, n)).join('')}
   </div>`;
 
   return `
-    ${group('Protagonists', 'who:protagonists', "NPCs mentioned in WHO's Focus, tagged #character.", protagonists)}
-    ${group('Antagonists', 'who:antagonists', "Every other NPC mentioned in WHO's Focus.", antagonists)}
-    <div class="workspace-mini-section npc-scene-group">
-      <div class="section-head-row">
-        <span class="field-label-static">Bystanders (${bystanders.length})</span>
-        <span class="entity-chip-row">
-          <button type="button" class="icon-btn" data-entity-picker-open="bystander" title="Add a bystander">＋</button>
-          ${helpToggle('who:bystanders')}
-        </span>
-      </div>
-      ${wsHelpBody('who:bystanders', "Observers you've added to this scene — react to events, not directly involved.", ui)}
-      ${bystanders.length ? `<div class="actor-thumb-row">${bystanders.map((n) => actorThumb(doc, n, { removable: true, expandable: true, expanded: expandedSet.has(n.id) })).join('')}</div>` : '<p class="dim small">None yet.</p>'}
-      ${bystanders.filter((n) => expandedSet.has(n.id)).map((n) => npcSceneDetailBody(doc, ui, scene, n)).join('')}
-    </div>`;
+    ${group('Protagonists', 'a Protagonist', 'who:protagonists', "PCs and close allies — pick from NPCs tagged #character.", protagonists, 'protagonist', 'protagonist')}
+    ${group('Antagonists', 'an Antagonist', 'who:antagonists', 'Opposition and complicating NPCs in this scene.', antagonists, 'antagonist', 'antagonist')}
+    ${group('Bystanders', 'a Bystander', 'who:bystanders', "Observers you've added to this scene — react to events, not directly involved.", bystanders, 'bystander', 'bystander')}`;
 }
 
 // WHERE's docked-Faction-Events side panel (whole-card relocation, direct
@@ -414,23 +414,14 @@ function dashboardTrackersBlock(doc) {
   </div>`;
 }
 
-// WHO's Focus keeps its free-text @mention editor as the source of truth
-// (composeNarrativeDraft/gatherSceneContext both read it) — the "+" picker
-// (data-entity-picker-open="focus", shell.js) is an ADDITIONAL, faster way
-// to insert a mention, not a replacement for typing one, and the thumbnail
-// row below just mirrors whichever NPCs are currently mentioned (direct
-// request). WHERE/WHY reuse this same field with no picker/thumbnails —
-// only WHO asked for the Actors treatment.
+// WHERE/WHY's free-text Focus field (rich @mention editor) — WHO used to
+// share this too, but no longer has a Focus field at all (direct follow-
+// up request: entity selection in WHO happens exclusively through each
+// Actor group's own "+" picker, never by typing into a textbox).
 function summaryField(key, val, placeholder, doc, ui) {
   const toolbarKey = `${key}:summary`;
-  const mentionedNpcs = key === 'who' ? gatherSceneContext(doc).whoEntities.filter((e) => e.type === 'npc') : [];
-  return `<div class="field-label">
-    <div class="section-head-row">
-      <span>Focus</span>
-      ${key === 'who' ? `<button type="button" class="icon-btn" data-entity-picker-open="focus" title="Add NPC to Focus">＋</button>` : ''}
-    </div>
+  return `<div class="field-label">Focus
     <div class="rich-field">${richToolbarHTML(toolbarKey, toolbarCollapsed(doc, ui, toolbarKey))}<div class="mention-editor" contenteditable="true" data-ctx="${key}.summary" data-placeholder="${esc(placeholder)}">${buildMentionEditorHTML(doc, val)}</div></div>
-    ${mentionedNpcs.length ? `<div class="actor-thumb-row">${mentionedNpcs.map((n) => actorThumb(doc, n)).join('')}</div>` : ''}
   </div>`;
 }
 
@@ -483,43 +474,6 @@ function whereLocationPicker(doc, ui) {
         <div class="entity-tag-picker-candidates"><span class="field-label-static">Matching locations</span>${candidatePanel}</div>
       </div>
       <div class="entity-add-row"><button class="chip" data-where-add-location>＋ New Location</button></div>
-    </div>`;
-}
-
-// WHO tab: the exact same tag-picker -> listbox -> select-to-mention
-// pattern as WHERE's whereLocationPicker above, applied to people instead
-// of places —
-// NPC and Faction tags pooled together (not a separate type-filter chip
-// row; kept as close to WHERE's own shape as possible, one type at a time
-// was WHERE's whole design, this just widens "one type" to "two related
-// ones"). "Introduce NPC" (the data-shift-prompt chip above this in
-// whoSectionBody) is left as-is — narrating a brand-new introduction in
-// prose is a different action from mentioning an entity that already
-// exists.
-function whoEntityPicker(doc, ui) {
-  const tagFilter = ui.whoTagFilter || null;
-  const vocab = [...new Set([...listTagVocabulary(doc, 'npc'), ...listTagVocabulary(doc, 'faction')])].sort((a, b) => a.localeCompare(b));
-  const tagListbox = vocab.length
-    ? `<select size="${Math.min(8, Math.max(3, vocab.length))}" data-who-tag-select>
-        <option value="" ${!tagFilter ? 'selected' : ''}>— all tags —</option>
-        ${vocab.map((t) => `<option value="${esc(t)}" ${t === tagFilter ? 'selected' : ''}>#${esc(t)}</option>`).join('')}
-      </select>`
-    : '<p class="ws-placeholder">No NPC/Faction tags yet — tag one in Cast to start filtering.</p>';
-
-  const allPeople = (doc.entities.items || []).filter((e) => e.type === 'npc' || e.type === 'faction');
-  const candidates = tagFilter ? allPeople.filter((e) => (e.tags || []).includes(tagFilter)) : allPeople;
-  const candidatePanel = candidateListbox(candidates, 'data-insert-who-mention-select', tagFilter, 'NPCs/Factions');
-
-  return `
-    <div class="entity-tag-picker">
-      <div class="entity-tag-picker-row">
-        <div class="entity-tag-picker-tags"><span class="field-label-static">NPC/Faction tags</span>${tagListbox}</div>
-        <div class="entity-tag-picker-candidates"><span class="field-label-static">Matching people</span>${candidatePanel}</div>
-      </div>
-      <div class="entity-add-row">
-        <button class="chip" data-entity-add="npc">＋ New NPC</button>
-        <button class="chip" data-entity-add="faction">＋ New Faction</button>
-      </div>
     </div>`;
 }
 

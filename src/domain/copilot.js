@@ -5,7 +5,7 @@
 // signature. Phase 0 ships a competent heuristic seeded from the ChatGPT design.
 
 import { overlookedThreads, listThreads } from './threads.js';
-import { listFlaggedRelationships, findMentions, listEntities } from './entities.js';
+import { listFlaggedRelationships, listEntities, getEntity } from './entities.js';
 import { factionsUnderPressure } from './factions.js';
 import { factionsWithGoalNearCompletion, isFactionRoundDue, getCurrentWhereLocations, factionsPresentAt } from './factionTurnEngine.js';
 import { expeditionsInDanger } from './expeditions.js';
@@ -186,7 +186,15 @@ export function advise(doc) {
 export function gatherSceneContext(campaign) {
   const whoText = (campaign.context && campaign.context.who && campaign.context.who.summary) || '';
   const whereText = (campaign.context && campaign.context.where && campaign.context.where.summary) || '';
-  const whoEntities = findMentions(campaign, whoText).filter((e) => e.type === 'npc' || e.type === 'faction');
+  // WHO's Actors (docs/adr/0041 WHO redesign) — Protagonists/Antagonists/
+  // Bystanders are GM-curated id lists on the current scene (scenes.js),
+  // not parsed from free text (WHO's old Focus mention-editor is gone).
+  const scenes = campaign.scenes || [];
+  const currentScene = scenes[scenes.length - 1];
+  const actorIds = currentScene
+    ? [...(currentScene.protagonistIds || []), ...(currentScene.antagonistIds || []), ...(currentScene.bystanderIds || [])]
+    : [];
+  const whoEntities = actorIds.map((id) => getEntity(campaign, id)).filter(Boolean);
   const whereLocations = getCurrentWhereLocations(campaign);
   const factionsHere = new Map();
   for (const loc of whereLocations) for (const f of factionsPresentAt(campaign, loc.id)) factionsHere.set(f.id, f);
@@ -199,11 +207,16 @@ export function gatherSceneContext(campaign) {
   const what = (campaign.context && campaign.context.what) || {};
   return {
     whoEntities, whereLocations, conflictsHere, openThreads, foreshadowing, worldFlags, activity,
-    // Raw Focus text (docs/adr/0040 Phase 12f) — whoEntities/whereLocations
-    // above are themselves ALWAYS derived by parsing this exact text, so
-    // it's the true source of "what the GM actually wrote," not just the
-    // entities mentioned inside it. composeNarrativeDraft below uses this
-    // directly instead of re-deriving a synthetic sentence from it.
+    // Raw WHERE Focus text (docs/adr/0040 Phase 12f) — whereLocations above
+    // is itself ALWAYS derived by parsing this exact text, so it's the true
+    // source of "what the GM actually wrote," not just the entities
+    // mentioned inside it. composeNarrativeDraft below uses this directly
+    // instead of re-deriving a synthetic sentence from it. WHO's own
+    // context.who.summary field still exists (schema/migration-safe) but
+    // has no editor in the UI anymore (docs/adr/0041 WHO redesign) — kept
+    // here for any old campaign that still has text in it, but empty on
+    // any campaign using the new Actor-list UI, so it contributes nothing
+    // to composeNarrativeDraft in practice going forward.
     whoSummary: whoText.trim(),
     whereSummary: whereText.trim(),
     factionsHere: Array.from(factionsHere.values()),

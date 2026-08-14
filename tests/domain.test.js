@@ -5085,7 +5085,7 @@ test('advise() names whichever faction signal is actually driving the observatio
 // --- docs/adr/0039: Story Options — cumulative, WHO/WHERE/WHY-aware suggestions
 import { gatherSceneContext, buildStoryOptions, composeNarrativeDraft } from '../src/domain/copilot.js';
 
-test('gatherSceneContext reads WHO/WHERE @mentions, WHERE-scoped factions/conflicts, and open Threads/Foreshadowing/World Flags — all empty/zeroed on a bare campaign', () => {
+test('gatherSceneContext reads WHO Actors from the current scene\'s curated lists, WHERE @mentions, WHERE-scoped factions/conflicts, and open Threads/Foreshadowing/World Flags — all empty/zeroed on a bare campaign', () => {
   const bare = gatherSceneContext(defaultCampaign());
   assert.deepEqual(bare.whoEntities, []);
   assert.deepEqual(bare.whereLocations, []);
@@ -5103,16 +5103,19 @@ test('gatherSceneContext reads WHO/WHERE @mentions, WHERE-scoped factions/confli
   camp = updateEntity(camp, factionId, { agenda: 'Corner the water trade' });
   let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Docking Bay' }));
   camp = updateEntity(camp, factionId, { homeworldId: locId });
-  camp.context.who.summary = 'Talking to @[Rust Cartel]';
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Dock Worker' }));
+  const tables = tablesWithOverrides(camp.oracles?.overrides, camp.settings?.genrePack);
+  const scene = generateScene(camp, tables, makeRng(3));
+  camp.scenes = [scene];
+  camp = addSceneAntagonist(camp, scene.id, npcId);
   camp.context.where.summary = 'At the @[Docking Bay]';
   camp.context.how.activity = 'negotiate';
 
   const ctx = gatherSceneContext(camp);
-  assert.deepEqual(ctx.whoEntities.map((e) => e.id), [factionId]);
+  assert.deepEqual(ctx.whoEntities.map((e) => e.id), [npcId]);
   assert.deepEqual(ctx.whereLocations.map((l) => l.id), [locId]);
   assert.deepEqual(ctx.factionsHere.map((f) => f.id), [factionId]);
   assert.equal(ctx.activity, 'negotiate');
-  assert.equal(ctx.whoSummary, 'Talking to @[Rust Cartel]');
   assert.equal(ctx.whereSummary, 'At the @[Docking Bay]');
 });
 
@@ -5232,7 +5235,7 @@ test('composeNarrativeDraft (docs/adr/0040 Phase 12f fix) uses WHO/WHERE\'s raw 
 });
 
 // --- docs/adr/0041 Phase 13a/13b: Location Details + scene-scoped NPC state ---
-import { getNpcSceneState, addSceneBystander, removeSceneBystander, NPC_SCENE_FIELD_ORACLE_PATH } from '../src/domain/scenes.js';
+import { getNpcSceneState, addSceneBystander, removeSceneBystander, addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, NPC_SCENE_FIELD_ORACLE_PATH } from '../src/domain/scenes.js';
 import { rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField } from '../src/domain/session.js';
 
 test('a location entity defaults sector/objectType (World Profile) and sights/smells/sounds + sensorySource (all null) — nothing required to create one', () => {
@@ -5252,6 +5255,8 @@ test('generateScene seeds npcStates:{} and bystanderIds:[] on every new scene; g
   const tables = tablesWithOverrides(camp.oracles?.overrides, camp.settings?.genrePack);
   const scene = generateScene(camp, tables, makeRng(1));
   assert.deepEqual(scene.npcStates, {});
+  assert.deepEqual(scene.protagonistIds, []);
+  assert.deepEqual(scene.antagonistIds, []);
   assert.deepEqual(scene.bystanderIds, []);
 
   const blank = getNpcSceneState(scene, 'npc_unknown');
@@ -5276,6 +5281,29 @@ test('addSceneBystander/removeSceneBystander: adds deduped, removes just the one
 
   const unchanged = addSceneBystander(camp, 'not-a-real-scene', npcId);
   assert.deepEqual(unchanged.scenes[0].bystanderIds, [], 'no-op on an unknown scene id');
+});
+
+test('addSceneProtagonist/addSceneAntagonist mirror addSceneBystander exactly — own list, deduped add, single remove, no-op on a missing scene', () => {
+  let camp = defaultCampaign();
+  let aliceId; ({ campaign: camp, id: aliceId } = createEntity(camp, { type: 'npc', name: 'Alice' }));
+  let bobId; ({ campaign: camp, id: bobId } = createEntity(camp, { type: 'npc', name: 'Bob' }));
+  const tables = tablesWithOverrides(camp.oracles?.overrides, camp.settings?.genrePack);
+  const scene = generateScene(camp, tables, makeRng(4));
+  camp.scenes = [scene];
+
+  camp = addSceneProtagonist(camp, scene.id, aliceId);
+  camp = addSceneProtagonist(camp, scene.id, aliceId); // dedupe
+  camp = addSceneAntagonist(camp, scene.id, bobId);
+  assert.deepEqual(camp.scenes[0].protagonistIds, [aliceId]);
+  assert.deepEqual(camp.scenes[0].antagonistIds, [bobId]);
+  assert.deepEqual(camp.scenes[0].bystanderIds, [], 'lists are independent — adding a protagonist/antagonist never touches bystanderIds');
+
+  camp = removeSceneProtagonist(camp, scene.id, aliceId);
+  assert.deepEqual(camp.scenes[0].protagonistIds, []);
+  assert.deepEqual(camp.scenes[0].antagonistIds, [bobId], 'removing a protagonist never touches antagonistIds');
+
+  const unchanged = addSceneAntagonist(camp, 'not-a-real-scene', bobId);
+  assert.deepEqual(unchanged.scenes[0].antagonistIds, [bobId], 'no-op on an unknown scene id');
 });
 
 test('rollNpcSceneField picks a real entry from the mapped oracle table and records its source; editNpcSceneField writes an edit back through oracles.overrides ONLY when the field was actually rolled, never for a hand-typed value', () => {

@@ -7,7 +7,7 @@ import { store } from '../core/store.js';
 import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { continueStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField } from '../domain/session.js';
-import { addSceneBystander, removeSceneBystander } from '../domain/scenes.js';
+import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag } from '../domain/oracles.js';
 import { oracleLinkTagsFor } from '../data/entityFieldOracleLinks.js';
@@ -196,8 +196,7 @@ let docRenameOpen = new Set(); // ephemeral — which doc/ref cards are showing 
 let docTagListOpen = false; // ephemeral — collapses the Documents drawer's tag-filter chip row (can get long once many tags exist)
 let journalEditOpen = new Set(); // ephemeral — which journal entries are showing an editable mention-editor instead of their static rendered text
 let whereLocationTagFilter = null; // ephemeral — the Location tag currently selected in the WHERE view's listbox (null = no filter/candidate panel shown)
-let whoTagFilter = null; // ephemeral — same as whereLocationTagFilter, for the WHO view's NPC/Faction tag listbox
-let whyTagFilter = null; // ephemeral — same as whoTagFilter, for the WHY view's NPC/Faction/Conflict tag listbox (docs/adr/0039)
+let whyTagFilter = null; // ephemeral — same as whereLocationTagFilter, for the WHY view's NPC/Faction/Conflict tag listbox (docs/adr/0039)
 let galleryFilter = ''; // ephemeral — Gallery drawer search box
 // Gallery's own "+ Upload" flow (as opposed to an entity's "+ Photo"): the
 // resize already happened (canvas work, ui/imageResize.js) by the time
@@ -274,11 +273,13 @@ let collapsedStatblockGroups = new Set(); // ephemeral — keyed `${entityId}::$
 let recapOpen = false; // ephemeral — collapses the "Previously on..." session recap panel
 let searchOpen = false; // ephemeral — Universal Search overlay
 let searchQuery = '';
-// ephemeral — WHO's Actors "+" entity picker (Focus/Bystanders, workspace/
-// index.js). null when closed; { mode: 'focus'|'bystander', query } when
-// open. 'focus' inserts a mention into who.summary (insertContextMention);
-// 'bystander' calls addSceneBystander for the current scene, excluding
-// whoever's already on it.
+// ephemeral — WHO's Actors "+" entity picker (Protagonists/Antagonists/
+// Bystanders, workspace/index.js). null when closed; { mode, query } when
+// open, mode one of 'protagonist'|'antagonist'|'bystander' — each calls
+// the matching addScene*() for the current scene (scenes.js), excluding
+// whoever's already on that specific list; Protagonists' candidates are
+// further filtered to NPCs tagged #character, Antagonists' to NPCs NOT so
+// tagged (renderEntityPickerOverlay).
 let entityPicker = null;
 let oracleEditorOpen = new Set(); // ephemeral — which oracle tables' entry editors are expanded
 let oracleTagEditorOpen = new Set(); // ephemeral — which oracle tables' TAG editors are expanded (docs/adr/0016), hidden by default
@@ -2081,15 +2082,27 @@ function onClick(ev) {
     if (!sceneId) return;
     return store.update((d) => rollNpcSceneField(d, sceneId, npcId, field));
   }
+  const protagonistRemove = hit('[data-scene-protagonist-remove]');
+  if (protagonistRemove) {
+    const sceneId = currentSceneId();
+    if (!sceneId) return;
+    return store.update((d) => removeSceneProtagonist(d, sceneId, protagonistRemove.dataset.sceneProtagonistRemove));
+  }
+  const antagonistRemove = hit('[data-scene-antagonist-remove]');
+  if (antagonistRemove) {
+    const sceneId = currentSceneId();
+    if (!sceneId) return;
+    return store.update((d) => removeSceneAntagonist(d, sceneId, antagonistRemove.dataset.sceneAntagonistRemove));
+  }
   const bystanderRemove = hit('[data-scene-bystander-remove]');
   if (bystanderRemove) {
     const sceneId = currentSceneId();
     if (!sceneId) return;
     return store.update((d) => removeSceneBystander(d, sceneId, bystanderRemove.dataset.sceneBystanderRemove));
   }
-  // WHO's Actors "+" picker (workspace/index.js summaryField/
-  // npcSceneGroupsBlock) — opens/closes/selects from the shared NPC
-  // picker overlay; see renderEntityPickerOverlay/entityPicker above.
+  // WHO's Actors "+" picker (workspace/index.js's npcSceneGroupsBlock, one
+  // per group) — opens/closes/selects from the shared NPC picker overlay;
+  // see renderEntityPickerOverlay/entityPicker above.
   const entityPickerOpenBtn = hit('[data-entity-picker-open]');
   if (entityPickerOpenBtn) {
     entityPicker = { mode: entityPickerOpenBtn.dataset.entityPickerOpen, query: '' };
@@ -2105,12 +2118,11 @@ function onClick(ev) {
     const id = entityPickerSelectBtn.dataset.entityPickerSelect;
     const mode = entityPicker && entityPicker.mode;
     entityPicker = null;
-    if (mode === 'focus') { insertContextMention('who', id); return; }
-    if (mode === 'bystander') {
-      const sceneId = currentSceneId();
-      if (!sceneId) return renderEntityPickerOverlay();
-      return store.update((d) => addSceneBystander(d, sceneId, id));
-    }
+    const sceneId = currentSceneId();
+    if (!sceneId) return renderEntityPickerOverlay();
+    if (mode === 'protagonist') return store.update((d) => addSceneProtagonist(d, sceneId, id));
+    if (mode === 'antagonist') return store.update((d) => addSceneAntagonist(d, sceneId, id));
+    if (mode === 'bystander') return store.update((d) => addSceneBystander(d, sceneId, id));
     return renderEntityPickerOverlay();
   }
   const locationDetailsToggle = hit('[data-location-details-toggle]');
@@ -2321,17 +2333,16 @@ function onChange(ev) {
   const t = ev.target;
   const whereTagSelect = t.closest('[data-where-tag-select]');
   if (whereTagSelect) { whereLocationTagFilter = whereTagSelect.value || null; return render(); }
-  const whoTagSelect = t.closest('[data-who-tag-select]');
-  if (whoTagSelect) { whoTagFilter = whoTagSelect.value || null; return render(); }
   const whyTagSelect = t.closest('[data-why-tag-select]');
   if (whyTagSelect) { whyTagFilter = whyTagSelect.value || null; return render(); }
-  // WHERE/WHO/WHY's candidates listbox (candidateListbox, workspace/index.js) —
+  // WHERE/WHY's candidates listbox (candidateListbox, workspace/index.js) —
   // picking an option inserts the @mention then resets to the placeholder,
-  // same "pick, act, reset" pattern as data-where-faction-link.
+  // same "pick, act, reset" pattern as data-where-faction-link. (WHO used
+  // to have its own version of this; removed along with Focus's free-text
+  // editor — WHO's Actors now go through the entity-picker overlay below
+  // instead, see entityPicker/renderEntityPickerOverlay.)
   const insertWhereMentionSelect = t.closest('[data-insert-where-mention-select]');
   if (insertWhereMentionSelect) { const id = t.value; t.value = ''; if (id) insertContextMention('where', id); return; }
-  const insertWhoMentionSelect = t.closest('[data-insert-who-mention-select]');
-  if (insertWhoMentionSelect) { const id = t.value; t.value = ''; if (id) insertContextMention('who', id); return; }
   const insertWhyMentionSelect = t.closest('[data-insert-why-mention-select]');
   if (insertWhyMentionSelect) { const id = t.value; t.value = ''; if (id) insertContextMention('why', id); return; }
   // Story Dashboard's per-option "include in the draft" checkbox
@@ -4018,11 +4029,12 @@ function commitMentionField(field) {
   store.update((d) => editContextText(d, key, fieldName, serializeMentionEditor(field)));
 }
 
-// Shared by WHERE's and WHO's tag-picker candidate click (workspace/
-// index.js's whereLocationPicker/whoEntityPicker) — inserts a real
-// @mention for `entityId` at the end of the given context question's
-// Focus field (`key.summary`) and commits it the same way any other
-// mention insertion does.
+// Shared by WHERE's and WHY's tag-picker candidate click (workspace/
+// index.js's whereLocationPicker/whyEntityPicker — WHO's own version was
+// removed along with its Focus field, docs/adr/0041 WHO redesign) —
+// inserts a real @mention for `entityId` at the end of the given context
+// question's Focus field (`key.summary`) and commits it the same way any
+// other mention insertion does.
 function insertContextMention(key, entityId) {
   const ent = getEntity(store.get(), entityId);
   const field = root.querySelector(`[data-ctx="${key}.summary"]`);
@@ -4316,10 +4328,13 @@ function renderEntityPickerOverlay() {
   const doc = store.get();
   const scenes = doc.scenes || [];
   const scene = scenes[scenes.length - 1];
-  const excludeIds = entityPicker.mode === 'bystander' && scene ? new Set(scene.bystanderIds || []) : new Set();
+  const listKey = entityPicker.mode === 'protagonist' ? 'protagonistIds' : entityPicker.mode === 'antagonist' ? 'antagonistIds' : 'bystanderIds';
+  const excludeIds = scene ? new Set(scene[listKey] || []) : new Set();
   const query = (entityPicker.query || '').trim().toLowerCase();
-  const candidates = listEntities(doc, ['npc'])
-    .filter((n) => !excludeIds.has(n.id))
+  let candidates = listEntities(doc, ['npc']).filter((n) => !excludeIds.has(n.id));
+  if (entityPicker.mode === 'protagonist') candidates = candidates.filter((n) => (n.tags || []).includes('character'));
+  if (entityPicker.mode === 'antagonist') candidates = candidates.filter((n) => !(n.tags || []).includes('character'));
+  candidates = candidates
     .filter((n) => !query || (n.name || '').toLowerCase().includes(query))
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   resultsEl.innerHTML = candidates.length
@@ -4475,7 +4490,7 @@ function buildDrawerUi() {
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,
-    journalEditOpen, whereLocationTagFilter, whoTagFilter, whyTagFilter, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
+    journalEditOpen, whereLocationTagFilter, whyTagFilter, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
     contentPackFlags, hostileLocationsImporting,

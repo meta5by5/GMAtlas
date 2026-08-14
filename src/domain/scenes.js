@@ -74,13 +74,16 @@ export function generateScene(campaign, tables, rng = Math.random, lensCategorie
     situationLine: what.situation ? what.situation.split('\n')[0] : '',
     // Scene-scoped NPC state (docs/adr/0041 Phase 13b) — WHO's per-NPC
     // Disposition/Motivation/Threat Rank/Challenges/Opportunities, keyed
-    // by entity id; and the GM-curated Bystanders list (Protagonists/
-    // Antagonists are derived live from WHO's @mentions + the #character
-    // tag, not stored here — see getNpcSceneState's own comment).
+    // by entity id; and the three GM-curated Actor lists (Protagonists/
+    // Antagonists/Bystanders — all three equally GM-picked via WHO's "+"
+    // entity picker, docs/adr/0041 WHO redesign; see
+    // addSceneProtagonist/addSceneAntagonist/addSceneBystander below).
     // Deliberately lives on the scene object, not a permanent entity
     // mutation or a new top-level campaign array — "specific to this
     // situation," same reasoning as the split Latest Scene fields above.
     npcStates: {},
+    protagonistIds: [],
+    antagonistIds: [],
     bystanderIds: [],
   };
   scene.text = recomposeSceneText(scene);
@@ -206,24 +209,39 @@ export function ensureNpcSceneState(scene, npcId) {
   return scene.npcStates[npcId];
 }
 
-/** Bystanders (docs/adr/0041 Phase 13b) — the one NPC group that's GM-
- *  curated rather than derived from WHO's @mentions + the #character tag
- *  (there's no existing "who's physically nearby but unmentioned" query
- *  safe to auto-derive this from). Plain id list, deduped; add is a no-op
- *  if already present. */
-export function addSceneBystander(campaign, sceneId, npcId) {
+/** WHO's three Actor lists (docs/adr/0041 Phase 13b, redesigned per direct
+ *  request) — Protagonists/Antagonists/Bystanders are all equally GM-
+ *  curated id lists on the scene now (previously Protagonists/Antagonists
+ *  were derived by parsing WHO's free-text Focus field, since removed —
+ *  every Actor is now explicitly picked via WHO's own "+" entity picker
+ *  instead). One shared implementation keyed by list name; each kind gets
+ *  its own named export pair so call sites (shell.js) stay explicit about
+ *  which list they're touching. Plain id lists, deduped; add is a no-op if
+ *  already present. */
+const ACTOR_LIST_KEY = { protagonist: 'protagonistIds', antagonist: 'antagonistIds', bystander: 'bystanderIds' };
+
+function addSceneActor(campaign, sceneId, kind, npcId) {
   const next = clone(campaign);
   const scene = (next.scenes || []).find((s) => s.id === sceneId);
-  if (!scene || !npcId) return next;
-  if (!Array.isArray(scene.bystanderIds)) scene.bystanderIds = [];
-  if (!scene.bystanderIds.includes(npcId)) scene.bystanderIds.push(npcId);
+  const key = ACTOR_LIST_KEY[kind];
+  if (!scene || !npcId || !key) return next;
+  if (!Array.isArray(scene[key])) scene[key] = [];
+  if (!scene[key].includes(npcId)) scene[key].push(npcId);
   return next;
 }
 
-export function removeSceneBystander(campaign, sceneId, npcId) {
+function removeSceneActor(campaign, sceneId, kind, npcId) {
   const next = clone(campaign);
   const scene = (next.scenes || []).find((s) => s.id === sceneId);
-  if (!scene || !Array.isArray(scene.bystanderIds)) return next;
-  scene.bystanderIds = scene.bystanderIds.filter((id) => id !== npcId);
+  const key = ACTOR_LIST_KEY[kind];
+  if (!scene || !key || !Array.isArray(scene[key])) return next;
+  scene[key] = scene[key].filter((id) => id !== npcId);
   return next;
 }
+
+export function addSceneProtagonist(campaign, sceneId, npcId) { return addSceneActor(campaign, sceneId, 'protagonist', npcId); }
+export function removeSceneProtagonist(campaign, sceneId, npcId) { return removeSceneActor(campaign, sceneId, 'protagonist', npcId); }
+export function addSceneAntagonist(campaign, sceneId, npcId) { return addSceneActor(campaign, sceneId, 'antagonist', npcId); }
+export function removeSceneAntagonist(campaign, sceneId, npcId) { return removeSceneActor(campaign, sceneId, 'antagonist', npcId); }
+export function addSceneBystander(campaign, sceneId, npcId) { return addSceneActor(campaign, sceneId, 'bystander', npcId); }
+export function removeSceneBystander(campaign, sceneId, npcId) { return removeSceneActor(campaign, sceneId, 'bystander', npcId); }
