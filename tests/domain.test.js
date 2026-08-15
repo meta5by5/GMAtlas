@@ -5235,7 +5235,7 @@ test('composeNarrativeDraft (docs/adr/0040 Phase 12f fix) uses WHO/WHERE\'s raw 
 });
 
 // --- docs/adr/0041 Phase 13a/13b: Location Details + scene-scoped NPC state ---
-import { getNpcSceneState, addSceneBystander, removeSceneBystander, addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, NPC_SCENE_FIELD_ORACLE_PATH } from '../src/domain/scenes.js';
+import { getNpcSceneState, addSceneBystander, removeSceneBystander, addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, moveSceneActor, NPC_SCENE_FIELD_ORACLE_PATH } from '../src/domain/scenes.js';
 import { rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField } from '../src/domain/session.js';
 
 test('a location entity defaults sector/objectType (World Profile) and sights/smells/sounds + sensorySource (all null) — nothing required to create one', () => {
@@ -5304,6 +5304,25 @@ test('addSceneProtagonist/addSceneAntagonist mirror addSceneBystander exactly �
 
   const unchanged = addSceneAntagonist(camp, 'not-a-real-scene', bobId);
   assert.deepEqual(unchanged.scenes[0].antagonistIds, [bobId], 'no-op on an unknown scene id');
+});
+
+test('moveSceneActor drags a thumbnail from one Actor group to another in one pass — removed from the source list, added to the destination, no-op when both kinds match or the scene is unknown', () => {
+  let camp = defaultCampaign();
+  let aliceId; ({ campaign: camp, id: aliceId } = createEntity(camp, { type: 'npc', name: 'Alice' }));
+  const tables = tablesWithOverrides(camp.oracles?.overrides, camp.settings?.genrePack);
+  const scene = generateScene(camp, tables, makeRng(5));
+  camp.scenes = [scene];
+  camp = addSceneProtagonist(camp, scene.id, aliceId);
+
+  camp = moveSceneActor(camp, scene.id, 'protagonist', 'bystander', aliceId);
+  assert.deepEqual(camp.scenes[0].protagonistIds, [], 'gone from the source list');
+  assert.deepEqual(camp.scenes[0].bystanderIds, [aliceId], 'landed on the destination list');
+
+  const samekind = moveSceneActor(camp, scene.id, 'bystander', 'bystander', aliceId);
+  assert.deepEqual(samekind.scenes[0].bystanderIds, [aliceId], 'no-op when fromKind === toKind (dropped back on its own group)');
+
+  const unchanged = moveSceneActor(camp, 'not-a-real-scene', 'bystander', 'antagonist', aliceId);
+  assert.deepEqual(unchanged.scenes[0].bystanderIds, [aliceId], 'no-op on an unknown scene id');
 });
 
 test('rollNpcSceneField picks a real entry from the mapped oracle table and records its source; editNpcSceneField writes an edit back through oracles.overrides ONLY when the field was actually rolled, never for a hand-typed value', () => {

@@ -245,3 +245,22 @@ export function addSceneAntagonist(campaign, sceneId, npcId) { return addSceneAc
 export function removeSceneAntagonist(campaign, sceneId, npcId) { return removeSceneActor(campaign, sceneId, 'antagonist', npcId); }
 export function addSceneBystander(campaign, sceneId, npcId) { return addSceneActor(campaign, sceneId, 'bystander', npcId); }
 export function removeSceneBystander(campaign, sceneId, npcId) { return removeSceneActor(campaign, sceneId, 'bystander', npcId); }
+
+/** Dragging a thumbnail from one Actor group to another (WHO redesign
+ *  follow-up, direct request) — removes from `fromKind`'s list and adds to
+ *  `toKind`'s in one pass (a real move, not remove-then-add as two separate
+ *  store.update calls, so it can't land half-applied). No-op if `fromKind`
+ *  and `toKind` are the same (dropping a thumbnail back on its own group)
+ *  or either kind is unrecognized; deduped the same as addSceneActor if the
+ *  npc is somehow already on the destination list. */
+export function moveSceneActor(campaign, sceneId, fromKind, toKind, npcId) {
+  const next = clone(campaign);
+  const scene = (next.scenes || []).find((s) => s.id === sceneId);
+  const fromKey = ACTOR_LIST_KEY[fromKind];
+  const toKey = ACTOR_LIST_KEY[toKind];
+  if (!scene || !npcId || !fromKey || !toKey || fromKind === toKind) return next;
+  if (Array.isArray(scene[fromKey])) scene[fromKey] = scene[fromKey].filter((id) => id !== npcId);
+  if (!Array.isArray(scene[toKey])) scene[toKey] = [];
+  if (!scene[toKey].includes(npcId)) scene[toKey].push(npcId);
+  return next;
+}

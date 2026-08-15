@@ -73,7 +73,7 @@ function dashboardSection(key, title, lead, bodyHtml, doc, ui) {
   const helpKey = `dash:${key}`;
   return `<section class="dashboard-section" data-dashboard-section="${esc(key)}">
     <div class="section-head-row">
-      <button type="button" class="btn ghost sm dashboard-section-toggle" data-dashboard-section-toggle="${esc(key)}">${expanded ? '▾' : '▸'} ${esc(title)}</button>
+      <button type="button" class="dashboard-section-toggle" data-dashboard-section-toggle="${esc(key)}">${expanded ? '▾' : '▸'} ${esc(title)}</button>
       ${expanded && lead ? helpToggle(helpKey) : ''}
       ${!expanded && summary ? `<span class="dim small dashboard-section-summary">${esc(summary)}</span>` : ''}
     </div>
@@ -83,15 +83,23 @@ function dashboardSection(key, title, lead, bodyHtml, doc, ui) {
 
 // WHO no longer has a Focus free-text field (direct follow-up request —
 // entity selection happens exclusively through each Actor group's own
-// "+" picker below, never by typing an @mention into a textbox). "+ New
-// NPC"/"+ New Faction" (formerly whoEntityPicker's quick-create row,
-// otherwise now-dead since that function's tag-listbox/mention-insert
-// machinery had no reason to exist without Focus) move up next to
-// "Introduce NPC" so creating a brand-new entity is still one click away.
+// "+" picker below, never by typing an @mention into a textbox).
+// "Introduce NPC" (data-who-introduce-npc, shell.js) is its own one-field
+// inline prompt, distinct from the generic data-shift-prompt mechanism it
+// used to (silently, uselessly) share with WHY's "Set Objective" — typing
+// an existing NPC's name (plain text or @Name/@[Name]) adds THAT entity
+// to whichever Actor group its #character tag routes it to; typing a name
+// that matches no NPC creates a brand-new one with that name and adds it
+// the same way. "+ New NPC"/"+ New Faction" (formerly whoEntityPicker's
+// quick-create row, otherwise now-dead since that function's tag-listbox/
+// mention-insert machinery had no reason to exist without Focus) stay
+// alongside it for a blank, unnamed entity the GM names later in Cast —
+// a different, still-useful shape of "add an entity" from Introduce NPC's
+// named/scene-attached one.
 function whoSectionBody(doc, ui) {
   return `
     <div class="shift-actions">
-      <button class="chip" data-shift-prompt="Introduce NPC">＋ Introduce NPC</button>
+      <button class="chip" data-who-introduce-npc>＋ Introduce NPC</button>
       <button class="chip" data-entity-add="npc">＋ New NPC</button>
       <button class="chip" data-entity-add="faction">＋ New Faction</button>
     </div>
@@ -117,30 +125,32 @@ function oracleFieldRow(label, value, rollAttr, fieldAttr) {
 
 // Read-only, mention-style thumbnail for an NPC "Actor" (Protagonists/
 // Antagonists/Bystanders — WHO redesign, replacing the old always-visible
-// name-chip rows AND the free-text Focus mention-editor). The thumbnail
+// name-chip rows AND the free-text Focus mention-editor). The photo
 // itself only opens the entity (data-open-entity, same as any other
-// mention click); scene-scoped controls (the 5-field expand toggle, the
-// remove button) sit below it in their own row so they never intercept
-// that click. `removeKind` ('protagonist'|'antagonist'|'bystander', or
-// null) picks which data-scene-*-remove attribute to render — all three
-// Actor lists are equally GM-curated now (scenes.js), so all three are
-// removable.
-function actorThumb(doc, npc, { removeKind = null, expandable = false, expanded = false } = {}) {
+// mention click); the expand-scene-details and remove controls are
+// separate sibling buttons overlaid on the photo's upper-left/upper-right
+// edge as small badges (per reference mockup), not nested inside the
+// photo's own button (nested buttons are invalid HTML and would fight
+// the photo's click). `kind` ('protagonist'|'antagonist'|'bystander')
+// picks which data-scene-*-remove attribute the remove badge carries and
+// is also the thumbnail's drag-source kind (data-drag-actor, shell.js) —
+// dragging the whole wrap onto another group's [data-drop-actor-group]
+// moves the NPC there (scenes.js's moveSceneActor), no restriction by
+// #character tag or which group it started in.
+function actorThumb(doc, npc, kind, { expandable = false, expanded = false } = {}) {
   const img = npc.thumbnailId ? getGalleryImage(doc, npc.thumbnailId) : null;
   const photo = img
     ? `<img class="actor-thumb-photo" src="${esc(img.dataUrl)}" alt="">`
     : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((npc.name || '?').trim().slice(0, 1).toUpperCase())}</span>`;
-  const removeAttr = removeKind === 'protagonist' ? 'data-scene-protagonist-remove'
-    : removeKind === 'antagonist' ? 'data-scene-antagonist-remove'
-    : removeKind === 'bystander' ? 'data-scene-bystander-remove' : null;
-  return `<div class="actor-thumb-wrap">
-    <button type="button" class="actor-thumb" data-open-entity="${esc(npc.id)}" title="${esc(npc.name || 'Unnamed')}">
-      ${photo}<span class="actor-thumb-name">${esc(npc.name || 'Unnamed')}</span>
-    </button>
-    ${(removeAttr || expandable) ? `<span class="actor-thumb-actions">
-      ${expandable ? `<button type="button" class="icon-btn" data-scene-npc-toggle="${esc(npc.id)}" title="${expanded ? 'Collapse scene details' : 'Scene details'}">${expanded ? '▾' : '▸'}</button>` : ''}
-      ${removeAttr ? `<button type="button" class="icon-btn" ${removeAttr}="${esc(npc.id)}" title="Remove from this scene">✕</button>` : ''}
-    </span>` : ''}
+  const removeAttr = kind === 'protagonist' ? 'data-scene-protagonist-remove'
+    : kind === 'antagonist' ? 'data-scene-antagonist-remove' : 'data-scene-bystander-remove';
+  return `<div class="actor-thumb-wrap" draggable="true" data-drag-actor="${esc(kind)}::${esc(npc.id)}">
+    <div class="actor-thumb-circle">
+      <button type="button" class="actor-thumb" data-open-entity="${esc(npc.id)}" title="${esc(npc.name || 'Unnamed')}">${photo}</button>
+      ${expandable ? `<button type="button" class="actor-thumb-badge actor-thumb-badge-expand" data-scene-npc-toggle="${esc(npc.id)}" title="${expanded ? 'Collapse scene details' : 'Scene details'}">${expanded ? '▾' : '▸'}</button>` : ''}
+      <button type="button" class="actor-thumb-badge actor-thumb-badge-remove" ${removeAttr}="${esc(npc.id)}" title="Remove from this scene">✕</button>
+    </div>
+    <span class="actor-thumb-name">${esc(npc.name || 'Unnamed')}</span>
   </div>`;
 }
 
@@ -191,23 +201,23 @@ function npcSceneGroupsBlock(doc, ui) {
   const bystanders = (scene.bystanderIds || []).map((id) => getEntity(doc, id)).filter(Boolean);
   const expandedSet = (ui && ui.expandedSceneNpcs) || new Set();
 
-  const group = (label, singular, helpKey, hint, npcs, pickerMode, removeKind) => `<div class="workspace-mini-section npc-scene-group">
+  const group = (label, singular, helpKey, hint, npcs, kind) => `<div class="workspace-mini-section npc-scene-group" data-drop-actor-group="${esc(kind)}">
     <div class="section-head-row">
       <span class="field-label-static">${esc(label)} (${npcs.length})</span>
       <span class="entity-chip-row">
-        <button type="button" class="icon-btn" data-entity-picker-open="${esc(pickerMode)}" title="Add ${esc(singular)}">＋</button>
+        <button type="button" class="icon-btn" data-entity-picker-open="${esc(kind)}" title="Add ${esc(singular)}">＋</button>
         ${helpToggle(helpKey)}
       </span>
     </div>
     ${wsHelpBody(helpKey, esc(hint), ui)}
-    ${npcs.length ? `<div class="actor-thumb-row">${npcs.map((n) => actorThumb(doc, n, { removeKind, expandable: true, expanded: expandedSet.has(n.id) })).join('')}</div>` : '<p class="dim small">None yet.</p>'}
+    ${npcs.length ? `<div class="actor-thumb-row">${npcs.map((n) => actorThumb(doc, n, kind, { expandable: true, expanded: expandedSet.has(n.id) })).join('')}</div>` : '<p class="dim small">None yet.</p>'}
     ${npcs.filter((n) => expandedSet.has(n.id)).map((n) => npcSceneDetailBody(doc, ui, scene, n)).join('')}
   </div>`;
 
   return `
-    ${group('Protagonists', 'a Protagonist', 'who:protagonists', "PCs and close allies — pick from NPCs tagged #character.", protagonists, 'protagonist', 'protagonist')}
-    ${group('Antagonists', 'an Antagonist', 'who:antagonists', 'Opposition and complicating NPCs in this scene.', antagonists, 'antagonist', 'antagonist')}
-    ${group('Bystanders', 'a Bystander', 'who:bystanders', "Observers you've added to this scene — react to events, not directly involved.", bystanders, 'bystander', 'bystander')}`;
+    ${group('Protagonists', 'a Protagonist', 'who:protagonists', "PCs and close allies — pick from NPCs tagged #character, or drag one in from another group.", protagonists, 'protagonist')}
+    ${group('Antagonists', 'an Antagonist', 'who:antagonists', 'Opposition and complicating NPCs in this scene — or drag one in from another group.', antagonists, 'antagonist')}
+    ${group('Bystanders', 'a Bystander', 'who:bystanders', "Observers you've added to this scene — react to events, not directly involved. Drag any Actor here, including a #character NPC, to demote them to a bystander.", bystanders, 'bystander')}`;
 }
 
 // WHERE's docked-Faction-Events side panel (whole-card relocation, direct

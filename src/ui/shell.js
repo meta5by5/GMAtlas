@@ -7,7 +7,7 @@ import { store } from '../core/store.js';
 import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { continueStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField } from '../domain/session.js';
-import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander } from '../domain/scenes.js';
+import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, moveSceneActor } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag } from '../domain/oracles.js';
 import { oracleLinkTagsFor } from '../data/entityFieldOracleLinks.js';
@@ -161,7 +161,6 @@ const HEADER_ORDER = ['party', 'colony', 'journal'];
 // for any future shift this gets wired to without needing an entry here).
 const SHIFT_PROMPT_PLACEHOLDERS = {
   'Set Objective': 'What is the party trying to accomplish?',
-  'Introduce NPC': "Who's the NPC (name, brief description)?",
 };
 
 // Tabbed drawer switching (2026-07-04 design review): multiple drawers can
@@ -724,6 +723,20 @@ function onClick(ev) {
     openInlinePrompt('shift-prompt', {
       label: name, placeholder: SHIFT_PROMPT_PLACEHOLDERS[name] || `${name}…`,
       meta: { name }, anchorRect: shiftPrompt.getBoundingClientRect(),
+    });
+    return;
+  }
+
+  // WHO's "Introduce NPC" (workspace/index.js's whoSectionBody) — its own
+  // dedicated inline-prompt kind, not the generic shift-prompt above (that
+  // used to silently write into WHO's now-removed Focus field). See
+  // commitInlinePrompt's 'who-introduce-npc' branch for the actual
+  // resolve-an-existing-NPC-or-create-a-new-one logic.
+  const whoIntroduceNpc = hit('[data-who-introduce-npc]');
+  if (whoIntroduceNpc) {
+    openInlinePrompt('who-introduce-npc', {
+      label: 'Introduce NPC', placeholder: 'Name, or @ an existing NPC…',
+      anchorRect: whoIntroduceNpc.getBoundingClientRect(),
     });
     return;
   }
@@ -3395,6 +3408,13 @@ const GUIDE_NODE_DRAG_TYPE = 'application/x-gmatlas-guide-node';
 // carries "mapId::iconId" the same "::"-joined-pair shape every other
 // battlemap data-* attribute here uses.
 const BATTLEMAP_ICON_DRAG_TYPE = 'application/x-gmatlas-battlemap-icon';
+// Moving a WHO Actor thumbnail between Protagonists/Antagonists/Bystanders
+// (WHO redesign follow-up, direct request) — carries "fromKind::npcId"
+// (fromKind one of 'protagonist'|'antagonist'|'bystander', workspace/
+// index.js's actorThumb) so the drop handler knows which list to remove
+// from; the destination list comes from whichever [data-drop-actor-group]
+// the drop landed on.
+const ACTOR_DRAG_TYPE = 'application/x-gmatlas-actor';
 
 function onDragStart(ev) {
   const guideSrc = ev.target.closest('[data-drag-guide-node]');
@@ -3407,6 +3427,13 @@ function onDragStart(ev) {
   const battlemapIconSrc = ev.target.closest('[data-drag-battlemap-icon]');
   if (battlemapIconSrc) {
     ev.dataTransfer.setData(BATTLEMAP_ICON_DRAG_TYPE, battlemapIconSrc.dataset.dragBattlemapIcon);
+    ev.dataTransfer.effectAllowed = 'move';
+    return;
+  }
+
+  const actorSrc = ev.target.closest('[data-drag-actor]');
+  if (actorSrc) {
+    ev.dataTransfer.setData(ACTOR_DRAG_TYPE, actorSrc.dataset.dragActor);
     ev.dataTransfer.effectAllowed = 'move';
     return;
   }
@@ -3436,6 +3463,11 @@ function onDragOver(ev) {
     const bmTarget = ev.target.closest('[data-drop-battlemap]');
     if (bmTarget) { ev.preventDefault(); bmTarget.classList.add('drop-hover'); return; }
   }
+  if (types.includes(ACTOR_DRAG_TYPE)) {
+    const actorTarget = ev.target.closest('[data-drop-actor-group]');
+    if (actorTarget) { ev.preventDefault(); actorTarget.classList.add('drop-hover'); }
+    return;
+  }
   if (!types.includes(ENTITY_DRAG_TYPE) && !types.includes(DOCUMENT_DRAG_TYPE)) return;
   const target = ev.target.closest(DROP_TARGET_SELECTOR);
   if (target) { ev.preventDefault(); target.classList.add('drop-hover'); }
@@ -3451,6 +3483,12 @@ function onDrop(ev) {
   if (guideNodeId) {
     const target = ev.target.closest('[data-drop-guide-node]');
     if (target) { ev.preventDefault(); target.classList.remove('drop-hover'); completeGuideNodeDrop(target, guideNodeId); }
+    return;
+  }
+  const actorRef = ev.dataTransfer.getData(ACTOR_DRAG_TYPE);
+  if (actorRef) {
+    const actorTarget = ev.target.closest('[data-drop-actor-group]');
+    if (actorTarget) { ev.preventDefault(); actorTarget.classList.remove('drop-hover'); completeActorDrop(actorTarget.dataset.dropActorGroup, actorRef); }
     return;
   }
   const entityId = ev.dataTransfer.getData(ENTITY_DRAG_TYPE);
@@ -3469,6 +3507,21 @@ function onDrop(ev) {
   ev.preventDefault();
   target.classList.remove('drop-hover');
   completeDrop(target, { entityId, documentId }, ev.clientX, ev.clientY);
+}
+
+// WHO's Actor-group drag-and-drop (direct request) — moves the dragged
+// NPC from whichever list it came from to whichever [data-drop-actor-
+// group] it landed on. No manual routing/validation by #character tag
+// here on purpose: the tag only drives the DEFAULT group an NPC starts in
+// (the "+" picker's filtering, and Introduce NPC's own routing) — once an
+// Actor is in the scene, the GM can drag it anywhere, including a
+// #character NPC into Bystanders (explicitly asked for).
+function completeActorDrop(toKind, actorRef) {
+  const [fromKind, npcId] = actorRef.split('::');
+  if (!fromKind || !npcId || !toKind || fromKind === toKind) return;
+  const sceneId = currentSceneId();
+  if (!sceneId) return;
+  store.update((d) => moveSceneActor(d, sceneId, fromKind, toKind, npcId));
 }
 
 // Shared drop target for both placing a NEW token (dragging a Cast entity
@@ -3629,12 +3682,14 @@ let touchDrag = null;
 function onTouchStart(ev) {
   const t = ev.target;
   const guideSrc = t.closest('[data-drag-guide-node]');
-  const entitySrc = !guideSrc && t.closest('[data-drag-entity]');
-  const docSrc = !guideSrc && !entitySrc && t.closest('[data-drag-document]');
-  if (!guideSrc && !entitySrc && !docSrc) return;
+  const actorSrc = !guideSrc && t.closest('[data-drag-actor]');
+  const entitySrc = !guideSrc && !actorSrc && t.closest('[data-drag-entity]');
+  const docSrc = !guideSrc && !actorSrc && !entitySrc && t.closest('[data-drag-document]');
+  if (!guideSrc && !actorSrc && !entitySrc && !docSrc) return;
   const touch = ev.touches[0];
   touchDrag = {
     guideNodeId: guideSrc ? guideSrc.dataset.dragGuideNode : null,
+    actorRef: actorSrc ? actorSrc.dataset.dragActor : null,
     entityId: entitySrc ? entitySrc.dataset.dragEntity : null,
     documentId: docSrc ? docSrc.dataset.dragDocument : null,
     startX: touch.clientX, startY: touch.clientY,
@@ -3682,7 +3737,8 @@ function onTouchMove(ev) {
   if (touchDrag.ghostEl) { touchDrag.ghostEl.style.left = touch.clientX + 'px'; touchDrag.ghostEl.style.top = touch.clientY + 'px'; }
   const under = document.elementFromPoint(touch.clientX, touch.clientY);
   updateTouchDragHover(under);
-  const dropTarget = under && under.closest(touchDrag.guideNodeId ? '[data-drop-guide-node]' : DROP_TARGET_SELECTOR);
+  const dropSelector = touchDrag.guideNodeId ? '[data-drop-guide-node]' : touchDrag.actorRef ? '[data-drop-actor-group]' : DROP_TARGET_SELECTOR;
+  const dropTarget = under && under.closest(dropSelector);
   if (dropTarget !== touchDrag.lastTarget) {
     if (touchDrag.lastTarget) touchDrag.lastTarget.classList.remove('drop-hover');
     if (dropTarget) dropTarget.classList.add('drop-hover');
@@ -3701,16 +3757,18 @@ function onTouchEnd() {
   if (drag.lastTarget) drag.lastTarget.classList.remove('drop-hover');
   if (!drag.engaged || !drag.lastTarget) return; // a tap, or released off any valid target
   if (drag.guideNodeId) { completeGuideNodeDrop(drag.lastTarget, drag.guideNodeId); return; }
+  if (drag.actorRef) { completeActorDrop(drag.lastTarget.dataset.dropActorGroup, drag.actorRef); return; }
   completeDrop(drag.lastTarget, drag, drag.lastX, drag.lastY);
 }
 
 function makeTouchDragGhost(drag) {
   const label = drag.guideNodeId
     ? (((store.get().guide && store.get().guide.docs) || []).find((d) => d.id === drag.guideNodeId) || {}).title
+    : drag.actorRef ? (getEntity(store.get(), drag.actorRef.split('::')[1]) || {}).name
     : drag.entityId ? (getEntity(store.get(), drag.entityId) || {}).name : (resolveDocumentTab(store.get(), drag.documentId) || {}).title;
   const el = document.createElement('div');
   el.className = 'touch-drag-ghost';
-  el.textContent = label || (drag.guideNodeId ? 'Document' : drag.entityId ? 'Entity' : 'Document');
+  el.textContent = label || (drag.guideNodeId ? 'Document' : drag.actorRef ? 'NPC' : drag.entityId ? 'Entity' : 'Document');
   document.body.appendChild(el);
   return el;
 }
@@ -3937,6 +3995,20 @@ function commitInlinePrompt() {
 
   if (kind === 'shift-prompt') {
     if (value) { store.update((d) => applyStoryShift(d, meta.name, value)); toast(meta.name); }
+  } else if (kind === 'who-introduce-npc') {
+    const sceneId = currentSceneId();
+    if (!value) { /* nothing typed — no-op */ }
+    else if (!sceneId) toast('Continue Story (Advisor) to start a scene first');
+    else {
+      store.update((d) => {
+        const { campaign: withNpc, id } = resolveOrCreateIntroducedNpc(d, value);
+        if (!id) return withNpc;
+        const npc = getEntity(withNpc, id);
+        const isCharacter = npc && (npc.tags || []).includes('character');
+        return isCharacter ? addSceneProtagonist(withNpc, sceneId, id) : addSceneAntagonist(withNpc, sceneId, id);
+      });
+      toast('NPC introduced');
+    }
   } else if (kind === 'statblock-add-field') {
     const active = store.get().entities.activeId;
     store.update((d) => addEntityStatblockField(d, active, meta.gi, { key: value || 'New Field', value: '' }));
@@ -4027,6 +4099,27 @@ function commitMentionField(field) {
   if (!ctxAttr) return;
   const [key, fieldName] = ctxAttr.split('.');
   store.update((d) => editContextText(d, key, fieldName, serializeMentionEditor(field)));
+}
+
+// WHO's "Introduce NPC" (data-who-introduce-npc) — resolves the typed
+// text against existing NPCs by name (an @Name/@[Name|...] wrapper is
+// unwrapped to its plain name first, same shapes findMentions elsewhere
+// recognizes, but matched here by a direct case-insensitive name compare
+// rather than the mention-scan regex findMentions uses, since this is a
+// single deliberately-typed value, not free prose to scan for incidental
+// mentions). No match creates a brand-new NPC named after the typed text,
+// the same shape "+ New NPC" creates blank. Pure but for createEntity's
+// id generation, so it stays here rather than in domain/ — it's plumbing
+// for one specific UI action, not a reusable domain concept.
+function resolveOrCreateIntroducedNpc(campaign, rawText) {
+  const text = (rawText || '').trim();
+  if (!text) return { campaign, id: null };
+  const bracket = text.match(/^@\[([^\]|]+)(?:\|[^\]]*)?\]$/);
+  const name = (bracket ? bracket[1] : text.startsWith('@') ? text.slice(1) : text).trim();
+  const existing = listEntities(campaign, ['npc']).find((e) => (e.name || '').trim().toLowerCase() === name.toLowerCase());
+  if (existing) return { campaign, id: existing.id };
+  const created = createEntity(campaign, { type: 'npc', name });
+  return { campaign: created.campaign, id: created.id };
 }
 
 // Shared by WHERE's and WHY's tag-picker candidate click (workspace/

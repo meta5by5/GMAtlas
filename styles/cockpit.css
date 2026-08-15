@@ -579,10 +579,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* Each former W-tab, now a collapsible section (dashboardSection(),
    ui/workspace/index.js) — reuses .section-head-row (drawers/index.js's
    Bases of Influence toggle already established this exact convention)
-   for the header row, just adds separation between sections. */
+   for the header row, just adds separation between sections. Direct
+   follow-up request: the header should read like the Navigator's own
+   "Scene Summary" heading (.threads-head h3 below) rather than a boxed
+   ghost button — same small/bold/accent-colored treatment, explicit reset
+   properties (not .btn/.icon-btn) since it's a <button> standing in for
+   an <h3>, not a real button-shaped control. */
 .dashboard-section { border-top: 1px solid var(--border); padding-top: var(--sp-3); margin-top: var(--sp-3); }
 .dashboard-section:first-child { border-top: none; padding-top: 0; margin-top: 0; }
-.dashboard-section-toggle { font-weight: 600; }
+.dashboard-section-toggle { background: none; border: none; padding: 0; text-align: left; cursor: pointer; font-size: 0.85rem; font-weight: 700; color: var(--accent); }
 .dashboard-section-summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
 .dashboard-section-lead { margin-top: var(--sp-1); }
 .narrative-composer-preview { min-height: 3rem; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--sp-3); background: var(--bg-inset); margin: var(--sp-2) 0; }
@@ -607,20 +612,36 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .oracle-field-row { display: grid; grid-template-columns: auto 1.6rem 1fr; align-items: center; gap: var(--sp-2); }
 .oracle-field-row input { width: 100%; }
 /* Actor thumbnails (Composer WHO redesign) — a mention-style, read-only
-   photo+name button for Focus/Protagonists/Antagonists/Bystanders, replacing
-   the old always-visible chip rows. Sized well below .gallery-thumb-circle's
-   5rem so several fit per row. .actor-thumb-actions holds the optional
-   scene-detail expand toggle (Protagonists/Antagonists/Bystanders only) and
-   remove button (Bystanders only) below the thumbnail itself, not on it, so
-   the thumbnail's own click always means "open like a mention". */
+   photo+name button for Protagonists/Antagonists/Bystanders, replacing the
+   old always-visible chip rows. Sized well below .gallery-thumb-circle's
+   5rem so several fit per row. .actor-thumb-badge (expand-scene-details/
+   remove) overlays the photo's upper-left/upper-right edge per reference
+   mockup, rather than sitting in a row below it — .actor-thumb-circle is
+   the shared position:relative anchor both badges are absolutely
+   positioned against; each badge is a sibling of .actor-thumb (the photo's
+   own button), never nested inside it, since a <button> can't contain
+   another <button>. The whole wrap is draggable (data-drag-actor, shell.js)
+   to move an Actor between groups; .npc-scene-group (the drop target)
+   picks up the generic .drop-hover outline while a compatible drag is
+   over it. */
 .actor-thumb-row { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-2); }
-.actor-thumb-wrap { display: flex; flex-direction: column; align-items: center; width: 4.5rem; }
-.actor-thumb { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; background: none; border: none; color: var(--text); padding: 0; width: 100%; }
-.actor-thumb:hover .actor-thumb-name { color: var(--accent); }
-.actor-thumb-photo { width: 2.75rem; height: 2.75rem; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); background: var(--bg-inset); }
+.actor-thumb-wrap { display: flex; flex-direction: column; align-items: center; width: 4.5rem; cursor: grab; }
+.actor-thumb-wrap:hover .actor-thumb-name { color: var(--accent); }
+.actor-thumb-circle { position: relative; }
+.actor-thumb { display: block; background: none; border: none; color: var(--text); padding: 0; }
+.actor-thumb-photo { width: 2.75rem; height: 2.75rem; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); background: var(--bg-inset); display: block; }
 .actor-thumb-photo-empty { display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 600; color: var(--text-dim); }
-.actor-thumb-name { font-size: 0.7rem; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
-.actor-thumb-actions { display: flex; gap: 0.1rem; margin-top: 0.1rem; }
+.actor-thumb-name { font-size: 0.7rem; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; margin-top: 0.25rem; }
+.actor-thumb-badge {
+  position: absolute; top: -0.2rem; width: 1.2rem; height: 1.2rem; line-height: 1;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+  border-radius: 50%; border: 1px solid var(--border-strong); background: var(--tier3-bg); color: var(--text-dim);
+  font-size: 0.6rem;
+}
+.actor-thumb-badge:hover { color: var(--accent); border-color: var(--accent); }
+.actor-thumb-badge-expand { left: -0.2rem; }
+.actor-thumb-badge-remove { right: -0.2rem; }
+.npc-scene-group.drop-hover { border-radius: var(--radius-sm); }
 .npc-scene-card-detail { width: 100%; }
 .location-details { border-top: 1px dashed var(--border); padding-top: var(--sp-2); }
 .location-details-title { font-style: italic; color: var(--text-dim); margin: var(--sp-2) 0; }

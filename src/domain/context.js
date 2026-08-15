@@ -42,7 +42,6 @@ export const SHIFTS = {
   'Reward': (c, p) => { c.what.situation = appendNote(c.what.situation, p || 'The party gains leverage or resources.'); return 'Reward granted'; },
   'Advance Time': (c) => { c.how.summary = nextPacing(c.how.summary); return `Time advanced — pacing now ${c.how.summary}`; },
   'Change Location': (c, p) => { if (p) c.where.summary = p; return `Location changed${p ? ` to ${p}` : ''}`; },
-  'Introduce NPC': (c, p) => { if (p) c.who.summary = mergeSummary(c.who.summary, p); return `Introduced ${p || 'an NPC'}`; },
   'Set Objective': (c, p) => { if (p) c.why.summary = p; return `Objective set${p ? `: ${p}` : ''}`; },
 };
 
@@ -70,12 +69,6 @@ function nextPacing(current) {
 function appendNote(text, note) {
   const base = (text || '').trim();
   return base ? `${base}\n• ${note}` : `• ${note}`;
-}
-function mergeSummary(current, addition) {
-  const base = (current || '').trim();
-  if (!base) return addition;
-  if (base.split(',').map((s) => s.trim()).includes(addition)) return base;
-  return `${base}, ${addition}`;
 }
 
 /** Short label used in the context strip for each question. */
