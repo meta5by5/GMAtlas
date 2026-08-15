@@ -288,8 +288,23 @@ function ensureWorldProfileFields(e) {
 // null per-field until a roll actually sources it; typing a value
 // directly (never rolled) leaves it null, so a hand-typed sight/smell/
 // sound is never mistaken for something a table roll should "remember."
+// System/Star/Colony-Base/District as real entity references (WHERE
+// redesign, direct follow-up request) — WHERE's Current Location banner
+// used to show these as either free text (`zone`/`starSystem`/`bases[]`,
+// hand-typed, no link to an actual Location entity) or a live graph walk
+// (District, via getContainingLocation) with no way to override it. All
+// four are now explicit id references, each set via its own tag-filtered
+// "+" picker (#system/#star/#colony/#district, workspace/index.js's
+// currentLocationBanner) — one consistent mechanism for all four instead
+// of three different ones. The old zone/starSystem/bases fields (see
+// ensureWorldProfileFields below) stay in the schema, untouched and
+// inert (migration rule 5) — nothing reads them anymore.
 function ensureLocationFields(e) {
   if (e.type !== 'location') return;
+  if (e.starSystemId === undefined) e.starSystemId = null;
+  if (e.starId === undefined) e.starId = null;
+  if (e.colonyBaseId === undefined) e.colonyBaseId = null;
+  if (e.districtId === undefined) e.districtId = null;
   if (e.developmentLevel === undefined) e.developmentLevel = '';
   if (e.biome === undefined) e.biome = '';
   // Location Story (docs/adr/0038): a GM's own free-text narrative note
@@ -591,6 +606,17 @@ function _create(campaign, { type = 'npc', name = '' } = {}) {
   return rec;
 }
 
+// located_at/contains is the one pair of RELATIONSHIP_TYPES that's a true
+// structural inverse of itself (A located_at B means, by definition, B
+// contains A) — direct follow-up request: auto-mirror it in both
+// directions instead of leaving the reverse edge generic 'linked', so the
+// location-hierarchy walks (getContainingLocation/getContainedLocations,
+// and WHERE's System/Star/Colony-Base cross-referencing below) work no
+// matter which side the GM set the relationship from. No other type gets
+// this treatment (Member Of -> Faction, Owns -> Asset, etc. aren't
+// self-inverse the same way).
+const INVERSE_REL_TYPE = { located_at: 'contains', contains: 'located_at' };
+
 function _link(campaign, aId, bId, label = 'linked', type = 'linked') {
   if (aId === bId) return;
   const a = getEntity(campaign, aId); const b = getEntity(campaign, bId);
@@ -602,9 +628,12 @@ function _link(campaign, aId, bId, label = 'linked', type = 'linked') {
   // always mis-flag the reverse edge immediately at creation (B looking
   // back at A rarely satisfies the same constraint A->B does). B's mirrored
   // edge starts 'linked' (unconstrained) until the GM deliberately retypes
-  // it from that side.
+  // it from that side — EXCEPT located_at/contains, whose reverse edge is
+  // its own well-defined inverse (see INVERSE_REL_TYPE above), so that one
+  // pair mirrors correctly from the very first creation too.
+  const reverseType = INVERSE_REL_TYPE[t] || 'linked';
   if (!a.relationships.some((r) => r.to === bId)) a.relationships.push({ to: bId, label, type: t, strength: 0 });
-  if (!b.relationships.some((r) => r.to === aId)) b.relationships.push({ to: aId, label, type: 'linked', strength: 0 });
+  if (!b.relationships.some((r) => r.to === aId)) b.relationships.push({ to: aId, label, type: reverseType, strength: 0 });
   if (t === 'bond') ensureBondTrack(a, b);
 }
 
@@ -901,7 +930,11 @@ export function updateRelationshipLabel(campaign, aId, bId, label) {
 /** Set the semantic edge type on one side of a relationship — same
  *  per-side scope as updateRelationshipLabel (a directional type like
  *  Member Of legitimately differs per side: A is Member Of B doesn't mean
- *  B is Member Of A). Falls back to 'linked' for an unrecognized id. */
+ *  B is Member Of A) — EXCEPT located_at/contains (direct follow-up
+ *  request), which auto-syncs B's edge back to A to the matching inverse
+ *  (INVERSE_REL_TYPE, _link's own comment above) whenever retyped to
+ *  either one, same as a fresh link already does. Falls back to 'linked'
+ *  for an unrecognized id. */
 export function updateRelationshipType(campaign, aId, bId, type) {
   const next = clone(campaign);
   const a = getEntity(next, aId);
@@ -910,6 +943,11 @@ export function updateRelationshipType(campaign, aId, bId, type) {
     normalizeRel(r);
     r.type = RELATIONSHIP_TYPES.includes(type) ? type : 'linked';
     if (r.type === 'bond') ensureBondTrack(a, getEntity(next, bId));
+    if (INVERSE_REL_TYPE[r.type]) {
+      const b = getEntity(next, bId);
+      const br = b && b.relationships.find((rel) => rel.to === aId);
+      if (br) { normalizeRel(br); br.type = INVERSE_REL_TYPE[r.type]; }
+    }
   }
   return next;
 }
@@ -981,6 +1019,101 @@ export function getContainedLocations(campaign, locationId) {
     .filter((r) => r.type === 'contains')
     .map((r) => getEntity(campaign, r.to))
     .filter(Boolean);
+}
+
+/** A #system Location's own `located_at` edge (getContainingLocation),
+ *  read as "this System's Star" — only if that parent is actually tagged
+ *  #star (a System could be located_at something else entirely, e.g. a
+ *  Sector). Null if unresolvable. */
+export function findRelatedStar(campaign, systemId) {
+  const star = getContainingLocation(campaign, systemId);
+  return star && (star.tags || []).includes('star') ? star : null;
+}
+
+/** The reverse of findRelatedStar: which #system Location has ITS OWN
+ *  `located_at` edge pointing at this star. Deliberately a search over
+ *  every #system Location's own edge, not getContainedLocations(starId) —
+ *  a fresh reverse edge from the System's own located_at link now auto-
+ *  mirrors as 'contains' (see _link/updateRelationshipType's own
+ *  INVERSE_REL_TYPE above), but a Location linked before that fix shipped
+ *  may still only have the old generic 'linked' reverse edge, which this
+ *  search doesn't depend on either way. Null if none found. */
+export function findRelatedSystem(campaign, starId) {
+  return (campaign.entities.items || []).find((e) =>
+    e.type === 'location' && (e.tags || []).includes('system') &&
+    (e.relationships || []).some((r) => r.type === 'located_at' && r.to === starId)) || null;
+}
+
+/** A #colony Location's own `located_at` edge, read as "this Colony's
+ *  System" — only if that parent is tagged #system. One hop only (a
+ *  Colony located_at something other than a #system Location doesn't
+ *  correlate). Null if unresolvable. */
+export function findRelatedSystemForColony(campaign, colonyId) {
+  const parent = getContainingLocation(campaign, colonyId);
+  return parent && (parent.tags || []).includes('system') ? parent : null;
+}
+
+/** Sets one of a Location's three hierarchy references — starSystemId,
+ *  starId, or colonyBaseId (WHERE redesign, direct follow-up request) —
+ *  and reconciles the whole trio from there: auto-fills whichever of the
+ *  other two is resolvable via the relationship graph (findRelatedStar/
+ *  findRelatedSystem/findRelatedSystemForColony above), and CLEARS
+ *  whichever no longer validates against the new pick (e.g. picking a
+ *  different System than the one the current Colony-Base actually chains
+ *  up to drops the now-stale Colony-Base) rather than leaving a silently
+ *  inconsistent trio. Returns `{ campaign, missingRelationshipFor }` —
+ *  the latter is `{ entityId, wantTag }` naming which entity has no
+ *  #<wantTag> Location it could cross-reference to, so the UI (shell.js)
+ *  can offer to open that entity's editor and add one; null when
+ *  everything resolved (or the field was just cleared, refId falsy —
+ *  clearing one field never cascades to the other two, unlike picking a
+ *  new value). No-op (missingRelationshipFor null) for `field: 'districtId'`
+ *  or any other field — District doesn't participate in this trio. */
+export function setLocationHierarchyField(campaign, locationId, field, refId) {
+  const next = clone(campaign);
+  const loc = getEntity(next, locationId);
+  if (!loc || (field !== 'starSystemId' && field !== 'starId' && field !== 'colonyBaseId')) {
+    return { campaign: next, missingRelationshipFor: null };
+  }
+  loc[field] = refId || null;
+  if (!refId) return { campaign: next, missingRelationshipFor: null };
+
+  let missingRelationshipFor = null;
+  if (field === 'starSystemId') {
+    const star = findRelatedStar(next, refId);
+    loc.starId = star ? star.id : null;
+    if (!star) missingRelationshipFor = { entityId: refId, wantTag: 'star' };
+    if (loc.colonyBaseId) {
+      const colonySystem = findRelatedSystemForColony(next, loc.colonyBaseId);
+      if (!colonySystem || colonySystem.id !== refId) loc.colonyBaseId = null;
+    }
+  } else if (field === 'starId') {
+    const system = findRelatedSystem(next, refId);
+    if (system) {
+      loc.starSystemId = system.id;
+      if (loc.colonyBaseId) {
+        const colonySystem = findRelatedSystemForColony(next, loc.colonyBaseId);
+        if (!colonySystem || colonySystem.id !== system.id) loc.colonyBaseId = null;
+      }
+    } else {
+      loc.starSystemId = null;
+      loc.colonyBaseId = null;
+      missingRelationshipFor = { entityId: refId, wantTag: 'system' };
+    }
+  } else if (field === 'colonyBaseId') {
+    const system = findRelatedSystemForColony(next, refId);
+    if (system) {
+      loc.starSystemId = system.id;
+      const star = findRelatedStar(next, system.id);
+      loc.starId = star ? star.id : null;
+      if (!star) missingRelationshipFor = { entityId: system.id, wantTag: 'star' };
+    } else {
+      loc.starSystemId = null;
+      loc.starId = null;
+      missingRelationshipFor = { entityId: refId, wantTag: 'system' };
+    }
+  }
+  return { campaign: next, missingRelationshipFor };
 }
 
 /** Every entity conceptually belongs to a faction, even a bystander one —

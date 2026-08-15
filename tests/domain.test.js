@@ -4717,7 +4717,7 @@ test('repairAssetOrFaction is never proposed as a candidate action for a 0-FacCr
 
 // --- docs/adr/0031 Faction Events follow-up: location-pairing, relationship
 // stance, district/witnessed framing, WHO/WHERE tie-ins ------------------
-import { getRelationshipBetween, getContainingLocation, getContainedLocations, isSameDistrict } from '../src/domain/entities.js';
+import { getRelationshipBetween, getContainingLocation, getContainedLocations, isSameDistrict, setLocationHierarchyField } from '../src/domain/entities.js';
 import { relationshipStanceBetween, factionsAtLocation, getCurrentWhereLocations } from '../src/domain/factionTurnEngine.js';
 
 test('getRelationshipBetween looks up the relationship FROM a TO b (a\'s own edge), and returns null for a missing entity or edge', () => {
@@ -4778,6 +4778,87 @@ test('getContainingLocation/getContainedLocations walk the contains/located_at p
   assert.equal(isSameDistrict(camp, worldId, zoneId), true); // world's own parent
   assert.equal(isSameDistrict(camp, baseId, zoneId), false); // two hops — not a single-level match
   assert.equal(isSameDistrict(camp, worldId, farId), false);
+});
+
+test('addRelationship/updateRelationshipType auto-mirror located_at <-> contains onto the OTHER side (direct follow-up request) — every other type pair still mirrors as generic "linked" only', () => {
+  let camp = defaultCampaign();
+  let starId, systemId, factionId;
+  ({ campaign: camp, id: starId } = createEntity(camp, { type: 'location', name: 'Vega' }));
+  ({ campaign: camp, id: systemId } = createEntity(camp, { type: 'location', name: 'Vega System' }));
+  ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Vega Combine' }));
+
+  // A fresh relationship typed 'located_at' from the System's side auto-
+  // mirrors 'contains' onto the Star's side, with no second call needed.
+  camp = addRelationship(camp, systemId, starId, 'Located At', 'located_at');
+  assert.equal(getEntity(camp, systemId).relationships.find((r) => r.to === starId).type, 'located_at');
+  assert.equal(getEntity(camp, starId).relationships.find((r) => r.to === systemId).type, 'contains', 'fresh located_at auto-mirrors as contains, not generic linked');
+
+  // Retyping an EXISTING relationship to 'located_at'/'contains' from
+  // either side re-syncs the other side to match, same as a fresh link.
+  camp = updateRelationshipType(camp, starId, systemId, 'contains'); // already contains — re-confirms, no change
+  assert.equal(getEntity(camp, systemId).relationships.find((r) => r.to === starId).type, 'located_at');
+  camp = updateRelationshipType(camp, systemId, starId, 'linked'); // move away from the pair — other side untouched
+  assert.equal(getEntity(camp, starId).relationships.find((r) => r.to === systemId).type, 'contains', 'moving ONE side away from the pair doesn\'t retroactively change the other');
+  camp = updateRelationshipType(camp, starId, systemId, 'located_at'); // retype from the OTHER side this time
+  assert.equal(getEntity(camp, systemId).relationships.find((r) => r.to === starId).type, 'contains', 'retyping from either side re-syncs the other to the matching inverse');
+
+  // A non-hierarchy type pair (e.g. member_of) still mirrors as plain
+  // 'linked' on the reverse side, unaffected by this change.
+  camp = addRelationship(camp, factionId, systemId, 'Governs', 'controls');
+  assert.equal(getEntity(camp, systemId).relationships.find((r) => r.to === factionId).type, 'linked', 'non-located_at/contains types are unaffected — reverse edge stays generic linked');
+});
+
+test('setLocationHierarchyField (WHERE redesign) cross-references System/Star/Colony-Base, clears whichever no longer validates against a new pick, and reports a missing relationship to prompt on', () => {
+  let camp = defaultCampaign();
+  let sol, solSystem, earthColony, earth, sirius;
+  ({ campaign: camp, id: sol } = createEntity(camp, { type: 'location', name: 'Sol' }));
+  camp = addEntityTag(camp, sol, 'star');
+  ({ campaign: camp, id: solSystem } = createEntity(camp, { type: 'location', name: 'Sol System' }));
+  camp = addEntityTag(camp, solSystem, 'system');
+  ({ campaign: camp, id: earthColony } = createEntity(camp, { type: 'location', name: 'Earth Colony' }));
+  camp = addEntityTag(camp, earthColony, 'colony');
+  ({ campaign: camp, id: earth } = createEntity(camp, { type: 'location', name: 'Earth' })); // the location whose Current Location fields we're setting
+  ({ campaign: camp, id: sirius } = createEntity(camp, { type: 'location', name: 'Sirius System' }));
+  camp = addEntityTag(camp, sirius, 'system');
+  // Earth Colony -> located_at -> Sol System -> located_at -> Sol, both
+  // mirroring automatically per the test above (only the forward call is
+  // needed now).
+  camp = addRelationship(camp, earthColony, solSystem, 'Located At', 'located_at');
+  camp = addRelationship(camp, solSystem, sol, 'Located At', 'located_at');
+
+  // Picking Sol System as Earth's System auto-fills Star (Sol); no missing relationship.
+  let r = setLocationHierarchyField(camp, earth, 'starSystemId', solSystem);
+  camp = r.campaign;
+  assert.equal(r.missingRelationshipFor, null);
+  let e = getEntity(camp, earth);
+  assert.equal(e.starSystemId, solSystem);
+  assert.equal(e.starId, sol, 'Star auto-filled from the System\'s own located_at parent');
+
+  // Picking Earth Colony as Colony-Base correlates BOTH System and Star
+  // (two hops: Colony -> System -> Star), overwriting whatever was there.
+  r = setLocationHierarchyField(camp, earth, 'colonyBaseId', earthColony);
+  camp = r.campaign;
+  assert.equal(r.missingRelationshipFor, null);
+  e = getEntity(camp, earth);
+  assert.equal(e.colonyBaseId, earthColony);
+  assert.equal(e.starSystemId, solSystem, 'Colony-Base pick correlates System');
+  assert.equal(e.starId, sol, 'Colony-Base pick correlates Star too, via the System it resolved');
+
+  // Now pick a DIFFERENT System (Sirius, no located_at Star, no Colony-Base
+  // pointing at it) — invalidates BOTH the current Star and the current
+  // Colony-Base, clearing them, and reports Sirius as missing a #star relationship.
+  r = setLocationHierarchyField(camp, earth, 'starSystemId', sirius);
+  camp = r.campaign;
+  e = getEntity(camp, earth);
+  assert.equal(e.starSystemId, sirius);
+  assert.equal(e.starId, null, 'Star cleared — Sirius has no located_at Star to cross-reference');
+  assert.equal(e.colonyBaseId, null, 'Colony-Base cleared — Earth Colony no longer chains up to the new System');
+  assert.deepEqual(r.missingRelationshipFor, { entityId: sirius, wantTag: 'star' });
+
+  // Clearing a field outright (refId falsy) never cascades to the other two.
+  r = setLocationHierarchyField(camp, earth, 'starSystemId', null);
+  assert.equal(r.missingRelationshipFor, null);
+  assert.equal(getEntity(r.campaign, earth).starSystemId, null);
 });
 
 test('factionsAtLocation lists every OTHER faction present (active asset, homeworld, or Base of Influence) at a location, tagged with relationshipStanceBetween; asset-less presence still appears with asset:null', () => {

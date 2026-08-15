@@ -27,7 +27,7 @@ import {
   addLocationTradeCode, removeLocationTradeCode, addLocationBase, removeLocationBase,
   addConflictSessionHook, toggleConflictSessionHookUsed, removeConflictSessionHook, addConflictIrreversibleFact,
   setConflictFactionPosture, removeConflictFactionPosture, updateConflictInformationAsymmetry,
-  clearConflictInformationAsymmetry, revealConflictInformationAsymmetry,
+  clearConflictInformationAsymmetry, revealConflictInformationAsymmetry, setLocationHierarchyField,
 } from '../domain/entities.js';
 import { findCatalogItem } from '../data/gearCatalog.js';
 import { installEnhancement, removeEnhancement } from '../domain/enhancements.js';
@@ -140,6 +140,13 @@ function drawerMeta(id) { return DRAWERS.find((d) => d.id === id) || DRAWER_META
 // third, separate layout.
 const COMPACT_TAB_BREAKPOINT = 1023;
 function isCompactTab() { return window.innerWidth <= COMPACT_TAB_BREAKPOINT; }
+// Narrower than COMPACT_TAB_BREAKPOINT on purpose — matches styles/
+// cockpit.css's own "genuinely phone-specific" <=480px tier (as opposed to
+// the wider compact-tab tier that also covers tablet), for the one phone-
+// only relocation (the Settings gear, below Advisor in the edge nav) that
+// tablet doesn't need since its header has room.
+const PHONE_BREAKPOINT = 480;
+function isPhoneWidth() { return window.innerWidth <= PHONE_BREAKPOINT; }
 // Edge nav button order top-down: Guide, Oracle, Cast, Trade, Docs, Graph,
 // Co-Pilot, Settings — Co-Pilot is the one remaining non-drawer button
 // interleaved into the same array DRAWERS.map() used to render alone,
@@ -272,13 +279,21 @@ let collapsedStatblockGroups = new Set(); // ephemeral — keyed `${entityId}::$
 let recapOpen = false; // ephemeral — collapses the "Previously on..." session recap panel
 let searchOpen = false; // ephemeral — Universal Search overlay
 let searchQuery = '';
-// ephemeral — WHO's Actors "+" entity picker (Protagonists/Antagonists/
-// Bystanders, workspace/index.js). null when closed; { mode, query } when
-// open, mode one of 'protagonist'|'antagonist'|'bystander' — each calls
-// the matching addScene*() for the current scene (scenes.js), excluding
-// whoever's already on that specific list; Protagonists' candidates are
-// further filtered to NPCs tagged #character, Antagonists' to NPCs NOT so
-// tagged (renderEntityPickerOverlay).
+// ephemeral — the shared "+" entity picker overlay, used by both WHO's
+// Actors (Protagonists/Antagonists/Bystanders) and WHERE's Current
+// Location System/Star/Colony-Base/District rows (workspace/index.js).
+// null when closed; { entityType, mode, scope, query } when open:
+//   entityType 'npc'   — mode one of 'protagonist'|'antagonist'|'bystander',
+//     scope null (implicitly the current scene) — candidates are NPCs,
+//     Protagonists further filtered to #character-tagged, Antagonists to
+//     NOT so tagged (renderEntityPickerOverlay); selecting one calls the
+//     matching addScene*() (scenes.js).
+//   entityType 'location' — mode one of 'system'|'star'|'colony'|'district',
+//     scope the Location entity id being set — candidates are Locations
+//     tagged #system/#star/#colony/#district to match; selecting one sets
+//     that field on `scope` (setLocationHierarchyField for system/star/
+//     colony, so the cross-reference/reconciliation applies; a plain
+//     updateEntity for district, which doesn't participate in that trio).
 let entityPicker = null;
 let oracleEditorOpen = new Set(); // ephemeral — which oracle tables' entry editors are expanded
 let oracleTagEditorOpen = new Set(); // ephemeral — which oracle tables' TAG editors are expanded (docs/adr/0016), hidden by default
@@ -388,6 +403,7 @@ let lastDocViewerSrc = null;
 // (rollAction/rollFlat/rollTraveller's return shape) the window renders.
 let diceRollResult = null;
 let focusInspectorNameNextRender = false; // ephemeral — set by clicking any data-open-entity link/chip, so Entity Detail's name field is focused+selected the moment it renders
+let focusInspectorRelationshipNextRender = false; // ephemeral — set by promptMissingLocationRelationship, so Entity Detail's "add relationship" type field is focused once it renders (WHERE's System/Star/Colony-Base cross-reference "no relationship yet" prompt)
 let entityDetailFocusEventId = ''; // ephemeral — set when a data-open-entity link also carries data-open-entity-event (a Faction Events turn's faction-name link); factionTurnSectionHtml highlights/expands that one Turn History entry
 
 export function mountShell(el) {
@@ -401,7 +417,7 @@ export function mountShell(el) {
           <span class="campaign-title" title="Campaign name"></span>
           <div class="header-drawer-tabs" data-header-drawer-tabs></div>
           <div class="settings-menu-wrap">
-            <button class="btn ghost sm" data-settings-menu-toggle title="Menu" aria-label="Menu">⚙</button>
+            <button class="btn ghost sm" data-settings-menu-toggle title="Menu" aria-label="Menu"><span class="glyph">⚙</span><b>Settings</b></button>
             <div class="settings-menu" data-settings-menu hidden>
               <button type="button" data-menu-open-settings>Settings</button>
               <button type="button" data-menu-open-about>About</button>
@@ -2113,12 +2129,24 @@ function onClick(ev) {
     if (!sceneId) return;
     return store.update((d) => removeSceneBystander(d, sceneId, bystanderRemove.dataset.sceneBystanderRemove));
   }
-  // WHO's Actors "+" picker (workspace/index.js's npcSceneGroupsBlock, one
-  // per group) — opens/closes/selects from the shared NPC picker overlay;
-  // see renderEntityPickerOverlay/entityPicker above.
+  // Shared "+" entity picker overlay — WHO's Actors (workspace/index.js's
+  // npcSceneGroupsBlock, one per group: NPCs filtered by #character tag)
+  // and WHERE's Current Location System/Star/Colony-Base/District rows
+  // (currentLocationBanner: Locations filtered by #system/#star/#colony/
+  // #district tag). data-entity-picker-open carries either a bare mode
+  // ('protagonist'|'antagonist'|'bystander', WHO — implicit entityType
+  // 'npc', scoped to the current scene) or a "location:<mode>:<locId>"
+  // compound value (WHERE — entityType 'location', scoped to that one
+  // Location entity) parsed here so the rest of the flow only ever deals
+  // with a plain { entityType, mode, scope } shape. See
+  // renderEntityPickerOverlay/entityPicker above.
   const entityPickerOpenBtn = hit('[data-entity-picker-open]');
   if (entityPickerOpenBtn) {
-    entityPicker = { mode: entityPickerOpenBtn.dataset.entityPickerOpen, query: '' };
+    const raw = entityPickerOpenBtn.dataset.entityPickerOpen;
+    const parts = raw.split(':');
+    entityPicker = parts[0] === 'location'
+      ? { entityType: 'location', mode: parts[1], scope: parts[2], query: '' }
+      : { entityType: 'npc', mode: raw, scope: null, query: '' };
     renderEntityPickerOverlay();
     const inp = root.querySelector('[data-entity-picker-query]');
     if (inp) { inp.value = ''; inp.focus(); }
@@ -2129,14 +2157,40 @@ function onClick(ev) {
   const entityPickerSelectBtn = hit('[data-entity-picker-select]');
   if (entityPickerSelectBtn) {
     const id = entityPickerSelectBtn.dataset.entityPickerSelect;
-    const mode = entityPicker && entityPicker.mode;
+    const picker = entityPicker;
     entityPicker = null;
+    if (!picker) return renderEntityPickerOverlay();
+    if (picker.entityType === 'location') {
+      const field = picker.mode === 'system' ? 'starSystemId' : picker.mode === 'star' ? 'starId'
+        : picker.mode === 'colony' ? 'colonyBaseId' : 'districtId';
+      if (field === 'starSystemId' || field === 'starId' || field === 'colonyBaseId') {
+        let missing = null;
+        store.update((d) => {
+          const r = setLocationHierarchyField(d, picker.scope, field, id);
+          missing = r.missingRelationshipFor;
+          return r.campaign;
+        });
+        if (missing) promptMissingLocationRelationship(missing);
+        return;
+      }
+      return store.update((d) => updateEntity(d, picker.scope, { [field]: id }));
+    }
     const sceneId = currentSceneId();
     if (!sceneId) return renderEntityPickerOverlay();
-    if (mode === 'protagonist') return store.update((d) => addSceneProtagonist(d, sceneId, id));
-    if (mode === 'antagonist') return store.update((d) => addSceneAntagonist(d, sceneId, id));
-    if (mode === 'bystander') return store.update((d) => addSceneBystander(d, sceneId, id));
+    if (picker.mode === 'protagonist') return store.update((d) => addSceneProtagonist(d, sceneId, id));
+    if (picker.mode === 'antagonist') return store.update((d) => addSceneAntagonist(d, sceneId, id));
+    if (picker.mode === 'bystander') return store.update((d) => addSceneBystander(d, sceneId, id));
     return renderEntityPickerOverlay();
+  }
+  // Current Location's "-" clear button (workspace/index.js's
+  // currentLocationBanner) — a plain field clear, deliberately not routed
+  // through setLocationHierarchyField (that function's cascade logic is
+  // for REPLACING a value with a new, possibly-inconsistent one; clearing
+  // one field outright has nothing to reconcile against).
+  const locFieldClear = hit('[data-location-field-clear]');
+  if (locFieldClear) {
+    const [locId, field] = locFieldClear.dataset.locationFieldClear.split('::');
+    return store.update((d) => updateEntity(d, locId, { [field]: null }));
   }
   const locationDetailsToggle = hit('[data-location-details-toggle]');
   if (locationDetailsToggle) {
@@ -4215,6 +4269,18 @@ function render() {
   root.querySelector('[data-copilot]').dataset.open = String(copilotOpen);
 
   const edge = root.querySelector('[data-edge]');
+  // The header's Settings gear (.settings-menu-wrap) physically relocates
+  // to the bottom of the edge nav, below Advisor, on phone-width screens
+  // (direct request) — detached first (rather than left as an edge-nav
+  // child) so the innerHTML rebuild just below can't destroy the live DOM
+  // node; delegated click handling (rule 4) doesn't care which parent it
+  // ends up under, and the dropdown itself (.settings-menu, still the
+  // ONE instance — no duplicate menu markup anywhere) automatically opens
+  // upward instead of off the bottom of the screen there via
+  // `.mc-edge .settings-menu` in cockpit.css, scoped off the actual DOM
+  // relationship rather than a second copy of the same media query.
+  const settingsWrap = root.querySelector('.settings-menu-wrap');
+  if (settingsWrap) settingsWrap.remove();
   edge.innerHTML = EDGE_ORDER.map((id) => {
     if (id === 'copilot') return `<button data-toggle-copilot title="Advisor"><span class="glyph">💡</span><b>Advisor</b></button>`;
     // Faction Events (docs/adr/0031/0032) is an ordinary DRAWERS entry now
@@ -4232,6 +4298,10 @@ function render() {
       <span class="glyph">${d.glyph}</span><b>${d.label}</b>
     </button>`;
   }).join('');
+  if (settingsWrap) {
+    const target = isPhoneWidth() ? edge : root.querySelector('.header-actions');
+    if (target) target.appendChild(settingsWrap);
+  }
 
   // Party/Colony/Journal's own small tab group in the header ("USER
   // CHANGES" QoL batch) — same [data-drawer-open] routing as the edge nav
@@ -4407,10 +4477,13 @@ function renderSearchOverlay() {
   if (resultsEl) resultsEl.innerHTML = searchOpen ? renderSearchPanel(store.get(), searchQuery) : '';
 }
 
-// WHO's Actors "+" picker (Focus/Bystanders, workspace/index.js) — same
-// static-skeleton/targeted-update shape as renderSearchOverlay above.
-// Candidates are always NPCs; 'bystander' mode additionally excludes
-// whoever's already on the current scene's bystander list.
+// The shared "+" entity picker (WHO's Actors + WHERE's Current Location
+// rows, workspace/index.js) — same static-skeleton/targeted-update shape
+// as renderSearchOverlay above. Branches once on entityPicker.entityType:
+// 'npc' candidates are scene Actors (with the same exclude-already-on-
+// this-list + tag-filter rules as before); 'location' candidates are
+// Locations tagged to match the picked row (#system/#star/#colony/
+// #district), excluding the Location being edited itself.
 function renderEntityPickerOverlay() {
   const overlay = root && root.querySelector('[data-entity-picker-overlay]');
   if (!overlay) return;
@@ -4419,20 +4492,48 @@ function renderEntityPickerOverlay() {
   if (!resultsEl) return;
   if (!entityPicker) { resultsEl.innerHTML = ''; return; }
   const doc = store.get();
-  const scenes = doc.scenes || [];
-  const scene = scenes[scenes.length - 1];
-  const listKey = entityPicker.mode === 'protagonist' ? 'protagonistIds' : entityPicker.mode === 'antagonist' ? 'antagonistIds' : 'bystanderIds';
-  const excludeIds = scene ? new Set(scene[listKey] || []) : new Set();
   const query = (entityPicker.query || '').trim().toLowerCase();
-  let candidates = listEntities(doc, ['npc']).filter((n) => !excludeIds.has(n.id));
-  if (entityPicker.mode === 'protagonist') candidates = candidates.filter((n) => (n.tags || []).includes('character'));
-  if (entityPicker.mode === 'antagonist') candidates = candidates.filter((n) => !(n.tags || []).includes('character'));
+  let candidates; let emptyMessage;
+  if (entityPicker.entityType === 'location') {
+    const tag = entityPicker.mode === 'system' ? 'system' : entityPicker.mode === 'star' ? 'star'
+      : entityPicker.mode === 'colony' ? 'colony' : 'district';
+    candidates = listEntities(doc, ['location'])
+      .filter((l) => l.id !== entityPicker.scope && (l.tags || []).includes(tag));
+    emptyMessage = `No #${tag} locations yet — tag one in Cast first.`;
+  } else {
+    const scenes = doc.scenes || [];
+    const scene = scenes[scenes.length - 1];
+    const listKey = entityPicker.mode === 'protagonist' ? 'protagonistIds' : entityPicker.mode === 'antagonist' ? 'antagonistIds' : 'bystanderIds';
+    const excludeIds = scene ? new Set(scene[listKey] || []) : new Set();
+    candidates = listEntities(doc, ['npc']).filter((n) => !excludeIds.has(n.id));
+    if (entityPicker.mode === 'protagonist') candidates = candidates.filter((n) => (n.tags || []).includes('character'));
+    if (entityPicker.mode === 'antagonist') candidates = candidates.filter((n) => !(n.tags || []).includes('character'));
+    emptyMessage = 'No matching NPCs.';
+  }
   candidates = candidates
     .filter((n) => !query || (n.name || '').toLowerCase().includes(query))
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   resultsEl.innerHTML = candidates.length
     ? candidates.map((n) => `<button type="button" class="entity-picker-row" data-entity-picker-select="${escapeHtml(n.id)}">${escapeHtml(n.name || 'Unnamed')}</button>`).join('')
-    : '<p class="dim small">No matching NPCs.</p>';
+    : `<p class="dim small">${escapeHtml(emptyMessage)}</p>`;
+}
+
+// WHERE's System/Star/Colony-Base cross-reference (setLocationHierarchyField,
+// entities.js) couldn't find the OTHER entity in the pair because
+// `missing.entityId` has no #<missing.wantTag> Location it's `located_at` —
+// direct follow-up request: ask (window.confirm — a yes/no decision, not a
+// value, same posture as every delete confirmation) whether to open that
+// entity's own editor and set one up, rather than failing silently. "No"
+// leaves the campaign exactly as setLocationHierarchyField already left it
+// (the resolvable field set, the unresolvable one cleared).
+function promptMissingLocationRelationship(missing) {
+  const ent = getEntity(store.get(), missing.entityId);
+  const name = ent ? (ent.name || 'Unnamed') : 'This location';
+  const ok = window.confirm(`${name} has no linked #${missing.wantTag} yet. Open its Entity Editor to set one up?`);
+  if (!ok) return;
+  openDrawerTab('entity-detail');
+  focusInspectorRelationshipNextRender = true;
+  store.update((d) => setActiveEntity(d, missing.entityId));
 }
 
 // The dice roll window (performFieldRoll's replacement for a plain toast) —
@@ -4664,6 +4765,16 @@ function renderDrawerBody() {
     focusInspectorNameNextRender = false;
     const nameInput = root && root.querySelector('.inspector-name');
     if (nameInput) { nameInput.focus(); nameInput.select(); }
+  }
+  // promptMissingLocationRelationship's "open the editor and set up the
+  // relationship" path — focuses the "add relationship" row's type select
+  // (.rel-add, drawers/index.js's inspector()) instead of the name field
+  // above, since the GM's actual next action here is picking a target
+  // entity + type, not renaming anything.
+  if (focusInspectorRelationshipNextRender) {
+    focusInspectorRelationshipNextRender = false;
+    const relTypeSelect = root && root.querySelector('[data-entity-link-type]');
+    if (relTypeSelect) relTypeSelect.focus();
   }
 }
 

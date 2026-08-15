@@ -52,12 +52,32 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* Header gear menu (New Campaign / Settings / About — replaces the old
    click-the-campaign-title-to-open-Settings convention). */
 .settings-menu-wrap { position: relative; }
+/* The gear's label stays hidden in its normal header spot (icon-only, by
+   direct earlier request) and only appears once shell.js physically
+   relocates .settings-menu-wrap into .mc-edge on phone widths, where it
+   should look like every other edge-nav tile. .mc-edge button's own
+   descendant-selector rules are too low-specificity to beat the button's
+   own .btn.ghost.sm classes (2 classes beats 1 class + 1 type), so this
+   restyles it explicitly instead of relying on inheriting that rule. */
+.settings-menu-wrap b { display: none; }
+.mc-edge .settings-menu-wrap [data-settings-menu-toggle] {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: none; border: none; padding: var(--sp-2) 0; width: 100%;
+  color: var(--text-dim); font-size: 0.6rem;
+}
+.mc-edge .settings-menu-wrap [data-settings-menu-toggle] .glyph { font-size: 1.1rem; }
+.mc-edge .settings-menu-wrap b { display: block; }
 .settings-menu {
   position: absolute; top: 100%; right: 0; margin-top: var(--sp-1); z-index: 25;
   display: flex; flex-direction: column; min-width: 9rem;
   background: var(--tier3-bg); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
   box-shadow: var(--shadow); overflow: hidden;
 }
+/* Relocated into the edge nav (bottom of the screen) — open upward
+   instead of off the bottom edge of the viewport. Scoped to the actual
+   DOM relationship (only true once shell.js has moved the wrap there),
+   not a second copy of the phone media query. */
+.mc-edge .settings-menu { top: auto; bottom: 100%; margin-top: 0; margin-bottom: var(--sp-1); }
 .settings-menu[hidden] { display: none; }
 .settings-menu button { text-align: left; background: none; border: none; color: var(--text); padding: 0.5rem 0.75rem; font-size: 0.85rem; }
 .settings-menu button:hover { background: var(--tier2-bg); }
@@ -171,8 +191,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .workspace-card-head-text { flex: 1 1 14rem; }
 .workspace-card-head-row .workspace-card-head-text h2,
 .workspace-card-head-row .workspace-card-head-text .lead { margin-bottom: 0; }
-.location-summary { display: flex; flex-direction: column; gap: 0.15rem; text-align: right; font-size: 0.8rem; flex: 0 0 auto; }
-.location-summary-item .dim { margin-right: 0.3rem; }
+.location-summary { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.8rem; flex: 0 0 auto; }
+/* Each row (System/Star/Colony-Base/District, currentLocationBanner) is
+   its own flex line, split into two clusters — label+value LEFT-aligned,
+   the +/- picker controls RIGHT-aligned (direct follow-up request; a
+   single right-packed row, the previous shape, made the +/- controls
+   drift depending on how long the value was). */
+.location-summary-item { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.location-summary-label { display: flex; align-items: center; gap: 0.3rem; }
+.location-summary-actions { display: flex; align-items: center; gap: 0.15rem; }
+.location-summary-item .entity-chip { font-size: 0.75rem; padding: 0.15rem 0.5rem; }
 
 /* WHERE's docked Faction Events card (direct request: a down-arrow on the
    Faction Events card relocates it here as a right column; an up-arrow
@@ -615,15 +643,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
    photo+name button for Protagonists/Antagonists/Bystanders, replacing the
    old always-visible chip rows. Sized well below .gallery-thumb-circle's
    5rem so several fit per row. .actor-thumb-badge (expand-scene-details/
-   remove) overlays the photo's upper-left/upper-right edge per reference
-   mockup, rather than sitting in a row below it — .actor-thumb-circle is
-   the shared position:relative anchor both badges are absolutely
-   positioned against; each badge is a sibling of .actor-thumb (the photo's
-   own button), never nested inside it, since a <button> can't contain
-   another <button>. The whole wrap is draggable (data-drag-actor, shell.js)
-   to move an Actor between groups; .npc-scene-group (the drop target)
-   picks up the generic .drop-hover outline while a compatible drag is
-   over it. */
+   remove) overlays the photo's LOWER-left/lower-right edge per reference
+   mockup, pushed further apart and clear of the photo (direct follow-up
+   correction — they were still clipping into the circle) so each only
+   touches its outside edge, not sitting in a row below it. .actor-thumb-
+   circle is the shared position:relative anchor both badges are
+   absolutely positioned against; each badge is a sibling of .actor-thumb
+   (the photo's own button), never nested inside it, since a <button>
+   can't contain another <button>. The whole wrap is draggable (data-drag-
+   actor, shell.js) to move an Actor between groups; .npc-scene-group (the
+   drop target) picks up the generic .drop-hover outline while a
+   compatible drag is over it. */
 .actor-thumb-row { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-2); }
 .actor-thumb-wrap { display: flex; flex-direction: column; align-items: center; width: 4.5rem; cursor: grab; }
 .actor-thumb-wrap:hover .actor-thumb-name { color: var(--accent); }
@@ -631,16 +661,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .actor-thumb { display: block; background: none; border: none; color: var(--text); padding: 0; }
 .actor-thumb-photo { width: 2.75rem; height: 2.75rem; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); background: var(--bg-inset); display: block; }
 .actor-thumb-photo-empty { display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 600; color: var(--text-dim); }
-.actor-thumb-name { font-size: 0.7rem; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; margin-top: 0.25rem; }
+.actor-thumb-name { font-size: 0.7rem; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; margin-top: 0.4rem; }
 .actor-thumb-badge {
-  position: absolute; top: -0.2rem; width: 1.2rem; height: 1.2rem; line-height: 1;
+  position: absolute; bottom: -0.3rem; width: 1.1rem; height: 1.1rem; line-height: 1;
   display: flex; align-items: center; justify-content: center; padding: 0;
   border-radius: 50%; border: 1px solid var(--border-strong); background: var(--tier3-bg); color: var(--text-dim);
-  font-size: 0.6rem;
+  font-size: 0.58rem;
 }
 .actor-thumb-badge:hover { color: var(--accent); border-color: var(--accent); }
-.actor-thumb-badge-expand { left: -0.2rem; }
-.actor-thumb-badge-remove { right: -0.2rem; }
+.actor-thumb-badge-expand { left: -0.6rem; }
+.actor-thumb-badge-remove { right: -0.6rem; }
 .npc-scene-group.drop-hover { border-radius: var(--radius-sm); }
 .npc-scene-card-detail { width: 100%; }
 .location-details { border-top: 1px dashed var(--border); padding-top: var(--sp-2); }
@@ -793,7 +823,12 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 /* WHERE's persistent "current location" indicator (docs/adr/0038) — a
    thin accent-colored left border is enough emphasis to read as "this is
    selected" without a new layout system. */
-.current-location-banner { border-left: 2px solid var(--accent); padding-left: var(--sp-2); }
+/* Direct follow-up request: the +/- picker controls should sit closer to
+   the panel's own scrollbar than the rest of Composer's content does —
+   .workspace-card-body-inner reserves a full --sp-6 right gutter so the
+   scrollbar track never touches text, but that's more room than a small
+   icon-button row needs, so this one block claws part of it back. */
+.current-location-banner { border-left: 2px solid var(--accent); padding-left: var(--sp-2); margin-right: calc(-1 * var(--sp-4)); }
 
 /* WHERE tab's tag-listbox + candidate-panel redesign ("USER CHANGES"
    batch, docs/adr/0019) — a listbox (not chips, per explicit request) on
