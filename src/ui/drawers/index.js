@@ -12,6 +12,7 @@ import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import {
   listEntities, filterEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, listTagVocabulary, listEntityTagVocabulary,
   RELATIONSHIP_TYPES, RELATIONSHIP_TYPE_LABEL, isRelationshipFlagged, computeFactionMaxHp,
+  getSystemForLocation, getStarForLocation, getHexZoneForLocation,
 } from '../../domain/entities.js';
 import { parseStatsString, sortStatblockGroups, getStatblockTemplates } from '../../domain/statblocks.js';
 import { listTemplates } from '../../domain/statblockTemplates.js';
@@ -789,34 +790,42 @@ function factionImpactSummary(provider, impact) {
 }
 
 // World Profile (UWP) card (docs/adr/0026-hostile-canon-locations.md,
-// 2026-07-08 third follow-up): the physical/astrographic half of a
-// Location's Universal World Profile — Hex, Star System, Zone (one row),
-// then World Size, Atmosphere, Biome, Hydrographics. Biome (ADR 0025)
-// lives here now, not in a separate card — it's still the same field
-// feeding domain/trade.js's biomeBiasAt(), only its UI position moved.
-// Renders for any Location entity that has at least one of these fields
-// set, OR whenever the active genre pack is Hostile (so a GM can start
-// filling one in even before the canon import has run). Collapsed by
-// default (ui.expandedWorldProfile, ephemeral — same Set shape as
+// 2026-07-08 third follow-up; System/Star/Hex/Zone reworked per direct
+// follow-up request — "just use the Relationships for setting the
+// choice... list it in the world profile for any location"): the
+// physical/astrographic half of a Location's Universal World Profile —
+// a read-only System/Star summary (any Location — getSystemForLocation/
+// getStarForLocation, entities.js, a pure relationship-graph read, not a
+// separately picked/stored field), then Hex/Zone (editable ONLY for a
+// Location tagged #system or #star — they don't mean anything for a
+// plain world/room/building), then World Size/Atmosphere/Biome/
+// Hydrographics for everything else. Biome (ADR 0025) lives here too —
+// still the same field feeding domain/trade.js's biomeBiasAt(), only its
+// UI position moved. Renders for any Location entity that has at least
+// one of these fields set, is tagged #system/#star, OR whenever the
+// active genre pack is Hostile (so a GM can start filling one in even
+// before the canon import has run). Collapsed by default
+// (ui.expandedWorldProfile, ephemeral — same Set shape as
 // enhancementsSection's ui.expandedEnhancements).
 //
-// Star System is a `<select>` sourced from existing Location entities
-// tagged #star, not free text — the field still stores a plain string
-// (the chosen star Location's name), so data-entity-field's generic
-// handler needs no changes; a GM models a star system as its own
-// Location entity (tagged #star) and links a world to it by name. A
-// star's own World Profile self-references (its starSystem equals its
-// own name, per the HOSTILE Locations JSON pack's own `stars` entries/
-// domain/hostileLocations.js's import) — when that's true, this card hides
-// World Size/Atmosphere/Biome/Hydrographics (a star has none of these)
-// and shows only Hex/Star System/Zone; worldDemographicsSection below
+// Hex/Zone can be set on EITHER a #system or #star Location, but "only
+// one can be correct and the #star wins out" (direct quote) — a #system's
+// OWN Hex/Zone only shows/is editable when its related Star
+// (findRelatedStar, via getHexZoneForLocation) has NEITHER set; once the
+// Star has either, the System's fields become a read-only display of the
+// Star's values instead, with a note pointing at where to actually edit
+// them. A #star's own Hex/Zone is always directly editable — it's the
+// one source of truth once it exists. World Size/Atmosphere/Biome/
+// Hydrographics/gas-giant are hidden for a #system OR #star Location
+// either way (neither has a surface); worldDemographicsSection below
 // hides itself entirely for the same reason.
 function worldProfileSection(doc, e, ui = {}) {
   if (e.type !== 'location') return '';
-  const hasAny = e.hex || e.zone || e.worldSize || e.atmosphere || e.biome || e.hydrographics || e.starSystem || e.gasGiant;
+  const isStarTagged = (e.tags || []).includes('star');
+  const isSystemTagged = (e.tags || []).includes('system');
+  const hasAny = e.hex || e.zone || e.worldSize || e.atmosphere || e.biome || e.hydrographics || e.gasGiant || isStarTagged || isSystemTagged;
   if (!hasAny && doc.settings.genrePack !== 'hostile') return '';
   const open = (ui.expandedWorldProfile || new Set()).has(e.id);
-  const isStar = !!(e.starSystem && e.starSystem === e.name);
   const codeSelect = (field, label, table, value) => `
     <label class="field-label">${fieldLabelRow(label, 'location', field)}
       <select data-entity-field="${field}">
@@ -824,29 +833,36 @@ function worldProfileSection(doc, e, ui = {}) {
         ${table.map((t) => `<option value="${esc(t.code)}" ${value === t.code ? 'selected' : ''}>${esc(t.code)} — ${esc(t.label)}</option>`).join('')}
       </select>
     </label>`;
-  const starLocations = listEntities(doc).filter((l) => l.type === 'location' && (l.tags || []).includes('star'));
   const biomes = biomesForGenrePack(doc.settings.genrePack || 'hostile');
+  const system = getSystemForLocation(doc, e.id);
+  const star = getStarForLocation(doc, e.id);
+  const hexZone = (isSystemTagged || isStarTagged) ? getHexZoneForLocation(doc, e.id) : null;
+  const overriddenBy = hexZone && hexZone.overriddenBy;
   return `
     <div class="faction-card">
       <h4><button class="section-toggle" data-world-profile-toggle="${esc(e.id)}">${open ? '▾' : '▸'} World Profile (UWP)</button></h4>
       ${open ? `
       <p class="dim small">HOSTILE's own Universal World Profile format — reference only, doesn't affect Trade pricing. See Settings → Trade Economy Model for the full digit-meaning legend.</p>
+      ${(system && system.id !== e.id) || (star && star.id !== e.id) ? `<div class="location-summary">
+        ${system && system.id !== e.id ? `<span class="location-summary-item"><span class="location-summary-label"><span class="dim small">System</span> <button type="button" class="entity-chip" data-open-entity="${esc(system.id)}">${esc(system.name || 'Unnamed')}</button></span></span>` : ''}
+        ${star && star.id !== e.id ? `<span class="location-summary-item"><span class="location-summary-label"><span class="dim small">Star</span> <button type="button" class="entity-chip" data-open-entity="${esc(star.id)}">${esc(star.name || 'Unnamed')}</button></span></span>` : ''}
+      </div>` : ''}
+      ${(isSystemTagged || isStarTagged) ? `
       <div class="faction-stats-row">
         <label class="field-label">${fieldLabelRow('Hex', 'location', 'hex')}
-          <input data-entity-field="hex" value="${esc(e.hex)}" placeholder="0704" size="4" maxlength="4">
-        </label>
-        <label class="field-label">${fieldLabelRow('Star System', 'location', 'starSystem', '(#star)')}
-          <select data-entity-field="starSystem">
-            <option value="" ${!e.starSystem ? 'selected' : ''}>— unset —</option>
-            ${starLocations.map((l) => `<option value="${esc(l.name)}" ${e.starSystem === l.name ? 'selected' : ''}>${esc(l.name) || 'Unnamed'}</option>`).join('')}
-          </select>
-          ${!starLocations.length ? '<p class="dim small">No Locations tagged #star yet.</p>' : ''}
+          ${overriddenBy
+            ? `<input value="${esc(hexZone.hex)}" disabled title="Overridden by ${esc(overriddenBy.name || 'Unnamed')}'s own Hex">`
+            : `<input data-entity-field="hex" value="${esc(e.hex)}" placeholder="0704" size="4" maxlength="4">`}
         </label>
         <label class="field-label">${fieldLabelRow('Zone', 'location', 'zone')}
-          <input data-entity-field="zone" value="${esc(e.zone)}" placeholder="Near Earth Zone">
+          ${overriddenBy
+            ? `<input value="${esc(hexZone.zone)}" disabled title="Overridden by ${esc(overriddenBy.name || 'Unnamed')}'s own Zone">`
+            : `<input data-entity-field="zone" value="${esc(e.zone)}" placeholder="Near Earth Zone">`}
         </label>
       </div>
-      ${isStar ? '<p class="dim small">This Location is a star system (its Star System field references itself) — planet-only fields are hidden.</p>' : `
+      ${overriddenBy ? `<p class="dim small">Hex/Zone overridden by its Star, <button type="button" class="entity-chip" data-open-entity="${esc(overriddenBy.id)}">${esc(overriddenBy.name || 'Unnamed')}</button> — edit them there instead.</p>` : ''}
+      ` : ''}
+      ${(isSystemTagged || isStarTagged) ? '<p class="dim small">This Location is a system or star — planet-only fields are hidden.</p>' : `
       ${codeSelect('worldSize', 'World Size', WORLD_SIZES, e.worldSize)}
       ${codeSelect('atmosphere', 'Atmosphere', ATMOSPHERES, e.atmosphere)}
       <label class="field-label">${fieldLabelRow('Biome', 'location', 'biome')}
@@ -868,12 +884,13 @@ function worldProfileSection(doc, e, ui = {}) {
 // (the ADR 0013/0025 developmentLevel field, relabeled — still the same
 // field feeding domain/trade.js's developmentLevelBiasAt(), only the
 // display label changed), Population, Government. Hidden entirely for a
-// self-referencing star (worldProfileSection's isStar check) — a star
-// has no starport, bases, population, government, tech level, law
-// level, trade codes, or economy of its own.
+// #system/#star-tagged Location (same gate worldProfileSection uses for
+// its own planet-only fields) — neither has a starport, bases,
+// population, government, tech level, law level, trade codes, or economy
+// of its own.
 function worldDemographicsSection(doc, e, ui = {}) {
   if (e.type !== 'location') return '';
-  if (e.starSystem && e.starSystem === e.name) return ''; // self-referencing star: no demographics
+  if ((e.tags || []).includes('system') || (e.tags || []).includes('star')) return '';
   const hasAny = e.starport || (e.bases && e.bases.length) || e.techLevel || e.lawLevel ||
     (e.tradeCodes && e.tradeCodes.length) || e.developmentLevel || e.population || e.government;
   if (!hasAny && doc.settings.genrePack !== 'hostile') return '';

@@ -4717,7 +4717,7 @@ test('repairAssetOrFaction is never proposed as a candidate action for a 0-FacCr
 
 // --- docs/adr/0031 Faction Events follow-up: location-pairing, relationship
 // stance, district/witnessed framing, WHO/WHERE tie-ins ------------------
-import { getRelationshipBetween, getContainingLocation, getContainedLocations, isSameDistrict, setLocationHierarchyField } from '../src/domain/entities.js';
+import { getRelationshipBetween, getContainingLocation, getContainedLocations, isSameDistrict, getSystemForLocation, getStarForLocation, getHexZoneForLocation } from '../src/domain/entities.js';
 import { relationshipStanceBetween, factionsAtLocation, getCurrentWhereLocations } from '../src/domain/factionTurnEngine.js';
 
 test('getRelationshipBetween looks up the relationship FROM a TO b (a\'s own edge), and returns null for a missing entity or edge', () => {
@@ -4808,57 +4808,77 @@ test('addRelationship/updateRelationshipType auto-mirror located_at <-> contains
   assert.equal(getEntity(camp, systemId).relationships.find((r) => r.to === factionId).type, 'linked', 'non-located_at/contains types are unaffected — reverse edge stays generic linked');
 });
 
-test('setLocationHierarchyField (WHERE redesign) cross-references System/Star/Colony-Base, clears whichever no longer validates against a new pick, and reports a missing relationship to prompt on', () => {
+test('getSystemForLocation/getStarForLocation (WHERE redesign, "just use the Relationships") derive System/Star purely from the located_at graph — self-tagged short-circuits, one hop from a direct parent otherwise, null when neither applies', () => {
   let camp = defaultCampaign();
-  let sol, solSystem, earthColony, earth, sirius;
+  let sol, solSystem, earthColony, earth, untaggedParent, orphan;
   ({ campaign: camp, id: sol } = createEntity(camp, { type: 'location', name: 'Sol' }));
   camp = addEntityTag(camp, sol, 'star');
   ({ campaign: camp, id: solSystem } = createEntity(camp, { type: 'location', name: 'Sol System' }));
   camp = addEntityTag(camp, solSystem, 'system');
   ({ campaign: camp, id: earthColony } = createEntity(camp, { type: 'location', name: 'Earth Colony' }));
   camp = addEntityTag(camp, earthColony, 'colony');
-  ({ campaign: camp, id: earth } = createEntity(camp, { type: 'location', name: 'Earth' })); // the location whose Current Location fields we're setting
-  ({ campaign: camp, id: sirius } = createEntity(camp, { type: 'location', name: 'Sirius System' }));
-  camp = addEntityTag(camp, sirius, 'system');
-  // Earth Colony -> located_at -> Sol System -> located_at -> Sol, both
-  // mirroring automatically per the test above (only the forward call is
-  // needed now).
+  ({ campaign: camp, id: earth } = createEntity(camp, { type: 'location', name: 'Earth' }));
+  ({ campaign: camp, id: untaggedParent } = createEntity(camp, { type: 'location', name: 'Some Sector' })); // located_at target with no #system tag
+  ({ campaign: camp, id: orphan } = createEntity(camp, { type: 'location', name: 'Orphan' })); // no located_at edge at all
   camp = addRelationship(camp, earthColony, solSystem, 'Located At', 'located_at');
   camp = addRelationship(camp, solSystem, sol, 'Located At', 'located_at');
+  camp = addRelationship(camp, earth, untaggedParent, 'Located At', 'located_at');
 
-  // Picking Sol System as Earth's System auto-fills Star (Sol); no missing relationship.
-  let r = setLocationHierarchyField(camp, earth, 'starSystemId', solSystem);
-  camp = r.campaign;
-  assert.equal(r.missingRelationshipFor, null);
-  let e = getEntity(camp, earth);
-  assert.equal(e.starSystemId, solSystem);
-  assert.equal(e.starId, sol, 'Star auto-filled from the System\'s own located_at parent');
+  // Self-tagged: the entity IS its own System/Star.
+  assert.equal(getSystemForLocation(camp, solSystem).id, solSystem, 'A #system Location resolves to itself');
+  assert.equal(getStarForLocation(camp, sol).id, sol, 'A #star Location resolves to itself as its own Star');
 
-  // Picking Earth Colony as Colony-Base correlates BOTH System and Star
-  // (two hops: Colony -> System -> Star), overwriting whatever was there.
-  r = setLocationHierarchyField(camp, earth, 'colonyBaseId', earthColony);
-  camp = r.campaign;
-  assert.equal(r.missingRelationshipFor, null);
-  e = getEntity(camp, earth);
-  assert.equal(e.colonyBaseId, earthColony);
-  assert.equal(e.starSystemId, solSystem, 'Colony-Base pick correlates System');
-  assert.equal(e.starId, sol, 'Colony-Base pick correlates Star too, via the System it resolved');
+  // One hop from a direct located_at parent.
+  assert.equal(getSystemForLocation(camp, earthColony).id, solSystem, 'Earth Colony\'s System is its own located_at parent (Sol System)');
+  assert.equal(getStarForLocation(camp, earthColony).id, sol, 'Earth Colony\'s Star chains one hop further, via its resolved System\'s own located_at parent');
+  assert.equal(getStarForLocation(camp, solSystem).id, sol, 'Sol System (viewed directly) resolves its own Star the same way');
 
-  // Now pick a DIFFERENT System (Sirius, no located_at Star, no Colony-Base
-  // pointing at it) — invalidates BOTH the current Star and the current
-  // Colony-Base, clearing them, and reports Sirius as missing a #star relationship.
-  r = setLocationHierarchyField(camp, earth, 'starSystemId', sirius);
-  camp = r.campaign;
-  e = getEntity(camp, earth);
-  assert.equal(e.starSystemId, sirius);
-  assert.equal(e.starId, null, 'Star cleared — Sirius has no located_at Star to cross-reference');
-  assert.equal(e.colonyBaseId, null, 'Colony-Base cleared — Earth Colony no longer chains up to the new System');
-  assert.deepEqual(r.missingRelationshipFor, { entityId: sirius, wantTag: 'star' });
+  // No #system-tagged parent -> null, no further/unbounded walking.
+  assert.equal(getSystemForLocation(camp, earth), null, 'Earth\'s located_at parent (Some Sector) isn\'t tagged #system, so System is null — no multi-hop search beyond one hop');
+  assert.equal(getStarForLocation(camp, earth), null);
 
-  // Clearing a field outright (refId falsy) never cascades to the other two.
-  r = setLocationHierarchyField(camp, earth, 'starSystemId', null);
-  assert.equal(r.missingRelationshipFor, null);
-  assert.equal(getEntity(r.campaign, earth).starSystemId, null);
+  // No located_at edge at all.
+  assert.equal(getSystemForLocation(camp, orphan), null);
+  assert.equal(getStarForLocation(camp, orphan), null);
+});
+
+test('getHexZoneForLocation ("only one can be correct and the #star wins out") — a #star\'s own Hex/Zone is always authoritative; a #system\'s own values are used ONLY when its related Star has neither set', () => {
+  let camp = defaultCampaign();
+  let sol, solSystem, bareSystem;
+  ({ campaign: camp, id: sol } = createEntity(camp, { type: 'location', name: 'Sol' }));
+  camp = addEntityTag(camp, sol, 'star');
+  ({ campaign: camp, id: solSystem } = createEntity(camp, { type: 'location', name: 'Sol System' }));
+  camp = addEntityTag(camp, solSystem, 'system');
+  camp = addRelationship(camp, solSystem, sol, 'Located At', 'located_at');
+  ({ campaign: camp, id: bareSystem } = createEntity(camp, { type: 'location', name: 'Bare System' }));
+  camp = addEntityTag(camp, bareSystem, 'system'); // no located_at Star at all
+
+  // Neither Sol nor Sol System has Hex/Zone set yet -> System's own (blank) values, no override.
+  let hz = getHexZoneForLocation(camp, solSystem);
+  assert.deepEqual(hz, { hex: '', zone: '', overriddenBy: null });
+
+  // System sets its own Hex/Zone -> used, since the Star has neither.
+  camp = updateEntity(camp, solSystem, { hex: '0101', zone: 'Core' });
+  hz = getHexZoneForLocation(camp, solSystem);
+  assert.deepEqual(hz, { hex: '0101', zone: 'Core', overriddenBy: null });
+
+  // Star sets its OWN Hex/Zone -> overrides the System's, per "the #star wins out."
+  camp = updateEntity(camp, sol, { hex: '0202', zone: 'Deep Core' });
+  hz = getHexZoneForLocation(camp, solSystem);
+  assert.equal(hz.hex, '0202');
+  assert.equal(hz.zone, 'Deep Core');
+  assert.equal(hz.overriddenBy.id, sol, 'overriddenBy names the Star whose values won');
+
+  // The Star itself always reads its own values directly, never overridden by anything.
+  assert.deepEqual(getHexZoneForLocation(camp, sol), { hex: '0202', zone: 'Deep Core', overriddenBy: null });
+
+  // A #system with no related Star at all just uses its own values.
+  camp = updateEntity(camp, bareSystem, { hex: '0303', zone: 'Rim' });
+  assert.deepEqual(getHexZoneForLocation(camp, bareSystem), { hex: '0303', zone: 'Rim', overriddenBy: null });
+
+  // A plain (non-#system/#star) Location has no Hex/Zone concept at all.
+  let plain; ({ campaign: camp, id: plain } = createEntity(camp, { type: 'location', name: 'A Room' }));
+  assert.deepEqual(getHexZoneForLocation(camp, plain), { hex: '', zone: '', overriddenBy: null });
 });
 
 test('factionsAtLocation lists every OTHER faction present (active asset, homeworld, or Base of Influence) at a location, tagged with relationshipStanceBetween; asset-less presence still appears with asset:null', () => {

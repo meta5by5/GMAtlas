@@ -9,7 +9,7 @@
 import { contextSummary } from '../../domain/context.js';
 import { listThreads, THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { ACTIVITIES } from '../../domain/activities.js';
-import { listTagVocabulary, isSameDistrict, getEntity, listEntities, getContainingLocation, getContainedLocations, LOCATION_OBJECT_TYPES } from '../../domain/entities.js';
+import { listTagVocabulary, isSameDistrict, getEntity, listEntities, getContainingLocation, getContainedLocations, LOCATION_OBJECT_TYPES, getSystemForLocation, getStarForLocation } from '../../domain/entities.js';
 import { getCurrentWhereLocations, factionsPresentAt, factionsInRegion } from '../../domain/factionTurnEngine.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { buildMentionEditorHTML, richToolbarHTML, toolbarCollapsed } from '../mentionEditor.js';
@@ -263,50 +263,47 @@ function whereSectionBody(doc, ui) {
 // Direct follow-up request ("tie together... not be two different
 // location tracking mechanisms"): the entry list is no longer JUST
 // getCurrentWhereLocations (WHERE Focus @mentions) — it's that list PLUS
-// whichever of the PRIMARY current location's own System/Star/Colony-
-// Base/District references (currentLocationBanner) resolve to a real
-// entity, deduped by id. Without this, a System/Star/Colony-Base/District
-// picked via that banner's "+" picker (which doesn't require it to also
-// be @mentioned in Focus) had no Location Details entry AT ALL — no way
-// to reach its Sights/Smells/Sounds. Each hierarchy-sourced entry's
-// toggle label is prefixed with its role (e.g. "System: Kepler System")
-// so multiple entries stay distinguishable while collapsed, and gets a
+// whichever of the PRIMARY current location's System/Star/Colony-Base/
+// District (currentLocationBanner) resolve to a real entity, deduped by
+// id. Without this, a Colony-Base/District picked via that banner's "+"
+// picker (or a System/Star resolved via the relationship graph) had no
+// Location Details entry AT ALL — no way to reach its Sights/Smells/
+// Sounds. Each hierarchy-sourced entry's toggle label is prefixed with
+// its role (e.g. "System: Kepler System") so multiple entries stay
+// distinguishable while collapsed. Colony-Base/District entries get a
 // "✕" (data-location-field-clear, the same attribute/handler Current
-// Location's own "-" button already uses) that clears that ONE role
-// field on the primary location — removing the entry here and unsetting
-// Current Location's value are the same action, not two. A plain WHERE-
-// Focus-mentioned entry (not one of the four roles) has no single field
-// to unset, so it gets no "✕" — removing it means editing the @mention
-// out of Focus text instead, same as before this change.
+// Location's own "-" button already uses) that clears that ONE field on
+// the primary location — removing the entry here and unsetting Current
+// Location's value are the same action, not two. System/Star entries get
+// NO "✕" — they're relationship-derived (getSystemForLocation/
+// getStarForLocation, entities.js), not a stored field to clear; removing
+// one means editing/removing the located_at relationship in the Entity
+// Editor instead (same as a plain WHERE-Focus-mentioned entry, which
+// never had an "✕" either).
 function locationDetailsBlock(doc, ui) {
   const whereLocations = getCurrentWhereLocations(doc);
   if (!whereLocations.length) return '';
   const primary = whereLocations[0];
-  const HIERARCHY_ROLES = [
-    ['starSystemId', 'System'],
-    ['starId', 'Star'],
-    ['colonyBaseId', 'Colony/Base'],
-    ['districtId', 'District'],
-  ];
   const roleByLocId = new Map();
   const entries = [...whereLocations];
   const seenIds = new Set(whereLocations.map((l) => l.id));
-  for (const [field, roleLabel] of HIERARCHY_ROLES) {
-    const refId = primary[field];
-    if (!refId) continue;
-    const ent = getEntity(doc, refId);
-    if (!ent) continue;
-    roleByLocId.set(ent.id, { role: roleLabel, field });
+  const addRoleEntry = (ent, role, field) => {
+    if (!ent) return;
+    roleByLocId.set(ent.id, { role, field });
     if (!seenIds.has(ent.id)) { entries.push(ent); seenIds.add(ent.id); }
-  }
+  };
+  addRoleEntry(getSystemForLocation(doc, primary.id), 'System', null);
+  addRoleEntry(getStarForLocation(doc, primary.id), 'Star', null);
+  if (primary.colonyBaseId) addRoleEntry(getEntity(doc, primary.colonyBaseId), 'Colony/Base', 'colonyBaseId');
+  if (primary.districtId) addRoleEntry(getEntity(doc, primary.districtId), 'District', 'districtId');
 
   return entries.map((loc) => {
     const expanded = ((ui && ui.expandedLocationDetails) || new Set()).has(loc.id);
-    const system = loc.starSystemId ? getEntity(doc, loc.starSystemId) : null;
+    const system = getSystemForLocation(doc, loc.id);
     const title = [
       esc(loc.name || 'Unnamed'),
       loc.objectType ? `at/on the ${esc(loc.objectType)}` : '',
-      system ? `in the ${esc(system.name || 'Unnamed System')}` : '',
+      system && system.id !== loc.id ? `in the ${esc(system.name || 'Unnamed System')}` : '',
       loc.sector ? `— ${esc(loc.sector)} Sector` : '',
     ].filter(Boolean).join(' ');
     const roleInfo = roleByLocId.get(loc.id);
@@ -314,7 +311,7 @@ function locationDetailsBlock(doc, ui) {
     return `<div class="workspace-mini-section location-details">
       <div class="section-head-row">
         <button type="button" class="btn ghost sm" data-location-details-toggle="${esc(loc.id)}">${expanded ? '▾' : '▸'} ${toggleLabel}</button>
-        ${roleInfo ? `<button type="button" class="icon-btn" data-location-field-clear="${esc(primary.id)}::${esc(roleInfo.field)}" title="Remove ${esc(roleInfo.role)} from Current Location">✕</button>` : ''}
+        ${roleInfo && roleInfo.field ? `<button type="button" class="icon-btn" data-location-field-clear="${esc(primary.id)}::${esc(roleInfo.field)}" title="Remove ${esc(roleInfo.role)} from Current Location">✕</button>` : ''}
       </div>
       ${expanded ? `
         <p class="location-details-title">${title}</p>
@@ -658,36 +655,32 @@ function factionActivityHereBlock(doc) {
 // summary (direct request: grouped under Current Location instead of its
 // own separate block above it) for the PRIMARY current WHERE location
 // (whereLocations[0], same "first is primary" convention
-// factionsActiveNearbyBlock's add-select already uses) — the ONE place
-// these four are edited (direct follow-up request: Location Details,
-// below, used to have its own separate free-text Star system field,
-// which duplicated/conflicted with this one; it now just reflects
-// whatever's resolved here instead). Each is a real entity reference
-// (loc.starSystemId/starId/colonyBaseId/districtId, entities.js) set via
-// its own "+" picker filtered to Locations tagged #system/#star/#colony/
-// #district respectively — replacing the old free-text zone/starSystem/
-// bases[] fields and the automatic-only getContainingLocation walk
-// District used to be. Picking a System/Star/Colony-Base cross-references
-// (and reconciles) the rest of that trio where resolvable
-// (setLocationHierarchyField, entities.js; District doesn't participate)
-// — shell.js's entityPicker-select handler calls that instead of a plain
-// field set for those three modes, and prompts to set up a relationship
-// (promptMissingLocationRelationship) when nothing cross-references yet.
+// factionsActiveNearbyBlock's add-select already uses). Colony-Base/
+// District are still real entity references (loc.colonyBaseId/districtId,
+// entities.js) set via their own "+" picker filtered to Locations tagged
+// #colony/#district. System/Star are NOT — direct follow-up request
+// ("just use the Relationships for setting the choice"): they're pure
+// relationship-graph reads (getSystemForLocation/getStarForLocation,
+// entities.js — a Location IS its System/Star if so tagged, else its own
+// located_at parent counts if THAT is), so a "🔗" link opens the Entity
+// Editor with the "add relationship" field focused instead of a "+"
+// picker, and there's no "-" to clear (removing the located_at
+// relationship there is what unsets it, same "one true mechanism, not
+// two" reasoning locationDetailsBlock's own header comment explains).
 function currentLocationBanner(doc) {
   const locs = getCurrentWhereLocations(doc);
   if (!locs.length) return '';
   const chips = locs.map((l) => `<button type="button" class="entity-chip" data-open-entity="${esc(l.id)}" title="Open ${esc(l.name || 'Unnamed')}">${esc(l.name || 'Unnamed')}</button>`).join('');
   const loc = locs[0];
-  const system = loc.starSystemId ? getEntity(doc, loc.starSystemId) : null;
-  const star = loc.starId ? getEntity(doc, loc.starId) : null;
+  const system = getSystemForLocation(doc, loc.id);
+  const star = getStarForLocation(doc, loc.id);
   const colonyBase = loc.colonyBaseId ? getEntity(doc, loc.colonyBaseId) : null;
   const district = loc.districtId ? getEntity(doc, loc.districtId) : null;
-  // Label+value LEFT-aligned, +/- picker controls RIGHT-aligned, per direct
-  // follow-up request — two sub-clusters instead of one flat right-aligned
-  // row (each .location-summary-item is a space-between flex line). "-"
-  // only renders once a value is actually set (data-location-field-clear,
-  // shell.js — a plain field clear, no cascade to the other two; changing
-  // to a NEW value is what cascades, via setLocationHierarchyField).
+  // Label+value LEFT-aligned, +/- (or 🔗) controls RIGHT-aligned, per
+  // direct follow-up request — two sub-clusters instead of one flat
+  // right-aligned row (each .location-summary-item is a space-between
+  // flex line). "-" only renders once a value is actually set
+  // (data-location-field-clear, shell.js — a plain field clear).
   const row = (label, entity, pickerMode, field) => `<span class="location-summary-item">
     <span class="location-summary-label">
       <span class="dim small">${esc(label)}</span>
@@ -698,13 +691,22 @@ function currentLocationBanner(doc) {
       ${entity ? `<button type="button" class="icon-btn" data-location-field-clear="${esc(loc.id)}::${esc(field)}" title="Clear ${esc(label)}">－</button>` : ''}
     </span>
   </span>`;
+  const relRow = (label, entity) => `<span class="location-summary-item">
+    <span class="location-summary-label">
+      <span class="dim small">${esc(label)}</span>
+      ${entity ? `<button type="button" class="entity-chip" data-open-entity="${esc(entity.id)}">${esc(entity.name || 'Unnamed')}</button>` : '<span class="dim small">—</span>'}
+    </span>
+    <span class="location-summary-actions">
+      <button type="button" class="icon-btn" data-location-edit-relationships="${esc(loc.id)}" title="Set ${esc(label)} via Relationships (Cast)">🔗</button>
+    </span>
+  </span>`;
   return `
     <div class="workspace-mini-section current-location-banner">
       <span class="field-label-static">📍 Current location</span>
       <div class="entity-chips">${chips}</div>
       <div class="location-summary" title="Quick reference for ${esc(loc.name || 'the current location')}">
-        ${row('System', system, 'system', 'starSystemId')}
-        ${row('Star', star, 'star', 'starId')}
+        ${relRow('System', system)}
+        ${relRow('Star', star)}
         ${row('Colony/Base', colonyBase, 'colony', 'colonyBaseId')}
         ${row('District', district, 'district', 'districtId')}
       </div>

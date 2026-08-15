@@ -27,7 +27,7 @@ import {
   addLocationTradeCode, removeLocationTradeCode, addLocationBase, removeLocationBase,
   addConflictSessionHook, toggleConflictSessionHookUsed, removeConflictSessionHook, addConflictIrreversibleFact,
   setConflictFactionPosture, removeConflictFactionPosture, updateConflictInformationAsymmetry,
-  clearConflictInformationAsymmetry, revealConflictInformationAsymmetry, setLocationHierarchyField,
+  clearConflictInformationAsymmetry, revealConflictInformationAsymmetry,
 } from '../domain/entities.js';
 import { findCatalogItem } from '../data/gearCatalog.js';
 import { installEnhancement, removeEnhancement } from '../domain/enhancements.js';
@@ -281,19 +281,22 @@ let searchOpen = false; // ephemeral — Universal Search overlay
 let searchQuery = '';
 // ephemeral — the shared "+" entity picker overlay, used by both WHO's
 // Actors (Protagonists/Antagonists/Bystanders) and WHERE's Current
-// Location System/Star/Colony-Base/District rows (workspace/index.js).
-// null when closed; { entityType, mode, scope, query } when open:
+// Location Colony-Base/District rows (workspace/index.js). null when
+// closed; { entityType, mode, scope, query } when open:
 //   entityType 'npc'   — mode one of 'protagonist'|'antagonist'|'bystander',
 //     scope null (implicitly the current scene) — candidates are NPCs,
 //     Protagonists further filtered to #character-tagged, Antagonists to
 //     NOT so tagged (renderEntityPickerOverlay); selecting one calls the
 //     matching addScene*() (scenes.js).
-//   entityType 'location' — mode one of 'system'|'star'|'colony'|'district',
-//     scope the Location entity id being set — candidates are Locations
-//     tagged #system/#star/#colony/#district to match; selecting one sets
-//     that field on `scope` (setLocationHierarchyField for system/star/
-//     colony, so the cross-reference/reconciliation applies; a plain
-//     updateEntity for district, which doesn't participate in that trio).
+//   entityType 'location' — mode one of 'colony'|'district', scope the
+//     Location entity id being set — candidates are Locations tagged
+//     #colony/#district to match; selecting one sets that field on
+//     `scope` via a plain updateEntity. System/Star used to be picker
+//     modes here too, but per direct follow-up request ("just use the
+//     Relationships for setting the choice") they're gone — System/Star
+//     are read-only, relationship-graph-derived displays now
+//     (getSystemForLocation/getStarForLocation, entities.js), set by
+//     adding a located_at relationship in the Entity Editor instead.
 let entityPicker = null;
 let oracleEditorOpen = new Set(); // ephemeral — which oracle tables' entry editors are expanded
 let oracleTagEditorOpen = new Set(); // ephemeral — which oracle tables' TAG editors are expanded (docs/adr/0016), hidden by default
@@ -403,7 +406,7 @@ let lastDocViewerSrc = null;
 // (rollAction/rollFlat/rollTraveller's return shape) the window renders.
 let diceRollResult = null;
 let focusInspectorNameNextRender = false; // ephemeral — set by clicking any data-open-entity link/chip, so Entity Detail's name field is focused+selected the moment it renders
-let focusInspectorRelationshipNextRender = false; // ephemeral — set by promptMissingLocationRelationship, so Entity Detail's "add relationship" type field is focused once it renders (WHERE's System/Star/Colony-Base cross-reference "no relationship yet" prompt)
+let focusInspectorRelationshipNextRender = false; // ephemeral — set by Current Location's "🔗" link (data-location-edit-relationships), so Entity Detail's "add relationship" type field is focused once it renders
 let entityDetailFocusEventId = ''; // ephemeral — set when a data-open-entity link also carries data-open-entity-event (a Faction Events turn's faction-name link); factionTurnSectionHtml highlights/expands that one Turn History entry
 
 export function mountShell(el) {
@@ -2161,18 +2164,7 @@ function onClick(ev) {
     entityPicker = null;
     if (!picker) return renderEntityPickerOverlay();
     if (picker.entityType === 'location') {
-      const field = picker.mode === 'system' ? 'starSystemId' : picker.mode === 'star' ? 'starId'
-        : picker.mode === 'colony' ? 'colonyBaseId' : 'districtId';
-      if (field === 'starSystemId' || field === 'starId' || field === 'colonyBaseId') {
-        let missing = null;
-        store.update((d) => {
-          const r = setLocationHierarchyField(d, picker.scope, field, id);
-          missing = r.missingRelationshipFor;
-          return r.campaign;
-        });
-        if (missing) promptMissingLocationRelationship(missing);
-        return;
-      }
+      const field = picker.mode === 'colony' ? 'colonyBaseId' : 'districtId';
       return store.update((d) => updateEntity(d, picker.scope, { [field]: id }));
     }
     const sceneId = currentSceneId();
@@ -2182,15 +2174,30 @@ function onClick(ev) {
     if (picker.mode === 'bystander') return store.update((d) => addSceneBystander(d, sceneId, id));
     return renderEntityPickerOverlay();
   }
-  // Current Location's "-" clear button (workspace/index.js's
-  // currentLocationBanner) — a plain field clear, deliberately not routed
-  // through setLocationHierarchyField (that function's cascade logic is
-  // for REPLACING a value with a new, possibly-inconsistent one; clearing
-  // one field outright has nothing to reconcile against).
+  // Current Location's "-" clear button, and Location Details' matching
+  // "✕" on a Colony-Base/District entry (workspace/index.js) — a plain
+  // field clear; Colony-Base/District are the only two of the four rows
+  // still stored/settable fields (System/Star are relationship-derived
+  // now, see the entityPicker comment above).
   const locFieldClear = hit('[data-location-field-clear]');
   if (locFieldClear) {
     const [locId, field] = locFieldClear.dataset.locationFieldClear.split('::');
     return store.update((d) => updateEntity(d, locId, { [field]: null }));
+  }
+  // Current Location's System/Star rows (now read-only, relationship-
+  // derived) get a "🔗" link instead of a "+" picker — opens that
+  // Location's own Entity Editor with the "add relationship" type select
+  // focused, so the GM can set up (or fix) the located_at edge directly.
+  // No confirm prompt (unlike the old picker-driven missing-relationship
+  // flow this replaces) — clicking it is already a deliberate "go set
+  // this up" action, not an automatic consequence of an unrelated pick.
+  const locEditRel = hit('[data-location-edit-relationships]');
+  if (locEditRel) {
+    const locId = locEditRel.dataset.locationEditRelationships;
+    openDrawerTab('entity-detail');
+    focusInspectorRelationshipNextRender = true;
+    store.update((d) => setActiveEntity(d, locId));
+    return;
   }
   const locationDetailsToggle = hit('[data-location-details-toggle]');
   if (locationDetailsToggle) {
@@ -4478,12 +4485,12 @@ function renderSearchOverlay() {
 }
 
 // The shared "+" entity picker (WHO's Actors + WHERE's Current Location
-// rows, workspace/index.js) — same static-skeleton/targeted-update shape
-// as renderSearchOverlay above. Branches once on entityPicker.entityType:
-// 'npc' candidates are scene Actors (with the same exclude-already-on-
-// this-list + tag-filter rules as before); 'location' candidates are
-// Locations tagged to match the picked row (#system/#star/#colony/
-// #district), excluding the Location being edited itself.
+// Colony-Base/District rows, workspace/index.js) — same static-skeleton/
+// targeted-update shape as renderSearchOverlay above. Branches once on
+// entityPicker.entityType: 'npc' candidates are scene Actors (with the
+// same exclude-already-on-this-list + tag-filter rules as before);
+// 'location' candidates are Locations tagged #colony/#district to match
+// the picked row, excluding the Location being edited itself.
 function renderEntityPickerOverlay() {
   const overlay = root && root.querySelector('[data-entity-picker-overlay]');
   if (!overlay) return;
@@ -4495,8 +4502,7 @@ function renderEntityPickerOverlay() {
   const query = (entityPicker.query || '').trim().toLowerCase();
   let candidates; let emptyMessage;
   if (entityPicker.entityType === 'location') {
-    const tag = entityPicker.mode === 'system' ? 'system' : entityPicker.mode === 'star' ? 'star'
-      : entityPicker.mode === 'colony' ? 'colony' : 'district';
+    const tag = entityPicker.mode === 'colony' ? 'colony' : 'district';
     candidates = listEntities(doc, ['location'])
       .filter((l) => l.id !== entityPicker.scope && (l.tags || []).includes(tag));
     emptyMessage = `No #${tag} locations yet — tag one in Cast first.`;
@@ -4518,23 +4524,6 @@ function renderEntityPickerOverlay() {
     : `<p class="dim small">${escapeHtml(emptyMessage)}</p>`;
 }
 
-// WHERE's System/Star/Colony-Base cross-reference (setLocationHierarchyField,
-// entities.js) couldn't find the OTHER entity in the pair because
-// `missing.entityId` has no #<missing.wantTag> Location it's `located_at` —
-// direct follow-up request: ask (window.confirm — a yes/no decision, not a
-// value, same posture as every delete confirmation) whether to open that
-// entity's own editor and set one up, rather than failing silently. "No"
-// leaves the campaign exactly as setLocationHierarchyField already left it
-// (the resolvable field set, the unresolvable one cleared).
-function promptMissingLocationRelationship(missing) {
-  const ent = getEntity(store.get(), missing.entityId);
-  const name = ent ? (ent.name || 'Unnamed') : 'This location';
-  const ok = window.confirm(`${name} has no linked #${missing.wantTag} yet. Open its Entity Editor to set one up?`);
-  if (!ok) return;
-  openDrawerTab('entity-detail');
-  focusInspectorRelationshipNextRender = true;
-  store.update((d) => setActiveEntity(d, missing.entityId));
-}
 
 // The dice roll window (performFieldRoll's replacement for a plain toast) —
 // a graphical breakdown of the roll: the action/flat/traveller die(s) plus
@@ -4766,11 +4755,11 @@ function renderDrawerBody() {
     const nameInput = root && root.querySelector('.inspector-name');
     if (nameInput) { nameInput.focus(); nameInput.select(); }
   }
-  // promptMissingLocationRelationship's "open the editor and set up the
-  // relationship" path — focuses the "add relationship" row's type select
-  // (.rel-add, drawers/index.js's inspector()) instead of the name field
-  // above, since the GM's actual next action here is picking a target
-  // entity + type, not renaming anything.
+  // Current Location's "🔗" (data-location-edit-relationships) — focuses
+  // the "add relationship" row's type select (.rel-add, drawers/index.js's
+  // inspector()) instead of the name field above, since the GM's actual
+  // next action here is picking a target entity + type, not renaming
+  // anything.
   if (focusInspectorRelationshipNextRender) {
     focusInspectorRelationshipNextRender = false;
     const relTypeSelect = root && root.querySelector('[data-entity-link-type]');

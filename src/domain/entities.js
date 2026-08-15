@@ -288,17 +288,20 @@ function ensureWorldProfileFields(e) {
 // null per-field until a roll actually sources it; typing a value
 // directly (never rolled) leaves it null, so a hand-typed sight/smell/
 // sound is never mistaken for something a table roll should "remember."
-// System/Star/Colony-Base/District as real entity references (WHERE
-// redesign, direct follow-up request) — WHERE's Current Location banner
-// used to show these as either free text (`zone`/`starSystem`/`bases[]`,
-// hand-typed, no link to an actual Location entity) or a live graph walk
-// (District, via getContainingLocation) with no way to override it. All
-// four are now explicit id references, each set via its own tag-filtered
-// "+" picker (#system/#star/#colony/#district, workspace/index.js's
-// currentLocationBanner) — one consistent mechanism for all four instead
-// of three different ones. The old zone/starSystem/bases fields (see
-// ensureWorldProfileFields below) stay in the schema, untouched and
-// inert (migration rule 5) — nothing reads them anymore.
+// Colony-Base/District as real entity references (WHERE redesign) — WHERE's
+// Current Location banner used to show these as free text (`bases[]`,
+// hand-typed) or a live graph walk (District, via getContainingLocation)
+// with no way to override it; both are now explicit id references, each
+// set via its own tag-filtered "+" picker (#colony/#district, workspace/
+// index.js's currentLocationBanner). System/Star used to be a THIRD id-
+// reference pair here (starSystemId/starId) with their own picker, but per
+// direct follow-up request ("just use the Relationships for setting the
+// choice") those are retired in favor of a pure relationship-graph read —
+// getSystemForLocation/getStarForLocation/getHexZoneForLocation, below —
+// so System/Star never drift out of sync with what the GM actually linked
+// in Cast. starSystemId/starId stay declared here, untouched and inert
+// (migration rule 5, same posture as the older zone/starSystem/bases
+// fields) — nothing reads them anymore.
 function ensureLocationFields(e) {
   if (e.type !== 'location') return;
   if (e.starSystemId === undefined) e.starSystemId = null;
@@ -1030,90 +1033,59 @@ export function findRelatedStar(campaign, systemId) {
   return star && (star.tags || []).includes('star') ? star : null;
 }
 
-/** The reverse of findRelatedStar: which #system Location has ITS OWN
- *  `located_at` edge pointing at this star. Deliberately a search over
- *  every #system Location's own edge, not getContainedLocations(starId) —
- *  a fresh reverse edge from the System's own located_at link now auto-
- *  mirrors as 'contains' (see _link/updateRelationshipType's own
- *  INVERSE_REL_TYPE above), but a Location linked before that fix shipped
- *  may still only have the old generic 'linked' reverse edge, which this
- *  search doesn't depend on either way. Null if none found. */
-export function findRelatedSystem(campaign, starId) {
-  return (campaign.entities.items || []).find((e) =>
-    e.type === 'location' && (e.tags || []).includes('system') &&
-    (e.relationships || []).some((r) => r.type === 'located_at' && r.to === starId)) || null;
-}
-
-/** A #colony Location's own `located_at` edge, read as "this Colony's
- *  System" — only if that parent is tagged #system. One hop only (a
- *  Colony located_at something other than a #system Location doesn't
- *  correlate). Null if unresolvable. */
-export function findRelatedSystemForColony(campaign, colonyId) {
-  const parent = getContainingLocation(campaign, colonyId);
+/** "What System does this Location belong to?" (WHERE redesign, direct
+ *  follow-up request — System is now a pure relationship-graph read, not
+ *  a separately picked/stored field: "just use the Relationships for
+ *  setting the choice"). A Location IS its own System if tagged #system;
+ *  otherwise its own `located_at` parent (one hop, getContainingLocation)
+ *  counts only if THAT is tagged #system. No further, unbounded walking —
+ *  matches the same one-hop-from-a-direct-edge posture every other
+ *  location-hierarchy read in this file already uses (isSameDistrict,
+ *  findRelatedStar). Works "for any location," not just the current WHERE
+ *  one — callers pass whichever entity they're viewing. Null if neither
+ *  applies. */
+export function getSystemForLocation(campaign, locationId) {
+  const loc = getEntity(campaign, locationId);
+  if (!loc) return null;
+  if ((loc.tags || []).includes('system')) return loc;
+  const parent = getContainingLocation(campaign, locationId);
   return parent && (parent.tags || []).includes('system') ? parent : null;
 }
 
-/** Sets one of a Location's three hierarchy references — starSystemId,
- *  starId, or colonyBaseId (WHERE redesign, direct follow-up request) —
- *  and reconciles the whole trio from there: auto-fills whichever of the
- *  other two is resolvable via the relationship graph (findRelatedStar/
- *  findRelatedSystem/findRelatedSystemForColony above), and CLEARS
- *  whichever no longer validates against the new pick (e.g. picking a
- *  different System than the one the current Colony-Base actually chains
- *  up to drops the now-stale Colony-Base) rather than leaving a silently
- *  inconsistent trio. Returns `{ campaign, missingRelationshipFor }` —
- *  the latter is `{ entityId, wantTag }` naming which entity has no
- *  #<wantTag> Location it could cross-reference to, so the UI (shell.js)
- *  can offer to open that entity's editor and add one; null when
- *  everything resolved (or the field was just cleared, refId falsy —
- *  clearing one field never cascades to the other two, unlike picking a
- *  new value). No-op (missingRelationshipFor null) for `field: 'districtId'`
- *  or any other field — District doesn't participate in this trio. */
-export function setLocationHierarchyField(campaign, locationId, field, refId) {
-  const next = clone(campaign);
-  const loc = getEntity(next, locationId);
-  if (!loc || (field !== 'starSystemId' && field !== 'starId' && field !== 'colonyBaseId')) {
-    return { campaign: next, missingRelationshipFor: null };
-  }
-  loc[field] = refId || null;
-  if (!refId) return { campaign: next, missingRelationshipFor: null };
+/** "What Star does this Location's system orbit?" — same idea as
+ *  getSystemForLocation, chained one hop further: a Location IS its own
+ *  Star if tagged #star; otherwise resolve its System (above) and read
+ *  THAT System's own located_at parent via findRelatedStar. Null if
+ *  either hop doesn't resolve. */
+export function getStarForLocation(campaign, locationId) {
+  const loc = getEntity(campaign, locationId);
+  if (!loc) return null;
+  if ((loc.tags || []).includes('star')) return loc;
+  const system = getSystemForLocation(campaign, locationId);
+  return system ? findRelatedStar(campaign, system.id) : null;
+}
 
-  let missingRelationshipFor = null;
-  if (field === 'starSystemId') {
-    const star = findRelatedStar(next, refId);
-    loc.starId = star ? star.id : null;
-    if (!star) missingRelationshipFor = { entityId: refId, wantTag: 'star' };
-    if (loc.colonyBaseId) {
-      const colonySystem = findRelatedSystemForColony(next, loc.colonyBaseId);
-      if (!colonySystem || colonySystem.id !== refId) loc.colonyBaseId = null;
-    }
-  } else if (field === 'starId') {
-    const system = findRelatedSystem(next, refId);
-    if (system) {
-      loc.starSystemId = system.id;
-      if (loc.colonyBaseId) {
-        const colonySystem = findRelatedSystemForColony(next, loc.colonyBaseId);
-        if (!colonySystem || colonySystem.id !== system.id) loc.colonyBaseId = null;
-      }
-    } else {
-      loc.starSystemId = null;
-      loc.colonyBaseId = null;
-      missingRelationshipFor = { entityId: refId, wantTag: 'system' };
-    }
-  } else if (field === 'colonyBaseId') {
-    const system = findRelatedSystemForColony(next, refId);
-    if (system) {
-      loc.starSystemId = system.id;
-      const star = findRelatedStar(next, system.id);
-      loc.starId = star ? star.id : null;
-      if (!star) missingRelationshipFor = { entityId: system.id, wantTag: 'star' };
-    } else {
-      loc.starSystemId = null;
-      loc.starId = null;
-      missingRelationshipFor = { entityId: refId, wantTag: 'system' };
-    }
+/** Hex/Zone (HOSTILE gazetteer fields, entities.js's ensureWorldProfileFields)
+ *  only mean anything for a #system or #star Location — and direct
+ *  follow-up request: "you can define the Hex and Zone in either type...
+ *  but only one can be correct and the #star wins out." A #star Location's
+ *  own hex/zone is always authoritative. A #system Location's own
+ *  hex/zone is used ONLY when its related Star (findRelatedStar) has
+ *  neither set — otherwise the Star's values override, reported via
+ *  `overriddenBy` so the UI can show a read-only "(from X)" state instead
+ *  of a silently-ignored editable field. Any other Location type gets
+ *  blanks (Hex/Zone isn't shown as editable there at all — see
+ *  worldProfileSection, drawers/index.js). */
+export function getHexZoneForLocation(campaign, locationId) {
+  const loc = getEntity(campaign, locationId);
+  if (!loc) return { hex: '', zone: '', overriddenBy: null };
+  if ((loc.tags || []).includes('star')) return { hex: loc.hex || '', zone: loc.zone || '', overriddenBy: null };
+  if ((loc.tags || []).includes('system')) {
+    const star = findRelatedStar(campaign, locationId);
+    if (star && (star.hex || star.zone)) return { hex: star.hex || '', zone: star.zone || '', overriddenBy: star };
+    return { hex: loc.hex || '', zone: loc.zone || '', overriddenBy: null };
   }
-  return { campaign: next, missingRelationshipFor };
+  return { hex: '', zone: '', overriddenBy: null };
 }
 
 /** Every entity conceptually belongs to a faction, even a bystander one —
