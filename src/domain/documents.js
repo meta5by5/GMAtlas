@@ -33,7 +33,7 @@ export function addDocument(campaign, patch = {}) {
     id: 'doc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     title: String(patch.title || 'Untitled document').trim(),
     content: String(patch.content || ''),
-    kind: patch.kind === 'file' ? 'file' : patch.kind === 'drive' ? 'drive' : 'note',
+    kind: patch.kind === 'file' ? 'file' : 'note',
     tags: Array.isArray(patch.tags) ? patch.tags.map(normalizeTag).filter(Boolean) : [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -45,18 +45,6 @@ export function addDocument(campaign, patch = {}) {
     entry.fileName = String(patch.fileName || entry.title);
     entry.mimeType = String(patch.mimeType || 'application/octet-stream');
     entry.dataUrl = String(patch.dataUrl || '');
-  }
-  // Google Drive-linked documents (direct follow-up request — "the URL is
-  // saved... backed up and moved to other machines") carry only the Drive
-  // file id and the raw pasted share link — never the file's own bytes, so
-  // a campaign export/backup stays small and portable regardless of how
-  // large the actual PDF is. driveFileId (extractDriveFileId below) is what
-  // the viewer actually uses to build a fetch/embed URL each time; driveUrl
-  // is kept only as the original reference (shown on hover, not otherwise
-  // read back).
-  if (entry.kind === 'drive') {
-    entry.driveUrl = String(patch.driveUrl || '');
-    entry.driveFileId = String(patch.driveFileId || '');
   }
   docs.library.push(entry);
   return next;
@@ -302,9 +290,8 @@ export function linkDocumentMentions(campaign, text) {
 }
 
 /** Resolve a mentioned title to a document — an OPENABLE match (an uploaded
- *  PDF, a Drive-linked document, or a Reference Library entry — always a
- *  real PDF) wins over a same-titled uploaded TEXT NOTE, not just whichever
- *  list happens to be
+ *  PDF, or a Reference Library entry — always a real PDF) wins over a
+ *  same-titled uploaded TEXT NOTE, not just whichever list happens to be
  *  checked first. Without that preference, a stray phantom note sharing a
  *  Reference Library PDF's exact title (see linkDocumentMentions above —
  *  this used to be possible to create) would permanently shadow the real
@@ -316,7 +303,7 @@ export function findDocumentTabByTitle(campaign, name) {
   if (!key) return null;
   const library = (campaign.documents && campaign.documents.library) || [];
   const libEntry = library.find((d) => String(d.title || '').trim().toLowerCase() === key);
-  if (libEntry && (libEntry.kind === 'file' || libEntry.kind === 'drive')) return { tabKey: 'lib:' + libEntry.id, title: libEntry.title, openable: true };
+  if (libEntry && libEntry.kind === 'file') return { tabKey: 'lib:' + libEntry.id, title: libEntry.title, openable: true };
   const refDocs = listReferenceDocuments(campaign);
   const ref = refDocs.find((r) => String(r.title || '').trim().toLowerCase() === key);
   if (ref) return { tabKey: 'ref:' + ref.key, title: ref.title, openable: true };
@@ -460,55 +447,15 @@ function withPageAnchor(src, page) {
   return src.split('#')[0] + '#page=' + page;
 }
 
-// --- Google Drive-linked documents (direct follow-up request) -------------
-// A GM pastes any of Drive's own share-link shapes ("Anyone with the link"
-// sharing, set from Drive itself — no OAuth/API key, no live "browse my
-// Drive" picker, confirmed via direct question): the file/d/<id>/view form
-// the "Share" dialog produces, or a raw ?id=/uc?id= form. Only the file id
-// is actually kept (addDocument above) — everything the viewer needs is
-// re-derived from it on demand, so a share link's other query params
-// (which can rotate) never need to stay valid.
-const DRIVE_ID_PATTERNS = [/\/file\/d\/([a-zA-Z0-9_-]{10,})/, /[?&]id=([a-zA-Z0-9_-]{10,})/];
-
-/** Pulls a Drive file id out of any of Drive's own share-link shapes; null
- *  for anything that doesn't look like one (the add-flow's own validation —
- *  shell.js rejects the paste outright rather than silently storing
- *  something that can never resolve to a real file). */
-export function extractDriveFileId(url) {
-  const s = String(url || '').trim();
-  for (const re of DRIVE_ID_PATTERNS) {
-    const m = s.match(re);
-    if (m) return m[1];
-  }
-  return null;
-}
-
-/** Drive's direct-download endpoint — what the viewer tries to fetch and
- *  cache locally first (ui/shell.js's loadRemoteDocBlobUrl). */
-export function driveDownloadUrl(fileId) {
-  return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`;
-}
-
-/** Drive's own OFFICIAL embeddable viewer — the fallback the viewer falls
- *  back to when fetching-and-caching isn't possible (e.g. Drive's download
- *  endpoint doesn't grant this app's origin CORS access — confirmed likely
- *  via a live header check before building this). A normal cross-origin
- *  iframe navigation, not a fetch, so CORS doesn't apply to it at all; Drive
- *  explicitly designs this URL shape to be framed by third-party pages,
- *  unlike the download endpoint. Never falls back to driveDownloadUrl
- *  itself for the iframe src — that's the literal URL shape that forces a
- *  download/hands off to an external app, the whole bug being fixed. */
-export function drivePreviewUrl(fileId) {
-  return `https://drive.google.com/file/d/${encodeURIComponent(fileId)}/preview`;
-}
-
 /** Google's own (undocumented, but long-standing and widely relied upon)
- *  generic PDF embed viewer — the equivalent fallback for a Reference
- *  Library doc served from GitHub Releases, which has no first-party
- *  "embed this file" URL shape the way Drive does. Used the same way:
- *  only when fetch-and-cache fails (GitHub's release-asset host sends no
- *  CORS header at all, confirmed via a live header check — a direct fetch()
- *  from the browser is blocked outright, not just slow). */
+ *  generic PDF embed viewer — used as the LAST-RESORT fallback (ui/
+ *  shell.js) when a Reference Library doc's fetch-and-cache attempt fails
+ *  (GitHub's release-asset host sends no CORS header at all, confirmed via
+ *  a live header check, so the browser's fetch() is blocked outright, not
+ *  just slow). A normal cross-origin iframe NAVIGATION to this URL, not a
+ *  fetch, so CORS doesn't apply to it at all — critically, the fallback
+ *  must never be the raw source URL itself, since that's the literal thing
+ *  that forces the download this whole mechanism exists to avoid. */
 export function gviewEmbedUrl(fileUrl) {
   return `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(fileUrl)}`;
 }
@@ -734,14 +681,5 @@ export function resolveDocumentTab(campaign, tabKey) {
   }
   const entry = getDocument(campaign, id);
   if (!entry) return null;
-  // A Drive-linked entry has no dataUrl at all (addDocument above never
-  // sets one for kind:'drive') — src is Drive's own direct-download
-  // endpoint, the URL ui/shell.js's fetch-and-cache path actually requests;
-  // driveFileId rides along so that same caller can also build the
-  // preview-iframe fallback (drivePreviewUrl) without re-deriving it.
-  if (entry.kind === 'drive') {
-    if (!entry.driveFileId) return { title: entry.title, src: '', kind: 'lib', page };
-    return { title: entry.title, src: withPageAnchor(driveDownloadUrl(entry.driveFileId), page), kind: 'lib', page, driveFileId: entry.driveFileId };
-  }
   return { title: entry.title || entry.fileName, src: withPageAnchor(entry.dataUrl || '', page), kind: 'lib', page };
 }
