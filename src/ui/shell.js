@@ -7,7 +7,7 @@ import { store } from '../core/store.js';
 import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { continueStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField } from '../domain/session.js';
-import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, addSceneAsset, removeSceneAsset, addSceneLocation, removeSceneLocation, setSceneSystem, moveSceneActor } from '../domain/scenes.js';
+import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, addSceneAsset, removeSceneAsset, addSceneLocation, removeSceneLocation, setSceneSystem, addSceneDismissedFaction, removeSceneDismissedFaction, moveSceneActor } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag } from '../domain/oracles.js';
 import { oracleLinkTagsFor } from '../data/entityFieldOracleLinks.js';
@@ -27,7 +27,7 @@ import {
   addLocationTradeCode, removeLocationTradeCode, addLocationBase, removeLocationBase,
   addConflictSessionHook, toggleConflictSessionHookUsed, removeConflictSessionHook, addConflictIrreversibleFact,
   setConflictFactionPosture, removeConflictFactionPosture, updateConflictInformationAsymmetry,
-  clearConflictInformationAsymmetry, revealConflictInformationAsymmetry,
+  clearConflictInformationAsymmetry, revealConflictInformationAsymmetry, getEntityFaction,
 } from '../domain/entities.js';
 import { findCatalogItem } from '../data/gearCatalog.js';
 import { installEnhancement, removeEnhancement } from '../domain/enhancements.js';
@@ -55,7 +55,7 @@ import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors, reso
 import {
   ensureFactionGoalTrack, buyAsset, sellAsset, repairAssetOrFaction, useAssetAbility, expandInfluence,
   refitAsset, changeHomeworld, seizePlanet, toggleAssetStealth, expandEventReadAloud, setEventReadAloud,
-  proposeFactionStep, advanceFactionTurnRound, commitFactionTurn, factionsPresentAt, getCurrentWhereLocations,
+  proposeFactionStep, advanceFactionTurnRound, commitFactionTurn, factionsPresentAt, getCurrentWhereLocations, factionsInRegion,
   resetFactionPacing, ensureConflictEscalationTrack, getConflictEscalationTrack, suggestedConflictEscalations, removeFactionBase,
 } from '../domain/factionTurnEngine.js';
 import { generateConflictSeed } from '../domain/factionConflicts.js';
@@ -416,6 +416,7 @@ let dashboardSectionCursor = 'who';
 // NPC scene-cards (WHO) and Location Details blocks (WHERE) are expanded.
 let expandedSceneNpcs = new Set();
 let expandedLocationDetails = new Set();
+let expandedFactionsNearby = new Set(); // ephemeral — WHO's "Factions active nearby" thumbnails, direct follow-up request (parity with NPCs' own scene-detail expand)
 // Ephemeral, collapsed on demand (default EXPANDED — empty Set means
 // nothing's collapsed): which of WHO's five thumbnail groups
 // (Protagonists/Antagonists/Bystanders/Factions active nearby/Assets
@@ -1092,14 +1093,26 @@ function onClick(ev) {
   if (revealToggle) { const id = revealToggle.dataset.revealToggle; return store.update((d) => updateEntity(d, id, { revealedOpen: !getEntity(d, id).revealedOpen })); }
   const unlink = hit('[data-entity-unlink]');
   if (unlink) { const active = store.get().entities.activeId; return store.update((d) => removeRelationship(d, active, unlink.dataset.entityUnlink)); }
-  // WHO's ✕ on a manually-linked "faction operating here" chip
-  // (factionsActiveNearbyBlock, workspace/index.js, docs/adr/0038) — only
-  // ever rendered for a `located_at` relationship the GM added themselves,
-  // so this is always safe to remove outright.
-  const whereFactionUnlink = hit('[data-where-faction-unlink]');
-  if (whereFactionUnlink) {
-    const [locationId, factionId] = whereFactionUnlink.dataset.whereFactionUnlink.split('::');
-    return store.update((d) => removeRelationship(d, factionId, locationId));
+  // WHO's ✕ on any "Factions active nearby" thumbnail (direct follow-up
+  // request — parity with NPCs' own always-available remove) — dismisses
+  // it from this scene's view (scenes.js's addSceneDismissedFaction)
+  // without touching whatever real presence made it appear; re-linking it
+  // via the "+" picker clears the dismissal again (see the
+  // entityPickerSelectBtn 'where-faction-link' branch above).
+  const factionDismiss = hit('[data-scene-faction-dismiss]');
+  if (factionDismiss) {
+    const sceneId = currentSceneId();
+    if (!sceneId) return;
+    return store.update((d) => addSceneDismissedFaction(d, sceneId, factionDismiss.dataset.sceneFactionDismiss));
+  }
+  // WHO's ▸/▾ on a "Factions active nearby" thumbnail (direct follow-up
+  // request — parity with NPCs' own scene-detail expand) — reveals
+  // factionDetailBody's read-only Agenda/Fear/Need/HQ snippet.
+  const factionNearbyToggle = hit('[data-faction-nearby-toggle]');
+  if (factionNearbyToggle) {
+    const id = factionNearbyToggle.dataset.factionNearbyToggle;
+    if (expandedFactionsNearby.has(id)) expandedFactionsNearby.delete(id); else expandedFactionsNearby.add(id);
+    return render();
   }
   const entTagRemove = hit('[data-entity-tag-remove]');
   if (entTagRemove) { const active = store.get().entities.activeId; return store.update((d) => removeEntityTag(d, active, entTagRemove.dataset.entityTagRemove)); }
@@ -2350,7 +2363,9 @@ function onClick(ev) {
         ? { entityType: 'location-current', mode: 'current', scope: null, query: '' }
         : raw === 'system'
           ? { entityType: 'system', mode: 'system', scope: null, query: '' }
-          : { entityType: 'npc', mode: raw, scope: null, query: '' };
+          : raw.startsWith('where-faction-link:')
+            ? { entityType: 'where-faction-link', mode: 'link', scope: raw.slice('where-faction-link:'.length), query: '' }
+            : { entityType: 'npc', mode: raw, scope: null, query: '' };
     renderEntityPickerOverlay();
     const inp = root.querySelector('[data-entity-picker-query]');
     if (inp) { inp.value = ''; inp.focus(); }
@@ -2364,6 +2379,21 @@ function onClick(ev) {
     const picker = entityPicker;
     entityPicker = null;
     if (!picker) return renderEntityPickerOverlay();
+    if (picker.entityType === 'where-faction-link') {
+      // WHO's "+" on Factions active nearby (direct follow-up request,
+      // replacing the old inline <select>) — links the picked faction to
+      // the scope Location via a real located_at relationship (same
+      // action the old dropdown's onChange took), and clears any stale
+      // dismissal (scenes.js's removeSceneDismissedFaction) so a
+      // deliberate re-add isn't immediately hidden again.
+      const locationId = picker.scope;
+      const sceneId0 = currentSceneId();
+      return store.update((d) => {
+        let next = addRelationship(d, id, locationId, 'Located At', 'located_at');
+        if (sceneId0) next = removeSceneDismissedFaction(next, sceneId0, id);
+        return next;
+      });
+    }
     const sceneId = currentSceneId();
     if (!sceneId) return renderEntityPickerOverlay();
     if (picker.entityType === 'asset') return store.update((d) => addSceneAsset(d, sceneId, id));
@@ -3011,18 +3041,6 @@ function onChange(ev) {
     if (!factionId) return;
     return store.update((d) => addRelationship(d, conflictId, factionId, 'Involves', 'involves'));
   }
-  // WHO's own "+ faction operating here" dropdown (factionsActiveNearbyBlock,
-  // workspace/index.js) — same select-picks-then-immediately-links pattern
-  // as data-conflict-faction-link above, a `located_at` relationship
-  // instead of `involves` (docs/adr/0038).
-  const whereFactionLink = t.closest('[data-where-faction-link]');
-  if (whereFactionLink) {
-    const locationId = whereFactionLink.dataset.whereFactionLink;
-    const factionId = t.value;
-    t.value = '';
-    if (!factionId) return;
-    return store.update((d) => addRelationship(d, factionId, locationId, 'Located At', 'located_at'));
-  }
 
   const oev = t.closest('[data-oracle-entry-value]');
   if (oev) {
@@ -3265,9 +3283,18 @@ function onChange(ev) {
 // max-height on .scene-fields textarea (~4 rows) is what caps the visible
 // growth and hands off to internal scrolling beyond that, this only ever
 // asks for "as tall as the content wants," never enforces the cap itself.
+// Grows to fit content on every keystroke, but never shrinks below
+// whatever height is already set — including one the GM dragged taller
+// via the field's own resize handle (direct follow-up request: "allow all
+// textboxes to be resizeable... to view more text") — so a manual resize
+// and typing don't fight each other. Resetting to 'auto' first is still
+// needed to measure the CONTENT's real natural height (scrollHeight can
+// otherwise just report back whatever the current, possibly-larger,
+// explicit height already is, since there's no overflow to reveal it).
 function autoGrowSceneField(el) {
+  const prevHeight = parseFloat(el.style.height) || 0;
   el.style.height = 'auto';
-  el.style.height = el.scrollHeight + 'px';
+  el.style.height = Math.max(el.scrollHeight, prevHeight) + 'px';
 }
 
 function onInput(ev) {
@@ -4589,14 +4616,15 @@ function render() {
   titleEl.textContent = titleForDrawer(doc, activeDrawer);
   titleEl.classList.remove('drawer-title-toggle'); // Cast's own collapse-via-title is gone — Cast isn't a drawer tab anymore
   titleEl.title = '';
-  // Direct follow-up request: every drawer (and the Advisor panel,
-  // styles/tokens.css's --copilot-w) is the SAME width as Cast, for UX
-  // consistency — doc.drawers.widths' old per-drawer overrides (its own
-  // keys didn't even match today's drawer ids — 'entities' isn't 'cast'
-  // or 'entity-detail') are no longer read here; left inert in the schema
-  // per migration rule 5. 420px is Cast's own effective width (it was
-  // never in that map, so it already fell back to this default).
-  drawer.style.setProperty('--drawer-w', '420px');
+  // Direct follow-up request: every drawer, and the Advisor panel/grid
+  // column, are the SAME width as Cast, for UX consistency (and so their
+  // left edges align exactly, a real reported misalignment) — one shared
+  // --drawer-w token, declared once at :root (tokens.css) and read by
+  // both .mc-drawer's own width AND .cockpit's grid-template-columns, so
+  // there's nothing left to set per-render here. doc.drawers.widths' old
+  // per-drawer overrides (its own keys didn't even match today's drawer
+  // ids — 'entities' isn't 'cast' or 'entity-detail') are no longer read
+  // at all; left inert in the schema per migration rule 5.
   const drawerHeadExtra = drawer.querySelector('[data-drawer-head-extra]');
   if (drawerHeadExtra) drawerHeadExtra.innerHTML = headExtraForDrawer(activeDrawer);
   // Tab strip — same pattern as the doc viewer's own tabs below: one pinned
@@ -4646,14 +4674,13 @@ function render() {
   const openTabs = docViewerOpenTabs;
   viewer.hidden = openTabs.length === 0;
   // Narrow the viewer to sit beside the (now-still-visible, see above)
-  // drawer panel instead of covering it, desktop/tablet only — matches
-  // the drawer's own current width (420px, same value .mc-drawer's inline
-  // --drawer-w above uses — every drawer is this one width now, see that
-  // assignment's own comment) so their edges meet with no gap or overlap.
+  // drawer panel instead of covering it, desktop/tablet only — the same
+  // --drawer-w token (tokens.css) the drawer's own width and the Advisor
+  // grid column both use, so its edge meets theirs with no gap or overlap.
   // Reset to the CSS default (full width to the edge nav) the moment
   // there's nothing to share space with.
   viewer.style.right = (!compact && openTabs.length > 0 && openDrawers.length > 0 && !drawerCollapsed)
-    ? `calc(var(--edge-w) + min(420px, 88vw))`
+    ? `calc(var(--edge-w) + min(var(--drawer-w, 420px), 88vw))`
     : '';
   if (openTabs.length) {
     const activeTab = doc.documents.activeTab && openTabs.includes(doc.documents.activeTab)
@@ -4768,6 +4795,31 @@ function renderEntityPickerOverlay() {
   } else if (entityPicker.entityType === 'system') {
     candidates = listEntities(doc, ['location']).filter((l) => (l.tags || []).includes('system'));
     emptyMessage = 'No #system locations yet — tag one in Cast first.';
+  } else if (entityPicker.entityType === 'where-faction-link') {
+    // WHO's Factions active nearby "+" (direct follow-up request) —
+    // excludes whatever's already showing there (region presence, an
+    // Actor's own membership, a manual link), same "active" pool
+    // factionsActiveNearbyBlock itself computes (workspace/index.js);
+    // a dismissed faction (not currently rendered) is NOT excluded, so
+    // it's reachable here again — picking it clears the dismissal (see
+    // entityPickerSelectBtn's 'where-faction-link' branch).
+    const scenes = doc.scenes || [];
+    const scene = scenes[scenes.length - 1];
+    const whereLocations = getCurrentWhereLocations(doc);
+    const seen = new Set();
+    for (const loc of whereLocations) {
+      for (const { faction } of factionsInRegion(doc, loc.id, { maxDepth: 6 })) seen.add(faction.id);
+    }
+    if (scene) {
+      const actorIds = [...(scene.protagonistIds || []), ...(scene.antagonistIds || []), ...(scene.bystanderIds || [])];
+      for (const id of actorIds) {
+        const faction = getEntityFaction(doc, id);
+        if (faction && faction.id) seen.add(faction.id);
+      }
+    }
+    const dismissed = new Set(scene ? (scene.dismissedFactionIds || []) : []);
+    candidates = listEntities(doc, ['faction']).filter((f) => !seen.has(f.id) || dismissed.has(f.id));
+    emptyMessage = 'No other Faction entities yet — add one in Cast first.';
   } else {
     const scenes = doc.scenes || [];
     const scene = scenes[scenes.length - 1];
@@ -4931,7 +4983,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, collapsedActorGroups, inspirationDrafts,
+    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,

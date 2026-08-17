@@ -27,7 +27,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .cockpit {
   display: grid;
   grid-template-rows: var(--header-h) var(--strip-h) 1fr;
-  grid-template-columns: 1fr var(--copilot-w);
+  grid-template-columns: 1fr var(--drawer-w); /* same token .mc-drawer's own width uses — see tokens.css */
   grid-template-areas:
     "header      header"
     "breadcrumb  breadcrumb"
@@ -445,11 +445,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .mc-copilot { transform: none; }
   /* ...except while a real drawer is pinned open (design/UX-ROADMAP.md
      Step 3): the drawer already visually covers this column (.mc-drawer
-     is the same width as --copilot-w, direct follow-up request), so the
-     standalone panel is hidden
-     rather than sitting duplicated/unreachable underneath it — its content
-     is reachable from the drawer's own tab strip instead (the 'advisor'
-     pseudo-tab, see shell.js's renderActiveDrawerHtml/hasPendingAdvisorDecision). */
+     and this grid column both size off the same --drawer-w token now, so
+     their left edges align exactly, not just approximately), so the
+     standalone panel is hidden rather than sitting duplicated/unreachable
+     underneath it — its content is reachable from the drawer's own tab
+     strip instead (the 'advisor' pseudo-tab, see shell.js's
+     renderActiveDrawerHtml/hasPendingAdvisorDecision). */
   .cockpit.has-open-drawer .mc-copilot { display: none; }
 }
 
@@ -707,12 +708,14 @@ button.actor-group-toggle { background: none; border: none; padding: 0; cursor: 
    reads much better as one legible column than crammed side by side. */
 .scene-fields { display: grid; grid-template-columns: 1fr; gap: var(--sp-3); margin: var(--sp-2) 0; }
 /* Each field is a <textarea> (not <input>) so it can grow with its
-   content: starts at one row (rows="1"), auto-grows on input up to ~4
-   rows (autoGrowSceneField, ui/shell.js — also run once per render for
-   fields already holding a lot of text), then scrolls internally beyond
-   that instead of growing forever. resize:none because the height is
-   already content-driven — a manual drag handle would just fight it. */
-.scene-fields textarea { resize: none; overflow-y: auto; line-height: 1.4; min-height: calc(1.4em + 1rem); max-height: calc(1.4em * 4 + 1rem); }
+   content: starts at one row (rows="1"), auto-grows on input with no cap
+   (autoGrowSceneField, ui/shell.js — also run once per render for fields
+   already holding a lot of text) — the old ~4-row cap-then-internal-
+   scroll is gone (direct follow-up request: "allow all textboxes to be
+   resizeable... to view more text"), replaced by a manual resize handle
+   too; autoGrowSceneField never shrinks below a height the GM dragged
+   larger (only grows to fit content on typing), so the two don't fight. */
+.scene-fields textarea { resize: vertical; overflow-y: auto; line-height: 1.4; min-height: calc(1.4em + 1rem); }
 /* Collapsed-by-default scene fields (docs/adr next-request UX batch) —
    the toggle is a <button> standing in for the field's own label text,
    so it needs the label's font reset instead of a default button look. */
@@ -762,10 +765,18 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
      were unaffected. */
   text-transform: none;
   white-space: pre-wrap; word-break: break-word;
+  /* Direct follow-up request ("allow all textboxes to be resizeable
+     vertically to view more text") — every rich mention-editor field gets
+     a manual drag handle now, not just Guide's own (previously the one
+     special-cased instance of this). overflow-y:auto above already makes
+     `resize` apply per spec. */
+  resize: vertical;
 }
 .mention-editor:focus { outline: none; border-color: var(--accent); }
 .mention-editor:empty::before { content: attr(data-placeholder); color: var(--text-dim); pointer-events: none; }
-.mention-text.mention-editor, .mention-text { min-height: 0; border: none; background: none; padding: 0; }
+/* The inline/read-only mention-text variant (no visible box chrome to
+   drag) opts back out of the resize handle the base rule above adds. */
+.mention-text.mention-editor, .mention-text { min-height: 0; border: none; background: none; padding: 0; resize: none; }
 .mention-editor ul, .mention-editor ol { margin: 0.2rem 0; padding-left: 1.4rem; }
 .mention-editor li { margin: 0.1rem 0; }
 .rt-lg { font-size: 1.3em; }
@@ -1663,10 +1674,10 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 /* Guide (docs/adr/0017: multi-doc tree, was one freeform field) */
 .guide-doc-head { margin-top: var(--sp-3); }
 .guide-title-input { width: 100%; box-sizing: border-box; font-size: 1rem; font-weight: 600; padding: 0.35rem 0.5rem; background: var(--bg-inset); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); }
-/* resize:vertical needs overflow non-visible, already true (overflow-y:auto
-   below) — scoped to .guide-editor alone, not every .mention-editor, since
-   WHO/WHERE/etc. context fields shouldn't gain a resize handle. */
-.guide-editor { min-height: 16rem; font-family: var(--font); resize: vertical; overflow-y: auto; }
+/* resize:vertical/overflow-y:auto now come from the base .mention-editor
+   rule (every rich field gained a resize handle, direct follow-up
+   request) — this just keeps Guide's own taller starting height. */
+.guide-editor { min-height: 16rem; font-family: var(--font); }
 .guide-tree-section { margin-top: var(--sp-4); border-top: 1px solid var(--border); padding-top: var(--sp-3); }
 .guide-tree-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-2); }
 .guide-tree-head h4 { margin: 0; font-size: 0.85rem; color: var(--accent); }

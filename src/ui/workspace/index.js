@@ -12,7 +12,7 @@ import { ACTIVITIES } from '../../domain/activities.js';
 import { listTagVocabulary, isSameDistrict, getEntity, listEntities, getContainingLocation, getContainedLocations, LOCATION_OBJECT_TYPES, getSystemForLocation, getStarForLocation, getHexZoneForLocation, getEntityFaction } from '../../domain/entities.js';
 import { getCurrentWhereLocations, factionsPresentAt, factionsInRegion } from '../../domain/factionTurnEngine.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
-import { buildMentionEditorHTML, richToolbarHTML, toolbarCollapsed } from '../mentionEditor.js';
+import { buildMentionEditorHTML, richToolbarHTML, richToolbarToggleHTML, toolbarCollapsed } from '../mentionEditor.js';
 import { renderFactionEvents } from '../drawers/factionEvents.js';
 import { CONFLICT_STATUS_OPTIONS, helpToggle } from '../drawers/index.js';
 import { getGalleryImage } from '../../domain/gallery.js';
@@ -359,9 +359,10 @@ function locationDetailBody(doc, ui, loc) {
       <div class="field-label sm">
         <span class="field-label-row">
           <span class="field-label-static">Regional faction activity</span>
+          ${richToolbarToggleHTML(toolbarKey, toolbarCollapsed(doc, ui, toolbarKey))}
           <button type="button" class="icon-btn" data-suggest-faction-oracles="${esc(loc.id)}" title="Suggest relevant oracles in the Advisor">💡</button>
         </span>
-        <div class="rich-field">${richToolbarHTML(toolbarKey, toolbarCollapsed(doc, ui, toolbarKey))}<div class="mention-editor" contenteditable="true" data-location-story="${esc(loc.id)}" data-placeholder="How are factions operating here? What's brewing?">${buildMentionEditorHTML(doc, loc.locationStory)}</div></div>
+        <div class="rich-field">${richToolbarHTML(toolbarKey, toolbarCollapsed(doc, ui, toolbarKey), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-location-story="${esc(loc.id)}" data-placeholder="How are factions operating here? What's brewing?">${buildMentionEditorHTML(doc, loc.locationStory)}</div></div>
       </div>
     </div>
   </div>`;
@@ -487,8 +488,9 @@ function whereLocationHierarchyBlock(doc, ui) {
 function whatSectionBody(doc, ui) {
   const c = doc.context.what;
   return `
-    <div class="field-label">Situation
-      <div class="rich-field">${richToolbarHTML('what:situation', toolbarCollapsed(doc, ui, 'what:situation'))}<div class="mention-editor" contenteditable="true" data-ctx="what.situation" data-placeholder="What is unresolved right now?">${buildMentionEditorHTML(doc, c.situation)}</div></div>
+    <div class="field-label">
+      <span class="field-label-row">Situation${richToolbarToggleHTML('what:situation', toolbarCollapsed(doc, ui, 'what:situation'))}</span>
+      <div class="rich-field">${richToolbarHTML('what:situation', toolbarCollapsed(doc, ui, 'what:situation'), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-ctx="what.situation" data-placeholder="What is unresolved right now?">${buildMentionEditorHTML(doc, c.situation)}</div></div>
     </div>
     <label class="field-label">Intent
       <select data-ctx="what.intent">
@@ -610,8 +612,9 @@ function dashboardTrackersBlock(doc) {
 // Actor group's own "+" picker, never by typing into a textbox).
 function summaryField(key, val, placeholder, doc, ui) {
   const toolbarKey = `${key}:summary`;
-  return `<div class="field-label">Focus
-    <div class="rich-field">${richToolbarHTML(toolbarKey, toolbarCollapsed(doc, ui, toolbarKey))}<div class="mention-editor" contenteditable="true" data-ctx="${key}.summary" data-placeholder="${esc(placeholder)}">${buildMentionEditorHTML(doc, val)}</div></div>
+  return `<div class="field-label">
+    <span class="field-label-row">Focus${richToolbarToggleHTML(toolbarKey, toolbarCollapsed(doc, ui, toolbarKey))}</span>
+    <div class="rich-field">${richToolbarHTML(toolbarKey, toolbarCollapsed(doc, ui, toolbarKey), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-ctx="${key}.summary" data-placeholder="${esc(placeholder)}">${buildMentionEditorHTML(doc, val)}</div></div>
   </div>`;
 }
 
@@ -659,6 +662,27 @@ function whyEntityPicker(doc, ui) {
     </div>`;
 }
 
+// A Factions active nearby entry's expanded detail body (direct follow-up
+// request — parity with NPCs' own scene-detail expand): read-only
+// Agenda/Fear/Need/HQ snippets, the same real entity fields
+// locationFactionsBlock already truncates for its own quick digest, shown
+// here in full since this IS the "view details" affordance.
+function factionDetailBody(faction) {
+  const strip = (s) => String(s || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const rows = [['Agenda', faction.agenda], ['Fear', faction.fear], ['Need', faction.need], ['HQ', faction.hq]]
+    .filter(([, v]) => strip(v));
+  return `<div class="npc-scene-card npc-scene-card-detail">
+    <div class="section-head-row">
+      <button type="button" class="entity-chip" data-open-entity="${esc(faction.id)}">${esc(faction.name || 'Unnamed')}</button>
+      <button type="button" class="icon-btn" data-faction-nearby-toggle="${esc(faction.id)}" title="Collapse">▾</button>
+    </div>
+    <div class="npc-scene-card-body">
+      ${rows.length ? rows.map(([label, v]) => `<div class="field-label sm">${esc(label)}<div class="dim small">${esc(strip(v))}</div></div>`).join('')
+        : '<p class="dim small">No Agenda/Fear/Need/HQ set yet — add it in Cast.</p>'}
+    </div>
+  </div>`;
+}
+
 // Faction Events tie-in (docs/adr/0031's Faction Events follow-up),
 // redesigned as one of WHO's five collapsible thumbnail groups (direct
 // follow-up request). "Active nearby" pools THREE sources now: present
@@ -668,16 +692,23 @@ function whyEntityPicker(doc, ui) {
 // (getCurrentWhereLocations); a manual `located_at` relationship (the
 // generic relationship system, already surfaced in the Entity Editor's
 // own Relationships block) for factions with no SWN Faction Turn Engine
-// presence fields set; and — new — whichever faction each of the current
-// scene's own Actors (Protagonists/Antagonists/Bystanders, WHO)
-// individually belongs to (getEntityFaction), skipping the synthetic
-// "Unaligned" placeholder that resolves for an NPC with no member_of
-// edge. Displayed as thumbnails (entityThumb, matching WHO's Actors) —
-// the ✕ only appears on a faction whose presence at the PRIMARY current
-// location is via that manual located_at relationship; a homeworld/Base/
-// asset/governed/NPC-membership presence isn't removable from here, same
-// "curated convenience, not a restriction" posture as the Conflict picker
-// below.
+// presence fields set; and whichever faction each of the current scene's
+// own Actors (Protagonists/Antagonists/Bystanders, WHO) individually
+// belongs to (getEntityFaction), skipping the synthetic "Unaligned"
+// placeholder that resolves for an NPC with no member_of edge. Every
+// thumbnail now carries the SAME ▸/▾ expand + "✕" NPCs' own thumbnails do
+// (direct follow-up request) — "✕" dismisses from THIS scene's view
+// (scenes.js's dismissedFactionIds/addSceneDismissedFaction) rather than
+// literally unlinking a relationship, since most of these are DERIVED,
+// not a stored list (there's nothing to "remove" for a region-present
+// faction) — "curated convenience, not a restriction." The old inline
+// "+ faction operating here" <select> is now a header "+" icon (direct
+// follow-up request — "work like the (+) add buttons for other
+// sections") opening the shared entityPicker overlay
+// (data-entity-picker-open="where-faction-link:<locId>"); picking one
+// still creates the same real located_at relationship, and additionally
+// clears any stale dismissal so a deliberate re-add isn't immediately
+// hidden again.
 function factionsActiveNearbyBlock(doc, ui) {
   const scenes = doc.scenes || [];
   const scene = scenes[scenes.length - 1];
@@ -697,23 +728,21 @@ function factionsActiveNearbyBlock(doc, ui) {
     const faction = getEntityFaction(doc, id);
     if (faction && faction.id && !seen.has(faction.id)) seen.set(faction.id, faction);
   }
-  const active = Array.from(seen.values());
-  const manualHere = primary ? new Set((factionsPresentAt(doc, primary.id) || [])
-    .filter((f) => (f.relationships || []).some((r) => r.type === 'located_at' && r.to === primary.id))
-    .map((f) => f.id)) : new Set();
-  const thumbs = active.map((f) => entityThumb(doc, f, manualHere.has(f.id)
-    ? { removeAttrHtml: `data-where-faction-unlink="${esc(primary.id)}::${esc(f.id)}"` } : {})).join('');
-  const presentIds = new Set(active.map((f) => f.id));
-  const linkable = primary ? listEntities(doc, ['faction']).filter((f) => !presentIds.has(f.id)) : [];
+  const dismissed = new Set(scene.dismissedFactionIds || []);
+  const active = Array.from(seen.values()).filter((f) => !dismissed.has(f.id));
+  const expandedSet = (ui && ui.expandedFactionsNearby) || new Set();
+  const thumbs = active.map((f) => entityThumb(doc, f, {
+    removeAttrHtml: `data-scene-faction-dismiss="${esc(f.id)}"`,
+    expandAttrHtml: `data-faction-nearby-toggle="${esc(f.id)}"`,
+    expanded: expandedSet.has(f.id),
+  })).join('');
   return collapsibleThumbGroup(ui, {
     key: 'who:factions-nearby', label: 'Factions active nearby', count: active.length,
     helpKey: 'who:factions-nearby',
     hint: "Present in the region, manually linked here, or a faction one of this scene's Protagonists/Antagonists/Bystanders belongs to.",
+    headerExtra: primary ? `<button type="button" class="icon-btn" data-entity-picker-open="where-faction-link:${esc(primary.id)}" title="Link a faction operating here">＋</button>` : '',
     body: `${active.length ? `<div class="actor-thumb-row">${thumbs}</div>` : '<p class="dim small">None yet.</p>'}
-      ${linkable.length ? `<select data-where-faction-link="${esc(primary.id)}">
-        <option value="">— faction operating here —</option>
-        ${linkable.map((f) => `<option value="${esc(f.id)}">${esc(f.name) || 'Unnamed'}</option>`).join('')}
-      </select>` : ''}`,
+      ${active.filter((f) => expandedSet.has(f.id)).map((f) => factionDetailBody(f)).join('')}`,
   });
 }
 

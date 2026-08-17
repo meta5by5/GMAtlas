@@ -254,18 +254,39 @@ export function toolbarCollapsed(doc, ui, key) {
 }
 
 // `key` (a stable per-field string, e.g. "entity:123:overview") identifies
-// this toolbar instance for the collapse toggle below; `collapsed` is the
-// RESOLVED boolean the caller computes (shell.js's toolbarCollapsed() XORs
-// ui.collapsedToolbars' per-key override against the persisted
-// campaign.settings.toolbarCollapsedByDefault — see Settings' "Formatting
-// toolbars" option) — this function just renders whichever state it's
-// told. Both params are optional (default: a key-less, always-expanded
-// toolbar) so a caller that hasn't been updated yet still renders
-// correctly, just without the collapse behavior.
-export function richToolbarHTML(key = '', collapsed = false) {
-  const toggle = key
+// this toolbar instance for the collapse toggle below (richToolbarToggleHTML) —
+// `data-rich-toolbar-toggle`'s shell.js handler is unchanged either way, just
+// which function renders the button. `collapsed` is the RESOLVED boolean the
+// caller computes (toolbarCollapsed() above XORs ui.collapsedToolbars' per-key
+// override against the persisted campaign.settings.toolbarCollapsedByDefault —
+// see Settings' "Formatting toolbars" option) — these functions just render
+// whichever state they're told.
+/** The collapse toggle alone, styled as a pencil (direct follow-up request:
+ *  "move the menu arrow to work like a right-aligned pencil icon on the
+ *  same row as the... header" — Composer's Situation/WHY/HOW/Regional
+ *  faction activity fields specifically). Callers render this themselves
+ *  inside their own field-label row and pass `includeToggle: false` to
+ *  richToolbarHTML below so it isn't rendered twice. Every OTHER rich-text
+ *  field in the app (Entity Editor, Journal, Guide, Documents, Colony,
+ *  Party gear) keeps richToolbarHTML's own built-in ▸/▾ toggle unchanged —
+ *  out of scope for this request, and most of those have no adjacent
+ *  header row to move it into anyway. */
+export function richToolbarToggleHTML(key, collapsed) {
+  if (!key) return '';
+  return `<button type="button" class="icon-btn rich-toolbar-toggle" data-rich-toolbar-toggle="${escAttr(key)}" title="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}" aria-label="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}">✏️</button>`;
+}
+function arrowToggleHTML(key, collapsed) {
+  return key
     ? `<button type="button" class="icon-btn rich-toolbar-toggle" data-rich-toolbar-toggle="${escAttr(key)}" title="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}" aria-label="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}">${collapsed ? '▸' : '▾'}</button>`
     : '';
+}
+// Both `key`/`collapsed` are optional (default: a key-less, always-expanded
+// toolbar) so a caller that hasn't been updated yet still renders correctly,
+// just without the collapse behavior. `includeToggle: false` (the 4
+// Composer fields above) omits the built-in ▸/▾ — the caller renders
+// richToolbarToggleHTML itself instead, elsewhere in its own markup.
+export function richToolbarHTML(key = '', collapsed = false, { includeToggle = true } = {}) {
+  const toggle = includeToggle ? arrowToggleHTML(key, collapsed) : '';
   if (collapsed) return `<div class="rich-toolbar" data-rich-toolbar>${toggle}</div>`;
   return `<div class="rich-toolbar" data-rich-toolbar>${toggle}
     <button type="button" class="icon-btn" data-rich-cmd="bold" title="Bold (**text**)"><b>B</b></button>

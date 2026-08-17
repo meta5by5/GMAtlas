@@ -36,7 +36,13 @@
   /* Layout */
   --header-h: 3rem;
   --strip-h: 3.25rem;
-  --copilot-w: 26.25rem; /* 420px — same width every drawer panel uses (.mc-drawer's own --drawer-w, shell.js), direct follow-up request for UX consistency */
+  /* 420px — one token for both .mc-drawer's own width AND the Advisor
+     column's grid track (cockpit.css), so their left edges align by
+     construction instead of by two separately-maintained values happening
+     to match (direct follow-up request — a real reported misalignment).
+     shell.js no longer overrides this per-drawer; every drawer is this
+     one width now. */
+  --drawer-w: 26.25rem;
   --edge-w: 3.25rem;
 }
 

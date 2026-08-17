@@ -102,6 +102,18 @@ export function generateScene(campaign, tables, rng = Math.random, lensCategorie
     // used (System/Star resolution, Location Details, Faction/Conflict
     // presence blocks, ...).
     locationIds: [],
+    // WHO's "Factions active nearby" ✕ (direct follow-up request — parity
+    // with NPCs' own always-available remove) — factions there are mostly
+    // DERIVED (region presence, an Actor's own membership), not a stored
+    // list, so "remove" can't mean "take off a list" the way it does for
+    // Protagonists/etc. Instead this is a scene-scoped dismiss list: "✕"
+    // just hides that faction from THIS scene's view (addSceneDismissedFaction
+    // below) without touching whatever real relationship/presence made it
+    // appear — "curated convenience, not a restriction," same posture the
+    // block's own manual-link case already had. Re-linking a dismissed
+    // faction via the "+" picker clears the dismissal (see
+    // addSceneDismissedFaction's own call site, shell.js).
+    dismissedFactionIds: [],
   };
   scene.text = recomposeSceneText(scene);
   return scene;
@@ -352,6 +364,30 @@ export function setSceneSystem(campaign, sceneId, systemId) {
   if (existingParent && existingParent.to === systemId) return next;
   if (existingParent) next = removeRelationship(next, anchorId, existingParent.to);
   next = addRelationship(next, anchorId, systemId, 'System', 'located_at');
+  return next;
+}
+
+/** WHO's "Factions active nearby" ✕ (direct follow-up request) — hides one
+ *  faction from THIS scene's view without touching whatever real presence
+ *  (region, an Actor's membership, a manual located_at edge) made it
+ *  appear in the first place; see generateScene's dismissedFactionIds
+ *  field comment above. */
+export function addSceneDismissedFaction(campaign, sceneId, factionId) {
+  const next = clone(campaign);
+  const scene = (next.scenes || []).find((s) => s.id === sceneId);
+  if (!scene || !factionId) return next;
+  if (!Array.isArray(scene.dismissedFactionIds)) scene.dismissedFactionIds = [];
+  if (!scene.dismissedFactionIds.includes(factionId)) scene.dismissedFactionIds.push(factionId);
+  return next;
+}
+/** Clears a dismissal — called when the "+" picker manually (re-)links a
+ *  previously-dismissed faction, so a deliberate re-add isn't immediately
+ *  hidden again by a stale dismissal. */
+export function removeSceneDismissedFaction(campaign, sceneId, factionId) {
+  const next = clone(campaign);
+  const scene = (next.scenes || []).find((s) => s.id === sceneId);
+  if (!scene || !Array.isArray(scene.dismissedFactionIds)) return next;
+  scene.dismissedFactionIds = scene.dismissedFactionIds.filter((id) => id !== factionId);
   return next;
 }
 
