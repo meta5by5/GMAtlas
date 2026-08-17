@@ -72,8 +72,8 @@ export function universalSearch(campaign, query, { limit = 40 } = {}) {
     if (matches(haystack, q)) {
       out.push({
         category: 'Documents', id: d.id, label: d.title || 'Untitled document',
-        sublabel: d.kind === 'file' ? 'uploaded file' : 'note',
-        target: { drawer: 'documents', docTabKey: d.kind === 'file' ? 'lib:' + d.id : null },
+        sublabel: d.kind === 'file' ? 'uploaded file' : d.kind === 'drive' ? 'Google Drive' : 'note',
+        target: { drawer: 'documents', docTabKey: (d.kind === 'file' || d.kind === 'drive') ? 'lib:' + d.id : null },
       });
     }
   }

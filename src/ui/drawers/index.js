@@ -2594,11 +2594,15 @@ function documents(doc, ui = {}) {
     // usual reason localStorage's quota gets hit (see store.js) — showing
     // its size right here (not just on hover) is what actually lets a GM
     // spot which upload to remove/move to assets/docs/ when that happens.
-    const sizeBadge = d.kind === 'file' && d.dataUrl ? `<span class="dim small doc-size-badge">${formatBytes(dataUrlBytes(d.dataUrl))}</span>` : '';
+    // A Drive-linked document (direct follow-up request) carries no bytes
+    // at all — this badge shows where it actually lives instead.
+    const sizeBadge = d.kind === 'file' && d.dataUrl ? `<span class="dim small doc-size-badge">${formatBytes(dataUrlBytes(d.dataUrl))}</span>`
+      : d.kind === 'drive' ? `<span class="dim small doc-size-badge" title="${esc(d.driveUrl || '')}">☁ Google Drive</span>` : '';
+    const openable = d.kind === 'file' || d.kind === 'drive';
     const titleEl = renameOpen.has(d.id)
       ? `<input class="doc-rename-input" data-doc-rename-input="${esc(d.id)}" value="${esc(d.title)}" placeholder="Untitled document" autofocus>`
-      : (d.kind === 'file'
-        ? `<a href="#" class="doc-card-title-link" data-doc-open="lib:${esc(d.id)}" data-drag-document="lib:${esc(d.id)}" draggable="true" title="Open in viewer — ${formatBytes(dataUrlBytes(d.dataUrl))}">${esc(d.title || d.fileName)}</a>`
+      : (openable
+        ? `<a href="#" class="doc-card-title-link" data-doc-open="lib:${esc(d.id)}" data-drag-document="lib:${esc(d.id)}" draggable="true" title="Open in viewer${d.kind === 'file' ? ` — ${formatBytes(dataUrlBytes(d.dataUrl))}` : ' — fetched from Google Drive, cached locally'}">${esc(d.title || d.fileName)}</a>`
         : `<span class="doc-card-title-static" data-drag-document="lib:${esc(d.id)}" draggable="true" title="Drag into a note or context field to insert a @ pointer">${esc(d.title || 'Untitled document')}</span>`);
     return `
     <div class="doc-card">
@@ -2610,7 +2614,7 @@ function documents(doc, ui = {}) {
           <button class="icon-btn" data-doc-delete="${esc(d.id)}" title="Delete document">✕</button>
         </div>
       </div>
-      ${d.kind === 'file' ? '' : `
+      ${openable ? '' : `
       <div class="rich-field">${richToolbarHTML(`doc:${d.id}`, toolbarCollapsed(doc, ui, `doc:${d.id}`))}<div class="mention-editor doc-content-input" contenteditable="true" data-doc-content="${esc(d.id)}" data-placeholder="Store notes, references, or handout text here…">${buildMentionEditorHTML(doc, d.content)}</div></div>
       <div class="drawer-note-actions"><button class="btn sm" data-doc-save="${esc(d.id)}">Save</button></div>`}
       ${tagEditorOpen.has(d.id) ? docTagEditor(d) : ''}
@@ -2637,6 +2641,7 @@ function documents(doc, ui = {}) {
     <datalist id="doc-tag-list">${allTags.map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
     <div class="drawer-note">
       <label class="btn ghost file-btn">Upload file(s)<input type="file" data-doc-upload multiple hidden></label>
+      <button type="button" class="btn ghost" data-doc-add-drive-link title="Paste a Google Drive share link — the file stays in Drive, only the link is saved, and it's fetched into the local cache each time it's opened">☁ Add from Google Drive</button>
       ${helpBody('documents-intro', 'Drag a document into a note or context field to insert a @ pointer.', ui)}
     </div>
     <input class="drawer-search" data-doc-filter value="${esc(search)}" placeholder="Search by name or tag…">

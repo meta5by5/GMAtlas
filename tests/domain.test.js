@@ -395,6 +395,7 @@ import {
   addDocument, updateDocument, removeDocument, parseDocumentMentions, parseDocumentMentionRefs, linkDocumentMentions, listDocumentMentions,
   findDocumentTabByTitle, openDocumentTab, closeDocumentTab, resolveDocumentTab, resolvedDocumentMentionNames, listReferenceDocuments,
   parseTextBlocks, parseInlineNodes, sanitizeExternalLinkUrl, sanitizeColorValue,
+  extractDriveFileId, driveDownloadUrl, drivePreviewUrl, gviewEmbedUrl,
 } from '../src/domain/documents.js';
 import { titleFromFilename } from '../src/domain/titleCase.js';
 import { releaseAssetUrl, REFERENCE_LIBRARY_RELEASE_TAG } from '../src/data/releaseConfig.js';
@@ -977,6 +978,48 @@ test('findDocumentTabByTitle resolves a library file as openable and a text note
   assert.equal(pdf.tabKey, 'lib:' + camp.documents.library[1].id);
 
   assert.equal(findDocumentTabByTitle(camp, 'Nonexistent'), null);
+});
+
+test('extractDriveFileId parses every Drive share-link shape "Anyone with the link" sharing actually produces, and rejects anything that isn\'t one', () => {
+  assert.equal(extractDriveFileId('https://drive.google.com/file/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs/view?usp=sharing'), '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs');
+  assert.equal(extractDriveFileId('https://drive.google.com/open?id=1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs'), '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs');
+  assert.equal(extractDriveFileId('https://drive.google.com/uc?id=1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs&export=download'), '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs');
+  assert.equal(extractDriveFileId('https://example.com/not-a-drive-link.pdf'), null, 'a non-Drive URL is rejected, not silently accepted');
+  assert.equal(extractDriveFileId(''), null);
+  assert.equal(extractDriveFileId(undefined), null);
+});
+
+test('driveDownloadUrl/drivePreviewUrl/gviewEmbedUrl build the exact URL shapes the viewer relies on — a fetchable direct-download endpoint, Drive\'s own embeddable preview, and Google\'s generic PDF embed viewer for a non-Drive URL', () => {
+  assert.equal(driveDownloadUrl('ABC123'), 'https://drive.google.com/uc?export=download&id=ABC123');
+  assert.equal(drivePreviewUrl('ABC123'), 'https://drive.google.com/file/d/ABC123/preview');
+  assert.equal(gviewEmbedUrl('https://example.com/a b.pdf'), 'https://docs.google.com/gview?embedded=true&url=https%3A%2F%2Fexample.com%2Fa%20b.pdf');
+});
+
+test('addDocument(kind:"drive") stores only the Drive file id + the raw pasted link — never any file bytes; resolveDocumentTab resolves it to the direct-download URL (with a #page anchor) and carries driveFileId for the fallback path', () => {
+  let camp = defaultCampaign();
+  camp = addDocument(camp, { kind: 'drive', title: 'Sector Map', driveUrl: 'https://drive.google.com/file/d/XYZ789/view?usp=sharing', driveFileId: 'XYZ789' });
+  const entry = camp.documents.library[0];
+  assert.equal(entry.kind, 'drive');
+  assert.equal(entry.driveFileId, 'XYZ789');
+  assert.equal(entry.driveUrl, 'https://drive.google.com/file/d/XYZ789/view?usp=sharing');
+  assert.equal(entry.dataUrl, undefined, 'no dataUrl field at all — no bytes stored, unlike an uploaded file');
+
+  const resolved = resolveDocumentTab(camp, 'lib:' + entry.id);
+  assert.equal(resolved.kind, 'lib');
+  assert.equal(resolved.driveFileId, 'XYZ789');
+  assert.equal(resolved.src, 'https://drive.google.com/uc?export=download&id=XYZ789');
+
+  camp = openDocumentTab(camp, 'lib:' + entry.id, 12);
+  const withPage = resolveDocumentTab(camp, 'lib:' + entry.id);
+  assert.equal(withPage.src, 'https://drive.google.com/uc?export=download&id=XYZ789#page=12', 'a requested page still anchors onto the Drive URL the same way it does for any other doc');
+});
+
+test('findDocumentTabByTitle treats a Drive-linked entry as openable, same as an uploaded file', () => {
+  let camp = defaultCampaign();
+  camp = addDocument(camp, { kind: 'drive', title: 'Faction Roster', driveUrl: 'https://drive.google.com/file/d/QQQ111/view', driveFileId: 'QQQ111' });
+  const resolved = findDocumentTabByTitle(camp, 'Faction Roster');
+  assert.equal(resolved.openable, true);
+  assert.equal(resolved.tabKey, 'lib:' + camp.documents.library[0].id);
 });
 
 test('findDocumentTabByTitle prefers an openable match over a same-titled uploaded text note (regression: a stray phantom note used to permanently shadow a real Reference Library PDF)', () => {

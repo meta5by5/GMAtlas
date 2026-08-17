@@ -46,7 +46,7 @@ import {
   addDocument, updateDocument, removeDocument, getDocument, addDocumentTag, removeDocumentTag, renameDocument,
   openDocumentTab, closeDocumentTab, setActiveDocumentTab, resolveDocumentTab,
   listReferenceDocuments, renameRefDocument, addRefDocumentTag, removeRefDocumentTag, hideRefDocument, listDocuments,
-  sanitizeExternalLinkUrl,
+  sanitizeExternalLinkUrl, extractDriveFileId, drivePreviewUrl, gviewEmbedUrl,
 } from '../domain/documents.js';
 import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue, setPartySharedGear, addPartySharedAsset, removePartySharedAsset } from '../domain/party.js';
 import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow } from '../domain/colony.js';
@@ -435,30 +435,48 @@ let inspirationDrafts = { site: null, seed: null };
 // reset the iframe to blank mid-load, stranding it white). Tracking "the
 // last src I myself set" sidesteps the mismatch entirely.
 let lastDocViewerSrc = null;
-// Reference Library docs not bundled locally fall back to a GitHub Release
-// URL (releaseConfig.js) — a real reported bug: the redirected response
-// carries Content-Type: application/octet-stream plus a forced
-// Content-Disposition: attachment, which makes essentially every browser
-// (phones especially — no inline PDF renderer to fall back to) download the
-// file instead of viewing it. Fixed by fetching it ourselves, caching the
-// bytes locally via the Cache API (the same mechanism sw.js already uses
-// for the app shell — "save it to the local cache like the rest of app
-// data," direct request), and handing the iframe a blob: URL built with the
-// CORRECT MIME type instead of the raw GitHub URL — a blob: URL has no
-// Content-Disposition concept at all, so the bad header can't apply.
-// refDocBlobUrls/refDocBlobFailed are keyed by the fragment-stripped base
-// URL (a #page=N anchor is re-appended after resolving, since it's meaningless
-// to the fetch/cache lookup itself); refDocBlobFailed remembers a CORS/
-// network failure for the session so a bad connection doesn't retry (and
-// re-show "Loading…") on every unrelated re-render — the iframe falls back
-// to the direct GitHub URL, matching today's behavior, at that point. Local
-// (already-bundled) Reference Library paths are untouched — no bug reported
-// there, and fetching a relative file:// path would hit the same CORS wall
-// PDF.js's own file:// gotcha already documents.
-let refDocBlobUrls = new Map();
-let refDocBlobFailed = new Set();
-let refDocBlobPending = null;
-async function loadRefDocBlobUrl(url) {
+// Any document served from an external URL — a Reference Library doc not
+// bundled locally (falls back to a GitHub Release URL, releaseConfig.js) or
+// a Google Drive-linked document (direct follow-up request) — routes
+// through this instead of a direct iframe src. Real reported bug (twice
+// over, for two different reasons): GitHub's release-asset host sends
+// Content-Type: application/octet-stream plus a forced Content-Disposition:
+// attachment (confirmed via a live header check), and Drive's own direct-
+// download endpoint sends no CORS header at all (confirmed the same way) —
+// either one makes most browsers download the file instead of viewing it,
+// phones worst of all (no inline-iframe PDF fallback the way desktop has).
+// The fix has two tiers, tried in order:
+//  1. Fetch it ourselves and cache the bytes locally via the Cache API (the
+//     same mechanism sw.js already uses for the app shell, a separate cache
+//     name) — "save it to the local cache like the rest of app data," direct
+//     quote — then hand the iframe a blob: URL built with the CORRECTED
+//     MIME type. A blob: URL has no Content-Disposition concept at all, so
+//     neither bad header can apply; but this tier only works if the source
+//     actually grants this app's origin CORS access, which GitHub's
+//     release-asset host does not (confirmed) and Drive's download endpoint
+//     may not either (also confirmed unlikely, same live check) — a fetch
+//     failure isn't necessarily a REAL failure, just "this host doesn't
+//     support being fetched cross-origin."
+//  2. A per-source EMBEDDABLE VIEWER URL as the iframe src instead — NEVER
+//     the raw download URL again (that's the literal thing that forces the
+//     download in the first place). Drive has an official one for its own
+//     files (drivePreviewUrl, documents.js); GitHub has no equivalent of
+//     its own, so a Reference Library doc falls back to Google's own
+//     generic embed viewer (gviewEmbedUrl) instead — both are normal cross-
+//     origin iframe NAVIGATIONS, not fetches, so CORS doesn't apply to
+//     either at all.
+// remoteDocBlobUrls/remoteDocBlobFailed are keyed by the fragment-stripped
+// base URL (a #page=N anchor is re-appended after resolving, meaningless to
+// the fetch/cache lookup itself); remoteDocBlobFailed remembers a tier-1
+// failure for the session so a bad connection doesn't retry (and re-show
+// "Loading…") on every unrelated re-render. Locally-bundled Reference
+// Library paths and user-uploaded (data: URL) documents are both untouched
+// — no bug reported there, and fetching a relative file:// path would hit
+// the same CORS wall PDF.js's own file:// gotcha already documents.
+let remoteDocBlobUrls = new Map();
+let remoteDocBlobFailed = new Set();
+let remoteDocBlobPending = null;
+async function loadRemoteDocBlobUrl(url) {
   if (!(typeof caches !== 'undefined' && caches) || !window.fetch) return null;
   try {
     // Cache name matches sw.js's own REF_DOC_CACHE constant — the two
@@ -488,6 +506,36 @@ function loadDocViewerFrame(frame, nextSrc) {
   frame.src = 'about:blank';
   setTimeout(() => { if (frame.isConnected) frame.src = nextSrc; }, 0);
   lastDocViewerSrc = nextSrc;
+}
+// Shared tier-1(fetch+cache+blob)/tier-2(embeddable fallback) state machine
+// for whichever externally-served doc is active — both the GitHub Reference
+// Library case and the Drive-linked case call this identically, only
+// `fallbackSrc` differs (see the shared comment above `remoteDocBlobUrls`).
+function renderRemoteDocFrame(frame, empty, resolvedActive, baseUrl, fallbackSrc, title) {
+  const withPage = (url) => (resolvedActive.page ? `${url}#page=${resolvedActive.page}` : url);
+  if (remoteDocBlobUrls.has(baseUrl)) {
+    frame.hidden = false;
+    empty.hidden = true;
+    const nextSrc = withPage(remoteDocBlobUrls.get(baseUrl));
+    if (lastDocViewerSrc !== nextSrc) loadDocViewerFrame(frame, nextSrc);
+  } else if (remoteDocBlobFailed.has(baseUrl)) {
+    frame.hidden = false;
+    empty.hidden = true;
+    if (lastDocViewerSrc !== fallbackSrc) loadDocViewerFrame(frame, fallbackSrc);
+  } else {
+    frame.hidden = true;
+    empty.hidden = false;
+    empty.textContent = `Loading "${title}"…`;
+    lastDocViewerSrc = null;
+    if (remoteDocBlobPending !== baseUrl) {
+      remoteDocBlobPending = baseUrl;
+      loadRemoteDocBlobUrl(baseUrl).then((blobUrl) => {
+        remoteDocBlobPending = null;
+        if (blobUrl) remoteDocBlobUrls.set(baseUrl, blobUrl); else remoteDocBlobFailed.add(baseUrl);
+        render();
+      });
+    }
+  }
 }
 // The dice roll window (see renderDiceRollOverlay) — set by performFieldRoll
 // whenever a statblock field is rolled, cleared on close/Escape/backdrop
@@ -846,6 +894,19 @@ function onClick(ev) {
     openInlinePrompt('who-introduce-npc', {
       label: 'Introduce NPC', placeholder: 'Name, or @ an existing NPC…',
       anchorRect: whoIntroduceNpc.getBoundingClientRect(),
+    });
+    return;
+  }
+
+  // Documents drawer's "☁ Add from Google Drive" (direct follow-up
+  // request) — one field, the pasted share link; see
+  // commitInlinePrompt's 'doc-add-drive-link' branch for validation
+  // (extractDriveFileId) and the actual addDocument call.
+  const docAddDriveLink = hit('[data-doc-add-drive-link]');
+  if (docAddDriveLink) {
+    openInlinePrompt('doc-add-drive-link', {
+      label: 'Google Drive share link', placeholder: 'Paste a Drive "Anyone with the link" share URL…',
+      anchorRect: docAddDriveLink.getBoundingClientRect(),
     });
     return;
   }
@@ -1809,7 +1870,7 @@ function onClick(ev) {
     }
     if (docOpen.dataset.docOpen.startsWith('lib:')) {
       const entry = getDocument(store.get(), docOpen.dataset.docOpen.slice(4));
-      if (entry && entry.kind !== 'file') { toast('Text notes open inline below — not a PDF file.'); return; }
+      if (entry && entry.kind !== 'file' && entry.kind !== 'drive') { toast('Text notes open inline below — not a PDF file.'); return; }
     }
     const page = docOpen.dataset.docOpenPage ? Number(docOpen.dataset.docOpenPage) : undefined;
     store.update((d) => openDocumentTab(d, docOpen.dataset.docOpen, page));
@@ -4377,6 +4438,17 @@ function commitInlinePrompt() {
       });
       toast('NPC introduced');
     }
+  } else if (kind === 'doc-add-drive-link') {
+    if (!value) { /* nothing typed — no-op */ }
+    else {
+      const fileId = extractDriveFileId(value);
+      if (!fileId) {
+        toast('That doesn\'t look like a Drive share link — copy the "Anyone with the link" URL from Drive\'s own Share dialog and try again.');
+      } else {
+        store.update((d) => addDocument(d, { kind: 'drive', title: 'Untitled document', driveUrl: value, driveFileId: fileId }));
+        toast('Added — name and tag it below');
+      }
+    }
   } else if (kind === 'statblock-add-field') {
     const active = store.get().entities.activeId;
     store.update((d) => addEntityStatblockField(d, active, meta.gi, { key: value || 'New Field', value: '' }));
@@ -4771,42 +4843,18 @@ function render() {
     const resolvedActive = resolveDocumentTab(doc, activeTab);
     const frame = viewer.querySelector('[data-doc-viewer-frame]');
     const empty = viewer.querySelector('[data-doc-viewer-empty]');
-    // A remote (GitHub Release-hosted) Reference Library doc routes through
-    // the fetch-then-cache-then-blob-URL path above instead of a direct
-    // src; a local Reference Library path or a user-uploaded (kind:'lib')
-    // data: URL both go straight to the existing direct-src branch,
-    // unchanged — see loadRefDocBlobUrl's own comment for why only this
-    // one case needs it.
+    // A remote (GitHub Release-hosted) Reference Library doc, or a Google
+    // Drive-linked document, both route through renderRemoteDocFrame above
+    // instead of a direct src; a local Reference Library path or a user-
+    // uploaded (kind:'lib', not Drive-linked) data: URL both go straight to
+    // the existing direct-src branch, unchanged — see renderRemoteDocFrame's
+    // own comment for why only these two cases need it.
     const isRemoteRefDoc = !!resolvedActive && resolvedActive.kind === 'ref' && /^https?:/i.test(resolvedActive.src);
-    if (resolvedActive && resolvedActive.src && isRemoteRefDoc) {
+    const isDriveLink = !!resolvedActive && !!resolvedActive.driveFileId;
+    if (resolvedActive && resolvedActive.src && (isRemoteRefDoc || isDriveLink)) {
       const baseUrl = resolvedActive.src.split('#')[0];
-      const withPage = (blobUrl) => (resolvedActive.page ? `${blobUrl}#page=${resolvedActive.page}` : blobUrl);
-      if (refDocBlobUrls.has(baseUrl)) {
-        frame.hidden = false;
-        empty.hidden = true;
-        const nextSrc = withPage(refDocBlobUrls.get(baseUrl));
-        if (lastDocViewerSrc !== nextSrc) loadDocViewerFrame(frame, nextSrc);
-      } else if (refDocBlobFailed.has(baseUrl)) {
-        // Couldn't fetch/cache it (offline, CORS, ...) — fall back to the
-        // direct GitHub URL, exactly today's pre-fix behavior, rather than
-        // leaving the GM with nothing.
-        frame.hidden = false;
-        empty.hidden = true;
-        if (lastDocViewerSrc !== resolvedActive.src) loadDocViewerFrame(frame, resolvedActive.src);
-      } else {
-        frame.hidden = true;
-        empty.hidden = false;
-        empty.textContent = `Loading "${resolvedActive.title}"…`;
-        lastDocViewerSrc = null;
-        if (refDocBlobPending !== baseUrl) {
-          refDocBlobPending = baseUrl;
-          loadRefDocBlobUrl(baseUrl).then((blobUrl) => {
-            refDocBlobPending = null;
-            if (blobUrl) refDocBlobUrls.set(baseUrl, blobUrl); else refDocBlobFailed.add(baseUrl);
-            render();
-          });
-        }
-      }
+      const fallbackSrc = isDriveLink ? drivePreviewUrl(resolvedActive.driveFileId) : gviewEmbedUrl(baseUrl);
+      renderRemoteDocFrame(frame, empty, resolvedActive, baseUrl, fallbackSrc, resolvedActive.title);
     } else if (resolvedActive && resolvedActive.src) {
       frame.hidden = false;
       empty.hidden = true;
