@@ -11,6 +11,7 @@
 
 import { advise, buildStoryOptions } from '../domain/copilot.js';
 import { suggestRulesLens } from '../domain/activities.js';
+import { getEntity, proximityToLocation } from '../domain/entities.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -131,6 +132,52 @@ function inspirationBlock(ui) {
     </div>`;
 }
 
+// "Suggested oracles" history stack (direct follow-up request: "whenever
+// anything is added to the Advisor, place it as a new entry in a box at
+// the top... move previous entries down. Show three entries plus
+// collapsed boxes for three before that"). Two triggers push onto the
+// same ui.suggestedOracleEntries array (shell.js's pushSuggestedOracleEntry
+// — newest first, capped at 6): WHAT's "Suggest oracles" button/Intent-
+// Latest-Scene auto-trigger, and WHERE's Location details "Regional
+// faction activity" 💡. Each entry is a fixed draw at the moment it was
+// added (not recomputed on render) — the first 3 render as open boxes,
+// the next 3 as native <details> so a GM can still expand one to look up
+// what an older suggestion was without it competing for space by default.
+// 🔮 rolls a table directly (the same rollOracle/data-story-option-roll
+// shape Story Options already uses) — a pointer at WHICH tables are
+// relevant, not a generated result in itself. A WHAT-sourced entry
+// carries target:'situation' (direct follow-up request) so its roll
+// appends into context.what.situation instead of the Journal — see
+// shell.js's data-suggest-oracle-roll handler.
+function suggestedOracleEntryChips(entry) {
+  const targetAttr = entry.target ? ` data-suggest-oracle-target="${esc(entry.target)}"` : '';
+  return `<div class="copilot-quick">${entry.paths.map((path) => `<button class="chip sm" data-suggest-oracle-roll="${esc(path.join('>'))}"${targetAttr} title="Roll ${esc(path.join(' > '))}${entry.target === 'situation' ? ' into Situation' : ''}">🔮 ${esc(path.join(' > '))}</button>`).join('')}</div>`;
+}
+function suggestedOraclesBlock(ui) {
+  const entries = (ui && ui.suggestedOracleEntries) || [];
+  if (!entries.length) {
+    return `
+    <div class="copilot-card">
+      <h3>Suggested oracles</h3>
+      <p class="dim small">Nothing suggested yet — click "Suggest oracles" on WHAT, or 💡 next to a Location's Regional faction activity on WHERE.</p>
+    </div>`;
+  }
+  const open = entries.slice(0, 3);
+  const older = entries.slice(3, 6);
+  return `
+    <div class="copilot-card">
+      <h3>Suggested oracles</h3>
+      ${open.map((e) => `<div class="advisor-history-entry">
+        <div class="advisor-history-entry-head dim small">${esc(e.label)}</div>
+        ${suggestedOracleEntryChips(e)}
+      </div>`).join('')}
+      ${older.map((e) => `<details class="advisor-history-entry advisor-history-entry-collapsed">
+        <summary class="dim small">${esc(e.label)}</summary>
+        ${suggestedOracleEntryChips(e)}
+      </details>`).join('')}
+    </div>`;
+}
+
 // Activity → Rules Lens suggestion (docs/adr/0002/0009) — formerly on the
 // HOW tab next to the Activity select itself; the select now lives on the
 // Dashboard header (ui/workspace/index.js), this suggestion card reads the
@@ -157,6 +204,44 @@ function rulesLensBlock(doc) {
     </div>`;
 }
 
+// "Located at <Location>" (direct follow-up request: "when clicking a
+// Location thumbnail, display a list of NPCs and sub-locations in the
+// Advisor... if there are any NPCs 'Located at' that location or a sub-
+// location that is also 'Located at' (i.e. iterative proximity)").
+// ui.locationProximity (shell.js) only stores the clicked Location's id —
+// entities.js's proximityToLocation is recomputed fresh here on every
+// render (not a frozen snapshot) so the list stays accurate as the GM adds
+// things to the scene; already-added NPCs/sub-locations are filtered out
+// the same way Nearby locations excludes them, since adding one again
+// would just be a confusing no-op click. Click-to-add (confirmed over
+// drag-and-drop) — an NPC routes through the same #character tag check
+// Introduce NPC's create path uses, a sub-location adds straight to
+// Location details.
+function locationProximityBlock(doc, ui) {
+  const prox = ui && ui.locationProximity;
+  if (!prox) return '';
+  const loc = getEntity(doc, prox.locationId);
+  if (!loc) return '';
+  const { locations, npcs } = proximityToLocation(doc, prox.locationId);
+  const scenes = doc.scenes || [];
+  const scene = scenes[scenes.length - 1];
+  const inScene = scene
+    ? new Set([...(scene.protagonistIds || []), ...(scene.antagonistIds || []), ...(scene.bystanderIds || []), ...(scene.locationIds || [])])
+    : new Set();
+  const npcsLeft = npcs.filter((n) => !inScene.has(n.id));
+  const locsLeft = locations.filter((l) => !inScene.has(l.id));
+  if (!npcsLeft.length && !locsLeft.length) return '';
+  const npcChips = npcsLeft.map((n) => `<button type="button" class="entity-chip" data-proximity-add-npc="${esc(n.id)}" title="Add ${esc(n.name || 'Unnamed')} to WHO">${esc(n.name || 'Unnamed')}</button>`).join('');
+  const locChips = locsLeft.map((l) => `<button type="button" class="entity-chip" data-proximity-add-location="${esc(l.id)}" title="Add ${esc(l.name || 'Unnamed')} to Location details">${esc(l.name || 'Unnamed')}</button>`).join('');
+  return `
+    <div class="copilot-card">
+      <h3>Located at ${esc(loc.name || 'Unnamed')}</h3>
+      <p class="dim small">NPCs and sub-locations located there, or under one of its sub-locations — click to add to the scene.</p>
+      ${npcsLeft.length ? `<div class="entity-chips">${npcChips}</div>` : ''}
+      ${locsLeft.length ? `<div class="entity-chips">${locChips}</div>` : ''}
+    </div>`;
+}
+
 export function renderCopilot(doc, ui) {
   const a = advise(doc);
   return `
@@ -164,6 +249,8 @@ export function renderCopilot(doc, ui) {
       ${a.hotFactionId ? `<button class="copilot-action" data-generate-faction-mission="${esc(a.hotFactionId)}">📋 Generate mission from ${esc(a.hotFactionName)}</button>` : ''}
     </div>
     ${storyOptionsBlock(doc, ui)}
+    ${locationProximityBlock(doc, ui)}
+    ${suggestedOraclesBlock(ui)}
     ${suggestLensBlock(ui)}
     <div class="copilot-card"><h3>If nothing changes…</h3><p>${esc(a.consequence)}</p></div>
     <div class="copilot-card"><h3>Opportunity</h3><p>${esc(a.opportunity)}</p></div>

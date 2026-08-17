@@ -293,7 +293,7 @@ function ensureWorldProfileFields(e) {
 // hand-typed) or a live graph walk (District, via getContainingLocation)
 // with no way to override it; both are now explicit id references, each
 // set via its own tag-filtered "+" picker (#colony/#district, workspace/
-// index.js's currentLocationBanner). System/Star used to be a THIRD id-
+// index.js's whereLocationHierarchyBlock). System/Star used to be a THIRD id-
 // reference pair here (starSystemId/starId) with their own picker, but per
 // direct follow-up request ("just use the Relationships for setting the
 // choice") those are retired in favor of a pure relationship-graph read —
@@ -1022,6 +1022,41 @@ export function getContainedLocations(campaign, locationId) {
     .filter((r) => r.type === 'contains')
     .map((r) => getEntity(campaign, r.to))
     .filter(Boolean);
+}
+
+/** Everything located at `locationId` OR reachable through a chain of its
+ *  sub-locations (getContainedLocations, walked breadth-first, deduped,
+ *  depth-capped the same way getSystemForLocation/isSameDistrict cap their
+ *  own walks) — "iterative proximity" (direct follow-up request): clicking
+ *  a Location surfaces every NPC whose own `located_at` edge points at it
+ *  or any descendant of it, plus every descendant Location itself, so a GM
+ *  can pull in "who/what is actually down there" without manually walking
+ *  the containment tree themselves. Returns `{ locations, npcs }` —
+ *  `locations` excludes `locationId` itself (it's already on-screen, being
+ *  clicked). Pure/read-only, same posture as every other location-
+ *  hierarchy read in this file. */
+export function proximityToLocation(campaign, locationId, { maxDepth = 8 } = {}) {
+  const seen = new Set([locationId]);
+  const queue = [{ id: locationId, depth: 0 }];
+  const locations = [];
+  while (queue.length) {
+    const { id, depth } = queue.shift();
+    if (depth >= maxDepth) continue;
+    // getContainedLocations returns everything with a `contains` edge,
+    // which also picks up an NPC's own auto-mirrored reverse edge from
+    // ITS `located_at` link (INVERSE_REL_TYPE, _link above) — filtered
+    // out here since this walk is Location-only; the NPC side is
+    // resolved separately below, off `seen` (every real Location found).
+    for (const child of getContainedLocations(campaign, id)) {
+      if (seen.has(child.id) || child.type !== 'location') continue;
+      seen.add(child.id);
+      locations.push(child);
+      queue.push({ id: child.id, depth: depth + 1 });
+    }
+  }
+  const npcs = (campaign.entities.items || []).filter((e) => e.type === 'npc'
+    && (e.relationships || []).some((r) => r.type === 'located_at' && seen.has(r.to)));
+  return { locations, npcs };
 }
 
 /** A #system Location's own `located_at` edge (getContainingLocation),

@@ -36,7 +36,7 @@
   /* Layout */
   --header-h: 3rem;
   --strip-h: 3.25rem;
-  --copilot-w: 22rem;
+  --copilot-w: 26.25rem; /* 420px — same width every drawer panel uses (.mc-drawer's own --drawer-w, shell.js), direct follow-up request for UX consistency */
   --edge-w: 3.25rem;
 }
 

@@ -6,8 +6,8 @@
 import { store } from '../core/store.js';
 import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
-import { continueStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField } from '../domain/session.js';
-import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, moveSceneActor } from '../domain/scenes.js';
+import { continueStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField } from '../domain/session.js';
+import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, addSceneAsset, removeSceneAsset, addSceneLocation, removeSceneLocation, setSceneSystem, moveSceneActor } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag } from '../domain/oracles.js';
 import { oracleLinkTagsFor } from '../data/entityFieldOracleLinks.js';
@@ -201,8 +201,7 @@ let docTagEditorOpen = new Set(); // ephemeral — which doc/ref cards' tag edit
 let docRenameOpen = new Set(); // ephemeral — which doc/ref cards are showing an inline rename input instead of their title link
 let docTagListOpen = false; // ephemeral — collapses the Documents drawer's tag-filter chip row (can get long once many tags exist)
 let journalEditOpen = new Set(); // ephemeral — which journal entries are showing an editable mention-editor instead of their static rendered text
-let whereLocationTagFilter = null; // ephemeral — the Location tag currently selected in the WHERE view's listbox (null = no filter/candidate panel shown)
-let whyTagFilter = null; // ephemeral — same as whereLocationTagFilter, for the WHY view's NPC/Faction/Conflict tag listbox (docs/adr/0039)
+let whyTagFilter = null; // ephemeral — the tag currently selected in WHY's NPC/Faction/Conflict tag listbox (docs/adr/0039)
 let galleryFilter = ''; // ephemeral — Gallery drawer search box
 // Gallery's own "+ Upload" flow (as opposed to an entity's "+ Photo"): the
 // resize already happened (canvas work, ui/imageResize.js) by the time
@@ -266,6 +265,9 @@ let inlinePrompt = null;
 // <select> also carries data-ctx, so this scopes to .mention-editor
 // specifically rather than a bare [data-ctx] to exclude it.
 const MENTION_FIELD_SELECTOR = '[data-journal-input], [data-guide-input], .mention-editor[data-ctx], .mention-editor[data-entity-field], .mention-editor[data-faction-event-readaloud]';
+// The Latest Scene fields drawSuggestedOracles (session.js) actually reads
+// tag links for — matches its own field list exactly (see onChange below).
+const SUGGEST_ORACLES_SCENE_FIELDS = ['opening', 'driver', 'clue', 'complication', 'consequence'];
 const DROP_TARGET_SELECTOR = `[data-drop-entity], ${MENTION_FIELD_SELECTOR}`;
 // Relationship graph pan/zoom — ephemeral, reset whenever the Graph tab is
 // freshly opened (see openDrawerTab). {scale, x, y} describes the SVG
@@ -280,23 +282,28 @@ let recapOpen = false; // ephemeral — collapses the "Previously on..." session
 let searchOpen = false; // ephemeral — Universal Search overlay
 let searchQuery = '';
 // ephemeral — the shared "+" entity picker overlay, used by both WHO's
-// Actors (Protagonists/Antagonists/Bystanders) and WHERE's Current
-// Location Colony-Base/District rows (workspace/index.js). null when
-// closed; { entityType, mode, scope, query } when open:
+// Actors (Protagonists/Antagonists/Bystanders) and WHERE's Location
+// details rows (workspace/index.js). null when closed; { entityType,
+// mode, scope, query } when open:
 //   entityType 'npc'   — mode one of 'protagonist'|'antagonist'|'bystander',
 //     scope null (implicitly the current scene) — candidates are NPCs,
 //     Protagonists further filtered to #character-tagged, Antagonists to
 //     NOT so tagged (renderEntityPickerOverlay); selecting one calls the
 //     matching addScene*() (scenes.js).
-//   entityType 'location' — mode one of 'colony'|'district', scope the
-//     Location entity id being set — candidates are Locations tagged
-//     #colony/#district to match; selecting one sets that field on
-//     `scope` via a plain updateEntity. System/Star used to be picker
-//     modes here too, but per direct follow-up request ("just use the
-//     Relationships for setting the choice") they're gone — System/Star
-//     are read-only, relationship-graph-derived displays now
-//     (getSystemForLocation/getStarForLocation, entities.js), set by
-//     adding a located_at relationship in the Entity Editor instead.
+//   entityType 'location-current' — mode 'current', scope null — any
+//     Location not already in the scene's curated list and not tagged
+//     #star/#system; selecting one calls addSceneLocation (scenes.js),
+//     which enforces one entity per #district/#site/etc. tag itself.
+//     Colony-Base/District used to be their own separate dedicated picker
+//     mode here (entityType 'location', tag-filtered, writing a field on
+//     one specific Location entity) — retired per direct follow-up
+//     request ("just one (+) like the approach for NPCs"); their
+//     colonyBaseId/districtId fields stay declared-but-inert on the
+//     entity (migration rule 5). System/Star are a separate, always
+//     read-only relationship-graph-derived display (getSystemForLocation/
+//     getStarForLocation, entities.js) — see entityType 'system' below.
+//   entityType 'system' — mode 'system', scope null — Locations tagged
+//     #system; selecting one calls setSceneSystem (scenes.js).
 let entityPicker = null;
 let oracleEditorOpen = new Set(); // ephemeral — which oracle tables' entry editors are expanded
 let oracleTagEditorOpen = new Set(); // ephemeral — which oracle tables' TAG editors are expanded (docs/adr/0016), hidden by default
@@ -329,6 +336,28 @@ let lensPickerOpen = false; // ephemeral — "What Happens Next?"'s Suggestion L
 let lensDraw = []; // ephemeral — the current random draw of lens chips, fixed until re-opened (not redrawn on every unrelated re-render)
 let whyLensPickerOpen = false; // ephemeral — WHY's own "Suggest a Lens" picker (docs/adr/0039 Phase 2) — separate from lensPickerOpen/lensDraw above so the two never interfere
 let whyLensDraw = []; // ephemeral — WHY's scene-context-weighted lens draw, fixed until re-opened
+// ephemeral — the Advisor's "Suggested oracles" history stack (direct
+// follow-up request: "whenever anything is added to the Advisor, place it
+// as a new entry in a box at the top... move previous entries down"),
+// newest first, capped to 6 — copilotPanel.js's suggestedOraclesBlock
+// shows the first 3 expanded and the next 3 as collapsed <details> for
+// lookup, dropping anything older. Every draw trigger (WHAT's "Suggest
+// oracles" button, its Intent/Latest-Scene auto-trigger, WHERE's Regional
+// faction activity 💡) pushes a new entry via pushSuggestedOracleEntry
+// below rather than overwriting a single slot.
+// `target` (direct follow-up request — "the results must go in the
+// Situation textbox instead of the Journal since the scene is still
+// under development") tags every entry pushed from WHAT so its 🔮 roll
+// buttons append to context.what.situation instead of rollOracle's normal
+// toJournal:true default (see the data-suggest-oracle-roll handler
+// below); WHERE's Regional faction activity 💡 leaves it unset, keeping
+// the ordinary journal-logging roll behavior every other oracle roll in
+// this app already has.
+let suggestedOracleEntries = [];
+function pushSuggestedOracleEntry(label, paths, target = null) {
+  if (!paths || !paths.length) return;
+  suggestedOracleEntries = [{ id: 'sug_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), label, paths, target }, ...suggestedOracleEntries].slice(0, 6);
+}
 let dismissedStoryOptionIds = new Set(); // ephemeral — Story Option ids the GM has accepted (rolled/journaled) or explicitly dismissed (docs/adr/0039 Phase 2, mirrors ADR 0036's dismissible-suggestion pattern) — filtered out of both storyOptionsBlock (WHY) and the Co-Pilot's condensed card so a used/dismissed option makes room for the next-ranked one instead of lingering
 let selectedStoryOptionIds = new Set(); // ephemeral — Story Option ids checked "in play" for the Story Dashboard's Narrative Composer (docs/adr/0040 Phase 12b) — a DIFFERENT concept from dismissedStoryOptionIds above ("used/not interested" vs. "include in the draft"), never persisted
 let catalogSearch = ''; // ephemeral — the catalog picker's own name/tag search
@@ -387,6 +416,11 @@ let dashboardSectionCursor = 'who';
 // NPC scene-cards (WHO) and Location Details blocks (WHERE) are expanded.
 let expandedSceneNpcs = new Set();
 let expandedLocationDetails = new Set();
+// Ephemeral, collapsed on demand (default EXPANDED — empty Set means
+// nothing's collapsed): which of WHO's five thumbnail groups
+// (Protagonists/Antagonists/Bystanders/Factions active nearby/Assets
+// present) are currently collapsed. Direct follow-up request.
+let collapsedActorGroups = new Set();
 // Co-Pilot's Site Concept / Adventure Seed generators — ephemeral, never
 // persisted (a discarded/un-sent draft leaves no trace, same as a lens
 // picker's own draw). Keyed by kind ('site'/'seed') rather than two
@@ -408,6 +442,7 @@ let diceRollResult = null;
 let focusInspectorNameNextRender = false; // ephemeral — set by clicking any data-open-entity link/chip, so Entity Detail's name field is focused+selected the moment it renders
 let focusInspectorRelationshipNextRender = false; // ephemeral — set by Current Location's "🔗" link (data-location-edit-relationships), so Entity Detail's "add relationship" type field is focused once it renders
 let entityDetailFocusEventId = ''; // ephemeral — set when a data-open-entity link also carries data-open-entity-event (a Faction Events turn's faction-name link); factionTurnSectionHtml highlights/expands that one Turn History entry
+let locationProximity = null; // ephemeral — { locationId, locationName } for the Advisor's "Located at" card (direct follow-up request) — set whenever a Location entity is opened via data-open-entity; copilotPanel.js recomputes entities.js's proximityToLocation(doc, locationId) fresh on every render rather than storing a frozen list
 
 export function mountShell(el) {
   root = el;
@@ -947,7 +982,21 @@ function onClick(ev) {
     // '' for every other entity-open trigger so a stale highlight never
     // leaks in from a previous click.
     entityDetailFocusEventId = openEnt.dataset.openEntityEvent || '';
-    store.update((d) => setActiveEntity(d, openEnt.dataset.openEntity));
+    // Clicking a Location's thumbnail (direct follow-up request: "when
+    // clicking a Location thumbnail, display a list of NPCs and sub-
+    // locations in the Advisor") also refreshes locationProximity — only
+    // the id/name are stored; copilotPanel.js's locationProximityBlock
+    // recomputes proximityToLocation(doc, id) fresh on every render (not
+    // a frozen snapshot) so it stays in sync as items get added to the
+    // scene. Opening anything else clears it — stale "located near X"
+    // results outliving a click to an unrelated NPC/Faction would read as
+    // a bug, not a feature.
+    const openedId = openEnt.dataset.openEntity;
+    const openedEntity = getEntity(store.get(), openedId);
+    locationProximity = (openedEntity && openedEntity.type === 'location')
+      ? { locationId: openedId, locationName: openedEntity.name || 'Unnamed' }
+      : null;
+    store.update((d) => setActiveEntity(d, openedId));
     return;
   }
   const delEnt = hit('[data-entity-del]');
@@ -969,19 +1018,64 @@ function onClick(ev) {
     });
     return toast('Entity removed');
   }
-  // WHO/WHY's entityList() "+ Type" buttons — a real pre-existing gap found
-  // while wiring WHERE's own new "+ New Location" (below): this attribute
-  // was rendered but had no click handler at all, so those buttons did
-  // nothing. Fixed here since WHERE's version needed the identical
-  // create-a-blank-entity behavior anyway.
+  // WHO's "New NPC"/"New Faction" icons (direct follow-up request —
+  // "start new Entity Editors with the appropriate type"): create a blank
+  // entity of that type and open it directly in the Entity Editor, name
+  // field focused — same create-then-open shape WHERE's "New Location"
+  // (below) uses for a freshly created System.
   const entAdd = hit('[data-entity-add]');
-  if (entAdd) { store.update((d) => createEntity(d, { type: entAdd.dataset.entityAdd }).campaign); return toast('Entity added'); }
-  // WHERE's "+ New Location" — same blank-create as the generic "+ Type"
-  // above; the new entity is unnamed until the GM opens Cast and names it,
-  // at which point it becomes a taggable candidate below like any other
-  // Location (no more auto-add to a curated list — that list is gone).
+  if (entAdd) {
+    let newId = null;
+    store.update((d) => {
+      const created = createEntity(d, { type: entAdd.dataset.entityAdd });
+      newId = created.id;
+      return created.campaign;
+    });
+    if (newId) {
+      openDrawerTab('entity-detail');
+      focusInspectorNameNextRender = true;
+      store.update((d) => setActiveEntity(d, newId));
+    }
+    return;
+  }
+  // WHERE's System section — "New Location" (direct follow-up request):
+  // first offer a pick from existing #system-tagged Locations; only if
+  // NONE exist does the button fall back to a create-a-new-one prompt
+  // (window.confirm, the same yes/no posture every other confirm in this
+  // app uses — not free-text entry, so it's not a data-entry window.prompt
+  // case). Picking a candidate is handled by entityPickerSelectBtn below
+  // (entityType 'system' -> setSceneSystem, scenes.js); creating one here
+  // also immediately wires it up as the scene's System (setSceneSystem
+  // again) so the GM lands in the Entity Editor with it already selected,
+  // not on a second round trip back to this button.
   const whereAddLoc = hit('[data-where-add-location]');
-  if (whereAddLoc) { store.update((d) => createEntity(d, { type: 'location' }).campaign); return toast('Location added — name and tag it in Cast'); }
+  if (whereAddLoc) {
+    const currentDoc = store.get();
+    const systemCandidates = listEntities(currentDoc, ['location']).filter((l) => (l.tags || []).includes('system'));
+    if (systemCandidates.length) {
+      entityPicker = { entityType: 'system', mode: 'system', scope: null, query: '' };
+      renderEntityPickerOverlay();
+      const inp = root.querySelector('[data-entity-picker-query]');
+      if (inp) { inp.value = ''; inp.focus(); }
+      return;
+    }
+    if (!window.confirm('No locations are tagged #system yet — create one?')) return;
+    const sceneId = currentSceneId();
+    let newId = null;
+    store.update((d) => {
+      const created = createEntity(d, { type: 'location', name: '' });
+      newId = created.id;
+      let next = addEntityTag(created.campaign, newId, 'system');
+      if (sceneId) next = setSceneSystem(next, sceneId, newId);
+      return next;
+    });
+    if (newId) {
+      openDrawerTab('entity-detail');
+      focusInspectorNameNextRender = true;
+      store.update((d) => setActiveEntity(d, newId));
+    }
+    return;
+  }
   // WHERE's "Present Here" curated list (context.where.entityIds) was
   // duplicative of Focus — a Location already belongs to the scene once
   // it's mentioned there. Picking a matching Location (or, on WHO, a
@@ -2072,6 +2166,52 @@ function onClick(ev) {
     store.update((d) => addNote(d, `${option.label}: ${option.detail}`, 'Story Option'));
     return toast('Added to Journal');
   }
+  // WHAT's "Suggest oracles" (direct follow-up request) — draws a fresh
+  // set (session.js's drawSuggestedOracles, customized from Intent + the
+  // Latest Scene) and pushes it as a new entry onto the Advisor's
+  // Suggested oracles history stack; see onChange below for the automatic
+  // re-draw+push on Intent/Latest-Scene change.
+  const suggestOracles = hit('[data-suggest-oracles]');
+  if (suggestOracles) {
+    const doc = store.get();
+    pushSuggestedOracleEntry(`WHAT: ${doc.context?.what?.intent || 'no Intent set'}`, drawSuggestedOracles(doc), 'situation');
+    return render();
+  }
+  // WHERE's Location details "Regional faction activity" 💡 (direct
+  // follow-up request) — same push-a-new-entry shape as WHAT's trigger
+  // above, scoped to a fixed #faction/#agenda draw for the one Location
+  // this expand belongs to.
+  const suggestFactionOracles = hit('[data-suggest-faction-oracles]');
+  if (suggestFactionOracles) {
+    const doc = store.get();
+    const loc = getEntity(doc, suggestFactionOracles.dataset.suggestFactionOracles);
+    pushSuggestedOracleEntry(`Regional faction activity — ${loc ? loc.name || 'Unnamed' : 'location'}`, drawFactionActivityOracles(doc));
+    return render();
+  }
+  // Rolls one suggested table directly — identical shape to
+  // data-story-option-roll above, just without an option id to dismiss.
+  // A "situation"-targeted entry (WHAT's own suggestions — direct follow-
+  // up request) appends the roll straight into context.what.situation
+  // instead of the Journal (rollOracle's normal toJournal:true default) —
+  // "the scene is still under development," so it belongs in the WIP
+  // field it was suggested for, not a permanent play-history log entry.
+  const suggestOracleRoll = hit('[data-suggest-oracle-roll]');
+  if (suggestOracleRoll) {
+    const path = suggestOracleRoll.dataset.suggestOracleRoll.split('>');
+    const target = suggestOracleRoll.dataset.suggestOracleTarget;
+    let text = '';
+    if (target === 'situation') {
+      store.update((d) => {
+        const r = rollOracle(d, path, { toJournal: false });
+        text = r.text;
+        const current = (r.campaign.context.what && r.campaign.context.what.situation) || '';
+        return editContextText(r.campaign, 'what', 'situation', current ? `${current}\n${text}` : text);
+      });
+      return toast(text ? `Added to Situation: ${text}` : 'Rolled');
+    }
+    store.update((d) => { const r = rollOracle(d, path); text = r.text; return r.campaign; });
+    return toast(text || 'Rolled');
+  }
   // Story Dashboard's Narrative Composer (docs/adr/0040 Phase 12b) —
   // recomputes the exact same draft narrativeComposerBlock just rendered
   // (deterministic given current campaign state + selectedStoryOptionIds,
@@ -2132,24 +2272,85 @@ function onClick(ev) {
     if (!sceneId) return;
     return store.update((d) => removeSceneBystander(d, sceneId, bystanderRemove.dataset.sceneBystanderRemove));
   }
+  const sceneAssetRemove = hit('[data-scene-asset-remove]');
+  if (sceneAssetRemove) {
+    const sceneId = currentSceneId();
+    if (!sceneId) return;
+    return store.update((d) => removeSceneAsset(d, sceneId, sceneAssetRemove.dataset.sceneAssetRemove));
+  }
+  const locationRemove = hit('[data-scene-location-remove]');
+  if (locationRemove) {
+    const sceneId = currentSceneId();
+    if (!sceneId) return;
+    return store.update((d) => removeSceneLocation(d, sceneId, locationRemove.dataset.sceneLocationRemove));
+  }
+  // WHERE's "Nearby locations" chips (direct follow-up request) — clicking
+  // one adds it straight to Location details instead of opening its Entity
+  // Editor; addSceneLocation's own one-per-tag dedup (scenes.js) still
+  // applies the same as the "Pick location" picker.
+  const locationAdd = hit('[data-scene-location-add]');
+  if (locationAdd) {
+    const sceneId = currentSceneId();
+    if (!sceneId) return;
+    return store.update((d) => addSceneLocation(d, sceneId, locationAdd.dataset.sceneLocationAdd));
+  }
+  // Advisor's "Located at <Location>" proximity card (direct follow-up
+  // request — click-to-add, confirmed over drag-and-drop) — an NPC found
+  // there (or under a sub-location, iteratively) routes the same way
+  // Introduce NPC's create path already does (#character -> Protagonists,
+  // else Antagonists); a sub-location adds straight to Location details,
+  // same as a Nearby locations chip.
+  const proximityAddNpc = hit('[data-proximity-add-npc]');
+  if (proximityAddNpc) {
+    const sceneId = currentSceneId();
+    if (!sceneId) return;
+    const id = proximityAddNpc.dataset.proximityAddNpc;
+    const npc = getEntity(store.get(), id);
+    const isCharacter = npc && (npc.tags || []).includes('character');
+    return store.update((d) => (isCharacter ? addSceneProtagonist(d, sceneId, id) : addSceneAntagonist(d, sceneId, id)));
+  }
+  const proximityAddLocation = hit('[data-proximity-add-location]');
+  if (proximityAddLocation) {
+    const sceneId = currentSceneId();
+    if (!sceneId) return;
+    return store.update((d) => addSceneLocation(d, sceneId, proximityAddLocation.dataset.proximityAddLocation));
+  }
+  // Collapse toggle shared by all five WHO thumbnail groups (Protagonists/
+  // Antagonists/Bystanders/Factions active nearby/Assets present, direct
+  // follow-up request) — one ephemeral Set, keyed by a stable per-group
+  // string (workspace/index.js's group()), default expanded (matching
+  // every group's prior always-expanded behavior).
+  const actorGroupToggle = hit('[data-actor-group-toggle]');
+  if (actorGroupToggle) {
+    const key = actorGroupToggle.dataset.actorGroupToggle;
+    if (collapsedActorGroups.has(key)) collapsedActorGroups.delete(key); else collapsedActorGroups.add(key);
+    return render();
+  }
   // Shared "+" entity picker overlay — WHO's Actors (workspace/index.js's
   // npcSceneGroupsBlock, one per group: NPCs filtered by #character tag)
-  // and WHERE's Current Location System/Star/Colony-Base/District rows
-  // (currentLocationBanner: Locations filtered by #system/#star/#colony/
-  // #district tag). data-entity-picker-open carries either a bare mode
-  // ('protagonist'|'antagonist'|'bystander', WHO — implicit entityType
-  // 'npc', scoped to the current scene) or a "location:<mode>:<locId>"
-  // compound value (WHERE — entityType 'location', scoped to that one
-  // Location entity) parsed here so the rest of the flow only ever deals
-  // with a plain { entityType, mode, scope } shape. See
-  // renderEntityPickerOverlay/entityPicker above.
+  // and WHERE's Location details rows (whereLocationHierarchyBlock).
+  // data-entity-picker-open carries a bare mode
+  // ('protagonist'|'antagonist'|'bystander'|'asset', WHO — implicit
+  // entityType 'npc'/'asset', scoped to the current scene), the literal
+  // "location-current" (WHERE — any Location not already in the scene's
+  // curated list, one per #district/#site/etc. tag — addSceneLocation),
+  // or "system" (WHERE's System row). Colony-Base/District's own
+  // dedicated "location:<mode>:<locId>" compound-value picker mode is
+  // retired (direct follow-up request — "just one (+) like the approach
+  // for NPCs") in favor of the same location-current mechanism handling
+  // every type generically; colonyBaseId/districtId stay declared-but-
+  // inert on the entity (migration rule 5), just no longer read/written
+  // by this UI.
   const entityPickerOpenBtn = hit('[data-entity-picker-open]');
   if (entityPickerOpenBtn) {
     const raw = entityPickerOpenBtn.dataset.entityPickerOpen;
-    const parts = raw.split(':');
-    entityPicker = parts[0] === 'location'
-      ? { entityType: 'location', mode: parts[1], scope: parts[2], query: '' }
-      : { entityType: 'npc', mode: raw, scope: null, query: '' };
+    entityPicker = raw === 'asset'
+      ? { entityType: 'asset', mode: 'asset', scope: null, query: '' }
+      : raw === 'location-current'
+        ? { entityType: 'location-current', mode: 'current', scope: null, query: '' }
+        : raw === 'system'
+          ? { entityType: 'system', mode: 'system', scope: null, query: '' }
+          : { entityType: 'npc', mode: raw, scope: null, query: '' };
     renderEntityPickerOverlay();
     const inp = root.querySelector('[data-entity-picker-query]');
     if (inp) { inp.value = ''; inp.focus(); }
@@ -2163,26 +2364,15 @@ function onClick(ev) {
     const picker = entityPicker;
     entityPicker = null;
     if (!picker) return renderEntityPickerOverlay();
-    if (picker.entityType === 'location') {
-      const field = picker.mode === 'colony' ? 'colonyBaseId' : 'districtId';
-      return store.update((d) => updateEntity(d, picker.scope, { [field]: id }));
-    }
     const sceneId = currentSceneId();
     if (!sceneId) return renderEntityPickerOverlay();
+    if (picker.entityType === 'asset') return store.update((d) => addSceneAsset(d, sceneId, id));
+    if (picker.entityType === 'location-current') return store.update((d) => addSceneLocation(d, sceneId, id));
+    if (picker.entityType === 'system') return store.update((d) => setSceneSystem(d, sceneId, id));
     if (picker.mode === 'protagonist') return store.update((d) => addSceneProtagonist(d, sceneId, id));
     if (picker.mode === 'antagonist') return store.update((d) => addSceneAntagonist(d, sceneId, id));
     if (picker.mode === 'bystander') return store.update((d) => addSceneBystander(d, sceneId, id));
     return renderEntityPickerOverlay();
-  }
-  // Current Location's "-" clear button, and Location Details' matching
-  // "✕" on a Colony-Base/District entry (workspace/index.js) — a plain
-  // field clear; Colony-Base/District are the only two of the four rows
-  // still stored/settable fields (System/Star are relationship-derived
-  // now, see the entityPicker comment above).
-  const locFieldClear = hit('[data-location-field-clear]');
-  if (locFieldClear) {
-    const [locId, field] = locFieldClear.dataset.locationFieldClear.split('::');
-    return store.update((d) => updateEntity(d, locId, { [field]: null }));
   }
   // Current Location's System/Star rows (now read-only, relationship-
   // derived) get a "🔗" link instead of a "+" picker — opens that
@@ -2405,18 +2595,15 @@ function onDblClick(ev) {
 
 function onChange(ev) {
   const t = ev.target;
-  const whereTagSelect = t.closest('[data-where-tag-select]');
-  if (whereTagSelect) { whereLocationTagFilter = whereTagSelect.value || null; return render(); }
   const whyTagSelect = t.closest('[data-why-tag-select]');
   if (whyTagSelect) { whyTagFilter = whyTagSelect.value || null; return render(); }
-  // WHERE/WHY's candidates listbox (candidateListbox, workspace/index.js) —
+  // WHY's candidates listbox (candidateListbox, workspace/index.js) —
   // picking an option inserts the @mention then resets to the placeholder,
-  // same "pick, act, reset" pattern as data-where-faction-link. (WHO used
-  // to have its own version of this; removed along with Focus's free-text
-  // editor — WHO's Actors now go through the entity-picker overlay below
-  // instead, see entityPicker/renderEntityPickerOverlay.)
-  const insertWhereMentionSelect = t.closest('[data-insert-where-mention-select]');
-  if (insertWhereMentionSelect) { const id = t.value; t.value = ''; if (id) insertContextMention('where', id); return; }
+  // same "pick, act, reset" pattern as data-where-faction-link. (WHO and
+  // WHERE used to have their own version of this; both removed along with
+  // their free-text Focus editors — WHO's Actors and WHERE's Locations
+  // now go through the entity-picker overlay below instead, see
+  // entityPicker/renderEntityPickerOverlay.)
   const insertWhyMentionSelect = t.closest('[data-insert-why-mention-select]');
   if (insertWhyMentionSelect) { const id = t.value; t.value = ''; if (id) insertContextMention('why', id); return; }
   // Story Dashboard's per-option "include in the draft" checkbox
@@ -2459,18 +2646,37 @@ function onChange(ev) {
       .catch((err) => toast(`Couldn't add background — ${err.message}`));
     return;
   }
+  // Latest Scene fields that feed "Suggest oracles" (direct follow-up
+  // request: re-draw "every time... the Latest Scene changes") push a new
+  // history entry right after the field itself commits — only the 5
+  // fields drawSuggestedOracles actually reads from (session.js);
+  // decisionPoint/situationLine have no oracle tag link and don't affect
+  // the draw, so they don't trigger one either.
   const sceneField = t.closest('[data-scene-field]');
   if (sceneField) {
     const [sceneId, field] = sceneField.dataset.sceneField.split('::');
-    return store.update((d) => updateSceneField(d, sceneId, field, t.value));
+    store.update((d) => updateSceneField(d, sceneId, field, t.value));
+    if (SUGGEST_ORACLES_SCENE_FIELDS.includes(field)) {
+      const doc = store.get();
+      pushSuggestedOracleEntry(`WHAT: ${doc.context?.what?.intent || 'no Intent set'} (Latest Scene edited)`, drawSuggestedOracles(doc), 'situation');
+    }
+    return;
   }
   const ctx = t.closest('[data-ctx]');
   if (ctx) {
     // The free-text fields (situation/summary) are contenteditable now, not
     // <textarea> — they have no 'change' event at all, so they commit via
-    // onFocusOut instead. Only how.activity's <select> reaches here today.
+    // onFocusOut instead. Only how.activity's/what.intent's <select>s reach
+    // here today.
     const [key, field] = ctx.dataset.ctx.split('.');
-    return store.update((d) => patchContext(d, key, { [field]: t.value }));
+    store.update((d) => patchContext(d, key, { [field]: t.value }));
+    // "Suggest oracles" pushes a new history entry on an Intent change too
+    // (direct follow-up request), same as a Latest Scene field edit above.
+    if (key === 'what' && field === 'intent') {
+      const doc = store.get();
+      pushSuggestedOracleEntry(`WHAT: ${doc.context?.what?.intent || 'no Intent set'}`, drawSuggestedOracles(doc), 'situation');
+    }
+    return;
   }
 
   // Cast header's "Generate…" select (replaces the old row of "+ Type" chips
@@ -4252,6 +4458,17 @@ function render() {
   const doc = store.get();
   if (!doc || !root) return;
 
+  // Editing a field anywhere re-renders the whole shell (every mutation
+  // goes through store.update()) — a real reported bug: this used to snap
+  // the whole page back to the top, disorienting mid-edit. .mc-workspace
+  // (Composer/Navigator) and drawer panels each preserve their OWN scroll
+  // internally (see replaceWorkspacePreservingScroll/
+  // replaceBodyPreservingScroll below); this is a blanket top-level
+  // safety net for the window/document itself in case anything else ever
+  // scrolls the page as a whole.
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
+
   root.querySelector('.campaign-title').textContent = doc.meta.title;
 
   const bc = root.querySelector('[data-breadcrumb]');
@@ -4265,7 +4482,8 @@ function render() {
   // .mc-workspace itself is hidden by CSS there, so skip populating it
   // rather than duplicating the same fields into two places in the DOM at
   // once.
-  root.querySelector('[data-workspace]').innerHTML = isCompactTab() ? '' : renderWorkspace(doc, workspaceUi);
+  if (isCompactTab()) root.querySelector('[data-workspace]').innerHTML = '';
+  else replaceWorkspacePreservingScroll(root.querySelector('[data-workspace]'), renderWorkspace(doc, workspaceUi));
   // A freshly-rendered Scene field textarea starts at its rows="1" default
   // regardless of how much text it holds — only typing into it fires the
   // 'input' event that would otherwise trigger autoGrowSceneField, so a
@@ -4353,7 +4571,16 @@ function render() {
   // drawerCollapsed ("peek behind the drawer") is ignored at compact
   // widths — there is nothing behind it to peek at once .mc-workspace is
   // hidden there.
-  drawer.dataset.open = String((compact || openDrawers.length > 0) && (compact || !drawerCollapsed) && docViewerOpenTabs.length === 0);
+  //
+  // A document open used to force the WHOLE drawer panel closed
+  // (including its own tab strip) on every screen size — direct follow-up
+  // request: on compact widths that's still correct (the doc viewer IS
+  // the tab-menu's content there, no room to show both side by side), but
+  // on desktop/tablet the drawer panel — tabs included — now stays
+  // reachable even while a document is open; the doc viewer narrows to
+  // sit beside it instead of covering it (below), so a GM can still
+  // switch back to Cast/Guide/etc. without first closing the PDF.
+  drawer.dataset.open = String(compact ? docViewerOpenTabs.length === 0 : (openDrawers.length > 0) && !drawerCollapsed);
   // Desktop-only (styles/cockpit.css): hides the Advisor's own standalone
   // panel while a real drawer covers/replaces it, since its content is
   // reachable from the tab strip instead now (design/UX-ROADMAP.md Step 3).
@@ -4362,7 +4589,14 @@ function render() {
   titleEl.textContent = titleForDrawer(doc, activeDrawer);
   titleEl.classList.remove('drawer-title-toggle'); // Cast's own collapse-via-title is gone — Cast isn't a drawer tab anymore
   titleEl.title = '';
-  drawer.style.setProperty('--drawer-w', (doc.drawers.widths[activeDrawer] || 420) + 'px');
+  // Direct follow-up request: every drawer (and the Advisor panel,
+  // styles/tokens.css's --copilot-w) is the SAME width as Cast, for UX
+  // consistency — doc.drawers.widths' old per-drawer overrides (its own
+  // keys didn't even match today's drawer ids — 'entities' isn't 'cast'
+  // or 'entity-detail') are no longer read here; left inert in the schema
+  // per migration rule 5. 420px is Cast's own effective width (it was
+  // never in that map, so it already fell back to this default).
+  drawer.style.setProperty('--drawer-w', '420px');
   const drawerHeadExtra = drawer.querySelector('[data-drawer-head-extra]');
   if (drawerHeadExtra) drawerHeadExtra.innerHTML = headExtraForDrawer(activeDrawer);
   // Tab strip — same pattern as the doc viewer's own tabs below: one pinned
@@ -4411,6 +4645,16 @@ function render() {
   const viewer = root.querySelector('[data-doc-viewer]');
   const openTabs = docViewerOpenTabs;
   viewer.hidden = openTabs.length === 0;
+  // Narrow the viewer to sit beside the (now-still-visible, see above)
+  // drawer panel instead of covering it, desktop/tablet only — matches
+  // the drawer's own current width (420px, same value .mc-drawer's inline
+  // --drawer-w above uses — every drawer is this one width now, see that
+  // assignment's own comment) so their edges meet with no gap or overlap.
+  // Reset to the CSS default (full width to the edge nav) the moment
+  // there's nothing to share space with.
+  viewer.style.right = (!compact && openTabs.length > 0 && openDrawers.length > 0 && !drawerCollapsed)
+    ? `calc(var(--edge-w) + min(420px, 88vw))`
+    : '';
   if (openTabs.length) {
     const activeTab = doc.documents.activeTab && openTabs.includes(doc.documents.activeTab)
       ? doc.documents.activeTab : openTabs[openTabs.length - 1];
@@ -4471,6 +4715,8 @@ function render() {
   renderSearchOverlay();
   renderEntityPickerOverlay();
   renderDiceRollOverlay();
+
+  if (window.scrollX !== scrollX || window.scrollY !== scrollY) window.scrollTo(scrollX, scrollY);
 }
 
 // Lives outside the drawer/workspace update paths above since it's a
@@ -4484,13 +4730,15 @@ function renderSearchOverlay() {
   if (resultsEl) resultsEl.innerHTML = searchOpen ? renderSearchPanel(store.get(), searchQuery) : '';
 }
 
-// The shared "+" entity picker (WHO's Actors + WHERE's Current Location
-// Colony-Base/District rows, workspace/index.js) — same static-skeleton/
-// targeted-update shape as renderSearchOverlay above. Branches once on
-// entityPicker.entityType: 'npc' candidates are scene Actors (with the
-// same exclude-already-on-this-list + tag-filter rules as before);
-// 'location' candidates are Locations tagged #colony/#district to match
-// the picked row, excluding the Location being edited itself.
+// The shared "+" entity picker (WHO's Actors/Assets + WHERE's Location
+// details/System rows, workspace/index.js) — same static-
+// skeleton/targeted-update shape as renderSearchOverlay above. Branches
+// once on entityPicker.entityType: 'npc' candidates are scene Actors
+// (with the same exclude-already-on-this-list + tag-filter rules as
+// before); 'location' candidates are Locations tagged #colony/#district
+// to match the picked row, excluding the Location being edited itself;
+// 'asset' candidates are every #asset-TYPE entity not already in the
+// scene's Assets present list.
 function renderEntityPickerOverlay() {
   const overlay = root && root.querySelector('[data-entity-picker-overlay]');
   if (!overlay) return;
@@ -4501,11 +4749,25 @@ function renderEntityPickerOverlay() {
   const doc = store.get();
   const query = (entityPicker.query || '').trim().toLowerCase();
   let candidates; let emptyMessage;
-  if (entityPicker.entityType === 'location') {
-    const tag = entityPicker.mode === 'colony' ? 'colony' : 'district';
+  if (entityPicker.entityType === 'asset') {
+    const scenes = doc.scenes || [];
+    const scene = scenes[scenes.length - 1];
+    const excludeIds = scene ? new Set(scene.assetIds || []) : new Set();
+    candidates = listEntities(doc, ['asset']).filter((a) => !excludeIds.has(a.id));
+    emptyMessage = 'No Asset entities yet — add one in Cast first.';
+  } else if (entityPicker.entityType === 'location-current') {
+    const scenes = doc.scenes || [];
+    const scene = scenes[scenes.length - 1];
+    const excludeIds = scene ? new Set(scene.locationIds || []) : new Set();
+    // #star/#system-tagged Locations belong to the System row (row 1), not
+    // Location details — "filter on other tags than #star or #system"
+    // (direct follow-up request).
     candidates = listEntities(doc, ['location'])
-      .filter((l) => l.id !== entityPicker.scope && (l.tags || []).includes(tag));
-    emptyMessage = `No #${tag} locations yet — tag one in Cast first.`;
+      .filter((l) => !excludeIds.has(l.id) && !(l.tags || []).includes('star') && !(l.tags || []).includes('system'));
+    emptyMessage = 'No other Location entities yet — add one in Cast first.';
+  } else if (entityPicker.entityType === 'system') {
+    candidates = listEntities(doc, ['location']).filter((l) => (l.tags || []).includes('system'));
+    emptyMessage = 'No #system locations yet — tag one in Cast first.';
   } else {
     const scenes = doc.scenes || [];
     const scene = scenes[scenes.length - 1];
@@ -4669,11 +4931,11 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, inspirationDrafts,
+    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, collapsedActorGroups, inspirationDrafts,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,
-    journalEditOpen, whereLocationTagFilter, whyTagFilter, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
+    journalEditOpen, whyTagFilter, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
     contentPackFlags, hostileLocationsImporting,
@@ -4681,7 +4943,7 @@ function buildDrawerUi() {
     // comment above) — workspace/index.js's WHERE view reads these to render
     // the same renderFactionEvents() body a second way when docked.
     factionEventsDockedInWhere, factionEventsDrafts, factionEventsFactionFilterId, factionEventsLocationFilterId, factionEventsStepFactionId,
-    factionRoundHistoryOpen, entityDetailFocusEventId, conflictEscalationSuggestions,
+    factionRoundHistoryOpen, entityDetailFocusEventId, conflictEscalationSuggestions, locationProximity,
   };
 }
 
@@ -4708,6 +4970,21 @@ function replaceBodyPreservingScroll(body, html) {
     const newGuideEditor = body.querySelector('[data-guide-input]');
     if (newGuideEditor) newGuideEditor.scrollTop = guideScrollTop;
   }
+}
+
+// Same fix, same reported bug, for .mc-workspace (Composer/Navigator) —
+// [data-workspace] itself doesn't scroll (desktop/tablet); each card
+// scrolls independently via its own .workspace-card-body (styles/
+// cockpit.css). renderWorkspace() always emits exactly two, in the same
+// order (Composer then Navigator, storyboard-grid) — matched up by index
+// rather than a per-card id, since neither card has one of its own to key
+// off. A GM scrolled deep into either one editing a WHO/WHERE/WHAT/WHY/HOW
+// field — any field commit re-renders the whole shell — used to snap both
+// back to the top; this captures/restores each independently instead.
+function replaceWorkspacePreservingScroll(el, html) {
+  const scrollTops = [...el.querySelectorAll('.workspace-card-body')].map((s) => s.scrollTop);
+  el.innerHTML = html;
+  el.querySelectorAll('.workspace-card-body').forEach((s, i) => { if (scrollTops[i] != null) s.scrollTop = scrollTops[i]; });
 }
 
 // Faction Events (docs/adr/0031/0032) renders via its own pure function

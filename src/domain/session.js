@@ -5,10 +5,11 @@
 
 import { applyShift } from './context.js';
 import { generateScene, recomposeSceneText, ensureNpcSceneState, NPC_SCENE_FIELD_ORACLE_PATH } from './scenes.js';
-import { tablesWithOverrides, rollTable, rollGroup, formatRoll, pick, getTable, currentTableEntries, updateOracleEntry } from './oracles.js';
+import { tablesWithOverrides, rollTable, rollGroup, formatRoll, pick, getTable, currentTableEntries, updateOracleEntry, oraclePathsWithAnyTag } from './oracles.js';
 import { linkMentions, parseMentions, createEntity, updateEntity, getEntity, LOCATION_SENSORY_ORACLE_PATH } from './entities.js';
 import { linkDocumentMentions, parseDocumentMentions, resolvedDocumentMentionNames } from './documents.js';
 import { SUGGESTION_LENSES, findLens, lensOracleCategories } from '../data/suggestionLenses.js';
+import { oracleLinkTagsFor, INTENT_ORACLE_TAGS } from '../data/entityFieldOracleLinks.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 
@@ -112,6 +113,60 @@ export function drawSuggestionLenses(campaign, { rng = Math.random, count = 4, s
     drawn.push(lens);
   }
   return drawn;
+}
+
+/** Shared random-without-replacement draw, capped to `count`, of every
+ *  Oracle table (tablesWithOverrides) carrying ANY of `tags` — the common
+ *  core behind every "suggest oracles for X" trigger in this app (WHAT's
+ *  Intent+Latest-Scene draw and WHERE's Regional-faction-activity draw,
+ *  below). Returns an array of table paths (e.g. `['Mysteries & Coverups',
+ *  'Discovery']`) — the same shape rollOracle/oraclePathsWithAnyTag
+ *  already use, so the UI can roll one directly. */
+function drawOraclesForTags(campaign, tags, { rng = Math.random, count = 6 } = {}) {
+  const tables = tablesWithOverrides(campaign.oracles?.overrides, campaign.settings?.genrePack);
+  const pool = oraclePathsWithAnyTag(campaign, tables, tags);
+  const copy = pool.slice();
+  const drawn = [];
+  const n = Math.min(count, copy.length);
+  while (drawn.length < n && copy.length) {
+    const idx = Math.floor(rng() * copy.length);
+    drawn.push(copy.splice(idx, 1)[0]);
+  }
+  return drawn;
+}
+
+/** "Suggest oracles" (WHAT, direct follow-up request: "a list of oracles
+ *  ... customized from the Intent and the Latest Scene"). Reuses the same
+ *  tag-based linking ADR 0016 already established for field 🔮 icons —
+ *  INTENT_ORACLE_TAGS maps the current Intent to a few of that same locked
+ *  tag vocabulary, and oracleLinkTagsFor('scene', field) contributes more
+ *  for every Latest Scene field that's actually populated right now
+ *  (opening/driver/clue/complication/consequence — the same five fields
+ *  that already carry a scene.<field> tag entry) — no separate content or
+ *  NLP-guessing needed, just the field links already in place. Pure/
+ *  deterministic given `rng`; the UI recomputes this on demand (the
+ *  "Suggest oracles" click) and again automatically whenever Intent or a
+ *  Latest Scene field actually changes, so it's never stale — never on
+ *  every unrelated render. */
+export function drawSuggestedOracles(campaign, opts = {}) {
+  const tags = new Set(INTENT_ORACLE_TAGS[campaign.context?.what?.intent] || []);
+  const scenes = campaign.scenes || [];
+  const scene = scenes[scenes.length - 1];
+  if (scene) {
+    for (const field of ['opening', 'driver', 'clue', 'complication', 'consequence']) {
+      if (scene[field]) (oracleLinkTagsFor('scene', field) || []).forEach((t) => tags.add(t));
+    }
+  }
+  return drawOraclesForTags(campaign, [...tags], opts);
+}
+
+/** WHERE's "Regional faction activity" 💡 (Location details' per-entity
+ *  dropdown, direct follow-up request) — a fixed #faction/#agenda draw,
+ *  same shared mechanism as drawSuggestedOracles above but with no
+ *  Intent/Latest-Scene dependency, since this is scoped to "how are
+ *  factions operating here" specifically, not the whole current scene. */
+export function drawFactionActivityOracles(campaign, opts = {}) {
+  return drawOraclesForTags(campaign, ['faction', 'agenda'], opts);
 }
 
 /** "What Happens Next?", lens-filtered — this is Continue Story's own

@@ -41,3 +41,23 @@ export const ENTITY_FIELD_ORACLE_LINKS = {
 export function oracleLinkTagsFor(entityType, field) {
   return ENTITY_FIELD_ORACLE_LINKS[`${entityType}.${field}`] || null;
 }
+
+// WHAT's Intent (ui/workspace/index.js's INTENTS) -> the same locked oracle
+// tag vocabulary above — powers session.js's drawSuggestedOracles ("Suggest
+// oracles," direct follow-up request: "a list of oracles ... customized
+// from the Intent and the Latest Scene"). Reuses the identical tags
+// ENTITY_FIELD_ORACLE_LINKS already relies on rather than inventing a
+// parallel vocabulary, so every entry here is already guaranteed a real
+// seeded table (same data-integrity test).
+export const INTENT_ORACLE_TAGS = {
+  Discovery: ['discovery'],
+  Travel: ['setting'],
+  'Social encounter': ['character', 'leadership'],
+  Investigation: ['secret', 'discovery'],
+  'Resource pressure': ['trade'],
+  'Combat pressure': ['fear'],
+  'Moral choice': ['hook', 'agenda'],
+  'Faction complication': ['faction', 'agenda'],
+  'Exploration hazard': ['setting', 'fear'],
+  'Trade opportunity': ['trade'],
+};

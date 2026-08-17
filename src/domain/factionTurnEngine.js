@@ -54,7 +54,7 @@
 // - "District" is a single-level contains/located_at check (entities.js's
 //   isSameDistrict), not deep ancestor recursion.
 
-import { getEntity, updateEntity, listEntities, getRelationshipBetween, isSameDistrict, findMentions, ensureFactionTurnFields, getContainingLocation, getContainedLocations, getEntityFaction, setEntityFactionMembership } from './entities.js';
+import { getEntity, updateEntity, listEntities, getRelationshipBetween, isSameDistrict, ensureFactionTurnFields, getContainingLocation, getContainedLocations, getEntityFaction, setEntityFactionMembership } from './entities.js';
 import { listThreads, addThread, advanceThread, removeThread } from './threads.js';
 // Provider indirection (docs/adr/0032): every asset/tag/goal catalog lookup
 // below resolves through factionProviderFor(campaign, faction) instead of
@@ -272,9 +272,19 @@ function coLocatedSummary(campaign, factionId, locationId) {
  *  infrastructure rather than a new structured pointer (a past redesign
  *  deliberately removed context.where.entityIds as duplicative of Focus;
  *  reviving that reasoning here rather than refighting it). */
+// Direct follow-up request ("remove Focus... under WHERE it happens"):
+// this used to scan context.where.summary for @mentions — WHERE no
+// longer has a Focus field, so the current scene's own curated
+// locationIds (scenes.js, GM-picked via WHERE's "Location details" "+")
+// is the one source of truth now, same "no free-text derivation, an
+// explicit list instead" shift WHO's Actors went through earlier. The
+// first entry is "the" primary current location everywhere that concept
+// is used.
 export function getCurrentWhereLocations(campaign) {
-  const text = (campaign.context && campaign.context.where && campaign.context.where.summary) || '';
-  return findMentions(campaign, text).filter((e) => e.type === 'location');
+  const scenes = campaign.scenes || [];
+  const scene = scenes[scenes.length - 1];
+  if (!scene) return [];
+  return (scene.locationIds || []).map((id) => getEntity(campaign, id)).filter(Boolean);
 }
 
 /** Whether `locationId` is where the party currently is (or shares an

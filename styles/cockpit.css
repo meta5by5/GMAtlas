@@ -192,14 +192,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .workspace-card-head-row .workspace-card-head-text h2,
 .workspace-card-head-row .workspace-card-head-text .lead { margin-bottom: 0; }
 .location-summary { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.8rem; flex: 0 0 auto; }
-/* Each row (System/Star/Colony-Base/District, currentLocationBanner) is
-   its own flex line, split into two clusters — label+value LEFT-aligned,
-   the +/- picker controls RIGHT-aligned (direct follow-up request; a
-   single right-packed row, the previous shape, made the +/- controls
-   drift depending on how long the value was). */
+/* A read-only System/Star reference row (drawers/index.js's
+   worldProfileSection) — label left, resolved entity chip right, split
+   into two clusters so a future action control has somewhere to sit
+   without restyling this. */
 .location-summary-item { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
 .location-summary-label { display: flex; align-items: center; gap: 0.3rem; }
-.location-summary-actions { display: flex; align-items: center; gap: 0.15rem; }
 .location-summary-item .entity-chip { font-size: 0.75rem; padding: 0.15rem 0.5rem; }
 
 /* WHERE's docked Faction Events card (direct request: a down-arrow on the
@@ -259,6 +257,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
    suggestions inside one .copilot-card, each with its own roll/journal
    chips right under it. */
 .copilot-story-option { margin-top: var(--sp-2); }
+/* Suggested oracles' history stack (direct follow-up request) — each push
+   (WHAT's "Suggest oracles", WHERE's Regional faction activity 💡) is its
+   own boxed entry, newest at the top; the 3 most recent render open, the
+   next 3 as a native <details> (no new JS state needed for the expand/
+   collapse itself) so a GM can still look one up without it competing for
+   space by default. */
+.advisor-history-entry { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--sp-2); margin-top: var(--sp-2); }
+.advisor-history-entry-head { margin-bottom: var(--sp-1); }
+.advisor-history-entry-collapsed summary { cursor: pointer; }
+.advisor-history-entry-collapsed[open] summary { margin-bottom: var(--sp-1); }
 .copilot-story-option:first-child { margin-top: 0; }
 .copilot-story-option p { margin-bottom: 0.25rem; }
 
@@ -436,8 +444,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   /* Advisor is a permanent region on desktop — never a sheet/edge-tab. */
   .mc-copilot { transform: none; }
   /* ...except while a real drawer is pinned open (design/UX-ROADMAP.md
-     Step 3): the drawer already visually covers this column (.mc-drawer's
-     default width exceeds --copilot-w), so the standalone panel is hidden
+     Step 3): the drawer already visually covers this column (.mc-drawer
+     is the same width as --copilot-w, direct follow-up request), so the
+     standalone panel is hidden
      rather than sitting duplicated/unreachable underneath it — its content
      is reachable from the drawer's own tab strip instead (the 'advisor'
      pseudo-tab, see shell.js's renderActiveDrawerHtml/hasPendingAdvisorDecision). */
@@ -662,6 +671,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .actor-thumb-photo { width: 2.75rem; height: 2.75rem; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); background: var(--bg-inset); display: block; }
 .actor-thumb-photo-empty { display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 600; color: var(--text-dim); }
 .actor-thumb-name { font-size: 0.7rem; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; margin-top: 0.4rem; }
+/* WHERE Location details' "District"/"Site" top label (direct follow-up
+   request) — mirrors .actor-thumb-name's own type treatment but sits
+   flush above the circle instead of below it, so it reads as a category
+   tag rather than a second name. */
+.actor-thumb-toplabel { font-size: 0.62rem; text-align: center; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); line-height: 1; margin-bottom: 0.2rem; }
 .actor-thumb-badge {
   position: absolute; bottom: -0.3rem; width: 1.1rem; height: 1.1rem; line-height: 1;
   display: flex; align-items: center; justify-content: center; padding: 0;
@@ -673,8 +687,20 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .actor-thumb-badge-remove { right: -0.6rem; }
 .npc-scene-group.drop-hover { border-radius: var(--radius-sm); }
 .npc-scene-card-detail { width: 100%; }
-.location-details { border-top: 1px dashed var(--border); padding-top: var(--sp-2); }
-.location-details-title { font-style: italic; color: var(--text-dim); margin: var(--sp-2) 0; }
+/* WHO's five thumbnail groups' collapse toggle (direct follow-up request:
+   "without changing the current font style") — the button carries
+   .field-label-static directly for its type styling (font-size/color/
+   letter-spacing/text-transform, unchanged), this rule only strips the
+   browser's own button chrome so it doesn't look like a boxed control. */
+button.actor-group-toggle { background: none; border: none; padding: 0; cursor: pointer; text-align: left; }
+/* WHERE's consolidated System row (direct follow-up request) — System
+   thumbnail left-aligned, Star name + "(Zone) Hex" in a two-line block to
+   its right, vertically centered against the thumbnail ("both lines are
+   in a table vertically aligned with the thumbnail"). */
+.location-hierarchy-row { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-2); }
+.location-hierarchy-info { flex: 1; display: flex; flex-direction: column; gap: 0.1rem; }
+.location-hierarchy-star { font-size: 0.9rem; font-weight: 600; }
+.location-hierarchy-zonehex { font-size: 0.75rem; }
 /* Latest Scene's split fields (Opening/Driver/Clue/Complication/Decision
    point/Likely Consequence/Current thread) — single column, not a
    multi-column grid: a scene field is often a full sentence or two, and
@@ -704,16 +730,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font-size: 0.7rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim);
 }
 .section-toggle:hover { color: var(--accent); }
-/* Latest Scene: the combined text view sits at 70% width, its split
-   fields at 30%, side by side instead of stacked — the fields are edited
-   far less often than the text is read, so giving the text the larger
-   share reads better than an even split. Flex (not grid) so the text
-   panel's native resize handle can drag the split itself: dragging its
-   corner sets an explicit width on it, and the fields panel (flex:1)
-   fills whatever's left. */
-.last-scene-body { display: flex; gap: var(--sp-3); align-items: stretch; }
-.last-scene-body .scene-fields { flex: 1 1 0; min-width: 12rem; margin: 0; }
-.last-scene-body .scene-text { flex: 0 0 70%; min-width: 14rem; max-width: 85%; resize: horizontal; margin-top: 0; }
 textarea, select, input[type="text"], input[type="search"], .drawer-search {
   width: 100%; box-sizing: border-box;
   background: var(--bg-inset); color: var(--text);
@@ -811,7 +827,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 
 .last-scene { margin-top: var(--sp-4); border-top: 1px solid var(--border); padding-top: var(--sp-3); }
 .last-scene summary { cursor: pointer; font-size: 0.85rem; color: var(--accent); }
-.scene-text { white-space: pre-wrap; font-size: 0.82rem; line-height: 1.5; color: var(--text); background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--sp-3); margin-top: var(--sp-2); max-height: 40vh; overflow: auto; }
 
 .entity-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
 .entity-chip { background: var(--tier2-bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.25rem 0.6rem; font-size: 0.8rem; }
@@ -1044,12 +1059,6 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
      forced here since it predates auto-fit and nothing depends on it
      changing. */
   .field-row-2col { grid-template-columns: 1fr; }
-  /* A 70/30 side-by-side split has no room to breathe below this width —
-     stack the Scene text above its fields instead; the text panel's
-     resize handle only makes sense in the row layout, so drop the manual
-     width along with it. */
-  .last-scene-body { flex-direction: column; }
-  .last-scene-body .scene-text { flex-basis: auto; max-width: none; width: auto !important; resize: vertical; }
 }
 
 /* Threads (progress clocks) */

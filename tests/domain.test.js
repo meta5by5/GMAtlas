@@ -9,7 +9,7 @@ import { SCENE_TABLES, makeRng, rollTable, rollGroup, flattenKeys, getTable, tab
 import { ORACLE_TABLE_SOURCES } from '../src/data/oracleGroups.js';
 import { applyShift, listShifts, contextSummary } from '../src/domain/context.js';
 import { generateScene, recomposeSceneText } from '../src/domain/scenes.js';
-import { continueStory, applyStoryShift, rollOracle, patchContext, drawSuggestionLenses, suggestNextWithLens } from '../src/domain/session.js';
+import { continueStory, applyStoryShift, rollOracle, patchContext, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles } from '../src/domain/session.js';
 import { SUGGESTION_LENSES, lensOracleCategories } from '../src/data/suggestionLenses.js';
 import { defaultCampaign } from '../src/core/schema.js';
 import { parseStatsString } from '../src/domain/statblocks.js';
@@ -252,6 +252,38 @@ test('drawSuggestionLenses draws the requested count of distinct lenses from bot
   assert.equal(drawn.length, 4);
   const ids = new Set(drawn.map((l) => l.id));
   assert.equal(ids.size, 4); // no duplicates
+});
+
+test('drawSuggestedOracles ("Suggest oracles", WHAT direct follow-up request) is customized from Intent alone with no scene yet, then grows/shrinks as Latest Scene fields are populated/cleared — never surfacing a table unrelated to either', () => {
+  let camp = defaultCampaign();
+  camp = patchContext(camp, 'what', { intent: 'Trade opportunity' }); // INTENT_ORACLE_TAGS: ['trade']
+  const tradeOnly = drawSuggestedOracles(camp, { rng: makeRng(1), count: 20 });
+  const tradeOnlyPaths = tradeOnly.map((p) => p.join('>'));
+  assert.ok(tradeOnlyPaths.includes('Trade & Cargo>Trade Opportunity'), 'includes a #trade table (from Intent)');
+  assert.ok(!tradeOnlyPaths.includes('Plot Engine>Plot Target'), 'excludes a #hook-only table — no scene yet to contribute one');
+  assert.ok(!tradeOnlyPaths.includes('Mysteries & Coverups>Discovery'), 'excludes a #discovery-only table — Trade opportunity does not map to it');
+
+  camp.scenes = [{ id: 'scene1', number: 1, opening: '', driver: 'A rival crew wants this cargo too', clue: '', complication: '', consequence: '', decisionPoint: '', situationLine: '' }];
+  const withDriver = drawSuggestedOracles(camp, { rng: makeRng(1), count: 20 }).map((p) => p.join('>'));
+  assert.ok(withDriver.includes('Plot Engine>Plot Target'), 'a populated Driver field contributes #hook (scene.driver\'s own oracle link), growing the pool');
+  assert.ok(withDriver.includes('Trade & Cargo>Trade Opportunity'), 'Intent\'s own #trade tables are still included alongside it');
+
+  camp.scenes[0].driver = ''; // cleared
+  const cleared = drawSuggestedOracles(camp, { rng: makeRng(1), count: 20 }).map((p) => p.join('>'));
+  assert.ok(!cleared.includes('Plot Engine>Plot Target'), 'clearing Driver drops the #hook contribution again — an empty field links nothing');
+
+  const capped = drawSuggestedOracles(camp, { rng: makeRng(2), count: 1 });
+  assert.equal(capped.length, 1, 'respects the count cap');
+});
+
+test('drawFactionActivityOracles (WHERE "Regional faction activity" 💡, direct follow-up request) draws a fixed #faction/#agenda pool, independent of Intent/Latest Scene', () => {
+  const camp = defaultCampaign();
+  const drawn = drawFactionActivityOracles(camp, { rng: makeRng(1), count: 20 }).map((p) => p.join('>'));
+  assert.ok(drawn.includes('Factions>Faction Type'), 'includes a #faction table');
+  assert.ok(drawn.includes('Factions>Project') || drawn.includes('Corporate Powers>Hidden Agenda'), 'includes an #agenda table');
+  assert.ok(!drawn.includes('Trade & Cargo>Trade Opportunity'), 'excludes an unrelated #trade-only table');
+  const capped = drawFactionActivityOracles(camp, { rng: makeRng(1), count: 1 });
+  assert.equal(capped.length, 1, 'respects the count cap');
 });
 
 test('suggestNextWithLens appends a scene, timeline crumb, and journal entry the same as continueStory, with a "Lens:" marker for a recognized lens; falls back gracefully for an unknown one', () => {
@@ -4717,7 +4749,7 @@ test('repairAssetOrFaction is never proposed as a candidate action for a 0-FacCr
 
 // --- docs/adr/0031 Faction Events follow-up: location-pairing, relationship
 // stance, district/witnessed framing, WHO/WHERE tie-ins ------------------
-import { getRelationshipBetween, getContainingLocation, getContainedLocations, isSameDistrict, getSystemForLocation, getStarForLocation, getHexZoneForLocation } from '../src/domain/entities.js';
+import { getRelationshipBetween, getContainingLocation, getContainedLocations, isSameDistrict, getSystemForLocation, getStarForLocation, getHexZoneForLocation, proximityToLocation } from '../src/domain/entities.js';
 import { relationshipStanceBetween, factionsAtLocation, getCurrentWhereLocations } from '../src/domain/factionTurnEngine.js';
 
 test('getRelationshipBetween looks up the relationship FROM a TO b (a\'s own edge), and returns null for a missing entity or edge', () => {
@@ -4778,6 +4810,32 @@ test('getContainingLocation/getContainedLocations walk the contains/located_at p
   assert.equal(isSameDistrict(camp, worldId, zoneId), true); // world's own parent
   assert.equal(isSameDistrict(camp, baseId, zoneId), false); // two hops — not a single-level match
   assert.equal(isSameDistrict(camp, worldId, farId), false);
+});
+
+test('proximityToLocation ("iterative proximity," direct follow-up request) walks the FULL contains chain — not just one hop — collecting every descendant Location and every NPC located_at any of them, direct or several levels down; excludes the starting Location itself and an unrelated NPC elsewhere', () => {
+  let camp = defaultCampaign();
+  let zoneId, worldId, baseId, farId, aliceId, bobId, carolId;
+  ({ campaign: camp, id: zoneId } = createEntity(camp, { type: 'location', name: 'Zone' }));
+  ({ campaign: camp, id: worldId } = createEntity(camp, { type: 'location', name: 'World' }));
+  ({ campaign: camp, id: baseId } = createEntity(camp, { type: 'location', name: 'Base' }));
+  ({ campaign: camp, id: farId } = createEntity(camp, { type: 'location', name: 'Far Away' }));
+  camp = addRelationship(camp, zoneId, worldId, 'Contains', 'contains');
+  camp = addRelationship(camp, worldId, baseId, 'Contains', 'contains'); // two hops down from Zone
+
+  ({ campaign: camp, id: aliceId } = createEntity(camp, { type: 'npc', name: 'Alice' }));
+  camp = addRelationship(camp, aliceId, worldId, 'Located At', 'located_at'); // one hop down
+  ({ campaign: camp, id: bobId } = createEntity(camp, { type: 'npc', name: 'Bob' }));
+  camp = addRelationship(camp, bobId, baseId, 'Located At', 'located_at'); // two hops down
+  ({ campaign: camp, id: carolId } = createEntity(camp, { type: 'npc', name: 'Carol' }));
+  camp = addRelationship(camp, carolId, farId, 'Located At', 'located_at'); // unrelated location entirely
+
+  const { locations, npcs } = proximityToLocation(camp, zoneId);
+  assert.deepEqual(new Set(locations.map((l) => l.id)), new Set([worldId, baseId]), 'both descendants collected, Zone itself excluded');
+  assert.deepEqual(new Set(npcs.map((n) => n.id)), new Set([aliceId, bobId]), 'NPCs located at either descendant, at any depth, both surfaced');
+  assert.equal(npcs.some((n) => n.id === carolId), false, 'Carol (an unrelated location) is not included');
+
+  assert.deepEqual(proximityToLocation(camp, farId).locations, [], 'a location with no sub-locations returns an empty list');
+  assert.deepEqual(proximityToLocation(camp, farId).npcs.map((n) => n.id), [carolId], 'still finds an NPC located directly AT the queried location itself');
 });
 
 test('addRelationship/updateRelationshipType auto-mirror located_at <-> contains onto the OTHER side (direct follow-up request) — every other type pair still mirrors as generic "linked" only', () => {
@@ -4901,14 +4959,14 @@ test('factionsAtLocation lists every OTHER faction present (active asset, homewo
   assert.ok(byFaction[rivalId].asset);
 });
 
-test('getCurrentWhereLocations parses Location @mentions out of WHERE\'s own Focus text (context.where.summary), ignoring non-Location mentions', () => {
+test('getCurrentWhereLocations reads the current scene\'s own curated locationIds (scenes.js) — no free text involved', () => {
   let camp = defaultCampaign();
   let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Prospect Station' }));
-  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Reyes' }));
-  camp = patchContext(camp, 'where', { summary: 'The party is at @[Prospect Station], talking to @Reyes.' });
+  camp.scenes = [{ id: 'scene1', locationIds: [locId] }];
   const locs = getCurrentWhereLocations(camp);
   assert.equal(locs.length, 1);
   assert.equal(locs[0].id, locId);
+  assert.deepEqual(getCurrentWhereLocations(defaultCampaign()), [], 'empty with no scenes at all');
 });
 
 test('attack auto-targeting (autoArgs, via proposeFactionTurn) never picks an allied co-located faction as a defender — only a rival, falling back to neutral if no rival is present', () => {
@@ -4957,9 +5015,9 @@ test('event records are Faction-Location pairs: locationId, coLocatedFactions (d
   assert.equal(r.event.witnessed, false);
   assert.deepEqual(r.event.coLocatedFactions, [{ factionId: bId, factionName: 'Faction B', stance: 'ally' }]);
 
-  // Now WHERE points at the same world — the same action is witnessed.
-  const locName = getEntity(camp, aLoc).name;
-  camp = patchContext(camp, 'where', { summary: `The party arrives at @[${locName}].` });
+  // Now WHERE's own curated scene locations include the same world — the
+  // same action is witnessed.
+  camp.scenes = [{ id: 'scene1', locationIds: [aLoc] }];
   r = buyAsset(camp, { factionId: aId, statType: 'force', catalogId: 'militia-unit', locationId: aLoc, turnNumber: 2 });
   assert.equal(r.event.witnessed, true);
 });
@@ -5138,8 +5196,7 @@ test('WHAT-tab consequence hook: a witnessed, non-failure faction-vs-world event
   let camp = defaultCampaign();
   let factionId, locationId; ({ campaign: camp, factionId, locationId } = makeFactionWithHomeworld(camp, 'Witnessed Invader'));
   camp = updateEntity(camp, factionId, { seizeProgress: { locationId, remainingHp: 0 } });
-  const locName = getEntity(camp, locationId).name;
-  camp = patchContext(camp, 'where', { summary: `The party stands at @[${locName}].` });
+  camp.scenes = [{ id: 'scene1', locationIds: [locationId] }];
   camp.context.what.threat = 3;
 
   const draft = proposeFactionStep(camp, factionId, { rng: makeRng(1) });
@@ -5207,6 +5264,7 @@ test('gatherSceneContext reads WHO Actors from the current scene\'s curated list
   let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Dock Worker' }));
   const tables = tablesWithOverrides(camp.oracles?.overrides, camp.settings?.genrePack);
   const scene = generateScene(camp, tables, makeRng(3));
+  scene.locationIds = [locId];
   camp.scenes = [scene];
   camp = addSceneAntagonist(camp, scene.id, npcId);
   camp.context.where.summary = 'At the @[Docking Bay]';
@@ -5228,7 +5286,7 @@ test('buildStoryOptions is genuinely cumulative — a faction agenda, a Conflict
   let conflictId; ({ campaign: camp, id: conflictId } = createEntity(camp, { type: 'conflict', name: 'Water Rights Dispute' }));
   camp = updateEntity(camp, conflictId, { locationId: locId, causeGapHook: 'The Cartel poisoned the well themselves' });
   camp = addForeshadowing(camp, 'A stranger asked about the old cistern', 'Reveals the Cartel\'s sabotage');
-  camp.context.where.summary = 'At the @[Docking Bay]';
+  camp.scenes = [{ id: 'scene1', locationIds: [locId] }];
 
   const options = buildStoryOptions(camp);
   const sources = options.map((o) => o.source);
@@ -5261,7 +5319,7 @@ test('buildStoryOptions respects `limit` and is empty (not throwing) on a campai
     let fid; ({ campaign: camp, id: fid } = createEntity(camp, { type: 'faction', name: `Faction ${i}` }));
     camp = updateEntity(camp, fid, { agenda: `Agenda ${i}`, homeworldId: locId });
   }
-  camp.context.where.summary = 'At the @[Docking Bay]';
+  camp.scenes = [{ id: 'scene1', locationIds: [locId] }];
   assert.equal(buildStoryOptions(camp, { limit: 2 }).length, 2);
 });
 
@@ -5274,7 +5332,7 @@ test('buildStoryOptions breaks an exact weight tie using campaign.oracles.usage 
   let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Docking Bay' }));
   camp = updateEntity(camp, factionId, { agenda: 'Corner the water trade', homeworldId: locId });
   camp = addWorldFlag(camp, 'Does the party know the well was poisoned?');
-  camp.context.where.summary = 'At the @[Docking Bay]';
+  camp.scenes = [{ id: 'scene1', locationIds: [locId] }];
 
   const idxOf = (opts, source) => opts.findIndex((o) => o.source === source);
 
@@ -5301,6 +5359,7 @@ test('composeNarrativeDraft (docs/adr/0040 Phase 12b) is empty on a bare campaig
   camp.context.who.summary = 'Talking to @[Rust Cartel]';
   camp.context.what.situation = 'The docking clamps just failed.';
   camp.context.why.summary = 'Get the ship spaceworthy again';
+  camp.scenes = [{ id: 'scene1', locationIds: [locId] }]; // buildStoryOptions' faction-agenda option needs the faction's homeworld recognized as "here"
 
   // No options selected: location/who/situation/objective still compose.
   const bare = composeNarrativeDraft(camp);
@@ -5336,7 +5395,7 @@ test('composeNarrativeDraft (docs/adr/0040 Phase 12f fix) uses WHO/WHERE\'s raw 
 });
 
 // --- docs/adr/0041 Phase 13a/13b: Location Details + scene-scoped NPC state ---
-import { getNpcSceneState, addSceneBystander, removeSceneBystander, addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, moveSceneActor, NPC_SCENE_FIELD_ORACLE_PATH } from '../src/domain/scenes.js';
+import { getNpcSceneState, addSceneBystander, removeSceneBystander, addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, moveSceneActor, addSceneLocation, setSceneSystem, NPC_SCENE_FIELD_ORACLE_PATH } from '../src/domain/scenes.js';
 import { rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField } from '../src/domain/session.js';
 
 test('a location entity defaults sector/objectType (World Profile) and sights/smells/sounds + sensorySource (all null) — nothing required to create one', () => {
@@ -5424,6 +5483,88 @@ test('moveSceneActor drags a thumbnail from one Actor group to another in one pa
 
   const unchanged = moveSceneActor(camp, 'not-a-real-scene', 'bystander', 'antagonist', aliceId);
   assert.deepEqual(unchanged.scenes[0].bystanderIds, [aliceId], 'no-op on an unknown scene id');
+});
+
+test('addSceneLocation enforces ONE entity of each tag-type — a second #district replaces the first, an unrelated #site tag coexists, and an untagged pick never displaces anything', () => {
+  let camp = defaultCampaign();
+  let alphaId; ({ campaign: camp, id: alphaId } = createEntity(camp, { type: 'location', name: 'Alpha District' }));
+  camp = addEntityTag(camp, alphaId, 'district');
+  let betaId; ({ campaign: camp, id: betaId } = createEntity(camp, { type: 'location', name: 'Beta District' }));
+  camp = addEntityTag(camp, betaId, 'district');
+  let siteId; ({ campaign: camp, id: siteId } = createEntity(camp, { type: 'location', name: 'Camp Site' }));
+  camp = addEntityTag(camp, siteId, 'site');
+  let miscId; ({ campaign: camp, id: miscId } = createEntity(camp, { type: 'location', name: 'Unlabeled Spot' }));
+  camp.scenes = [{ id: 'scene1', locationIds: [] }];
+
+  camp = addSceneLocation(camp, 'scene1', alphaId);
+  assert.deepEqual(camp.scenes[0].locationIds, [alphaId]);
+
+  camp = addSceneLocation(camp, 'scene1', betaId);
+  assert.deepEqual(camp.scenes[0].locationIds, [betaId], 'a second #district swaps out the first rather than accumulating both');
+
+  camp = addSceneLocation(camp, 'scene1', siteId);
+  assert.deepEqual(camp.scenes[0].locationIds, [betaId, siteId], 'a #site shares no tag with the #district already present, so it just adds alongside it');
+
+  camp = addSceneLocation(camp, 'scene1', miscId);
+  assert.deepEqual(camp.scenes[0].locationIds, [betaId, siteId, miscId], 'an untagged entity has nothing to overlap on, so nothing gets displaced');
+
+  const deduped = addSceneLocation(camp, 'scene1', siteId);
+  assert.deepEqual(deduped.scenes[0].locationIds, [betaId, siteId, miscId], 'already-present id is a no-op, not a self-replace');
+
+  const unchanged = addSceneLocation(camp, 'not-a-real-scene', alphaId);
+  assert.deepEqual(unchanged.scenes[0].locationIds, [betaId, siteId, miscId], 'no-op on an unknown scene id');
+});
+
+test('setSceneSystem: no anchor yet -> the picked System becomes the anchor directly (self-resolving, no relationship needed); a real Location-details anchor -> gets a located_at edge to the System, replacing any prior one; an anchor that was only a self-#system-tagged stand-in -> gets swapped, never linked to itself', () => {
+  let camp = defaultCampaign();
+  let sysAId; ({ campaign: camp, id: sysAId } = createEntity(camp, { type: 'location', name: 'Kepler System' }));
+  camp = addEntityTag(camp, sysAId, 'system');
+  let sysBId; ({ campaign: camp, id: sysBId } = createEntity(camp, { type: 'location', name: 'Vex System' }));
+  camp = addEntityTag(camp, sysBId, 'system');
+  let districtId; ({ campaign: camp, id: districtId } = createEntity(camp, { type: 'location', name: 'Old Town' }));
+  camp = addEntityTag(camp, districtId, 'district');
+  let district2Id; ({ campaign: camp, id: district2Id } = createEntity(camp, { type: 'location', name: 'New Town' }));
+  camp = addEntityTag(camp, district2Id, 'district');
+  let sectorId; ({ campaign: camp, id: sectorId } = createEntity(camp, { type: 'location', name: 'Some Sector' }));
+
+  // (a) bootstrap: no anchor at all yet.
+  camp.scenes = [{ id: 'scene1', locationIds: [] }];
+  camp = setSceneSystem(camp, 'scene1', sysAId);
+  assert.deepEqual(camp.scenes[0].locationIds, [sysAId], 'the System itself becomes the anchor');
+  assert.equal((getEntity(camp, districtId).relationships || []).length, 0, 'no relationship was touched — nothing to link yet');
+
+  // (c) the anchor is only a self-#system stand-in from (a) -> swapped for a
+  // different System pick directly, not linked to itself.
+  camp = setSceneSystem(camp, 'scene1', sysBId);
+  assert.deepEqual(camp.scenes[0].locationIds, [sysBId], 'swapped the stand-in anchor for the new pick');
+  assert.equal((getEntity(camp, sysAId).relationships || []).some((r) => r.to === sysBId), false, 'never linked the old stand-in to the new pick');
+
+  // (b) a real Location-details anchor (a District, not itself #system) ->
+  // gets a located_at edge to the System.
+  camp.scenes = [{ id: 'scene1', locationIds: [districtId] }];
+  camp = setSceneSystem(camp, 'scene1', sysAId);
+  assert.deepEqual(camp.scenes[0].locationIds, [districtId], 'the anchor itself is untouched — the link lives on its relationships');
+  let districtRel = getEntity(camp, districtId).relationships.find((r) => r.type === 'located_at');
+  assert.ok(districtRel && districtRel.to === sysAId, 'District now has a located_at edge to the System');
+  assert.ok(getEntity(camp, sysAId).relationships.some((r) => r.to === districtId && r.type === 'contains'), 'auto-mirrored as contains on the System side');
+
+  // Replacing an existing located_at edge (a District already located_at
+  // some unrelated Sector) removes the old one rather than adding a second.
+  camp = addRelationship(camp, district2Id, sectorId, 'linked', 'located_at');
+  camp.scenes = [{ id: 'scene1', locationIds: [district2Id] }];
+  camp = setSceneSystem(camp, 'scene1', sysBId);
+  const parentRels = getEntity(camp, district2Id).relationships.filter((r) => r.type === 'located_at');
+  assert.equal(parentRels.length, 1, 'still only ever one located_at parent');
+  assert.equal(parentRels[0].to, sysBId, 'replaced with the newly picked System');
+  assert.equal(getEntity(camp, sectorId).relationships.some((r) => r.to === district2Id), false, 'the old Sector\'s mirrored edge back to District is cleaned up too');
+
+  // No-ops: unknown system id, unknown scene id, already-linked (idempotent).
+  const noSystem = setSceneSystem(camp, 'scene1', 'not-a-real-entity');
+  assert.deepEqual(noSystem.scenes[0].locationIds, [district2Id], 'no-op on an unresolvable systemId');
+  const noScene = setSceneSystem(camp, 'not-a-real-scene', sysAId);
+  assert.deepEqual(noScene.scenes[0].locationIds, [district2Id], 'no-op on an unknown scene id');
+  const already = setSceneSystem(camp, 'scene1', sysBId);
+  assert.equal(getEntity(already, district2Id).relationships.filter((r) => r.type === 'located_at').length, 1, 'already-linked System is idempotent, not a second edge');
 });
 
 test('rollNpcSceneField picks a real entry from the mapped oracle table and records its source; editNpcSceneField writes an edit back through oracles.overrides ONLY when the field was actually rolled, never for a hand-typed value', () => {

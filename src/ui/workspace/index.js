@@ -9,7 +9,7 @@
 import { contextSummary } from '../../domain/context.js';
 import { listThreads, THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { ACTIVITIES } from '../../domain/activities.js';
-import { listTagVocabulary, isSameDistrict, getEntity, listEntities, getContainingLocation, getContainedLocations, LOCATION_OBJECT_TYPES, getSystemForLocation, getStarForLocation } from '../../domain/entities.js';
+import { listTagVocabulary, isSameDistrict, getEntity, listEntities, getContainingLocation, getContainedLocations, LOCATION_OBJECT_TYPES, getSystemForLocation, getStarForLocation, getHexZoneForLocation, getEntityFaction } from '../../domain/entities.js';
 import { getCurrentWhereLocations, factionsPresentAt, factionsInRegion } from '../../domain/factionTurnEngine.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { buildMentionEditorHTML, richToolbarHTML, toolbarCollapsed } from '../mentionEditor.js';
@@ -61,7 +61,7 @@ function card(title, lead, body, extraClass) {
 // (domain/context.js) — the exact function that used to label the old tab
 // strip buttons — stripped of HTML/mention-bracket markup and truncated,
 // since it's plain header text here, not a rich field.
-function dashboardSection(key, title, lead, bodyHtml, doc, ui) {
+function dashboardSection(key, title, lead, bodyHtml, doc, ui, headerExtra = '') {
   const expanded = ((ui && ui.expandedDashboardSections) || new Set()).has(key);
   const rawSummary = contextSummary(doc.context, key)
     .replace(/<[^>]+>/g, ' ')
@@ -74,37 +74,41 @@ function dashboardSection(key, title, lead, bodyHtml, doc, ui) {
   return `<section class="dashboard-section" data-dashboard-section="${esc(key)}">
     <div class="section-head-row">
       <button type="button" class="dashboard-section-toggle" data-dashboard-section-toggle="${esc(key)}">${expanded ? '▾' : '▸'} ${esc(title)}</button>
-      ${expanded && lead ? helpToggle(helpKey) : ''}
-      ${!expanded && summary ? `<span class="dim small dashboard-section-summary">${esc(summary)}</span>` : ''}
+      <span class="entity-chip-row">
+        ${headerExtra}
+        ${expanded && lead ? helpToggle(helpKey) : ''}
+        ${!expanded && summary ? `<span class="dim small dashboard-section-summary">${esc(summary)}</span>` : ''}
+      </span>
     </div>
     ${expanded ? `${wsHelpBody(helpKey, esc(lead), ui)}<div class="dashboard-section-body">${bodyHtml}</div>` : ''}
   </section>`;
 }
 
-// WHO no longer has a Focus free-text field (direct follow-up request —
-// entity selection happens exclusively through each Actor group's own
-// "+" picker below, never by typing an @mention into a textbox).
-// "Introduce NPC" (data-who-introduce-npc, shell.js) is its own one-field
-// inline prompt, distinct from the generic data-shift-prompt mechanism it
-// used to (silently, uselessly) share with WHY's "Set Objective" — typing
-// an existing NPC's name (plain text or @Name/@[Name]) adds THAT entity
-// to whichever Actor group its #character tag routes it to; typing a name
-// that matches no NPC creates a brand-new one with that name and adds it
-// the same way. "+ New NPC"/"+ New Faction" (formerly whoEntityPicker's
-// quick-create row, otherwise now-dead since that function's tag-listbox/
-// mention-insert machinery had no reason to exist without Focus) stay
-// alongside it for a blank, unnamed entity the GM names later in Cast —
-// a different, still-useful shape of "add an entity" from Introduce NPC's
-// named/scene-attached one.
+// WHO's three top-level "add" actions, as icons right-aligned on the "WHO
+// is here" section header row (direct follow-up request, replacing the
+// old text-chip row inside the body) — passed as dashboardSection's
+// headerExtra so they're reachable even collapsed. "Introduce NPC"
+// (data-who-introduce-npc, shell.js) is unchanged in behavior — its own
+// one-field inline prompt: typing an existing NPC's name (plain text or
+// @Name/@[Name]) adds THAT entity to whichever Actor group its #character
+// tag routes it to; typing a name matching no NPC creates a brand-new one
+// and adds it the same way — "select from list and/or @ mentions," direct
+// quote. "New NPC"/"New Faction" (data-entity-add) now open a blank
+// entity straight into the Entity Editor (direct follow-up request —
+// "start new Entity Editors with the appropriate type") instead of a
+// silent background create-and-toast.
+function whoHeaderExtra() {
+  return `
+    <button type="button" class="icon-btn" data-who-introduce-npc title="Introduce NPC — select from Cast or type an @mention">🔎＋</button>
+    <button type="button" class="icon-btn" data-entity-add="npc" title="New NPC — opens a blank Entity Editor">🧑＋</button>
+    <button type="button" class="icon-btn" data-entity-add="faction" title="New Faction — opens a blank Entity Editor">🏛＋</button>`;
+}
+
 function whoSectionBody(doc, ui) {
   return `
-    <div class="shift-actions">
-      <button class="chip" data-who-introduce-npc>＋ Introduce NPC</button>
-      <button class="chip" data-entity-add="npc">＋ New NPC</button>
-      <button class="chip" data-entity-add="faction">＋ New Faction</button>
-    </div>
     ${npcSceneGroupsBlock(doc, ui)}
-    ${factionsActiveNearbyBlock(doc)}
+    ${factionsActiveNearbyBlock(doc, ui)}
+    ${assetsPresentBlock(doc, ui)}
     ${activeConflictLocationPicker(doc)}`;
 }
 
@@ -151,6 +155,81 @@ function actorThumb(doc, npc, kind, { expandable = false, expanded = false } = {
       <button type="button" class="actor-thumb-badge actor-thumb-badge-remove" ${removeAttr}="${esc(npc.id)}" title="Remove from this scene">✕</button>
     </div>
     <span class="actor-thumb-name">${esc(npc.name || 'Unnamed')}</span>
+  </div>`;
+}
+
+// Simple, read-only, mention-style thumbnail (photo + name) for entities
+// OUTSIDE WHO's own Actor system — WHERE's System row, Factions active
+// nearby, Assets present. Same visual language as actorThumb above
+// (direct request: "thumbnails like those used for NPCs") but without the
+// scene-actor-specific drag/expand-badge machinery, since none of these
+// are "actors in a scene" that move between groups. `removeAttrHtml`, if
+// given, is a FULL pre-built `attr="value"` string (not just an attribute
+// name) since callers need different shapes — a plain
+// data-scene-asset-remove="id", vs Factions' compound
+// data-where-faction-unlink="locId::factionId".
+function entityThumb(doc, entity, { removeAttrHtml = '', expandAttrHtml = '', expanded = false, topLabel = '' } = {}) {
+  const img = entity.thumbnailId ? getGalleryImage(doc, entity.thumbnailId) : null;
+  const photo = img
+    ? `<img class="actor-thumb-photo" src="${esc(img.dataUrl)}" alt="">`
+    : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((entity.name || '?').trim().slice(0, 1).toUpperCase())}</span>`;
+  return `<div class="actor-thumb-wrap">
+    ${topLabel ? `<span class="actor-thumb-toplabel">${esc(topLabel)}</span>` : ''}
+    <div class="actor-thumb-circle">
+      <button type="button" class="actor-thumb" data-open-entity="${esc(entity.id)}" title="${esc(entity.name || 'Unnamed')}">${photo}</button>
+      ${expandAttrHtml ? `<button type="button" class="actor-thumb-badge actor-thumb-badge-expand" ${expandAttrHtml} title="${expanded ? 'Collapse details' : 'Details'}">${expanded ? '▾' : '▸'}</button>` : ''}
+      ${removeAttrHtml ? `<button type="button" class="actor-thumb-badge actor-thumb-badge-remove" ${removeAttrHtml} title="Remove">✕</button>` : ''}
+    </div>
+    <span class="actor-thumb-name">${esc(entity.name || 'Unnamed')}</span>
+  </div>`;
+}
+
+// Location details' top-label (direct follow-up request): "District" or
+// "Site" printed right above the thumbnail circle, tag-driven off the
+// entity's own #district/#site tag — the same two tags addSceneLocation
+// (scenes.js) already treats as their own "one at a time" type. Any other
+// tag (or no tag) gets no label, same as before.
+function locationTypeTopLabel(entity) {
+  const tags = entity.tags || [];
+  if (tags.includes('district')) return 'District';
+  if (tags.includes('site')) return 'Site';
+  return '';
+}
+
+// Shared collapsible-group shell for WHO's five thumbnail groups
+// (Protagonists/Antagonists/Bystanders/Factions active nearby/Assets
+// present, direct follow-up request) plus WHERE's Nearby locations — a
+// header (collapse toggle + optional "+"/other controls + "?" help) plus
+// a body that collapses away entirely rather than just visually hiding.
+// Default expanded (ui.collapsedActorGroups, shell.js — an empty Set,
+// matching every WHO group's prior always-expanded behavior), UNLESS
+// `defaultCollapsed` is given (Nearby locations, direct follow-up
+// request: "be a collapsed section... by default") — the Set is then read
+// inverted (present in the Set means the GM explicitly opened it, same
+// "tracks explicit action" shape basesOfInfluenceToggled already
+// established for an analogous default-open-when-empty flip), so the one
+// shared toggle handler still works unmodified for both directions. The
+// toggle button carries .field-label-static directly (not .btn/
+// .dashboard-section-toggle) so its font stays IDENTICAL to before this
+// became clickable — direct request ("without changing the current font
+// style") — styles/cockpit.css resets just its button-chrome (background/
+// border/padding/cursor), not its type styling. `dropGroup`, if given,
+// marks this as a valid data-drop-actor-group drag target (WHO Actor
+// groups only — Factions/Assets/Nearby locations never participate in
+// moveSceneActor's drag-between-groups).
+function collapsibleThumbGroup(ui, { key, label, count, helpKey, hint, dropGroup, headerExtra, body, defaultCollapsed = false }) {
+  const toggled = ((ui && ui.collapsedActorGroups) || new Set()).has(key);
+  const collapsed = defaultCollapsed ? !toggled : toggled;
+  return `<div class="workspace-mini-section npc-scene-group"${dropGroup ? ` data-drop-actor-group="${esc(dropGroup)}"` : ''}>
+    <div class="section-head-row">
+      <button type="button" class="field-label-static actor-group-toggle" data-actor-group-toggle="${esc(key)}">${collapsed ? '▸' : '▾'} ${esc(label)} (${count})</button>
+      <span class="entity-chip-row">
+        ${headerExtra || ''}
+        ${helpToggle(helpKey)}
+      </span>
+    </div>
+    ${wsHelpBody(helpKey, esc(hint), ui)}
+    ${collapsed ? '' : body}
   </div>`;
 }
 
@@ -201,23 +280,17 @@ function npcSceneGroupsBlock(doc, ui) {
   const bystanders = (scene.bystanderIds || []).map((id) => getEntity(doc, id)).filter(Boolean);
   const expandedSet = (ui && ui.expandedSceneNpcs) || new Set();
 
-  const group = (label, singular, helpKey, hint, npcs, kind) => `<div class="workspace-mini-section npc-scene-group" data-drop-actor-group="${esc(kind)}">
-    <div class="section-head-row">
-      <span class="field-label-static">${esc(label)} (${npcs.length})</span>
-      <span class="entity-chip-row">
-        <button type="button" class="icon-btn" data-entity-picker-open="${esc(kind)}" title="Add ${esc(singular)}">＋</button>
-        ${helpToggle(helpKey)}
-      </span>
-    </div>
-    ${wsHelpBody(helpKey, esc(hint), ui)}
-    ${npcs.length ? `<div class="actor-thumb-row">${npcs.map((n) => actorThumb(doc, n, kind, { expandable: true, expanded: expandedSet.has(n.id) })).join('')}</div>` : '<p class="dim small">None yet.</p>'}
-    ${npcs.filter((n) => expandedSet.has(n.id)).map((n) => npcSceneDetailBody(doc, ui, scene, n)).join('')}
-  </div>`;
+  const group = (key, label, singular, hint, npcs, kind) => collapsibleThumbGroup(ui, {
+    key, label, count: npcs.length, helpKey: key, hint, dropGroup: kind,
+    headerExtra: `<button type="button" class="icon-btn" data-entity-picker-open="${esc(kind)}" title="Add ${esc(singular)}">＋</button>`,
+    body: `${npcs.length ? `<div class="actor-thumb-row">${npcs.map((n) => actorThumb(doc, n, kind, { expandable: true, expanded: expandedSet.has(n.id) })).join('')}</div>` : '<p class="dim small">None yet.</p>'}
+      ${npcs.filter((n) => expandedSet.has(n.id)).map((n) => npcSceneDetailBody(doc, ui, scene, n)).join('')}`,
+  });
 
   return `
-    ${group('Protagonists', 'a Protagonist', 'who:protagonists', "PCs and close allies — pick from NPCs tagged #character, or drag one in from another group.", protagonists, 'protagonist')}
-    ${group('Antagonists', 'an Antagonist', 'who:antagonists', 'Opposition and complicating NPCs in this scene — or drag one in from another group.', antagonists, 'antagonist')}
-    ${group('Bystanders', 'a Bystander', 'who:bystanders', "Observers you've added to this scene — react to events, not directly involved. Drag any Actor here, including a #character NPC, to demote them to a bystander.", bystanders, 'bystander')}`;
+    ${group('who:protagonists', 'Protagonists', 'a Protagonist', "PCs and close allies — pick from NPCs tagged #character, or drag one in from another group.", protagonists, 'protagonist')}
+    ${group('who:antagonists', 'Antagonists', 'an Antagonist', 'Opposition and complicating NPCs in this scene — or drag one in from another group.', antagonists, 'antagonist')}
+    ${group('who:bystanders', 'Bystanders', 'a Bystander', "Observers you've added to this scene — react to events, not directly involved. Drag any Actor here, including a #character NPC, to demote them to a bystander.", bystanders, 'bystander')}`;
 }
 
 // WHERE's docked-Faction-Events side panel (whole-card relocation, direct
@@ -227,19 +300,15 @@ function npcSceneGroupsBlock(doc, ui) {
 // reference strip that used to render inline at the top of this section
 // (a special header-row slot that doesn't exist anymore now that
 // `dashboardSection` supplies the section's own header) now lives inside
-// `currentLocationBanner` instead — direct request, grouped under Current
-// Location rather than its own separate block.
+// `whereLocationHierarchyBlock` instead — direct request, grouped under
+// WHERE rather than its own separate block.
 function whereSectionBody(doc, ui) {
   const body = `
-    ${locationDetailsBlock(doc, ui)}
-    ${summaryField('where', doc.context.where.summary, 'Location and immediate surroundings…', doc, ui)}
-    ${whereLocationPicker(doc, ui)}
-    ${currentLocationBanner(doc)}
+    ${whereLocationHierarchyBlock(doc, ui)}
     ${locationFactionsBlock(doc)}
     ${locationConflictsBlock(doc)}
-    ${nearbyLocationsBlock(doc)}
     ${factionActivityHereBlock(doc)}
-    ${locationStoryBlock(doc, ui)}`;
+    ${nearbyLocationsBlock(doc, ui)}`;
   if (!ui.factionEventsDockedInWhere) return body;
   const dockedPanel = renderFactionEvents(doc, {
     factionEventsDrafts: ui.factionEventsDrafts,
@@ -253,85 +322,164 @@ function whereSectionBody(doc, ui) {
   return `<div class="workspace-with-side">${body}<aside class="workspace-docked-panel">${dockedPanel}</aside></div>`;
 }
 
-// Location Details (docs/adr/0041 Phase 13a) — an expander (collapsed by
-// default, ui.expandedLocationDetails) per location entry, showing the
-// hierarchy the original request asked for: "[immediate location] at/on
-// the [object type] in the [star system] [sector]," plus the oracle-
-// seedable Sights/Smells/Sounds. Object type/Sector are plain flat fields
-// (entities.js's ensureWorldProfileFields).
-//
-// Direct follow-up request ("tie together... not be two different
-// location tracking mechanisms"): the entry list is no longer JUST
-// getCurrentWhereLocations (WHERE Focus @mentions) — it's that list PLUS
-// whichever of the PRIMARY current location's System/Star/Colony-Base/
-// District (currentLocationBanner) resolve to a real entity, deduped by
-// id. Without this, a Colony-Base/District picked via that banner's "+"
-// picker (or a System/Star resolved via the relationship graph) had no
-// Location Details entry AT ALL — no way to reach its Sights/Smells/
-// Sounds. Each hierarchy-sourced entry's toggle label is prefixed with
-// its role (e.g. "System: Kepler System") so multiple entries stay
-// distinguishable while collapsed. Colony-Base/District entries get a
-// "✕" (data-location-field-clear, the same attribute/handler Current
-// Location's own "-" button already uses) that clears that ONE field on
-// the primary location — removing the entry here and unsetting Current
-// Location's value are the same action, not two. System/Star entries get
-// NO "✕" — they're relationship-derived (getSystemForLocation/
-// getStarForLocation, entities.js), not a stored field to clear; removing
-// one means editing/removing the located_at relationship in the Entity
-// Editor instead (same as a plain WHERE-Focus-mentioned entry, which
-// never had an "✕" either).
-function locationDetailsBlock(doc, ui) {
-  const whereLocations = getCurrentWhereLocations(doc);
-  if (!whereLocations.length) return '';
-  const primary = whereLocations[0];
-  const roleByLocId = new Map();
-  const entries = [...whereLocations];
-  const seenIds = new Set(whereLocations.map((l) => l.id));
-  const addRoleEntry = (ent, role, field) => {
-    if (!ent) return;
-    roleByLocId.set(ent.id, { role, field });
-    if (!seenIds.has(ent.id)) { entries.push(ent); seenIds.add(ent.id); }
-  };
-  addRoleEntry(getSystemForLocation(doc, primary.id), 'System', null);
-  addRoleEntry(getStarForLocation(doc, primary.id), 'Star', null);
-  if (primary.colonyBaseId) addRoleEntry(getEntity(doc, primary.colonyBaseId), 'Colony/Base', 'colonyBaseId');
-  if (primary.districtId) addRoleEntry(getEntity(doc, primary.districtId), 'District', 'districtId');
-
-  return entries.map((loc) => {
-    const expanded = ((ui && ui.expandedLocationDetails) || new Set()).has(loc.id);
-    const system = getSystemForLocation(doc, loc.id);
-    const title = [
-      esc(loc.name || 'Unnamed'),
-      loc.objectType ? `at/on the ${esc(loc.objectType)}` : '',
-      system && system.id !== loc.id ? `in the ${esc(system.name || 'Unnamed System')}` : '',
-      loc.sector ? `— ${esc(loc.sector)} Sector` : '',
-    ].filter(Boolean).join(' ');
-    const roleInfo = roleByLocId.get(loc.id);
-    const toggleLabel = `${roleInfo ? `${esc(roleInfo.role)}: ` : ''}${esc(loc.name || 'Unnamed')} — Location Details`;
-    return `<div class="workspace-mini-section location-details">
-      <div class="section-head-row">
-        <button type="button" class="btn ghost sm" data-location-details-toggle="${esc(loc.id)}">${expanded ? '▾' : '▸'} ${toggleLabel}</button>
-        ${roleInfo && roleInfo.field ? `<button type="button" class="icon-btn" data-location-field-clear="${esc(primary.id)}::${esc(roleInfo.field)}" title="Remove ${esc(roleInfo.role)} from Current Location">✕</button>` : ''}
+// A Location Details entry's expanded detail body (Location type — the
+// old "Object type" label, renamed per direct request — plus Sights/
+// Smells/Sounds, plus — direct follow-up request — the old standalone
+// "Location Story" section's own rich-text field, merged in here and
+// relabeled "Regional faction activity" ("merge the 'Location Story' text
+// field as part of the dropdown opened by the thumbnail arrow... remove
+// Location Story as a separate section"). Same underlying
+// loc.locationStory field/data-location-story attribute/placeholder as
+// before, just relocated and re-headed; its own 💡 (data-suggest-faction-
+// oracles) draws a #faction/#agenda oracle set (session.js's
+// drawFactionActivityOracles) and pushes it onto the Advisor's Suggested
+// oracles history stack (shell.js's pushSuggestedOracleEntry,
+// copilotPanel.js). Split out from its thumbnail row for the same reason
+// npcSceneDetailBody is split from actorThumb: the thumbnail row stays
+// compact, the body renders full-width below the whole row when toggled
+// open. Sector is dropped entirely (direct request — it's the Zone
+// tied to the #system, shown once in row 1, not per-location).
+function locationDetailBody(doc, ui, loc) {
+  const toolbarKey = `location:${loc.id}:story`;
+  return `<div class="npc-scene-card npc-scene-card-detail">
+    <div class="section-head-row">
+      <button type="button" class="entity-chip" data-open-entity="${esc(loc.id)}">${esc(loc.name || 'Unnamed')}</button>
+      <button type="button" class="icon-btn" data-location-details-toggle="${esc(loc.id)}" title="Collapse">▾</button>
+    </div>
+    <div class="npc-scene-card-body">
+      <label class="field-label sm">Location type
+        <select data-location-field="${esc(loc.id)}::objectType">
+          <option value="">— unset —</option>
+          ${LOCATION_OBJECT_TYPES.map((t) => `<option value="${esc(t)}" ${t === loc.objectType ? 'selected' : ''}>${esc(t)}</option>`).join('')}
+        </select>
+      </label>
+      ${oracleFieldRow('Sights', loc.sights || '', `data-location-sensory-roll="${esc(loc.id)}::sights"`, `data-location-field="${esc(loc.id)}::sights"`)}
+      ${oracleFieldRow('Smells', loc.smells || '', `data-location-sensory-roll="${esc(loc.id)}::smells"`, `data-location-field="${esc(loc.id)}::smells"`)}
+      ${oracleFieldRow('Sounds', loc.sounds || '', `data-location-sensory-roll="${esc(loc.id)}::sounds"`, `data-location-field="${esc(loc.id)}::sounds"`)}
+      <div class="field-label sm">
+        <span class="field-label-row">
+          <span class="field-label-static">Regional faction activity</span>
+          <button type="button" class="icon-btn" data-suggest-faction-oracles="${esc(loc.id)}" title="Suggest relevant oracles in the Advisor">💡</button>
+        </span>
+        <div class="rich-field">${richToolbarHTML(toolbarKey, toolbarCollapsed(doc, ui, toolbarKey))}<div class="mention-editor" contenteditable="true" data-location-story="${esc(loc.id)}" data-placeholder="How are factions operating here? What's brewing?">${buildMentionEditorHTML(doc, loc.locationStory)}</div></div>
       </div>
-      ${expanded ? `
-        <p class="location-details-title">${title}</p>
-        <div class="field-row-2col">
-          <label class="field-label sm">Object type
-            <select data-location-field="${esc(loc.id)}::objectType">
-              <option value="">— unset —</option>
-              ${LOCATION_OBJECT_TYPES.map((t) => `<option value="${esc(t)}" ${t === loc.objectType ? 'selected' : ''}>${esc(t)}</option>`).join('')}
-            </select>
-          </label>
-          <label class="field-label sm">Sector
-            <input type="text" data-location-field="${esc(loc.id)}::sector" value="${esc(loc.sector || '')}" placeholder="Outer Rim…">
-          </label>
-        </div>
-        ${oracleFieldRow('Sights', loc.sights || '', `data-location-sensory-roll="${esc(loc.id)}::sights"`, `data-location-field="${esc(loc.id)}::sights"`)}
-        ${oracleFieldRow('Smells', loc.smells || '', `data-location-sensory-roll="${esc(loc.id)}::smells"`, `data-location-field="${esc(loc.id)}::smells"`)}
-        ${oracleFieldRow('Sounds', loc.sounds || '', `data-location-sensory-roll="${esc(loc.id)}::sounds"`, `data-location-field="${esc(loc.id)}::sounds"`)}
-      ` : ''}
+    </div>
+  </div>`;
+}
+
+// WHERE's location hierarchy (direct follow-up requests, several rounds):
+// Current Location's System/Star quick reference AND every other
+// current location's Sights/Smells/Sounds details, CONSOLIDATED into one
+// block instead of two separately-rendered pieces reading as "two
+// different location tracking mechanisms." WHERE no longer has a Focus
+// field or a tag/candidate-listbox picker either — like WHO's own
+// Actors before it, "the current location(s)" is now the current scene's
+// own curated list (scene.locationIds, scenes.js) via getCurrentWhereLocations,
+// not text scanned for @mentions; the first entry is "the" primary
+// location everywhere that concept is used.
+//
+// Two always-present sections (direct follow-up request): "System" (row
+// 1) and "Location details" below it — never conditionally hidden on
+// each other, so the System section is reachable even from a totally
+// empty scene.
+//
+// Row 1 is the System: a thumbnail (entityThumb, "like the NPC
+// thumbnail") left-aligned, with the resolved Star's name and "(Zone)
+// Hex" (getHexZoneForLocation) in a two-line block to its right,
+// vertically centered against the thumbnail. System/Star stay
+// relationship-graph reads (getSystemForLocation/getStarForLocation,
+// entities.js — "just use the Relationships for setting the choice"),
+// never a stored/picked field themselves — but SETTING one up now goes
+// through "New Location" (data-where-add-location, shell.js) instead of
+// only a manual Relationships edit: it lists existing #system-tagged
+// Locations to pick from, or — none exist — prompts to create one
+// (scenes.js's setSceneSystem does the actual pick/link/replace, still
+// landing on a real located_at edge or a self-#system-tagged anchor
+// under the hood). The resolved row keeps its "🔗" too, for manually
+// fixing/undoing the edge directly. With no System yet, the row is a
+// blank thumbnail (actor-thumb-photo-empty, same visual language an NPC
+// with no photo already uses) carrying a "+" instead of an initial
+// letter, wired to that same New Location control.
+//
+// Below it, "Location details" is a sixth collapsible thumbnail group
+// (collapsibleThumbGroup, "formatted like Protagonists") — ONE "+" (icon-
+// only, "like the approach for NPCs" — direct follow-up request replacing
+// the earlier "Pick location" text chip plus two separate role-specific
+// Colony-Base/District "+"s with a single control) adds a Location entity
+// to the scene's curated list (excluding #star/#system-tagged ones — those
+// belong to row 1, not here) — MINUS whichever entry already appears as
+// System/Star in row 1, so nothing repeats. addSceneLocation (scenes.js)
+// enforces "ONE entity of each type" purely off the entity's own tags —
+// picking a second #district (or #site, or #colony) swaps out the first
+// rather than accumulating both; Colony-Base/District's own dedicated
+// colonyBaseId/districtId fields are retired from this UI as a result
+// (left inert in the schema, migration rule 5) — the tag-driven list is
+// now the one mechanism for all of them. Each thumbnail carries a small
+// top label (locationTypeTopLabel, above) reading "District" or "Site"
+// when that tag applies, "for quick clarification" (direct request) —
+// nothing else gets one. Each thumbnail also expands (locationDetailBody)
+// to reveal Location type + Sights/Smells/Sounds; every entry's "✕"
+// (data-scene-location-remove) drops it from the curated list.
+function whereLocationHierarchyBlock(doc, ui) {
+  const whereLocations = getCurrentWhereLocations(doc);
+  if (!(doc.scenes || []).length) return '<div class="ws-placeholder">Continue Story (Advisor) to start a scene — Location tracking is per scene.</div>';
+  const primary = whereLocations[0] || null;
+  const system = primary ? getSystemForLocation(doc, primary.id) : null;
+  const star = primary ? getStarForLocation(doc, primary.id) : null;
+
+  // Row 1 (the System section) always renders now, even before any
+  // scene location exists at all — "New Location" (below) is the one
+  // entry point into picking or creating the scene's System, so it has
+  // to be reachable from the very first, fully-empty state too, not only
+  // once a Location Details anchor already exists.
+  let systemRow;
+  if (system) {
+    const hz = getHexZoneForLocation(doc, system.id);
+    const zoneHex = [hz.zone ? `(${esc(hz.zone)})` : '', hz.hex ? esc(hz.hex) : ''].filter(Boolean).join(' ');
+    systemRow = `<div class="location-hierarchy-row">
+      ${entityThumb(doc, system)}
+      <div class="location-hierarchy-info">
+        <div class="location-hierarchy-star">${star ? esc(star.name || 'Unnamed') : '<span class="dim small">No Star linked</span>'}</div>
+        <div class="location-hierarchy-zonehex dim small">${zoneHex || '—'}</div>
+      </div>
+      <button type="button" class="icon-btn" data-location-edit-relationships="${esc(primary.id)}" title="Edit System/Star via Relationships (Cast)">🔗</button>
     </div>`;
-  }).join('');
+  } else {
+    systemRow = `<div class="location-hierarchy-row">
+      <div class="actor-thumb-wrap">
+        <div class="actor-thumb-circle">
+          <button type="button" class="actor-thumb" data-where-add-location title="Select or create the System">
+            <span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">＋</span>
+          </button>
+        </div>
+        <span class="actor-thumb-name">Select System</span>
+      </div>
+    </div>`;
+  }
+
+  const skipIds = new Set([system && system.id, star && star.id].filter(Boolean));
+  const entries = whereLocations.filter((l) => !skipIds.has(l.id));
+
+  const expandedSet = (ui && ui.expandedLocationDetails) || new Set();
+  const thumbs = entries.map((loc) => entityThumb(doc, loc, {
+    removeAttrHtml: `data-scene-location-remove="${esc(loc.id)}"`,
+    expandAttrHtml: `data-location-details-toggle="${esc(loc.id)}"`,
+    expanded: expandedSet.has(loc.id),
+    topLabel: locationTypeTopLabel(loc),
+  })).join('');
+
+  const locationDetailsGroup = collapsibleThumbGroup(ui, {
+    key: 'where:location-details', label: 'Location details', count: entries.length,
+    helpKey: 'where:location-details',
+    hint: 'Locations in the current scene, not counting the System above — one per type (picking a second #district or #site replaces the first).',
+    headerExtra: `<button type="button" class="icon-btn" data-entity-picker-open="location-current" title="Add a Location">＋</button>`,
+    body: `${entries.length ? `<div class="actor-thumb-row">${thumbs}</div>` : '<p class="dim small">None yet.</p>'}
+      ${entries.filter((l) => expandedSet.has(l.id)).map((l) => locationDetailBody(doc, ui, l)).join('')}`,
+  });
+
+  return `
+    <div class="workspace-mini-section current-location-banner">${systemRow}</div>
+    ${locationDetailsGroup}`;
 }
 
 // Threat/Mystery/Stress/Resources/Reputation dials now live once, in the
@@ -347,6 +495,9 @@ function whatSectionBody(doc, ui) {
         ${INTENTS.map((i) => `<option ${i === c.intent ? 'selected' : ''}>${i}</option>`).join('')}
       </select>
     </label>
+    <div class="shift-actions">
+      <button class="chip" data-suggest-oracles title="Suggest Oracle tables in the Advisor, based on Intent and the Latest Scene">🔮 Suggest oracles</button>
+    </div>
     ${lastScene(doc, ui)}
     ${worldFlagsBlock(doc)}`;
 }
@@ -401,14 +552,13 @@ export function renderWorkspace(doc, ui) {
 export function composerBodyHtml(doc, ui) {
   const activity = doc.context.how.activity || '';
   return `
-    ${currentLocationBanner(doc)}
     <label class="field-label sm">Activity
       <select data-ctx="how.activity">
         <option value="">— none set —</option>
         ${ACTIVITIES.map((a) => `<option value="${a.id}" ${a.id === activity ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}
       </select>
     </label>
-    ${dashboardSection('who', 'WHO is here', 'People and factions in play.', whoSectionBody(doc, ui), doc, ui)}
+    ${dashboardSection('who', 'WHO is here', 'People and factions in play.', whoSectionBody(doc, ui), doc, ui, whoHeaderExtra())}
     ${dashboardSection('where', 'WHERE it happens', 'The place the scene is set.', whereSectionBody(doc, ui), doc, ui)}
     ${dashboardSection('what', 'WHAT is happening', 'The active situation.', whatSectionBody(doc, ui), doc, ui)}
     ${dashboardSection('why', 'WHY they are here', 'The objective driving the party, tracked as progress clocks.', whySectionBody(doc, ui), doc, ui)}
@@ -481,42 +631,6 @@ function candidateListbox(candidates, selectAttr, tagFilter, noun) {
     </select>`;
 }
 
-// WHERE tab redesign ("USER CHANGES" batch): a Location tag listbox (not
-// chips, per direct user request) filters a candidate panel of matching
-// Locations. Per direct follow-up feedback, the earlier "Present Here"
-// curated list (context.where.entityIds) was duplicative of the Focus
-// field — a Location already belongs to the scene once it's mentioned in
-// Focus text, so a second, separate present-here list was redundant
-// bookkeeping. Picking a candidate now inserts a real @mention into Focus
-// directly (data-insert-where-mention-select, handled in shell.js via
-// insertMentionNode/serializeMentionEditor) instead of adding to a list.
-// context.where.entityIds/addContextEntity/removeContextEntity (session.js)
-// still exist (harmless, tested, generic) but are no longer driven from
-// this UI.
-function whereLocationPicker(doc, ui) {
-  const tagFilter = ui.whereLocationTagFilter || null;
-  const vocab = listTagVocabulary(doc, 'location');
-  const tagListbox = vocab.length
-    ? `<select size="${Math.min(8, Math.max(3, vocab.length))}" data-where-tag-select>
-        <option value="" ${!tagFilter ? 'selected' : ''}>— all tags —</option>
-        ${vocab.map((t) => `<option value="${esc(t)}" ${t === tagFilter ? 'selected' : ''}>#${esc(t)}</option>`).join('')}
-      </select>`
-    : '<p class="ws-placeholder">No Location tags yet — tag a Location in Cast to start filtering.</p>';
-
-  const allLocations = (doc.entities.items || []).filter((e) => e.type === 'location');
-  const candidates = tagFilter ? allLocations.filter((e) => (e.tags || []).includes(tagFilter)) : allLocations;
-  const candidatePanel = candidateListbox(candidates, 'data-insert-where-mention-select', tagFilter, 'Locations');
-
-  return `
-    <div class="entity-tag-picker">
-      <div class="entity-tag-picker-row">
-        <div class="entity-tag-picker-tags"><span class="field-label-static">Location tags</span>${tagListbox}</div>
-        <div class="entity-tag-picker-candidates"><span class="field-label-static">Matching locations</span>${candidatePanel}</div>
-      </div>
-      <div class="entity-add-row"><button class="chip" data-where-add-location>＋ New Location</button></div>
-    </div>`;
-}
-
 // WHY tab: the same tag-picker -> listbox -> select-to-mention pattern as
 // WHO/WHERE above, applied to "who/what this objective is actually about"
 // — NPCs, Factions, and Conflicts pooled together (docs/adr/0039). WHY had
@@ -545,54 +659,82 @@ function whyEntityPicker(doc, ui) {
     </div>`;
 }
 
-// Faction Events tie-in (docs/adr/0031's Faction Events follow-up): a
-// small, read-only summary + jump link, not a new place to enter data —
-// same posture as the tag-jump chips elsewhere in this app. "Nearby" here
-// means present anywhere in the region (factionsInRegion, factionTurnEngine.js
-// — the full location containment tree, region-hop and all, not just a
-// single district) of whichever Location(s) are currently @mentioned in
-// WHERE's own Focus text (getCurrentWhereLocations) — the same "Focus
-// text is the single source of truth for what's in the scene" reasoning
-// the WHO/WHERE redesign already established, not a new structured
-// pointer. Direct request follow-up: this block is also the ONE place a
-// GM can manually say "this faction operates here" — via a `located_at`
-// relationship (the generic relationship system, already surfaced in the
-// Entity Editor's own Relationships block; factionsInRegion/
-// factionsPresentAt already recognize it) — for factions with no SWN
-// Faction Turn Engine presence fields set. The ✕ only appears on a
-// faction whose presence at the PRIMARY current location is via that
-// manual relationship — a homeworld/Base/asset/governed presence isn't
-// removable from here, same "curated convenience, not a restriction"
-// posture as the Conflict picker below.
-function factionsActiveNearbyBlock(doc) {
+// Faction Events tie-in (docs/adr/0031's Faction Events follow-up),
+// redesigned as one of WHO's five collapsible thumbnail groups (direct
+// follow-up request). "Active nearby" pools THREE sources now: present
+// anywhere in the region (factionsInRegion, factionTurnEngine.js — the
+// full location containment tree, region-hop and all) of whichever
+// Location(s) are currently @mentioned in WHERE's own Focus text
+// (getCurrentWhereLocations); a manual `located_at` relationship (the
+// generic relationship system, already surfaced in the Entity Editor's
+// own Relationships block) for factions with no SWN Faction Turn Engine
+// presence fields set; and — new — whichever faction each of the current
+// scene's own Actors (Protagonists/Antagonists/Bystanders, WHO)
+// individually belongs to (getEntityFaction), skipping the synthetic
+// "Unaligned" placeholder that resolves for an NPC with no member_of
+// edge. Displayed as thumbnails (entityThumb, matching WHO's Actors) —
+// the ✕ only appears on a faction whose presence at the PRIMARY current
+// location is via that manual located_at relationship; a homeworld/Base/
+// asset/governed/NPC-membership presence isn't removable from here, same
+// "curated convenience, not a restriction" posture as the Conflict picker
+// below.
+function factionsActiveNearbyBlock(doc, ui) {
+  const scenes = doc.scenes || [];
+  const scene = scenes[scenes.length - 1];
+  if (!scene) return '';
   const whereLocations = getCurrentWhereLocations(doc);
-  if (!whereLocations.length) return '';
-  const primary = whereLocations[0];
+  const primary = whereLocations[0] || null;
   const seen = new Map();
-  for (const loc of whereLocations) {
-    for (const { faction } of factionsInRegion(doc, loc.id, { maxDepth: 6 })) {
-      if (!seen.has(faction.id)) seen.set(faction.id, faction);
+  if (primary) {
+    for (const loc of whereLocations) {
+      for (const { faction } of factionsInRegion(doc, loc.id, { maxDepth: 6 })) {
+        if (!seen.has(faction.id)) seen.set(faction.id, faction);
+      }
     }
   }
+  const actorIds = [...(scene.protagonistIds || []), ...(scene.antagonistIds || []), ...(scene.bystanderIds || [])];
+  for (const id of actorIds) {
+    const faction = getEntityFaction(doc, id);
+    if (faction && faction.id && !seen.has(faction.id)) seen.set(faction.id, faction);
+  }
   const active = Array.from(seen.values());
-  const manualHere = new Set((factionsPresentAt(doc, primary.id) || [])
+  const manualHere = primary ? new Set((factionsPresentAt(doc, primary.id) || [])
     .filter((f) => (f.relationships || []).some((r) => r.type === 'located_at' && r.to === primary.id))
-    .map((f) => f.id));
-  const chips = active.map((f) => `<span class="entity-chip-row">
-      <button type="button" class="entity-chip" data-faction-events-jump="${esc(f.id)}" title="Open Faction Events, filtered to ${esc(f.name || 'this faction')}">${esc(f.name || 'Unnamed faction')}</button>
-      ${manualHere.has(f.id) ? `<button type="button" class="icon-btn" data-where-faction-unlink="${esc(primary.id)}::${esc(f.id)}" title="Remove — no longer operating here">✕</button>` : ''}
-    </span>`).join('');
+    .map((f) => f.id)) : new Set();
+  const thumbs = active.map((f) => entityThumb(doc, f, manualHere.has(f.id)
+    ? { removeAttrHtml: `data-where-faction-unlink="${esc(primary.id)}::${esc(f.id)}"` } : {})).join('');
   const presentIds = new Set(active.map((f) => f.id));
-  const linkable = listEntities(doc, ['faction']).filter((f) => !presentIds.has(f.id));
-  return `
-    <div class="workspace-mini-section">
-      <span class="field-label-static">Factions active nearby</span>
-      <div class="entity-chips">${chips || '<span class="dim small">None yet.</span>'}</div>
+  const linkable = primary ? listEntities(doc, ['faction']).filter((f) => !presentIds.has(f.id)) : [];
+  return collapsibleThumbGroup(ui, {
+    key: 'who:factions-nearby', label: 'Factions active nearby', count: active.length,
+    helpKey: 'who:factions-nearby',
+    hint: "Present in the region, manually linked here, or a faction one of this scene's Protagonists/Antagonists/Bystanders belongs to.",
+    body: `${active.length ? `<div class="actor-thumb-row">${thumbs}</div>` : '<p class="dim small">None yet.</p>'}
       ${linkable.length ? `<select data-where-faction-link="${esc(primary.id)}">
         <option value="">— faction operating here —</option>
         ${linkable.map((f) => `<option value="${esc(f.id)}">${esc(f.name) || 'Unnamed'}</option>`).join('')}
-      </select>` : ''}
-    </div>`;
+      </select>` : ''}`,
+  });
+}
+
+// "Assets present" (direct follow-up request) — the fourth GM-curated
+// scene list (scenes.js's assetIds, same shape as Bystanders), for
+// #asset-TYPE entities (ships, gear caches, vehicles, ...) physically
+// present in the current scene. Displayed as thumbnails like WHO's Actors
+// and Factions above; needs an active scene to hang the list on, same gate
+// npcSceneGroupsBlock uses.
+function assetsPresentBlock(doc, ui) {
+  const scenes = doc.scenes || [];
+  if (!scenes.length) return '';
+  const scene = scenes[scenes.length - 1];
+  const assets = (scene.assetIds || []).map((id) => getEntity(doc, id)).filter(Boolean);
+  const thumbs = assets.map((a) => entityThumb(doc, a, { removeAttrHtml: `data-scene-asset-remove="${esc(a.id)}"` })).join('');
+  return collapsibleThumbGroup(ui, {
+    key: 'who:assets-present', label: 'Assets present', count: assets.length,
+    helpKey: 'who:assets-present', hint: 'Ships, gear caches, and other #asset entities present in this scene.',
+    headerExtra: `<button type="button" class="icon-btn" data-entity-picker-open="asset" title="Add an Asset">＋</button>`,
+    body: assets.length ? `<div class="actor-thumb-row">${thumbs}</div>` : '<p class="dim small">None yet.</p>',
+  });
 }
 
 /** Faction Conflict's Location (contested zone) picker — lives on WHO,
@@ -642,77 +784,6 @@ function factionActivityHereBlock(doc) {
     </div>`;
 }
 
-// A persistent "this is what's selected" indicator (direct feedback,
-// docs/adr/0038) — WHERE's own location "selection" is still just an
-// @mention inserted into Focus (whereLocationPicker above; a past
-// redesign deliberately removed a separate curated list as duplicative of
-// that text), so this is read-only derived display, not a second storage
-// mechanism — it just makes the already-real current location(s)
-// (getCurrentWhereLocations) visible without having to read the Focus
-// prose itself.
-//
-// Also carries the System/Star/Colony-Base/District quick-awareness
-// summary (direct request: grouped under Current Location instead of its
-// own separate block above it) for the PRIMARY current WHERE location
-// (whereLocations[0], same "first is primary" convention
-// factionsActiveNearbyBlock's add-select already uses). Colony-Base/
-// District are still real entity references (loc.colonyBaseId/districtId,
-// entities.js) set via their own "+" picker filtered to Locations tagged
-// #colony/#district. System/Star are NOT — direct follow-up request
-// ("just use the Relationships for setting the choice"): they're pure
-// relationship-graph reads (getSystemForLocation/getStarForLocation,
-// entities.js — a Location IS its System/Star if so tagged, else its own
-// located_at parent counts if THAT is), so a "🔗" link opens the Entity
-// Editor with the "add relationship" field focused instead of a "+"
-// picker, and there's no "-" to clear (removing the located_at
-// relationship there is what unsets it, same "one true mechanism, not
-// two" reasoning locationDetailsBlock's own header comment explains).
-function currentLocationBanner(doc) {
-  const locs = getCurrentWhereLocations(doc);
-  if (!locs.length) return '';
-  const chips = locs.map((l) => `<button type="button" class="entity-chip" data-open-entity="${esc(l.id)}" title="Open ${esc(l.name || 'Unnamed')}">${esc(l.name || 'Unnamed')}</button>`).join('');
-  const loc = locs[0];
-  const system = getSystemForLocation(doc, loc.id);
-  const star = getStarForLocation(doc, loc.id);
-  const colonyBase = loc.colonyBaseId ? getEntity(doc, loc.colonyBaseId) : null;
-  const district = loc.districtId ? getEntity(doc, loc.districtId) : null;
-  // Label+value LEFT-aligned, +/- (or 🔗) controls RIGHT-aligned, per
-  // direct follow-up request — two sub-clusters instead of one flat
-  // right-aligned row (each .location-summary-item is a space-between
-  // flex line). "-" only renders once a value is actually set
-  // (data-location-field-clear, shell.js — a plain field clear).
-  const row = (label, entity, pickerMode, field) => `<span class="location-summary-item">
-    <span class="location-summary-label">
-      <span class="dim small">${esc(label)}</span>
-      ${entity ? `<button type="button" class="entity-chip" data-open-entity="${esc(entity.id)}">${esc(entity.name || 'Unnamed')}</button>` : '<span class="dim small">—</span>'}
-    </span>
-    <span class="location-summary-actions">
-      <button type="button" class="icon-btn" data-entity-picker-open="location:${esc(pickerMode)}:${esc(loc.id)}" title="Set ${esc(label)} (#${esc(pickerMode)} locations)">＋</button>
-      ${entity ? `<button type="button" class="icon-btn" data-location-field-clear="${esc(loc.id)}::${esc(field)}" title="Clear ${esc(label)}">－</button>` : ''}
-    </span>
-  </span>`;
-  const relRow = (label, entity) => `<span class="location-summary-item">
-    <span class="location-summary-label">
-      <span class="dim small">${esc(label)}</span>
-      ${entity ? `<button type="button" class="entity-chip" data-open-entity="${esc(entity.id)}">${esc(entity.name || 'Unnamed')}</button>` : '<span class="dim small">—</span>'}
-    </span>
-    <span class="location-summary-actions">
-      <button type="button" class="icon-btn" data-location-edit-relationships="${esc(loc.id)}" title="Set ${esc(label)} via Relationships (Cast)">🔗</button>
-    </span>
-  </span>`;
-  return `
-    <div class="workspace-mini-section current-location-banner">
-      <span class="field-label-static">📍 Current location</span>
-      <div class="entity-chips">${chips}</div>
-      <div class="location-summary" title="Quick reference for ${esc(loc.name || 'the current location')}">
-        ${relRow('System', system)}
-        ${relRow('Star', star)}
-        ${row('Colony/Base', colonyBase, 'colony', 'colonyBaseId')}
-        ${row('District', district, 'district', 'districtId')}
-      </div>
-    </div>`;
-}
-
 // Read-only digest: factions actually present AT the current location(s)
 // specifically (factionsPresentAt — the exact-location counterpart to
 // WHO's region-wide factionsActiveNearbyBlock), each with a truncated
@@ -757,28 +828,46 @@ function locationConflictsBlock(doc) {
   </div>`;
 }
 
-// Read-only jump list: every OTHER Location sharing the same immediate
-// structural parent as the current one (getContainedLocations on
+// Jump list: every OTHER Location sharing the same immediate structural
+// parent as the current one (getContainedLocations on
 // getContainingLocation's result — i.e. its siblings, same "district"
-// concept isSameDistrict already established one hop out) — a quick
-// "what else is around here" reference so a GM can eyeball or jump to a
-// nearby option without leaving WHERE. A Location with no parent set (no
-// `located_at` edge yet) simply shows nothing, same posture as every
-// other block here that's silent until there's real structure to show.
-function nearbyLocationsBlock(doc) {
+// concept isSameDistrict already established one hop out) — "what else is
+// around here," so a GM can add one to the scene without leaving WHERE.
+// Moved underneath the old "Location Story" section's slot (now that
+// Location Story itself is merged into each thumbnail's own dropdown,
+// below) and collapsed by default (direct follow-up request — "hide the
+// list of available entities... by default"), same collapsibleThumbGroup
+// shell WHO's groups use, just defaultCollapsed. Also now excludes any
+// sibling already present in the current scene (System/Star/Location
+// details, getCurrentWhereLocations) — "available entities that have not
+// already been added to the scene," direct quote — so it reads as "what
+// else COULD be added," distinct from Location details' actual added
+// list. Clicking a chip ADDS it straight to Location details
+// (data-scene-location-add, direct follow-up request — replacing the
+// previous "open its Entity Editor" click behavior; addSceneLocation's
+// own one-per-tag dedup, scenes.js, still applies) — once added, this
+// block's own addedIds filter drops it from view on the next render, so
+// nothing needs to track "already clicked" state separately. A Location
+// with no parent set (no `located_at` edge yet) simply shows nothing,
+// same posture as every other block here that's silent until there's
+// real structure to show.
+function nearbyLocationsBlock(doc, ui) {
   const whereLocations = getCurrentWhereLocations(doc);
   if (!whereLocations.length) return '';
   const loc = whereLocations[0];
   const parent = getContainingLocation(doc, loc.id);
   if (!parent) return '';
-  const siblings = getContainedLocations(doc, parent.id).filter((l) => l.id !== loc.id);
+  const addedIds = new Set(whereLocations.map((l) => l.id));
+  const siblings = getContainedLocations(doc, parent.id).filter((l) => l.id !== loc.id && !addedIds.has(l.id));
   if (!siblings.length) return '';
-  const chips = siblings.map((l) => `<button type="button" class="entity-chip" data-open-entity="${esc(l.id)}" title="Open ${esc(l.name || 'Unnamed')}">${esc(l.name || 'Unnamed')}</button>`).join('');
-  return `
-    <div class="workspace-mini-section">
-      <span class="field-label-static">Nearby locations (${esc(parent.name || 'Unnamed')})</span>
-      <div class="entity-chips">${chips}</div>
-    </div>`;
+  const chips = siblings.map((l) => `<button type="button" class="entity-chip" data-scene-location-add="${esc(l.id)}" title="Add ${esc(l.name || 'Unnamed')} to Location details">${esc(l.name || 'Unnamed')}</button>`).join('');
+  return collapsibleThumbGroup(ui, {
+    key: 'where:nearby-locations', label: 'Nearby locations', count: siblings.length,
+    helpKey: 'where:nearby-locations',
+    hint: `Other locations under ${esc(parent.name || 'Unnamed')}, not yet added to this scene.`,
+    defaultCollapsed: true,
+    body: `<div class="entity-chips">${chips}</div>`,
+  });
 }
 
 // Scene Summary, the Navigator card's top block — composeNarrativeDraft()
@@ -807,26 +896,6 @@ function narrativeComposerBlock(doc, ui) {
       <button class="chip" data-composer-journal title="Add the draft to the Journal">＋ Send to Journal</button>
     </div>
   </div>`;
-}
-
-// A GM's own free-text narrative note per Location — "Location Story"
-// (docs/design/GMAtlas_Scene_Story_Data_Model.md via docs/adr/0038),
-// mirrors Faction's Scenario Seed but bound to whichever Location(s) are
-// currently mentioned in WHERE's Focus rather than the Cast-active
-// entity — `data-entity-field` always targets `entities.activeId`
-// (confirmed via activeConflictLocationPicker's own comment above), which
-// isn't necessarily the WHERE-mentioned location, so this uses its own
-// `data-location-story` attribute instead (shell.js's onFocusOut reads
-// the location id straight off the element).
-function locationStoryBlock(doc, ui) {
-  const whereLocations = getCurrentWhereLocations(doc);
-  if (!whereLocations.length) return '';
-  return whereLocations.map((loc) => {
-    const toolbarKey = `location:${loc.id}:story`;
-    return `<div class="field-label">${esc(loc.name || 'Unnamed location')} — Location Story
-      <div class="rich-field">${richToolbarHTML(toolbarKey, toolbarCollapsed(doc, ui, toolbarKey))}<div class="mention-editor" contenteditable="true" data-location-story="${esc(loc.id)}" data-placeholder="How are factions operating here? What's brewing?">${buildMentionEditorHTML(doc, loc.locationStory)}</div></div>
-    </div>`;
-  }).join('');
 }
 
 const ACTION_LABEL_FOR_WHERE = {
@@ -948,13 +1017,15 @@ function sceneField(scene, key, label, placeholder, ui) {
 
 // Latest Scene split fields: Opening/Driver/Clue/Complication/Likely
 // Consequence are real, individually-editable fields (domain/scenes.js),
-// each linked to its own Oracle category; the combined `text` blob below
-// is a DERIVED, read-only view recomposed from current field values on
-// every edit (session.js's updateSceneField), not a second,
-// independently-editable copy — editing a field updates it live. Opening
+// each linked to its own Oracle category. scene.text (the combined
+// narrative, recomposed from these same fields on every edit —
+// session.js's updateSceneField) is still kept and used elsewhere (the
+// Journal, session recap) but is no longer rendered here as its own
+// read-only block (direct follow-up request — it just duplicated what
+// these editable fields already show, one narrative twice over). Opening
 // holds the FULL line's content (not a fragment nested in a fixed
 // template) — editing it directly rewrites what "Opening:" reads in the
-// combined text below.
+// derived text used elsewhere.
 function lastScene(doc, ui) {
   const scenes = doc.scenes || [];
   if (!scenes.length) return '<div class="ws-placeholder">No scenes yet. Continue Story (Advisor) to generate the opening beat.</div>';
@@ -962,7 +1033,6 @@ function lastScene(doc, ui) {
   return `<details class="last-scene" open>
     <summary>Latest: Scene ${s.number} — ${esc(s.summary)}</summary>
     <div class="last-scene-body">
-      <pre class="scene-text">${esc(s.text)}</pre>
       <div class="scene-fields">
         ${sceneField(s, 'opening', 'Opening', 'What the party notices first…', ui)}
         ${sceneField(s, 'driver', 'Driver', "What's pushing this scene forward…", ui)}

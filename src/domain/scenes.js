@@ -3,6 +3,7 @@
 // model (context + settings.form) instead of reading the DOM.
 
 import { getTable, pick } from './oracles.js';
+import { getEntity, addRelationship, removeRelationship } from './entities.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 
@@ -85,6 +86,22 @@ export function generateScene(campaign, tables, rng = Math.random, lensCategorie
     protagonistIds: [],
     antagonistIds: [],
     bystanderIds: [],
+    // "Assets present" (WHO redesign, direct follow-up request) — a
+    // fourth GM-curated scene list, same shape as bystanderIds, but for
+    // #asset-TYPE entities (not NPCs) — deliberately NOT part of
+    // ACTOR_LIST_KEY/moveSceneActor below, since dragging an Asset into
+    // Protagonists/Antagonists/Bystanders (or vice versa) has no meaning.
+    assetIds: [],
+    // WHERE's own curated Location list (direct follow-up request —
+    // "remove Focus... under WHERE it happens"): WHERE used to derive
+    // "the current location(s)" by scanning Focus text for @mentions;
+    // Focus is gone the same way WHO's was, so this is now the single
+    // source of truth instead — factionTurnEngine.js's
+    // getCurrentWhereLocations reads THIS, not Focus text, and its first
+    // entry is "the" primary current location everywhere that concept is
+    // used (System/Star resolution, Location Details, Faction/Conflict
+    // presence blocks, ...).
+    locationIds: [],
   };
   scene.text = recomposeSceneText(scene);
   return scene;
@@ -245,6 +262,98 @@ export function addSceneAntagonist(campaign, sceneId, npcId) { return addSceneAc
 export function removeSceneAntagonist(campaign, sceneId, npcId) { return removeSceneActor(campaign, sceneId, 'antagonist', npcId); }
 export function addSceneBystander(campaign, sceneId, npcId) { return addSceneActor(campaign, sceneId, 'bystander', npcId); }
 export function removeSceneBystander(campaign, sceneId, npcId) { return removeSceneActor(campaign, sceneId, 'bystander', npcId); }
+
+/** "Assets present" (direct follow-up request) — a #asset-TYPE entity
+ *  list, same add/dedupe/remove shape as the three Actor lists above but
+ *  deliberately its own pair rather than a fourth ACTOR_LIST_KEY entry —
+ *  Assets never move between groups (moveSceneActor/drag-and-drop is an
+ *  Actor-only concept). */
+export function addSceneAsset(campaign, sceneId, assetId) {
+  const next = clone(campaign);
+  const scene = (next.scenes || []).find((s) => s.id === sceneId);
+  if (!scene || !assetId) return next;
+  if (!Array.isArray(scene.assetIds)) scene.assetIds = [];
+  if (!scene.assetIds.includes(assetId)) scene.assetIds.push(assetId);
+  return next;
+}
+export function removeSceneAsset(campaign, sceneId, assetId) {
+  const next = clone(campaign);
+  const scene = (next.scenes || []).find((s) => s.id === sceneId);
+  if (!scene || !Array.isArray(scene.assetIds)) return next;
+  scene.assetIds = scene.assetIds.filter((id) => id !== assetId);
+  return next;
+}
+
+/** WHERE's curated Location list (direct follow-up request, replacing
+ *  Focus-text @mention scanning as "the current location(s)" source of
+ *  truth) — the "Location details" section (workspace/index.js), NOT the
+ *  System row above it (see setSceneSystem below for that). Enforces "ONE
+ *  entity of each type" (direct follow-up request — "the scene takes
+ *  place in just one district, etc."): if the entity being added shares
+ *  ANY tag with an entity already in the list, that existing entry is
+ *  swapped out for the new one instead of accumulating a second of the
+ *  same type — an untagged entity, or one whose tags don't overlap
+ *  anything already present, is simply added alongside. Tag-driven, not a
+ *  hardcoded type enum, so it works for #district/#site/whatever the GM's
+ *  own tag vocabulary happens to be. */
+export function addSceneLocation(campaign, sceneId, locationId) {
+  const next = clone(campaign);
+  const scene = (next.scenes || []).find((s) => s.id === sceneId);
+  if (!scene || !locationId) return next;
+  if (!Array.isArray(scene.locationIds)) scene.locationIds = [];
+  if (scene.locationIds.includes(locationId)) return next;
+  const incoming = getEntity(next, locationId);
+  const incomingTags = new Set((incoming && incoming.tags) || []);
+  if (incomingTags.size) {
+    scene.locationIds = scene.locationIds.filter((id) => {
+      const existingTags = (getEntity(next, id) || {}).tags || [];
+      return !existingTags.some((t) => incomingTags.has(t));
+    });
+  }
+  scene.locationIds.push(locationId);
+  return next;
+}
+export function removeSceneLocation(campaign, sceneId, locationId) {
+  const next = clone(campaign);
+  const scene = (next.scenes || []).find((s) => s.id === sceneId);
+  if (!scene || !Array.isArray(scene.locationIds)) return next;
+  scene.locationIds = scene.locationIds.filter((id) => id !== locationId);
+  return next;
+}
+
+/** WHERE's System row (direct follow-up request — a dedicated pick-or-
+ *  create button instead of only a manual Relationships edit): System
+ *  stays a pure relationship-graph read (getSystemForLocation, entities.js
+ *  — "just use the Relationships for setting the choice"), this just makes
+ *  SETTING it up nicer. `scene.locationIds[0]` (the "anchor," same primary
+ *  Location Details already uses for Colony-Base/District) is either: (a)
+ *  absent — no scene location exists yet, so the picked System becomes the
+ *  anchor directly (it self-resolves as its own System via the #system
+ *  tag, no relationship needed); (b) itself #system-tagged — a previous
+ *  pick under case (a) standing in as the anchor — swapped out for the new
+ *  pick the same way, never linked to itself; or (c) a real Location
+ *  details entry (a site/district) — gets a `located_at` edge to the
+ *  picked System, replacing any prior one so there's only ever one parent,
+ *  matching getContainingLocation's own "at most one" assumption. */
+export function setSceneSystem(campaign, sceneId, systemId) {
+  let next = clone(campaign);
+  const scene = (next.scenes || []).find((s) => s.id === sceneId);
+  if (!scene || !systemId || !getEntity(next, systemId)) return next;
+  if (!Array.isArray(scene.locationIds)) scene.locationIds = [];
+  const anchorId = scene.locationIds[0] || null;
+  if (anchorId === systemId) return next;
+  const anchor = anchorId ? getEntity(next, anchorId) : null;
+  if (!anchor || (anchor.tags || []).includes('system')) {
+    scene.locationIds = scene.locationIds.filter((id) => id !== anchorId);
+    scene.locationIds.unshift(systemId);
+    return next;
+  }
+  const existingParent = (anchor.relationships || []).find((r) => r.type === 'located_at');
+  if (existingParent && existingParent.to === systemId) return next;
+  if (existingParent) next = removeRelationship(next, anchorId, existingParent.to);
+  next = addRelationship(next, anchorId, systemId, 'System', 'located_at');
+  return next;
+}
 
 /** Dragging a thumbnail from one Actor group to another (WHO redesign
  *  follow-up, direct request) — removes from `fromKind`'s list and adds to
