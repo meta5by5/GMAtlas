@@ -442,9 +442,22 @@ function whereLocationHierarchyBlock(doc, ui) {
   if (system) {
     const hz = getHexZoneForLocation(doc, system.id);
     const zoneHex = [hz.zone ? `(${esc(hz.zone)})` : '', hz.hex ? esc(hz.hex) : ''].filter(Boolean).join(' ');
+    // The System's own name moved off the thumbnail (direct follow-up
+    // request) — a plain photo/circle, no name underneath — to a new
+    // first line in the info block, above the Star name; the thumbnail
+    // itself grows to fill that block's full height (three lines: System/
+    // Star/Zone+Hex) via CSS stretch instead of staying the small fixed
+    // NPC-thumbnail size.
+    const img = system.thumbnailId ? getGalleryImage(doc, system.thumbnailId) : null;
+    const photo = img
+      ? `<img class="actor-thumb-photo" src="${esc(img.dataUrl)}" alt="">`
+      : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((system.name || '?').trim().slice(0, 1).toUpperCase())}</span>`;
     systemRow = `<div class="location-hierarchy-row">
-      ${entityThumb(doc, system)}
+      <div class="location-hierarchy-thumb">
+        <button type="button" class="actor-thumb" data-open-entity="${esc(system.id)}" title="${esc(system.name || 'Unnamed')}">${photo}</button>
+      </div>
       <div class="location-hierarchy-info">
+        <div class="location-hierarchy-system">${esc(system.name || 'Unnamed')}</div>
         <div class="location-hierarchy-star">${star ? esc(star.name || 'Unnamed') : '<span class="dim small">No Star linked</span>'}</div>
         <div class="location-hierarchy-zonehex dim small">${zoneHex || '—'}</div>
       </div>

@@ -435,6 +435,60 @@ let inspirationDrafts = { site: null, seed: null };
 // reset the iframe to blank mid-load, stranding it white). Tracking "the
 // last src I myself set" sidesteps the mismatch entirely.
 let lastDocViewerSrc = null;
+// Reference Library docs not bundled locally fall back to a GitHub Release
+// URL (releaseConfig.js) — a real reported bug: the redirected response
+// carries Content-Type: application/octet-stream plus a forced
+// Content-Disposition: attachment, which makes essentially every browser
+// (phones especially — no inline PDF renderer to fall back to) download the
+// file instead of viewing it. Fixed by fetching it ourselves, caching the
+// bytes locally via the Cache API (the same mechanism sw.js already uses
+// for the app shell — "save it to the local cache like the rest of app
+// data," direct request), and handing the iframe a blob: URL built with the
+// CORRECT MIME type instead of the raw GitHub URL — a blob: URL has no
+// Content-Disposition concept at all, so the bad header can't apply.
+// refDocBlobUrls/refDocBlobFailed are keyed by the fragment-stripped base
+// URL (a #page=N anchor is re-appended after resolving, since it's meaningless
+// to the fetch/cache lookup itself); refDocBlobFailed remembers a CORS/
+// network failure for the session so a bad connection doesn't retry (and
+// re-show "Loading…") on every unrelated re-render — the iframe falls back
+// to the direct GitHub URL, matching today's behavior, at that point. Local
+// (already-bundled) Reference Library paths are untouched — no bug reported
+// there, and fetching a relative file:// path would hit the same CORS wall
+// PDF.js's own file:// gotcha already documents.
+let refDocBlobUrls = new Map();
+let refDocBlobFailed = new Set();
+let refDocBlobPending = null;
+async function loadRefDocBlobUrl(url) {
+  if (!(typeof caches !== 'undefined' && caches) || !window.fetch) return null;
+  try {
+    // Cache name matches sw.js's own REF_DOC_CACHE constant — the two
+    // contexts (this bundle, the service worker) can't share a real JS
+    // reference, so sw.js's activate handler keys off this exact string
+    // to make sure it never gets swept as an "unrecognized" cache on a
+    // service-worker update.
+    const cache = await caches.open('gmatlas-refdocs-v1');
+    let response = await cache.match(url);
+    if (!response) {
+      const fetched = await fetch(url);
+      if (!fetched.ok) return null;
+      await cache.put(url, fetched.clone());
+      response = fetched;
+    }
+    const rawBlob = await response.blob();
+    const pdfBlob = rawBlob.type === 'application/pdf' ? rawBlob : new Blob([rawBlob], { type: 'application/pdf' });
+    return URL.createObjectURL(pdfBlob);
+  } catch {
+    return null;
+  }
+}
+// The "blank, then the real src on the next tick" reload trick (see the
+// call site's own comment for why) — factored out so both the direct-src
+// path and the fetched-blob path share it identically.
+function loadDocViewerFrame(frame, nextSrc) {
+  frame.src = 'about:blank';
+  setTimeout(() => { if (frame.isConnected) frame.src = nextSrc; }, 0);
+  lastDocViewerSrc = nextSrc;
+}
 // The dice roll window (see renderDiceRollOverlay) — set by performFieldRoll
 // whenever a statblock field is rolled, cleared on close/Escape/backdrop
 // click. Shape: { label, method, r } where method picks which fields of r
@@ -4717,7 +4771,43 @@ function render() {
     const resolvedActive = resolveDocumentTab(doc, activeTab);
     const frame = viewer.querySelector('[data-doc-viewer-frame]');
     const empty = viewer.querySelector('[data-doc-viewer-empty]');
-    if (resolvedActive && resolvedActive.src) {
+    // A remote (GitHub Release-hosted) Reference Library doc routes through
+    // the fetch-then-cache-then-blob-URL path above instead of a direct
+    // src; a local Reference Library path or a user-uploaded (kind:'lib')
+    // data: URL both go straight to the existing direct-src branch,
+    // unchanged — see loadRefDocBlobUrl's own comment for why only this
+    // one case needs it.
+    const isRemoteRefDoc = !!resolvedActive && resolvedActive.kind === 'ref' && /^https?:/i.test(resolvedActive.src);
+    if (resolvedActive && resolvedActive.src && isRemoteRefDoc) {
+      const baseUrl = resolvedActive.src.split('#')[0];
+      const withPage = (blobUrl) => (resolvedActive.page ? `${blobUrl}#page=${resolvedActive.page}` : blobUrl);
+      if (refDocBlobUrls.has(baseUrl)) {
+        frame.hidden = false;
+        empty.hidden = true;
+        const nextSrc = withPage(refDocBlobUrls.get(baseUrl));
+        if (lastDocViewerSrc !== nextSrc) loadDocViewerFrame(frame, nextSrc);
+      } else if (refDocBlobFailed.has(baseUrl)) {
+        // Couldn't fetch/cache it (offline, CORS, ...) — fall back to the
+        // direct GitHub URL, exactly today's pre-fix behavior, rather than
+        // leaving the GM with nothing.
+        frame.hidden = false;
+        empty.hidden = true;
+        if (lastDocViewerSrc !== resolvedActive.src) loadDocViewerFrame(frame, resolvedActive.src);
+      } else {
+        frame.hidden = true;
+        empty.hidden = false;
+        empty.textContent = `Loading "${resolvedActive.title}"…`;
+        lastDocViewerSrc = null;
+        if (refDocBlobPending !== baseUrl) {
+          refDocBlobPending = baseUrl;
+          loadRefDocBlobUrl(baseUrl).then((blobUrl) => {
+            refDocBlobPending = null;
+            if (blobUrl) refDocBlobUrls.set(baseUrl, blobUrl); else refDocBlobFailed.add(baseUrl);
+            render();
+          });
+        }
+      }
+    } else if (resolvedActive && resolvedActive.src) {
       frame.hidden = false;
       empty.hidden = true;
       if (lastDocViewerSrc !== resolvedActive.src) {
@@ -4740,10 +4830,7 @@ function render() {
         // (a blank/white frame that no longer responds to further src
         // changes). Deferring the real src to the next tick gives the
         // unload from `about:blank` a chance to actually complete first.
-        const nextSrc = resolvedActive.src;
-        frame.src = 'about:blank';
-        setTimeout(() => { if (frame.isConnected) frame.src = nextSrc; }, 0);
-        lastDocViewerSrc = nextSrc;
+        loadDocViewerFrame(frame, resolvedActive.src);
       }
     } else {
       // A resolved 'lib' entry with no dataUrl means the file never actually

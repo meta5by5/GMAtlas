@@ -695,13 +695,31 @@ button { font: inherit; color: inherit; cursor: pointer; }
    browser's own button chrome so it doesn't look like a boxed control. */
 button.actor-group-toggle { background: none; border: none; padding: 0; cursor: pointer; text-align: left; }
 /* WHERE's consolidated System row (direct follow-up request) — System
-   thumbnail left-aligned, Star name + "(Zone) Hex" in a two-line block to
-   its right, vertically centered against the thumbnail ("both lines are
-   in a table vertically aligned with the thumbnail"). */
-.location-hierarchy-row { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-2); }
-.location-hierarchy-info { flex: 1; display: flex; flex-direction: column; gap: 0.1rem; }
+   thumbnail left-aligned, System/Star name + "(Zone) Hex" in a three-line
+   block to its right. align-items:stretch (was center) lets
+   .location-hierarchy-thumb grow to the info block's own natural height
+   (direct follow-up request — "allow the thumbnail to be bigger to fill
+   the vertical height of the box") instead of staying the small fixed
+   NPC-thumbnail size; the 🔗 button opts back out with align-self:center
+   so it doesn't stretch into an odd tall rectangle alongside them. */
+.location-hierarchy-row { display: flex; align-items: stretch; gap: var(--sp-3); margin-bottom: var(--sp-2); }
+.location-hierarchy-row > .icon-btn { align-self: center; }
+.location-hierarchy-info { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 0.1rem; }
+/* The System's own name — direct follow-up request: moved off the
+   thumbnail (a plain photo now, no name underneath) to this new first
+   line, above the Star name. */
+.location-hierarchy-system { font-size: 0.95rem; font-weight: 700; }
 .location-hierarchy-star { font-size: 0.9rem; font-weight: 600; }
 .location-hierarchy-zonehex { font-size: 0.75rem; }
+/* The System thumbnail itself — stretched by its flex row (above) to the
+   info block's full height, the photo/circle then fills THAT via
+   height:100% + aspect-ratio (a square photo reads as circular via the
+   existing border-radius:50% on .actor-thumb-photo/-empty), growing or
+   shrinking with however many lines the info block ends up needing. */
+.location-hierarchy-thumb { display: flex; }
+.location-hierarchy-thumb .actor-thumb { display: block; padding: 0; height: 100%; }
+.location-hierarchy-thumb .actor-thumb-photo,
+.location-hierarchy-thumb .actor-thumb-photo-empty { width: auto; height: 100%; aspect-ratio: 1 / 1; }
 /* Latest Scene's split fields (Opening/Driver/Clue/Complication/Decision
    point/Likely Consequence/Current thread) — single column, not a
    multi-column grid: a scene field is often a full sentence or two, and
