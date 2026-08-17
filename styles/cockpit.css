@@ -647,7 +647,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .npc-scene-card { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--sp-2) var(--sp-3); margin-top: var(--sp-2); background: var(--bg-inset); }
 .npc-scene-card-actions { display: inline-flex; gap: var(--sp-1); align-items: center; }
 .npc-scene-card-body { margin-top: var(--sp-2); display: flex; flex-direction: column; gap: var(--sp-2); }
-.oracle-field-row { display: grid; grid-template-columns: auto 1.6rem 1fr; align-items: center; gap: var(--sp-2); }
+.oracle-field-row { display: grid; grid-template-columns: auto 1.6rem 1fr auto; align-items: center; gap: var(--sp-2); }
 .oracle-field-row input { width: 100%; }
 /* Actor thumbnails (Composer WHO redesign) — a mention-style, read-only
    photo+name button for Protagonists/Antagonists/Bystanders, replacing the

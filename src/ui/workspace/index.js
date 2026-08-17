@@ -118,12 +118,17 @@ function whoSectionBody(doc, ui) {
 // currently rolled/typed; the roll button re-rolls from the field's
 // mapped oracle table (session.js), the input commits an edit on blur/
 // change, which — if the current value came from a roll — ALSO writes
-// back through oracles.overrides (the "remembered" half).
-function oracleFieldRow(label, value, rollAttr, fieldAttr) {
+// back through oracles.overrides (the "remembered" half). `clearAttr`
+// (direct follow-up request — "add x to clear text in the oracle fields
+// for the popup window from the thumbnail arrow, e.g., Disposition") is a
+// click handler that blanks the field the same way typing it empty and
+// blurring would; only rendered once there's actually text to clear.
+function oracleFieldRow(label, value, rollAttr, fieldAttr, clearAttr) {
   return `<div class="oracle-field-row">
     <span class="field-label-static">${esc(label)}</span>
     <button type="button" class="icon-btn" ${rollAttr} title="Roll ${esc(label)}">🎲</button>
     <input type="text" class="thread-name-input" ${fieldAttr} value="${esc(value)}" placeholder="—">
+    ${value ? `<button type="button" class="icon-btn" ${clearAttr} title="Clear ${esc(label)}">✕</button>` : ''}
   </div>`;
 }
 
@@ -251,11 +256,11 @@ function npcSceneDetailBody(doc, ui, scene, npc) {
       <label class="field-label sm">Current goal
         <input type="text" data-npc-current-goal="${esc(npc.id)}" value="${esc(npc.currentGoal || '')}" placeholder="What do they want right now?">
       </label>
-      ${oracleFieldRow('Disposition', state.disposition.value, `data-scene-npc-roll="${esc(npc.id)}::disposition"`, `data-scene-npc-field="${esc(npc.id)}::disposition"`)}
-      ${oracleFieldRow('Motivation', state.motivation.value, `data-scene-npc-roll="${esc(npc.id)}::motivation"`, `data-scene-npc-field="${esc(npc.id)}::motivation"`)}
-      ${oracleFieldRow('Threat Rank', state.threatRank.value, `data-scene-npc-roll="${esc(npc.id)}::threatRank"`, `data-scene-npc-field="${esc(npc.id)}::threatRank"`)}
-      ${oracleFieldRow('Challenges', state.challenges.value, `data-scene-npc-roll="${esc(npc.id)}::challenges"`, `data-scene-npc-field="${esc(npc.id)}::challenges"`)}
-      ${oracleFieldRow('Opportunities', state.opportunities.value, `data-scene-npc-roll="${esc(npc.id)}::opportunities"`, `data-scene-npc-field="${esc(npc.id)}::opportunities"`)}
+      ${oracleFieldRow('Disposition', state.disposition.value, `data-scene-npc-roll="${esc(npc.id)}::disposition"`, `data-scene-npc-field="${esc(npc.id)}::disposition"`, `data-scene-npc-field-clear="${esc(npc.id)}::disposition"`)}
+      ${oracleFieldRow('Motivation', state.motivation.value, `data-scene-npc-roll="${esc(npc.id)}::motivation"`, `data-scene-npc-field="${esc(npc.id)}::motivation"`, `data-scene-npc-field-clear="${esc(npc.id)}::motivation"`)}
+      ${oracleFieldRow('Threat Rank', state.threatRank.value, `data-scene-npc-roll="${esc(npc.id)}::threatRank"`, `data-scene-npc-field="${esc(npc.id)}::threatRank"`, `data-scene-npc-field-clear="${esc(npc.id)}::threatRank"`)}
+      ${oracleFieldRow('Challenges', state.challenges.value, `data-scene-npc-roll="${esc(npc.id)}::challenges"`, `data-scene-npc-field="${esc(npc.id)}::challenges"`, `data-scene-npc-field-clear="${esc(npc.id)}::challenges"`)}
+      ${oracleFieldRow('Opportunities', state.opportunities.value, `data-scene-npc-roll="${esc(npc.id)}::opportunities"`, `data-scene-npc-field="${esc(npc.id)}::opportunities"`, `data-scene-npc-field-clear="${esc(npc.id)}::opportunities"`)}
     </div>
   </div>`;
 }
@@ -353,9 +358,9 @@ function locationDetailBody(doc, ui, loc) {
           ${LOCATION_OBJECT_TYPES.map((t) => `<option value="${esc(t)}" ${t === loc.objectType ? 'selected' : ''}>${esc(t)}</option>`).join('')}
         </select>
       </label>
-      ${oracleFieldRow('Sights', loc.sights || '', `data-location-sensory-roll="${esc(loc.id)}::sights"`, `data-location-field="${esc(loc.id)}::sights"`)}
-      ${oracleFieldRow('Smells', loc.smells || '', `data-location-sensory-roll="${esc(loc.id)}::smells"`, `data-location-field="${esc(loc.id)}::smells"`)}
-      ${oracleFieldRow('Sounds', loc.sounds || '', `data-location-sensory-roll="${esc(loc.id)}::sounds"`, `data-location-field="${esc(loc.id)}::sounds"`)}
+      ${oracleFieldRow('Sights', loc.sights || '', `data-location-sensory-roll="${esc(loc.id)}::sights"`, `data-location-field="${esc(loc.id)}::sights"`, `data-location-sensory-clear="${esc(loc.id)}::sights"`)}
+      ${oracleFieldRow('Smells', loc.smells || '', `data-location-sensory-roll="${esc(loc.id)}::smells"`, `data-location-field="${esc(loc.id)}::smells"`, `data-location-sensory-clear="${esc(loc.id)}::smells"`)}
+      ${oracleFieldRow('Sounds', loc.sounds || '', `data-location-sensory-roll="${esc(loc.id)}::sounds"`, `data-location-field="${esc(loc.id)}::sounds"`, `data-location-sensory-clear="${esc(loc.id)}::sounds"`)}
       <div class="field-label sm">
         <span class="field-label-row">
           <span class="field-label-static">Regional faction activity</span>

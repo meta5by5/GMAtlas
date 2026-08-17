@@ -2267,6 +2267,18 @@ function onClick(ev) {
     if (!sceneId) return;
     return store.update((d) => rollNpcSceneField(d, sceneId, npcId, field));
   }
+  // "✕" on an NPC scene-detail oracle field (Disposition/Motivation/...,
+  // direct follow-up request) — blanks it the same way clearing the input
+  // by hand and blurring would (editNpcSceneField already handles writing
+  // an edit back through oracles.overrides only when the prior value came
+  // from a roll).
+  const sceneNpcFieldClear = hit('[data-scene-npc-field-clear]');
+  if (sceneNpcFieldClear) {
+    const [npcId, field] = sceneNpcFieldClear.dataset.sceneNpcFieldClear.split('::');
+    const sceneId = currentSceneId();
+    if (!sceneId) return;
+    return store.update((d) => editNpcSceneField(d, sceneId, npcId, field, ''));
+  }
   const protagonistRemove = hit('[data-scene-protagonist-remove]');
   if (protagonistRemove) {
     const sceneId = currentSceneId();
@@ -2429,6 +2441,14 @@ function onClick(ev) {
   if (locationSensoryRoll) {
     const [locId, field] = locationSensoryRoll.dataset.locationSensoryRoll.split('::');
     return store.update((d) => rollLocationSensoryField(d, locId, field));
+  }
+  // "✕" on a Location Details sensory field (Sights/Smells/Sounds, direct
+  // follow-up request) — same clear-in-place shape as the NPC scene-field
+  // "✕" above.
+  const locationSensoryClear = hit('[data-location-sensory-clear]');
+  if (locationSensoryClear) {
+    const [locId, field] = locationSensoryClear.dataset.locationSensoryClear.split('::');
+    return store.update((d) => editLocationSensoryField(d, locId, field, ''));
   }
 
   if (hit('[data-new-campaign]')) return confirmNewCampaign();
