@@ -737,14 +737,18 @@ button.actor-group-toggle { background: none; border: none; padding: 0; cursor: 
 .location-hierarchy-star { font-size: 0.9rem; font-weight: 600; }
 .location-hierarchy-zonehex { font-size: 0.75rem; }
 /* The System thumbnail itself — stretched by its flex row (above) to the
-   info block's full height, the photo/circle then fills THAT via
-   height:100% + aspect-ratio (a square photo reads as circular via the
-   existing border-radius:50% on .actor-thumb-photo/-empty), growing or
-   shrinking with however many lines the info block ends up needing. */
-.location-hierarchy-thumb { display: flex; }
-.location-hierarchy-thumb .actor-thumb { display: block; padding: 0; height: 100%; }
+   info block's full height, the photo/circle then fills HALF of that via
+   height:50% + aspect-ratio (reduced from a full 100% — direct follow-up
+   request) — a square photo reads as circular via the existing
+   border-radius:50% on .actor-thumb-photo/-empty, growing or shrinking
+   with however many lines the info block ends up needing, just at half
+   scale now. align-items:center (the wrapper no longer fills the row's
+   full height on its own) keeps the smaller circle vertically centered
+   next to the info block instead of pinned to the top. */
+.location-hierarchy-thumb { display: flex; align-items: center; }
+.location-hierarchy-thumb .actor-thumb { display: block; padding: 0; height: 50%; }
 .location-hierarchy-thumb .actor-thumb-photo,
-.location-hierarchy-thumb .actor-thumb-photo-empty { width: auto; height: 100%; aspect-ratio: 1 / 1; }
+.location-hierarchy-thumb .actor-thumb-photo-empty { width: auto; height: 50%; aspect-ratio: 1 / 1; }
 /* Latest Scene's split fields (Opening/Driver/Clue/Complication/Decision
    point/Likely Consequence/Current thread) — single column, not a
    multi-column grid: a scene field is often a full sentence or two, and

@@ -622,6 +622,10 @@ export function mountShell(el) {
       <div class="dice-roll-overlay" data-dice-roll-overlay data-open="false" aria-label="Dice roll result">
         <div class="dice-roll-card" data-dice-roll-card></div>
       </div>
+      <div class="image-lightbox-overlay" data-image-lightbox-overlay hidden aria-label="Full-size image">
+        <button type="button" class="icon-btn image-lightbox-close" data-image-lightbox-close aria-label="Close">✕</button>
+        <img class="image-lightbox-img" data-image-lightbox-img src="" alt="">
+      </div>
       <nav class="mc-edge" aria-label="Drawers" data-edge></nav>
       <aside class="mc-drawer" data-drawer aria-label="Drawer">
         <div class="drawer-tabs" data-drawer-tabs></div>

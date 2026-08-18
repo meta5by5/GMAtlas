@@ -1099,8 +1099,15 @@ function enhancementsSection(e, ui) {
 function entityPhotoHtml(doc, e) {
   const img = e.thumbnailId ? getGalleryImage(doc, e.thumbnailId) : null;
   if (img) {
+    // Direct follow-up request: clicking the thumbnail shows the full-size
+    // image. data-open-image-lightbox carries no value — shell.js reads the
+    // src/alt straight off the clicked <img> itself (it's already inline in
+    // the DOM as a data: URL) rather than duplicating potentially-large
+    // image data into a second attribute.
     return `<div class="inspector-photo">
-      <img class="gallery-thumb-circle" src="${esc(img.dataUrl)}" alt="${esc(e.name || 'Entity')} thumbnail">
+      <button type="button" class="gallery-thumb-circle-btn" title="View full size">
+        <img class="gallery-thumb-circle" data-open-image-lightbox src="${esc(img.dataUrl)}" alt="${esc(e.name || 'Entity')} thumbnail">
+      </button>
       <label class="btn ghost sm file-btn">Replace<input type="file" accept="image/*" data-entity-photo-upload="${esc(e.id)}" hidden></label>
     </div>`;
   }
