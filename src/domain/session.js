@@ -169,6 +169,17 @@ export function drawFactionActivityOracles(campaign, opts = {}) {
   return drawOraclesForTags(campaign, ['faction', 'agenda'], opts);
 }
 
+/** The Advisor's "If nothing changes…" card (direct follow-up request:
+ *  "there should always be relevant oracle selections... displayed in each
+ *  section of the Advisor, such as 'suggested Oracles' and 'if nothing
+ *  changes'") — reuses the exact same tag-linked draw mechanism, keyed off
+ *  Latest Scene's own "Likely consequence" field tags (oracleLinkTagsFor
+ *  ('scene', 'consequence')), the same field a GM would naturally record
+ *  what happens if the party doesn't act. */
+export function drawConsequenceOracles(campaign, opts = {}) {
+  return drawOraclesForTags(campaign, oracleLinkTagsFor('scene', 'consequence') || [], opts);
+}
+
 /** "What Happens Next?", lens-filtered — this is Continue Story's own
  *  generateScene(), just handed the chosen lens's mapped Oracle categories
  *  so its Driver line pulls from THAT lens's content instead of the

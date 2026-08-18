@@ -198,6 +198,14 @@ export function defaultCampaign(now = new Date().toISOString()) {
       // scenesPerRound to surface a Co-Pilot nudge. Purely a reminder —
       // never auto-advances a faction turn (Article II).
       factionPacing: { scenesPerRound: 3, scenesSinceLastRound: 0 },
+      // Which track-field names "headline" on a collapsed Party Roster
+      // member row as small right-aligned counters (direct request — "GM
+      // picks per-ruleset which fields surface"), matched case-insensitively
+      // against a member's own statblock track field keys wherever they're
+      // found (Character Sheet or Bestiary groups alike). Defaults to the
+      // two named in the request; a GM on a ruleset with differently-named
+      // resources (5PFH's Luck/XP) edits this list in Settings.
+      partyHeadlineFields: ['Health', 'Momentum'],
       form: {},          // legacy Story Director form fields, preserved verbatim
       ui: { activeCenterTab: 'journal', activeLeftTab: 'entityList', oracleFilter: '', entityFilter: '', docFilter: '', docTagFilter: [] },
     },

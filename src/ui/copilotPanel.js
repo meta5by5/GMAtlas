@@ -132,6 +132,21 @@ function inspirationBlock(ui) {
     </div>`;
 }
 
+// The Advisor's "stage, then apply" mechanic (direct follow-up request —
+// see shell.js's advisorOracleResults/advisorDrafts declaration comment for
+// the full 4-step flow): an editable textarea a GM can type into freely,
+// plus an "Apply" button that sends its CURRENT text to one specific
+// Composer field (context.what.situation or Latest Scene's consequence
+// field) — shared by suggestedOraclesBlock and consequenceOraclesBlock
+// below rather than each building its own editor+apply markup.
+function advisorDraftEditor(draftKey, ui, { placeholder, applyLabel }) {
+  const value = (ui && ui.advisorDrafts && ui.advisorDrafts[draftKey]) || '';
+  return `<div class="advisor-suggestion-editor">
+    <textarea class="advisor-suggestion-input" data-advisor-draft-input="${esc(draftKey)}" rows="2" placeholder="${esc(placeholder)}">${esc(value)}</textarea>
+    <button class="chip sm" data-advisor-draft-apply="${esc(draftKey)}" ${value.trim() ? '' : 'disabled'} title="Apply the text above to ${esc(applyLabel)}">➜ Apply to ${esc(applyLabel)}</button>
+  </div>`;
+}
+
 // "Suggested oracles" history stack (direct follow-up request: "whenever
 // anything is added to the Advisor, place it as a new entry in a box at
 // the top... move previous entries down. Show three entries plus
@@ -143,23 +158,44 @@ function inspirationBlock(ui) {
 // added (not recomputed on render) — the first 3 render as open boxes,
 // the next 3 as native <details> so a GM can still expand one to look up
 // what an older suggestion was without it competing for space by default.
-// 🔮 rolls a table directly (the same rollOracle/data-story-option-roll
-// shape Story Options already uses) — a pointer at WHICH tables are
-// relevant, not a generated result in itself. A WHAT-sourced entry
-// carries target:'situation' (direct follow-up request) so its roll
-// appends into context.what.situation instead of the Journal — see
-// shell.js's data-suggest-oracle-roll handler.
-function suggestedOracleEntryChips(entry) {
-  const targetAttr = entry.target ? ` data-suggest-oracle-target="${esc(entry.target)}"` : '';
-  return `<div class="copilot-quick">${entry.paths.map((path) => `<button class="chip sm" data-suggest-oracle-roll="${esc(path.join('>'))}"${targetAttr} title="Roll ${esc(path.join(' > '))}${entry.target === 'situation' ? ' into Situation' : ''}">🔮 ${esc(path.join(' > '))}</button>`).join('')}</div>`;
+// A WHAT-sourced entry carries target:'situation' — rolling ONE of its
+// chips (data-advisor-oracle-roll) now shows the result as plain text with
+// a ✓ (data-advisor-result-accept) instead of committing straight to
+// context.what.situation the way it used to (direct follow-up request,
+// replacing the old one-click "roll = commit" with "roll, review, check
+// off, then Apply" via the shared editor below). WHERE's Regional faction
+// activity 💡 entries have no target and keep their original direct-roll-
+// to-Journal behavior (data-suggest-oracle-roll, unchanged) — there was
+// never one obvious Composer field for that one to stage into.
+function suggestedOracleEntryChips(entry, ui) {
+  if (entry.target !== 'situation') {
+    return `<div class="copilot-quick">${entry.paths.map((path) => `<button class="chip sm" data-suggest-oracle-roll="${esc(path.join('>'))}" title="Roll ${esc(path.join(' > '))}">🔮 ${esc(path.join(' > '))}</button>`).join('')}</div>`;
+  }
+  const results = (ui && ui.advisorOracleResults) || {};
+  return `<div class="copilot-quick">${entry.paths.map((path) => {
+    const key = path.join('>');
+    const result = results[key];
+    if (result) {
+      return `<span class="advisor-oracle-result" title="${esc(path.join(' > '))}">
+        <span class="advisor-oracle-result-text">${esc(result)}</span>
+        <button type="button" class="icon-btn" data-advisor-result-accept="${esc(key)}" data-advisor-draft-target="situation" title="Append to the Situation draft below">✓</button>
+      </span>`;
+    }
+    return `<button class="chip sm" data-advisor-oracle-roll="${esc(key)}" data-advisor-result-key="${esc(key)}" title="Roll ${esc(path.join(' > '))}">🔮 ${esc(path.join(' > '))}</button>`;
+  }).join('')}</div>`;
 }
 function suggestedOraclesBlock(ui) {
   const entries = (ui && ui.suggestedOracleEntries) || [];
+  const editor = advisorDraftEditor('situation', ui, {
+    placeholder: 'Check an oracle result below to stage it here, or type your own — then Apply to send it to Situation.',
+    applyLabel: 'Situation',
+  });
   if (!entries.length) {
     return `
     <div class="copilot-card">
       <h3>Suggested oracles</h3>
       <p class="dim small">Nothing suggested yet — click "Suggest oracles" on WHAT, or 💡 next to a Location's Regional faction activity on WHERE.</p>
+      ${editor}
     </div>`;
   }
   const open = entries.slice(0, 3);
@@ -169,12 +205,53 @@ function suggestedOraclesBlock(ui) {
       <h3>Suggested oracles</h3>
       ${open.map((e) => `<div class="advisor-history-entry">
         <div class="advisor-history-entry-head dim small">${esc(e.label)}</div>
-        ${suggestedOracleEntryChips(e)}
+        ${suggestedOracleEntryChips(e, ui)}
       </div>`).join('')}
       ${older.map((e) => `<details class="advisor-history-entry advisor-history-entry-collapsed">
         <summary class="dim small">${esc(e.label)}</summary>
-        ${suggestedOracleEntryChips(e)}
+        ${suggestedOracleEntryChips(e, ui)}
       </details>`).join('')}
+      ${editor}
+    </div>`;
+}
+
+// "If nothing changes…" (direct follow-up request — named alongside
+// "Suggested oracles" as an example of a section that should "always
+// [have] relevant oracle selections... displayed"): previously a static
+// paragraph with no oracle mechanism at all. "🎲 Suggest oracles" draws a
+// fresh table-path list via drawConsequenceOracles (session.js — the same
+// tag-linked draw mechanism as WHAT's own "Suggest oracles," keyed off
+// Latest Scene's consequence field's own oracle tags) into
+// ui.advisorConsequenceDraw (shell.js, on-demand, not auto-triggered);
+// each chip shares the exact same roll/review/check-off/Apply flow as
+// Suggested oracles above, staging into advisorDrafts.consequence and
+// applying to Latest Scene's own consequence field.
+function consequenceOraclesBlock(doc, ui, observedConsequence) {
+  const draw = ui && ui.advisorConsequenceDraw;
+  const results = (ui && ui.advisorOracleResults) || {};
+  const chips = (draw || []).map((path) => {
+    const key = path.join('>');
+    const result = results[key];
+    if (result) {
+      return `<span class="advisor-oracle-result" title="${esc(path.join(' > '))}">
+        <span class="advisor-oracle-result-text">${esc(result)}</span>
+        <button type="button" class="icon-btn" data-advisor-result-accept="${esc(key)}" data-advisor-draft-target="consequence" title="Append to the draft below">✓</button>
+      </span>`;
+    }
+    return `<button class="chip sm" data-advisor-oracle-roll="${esc(key)}" data-advisor-result-key="${esc(key)}" title="Roll ${esc(path.join(' > '))}">🔮 ${esc(path.join(' > '))}</button>`;
+  }).join('');
+  const editor = advisorDraftEditor('consequence', ui, {
+    placeholder: "Check an oracle result below to stage it here, or type your own — then Apply to send it to Latest Scene's Likely consequence.",
+    applyLabel: 'Likely consequence',
+  });
+  return `
+    <div class="copilot-card">
+      <h3>If nothing changes…</h3>
+      <p>${esc(observedConsequence)}</p>
+      ${draw
+        ? (chips ? `<div class="copilot-quick">${chips}</div>` : '<p class="dim small">No linked oracle tables found — tag one #consequence-related, or set a Latest Scene field first.</p>')
+        : `<button class="chip sm" data-advisor-consequence-draw title="Draw oracle tables relevant to Likely consequence">🎲 Suggest oracles</button>`}
+      ${editor}
     </div>`;
 }
 
@@ -252,7 +329,7 @@ export function renderCopilot(doc, ui) {
     ${locationProximityBlock(doc, ui)}
     ${suggestedOraclesBlock(ui)}
     ${suggestLensBlock(ui)}
-    <div class="copilot-card"><h3>If nothing changes…</h3><p>${esc(a.consequence)}</p></div>
+    ${consequenceOraclesBlock(doc, ui, a.consequence)}
     <div class="copilot-card"><h3>Opportunity</h3><p>${esc(a.opportunity)}</p></div>
     ${inspirationBlock(ui)}
     <div class="copilot-card">

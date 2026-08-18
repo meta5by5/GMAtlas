@@ -328,9 +328,27 @@ export function resolvedDocumentMentionNames(campaign, text) {
   return out;
 }
 
+/** Library documents that are actually @mentioned somewhere — scanning the
+ *  two surfaces linkDocumentMentions itself is wired to (session.js's
+ *  addNote/editNote for the Journal, editContextText for the WHO/WHERE/
+ *  WHAT/WHY/HOW dashboard fields). Previously this returned every library
+ *  entry unconditionally regardless of whether it was ever mentioned
+ *  anywhere — a real reported bug (a freshly-uploaded, never-mentioned doc
+ *  showed up in the "Mentioned in notes" summary immediately). */
 export function listDocumentMentions(campaign) {
+  const mentioned = new Set();
+  for (const entry of (campaign.journal || [])) {
+    for (const name of parseDocumentMentions(entry.text || '')) mentioned.add(name.trim().toLowerCase());
+  }
+  const context = campaign.context || {};
+  for (const fields of Object.values(context)) {
+    for (const value of Object.values(fields || {})) {
+      if (typeof value !== 'string') continue;
+      for (const name of parseDocumentMentions(value)) mentioned.add(name.trim().toLowerCase());
+    }
+  }
   return (campaign.documents && campaign.documents.library || [])
-    .filter((entry) => entry && entry.title)
+    .filter((entry) => entry && entry.title && mentioned.has(entry.title.trim().toLowerCase()))
     .map((entry) => ({ documentId: entry.id, name: entry.title }));
 }
 

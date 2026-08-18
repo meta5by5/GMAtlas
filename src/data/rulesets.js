@@ -124,3 +124,14 @@ export const STARFORGED_PROGRESS_TRACK_MAX = 40;
 export function findProgressDifficulty(id) {
   return STARFORGED_PROGRESS_DIFFICULTIES.find((d) => d.id === id) || null;
 }
+
+// Starforged's two party-wide resource tracks (rulebook p.42/p.44) — auto-
+// populated onto a fresh Party Tracker list under the Starforged ruleset
+// (domain/party.js's ensurePartyStarforgedTrackers). Momentum is bidirect-
+// ional (a burn can drop it negative) and reset to +2, unlike every other
+// tracker in this app which floors at 0 — it's the one 'gauge'-kind tracker
+// (a single current-value POSITION, not a fill-from-zero count).
+export const STARFORGED_MOMENTUM_MIN = -6;
+export const STARFORGED_MOMENTUM_MAX = 10;
+export const STARFORGED_MOMENTUM_RESET = 2;
+export const STARFORGED_SUPPLY_MAX = 5;

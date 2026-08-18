@@ -6,7 +6,7 @@
 import { store } from '../core/store.js';
 import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
-import { continueStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField } from '../domain/session.js';
+import { continueStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField } from '../domain/session.js';
 import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, addSceneAsset, removeSceneAsset, addSceneLocation, removeSceneLocation, setSceneSystem, addSceneDismissedFaction, removeSceneDismissedFaction, moveSceneActor } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag } from '../domain/oracles.js';
@@ -48,7 +48,7 @@ import {
   listReferenceDocuments, renameRefDocument, addRefDocumentTag, removeRefDocumentTag, hideRefDocument, listDocuments,
   sanitizeExternalLinkUrl, gviewEmbedUrl,
 } from '../domain/documents.js';
-import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue, setPartySharedGear, addPartySharedAsset, removePartySharedAsset } from '../domain/party.js';
+import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue, setGaugeTrackerValue, ensurePartyStarforgedTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity } from '../domain/party.js';
 import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow } from '../domain/colony.js';
 import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract, updateContract } from '../domain/trade.js';
 import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors, resolveFactionTurn, formatFactionTurnResult, rollFactionAsset } from '../domain/factions.js';
@@ -358,6 +358,30 @@ function pushSuggestedOracleEntry(label, paths, target = null) {
   if (!paths || !paths.length) return;
   suggestedOracleEntries = [{ id: 'sug_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), label, paths, target }, ...suggestedOracleEntries].slice(0, 6);
 }
+// Advisor "stage, then apply" mechanic (direct follow-up request: "any
+// oracle or suggestion made in the Advisor should have a field it modifies
+// in the Composer... each oracle should display its results in a text
+// label with a checkmark to accept it into the suggestion field by
+// appending it... The current text suggestion should be editable"). Two
+// cards use this — "Suggested oracles" (target 'situation' →
+// context.what.situation) and "If nothing changes…" (target 'consequence'
+// → Latest Scene's own consequence field) — both share this one small
+// mechanism rather than each getting a bespoke one:
+//   1. Rolling a chip (data-advisor-oracle-roll) stores its result text in
+//      advisorOracleResults, keyed by a caller-chosen resultKey — shown as
+//      a plain text label, NOT committed anywhere yet.
+//   2. Checking it off (data-advisor-result-accept) appends that text into
+//      advisorDrafts[target] and clears the shown result.
+//   3. advisorDrafts[target] is a normal editable textarea (direct typing
+//      updates it too, same live-sync pattern as inspirationDrafts below) —
+//      "the default value can be changed."
+//   4. data-advisor-draft-apply writes the CURRENT draft text into the real
+//      Composer field (appending to any existing content, same non-
+//      destructive convention the old direct-roll-to-situation behavior
+//      already used) and clears the draft, so "applied" is visually obvious.
+let advisorOracleResults = {}; // ephemeral — resultKey -> last-rolled text, cleared once accepted
+let advisorDrafts = { situation: '', consequence: '' }; // ephemeral — editable staging text per Composer-field target
+let advisorConsequenceDraw = null; // ephemeral — "If nothing changes…"'s own on-demand table-path draw (drawConsequenceOracles), null until the GM asks for one
 let dismissedStoryOptionIds = new Set(); // ephemeral — Story Option ids the GM has accepted (rolled/journaled) or explicitly dismissed (docs/adr/0039 Phase 2, mirrors ADR 0036's dismissible-suggestion pattern) — filtered out of both storyOptionsBlock (WHY) and the Co-Pilot's condensed card so a used/dismissed option makes room for the next-ranked one instead of lingering
 let selectedStoryOptionIds = new Set(); // ephemeral — Story Option ids checked "in play" for the Story Dashboard's Narrative Composer (docs/adr/0040 Phase 12b) — a DIFFERENT concept from dismissedStoryOptionIds above ("used/not interested" vs. "include in the draft"), never persisted
 let catalogSearch = ''; // ephemeral — the catalog picker's own name/tag search
@@ -492,12 +516,34 @@ async function loadRefDocBlobUrl(url) {
     return null;
   }
 }
-// The "blank, then the real src on the next tick" reload trick (see the
-// call site's own comment for why) — factored out so both the direct-src
-// path and the fetched-blob path share it identically.
+// A shared, reused iframe reliably leaves Chromium's built-in PDF viewer
+// stuck in a bad state after enough src changes — confirmed, two real
+// reported bugs from the same root cause: a freshly uploaded large data:
+// URI PDF would white-screen, and once that happened, EVERY subsequent
+// document — including ones that had loaded fine earlier the same session
+// — failed with the viewer's own "Failed to load PDF document" error,
+// because the SAME wedged iframe kept getting reused underneath every
+// later navigation. The previous fix here (blank the src, then defer the
+// real one to the next tick via a fixed setTimeout(0), on the theory that
+// the built-in viewer just needed a moment to unload first) wasn't
+// reliably enough time on a real device, and didn't help at all once the
+// viewer was ALREADY wedged from an earlier failed load — no amount of
+// waiting fixes a broken viewer instance, only a fresh one does.
+// Swapping in a genuinely NEW iframe element for every real navigation
+// sidesteps the whole class of problem: a brand-new element has no
+// leftover internal viewer state to get stuck in, so there's no unload-
+// then-reload sequencing to get right at all — the fresh src can be set
+// immediately. cloneNode(false) carries over attributes (including
+// data-doc-viewer-frame itself) but no children/listeners — nothing to
+// lose, since every interactive control in this app is wired through ONE
+// delegated listener on the root (rule 4), never per-element. The next
+// render() call re-queries [data-doc-viewer-frame] fresh (already does
+// this unconditionally on every call), so the new element is picked up
+// automatically — no caller needs to hold onto a reference across renders.
 function loadDocViewerFrame(frame, nextSrc) {
-  frame.src = 'about:blank';
-  setTimeout(() => { if (frame.isConnected) frame.src = nextSrc; }, 0);
+  const freshFrame = frame.cloneNode(false);
+  freshFrame.src = nextSrc;
+  frame.replaceWith(freshFrame);
   lastDocViewerSrc = nextSrc;
 }
 // The dice roll window (see renderDiceRollOverlay) — set by performFieldRoll
@@ -1249,16 +1295,14 @@ function onClick(ev) {
   }
   const trackSet = hit('[data-statblock-track-set]');
   if (trackSet) {
-    const active = store.get().entities.activeId;
-    const [gi, fi] = trackSet.dataset.statblockTrackSet.split('::').map(Number);
+    const { entityId, gi, fi } = parseStatblockKey(trackSet.dataset.statblockTrackSet);
     const n = Number(trackSet.dataset.trackN);
-    return store.update((d) => setEntityStatblockTrackValue(d, active, gi, fi, n));
+    return store.update((d) => setEntityStatblockTrackValue(d, entityId, gi, fi, n));
   }
   const rollLabel = hit('[data-statblock-roll-label]');
   if (rollLabel) {
-    const [gi, fi] = rollLabel.dataset.statblockRollLabel.split('::').map(Number);
-    const active = store.get().entities.activeId;
-    const e = getEntity(store.get(), active);
+    const { entityId, gi, fi } = parseStatblockKey(rollLabel.dataset.statblockRollLabel);
+    const e = getEntity(store.get(), entityId);
     const group = e && e.statblocks && e.statblocks[gi];
     const f = group && group.fields[fi];
     if (f) performFieldRoll(f, `${e.name || 'Unnamed'} — ${f.key || 'Stat'}`);
@@ -1492,6 +1536,8 @@ function onClick(ev) {
   if (trkStep) return store.update((d) => stepPartyTracker(d, trkStep.dataset.partyTrackerStep, Number(trkStep.dataset.delta)));
   const trkBox = hit('[data-party-tracker-box]');
   if (trkBox) return store.update((d) => setPartyTrackerValue(d, trkBox.dataset.partyTrackerBox, Number(trkBox.dataset.trackN)));
+  const trkGaugeBox = hit('[data-party-tracker-gauge-box]');
+  if (trkGaugeBox) return store.update((d) => setGaugeTrackerValue(d, trkGaugeBox.dataset.partyTrackerGaugeBox, Number(trkGaugeBox.dataset.trackN)));
   const partyMemberToggle = hit('[data-party-member-toggle]');
   if (partyMemberToggle) {
     const id = partyMemberToggle.dataset.partyMemberToggle;
@@ -1505,15 +1551,10 @@ function onClick(ev) {
     store.update((d) => { const r = createEntity(d, { type: 'npc' }); return addEntityTag(r.campaign, r.id, 'character'); });
     return toast('NPC added to Party');
   }
-  // "+ Vehicle" — a blank Asset entity tagged #vehicle (Colony's own
-  // Vehicle/Asset dropdown already lists every Asset regardless of tag,
-  // so this shows up there immediately too).
-  if (hit('[data-party-add-vehicle]')) {
-    store.update((d) => { const r = createEntity(d, { type: 'asset' }); return addEntityTag(r.campaign, r.id, 'vehicle'); });
-    return toast('Vehicle added — name it in Cast');
-  }
   const sharedAssetDel = hit('[data-party-shared-asset-remove]');
   if (sharedAssetDel) return store.update((d) => removePartySharedAsset(d, Number(sharedAssetDel.dataset.partySharedAssetRemove)));
+  const sharedAssetEntityDel = hit('[data-party-shared-asset-entity-remove]');
+  if (sharedAssetEntityDel) return store.update((d) => removePartySharedAssetEntity(d, sharedAssetEntityDel.dataset.partySharedAssetEntityRemove));
 
   // --- colony ---
   if (hit('[data-colony-crew-add]')) { store.update((d) => addCrewRow(d, {})); return toast('Crew row added'); }
@@ -2268,27 +2309,80 @@ function onClick(ev) {
   }
   // Rolls one suggested table directly — identical shape to
   // data-story-option-roll above, just without an option id to dismiss.
-  // A "situation"-targeted entry (WHAT's own suggestions — direct follow-
-  // up request) appends the roll straight into context.what.situation
-  // instead of the Journal (rollOracle's normal toJournal:true default) —
-  // "the scene is still under development," so it belongs in the WIP
-  // field it was suggested for, not a permanent play-history log entry.
+  // A "situation"-targeted entry now stages through advisorOracleResults/
+  // advisorDrafts (see data-advisor-oracle-roll below) instead of
+  // committing straight to context.what.situation — direct follow-up
+  // request turning the old one-click "roll = commit" into "roll, review,
+  // check off, then apply." An untargeted entry (WHERE's Regional faction
+  // activity 💡) keeps the original direct-to-Journal behavior — it never
+  // had an obvious single Composer field to stage into.
   const suggestOracleRoll = hit('[data-suggest-oracle-roll]');
   if (suggestOracleRoll) {
     const path = suggestOracleRoll.dataset.suggestOracleRoll.split('>');
     const target = suggestOracleRoll.dataset.suggestOracleTarget;
     let text = '';
     if (target === 'situation') {
-      store.update((d) => {
-        const r = rollOracle(d, path, { toJournal: false });
-        text = r.text;
-        const current = (r.campaign.context.what && r.campaign.context.what.situation) || '';
-        return editContextText(r.campaign, 'what', 'situation', current ? `${current}\n${text}` : text);
-      });
-      return toast(text ? `Added to Situation: ${text}` : 'Rolled');
+      store.update((d) => { const r = rollOracle(d, path, { toJournal: false }); text = r.text; return r.campaign; });
+      advisorOracleResults[path.join('>')] = text;
+      return render();
     }
     store.update((d) => { const r = rollOracle(d, path); text = r.text; return r.campaign; });
     return toast(text || 'Rolled');
+  }
+  // Advisor stage-then-apply mechanic, shared by "Suggested oracles" and
+  // "If nothing changes…" (see the advisorOracleResults/advisorDrafts
+  // declaration comment above for the full 4-step flow).
+  const advisorRoll = hit('[data-advisor-oracle-roll]');
+  if (advisorRoll) {
+    const path = advisorRoll.dataset.advisorOracleRoll.split('>');
+    const resultKey = advisorRoll.dataset.advisorResultKey;
+    let text = '';
+    store.update((d) => { const r = rollOracle(d, path, { toJournal: false }); text = r.text; return r.campaign; });
+    advisorOracleResults[resultKey] = text;
+    return render();
+  }
+  const advisorAccept = hit('[data-advisor-result-accept]');
+  if (advisorAccept) {
+    const resultKey = advisorAccept.dataset.advisorResultAccept;
+    const target = advisorAccept.dataset.advisorDraftTarget;
+    const text = advisorOracleResults[resultKey];
+    if (text) {
+      const current = advisorDrafts[target] || '';
+      advisorDrafts[target] = current ? `${current}\n${text}` : text;
+      delete advisorOracleResults[resultKey];
+    }
+    return render();
+  }
+  const advisorApply = hit('[data-advisor-draft-apply]');
+  if (advisorApply) {
+    const target = advisorApply.dataset.advisorDraftApply;
+    const text = (advisorDrafts[target] || '').trim();
+    if (!text) return;
+    if (target === 'consequence' && !currentSceneId()) return toast('No active scene to apply to yet');
+    // Cleared BEFORE store.update (not after) — store.update's own notify()
+    // re-renders synchronously, so clearing afterward would apply to a
+    // render that already happened, leaving the stale text visibly stuck
+    // in the textarea until some LATER unrelated render caught up.
+    advisorDrafts[target] = '';
+    if (target === 'situation') {
+      store.update((d) => {
+        const current = (d.context.what && d.context.what.situation) || '';
+        return editContextText(d, 'what', 'situation', current ? `${current}\n${text}` : text);
+      });
+    } else if (target === 'consequence') {
+      const sceneId = currentSceneId();
+      store.update((d) => {
+        const scene = (d.scenes || []).find((s) => s.id === sceneId);
+        const current = (scene && scene.consequence) || '';
+        return updateSceneField(d, sceneId, 'consequence', current ? `${current}\n${text}` : text);
+      });
+    }
+    return toast(`Applied to ${target === 'situation' ? 'Situation' : 'Likely consequence'}`);
+  }
+  const advisorConsequenceDrawBtn = hit('[data-advisor-consequence-draw]');
+  if (advisorConsequenceDrawBtn) {
+    advisorConsequenceDraw = drawConsequenceOracles(store.get());
+    return render();
   }
   // Story Dashboard's Narrative Composer (docs/adr/0040 Phase 12b) —
   // recomputes the exact same draft narrativeComposerBlock just rendered
@@ -2436,13 +2530,15 @@ function onClick(ev) {
     const raw = entityPickerOpenBtn.dataset.entityPickerOpen;
     entityPicker = raw === 'asset'
       ? { entityType: 'asset', mode: 'asset', scope: null, query: '' }
-      : raw === 'location-current'
-        ? { entityType: 'location-current', mode: 'current', scope: null, query: '' }
-        : raw === 'system'
-          ? { entityType: 'system', mode: 'system', scope: null, query: '' }
-          : raw.startsWith('where-faction-link:')
-            ? { entityType: 'where-faction-link', mode: 'link', scope: raw.slice('where-faction-link:'.length), query: '' }
-            : { entityType: 'npc', mode: raw, scope: null, query: '' };
+      : raw === 'party-vehicle'
+        ? { entityType: 'party-vehicle', mode: 'party-vehicle', scope: null, query: '' }
+        : raw === 'location-current'
+          ? { entityType: 'location-current', mode: 'current', scope: null, query: '' }
+          : raw === 'system'
+            ? { entityType: 'system', mode: 'system', scope: null, query: '' }
+            : raw.startsWith('where-faction-link:')
+              ? { entityType: 'where-faction-link', mode: 'link', scope: raw.slice('where-faction-link:'.length), query: '' }
+              : { entityType: 'npc', mode: raw, scope: null, query: '' };
     renderEntityPickerOverlay();
     const inp = root.querySelector('[data-entity-picker-query]');
     if (inp) { inp.value = ''; inp.focus(); }
@@ -2470,6 +2566,13 @@ function onClick(ev) {
         if (sceneId0) next = removeSceneDismissedFaction(next, sceneId0, id);
         return next;
       });
+    }
+    if (picker.entityType === 'party-vehicle') {
+      // Party's Shared Assets — unlike WHO's own 'asset' mode above, this
+      // isn't scene-scoped (a Party Tracker's Shared Assets persist across
+      // scenes), so it must NOT go through the currentSceneId() early
+      // return below.
+      return store.update((d) => addPartySharedAssetEntity(d, id));
     }
     const sceneId = currentSceneId();
     if (!sceneId) return renderEntityPickerOverlay();
@@ -2539,10 +2642,36 @@ function onClick(ev) {
     tocScanning = true;
     renderDrawerBody();
     scanAndGenerateToc(store)
-      .then(({ generated, skipped }) => { tocScanning = false; renderDrawerBody(); toast(`Table of Contents: ${generated} document(s) generated${skipped ? `, ${skipped} skipped (no bookmarks)` : ''}`); })
+      .then(({ generated, skipped, unresolved }) => {
+        tocScanning = false;
+        if (generated > 0) {
+          const parent = ((store.get().guide && store.get().guide.docs) || []).find((g) => !g.parentId && g.title === 'Table of Contents');
+          if (parent) expandedGuideNodes.add(parent.id);
+        }
+        renderDrawerBody();
+        const unresolvedNote = unresolved ? `, ${unresolved} had unreadable bookmarks` : '';
+        toast(`Table of Contents: ${generated} document(s) generated${skipped ? `, ${skipped} skipped (no bookmarks)` : ''}${unresolvedNote}`);
+      })
       .catch((err) => { tocScanning = false; renderDrawerBody(); toast(`Table of Contents scan failed — ${err.message}`); });
     return;
   }
+}
+
+// The four data-statblock-* attributes (roll/roll-label/track-set/attr-val)
+// were originally always "gi::fi" against whichever entity the Entity
+// Editor currently has active — the only place they were ever clickable
+// from. The Party Roster (direct follow-up request — "clicking a stat
+// should roll that stat" on a member card, not just inside the full Entity
+// Editor) needs the SAME roll/set logic to work for a card that ISN'T the
+// active entity. Rather than a parallel set of party-specific handlers,
+// every caller MAY now prefix the key with an explicit entity id
+// ("entityId::gi::fi", 3 parts) — omitting it (the original "gi::fi", 2
+// parts) still falls back to the active Entity Editor entity exactly as
+// before, so every existing call site keeps working unchanged.
+function parseStatblockKey(raw) {
+  const parts = String(raw || '').split('::');
+  if (parts.length >= 3) return { entityId: parts[0], gi: Number(parts[1]), fi: Number(parts[2]) };
+  return { entityId: store.get().entities.activeId, gi: Number(parts[0]), fi: Number(parts[1]) };
 }
 
 // Executes a statblock field's configured dice model (see ROLL_METHODS in
@@ -2699,9 +2828,8 @@ function onDblClick(ev) {
   const rollTarget = ev.target.closest('[data-statblock-roll]');
   if (!rollTarget) return;
   ev.preventDefault();
-  const [gi, fi] = rollTarget.dataset.statblockRoll.split('::').map(Number);
-  const active = store.get().entities.activeId;
-  const e = getEntity(store.get(), active);
+  const { entityId, gi, fi } = parseStatblockKey(rollTarget.dataset.statblockRoll);
+  const e = getEntity(store.get(), entityId);
   const group = e && e.statblocks && e.statblocks[gi];
   const f = group && group.fields[fi];
   if (!f || !f.track) return;
@@ -3054,6 +3182,14 @@ function onChange(ev) {
     inspirationDrafts[inspirationField.dataset.inspirationField] = t.value;
     return;
   }
+  // Advisor suggestion drafts (advisorDrafts) — same live-sync-without-
+  // re-render pattern as inspirationDrafts above; "the current text
+  // suggestion should be editable... the default value can be changed."
+  const advisorDraftInput = t.closest('[data-advisor-draft-input]');
+  if (advisorDraftInput) {
+    advisorDrafts[advisorDraftInput.dataset.advisorDraftInput] = t.value;
+    return;
+  }
   const locationField = t.closest('[data-location-field]');
   if (locationField) {
     const [locId, field] = locationField.dataset.locationField.split('::');
@@ -3135,15 +3271,13 @@ function onChange(ev) {
 
   const sval = t.closest('[data-statblock-val]');
   if (sval) {
-    const [gi, fi] = sval.dataset.statblockVal.split('::').map(Number);
-    const active = store.get().entities.activeId;
-    return store.update((d) => setEntityStatblockField(d, active, gi, fi, { value: t.value }));
+    const { entityId, gi, fi } = parseStatblockKey(sval.dataset.statblockVal);
+    return store.update((d) => setEntityStatblockField(d, entityId, gi, fi, { value: t.value }));
   }
   const sattr = t.closest('[data-statblock-attr-val]');
   if (sattr) {
-    const [gi, fi] = sattr.dataset.statblockAttrVal.split('::').map(Number);
-    const active = store.get().entities.activeId;
-    return store.update((d) => setEntityStatblockAttributeValue(d, active, gi, fi, t.value));
+    const { entityId, gi, fi } = parseStatblockKey(sattr.dataset.statblockAttrVal);
+    return store.update((d) => setEntityStatblockAttributeValue(d, entityId, gi, fi, t.value));
   }
 
   // --- party trackers --- (kind/difficulty/max are creation-time-only —
@@ -3219,6 +3353,9 @@ function onChange(ev) {
     return toast(`Genre Pack set to ${t.value}`);
   }
   if (t.closest('[data-settings-stat-ruleset]')) return store.update((d) => { d.settings.statRuleset = t.value; return d; });
+  if (t.closest('[data-settings-party-headline-fields]')) {
+    return store.update((d) => { d.settings.partyHeadlineFields = t.value.split(',').map((s) => s.trim()).filter(Boolean); return d; });
+  }
   if (t.closest('[data-settings-toolbar-default]')) return store.update((d) => { d.settings.toolbarCollapsedByDefault = t.checked; return d; });
   if (t.closest('[data-trade-economy-model-select]')) {
     store.update((d) => { d.settings.tradeEconomyModel = t.value; return d; });
@@ -3345,7 +3482,26 @@ function onChange(ev) {
           // so a GM opts in per document rather than it firing unasked.
           if (file.type === 'application/pdf' && window.confirm(`Generate a Table of Contents entry for "${uploadTitle}"? (scans its PDF bookmarks)`)) {
             scanAndGenerateToc(store, { onlyDoc: { title: uploadTitle, source: reader.result } })
-              .then(({ generated }) => toast(generated ? `Table of Contents added for "${uploadTitle}"` : `"${uploadTitle}" has no bookmarks — nothing to generate`))
+              .then(({ generated, unresolved }) => {
+                if (generated > 0) {
+                  // The new/updated entry lands nested under a "Table of
+                  // Contents" Guide doc, which the tree renders collapsed by
+                  // default (expandedGuideNodes starts empty) — without this,
+                  // a successful scan looked identical to "nothing happened"
+                  // unless the GM already knew to click the parent's caret.
+                  const parent = ((store.get().guide && store.get().guide.docs) || []).find((g) => !g.parentId && g.title === 'Table of Contents');
+                  if (parent) expandedGuideNodes.add(parent.id);
+                  toast(`Table of Contents added for "${uploadTitle}" — see Guide → Table of Contents`);
+                } else if (unresolved > 0) {
+                  // The PDF has real bookmarks (seen during the scan) but
+                  // none resolved to a page — a different, more diagnostic
+                  // message than "no bookmarks," since the fix belongs in
+                  // this scanner rather than the PDF itself.
+                  toast(`"${uploadTitle}" has bookmarks, but none could be resolved to a page — its bookmark format isn't supported yet`);
+                } else {
+                  toast(`"${uploadTitle}" has no bookmarks — nothing to generate`);
+                }
+              })
               .catch((err) => toast(`Table of Contents scan failed — ${err.message}`));
           }
         } catch (e) {
@@ -3473,6 +3629,12 @@ function openDrawerTab(id) {
     if (id === 'documents') { docFilter = ''; docTagFilters = new Set(); docTagEditorOpen = new Set(); }
     if (id === 'graph') graphView = { scale: 1, x: 0, y: 0 };
   }
+  // Auto-populate Momentum/Supply on every Party open, not just the first
+  // (direct request) — deliberately OUTSIDE the "already open" guard above,
+  // since a GM could switch to Starforged mid-session with Party already
+  // pinned open, or reopen it after removing a tracker; ensurePartyStarforgedTrackers
+  // is idempotent, so a redundant call when both already exist is a no-op.
+  if (id === 'party') store.update((d) => ensurePartyStarforgedTrackers(d));
   activeDrawer = id;
 }
 
@@ -4836,20 +4998,12 @@ function render() {
         // #page=N fragment — a browser's built-in PDF viewer doesn't
         // reliably jump to the new page when an iframe's src is reassigned
         // to a URL that differs ONLY by fragment (it isn't always treated
-        // as a real navigation the way a differing path/query is). Forcing
-        // a real reload (blank, then the real src) makes clicking the
-        // second mention actually jump, not just silently update the src
-        // attribute with no visible effect.
-        //
-        // The two assignments are deliberately NOT back-to-back in the same
-        // tick (confirmed, a real reported bug): once the frame already has
-        // a real PDF loaded (i.e. this isn't the first document opened this
-        // session), blanking it and immediately loading a new — possibly
-        // large, data: URI — PDF in the same synchronous pass could leave
-        // Chromium's built-in PDF viewer stuck rendering nothing at all
-        // (a blank/white frame that no longer responds to further src
-        // changes). Deferring the real src to the next tick gives the
-        // unload from `about:blank` a chance to actually complete first.
+        // as a real navigation the way a differing path/query is). Loading
+        // a genuinely fresh iframe (loadDocViewerFrame's own comment —
+        // this used to be a blank-then-defer reload trick on the SAME
+        // element, replaced after it proved unreliable on a real device)
+        // makes clicking the second mention actually jump, not just
+        // silently update the src attribute with no visible effect.
         loadDocViewerFrame(frame, resolvedActive.src);
       }
     } else {
@@ -4909,6 +5063,13 @@ function renderEntityPickerOverlay() {
     const excludeIds = scene ? new Set(scene.assetIds || []) : new Set();
     candidates = listEntities(doc, ['asset']).filter((a) => !excludeIds.has(a.id));
     emptyMessage = 'No Asset entities yet — add one in Cast first.';
+  } else if (entityPicker.entityType === 'party-vehicle') {
+    // Party's Shared Assets "+Vehicle" — Asset entities tagged #vehicle
+    // (the same tag Vehicle Statblock's own add-choice, drawers/index.js,
+    // already keys off), excluding ones already linked.
+    const excludeIds = new Set((doc.party && doc.party.sharedAssetIds) || []);
+    candidates = listEntities(doc, ['asset']).filter((a) => (a.tags || []).includes('vehicle') && !excludeIds.has(a.id));
+    emptyMessage = 'No #vehicle Asset entities yet — add one in Cast (type Asset, tag #vehicle) first.';
   } else if (entityPicker.entityType === 'location-current') {
     const scenes = doc.scenes || [];
     const scene = scenes[scenes.length - 1];
@@ -5111,6 +5272,7 @@ function buildDrawerUi() {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
     enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts,
+    advisorOracleResults, advisorDrafts, advisorConsequenceDraw,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
     tradeLocationId, tradeContractAddOpen,

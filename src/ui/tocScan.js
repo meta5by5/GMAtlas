@@ -32,28 +32,46 @@ async function resolveDestPage(pdf, dest) {
     let d = dest;
     if (typeof d === 'string') d = await pdf.getDestination(d);
     if (!Array.isArray(d) || !d.length) return null;
-    return (await pdf.getPageIndex(d[0])) + 1; // +1: this app's @[Title#N] mentions are 1-based, matching mechanicsScan.js's own page-loop convention
+    const ref = d[0];
+    // Most real-world PDFs point at a page via an indirect Ref object,
+    // which getPageIndex() resolves — but some PDF generators write a
+    // destination array whose first element is already a plain 0-based
+    // page number instead of a Ref, which getPageIndex() rejects/throws
+    // on. Handling that directly (rather than letting it fall into the
+    // catch-and-drop below) is what stops a PDF using this variant from
+    // silently reporting zero resolvable bookmarks despite genuinely
+    // having them.
+    if (typeof ref === 'number') return ref + 1;
+    return (await pdf.getPageIndex(ref)) + 1; // +1: this app's @[Title#N] mentions are 1-based, matching mechanicsScan.js's own page-loop convention
   } catch {
     return null;
   }
 }
 
-async function walkOutline(pdf, items, depth, out) {
+// `seen` counts every outline item visited regardless of whether its page
+// resolved — scanOutline uses the seen-vs-resolved gap to tell "this PDF
+// genuinely has no bookmarks" apart from "this PDF has bookmarks but none
+// of them resolved to a page" (e.g. URL/JS-action bookmarks, or a
+// destination shape resolveDestPage doesn't recognize), which otherwise
+// looked identical to the GM as one "has no bookmarks" toast either way.
+async function walkOutline(pdf, items, depth, out, seen) {
   for (const item of items) {
+    seen.count++;
     const page = item.dest ? await resolveDestPage(pdf, item.dest) : null;
     if (page) out.push({ title: item.title, page, depth });
-    if (item.items && item.items.length) await walkOutline(pdf, item.items, depth + 1, out);
+    if (item.items && item.items.length) await walkOutline(pdf, item.items, depth + 1, out, seen);
   }
 }
 
 async function scanOutline(pdfjsLib, source) {
   let pdf;
-  try { pdf = await pdfjsLib.getDocument(source).promise; } catch { return []; }
+  try { pdf = await pdfjsLib.getDocument(source).promise; } catch { return { entries: [], seenCount: 0 }; }
   const outline = await pdf.getOutline();
-  if (!outline || !outline.length) return [];
+  if (!outline || !outline.length) return { entries: [], seenCount: 0 };
   const out = [];
-  await walkOutline(pdf, outline, 0, out);
-  return out;
+  const seen = { count: 0 };
+  await walkOutline(pdf, outline, 0, out, seen);
+  return { entries: out, seenCount: seen.count };
 }
 
 /** Every PDF this app can currently scan for a TOC — the Reference
@@ -71,19 +89,25 @@ function combinedScannableDocs(campaign) {
 /** Scans `onlyDoc` (the per-upload path — {title, source}) or the whole
  *  combined library (the manual Settings button) for real bookmarks and
  *  writes a Guide TOC entry per document that has any (domain/toc.js).
- *  Returns {generated, skipped} for the caller's toast/confirm summary. */
+ *  Returns {generated, skipped, unresolved} — `unresolved` is the count of
+ *  documents whose PDF outline had bookmarks that were SEEN but none of
+ *  them resolved to a page (as opposed to having no bookmarks at all), so
+ *  the caller can tell the GM apart "no TOC in this file" from "this file's
+ *  TOC uses a bookmark format this scanner couldn't read." */
 export async function scanAndGenerateToc(store, { onlyDoc } = {}) {
   const pdfjsLib = assertScannable();
   const docs = onlyDoc ? [onlyDoc] : combinedScannableDocs(store.get());
   const scanResults = [];
+  let unresolved = 0;
   for (const doc of docs) {
-    const entries = await scanOutline(pdfjsLib, doc.source);
+    const { entries, seenCount } = await scanOutline(pdfjsLib, doc.source);
+    if (!entries.length && seenCount > 0) unresolved++;
     scanResults.push({ docTitle: doc.title, entries });
   }
-  let result = { generated: 0, skipped: 0 };
+  let result = { generated: 0, skipped: 0, unresolved };
   store.update((d) => {
     const r = generateReferenceToc(d, scanResults);
-    result = { generated: r.generated, skipped: r.skipped };
+    result = { generated: r.generated, skipped: r.skipped, unresolved };
     return r.campaign;
   });
   return result;

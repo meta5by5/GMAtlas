@@ -9,7 +9,7 @@ import { SCENE_TABLES, makeRng, rollTable, rollGroup, flattenKeys, getTable, tab
 import { ORACLE_TABLE_SOURCES } from '../src/data/oracleGroups.js';
 import { applyShift, listShifts, contextSummary } from '../src/domain/context.js';
 import { generateScene, recomposeSceneText } from '../src/domain/scenes.js';
-import { continueStory, applyStoryShift, rollOracle, patchContext, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles } from '../src/domain/session.js';
+import { continueStory, applyStoryShift, rollOracle, patchContext, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles } from '../src/domain/session.js';
 import { SUGGESTION_LENSES, lensOracleCategories } from '../src/data/suggestionLenses.js';
 import { defaultCampaign } from '../src/core/schema.js';
 import { parseStatsString } from '../src/domain/statblocks.js';
@@ -283,6 +283,15 @@ test('drawFactionActivityOracles (WHERE "Regional faction activity" 💡, direct
   assert.ok(drawn.includes('Factions>Project') || drawn.includes('Corporate Powers>Hidden Agenda'), 'includes an #agenda table');
   assert.ok(!drawn.includes('Trade & Cargo>Trade Opportunity'), 'excludes an unrelated #trade-only table');
   const capped = drawFactionActivityOracles(camp, { rng: makeRng(1), count: 1 });
+  assert.equal(capped.length, 1, 'respects the count cap');
+});
+
+test('drawConsequenceOracles (Advisor "If nothing changes…", direct follow-up request) draws from the same tag Latest Scene\'s own consequence field links to (#discovery), independent of Intent', () => {
+  const camp = defaultCampaign();
+  const drawn = drawConsequenceOracles(camp, { rng: makeRng(1), count: 20 }).map((p) => p.join('>'));
+  assert.ok(drawn.includes('Mysteries & Coverups>Discovery'), 'includes the #discovery table scene.consequence itself links to');
+  assert.ok(!drawn.includes('Trade & Cargo>Trade Opportunity'), 'excludes an unrelated #trade-only table');
+  const capped = drawConsequenceOracles(camp, { rng: makeRng(1), count: 1 });
   assert.equal(capped.length, 1, 'respects the count cap');
 });
 
@@ -931,8 +940,19 @@ test('document mentions are parsed and linked to the library', () => {
   camp = addDocument(camp, { title: 'Station Manual', content: 'Docking procedures' });
   camp = linkDocumentMentions(camp, 'See @Station Manual and @[Shipyard Guide]');
   assert.deepEqual(parseDocumentMentions('See @Station Manual and @[Shipyard Guide]'), ['Station Manual', 'Shipyard Guide']);
-  assert.equal(listDocumentMentions(camp).length, 2);
-  assert.equal(listDocumentMentions(camp)[0].documentId, camp.documents.library[0].id);
+  assert.equal(camp.documents.library.length, 2, 'Shipyard Guide is auto-created as a new library entry');
+});
+
+test('listDocumentMentions only lists documents actually @mentioned in the Journal or a dashboard context field — a freshly-added, never-referenced document is excluded', () => {
+  let camp = defaultCampaign();
+  camp = addDocument(camp, { title: 'Station Manual', content: 'Docking procedures' });
+  camp = addDocument(camp, { title: 'Unmentioned Doc', content: '' });
+  assert.equal(listDocumentMentions(camp).length, 0, 'neither doc has been mentioned anywhere yet');
+  camp = addNote(camp, 'See @Station Manual for docking procedures.');
+  const mentions = listDocumentMentions(camp);
+  assert.equal(mentions.length, 1);
+  assert.equal(mentions[0].name, 'Station Manual');
+  assert.equal(mentions[0].documentId, camp.documents.library.find((d) => d.title === 'Station Manual').id);
 });
 
 test('resolvedDocumentMentionNames only includes names that already resolve to a real document, ignoring page anchors', () => {
@@ -1671,7 +1691,7 @@ test('formatTravellerRollCopyText matches the dice roll window\'s layout for a T
 });
 
 // --- party (Party tab: #character roster + free trackers) ------------------
-import { listPartyMembers, addPartyTracker, updatePartyTracker, stepPartyTracker, setPartyTrackerValue, removePartyTracker, listPartyTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset } from '../src/domain/party.js';
+import { listPartyMembers, addPartyTracker, updatePartyTracker, stepPartyTracker, setPartyTrackerValue, removePartyTracker, listPartyTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity, setGaugeTrackerValue, gaugeWindow, ensurePartyStarforgedTrackers, listPartyHeadlineTracks } from '../src/domain/party.js';
 
 test('listPartyMembers returns only npc entities tagged #character', () => {
   let camp = defaultCampaign();
@@ -1766,6 +1786,83 @@ test('a difficulty is only honored for a counter under the Starforged ruleset �
   assert.equal(listPartyTrackers(camp)[0].difficulty, undefined);
 });
 
+test('a gauge tracker (Momentum) is click-to-set directly to n, clamped to [min, max], and can hold a negative value unlike a meter', () => {
+  let camp = defaultCampaign();
+  camp = addPartyTracker(camp, { name: 'Momentum', kind: 'gauge', value: 2, min: -6, max: 10 });
+  const gauge = listPartyTrackers(camp)[0];
+  assert.equal(gauge.value, 2);
+  camp = setGaugeTrackerValue(camp, gauge.id, -3);
+  assert.equal(listPartyTrackers(camp)[0].value, -3);
+  camp = setGaugeTrackerValue(camp, gauge.id, 99); // clamps at max
+  assert.equal(listPartyTrackers(camp)[0].value, 10);
+  camp = setGaugeTrackerValue(camp, gauge.id, -99); // clamps at min
+  assert.equal(listPartyTrackers(camp)[0].value, -6);
+  // min/max are creation-time-only, same as a meter's max
+  camp = updatePartyTracker(camp, gauge.id, { min: 0, max: 3, kind: 'meter' });
+  const after = listPartyTrackers(camp)[0];
+  assert.equal(after.min, -6);
+  assert.equal(after.max, 10);
+  assert.equal(after.kind, 'gauge');
+});
+
+test('gaugeWindow returns a 10-box sliding window over a wider range, centered on the current value, clamped to the range edges, and (unlike a meter) 0 can move position within it', () => {
+  // Momentum's real range is -6..10 (17 values) — can't all fit in 10 boxes.
+  assert.deepEqual(gaugeWindow(2, -6, 10, 10), [-2, -1, 0, 1, 2, 3, 4, 5, 6, 7]); // reset value, 0 near the middle
+  assert.deepEqual(gaugeWindow(-6, -6, 10, 10), [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3]); // pinned at the low edge, 0 near the end
+  assert.deepEqual(gaugeWindow(10, -6, 10, 10), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]); // pinned at the high edge, 0 not in view at all
+  // A range narrower than the window size just returns the whole range.
+  assert.deepEqual(gaugeWindow(1, 0, 5, 10), [0, 1, 2, 3, 4, 5]);
+});
+
+test('ensurePartyStarforgedTrackers auto-adds Momentum (gauge) and Supply (meter) once, only under the Starforged ruleset, and never removes them if the ruleset later changes', () => {
+  let camp = defaultCampaign();
+  camp.settings.statRuleset = '5pfh';
+  camp = ensurePartyStarforgedTrackers(camp);
+  assert.equal(listPartyTrackers(camp).length, 0, 'not Starforged — no-op');
+
+  camp.settings.statRuleset = 'starforged';
+  camp = ensurePartyStarforgedTrackers(camp);
+  const names = listPartyTrackers(camp).map((t) => t.name).sort();
+  assert.deepEqual(names, ['Momentum', 'Supply']);
+  const momentum = listPartyTrackers(camp).find((t) => t.name === 'Momentum');
+  assert.equal(momentum.kind, 'gauge');
+  assert.equal(momentum.value, 2);
+  assert.equal(momentum.min, -6);
+  assert.equal(momentum.max, 10);
+  const supply = listPartyTrackers(camp).find((t) => t.name === 'Supply');
+  assert.equal(supply.kind, 'meter');
+  assert.equal(supply.value, 5);
+  assert.equal(supply.max, 5);
+
+  // Idempotent: re-running doesn't duplicate.
+  camp = ensurePartyStarforgedTrackers(camp);
+  assert.equal(listPartyTrackers(camp).length, 2);
+
+  // Switching ruleset away never removes what's already there.
+  camp.settings.statRuleset = '5pfh';
+  camp = ensurePartyStarforgedTrackers(camp);
+  assert.equal(listPartyTrackers(camp).length, 2);
+});
+
+test('listPartyHeadlineTracks returns the GM-configured track fields (settings.partyHeadlineFields), in configured order, across ALL of a member\'s statblock groups at once', () => {
+  let camp = defaultCampaign();
+  camp.settings.statRuleset = 'starforged';
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Hero' }));
+  camp = setEntityTags(camp, id, 'character'); // auto-attaches BOTH a Character Sheet AND a Bestiary group
+  camp.settings.partyHeadlineFields = ['Momentum', 'Health']; // deliberately reversed from field order
+  const e = getEntity(camp, id);
+  const found = listPartyHeadlineTracks(camp, e);
+  assert.deepEqual(found.map(({ f }) => f.key), ['Momentum', 'Health'], 'follows configured order, not field order');
+  assert.equal(found[0].f.value, 2); // Starforged Momentum default
+  assert.equal(found[1].f.value, 5); // Starforged Health default
+
+  camp.settings.partyHeadlineFields = ['Spirit', 'NotARealField'];
+  assert.deepEqual(listPartyHeadlineTracks(camp, getEntity(camp, id)).map(({ f }) => f.key), ['Spirit'], 'an unmatched name is silently skipped, not an error');
+
+  camp.settings.partyHeadlineFields = [];
+  assert.deepEqual(listPartyHeadlineTracks(camp, getEntity(camp, id)), []);
+});
+
 test('setPartySharedGear overwrites the party-wide gear note wholesale; a fresh campaign defaults it to \'\'', () => {
   let camp = defaultCampaign();
   assert.equal(camp.party.sharedGear, undefined); // lazily set on first touch, like party.trackers
@@ -1786,6 +1883,17 @@ test('addPartySharedAsset appends free text (no-op on blank); removePartySharedA
   const before = camp;
   camp = removePartySharedAsset(camp, 99); // out of range — no-op
   assert.deepEqual(camp, before);
+});
+
+test('addPartySharedAssetEntity links a real Asset entity (deduped, distinct from the free-text sharedAssets list); removePartySharedAssetEntity unlinks it', () => {
+  let camp = defaultCampaign();
+  camp = addPartySharedAsset(camp, 'Spare oxygen tanks'); // free-text, untouched by the entity-linked calls below
+  camp = addPartySharedAssetEntity(camp, 'ent_rover');
+  camp = addPartySharedAssetEntity(camp, 'ent_rover'); // dedup — no-op
+  assert.deepEqual(camp.party.sharedAssetIds, ['ent_rover']);
+  assert.deepEqual(camp.party.sharedAssets, ['Spare oxygen tanks']);
+  camp = removePartySharedAssetEntity(camp, 'ent_rover');
+  assert.deepEqual(camp.party.sharedAssetIds, []);
 });
 
 // --- colony (5PFH Planetfall turn sheet + crew + lifeform filter) ----------

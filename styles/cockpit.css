@@ -236,14 +236,27 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .ws-field .v { font-size: 0.95rem; }
 
 /* --- Co-Pilot (primary, always visible) ----------------------------- */
+/* Direct follow-up request: the Advisor's default (always-visible desktop
+   sidebar) appearance should read as the same kind of rounded card as
+   Composer/Navigator (.workspace-card) rather than a flat, differently-
+   styled strip — background/border/radius/shadow and the header's own
+   size/spacing now match .workspace-card/.workspace-card h2 exactly. This
+   is deliberately scoped to ONLY this always-visible .mc-copilot aside —
+   "no change to how the Advisor looks when in the tab menu" — the SAME
+   renderCopilot() content rendered inside the drawer-panel tab strip
+   (phone/tablet's pinned Advisor tab, or a desktop drawer-opened Advisor)
+   goes through a completely different wrapper (.mc-drawer, shell.js's
+   renderActiveDrawerHtml) untouched by this rule. */
 .mc-copilot {
   grid-area: copilot;
   padding: var(--sp-4);
-  background: var(--bg-inset);
-  border-left: 1px solid var(--border);
+  background: var(--tier1-bg);
+  border: 1px solid var(--tier1-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
   overflow: auto;
 }
-.mc-copilot h2 { margin: 0 0 var(--sp-3); font-size: 0.95rem; color: var(--accent); }
+.mc-copilot h2 { margin: 0 var(--sp-6) 10px 0; font-size: 1.2rem; }
 .copilot-card {
   background: var(--tier2-bg);
   border: 1px solid var(--tier2-border);
@@ -267,6 +280,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .advisor-history-entry-head { margin-bottom: var(--sp-1); }
 .advisor-history-entry-collapsed summary { cursor: pointer; }
 .advisor-history-entry-collapsed[open] summary { margin-bottom: var(--sp-1); }
+/* Advisor "stage, then apply" mechanic (direct follow-up request) — a
+   rolled-but-not-yet-accepted oracle result reads as plain text next to a
+   ✓ (not yet another chip, so it can't be confused with "roll again"); the
+   editable draft + Apply button sits at the bottom of whichever card owns
+   it (Suggested oracles / If nothing changes), consistent regardless of
+   how many entries/chips are above it. */
+.advisor-oracle-result { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.2rem 0.4rem; }
+.advisor-oracle-result-text { max-width: 16rem; }
+.advisor-suggestion-editor { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-3); padding-top: var(--sp-2); border-top: 1px solid var(--border); }
+.advisor-suggestion-input { width: 100%; resize: vertical; }
+.advisor-suggestion-editor .chip.sm { align-self: flex-start; }
+.advisor-suggestion-editor .chip.sm:disabled { opacity: 0.5; cursor: default; }
 .copilot-story-option:first-child { margin-top: 0; }
 .copilot-story-option p { margin-bottom: 0.25rem; }
 
@@ -520,9 +545,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .track-row .statblock-key, .attr-row .statblock-key { align-self: center; }
   .track-row .track-widget { justify-content: flex-end; }
   .track-row .track-box { width: 1.55rem; height: 1.55rem; font-size: 0.72rem; }
-  .track-row .track-value-badge { font-size: 0.85rem; padding: 0.28rem 0.6rem; }
+  .track-row .track-value-badge { font-size: 0.85rem; padding: 0.28rem 0.5rem; }
 
-  .statblock-row.attr-row .attr-val-input { width: 100%; max-width: 6rem; min-height: 2.25rem; font-size: 1rem; justify-self: end; }
+  .statblock-row.attr-row .attr-val-input { width: 100%; max-width: 2.8rem; min-height: 2.25rem; font-size: 1rem; justify-self: end; }
 
   /* The read-only Combat/Danger-style summary badges above the field list
      (attributeBadges()) get the same "room to breathe" treatment, so a
@@ -993,7 +1018,6 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .doc-title-input { font-size: 0.92rem; font-weight: 600; }
 .doc-card-actions { display: inline-flex; gap: 2px; align-items: center; }
 .doc-card-title-group { display: inline-flex; align-items: center; gap: var(--sp-2); min-width: 0; }
-.doc-size-badge { white-space: nowrap; }
 .doc-content-input { min-height: 8rem; }
 
 /* Gallery (Phase 11, docs/adr/0021-gallery.md) */
@@ -1363,8 +1387,11 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 }
 .statblock-key-roll:hover { color: var(--accent-strong); }
 .attr-val-input {
-  width: 4rem; min-width: 0; text-align: center; border: 1px solid var(--accent-strong); background: rgba(56,189,248,0.08); color: var(--accent);
-  border-radius: 4px; padding: 2px 6px; font-size: 0.85rem; font-weight: 700;
+  /* Narrowed to fit a modifier-style value (2-3 chars, e.g. "+2") — direct
+     follow-up request; the box was previously sized as if it needed to fit
+     a wider ratio like a track's old "X/Y" display. */
+  width: 2.6rem; min-width: 0; text-align: center; border: 1px solid var(--accent-strong); background: rgba(56,189,248,0.08); color: var(--accent);
+  border-radius: 4px; padding: 2px 4px; font-size: 0.85rem; font-weight: 700;
 }
 .attr-val-input:focus { outline: 2px solid var(--accent-strong); outline-offset: 1px; }
 
@@ -1626,22 +1653,33 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
   padding: var(--sp-3); width: 100%; box-sizing: border-box;
 }
 .party-member-card:hover { border-color: var(--accent); }
-/* Name (a button standing in for the collapse toggle) on the left, the
-   ↗ open-in-editor icon right-aligned on the same row (UX batch — the
-   whole card used to open the editor on any click, which fought with a
-   plain collapse click on the name). */
+/* Thumbnail (.actor-thumb-photo — same Composer/WHO convention, direct
+   request) on the left, name (a button standing in for the collapse
+   toggle) next, then the right-aligned headline counters, then the ↗
+   open-in-editor icon (UX batch — the whole card used to open the editor
+   on any click, which fought with a plain collapse click on the name).
+   The name gets flex:1 1 auto (the row's one growable item) so it both
+   claims left-aligned space AND pushes everything after it — counters,
+   icon-btn — to the row's right edge; min-width:0 + ellipsis lets a long
+   name truncate instead of squeezing the counters off narrow widths. */
 .party-member-row { display: flex; align-items: center; gap: var(--sp-2); }
-.party-member-name { background: none; border: none; padding: 0; margin: 0; font: inherit; font-weight: 600; color: inherit; cursor: pointer; text-align: left; flex: 1 1 auto; }
-.party-member-row .icon-btn { margin-left: auto; }
-/* One row per ruleset/template (partyMemberStatblocks) — small caption
-   above a non-wrapping badge row, same "fit on one line, scroll if it
-   truly can't" fallback the Entity Inspector's character-sheet-stats uses. */
-.party-stat-group { margin-bottom: var(--sp-2); }
-.party-stat-group-label { font-size: 0.6rem; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 2px; }
-.party-stat-group .attribute-badges { flex-wrap: nowrap; overflow-x: auto; margin-bottom: 0; }
-.party-stat-group .attr-badge { min-width: 36px; min-height: 32px; padding: 0.2rem 0.25rem; flex: 0 0 auto; }
-.party-stat-group .attr-key { font-size: 0.52rem; }
-.party-stat-group .attr-val { font-size: 0.7rem; }
+.party-member-thumb-btn { flex: 0 0 auto; background: none; border: none; padding: 0; }
+.party-member-thumb-btn .actor-thumb-photo { width: 2rem; height: 2rem; }
+.party-member-name {
+  background: none; border: none; padding: 0; margin: 0; font: inherit; font-weight: 600; color: inherit; cursor: pointer;
+  text-align: left; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.party-member-row .icon-btn { flex: 0 0 auto; margin-left: auto; }
+/* Direct request: "size the boxes smaller to the scale of the statblock
+   boxes" — smaller than even .track-row-compact's own 18px, since several
+   of these need to fit inline on a name row rather than their own line.
+   overflow-x is the same escape valve every other tight row in this app
+   already falls back on if a GM configures several headline fields. */
+.party-headline-counters { display: flex; align-items: center; gap: var(--sp-2); flex: 0 0 auto; overflow-x: auto; max-width: 60%; }
+.party-headline-counter { display: flex; align-items: center; gap: 3px; flex: 0 0 auto; }
+.party-headline-counter-label { font-size: 0.58rem; letter-spacing: 0.04em; color: var(--text-dim); text-transform: uppercase; white-space: nowrap; }
+.party-headline-boxes { gap: 1px; }
+.party-headline-boxes .track-box { width: 13px; height: 13px; font-size: 0; border-radius: 2px; } /* number hidden at this size — fill state + hover title carry the info */
 .party-tracker-list { display: flex; flex-direction: column; gap: var(--sp-2); }
 .party-tracker-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: var(--sp-2); align-items: center; }
 .party-tracker-name-input { min-width: 0; }
@@ -1651,6 +1689,14 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    caption, not a control, replaces the old per-tracker kind <select>. */
 .party-tracker-kind-label { font-size: 0.7rem; color: var(--text-dim); white-space: nowrap; }
 .party-tracker-boxes { flex-wrap: wrap; max-width: 14rem; }
+/* Momentum-style gauge (domain/party.js's gaugeWindow) — a single current
+   POSITION, not a fill-from-zero count, so boxes are slightly wider than a
+   plain meter's to fit a negative 2-character value like "-6"; the box
+   whose number is 0 (Momentum's reset point) gets a distinguishing border
+   so it stays a visible landmark as the 10-box window slides. */
+.party-tracker-gauge .track-box { width: 26px; }
+.party-tracker-gauge .track-box.gauge-zero { border-color: var(--accent); border-width: 2px; }
+.party-tracker-gauge .track-box.gauge-zero.on { border-color: #0b1120; }
 /* Inline "+ Tracker" creation form (replaces a window.prompt() popup) — one
    row: name, type, a type-specific field (meter size / Starforged
    difficulty), Create, cancel. */

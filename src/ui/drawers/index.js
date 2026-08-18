@@ -19,7 +19,7 @@ import { listTemplates } from '../../domain/statblockTemplates.js';
 import { buildGraph, computeLayout, nodeColor } from '../../domain/graph.js';
 import { BUILD } from '../../core/buildInfo.js';
 import { getDocument, listDocuments, listDocumentMentions, allDocumentTags, filterDocuments, listReferenceDocuments } from '../../domain/documents.js';
-import { listPartyMembers, listPartyTrackers } from '../../domain/party.js';
+import { listPartyMembers, listPartyTrackers, gaugeWindow, listPartyHeadlineTracks } from '../../domain/party.js';
 import { COLONY_FIELDS, getColonyFields, listCrewRows, listLifeformEncounters } from '../../domain/colony.js';
 import { getMarket, priceAt, listCargoManifest, listContracts } from '../../domain/trade.js';
 import { COMMODITIES, findCommodity } from '../../data/commodities.js';
@@ -1042,7 +1042,7 @@ function strainMeter(used, cap, over) {
     <span class="statblock-key">Strain</span>
     <div class="track-widget">
       <div class="track-boxes">${boxes}</div>
-      <span class="track-value-badge track-value-badge-static ${over ? 'over-strain' : ''}" title="Strain — not rollable${over ? ', over capacity' : ''}">${used}<small>/${cap}</small></span>
+      <span class="track-value-badge track-value-badge-static ${over ? 'over-strain' : ''}" title="Strain — not rollable${over ? ', over capacity' : ''}">${used}</span>
     </div>
   </div>`;
 }
@@ -1159,10 +1159,10 @@ function tagEditor(doc, e) {
 // ui.statblockAddOpen) alongside the existing "add a whole new statblock
 // group" chips, instead of competing for attention with the fields
 // themselves.
-function statblockSection(e, doc, ui = {}) {
+function statblockSection(e, doc, ui = {}, opts = {}) {
   const groups = e.statblocks || [];
   const sorted = sortStatblockGroups(groups, doc.settings);
-  const rows = sorted.map(({ group, index }) => statblockGroupBlock(e, group, index, doc, ui)).join('');
+  const rows = sorted.map(({ group, index }) => statblockGroupBlock(e, group, index, doc, ui, opts)).join('');
   const addChoices = statblockAddChoices(e, groups, doc);
   const fieldAddRows = sorted.map(({ group, index }) => `
     <div class="statblock-add-row">
@@ -1195,11 +1195,11 @@ function statblockGroupLabel(group, doc) {
   return `${bestiaryTerm(doc.settings.genrePack)} (NPC) · ${esc(templateLabel(group.templateId, doc.settings))}`;
 }
 
-function statblockGroupBlock(e, group, gi, doc, ui = {}) {
-  if (group.kind === 'character') return characterSheetGroupBlock(e, group, gi, doc, ui);
+function statblockGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
+  if (group.kind === 'character') return characterSheetGroupBlock(e, group, gi, doc, ui, opts);
   const key = `${e.id}::${gi}`;
   const collapsed = !!(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
-  const rows = group.fields.map((f, fi) => statblockFieldRow(f, gi, fi)).join('');
+  const rows = group.fields.map((f, fi) => statblockFieldRow(f, gi, fi, opts)).join('');
   return `<div class="statblock-block">
     <div class="statblock-head">
       <button class="icon-btn statblock-collapse-toggle" data-statblock-group-toggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button>
@@ -1254,7 +1254,7 @@ function statblockAddChoices(e, groups, doc) {
 // (Health, Spirit, Supply, ...) — purely a rendering split; stats are
 // attribute fields, resources are track fields, both rollable the same way
 // (double-click the value).
-function characterSheetGroupBlock(e, group, gi, doc, ui = {}) {
+function characterSheetGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
   const key = `${e.id}::${gi}`;
   const collapsed = !!(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
   const ruleset = findRuleset(group.ruleset);
@@ -1268,8 +1268,8 @@ function characterSheetGroupBlock(e, group, gi, doc, ui = {}) {
       <button class="icon-btn" data-statblock-remove-group="${gi}" title="Remove this statblock">🗑</button>
     </div>
     ${collapsed ? '' : `
-    ${stats.length ? `<div class="character-sheet-stats">${stats.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { compact: true })).join('')}</div>` : ''}
-    ${resources.length ? `<div class="character-sheet-resources">${resources.map(({ f, fi }) => statblockFieldRow(f, gi, fi)).join('')}</div>` : ''}`}
+    ${stats.length ? `<div class="character-sheet-stats">${stats.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}
+    ${resources.length ? `<div class="character-sheet-resources">${resources.map(({ f, fi }) => statblockFieldRow(f, gi, fi, opts)).join('')}</div>` : ''}`}
   </div>`;
 }
 
@@ -1349,8 +1349,15 @@ function textRow(f, gi, fi) {
 function trackRow(f, gi, fi, opts = {}) {
   const max = f.max || 5;
   const value = Number(f.value) || 0;
+  // opts.entityId lets a caller OUTSIDE the Entity Editor (the Party Roster
+  // — direct follow-up request: "clicking a stat should roll") render a
+  // roll/set control for a specific entity rather than whichever one
+  // happens to be active there; parseStatblockKey (shell.js) falls back to
+  // the active Entity Editor entity when it's omitted, so every existing
+  // Entity Editor call site (no entityId passed) is unaffected.
+  const key = opts.entityId ? `${opts.entityId}::${gi}::${fi}` : `${gi}::${fi}`;
   const boxes = Array.from({ length: max }, (_, k) => k + 1).map((n) => `
-    <button type="button" class="track-box ${n <= value ? 'on' : ''}" data-statblock-track-set="${gi}::${fi}" data-track-n="${n}" aria-label="Set ${n}">${n}</button>`).join('');
+    <button type="button" class="track-box ${n <= value ? 'on' : ''}" data-statblock-track-set="${key}" data-track-n="${n}" aria-label="Set ${n}">${n}</button>`).join('');
   // rollMethod undefined defaults to rollable (action) for backward
   // compatibility with fields created before Bestiary templates existed
   // (Health/Hull tracks, manually-added "+Track" fields); explicit 'none'
@@ -1358,9 +1365,13 @@ function trackRow(f, gi, fi, opts = {}) {
   const method = f.rollMethod || 'action';
   const rollable = method !== 'none';
   const rollTitle = rollMethodTitle(method, value, f.target).replace('Click', 'Double-click');
+  // The trailing "/max" ratio is gone (direct follow-up request) — the row
+  // of boxes already shows both the fill count AND the max (its own box
+  // count) visually, so the badge now reads as just the bare current value,
+  // narrow enough to match the modifier-style boxes elsewhere in the sheet.
   const badge = rollable
-    ? `<button type="button" class="track-value-badge" data-statblock-roll="${gi}::${fi}" title="${esc(rollTitle)}">${value}<small>/${max}</small></button>`
-    : `<span class="track-value-badge track-value-badge-static" title="Progress track — not rollable">${value}<small>/${max}</small></span>`;
+    ? `<button type="button" class="track-value-badge" data-statblock-roll="${key}" title="${esc(rollTitle)}">${value}</button>`
+    : `<span class="track-value-badge track-value-badge-static" title="Progress track — not rollable">${value}</span>`;
   return `
     <div class="statblock-row track-row ${opts.compact ? 'track-row-compact' : ''}">
       <span class="statblock-key">${esc(f.key)}</span>
@@ -1388,13 +1399,14 @@ function attrRow(f, gi, fi, opts = {}) {
   const format = f.format || 'sign';
   const method = f.rollMethod || 'none';
   const rollable = method !== 'none';
+  const key = opts.entityId ? `${opts.entityId}::${gi}::${fi}` : `${gi}::${fi}`;
   const label = rollable
-    ? `<button type="button" class="statblock-key statblock-key-roll" data-statblock-roll-label="${gi}::${fi}" title="${esc(rollMethodTitle(method, value, f.target))}">${esc(f.key)}</button>`
+    ? `<button type="button" class="statblock-key statblock-key-roll" data-statblock-roll-label="${key}" title="${esc(rollMethodTitle(method, value, f.target))}">${esc(f.key)}</button>`
     : `<span class="statblock-key" title="Not rollable">${esc(f.key)}</span>`;
   return `
     <div class="statblock-row attr-row ${opts.compact ? 'attr-row-compact' : ''}">
       ${label}
-      <input type="text" inputmode="numeric" class="attr-val-input" data-statblock-attr-val="${gi}::${fi}" value="${esc(formatAttrValue(value, format))}" aria-label="${esc(f.key)} value">
+      <input type="text" inputmode="numeric" class="attr-val-input" data-statblock-attr-val="${key}" value="${esc(formatAttrValue(value, format))}" aria-label="${esc(f.key)} value">
     </div>`;
 }
 
@@ -1706,6 +1718,10 @@ function settings(doc, ui = {}) {
             ? `<p class="dim small">Reference: <a href="${activeRuleset.doc}" target="_blank" rel="noreferrer">${esc(activeRuleset.label)} PDF</a></p>`
             : `<p class="dim small">No sourcebook in this repo's library — ${esc(activeRuleset.label)}'s stats here are original content, not a transcription.</p>`;
         })()}
+        <label class="field-label">Party Roster headline fields
+          <input data-settings-party-headline-fields value="${esc((doc.settings.partyHeadlineFields || []).join(', '))}" placeholder="Health, Momentum">
+        </label>
+        <p class="dim small">Comma-separated track-field names (matched case-insensitively) shown as small counters on a collapsed Party Roster member row — differs per ruleset, since a 5PFH sheet has no field literally named "Momentum."</p>
       </div>
       ${statblockTemplateEditor(doc)}
       ${rulesConstitutionSection(doc, ui)}
@@ -2024,26 +2040,46 @@ function templateFieldRow(systemId, f, i, count) {
     </div>`;
 }
 
-// A Party roster card shows one row per statblock GROUP, not every group's
-// fields flattened together — a character carrying both a Starforged and a
-// 5PFH sheet otherwise reads as one undifferentiated pile of numbers with
-// no way to tell which system a given stat belongs to. Each row gets a
-// small label naming its ruleset/Bestiary template, mirroring how the
-// Entity Inspector's own character-sheet-stats row already stays on one
-// line per system.
-function partyMemberStatblocks(e, doc) {
-  const sorted = sortStatblockGroups(e.statblocks, doc.settings);
-  const templates = getStatblockTemplates(doc.settings);
-  return sorted.map(({ group }) => {
-    const badges = attributeBadges(group.fields);
-    if (!badges) return '';
-    const label = group.kind === 'character' ? findRuleset(group.ruleset).label
-      : (templates[group.templateId] || {}).label || (group.kind === 'vehicle' ? 'Vehicle' : bestiaryTerm(doc.settings.genrePack));
-    return `<div class="party-stat-group">
-      <div class="party-stat-group-label">${esc(label)}</div>
-      ${badges}
-    </div>`;
+// Expanded Party Roster card: reuses statblockSection() WHOLESALE (the
+// exact same interactive Entity Editor rendering — collapse/remove-group,
+// +Field/+Track, Enhancements, click-to-roll) rather than a separate
+// read-only summary, per direct request ("match the conventions of the
+// Composer... clicking a stat should roll that stat with modifier per the
+// rules appropriate to that statblock"). The ONLY thing that changes vs.
+// the Entity Editor's own call is opts.entityId — trackRow/attrRow thread
+// it into their data-statblock-* keys so a click here resolves against
+// THIS card's entity even though it's very likely not the Entity Editor's
+// currently-active one (see shell.js's parseStatblockKey).
+function partyMemberStatblocks(e, doc, ui) {
+  return statblockSection(e, doc, ui, { entityId: e.id });
+}
+
+// Small right-aligned counters on a collapsed Party Roster row — direct
+// request: "Right-aligned on the same row as the thumbnail needs to
+// display the stats using counters like Health and Momentum, but size the
+// boxes smaller to the scale of the statblock boxes." Which track fields
+// surface here is entirely GM-configured (settings.partyHeadlineFields,
+// Settings → Stat system — "GM picks per-ruleset which fields surface",
+// direct answer to the scoping question), since a field literally named
+// "Momentum" only exists under some rulesets. Reuses the SAME
+// data-statblock-track-set click handler trackRow's own boxes use (a
+// bare-bones inline copy of that markup, not a trackRow() call, since
+// trackRow's full label+badge layout doesn't fit inline next to a name).
+function partyMemberHeadlineCounters(doc, e) {
+  const tracks = listPartyHeadlineTracks(doc, e);
+  if (!tracks.length) return '';
+  const counters = tracks.map(({ f, gi, fi }) => {
+    const max = f.max || 5;
+    const value = Number(f.value) || 0;
+    const key = `${e.id}::${gi}::${fi}`;
+    const boxes = Array.from({ length: max }, (_, k) => k + 1).map((n) => `
+      <button type="button" class="track-box ${n <= value ? 'on' : ''}" data-statblock-track-set="${key}" data-track-n="${n}" aria-label="${esc(f.key)}: set ${n}">${n}</button>`).join('');
+    return `<span class="party-headline-counter" title="${esc(f.key)}: ${value}/${max}">
+      <span class="party-headline-counter-label">${esc(f.key)}</span>
+      <span class="track-boxes party-headline-boxes">${boxes}</span>
+    </span>`;
   }).join('');
+  return `<div class="party-headline-counters">${counters}</div>`;
 }
 
 // A tracker's kind (meter/counter/currency) is fixed for its lifetime (see
@@ -2057,7 +2093,11 @@ function partyTrackerRow(t) {
   const rank = t.difficulty && findProgressDifficulty(t.difficulty);
   const body = t.kind === 'meter' ? `
     <div class="track-boxes party-tracker-boxes">${Array.from({ length: t.max || 5 }, (_, k) => k + 1).map((n) => `
-      <button type="button" class="track-box ${n <= t.value ? 'on' : ''}" data-party-tracker-box="${esc(t.id)}" data-track-n="${n}" aria-label="Set ${n}">${n}</button>`).join('')}</div>` : `
+      <button type="button" class="track-box ${n <= t.value ? 'on' : ''}" data-party-tracker-box="${esc(t.id)}" data-track-n="${n}" aria-label="Set ${n}">${n}</button>`).join('')}</div>`
+    : t.kind === 'gauge' ? `
+    <div class="track-boxes party-tracker-boxes party-tracker-gauge" title="Momentum: -6 to +10 — the visible 10 boxes slide to keep the current value (and 0, where possible) in view">${gaugeWindow(t.value, t.min ?? -6, t.max ?? 10, 10).map((n) => `
+      <button type="button" class="track-box ${n === t.value ? 'on' : ''} ${n === 0 ? 'gauge-zero' : ''}" data-party-tracker-gauge-box="${esc(t.id)}" data-track-n="${n}" aria-label="Set ${n}" title="${n === 0 ? 'Reset (0)' : n}">${n}</button>`).join('')}</div>`
+    : `
     <span class="party-tracker-counter">
       <button class="icon-btn" data-party-tracker-step="${esc(t.id)}" data-delta="-1" title="-1">−</button>
       <input class="party-tracker-value-input" type="number" data-party-tracker-value="${esc(t.id)}" value="${t.value}">
@@ -2108,15 +2148,29 @@ function partyTrackerAddForm(ui, isStarforged) {
 // on the same row, opens the full entity editor instead (data-open-entity
 // no longer sits on the whole card — clicking anywhere used to open the
 // editor, which fought with wanting a plain collapse click on the name).
+// Thumbnail matches WHO's own Actor thumbnails exactly (.actor-thumb-photo/
+// -empty — Composer conventions, direct request), just click-to-open
+// instead of click-to-expand-scene-details (this card's own name button
+// already owns the collapse/expand interaction).
+function partyMemberThumb(doc, e) {
+  const img = e.thumbnailId ? getGalleryImage(doc, e.thumbnailId) : null;
+  const inner = img
+    ? `<img class="actor-thumb-photo" src="${esc(img.dataUrl)}" alt="">`
+    : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((e.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
+  return `<button type="button" class="actor-thumb party-member-thumb-btn" data-open-entity="${esc(e.id)}" title="Open in entity editor">${inner}</button>`;
+}
+
 function partyMemberCard(e, doc, ui) {
   const open = (ui.expandedPartyMembers || new Set()).has(e.id);
   return `
     <div class="party-member-card">
       <div class="party-member-row">
+        ${partyMemberThumb(doc, e)}
         <button type="button" class="party-member-name" data-party-member-toggle="${esc(e.id)}">${open ? '▾' : '▸'} ${esc(e.name) || '<em>Unnamed</em>'}</button>
+        ${partyMemberHeadlineCounters(doc, e)}
         <button class="icon-btn" data-open-entity="${esc(e.id)}" title="Open in entity editor" aria-label="Open in entity editor">↗</button>
       </div>
-      ${open ? partyMemberStatblocks(e, doc) : ''}
+      ${open ? partyMemberStatblocks(e, doc, ui) : ''}
     </div>`;
 }
 
@@ -2131,6 +2185,16 @@ function party(doc, ui = {}) {
   const sharedGearKey = 'party:sharedGear';
   const sharedAssetChips = (party_.sharedAssets || []).map((a, i) => `
     <span class="chip sm">${esc(a)} <button type="button" class="icon-btn" data-party-shared-asset-remove="${i}" title="Remove">✕</button></span>`).join('');
+  // Real Asset entities (vehicles, from the "+Vehicle" picker) — distinct
+  // from the free-text chips above, these open the Entity Editor.
+  const sharedAssetEntityChips = (party_.sharedAssetIds || []).map((id) => {
+    const a = getEntity(doc, id);
+    if (!a) return '';
+    return `<span class="entity-chip">
+      <button type="button" data-open-entity="${esc(id)}">${esc(a.name) || 'Unnamed'}</button>
+      <button type="button" class="icon-btn" data-party-shared-asset-entity-remove="${esc(id)}" title="Remove">✕</button>
+    </span>`;
+  }).join('');
 
   return `
     <div class="statblock-head"><h4>Party Roster</h4><button class="chip" data-party-add-character>＋ Add NPC</button></div>
@@ -2145,8 +2209,8 @@ function party(doc, ui = {}) {
     </div>
     <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Shared Gear</h4></div>
     <div class="rich-field">${richToolbarHTML(sharedGearKey, toolbarCollapsed(doc, ui, sharedGearKey))}<div class="mention-editor" contenteditable="true" data-party-field="sharedGear" data-placeholder="A shared toolkit, the ship's medkit, anything not tied to one character…">${buildMentionEditorHTML(doc, party_.sharedGear)}</div></div>
-    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Shared Assets</h4><button class="chip" data-party-add-vehicle>＋ Vehicle</button></div>
-    <div class="entity-chips">${sharedAssetChips || '<span class="dim small">None yet.</span>'}</div>
+    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Shared Assets</h4><button class="chip" data-entity-picker-open="party-vehicle">＋ Vehicle</button></div>
+    <div class="entity-chips">${sharedAssetEntityChips}${sharedAssetChips || (sharedAssetEntityChips ? '' : '<span class="dim small">None yet.</span>')}</div>
     <div class="entity-add-row"><input class="doc-tag-input" data-party-shared-asset-input placeholder="Add a shared asset…"></div>
     ${cargoManifestSection(doc)}
     ${contractsSection(doc, ui)}`;
@@ -2518,16 +2582,6 @@ export function formatBytes(n) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// Estimated decoded size of a base64 data: URI — good enough for a GM
-// judging which uploaded document is the one to remove/move to assets/docs/
-// when localStorage's quota gets hit (store.js), not meant to be exact.
-function dataUrlBytes(dataUrl) {
-  const base64 = String(dataUrl || '').split(',')[1] || '';
-  if (!base64) return 0;
-  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
-  return Math.max(0, Math.floor(base64.length * 0.75) - padding);
-}
-
 // Tag editor is collapsed behind the 🏷 toggle by default (small-footprint
 // ask) — chips render smaller than a regular chip (.doc-tag-chip) when it's
 // open; see the sizing in cockpit.css rather than here. The input commits on
@@ -2574,13 +2628,22 @@ function documents(doc, ui = {}) {
   const renameOpen = ui.docRenameOpen || new Set();
   const tagListOpen = !!ui.docTagListOpen;
   const items = filterDocuments(doc, { search, tags: [...activeTags] });
+  // An uploaded FILE (kind:'file', a real PDF) is an openable document same
+  // as any bundled Reference Library one — it renders in that same section
+  // now (direct follow-up request: "it should just be included in the
+  // Reference Library and not a separate section"), not the top list. A
+  // NOTE (kind:'note', free text with no underlying file) is categorically
+  // different — nothing to "open," just an editable text block — and stays
+  // in its own top section.
+  const noteItems = items.filter((d) => d.kind !== 'file');
+  const uploadedFileItems = items.filter((d) => d.kind === 'file');
   const mentions = listDocumentMentions(doc);
   const allTags = allDocumentTags(doc);
   // The Reference Library shares the same search box + tag-filter chips as
-  // the uploaded/note library above it (one search, one set of filters, two
-  // lists) — it was rendered unconditionally before, so typing in the search
-  // box visibly filtered the top list but silently left every reference doc
-  // on screen.
+  // the notes list above it (one search, one set of filters, two lists) —
+  // it was rendered unconditionally before, so typing in the search box
+  // visibly filtered the top list but silently left every reference doc on
+  // screen.
   const requiredTags = [...activeTags].map((t) => t.toLowerCase());
   const q = search.trim().toLowerCase();
   const refDocs = listReferenceDocuments(doc).filter((r) => {
@@ -2589,34 +2652,45 @@ function documents(doc, ui = {}) {
     return [r.title, ...(r.tags || [])].join(' ').toLowerCase().includes(q);
   });
 
-  const rows = items.map((d) => {
-    // An uploaded file's dataUrl is embedded directly in campaign.json, the
-    // usual reason localStorage's quota gets hit (see store.js) — showing
-    // its size right here (not just on hover) is what actually lets a GM
-    // spot which upload to remove/move to assets/docs/ when that happens.
-    const sizeBadge = d.kind === 'file' && d.dataUrl ? `<span class="dim small doc-size-badge">${formatBytes(dataUrlBytes(d.dataUrl))}</span>` : '';
+  const rows = noteItems.map((d) => {
+    // Direct follow-up request — the size badge is gone (was previously
+    // shown next to an uploaded file's title, taken from its embedded
+    // dataUrl); Settings' own storage-usage line (formatBytes(info.
+    // campaignBytes) above) is still where overall quota pressure shows.
     const titleEl = renameOpen.has(d.id)
       ? `<input class="doc-rename-input" data-doc-rename-input="${esc(d.id)}" value="${esc(d.title)}" placeholder="Untitled document" autofocus>`
-      : (d.kind === 'file'
-        ? `<a href="#" class="doc-card-title-link" data-doc-open="lib:${esc(d.id)}" data-drag-document="lib:${esc(d.id)}" draggable="true" title="Open in viewer — ${formatBytes(dataUrlBytes(d.dataUrl))}">${esc(d.title || d.fileName)}</a>`
-        : `<span class="doc-card-title-static" data-drag-document="lib:${esc(d.id)}" draggable="true" title="Drag into a note or context field to insert a @ pointer">${esc(d.title || 'Untitled document')}</span>`);
+      : `<span class="doc-card-title-static" data-drag-document="lib:${esc(d.id)}" draggable="true" title="Drag into a note or context field to insert a @ pointer">${esc(d.title || 'Untitled document')}</span>`;
     return `
     <div class="doc-card">
       <div class="doc-card-head">
-        <span class="doc-card-title-group">${titleEl}${sizeBadge}</span>
+        <span class="doc-card-title-group">${titleEl}</span>
         <div class="doc-card-actions">
           <button class="icon-btn" data-doc-tag-toggle="${esc(d.id)}" title="Tags">🏷</button>
           <button class="icon-btn" data-doc-rename="${esc(d.id)}" title="${renameOpen.has(d.id) ? 'Save' : 'Rename entry'}">${renameOpen.has(d.id) ? '💾' : '✎'}</button>
           <button class="icon-btn" data-doc-delete="${esc(d.id)}" title="Delete document">✕</button>
         </div>
       </div>
-      ${d.kind === 'file' ? '' : `
       <div class="rich-field">${richToolbarHTML(`doc:${d.id}`, toolbarCollapsed(doc, ui, `doc:${d.id}`))}<div class="mention-editor doc-content-input" contenteditable="true" data-doc-content="${esc(d.id)}" data-placeholder="Store notes, references, or handout text here…">${buildMentionEditorHTML(doc, d.content)}</div></div>
-      <div class="drawer-note-actions"><button class="btn sm" data-doc-save="${esc(d.id)}">Save</button></div>`}
+      <div class="drawer-note-actions"><button class="btn sm" data-doc-save="${esc(d.id)}">Save</button></div>
       ${tagEditorOpen.has(d.id) ? docTagEditor(d) : ''}
     </div>`;
   }).join('');
-  const mentionSummary = mentions.length ? `<p class="dim small">Mentioned in notes: ${mentions.map((m) => esc(m.name)).join(', ')}</p>` : '';
+  const mentionSummary = mentions.length ? `<p class="dim small">Mentioned in Journal or dashboard fields: ${mentions.map((m) => esc(m.name)).join(', ')}</p>` : '';
+
+  const uploadedFileRows = uploadedFileItems.map((d) => `
+    <div class="doc-card ref-doc-card">
+      <div class="doc-card-head">
+        ${renameOpen.has(d.id)
+          ? `<input class="doc-rename-input" data-doc-rename-input="${esc(d.id)}" value="${esc(d.title)}" placeholder="Untitled document" autofocus>`
+          : `<a href="#" class="doc-card-title-link" data-doc-open="lib:${esc(d.id)}" data-drag-document="lib:${esc(d.id)}" draggable="true" title="Open in viewer">${esc(d.title || d.fileName)}</a>`}
+        <div class="doc-card-actions">
+          <button class="icon-btn" data-doc-tag-toggle="${esc(d.id)}" title="Tags">🏷</button>
+          <button class="icon-btn" data-doc-rename="${esc(d.id)}" title="${renameOpen.has(d.id) ? 'Save' : 'Rename entry'}">${renameOpen.has(d.id) ? '💾' : '✎'}</button>
+          <button class="icon-btn" data-doc-delete="${esc(d.id)}" title="Delete document">✕</button>
+        </div>
+      </div>
+      ${tagEditorOpen.has(d.id) ? docTagEditor(d) : ''}
+    </div>`).join('');
 
   const refRows = refDocs.map((r) => `
     <div class="doc-card ref-doc-card">
@@ -2637,7 +2711,7 @@ function documents(doc, ui = {}) {
     <datalist id="doc-tag-list">${allTags.map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
     <div class="drawer-note">
       <label class="btn ghost file-btn">Upload file(s)<input type="file" data-doc-upload multiple hidden></label>
-      ${helpBody('documents-intro', 'Drag a document into a note or context field to insert a @ pointer.', ui)}
+      ${helpBody('documents-intro', 'A note is free text stored here; an uploaded file joins the Reference Library below, alongside the bundled rulebooks. Drag either into a note or context field to insert a @ pointer.', ui)}
     </div>
     <input class="drawer-search" data-doc-filter value="${esc(search)}" placeholder="Search by name or tag…">
     ${allTags.length ? `
@@ -2646,13 +2720,13 @@ function documents(doc, ui = {}) {
       ${allTags.map((t) => `<button class="chip sm ${activeTags.has(t) ? 'active' : ''}" data-doc-tag-filter="${esc(t)}">#${esc(t)}</button>`).join('')}
     </div>` : ''}` : ''}
     ${mentionSummary}
-    <div class="doc-list">
-      ${rows}
-    </div>
-    ${refDocs.length ? `
+    ${noteItems.length ? `
+    <div class="statblock-head"><h4>Notes</h4></div>
+    <div class="doc-list">${rows}</div>` : ''}
+    ${(uploadedFileItems.length || refDocs.length) ? `
     <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Reference Library</h4>${helpToggle('documents-reflib')}</div>
-    ${helpBody('documents-reflib', 'Bundled rulebooks and setting docs from <code>assets/docs/</code> — refreshed on every build.', ui)}
-    <div class="doc-list">${refRows}</div>` : ''}`;
+    ${helpBody('documents-reflib', 'Bundled rulebooks and setting docs from <code>assets/docs/</code>, plus anything you upload — refreshed on every build.', ui)}
+    <div class="doc-list">${uploadedFileRows}${refRows}</div>` : ''}`;
 }
 
 // Gallery (Phase 11, docs/adr/0021-gallery.md): a tagged image collection,
