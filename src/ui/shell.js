@@ -388,6 +388,7 @@ let catalogSearch = ''; // ephemeral — the catalog picker's own name/tag searc
 let relPickerOpen = false; // ephemeral — the Entity Editor Relationships section's "Find entity to link" searchable overlay (design/UX-ROADMAP.md, phone-focused), open or not
 let relPickerFilter = ''; // ephemeral — that overlay's own name/type/tags search
 let partyTrackerAddOpen = false; // ephemeral — the inline "+ Tracker" name/type creation form, open or not
+let partyTrackersEditOpen = false; // ephemeral — one shared edit-mode toggle (pencil icon, Party Trackers header) for the WHOLE tracker list, direct follow-up request: the ✕ remove button and the name's editable input are hidden by default (plain label instead) and only shown while this is on
 let partyTrackerDraftKind = 'meter'; // ephemeral — the creation form's in-progress type pick, so its size/difficulty sub-field can react before the tracker actually exists
 let partyTrackerDraftName = ''; // ephemeral — mirrors the creation form's name input so a kind-change re-render (which rebuilds that input from scratch) doesn't wipe out whatever the GM already typed
 let tradeLocationId = ''; // ephemeral — which Location's market the Trade drawer currently shows
@@ -1514,6 +1515,7 @@ function onClick(ev) {
   // partyTrackerAddForm in drawers/index.js; name/type are both asked there,
   // never changeable again once the tracker exists)
   if (hit('[data-party-tracker-add-toggle]')) { partyTrackerAddOpen = true; partyTrackerDraftKind = 'meter'; partyTrackerDraftName = ''; renderDrawerBody(); restoreFocus('[data-party-tracker-draft-name]'); return; }
+  if (hit('[data-party-trackers-edit-toggle]')) { partyTrackersEditOpen = !partyTrackersEditOpen; return renderDrawerBody(); }
   if (hit('[data-party-tracker-add-cancel]')) { partyTrackerAddOpen = false; partyTrackerDraftName = ''; return renderDrawerBody(); }
   if (hit('[data-party-tracker-create]')) {
     const nameInput = root.querySelector('[data-party-tracker-draft-name]');
@@ -5274,7 +5276,7 @@ function buildDrawerUi() {
     enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts,
     advisorOracleResults, advisorDrafts, advisorConsequenceDraw,
     expandedGuideNodes, guideRenameOpen,
-    partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName,
+    partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName, partyTrackersEditOpen,
     tradeLocationId, tradeContractAddOpen,
     journalEditOpen, whyTagFilter, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,

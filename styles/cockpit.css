@@ -1678,11 +1678,20 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .party-headline-counters { display: flex; align-items: center; gap: var(--sp-2); flex: 0 0 auto; overflow-x: auto; max-width: 60%; }
 .party-headline-counter { display: flex; align-items: center; gap: 3px; flex: 0 0 auto; }
 .party-headline-counter-label { font-size: 0.58rem; letter-spacing: 0.04em; color: var(--text-dim); text-transform: uppercase; white-space: nowrap; }
-.party-headline-boxes { gap: 1px; }
-.party-headline-boxes .track-box { width: 13px; height: 13px; font-size: 0; border-radius: 2px; } /* number hidden at this size — fill state + hover title carry the info */
+/* Direct follow-up request: "the single value total that is at the end of
+   the counter" — a plain number badge, replacing the earlier row-of-boxes
+   attempt entirely. */
+.party-headline-value { font-size: 0.72rem; padding: 1px 6px; }
 .party-tracker-list { display: flex; flex-direction: column; gap: var(--sp-2); }
 .party-tracker-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: var(--sp-2); align-items: center; }
 .party-tracker-name-input { min-width: 0; }
+/* Direct follow-up request: the tracker's name reads as a plain, fully-
+   sized label by default (view mode — no ✕, no input-box chrome) —
+   wrapping rather than the old always-editable input's single-line
+   truncation/scroll. Edit mode (the section's shared pencil toggle) still
+   renders the original input+✕ row unchanged. */
+.party-tracker-row-view { grid-template-columns: 1fr auto auto; }
+.party-tracker-name-label { font-weight: 600; white-space: normal; overflow: visible; word-break: break-word; }
 .party-tracker-counter { display: inline-flex; align-items: center; gap: var(--sp-1); white-space: nowrap; }
 .party-tracker-value-input { width: 3.2rem; text-align: center; }
 /* Type is fixed once a tracker exists (see domain/party.js) — a plain

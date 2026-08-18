@@ -1281,7 +1281,7 @@ function characterSheetGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
 function statblockFieldRow(f, gi, fi, opts) {
   if (f.attribute) return attrRow(f, gi, fi, opts);
   if (f.track) return trackRow(f, gi, fi, opts);
-  return textRow(f, gi, fi);
+  return textRow(f, gi, fi, opts);
 }
 
 // "EDGE +3" (sign, default) / "SPEED 3\"" (inches, 5PFH-style) / "3" (plain)
@@ -1334,11 +1334,17 @@ function attributeBadges(fields) {
 // here by design (Settings owns those); "+ Field"/"+ Track" below still let
 // you add an ad-hoc one-off field, named via a prompt since there's no
 // inline rename afterward.
-function textRow(f, gi, fi) {
+function textRow(f, gi, fi, opts = {}) {
+  // Same opts.entityId scoping trackRow/attrRow already carry — a plain
+  // text field (e.g. Bestiary's "Notable Gear") reachable from the Party
+  // Roster's expanded card needs it too, or an edit there would silently
+  // apply to whichever entity happens to be active in the Entity Editor
+  // instead of the entity actually on screen (a real bug this fixes).
+  const key = opts.entityId ? `${opts.entityId}::${gi}::${fi}` : `${gi}::${fi}`;
   return `
     <div class="statblock-row">
       <span class="statblock-key">${esc(f.key)}</span>
-      <input class="statblock-val" data-statblock-val="${gi}::${fi}" value="${esc(f.value)}" placeholder="Value">
+      <input class="statblock-val" data-statblock-val="${key}" value="${esc(f.value)}" placeholder="Value">
     </div>`;
 }
 
@@ -1369,9 +1375,13 @@ function trackRow(f, gi, fi, opts = {}) {
   // of boxes already shows both the fill count AND the max (its own box
   // count) visually, so the badge now reads as just the bare current value,
   // narrow enough to match the modifier-style boxes elsewhere in the sheet.
-  const badge = rollable
+  // opts.hideTrackBadge (Party Roster's expanded card, direct follow-up
+  // request) drops the badge entirely — its collapsed row already shows
+  // this same number as a headline counter, and boxes alone are enough
+  // for click-to-set here.
+  const badge = opts.hideTrackBadge ? '' : (rollable
     ? `<button type="button" class="track-value-badge" data-statblock-roll="${key}" title="${esc(rollTitle)}">${value}</button>`
-    : `<span class="track-value-badge track-value-badge-static" title="Progress track — not rollable">${value}</span>`;
+    : `<span class="track-value-badge track-value-badge-static" title="Progress track — not rollable">${value}</span>`);
   return `
     <div class="statblock-row track-row ${opts.compact ? 'track-row-compact' : ''}">
       <span class="statblock-key">${esc(f.key)}</span>
@@ -2050,33 +2060,48 @@ function templateFieldRow(systemId, f, i, count) {
 // it into their data-statblock-* keys so a click here resolves against
 // THIS card's entity even though it's very likely not the Entity Editor's
 // currently-active one (see shell.js's parseStatblockKey).
+// Expanded Party Roster card: reuses statblockSection() WHOLESALE (the
+// exact same interactive Entity Editor rendering — collapse/remove-group,
+// +Field/+Track, Enhancements, click-to-roll) rather than a separate
+// read-only summary, per direct request ("match the conventions of the
+// Composer... clicking a stat should roll that stat with modifier per the
+// rules appropriate to that statblock"). opts.entityId threads through
+// trackRow/attrRow into their data-statblock-* keys so a click here
+// resolves against THIS card's entity even though it's very likely not
+// the Entity Editor's currently-active one (see shell.js's
+// parseStatblockKey). opts.hideTrackBadge (direct follow-up request) drops
+// each track field's trailing value badge in THIS view specifically —
+// the collapsed row's own headline counter (below) already shows that
+// same number, so repeating it here read as redundant; the row of boxes
+// stays, still click-to-set.
 function partyMemberStatblocks(e, doc, ui) {
-  return statblockSection(e, doc, ui, { entityId: e.id });
+  return statblockSection(e, doc, ui, { entityId: e.id, hideTrackBadge: true });
 }
 
-// Small right-aligned counters on a collapsed Party Roster row — direct
-// request: "Right-aligned on the same row as the thumbnail needs to
-// display the stats using counters like Health and Momentum, but size the
-// boxes smaller to the scale of the statblock boxes." Which track fields
-// surface here is entirely GM-configured (settings.partyHeadlineFields,
-// Settings → Stat system — "GM picks per-ruleset which fields surface",
-// direct answer to the scoping question), since a field literally named
-// "Momentum" only exists under some rulesets. Reuses the SAME
-// data-statblock-track-set click handler trackRow's own boxes use (a
-// bare-bones inline copy of that markup, not a trackRow() call, since
-// trackRow's full label+badge layout doesn't fit inline next to a name).
+// Small right-aligned counter on a collapsed Party Roster row — direct
+// follow-up request: "the Health and momentum numbers need to be the
+// single value total that is at the end of the counter" (a plain number,
+// not the row-of-boxes this used to render). Which track fields surface
+// here is entirely GM-configured (settings.partyHeadlineFields, Settings →
+// Stat system — "GM picks per-ruleset which fields surface"), since a
+// field literally named "Momentum" only exists under some rulesets.
+// Reuses the SAME data-statblock-roll double-click-to-roll trigger
+// trackRow's own badge uses, entity-scoped via the "entityId::gi::fi" key
+// shape (parseStatblockKey, shell.js).
 function partyMemberHeadlineCounters(doc, e) {
   const tracks = listPartyHeadlineTracks(doc, e);
   if (!tracks.length) return '';
   const counters = tracks.map(({ f, gi, fi }) => {
-    const max = f.max || 5;
     const value = Number(f.value) || 0;
     const key = `${e.id}::${gi}::${fi}`;
-    const boxes = Array.from({ length: max }, (_, k) => k + 1).map((n) => `
-      <button type="button" class="track-box ${n <= value ? 'on' : ''}" data-statblock-track-set="${key}" data-track-n="${n}" aria-label="${esc(f.key)}: set ${n}">${n}</button>`).join('');
-    return `<span class="party-headline-counter" title="${esc(f.key)}: ${value}/${max}">
+    const method = f.rollMethod || 'action';
+    const rollable = method !== 'none';
+    const valueEl = rollable
+      ? `<button type="button" class="track-value-badge party-headline-value" data-statblock-roll="${key}" title="${esc(f.key)}: double-click to roll">${value}</button>`
+      : `<span class="track-value-badge track-value-badge-static party-headline-value" title="${esc(f.key)}: not rollable">${value}</span>`;
+    return `<span class="party-headline-counter">
       <span class="party-headline-counter-label">${esc(f.key)}</span>
-      <span class="track-boxes party-headline-boxes">${boxes}</span>
+      ${valueEl}
     </span>`;
   }).join('');
   return `<div class="party-headline-counters">${counters}</div>`;
@@ -2089,7 +2114,7 @@ function partyMemberHeadlineCounters(doc, e) {
 // difficulty rank (also creation-time-only) isn't inferable from the
 // format, so it still gets a small badge — just without the kind word
 // glued onto it.
-function partyTrackerRow(t) {
+function partyTrackerRow(t, editOpen) {
   const rank = t.difficulty && findProgressDifficulty(t.difficulty);
   const body = t.kind === 'meter' ? `
     <div class="track-boxes party-tracker-boxes">${Array.from({ length: t.max || 5 }, (_, k) => k + 1).map((n) => `
@@ -2103,12 +2128,21 @@ function partyTrackerRow(t) {
       <input class="party-tracker-value-input" type="number" data-party-tracker-value="${esc(t.id)}" value="${t.value}">
       <button class="icon-btn" data-party-tracker-step="${esc(t.id)}" data-delta="1" title="+1">＋</button>
     </span>`;
+  // Direct follow-up request: the name reads as a plain, fully-sized label
+  // by default (no truncation, no input-box chrome) and the ✕ remove
+  // button is hidden — both only appear while the section's shared pencil
+  // toggle (Party Trackers header, data-party-trackers-edit-toggle) is on,
+  // instead of every row always carrying its own always-editable input +
+  // always-visible delete button.
+  const nameEl = editOpen
+    ? `<input class="party-tracker-name-input" data-party-tracker-name="${esc(t.id)}" value="${esc(t.name)}" placeholder="Tracker name">`
+    : `<span class="party-tracker-name-label">${esc(t.name) || '<em>Untitled</em>'}</span>`;
   return `
-    <div class="party-tracker-row">
-      <input class="party-tracker-name-input" data-party-tracker-name="${esc(t.id)}" value="${esc(t.name)}" placeholder="Tracker name">
+    <div class="party-tracker-row ${editOpen ? '' : 'party-tracker-row-view'}">
+      ${nameEl}
       ${rank ? `<span class="party-tracker-kind-label" title="Starforged progress track difficulty — fixed once created">${esc(rank.label)}</span>` : ''}
       ${body}
-      <button class="icon-btn" data-party-tracker-remove="${esc(t.id)}" title="Remove">✕</button>
+      ${editOpen ? `<button class="icon-btn" data-party-tracker-remove="${esc(t.id)}" title="Remove">✕</button>` : ''}
     </div>`;
 }
 
@@ -2160,6 +2194,27 @@ function partyMemberThumb(doc, e) {
   return `<button type="button" class="actor-thumb party-member-thumb-btn" data-open-entity="${esc(e.id)}" title="Open in entity editor">${inner}</button>`;
 }
 
+// Shared Assets' entity-linked vehicles (direct follow-up request: "needs
+// to be a thumbnail like other NPC entity thumbnails") — same .actor-thumb-
+// wrap/-circle/-photo/-name/-badge shape as partyMemberThumb/WHO's own
+// Actor thumbnails, just with a remove badge instead of an expand one
+// (nothing to expand — a Shared Asset isn't a scene actor).
+function sharedAssetVehicleThumb(doc, entityId) {
+  const a = getEntity(doc, entityId);
+  if (!a) return '';
+  const img = a.thumbnailId ? getGalleryImage(doc, a.thumbnailId) : null;
+  const photo = img
+    ? `<img class="actor-thumb-photo" src="${esc(img.dataUrl)}" alt="">`
+    : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((a.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
+  return `<div class="actor-thumb-wrap">
+    <div class="actor-thumb-circle">
+      <button type="button" class="actor-thumb" data-open-entity="${esc(entityId)}" title="${esc(a.name || 'Unnamed')}">${photo}</button>
+      <button type="button" class="actor-thumb-badge actor-thumb-badge-remove" data-party-shared-asset-entity-remove="${esc(entityId)}" title="Remove from Shared Assets">✕</button>
+    </div>
+    <span class="actor-thumb-name">${esc(a.name || 'Unnamed')}</span>
+  </div>`;
+}
+
 function partyMemberCard(e, doc, ui) {
   const open = (ui.expandedPartyMembers || new Set()).has(e.id);
   return `
@@ -2180,21 +2235,17 @@ function party(doc, ui = {}) {
   const memberCards = members.map((e) => partyMemberCard(e, doc, ui)).join('');
 
   const isStarforged = ((doc.settings && doc.settings.statRuleset) || 'starforged') === 'starforged';
-  const trackerRows = trackers.map(partyTrackerRow).join('');
+  const trackersEditOpen = !!ui.partyTrackersEditOpen;
+  const trackerRows = trackers.map((t) => partyTrackerRow(t, trackersEditOpen)).join('');
   const party_ = doc.party || {};
   const sharedGearKey = 'party:sharedGear';
   const sharedAssetChips = (party_.sharedAssets || []).map((a, i) => `
     <span class="chip sm">${esc(a)} <button type="button" class="icon-btn" data-party-shared-asset-remove="${i}" title="Remove">✕</button></span>`).join('');
   // Real Asset entities (vehicles, from the "+Vehicle" picker) — distinct
-  // from the free-text chips above, these open the Entity Editor.
-  const sharedAssetEntityChips = (party_.sharedAssetIds || []).map((id) => {
-    const a = getEntity(doc, id);
-    if (!a) return '';
-    return `<span class="entity-chip">
-      <button type="button" data-open-entity="${esc(id)}">${esc(a.name) || 'Unnamed'}</button>
-      <button type="button" class="icon-btn" data-party-shared-asset-entity-remove="${esc(id)}" title="Remove">✕</button>
-    </span>`;
-  }).join('');
+  // from the free-text chips below, these render as real photo thumbnails
+  // (direct follow-up request: "needs to be a thumbnail like other NPC
+  // entity thumbnails") and open the Entity Editor.
+  const sharedAssetVehicleThumbs = (party_.sharedAssetIds || []).map((id) => sharedAssetVehicleThumb(doc, id)).join('');
 
   return `
     <div class="statblock-head"><h4>Party Roster</h4><button class="chip" data-party-add-character>＋ Add NPC</button></div>
@@ -2202,7 +2253,7 @@ function party(doc, ui = {}) {
     <div class="party-member-list">
       ${memberCards || '<p class="ws-placeholder">No party members yet. Add one above, or tag an existing NPC #character in Cast.</p>'}
     </div>
-    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Party Trackers</h4>${ui.partyTrackerAddOpen ? '' : '<button class="chip" data-party-tracker-add-toggle>＋ Tracker</button>'}</div>
+    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Party Trackers</h4>${ui.partyTrackerAddOpen ? '' : '<button class="chip" data-party-tracker-add-toggle>＋ Tracker</button>'}<button class="icon-btn" data-party-trackers-edit-toggle title="${trackersEditOpen ? 'Done editing' : 'Edit trackers (rename, remove)'}">${trackersEditOpen ? '💾' : '✎'}</button></div>
     ${ui.partyTrackerAddOpen ? partyTrackerAddForm(ui, isStarforged) : ''}
     <div class="party-tracker-list">
       ${trackerRows || '<p class="ws-placeholder">No trackers yet — add one for credits, supply, or any shared resource.</p>'}
@@ -2210,7 +2261,8 @@ function party(doc, ui = {}) {
     <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Shared Gear</h4></div>
     <div class="rich-field">${richToolbarHTML(sharedGearKey, toolbarCollapsed(doc, ui, sharedGearKey))}<div class="mention-editor" contenteditable="true" data-party-field="sharedGear" data-placeholder="A shared toolkit, the ship's medkit, anything not tied to one character…">${buildMentionEditorHTML(doc, party_.sharedGear)}</div></div>
     <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Shared Assets</h4><button class="chip" data-entity-picker-open="party-vehicle">＋ Vehicle</button></div>
-    <div class="entity-chips">${sharedAssetEntityChips}${sharedAssetChips || (sharedAssetEntityChips ? '' : '<span class="dim small">None yet.</span>')}</div>
+    ${sharedAssetVehicleThumbs ? `<div class="actor-thumb-row">${sharedAssetVehicleThumbs}</div>` : ''}
+    <div class="entity-chips">${sharedAssetChips || (sharedAssetVehicleThumbs ? '' : '<span class="dim small">None yet.</span>')}</div>
     <div class="entity-add-row"><input class="doc-tag-input" data-party-shared-asset-input placeholder="Add a shared asset…"></div>
     ${cargoManifestSection(doc)}
     ${contractsSection(doc, ui)}`;
