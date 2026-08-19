@@ -201,7 +201,6 @@ let docTagEditorOpen = new Set(); // ephemeral — which doc/ref cards' tag edit
 let docRenameOpen = new Set(); // ephemeral — which doc/ref cards are showing an inline rename input instead of their title link
 let docTagListOpen = false; // ephemeral — collapses the Documents drawer's tag-filter chip row (can get long once many tags exist)
 let journalEditOpen = new Set(); // ephemeral — which journal entries are showing an editable mention-editor instead of their static rendered text
-let whyTagFilter = null; // ephemeral — the tag currently selected in WHY's NPC/Faction/Conflict tag listbox (docs/adr/0039)
 let galleryFilter = ''; // ephemeral — Gallery drawer search box
 // Gallery's own "+ Upload" flow (as opposed to an entity's "+ Photo"): the
 // resize already happened (canvas work, ui/imageResize.js) by the time
@@ -1319,6 +1318,20 @@ function onClick(ev) {
   const rollLabel = hit('[data-statblock-roll-label]');
   if (rollLabel) {
     const { entityId, gi, fi } = parseStatblockKey(rollLabel.dataset.statblockRollLabel);
+    const e = getEntity(store.get(), entityId);
+    const group = e && e.statblocks && e.statblocks[gi];
+    const f = group && group.fields[fi];
+    if (f) performFieldRoll(f, `${e.name || 'Unnamed'} — ${f.key || 'Stat'}`);
+    return;
+  }
+  // Party Roster's expanded card (direct follow-up correction — its stat
+  // boxes are read-only, "not editable, that only happens in the entity
+  // editor"): a single click rolls, same performFieldRoll every other
+  // roll trigger in this app already calls — no edit path exists here at
+  // all, unlike attrRow/trackRow's own triggers.
+  const partyStatRoll = hit('[data-party-stat-roll]');
+  if (partyStatRoll) {
+    const { entityId, gi, fi } = parseStatblockKey(partyStatRoll.dataset.partyStatRoll);
     const e = getEntity(store.get(), entityId);
     const group = e && e.statblocks && e.statblocks[gi];
     const f = group && group.fields[fi];
@@ -2819,6 +2832,7 @@ function onKeydown(ev) {
   }
 
   if (ev.key === 'Escape') {
+    if (imageLightboxOpen) return closeImageLightbox();
     if (diceRollResult) { diceRollResult = null; return renderDiceRollOverlay(); }
     if (searchOpen) {
       searchOpen = false; searchQuery = '';
@@ -2856,17 +2870,6 @@ function onDblClick(ev) {
 
 function onChange(ev) {
   const t = ev.target;
-  const whyTagSelect = t.closest('[data-why-tag-select]');
-  if (whyTagSelect) { whyTagFilter = whyTagSelect.value || null; return render(); }
-  // WHY's candidates listbox (candidateListbox, workspace/index.js) —
-  // picking an option inserts the @mention then resets to the placeholder,
-  // same "pick, act, reset" pattern as data-where-faction-link. (WHO and
-  // WHERE used to have their own version of this; both removed along with
-  // their free-text Focus editors — WHO's Actors and WHERE's Locations
-  // now go through the entity-picker overlay below instead, see
-  // entityPicker/renderEntityPickerOverlay.)
-  const insertWhyMentionSelect = t.closest('[data-insert-why-mention-select]');
-  if (insertWhyMentionSelect) { const id = t.value; t.value = ''; if (id) insertContextMention('why', id); return; }
   // Story Dashboard's per-option "include in the draft" checkbox
   // (docs/adr/0040 Phase 12b) — toggles selectedStoryOptionIds, read live
   // by narrativeComposerBlock on the next render.
@@ -4681,25 +4684,6 @@ function resolveOrCreateIntroducedNpc(campaign, rawText) {
   return { campaign: created.campaign, id: created.id };
 }
 
-// Shared by WHERE's and WHY's tag-picker candidate click (workspace/
-// index.js's whereLocationPicker/whyEntityPicker — WHO's own version was
-// removed along with its Focus field, docs/adr/0041 WHO redesign) —
-// inserts a real @mention for `entityId` at the end of the given context
-// question's Focus field (`key.summary`) and commits it the same way any
-// other mention insertion does.
-function insertContextMention(key, entityId) {
-  const ent = getEntity(store.get(), entityId);
-  const field = root.querySelector(`[data-ctx="${key}.summary"]`);
-  if (!ent || !field) return;
-  const range = document.createRange();
-  range.selectNodeContents(field);
-  range.collapse(false);
-  insertMentionNode(range, { kind: 'entity', entityId, name: ent.name || 'Unnamed' });
-  field.focus();
-  commitMentionField(field);
-  toast(`Mentioned ${ent.name || 'Unnamed'} in Focus`);
-}
-
 // Shared by clicking a suggestion and pressing Enter on the highlighted one.
 function chooseMentionSuggestItem(index) {
   if (!mentionSuggest) return;
@@ -5165,6 +5149,30 @@ function renderDiceRollOverlay() {
   card.innerHTML = diceRollResult ? diceRollCardHtml(diceRollResult.label, diceRollResult.method, diceRollResult.r) : '';
 }
 
+// Full-size image lightbox (direct follow-up request) — a fixed skeleton
+// element (shell.js's root markup), targeted-updated rather than a full
+// re-render, same posture as renderDiceRollOverlay above. Src/alt are set
+// directly from whatever <img> was clicked (see onClick's data-open-image-
+// lightbox handler) instead of re-deriving them from campaign state, so
+// this works for ANY thumbnail in the app, not just the Entity Editor's.
+let imageLightboxOpen = false;
+function openImageLightbox(src, alt) {
+  imageLightboxOpen = true;
+  const overlay = root && root.querySelector('[data-image-lightbox-overlay]');
+  if (!overlay) return;
+  overlay.hidden = false;
+  const img = overlay.querySelector('[data-image-lightbox-img]');
+  if (img) { img.src = src || ''; img.alt = alt || ''; }
+}
+function closeImageLightbox() {
+  imageLightboxOpen = false;
+  const overlay = root && root.querySelector('[data-image-lightbox-overlay]');
+  if (!overlay) return;
+  overlay.hidden = true;
+  const img = overlay.querySelector('[data-image-lightbox-img]');
+  if (img) img.src = ''; // release the (possibly large) data: URL from memory once closed
+}
+
 // A drawn pip-die face (rounded square + dots), not a Unicode ⚀-⚅ glyph —
 // font/platform glyph coverage for that Unicode block is unreliable (it
 // rendered as a blank tofu box in an actual browser check), and an SVG
@@ -5294,7 +5302,7 @@ function buildDrawerUi() {
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName, partyTrackersEditOpen,
     tradeLocationId, tradeContractAddOpen,
-    journalEditOpen, whyTagFilter, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
+    journalEditOpen, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
     contentPackFlags, hostileLocationsImporting,

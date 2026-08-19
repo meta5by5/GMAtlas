@@ -144,6 +144,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
   flex-direction: column;
   min-height: 0;
 }
+/* Direct follow-up request: Composer/Navigator's gap below the breadcrumb
+   (the "line above") is .mc-workspace's own top padding PLUS
+   .storyboard-grid's margin-top stacked together — overridden here to a
+   combined exact 3px so it matches .mc-copilot's own 3px top padding
+   below, instead of the two having drifted to different totals. */
+.mc-workspace { padding-top: 3px; }
 /* Padding is deliberately tight on three sides now, on direct request:
    5px top/left (the title sits right in the corner) and 2px right (so
    .workspace-card-body's scrollbar sits right at the panel's own edge
@@ -250,6 +256,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .mc-copilot {
   grid-area: copilot;
   padding: var(--sp-4);
+  /* Direct follow-up request: 3px of visible gap below the breadcrumb (the
+     "line above") — a MARGIN, not padding, since .mc-copilot IS the
+     rounded box itself (unlike Composer/Navigator, where .mc-workspace is
+     a separate unstyled wrapper around the actual rounded .workspace-card
+     — see its own padding-top:3px override above) — padding here would
+     only add space between the border and the content inside it, not
+     between the border and the breadcrumb above it. */
+  margin-top: 3px;
   background: var(--tier1-bg);
   border: 1px solid var(--tier1-border);
   border-radius: var(--radius);
@@ -628,7 +642,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
    change; tablet's own placement is an open question, Step 4, left
    unchanged here pending real-device verification neither this pass nor
    its authoring environment could do). */
-.storyboard-grid { display: grid; grid-template-columns: minmax(18rem, 1fr) minmax(18rem, 1fr); gap: var(--sp-4); margin-top: var(--sp-3); align-items: stretch; flex: 1 1 auto; min-height: 0; }
+.storyboard-grid { display: grid; grid-template-columns: minmax(18rem, 1fr) minmax(18rem, 1fr); gap: var(--sp-4); margin-top: 0; align-items: stretch; flex: 1 1 auto; min-height: 0; }
 @media (max-width: 767px) {
   .storyboard-grid { grid-template-columns: 1fr; display: block; flex: none; }
 }
@@ -719,36 +733,34 @@ button { font: inherit; color: inherit; cursor: pointer; }
    letter-spacing/text-transform, unchanged), this rule only strips the
    browser's own button chrome so it doesn't look like a boxed control. */
 button.actor-group-toggle { background: none; border: none; padding: 0; cursor: pointer; text-align: left; }
-/* WHERE's consolidated System row (direct follow-up request) — System
-   thumbnail left-aligned, System/Star name + "(Zone) Hex" in a three-line
-   block to its right. align-items:stretch (was center) lets
-   .location-hierarchy-thumb grow to the info block's own natural height
-   (direct follow-up request — "allow the thumbnail to be bigger to fill
-   the vertical height of the box") instead of staying the small fixed
-   NPC-thumbnail size; the 🔗 button opts back out with align-self:center
-   so it doesn't stretch into an odd tall rectangle alongside them. */
-.location-hierarchy-row { display: flex; align-items: stretch; gap: var(--sp-3); margin-bottom: var(--sp-2); }
-.location-hierarchy-row > .icon-btn { align-self: center; }
-.location-hierarchy-info { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 0.1rem; }
+/* WHERE's consolidated System row (direct follow-up request, reworked
+   again after an intermediate stretch-to-fill attempt read as "too
+   reduced" once shrunk) — a plain left-aligned, FIXED-size thumbnail
+   (see .location-hierarchy-thumb below — 30% larger than a standard NPC
+   thumbnail, direct instruction, not sized relative to the row's own
+   height) with the info block taking the rest of the row's width
+   (flex:1). align-items:center (not stretch) keeps the fixed-size circle
+   vertically centered next to the 3-line info block instead of trying to
+   grow/shrink to match it; the 🔗 button shares that same centering. */
+.location-hierarchy-row { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-2); }
+.location-hierarchy-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.1rem; }
 /* The System's own name — direct follow-up request: moved off the
    thumbnail (a plain photo now, no name underneath) to this new first
    line, above the Star name. */
 .location-hierarchy-system { font-size: 0.95rem; font-weight: 700; }
 .location-hierarchy-star { font-size: 0.9rem; font-weight: 600; }
 .location-hierarchy-zonehex { font-size: 0.75rem; }
-/* The System thumbnail itself — stretched by its flex row (above) to the
-   info block's full height, the photo/circle then fills HALF of that via
-   height:50% + aspect-ratio (reduced from a full 100% — direct follow-up
-   request) — a square photo reads as circular via the existing
-   border-radius:50% on .actor-thumb-photo/-empty, growing or shrinking
-   with however many lines the info block ends up needing, just at half
-   scale now. align-items:center (the wrapper no longer fills the row's
-   full height on its own) keeps the smaller circle vertically centered
-   next to the info block instead of pinned to the top. */
-.location-hierarchy-thumb { display: flex; align-items: center; }
-.location-hierarchy-thumb .actor-thumb { display: block; padding: 0; height: 50%; }
+/* The System thumbnail itself — direct instruction: a FIXED size, 30%
+   larger than a standard NPC thumbnail (.actor-thumb-photo's own 2.75rem
+   elsewhere in this file), not a percentage of the row's own height (the
+   previous two attempts both tied it to the row/info-block's dynamic
+   height, which read as unpredictably too small once actually shrunk).
+   flex:0 0 auto keeps it left-aligned at this fixed size regardless of
+   how much space .location-hierarchy-info (flex:1, above) ends up taking. */
+.location-hierarchy-thumb { flex: 0 0 auto; display: flex; }
+.location-hierarchy-thumb .actor-thumb { display: block; padding: 0; }
 .location-hierarchy-thumb .actor-thumb-photo,
-.location-hierarchy-thumb .actor-thumb-photo-empty { width: auto; height: 50%; aspect-ratio: 1 / 1; }
+.location-hierarchy-thumb .actor-thumb-photo-empty { width: calc(2.75rem * 1.3); height: calc(2.75rem * 1.3); }
 /* Latest Scene's split fields (Opening/Driver/Clue/Complication/Decision
    point/Likely Consequence/Current thread) — single column, not a
    multi-column grid: a scene field is often a full sentence or two, and
@@ -839,9 +851,25 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 /* Lightweight rich-text toolbar (ADR 0018) — one small row of buttons above
    a .mention-editor that insert plain markup characters (see shell.js's
    data-rich-cmd mousedown handler), not live execCommand formatting. */
-.rich-toolbar { display: flex; flex-wrap: wrap; gap: 0.15rem; margin-bottom: 0.25rem; position: relative; }
+.rich-toolbar { display: flex; flex-wrap: wrap; gap: 0.15rem; margin-bottom: 0.25rem; position: relative; padding-right: 1.6rem; }
 .rich-toolbar .icon-btn { border: 1px solid var(--border); border-radius: var(--radius-sm); min-width: 1.6rem; text-align: center; }
 .rich-toolbar .icon-btn:hover { color: var(--text); border-color: var(--accent); }
+/* Direct follow-up request: the collapse toggle moved off the icon row and
+   onto the textbox's own top-right corner — same corner convention
+   .mention-editor's native resize handle already uses in the bottom-right.
+   .rich-field (every call site's shared wrapper around richToolbarHTML's
+   output + the .mention-editor box) is the positioning context, not
+   .rich-toolbar itself, so this correctly overlays the textbox even when
+   the icon row above it is collapsed to nothing. .rich-toolbar's own
+   padding-right (above) reserves room so the row's last button never sits
+   underneath this when both are visible at once. */
+.rich-field { position: relative; }
+.rich-toolbar-corner-toggle {
+  position: absolute; top: 0.3rem; right: 0.3rem; z-index: 1;
+  background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  width: 1.4rem; height: 1.4rem; line-height: 1; font-size: 0.75rem;
+}
+.rich-toolbar-corner-toggle:hover { color: var(--accent); border-color: var(--accent); }
 /* Visually hidden but still a real, clickable input (display:none blocks
    the native color picker from opening in most engines) — triggered via
    .click() from the 🎨 button, never shown/clicked directly itself. */
@@ -902,18 +930,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
    scrollbar track never touches text, but that's more room than a small
    icon-button row needs, so this one block claws part of it back. */
 .current-location-banner { border-left: 2px solid var(--accent); padding-left: var(--sp-2); margin-right: calc(-1 * var(--sp-4)); }
-
-/* WHERE tab's tag-listbox + candidate-panel redesign ("USER CHANGES"
-   batch, docs/adr/0019) — a listbox (not chips, per explicit request) on
-   one side, matching Locations on the other. */
-/* Shared tag-filter -> candidate-panel -> click-to-mention layout, first
-   built for WHERE's Location picker, now reused by WHO's NPC/Faction one
-   (workspace/index.js's whereLocationPicker/whoEntityPicker) — generically
-   named since it's no longer WHERE-specific. */
-.entity-tag-picker { margin-top: var(--sp-3); }
-.entity-tag-picker-row { display: flex; gap: var(--sp-4); flex-wrap: wrap; }
-.entity-tag-picker-tags, .entity-tag-picker-candidates { flex: 1 1 12rem; min-width: 10rem; }
-.entity-tag-picker-tags select { width: 100%; margin-top: var(--sp-1); }
 
 /* WHO/WHERE's Faction Events tie-in (docs/adr/0031's Faction Events
    follow-up) — a small read-only summary + jump chips, same entity-chips
@@ -1198,6 +1214,11 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    request), same reasoning as .rel-add select above. */
 .inspector-photo-fields select[data-entity-field="type"] { font-size: 0.72rem; }
 .inspector-photo .gallery-thumb-circle { width: 4.5rem; height: 4.5rem; }
+/* Direct follow-up request: clicking the thumbnail shows the full-size
+   image (see image-lightbox-overlay below). Bare-button reset so the
+   circular photo inside doesn't pick up default button chrome. */
+.gallery-thumb-circle-btn { background: none; border: none; padding: 0; cursor: zoom-in; border-radius: 50%; }
+.gallery-thumb-circle-btn:hover .gallery-thumb-circle { border-color: var(--accent); }
 .inspector-photo-empty {
   display: flex; align-items: center; justify-content: center; width: 100%;
   aspect-ratio: 1 / 1; border: 1px dashed var(--border); border-radius: var(--radius-sm);
@@ -1627,6 +1648,28 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .dice-outcome-weak-hit { background: rgba(251, 191, 36, 0.16); color: var(--warn); border: 1px solid rgba(251, 191, 36, 0.4); }
 .dice-outcome-miss, .dice-outcome-fail { background: rgba(248, 113, 113, 0.16); color: var(--danger); border: 1px solid rgba(248, 113, 113, 0.4); }
 
+/* Full-size image lightbox (direct follow-up request) — a centered,
+   backdrop-dimmed modal (same visual language as .mc-search-overlay)
+   showing whatever thumbnail was clicked at its natural size, capped to
+   the viewport. Closing: the ✕ button, Escape, or clicking the dimmed
+   backdrop itself — that last one reads shell.js's click target directly
+   (not .closest()) so a click ON the image (a descendant of the overlay)
+   doesn't also trigger it, the same closest()-matches-descendants pitfall
+   .mc-search-overlay's own comment already documents avoiding differently. */
+.image-lightbox-overlay {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--sp-6);
+}
+.image-lightbox-overlay[hidden] { display: none; }
+.image-lightbox-img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--radius-sm); box-shadow: var(--shadow); }
+.image-lightbox-close {
+  position: absolute; top: var(--sp-4); right: var(--sp-4);
+  background: var(--tier3-bg); border: 1px solid var(--border-strong); color: var(--text);
+  width: 2.25rem; height: 2.25rem; border-radius: 50%; font-size: 1.1rem;
+}
+
 /* Oracle: grouped, collapsible, searchable tree */
 .oracle-toolbar { display: flex; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-3); }
 .oracle-toolbar .drawer-search { margin-bottom: 0; flex: 1; }
@@ -1686,6 +1729,26 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    the counter" — a plain number badge, replacing the earlier row-of-boxes
    attempt entirely. */
 .party-headline-value { font-size: 0.72rem; padding: 1px 6px; }
+/* Expanded Party Roster card's stat fields (direct follow-up correction —
+   "simple stat (1st line) and value (2nd line) in a button-like box that
+   is clickable to roll dice but not editable"): same bordered-pill
+   language .attr-row-compact/.track-row-compact already established for a
+   compact stat box, just standing alone as a real <button> (or a <span>
+   for a non-rollable/text field) instead of wrapping an editable input. */
+.party-stat-group { margin-bottom: var(--sp-2); }
+.party-stat-group-label { font-size: 0.6rem; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 2px; }
+.party-stat-pills { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.party-stat-pill {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  width: 4.4rem; padding: 0.35rem 0.3rem;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset); color: var(--text);
+  font: inherit;
+}
+button.party-stat-pill { cursor: pointer; }
+button.party-stat-pill:hover { border-color: var(--accent); color: var(--accent); }
+.party-stat-pill-static { opacity: 0.85; }
+.party-stat-pill-label { font-size: 0.62rem; letter-spacing: 0.04em; color: var(--text-dim); text-transform: uppercase; text-align: center; line-height: 1.2; white-space: normal; }
+.party-stat-pill-value { font-size: 0.9rem; font-weight: 700; }
 .party-tracker-list { display: flex; flex-direction: column; gap: var(--sp-2); }
 .party-tracker-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: var(--sp-2); align-items: center; }
 .party-tracker-name-input { min-width: 0; }

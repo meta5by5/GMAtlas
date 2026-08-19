@@ -273,22 +273,37 @@ export function toolbarCollapsed(doc, ui, key) {
  *  header row to move it into anyway. */
 export function richToolbarToggleHTML(key, collapsed) {
   if (!key) return '';
-  return `<button type="button" class="icon-btn rich-toolbar-toggle" data-rich-toolbar-toggle="${escAttr(key)}" title="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}" aria-label="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}">✏️</button>`;
+  // Direct follow-up request: a plain, monochrome pencil (U+270E, no
+  // emoji variation selector) matching the SAME glyph every rename/edit
+  // toggle elsewhere in this app already uses (Journal, Oracle, Party
+  // Trackers, Guide, Documents) — not the colorful "✏️" emoji variant.
+  return `<button type="button" class="icon-btn rich-toolbar-toggle" data-rich-toolbar-toggle="${escAttr(key)}" title="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}" aria-label="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}">✎</button>`;
 }
-function arrowToggleHTML(key, collapsed) {
+// Direct follow-up request: the toggle no longer sits INSIDE the icon row
+// above the textbox — it's now a small overlay button pinned to the
+// textbox's own top-right corner (.rich-toolbar-corner-toggle, CSS
+// position:absolute against .rich-field, the shared wrapper every call
+// site already puts richToolbarHTML's output and the .mention-editor box
+// in together), the same corner convention .mention-editor's own native
+// resize handle already uses in the OPPOSITE corner. Rendered as a SIBLING
+// of .rich-toolbar (not a child of it) precisely so it anchors to
+// .rich-field as a whole rather than to the icon row's own (collapsible,
+// variable-height) box.
+function cornerToggleHTML(key, collapsed) {
   return key
-    ? `<button type="button" class="icon-btn rich-toolbar-toggle" data-rich-toolbar-toggle="${escAttr(key)}" title="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}" aria-label="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}">${collapsed ? '▸' : '▾'}</button>`
+    ? `<button type="button" class="icon-btn rich-toolbar-corner-toggle" data-rich-toolbar-toggle="${escAttr(key)}" title="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}" aria-label="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}">${collapsed ? '▾' : '▴'}</button>`
     : '';
 }
 // Both `key`/`collapsed` are optional (default: a key-less, always-expanded
 // toolbar) so a caller that hasn't been updated yet still renders correctly,
 // just without the collapse behavior. `includeToggle: false` (the 4
-// Composer fields above) omits the built-in ▸/▾ — the caller renders
-// richToolbarToggleHTML itself instead, elsewhere in its own markup.
+// Composer fields with their own header-row pencil) omits the built-in
+// corner toggle — the caller renders richToolbarToggleHTML itself instead,
+// elsewhere in its own markup.
 export function richToolbarHTML(key = '', collapsed = false, { includeToggle = true } = {}) {
-  const toggle = includeToggle ? arrowToggleHTML(key, collapsed) : '';
-  if (collapsed) return `<div class="rich-toolbar" data-rich-toolbar>${toggle}</div>`;
-  return `<div class="rich-toolbar" data-rich-toolbar>${toggle}
+  const toggle = includeToggle ? cornerToggleHTML(key, collapsed) : '';
+  if (collapsed) return toggle;
+  return `${toggle}<div class="rich-toolbar" data-rich-toolbar>
     <button type="button" class="icon-btn" data-rich-cmd="bold" title="Bold (**text**)"><b>B</b></button>
     <button type="button" class="icon-btn" data-rich-cmd="italic" title="Italic (*text*)"><i>I</i></button>
     <button type="button" class="icon-btn" data-rich-cmd="underline" title="Underline (_text_)"><u>U</u></button>

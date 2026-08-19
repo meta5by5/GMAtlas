@@ -9,7 +9,7 @@
 import { contextSummary } from '../../domain/context.js';
 import { listThreads, THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { ACTIVITIES } from '../../domain/activities.js';
-import { listTagVocabulary, isSameDistrict, getEntity, listEntities, getContainingLocation, getContainedLocations, LOCATION_OBJECT_TYPES, getSystemForLocation, getStarForLocation, getHexZoneForLocation, getEntityFaction } from '../../domain/entities.js';
+import { isSameDistrict, getEntity, listEntities, getContainingLocation, getContainedLocations, LOCATION_OBJECT_TYPES, getSystemForLocation, getStarForLocation, getHexZoneForLocation, getEntityFaction } from '../../domain/entities.js';
 import { getCurrentWhereLocations, factionsPresentAt, factionsInRegion } from '../../domain/factionTurnEngine.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { buildMentionEditorHTML, richToolbarHTML, richToolbarToggleHTML, toolbarCollapsed } from '../mentionEditor.js';
@@ -528,7 +528,6 @@ function whySectionBody(doc, ui) {
     <div class="shift-actions">
       <button class="chip" data-shift-prompt="Set Objective">◎ Set Objective</button>
     </div>
-    ${whyEntityPicker(doc, ui)}
     ${threadsBlock(doc)}
     ${foreshadowingBlock(doc)}`;
 }
@@ -636,49 +635,6 @@ function summaryField(key, val, placeholder, doc, ui) {
   </div>`;
 }
 
-// Shared candidates-panel renderer for WHERE/WHO's tag pickers — a
-// <select size> listbox, same box aesthetic as the Location/NPC-Faction
-// tag listbox right next to it (direct follow-up request: chips read as
-// inconsistent with that listbox and take more vertical space). Picking
-// an option inserts an @mention (the select's own change handler,
-// shell.js) then resets back to the placeholder — same "pick, act, reset"
-// shape as data-conflict-faction-link/data-where-faction-link, not a
-// persistent filter selection like the tag listbox itself.
-function candidateListbox(candidates, selectAttr, tagFilter, noun) {
-  if (!candidates.length) return `<div class="ws-placeholder">${tagFilter ? `No ${noun} tagged #${esc(tagFilter)}.` : `No ${noun} yet.`}</div>`;
-  return `<select size="${Math.min(8, Math.max(3, candidates.length))}" ${selectAttr}>
-      <option value="">— insert into Focus —</option>
-      ${candidates.map((e) => `<option value="${esc(e.id)}">${esc(e.name || 'Unnamed')}</option>`).join('')}
-    </select>`;
-}
-
-// WHY tab: the same tag-picker -> listbox -> select-to-mention pattern as
-// WHO/WHERE above, applied to "who/what this objective is actually about"
-// — NPCs, Factions, and Conflicts pooled together (docs/adr/0039). WHY had
-// NO entity-selection UI at all before this (unlike WHO/WHERE, both
-// upgraded earlier this session) — direct complaint this closes.
-function whyEntityPicker(doc, ui) {
-  const tagFilter = ui.whyTagFilter || null;
-  const vocab = [...new Set([...listTagVocabulary(doc, 'npc'), ...listTagVocabulary(doc, 'faction'), ...listTagVocabulary(doc, 'conflict')])].sort((a, b) => a.localeCompare(b));
-  const tagListbox = vocab.length
-    ? `<select size="${Math.min(8, Math.max(3, vocab.length))}" data-why-tag-select>
-        <option value="" ${!tagFilter ? 'selected' : ''}>— all tags —</option>
-        ${vocab.map((t) => `<option value="${esc(t)}" ${t === tagFilter ? 'selected' : ''}>#${esc(t)}</option>`).join('')}
-      </select>`
-    : '<p class="ws-placeholder">No NPC/Faction/Conflict tags yet — tag one in Cast to start filtering.</p>';
-
-  const allRelevant = (doc.entities.items || []).filter((e) => e.type === 'npc' || e.type === 'faction' || e.type === 'conflict');
-  const candidates = tagFilter ? allRelevant.filter((e) => (e.tags || []).includes(tagFilter)) : allRelevant;
-  const candidatePanel = candidateListbox(candidates, 'data-insert-why-mention-select', tagFilter, 'NPCs/Factions/Conflicts');
-
-  return `
-    <div class="entity-tag-picker">
-      <div class="entity-tag-picker-row">
-        <div class="entity-tag-picker-tags"><span class="field-label-static">NPC/Faction/Conflict tags</span>${tagListbox}</div>
-        <div class="entity-tag-picker-candidates"><span class="field-label-static">Matching entities</span>${candidatePanel}</div>
-      </div>
-    </div>`;
-}
 
 // A Factions active nearby entry's expanded detail body (direct follow-up
 // request — parity with NPCs' own scene-detail expand): read-only

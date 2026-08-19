@@ -1382,13 +1382,9 @@ function trackRow(f, gi, fi, opts = {}) {
   // of boxes already shows both the fill count AND the max (its own box
   // count) visually, so the badge now reads as just the bare current value,
   // narrow enough to match the modifier-style boxes elsewhere in the sheet.
-  // opts.hideTrackBadge (Party Roster's expanded card, direct follow-up
-  // request) drops the badge entirely — its collapsed row already shows
-  // this same number as a headline counter, and boxes alone are enough
-  // for click-to-set here.
-  const badge = opts.hideTrackBadge ? '' : (rollable
+  const badge = rollable
     ? `<button type="button" class="track-value-badge" data-statblock-roll="${key}" title="${esc(rollTitle)}">${value}</button>`
-    : `<span class="track-value-badge track-value-badge-static" title="Progress track — not rollable">${value}</span>`);
+    : `<span class="track-value-badge track-value-badge-static" title="Progress track — not rollable">${value}</span>`;
   return `
     <div class="statblock-row track-row ${opts.compact ? 'track-row-compact' : ''}">
       <span class="statblock-key">${esc(f.key)}</span>
@@ -2067,22 +2063,52 @@ function templateFieldRow(systemId, f, i, count) {
 // it into their data-statblock-* keys so a click here resolves against
 // THIS card's entity even though it's very likely not the Entity Editor's
 // currently-active one (see shell.js's parseStatblockKey).
-// Expanded Party Roster card: reuses statblockSection() WHOLESALE (the
-// exact same interactive Entity Editor rendering — collapse/remove-group,
-// +Field/+Track, Enhancements, click-to-roll) rather than a separate
-// read-only summary, per direct request ("match the conventions of the
-// Composer... clicking a stat should roll that stat with modifier per the
-// rules appropriate to that statblock"). opts.entityId threads through
-// trackRow/attrRow into their data-statblock-* keys so a click here
-// resolves against THIS card's entity even though it's very likely not
-// the Entity Editor's currently-active one (see shell.js's
-// parseStatblockKey). opts.hideTrackBadge (direct follow-up request) drops
-// each track field's trailing value badge in THIS view specifically —
-// the collapsed row's own headline counter (below) already shows that
-// same number, so repeating it here read as redundant; the row of boxes
-// stays, still click-to-set.
-function partyMemberStatblocks(e, doc, ui) {
-  return statblockSection(e, doc, ui, { entityId: e.id, hideTrackBadge: true });
+// Expanded Party Roster card (direct follow-up correction — reversing the
+// earlier "reuse statblockSection() wholesale" approach after trying it):
+// every field renders as a small READ-ONLY "button-like box" — the stat's
+// name on the first line, its current value on the second, clickable only
+// to ROLL it, never to edit it ("that only happens in the entity editor").
+// Unlike the Entity Editor's own attrRow/trackRow (a live-editable input /
+// click-to-set boxes), nothing here writes to the field directly — a new
+// dedicated data-party-stat-roll (shell.js) reuses performFieldRoll, the
+// exact same roll logic attrRow/trackRow's own triggers call, just without
+// any of their edit affordances riding along with it.
+function partyMemberStatblocks(e, doc) {
+  const sorted = sortStatblockGroups(e.statblocks, doc.settings);
+  return sorted.map(({ group, index: gi }) => {
+    const pills = (group.fields || []).map((f, fi) => partyStatPill(f, e.id, gi, fi)).join('');
+    if (!pills) return '';
+    return `<div class="party-stat-group">
+      <div class="party-stat-group-label">${esc(statblockGroupLabel(group, doc))}</div>
+      <div class="party-stat-pills">${pills}</div>
+    </div>`;
+  }).join('');
+}
+
+// One stat's read-only box — label/value shape and rollability mirror
+// attrRow/trackRow's own conventions exactly (attribute default rollMethod
+// 'none', track default 'action' for backward compatibility with fields
+// predating Bestiary templates — see CLAUDE.md's own note on this), just
+// rendered as a plain <button>/<span> instead of an <input> or a row of
+// click-to-set boxes. A plain text field (e.g. "Notable Gear") has no roll
+// concept at all — shown the same way but never interactive.
+function partyStatPill(f, entityId, gi, fi) {
+  const key = `${entityId}::${gi}::${fi}`;
+  const value = f.attribute ? esc(formatAttrValue(Number(f.value) || 0, f.format || 'sign'))
+    : f.track ? esc(String(Number(f.value) || 0))
+    : esc(f.value || '—');
+  const method = f.rollMethod || (f.attribute ? 'none' : f.track ? 'action' : 'none');
+  const rollable = (f.attribute || f.track) && method !== 'none';
+  if (rollable) {
+    return `<button type="button" class="party-stat-pill" data-party-stat-roll="${key}" title="Roll ${esc(f.key)}">
+      <span class="party-stat-pill-label">${esc(f.key)}</span>
+      <span class="party-stat-pill-value">${value}</span>
+    </button>`;
+  }
+  return `<span class="party-stat-pill party-stat-pill-static" title="${esc(f.key)} — not rollable">
+    <span class="party-stat-pill-label">${esc(f.key)}</span>
+    <span class="party-stat-pill-value">${value}</span>
+  </span>`;
 }
 
 // Small right-aligned counter on a collapsed Party Roster row — direct
@@ -2232,7 +2258,7 @@ function partyMemberCard(e, doc, ui) {
         ${partyMemberHeadlineCounters(doc, e)}
         <button class="icon-btn" data-open-entity="${esc(e.id)}" title="Open in entity editor" aria-label="Open in entity editor">↗</button>
       </div>
-      ${open ? partyMemberStatblocks(e, doc, ui) : ''}
+      ${open ? partyMemberStatblocks(e, doc) : ''}
     </div>`;
 }
 
