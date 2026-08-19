@@ -613,7 +613,22 @@ button { font: inherit; color: inherit; cursor: pointer; }
    right-aligned on the label's own line via margin-left:auto. */
 .field-label-row { display: flex; align-items: center; width: 100%; }
 .field-label-row .icon-btn { margin-left: auto; text-transform: none; letter-spacing: normal; }
+/* WHERE's Site Description/Immediate Surroundings (direct follow-up
+   request — "the icons should be right-aligned") — a robust alternative
+   to the icon-btn-first-child margin-left:auto trick above for a row that
+   carries more than one icon: the label text and the icon group are two
+   separate flex children, so alignment doesn't depend on which child
+   happens to be first in the DOM. */
+.field-label-text { text-transform: none; letter-spacing: normal; }
+.field-label-actions { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.field-label-actions .icon-btn { margin-left: 0; }
 .field-label-hint { text-transform: none; letter-spacing: normal; opacity: 0.8; }
+/* Direct follow-up request ("make the crystal ball, face and magnifying
+   glass icons grayscale or line-drawing like was done for the pencil") —
+   🔮/🎭/🔍 have no Unicode text-presentation variant (unlike ✎, U+270E,
+   which is an older dual-presentation symbol VS15 can force to plain
+   text), so a CSS filter is the only way to de-color them the same way. */
+.icon-mono { filter: grayscale(1); }
 /* Visual separator between an entity card's field groups (World
    Demographics: Starport/Bases vs. Tech Level onward, docs/adr/0026). */
 .field-divider { border: none; border-top: 1px solid var(--border); margin: var(--sp-3) 0; }

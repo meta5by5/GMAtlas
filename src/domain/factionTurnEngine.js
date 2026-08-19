@@ -54,7 +54,7 @@
 // - "District" is a single-level contains/located_at check (entities.js's
 //   isSameDistrict), not deep ancestor recursion.
 
-import { getEntity, updateEntity, listEntities, getRelationshipBetween, isSameDistrict, ensureFactionTurnFields, getContainingLocation, getContainedLocations, getEntityFaction, setEntityFactionMembership } from './entities.js';
+import { getEntity, updateEntity, listEntities, getRelationshipBetween, isSameDistrict, ensureFactionTurnFields, getContainingLocation, getContainedLocations, getEntityFaction, setEntityFactionMembership, RELATIONSHIP_TYPE_LABEL } from './entities.js';
 import { listThreads, addThread, advanceThread, removeThread } from './threads.js';
 // Provider indirection (docs/adr/0032): every asset/tag/goal catalog lookup
 // below resolves through factionProviderFor(campaign, faction) instead of
@@ -236,6 +236,48 @@ export function factionsPresentAt(campaign, locationId) {
     const viaMembership = owner && !owner.synthetic && owner.id === f.id;
     return viaAsset || viaHomeworld || viaBase || viaGoverned || viaRelationship || viaMembership;
   });
+}
+
+/** Why a faction reads as present at one of `locationIds` — every matching
+ *  structural signal (Asset here/Homeworld/Base of Influence/Governs) PLUS
+ *  the ACTUAL relationship type linking it to that location, whatever that
+ *  type is (direct follow-up request, WHERE's "Factions here": "include
+ *  any linked relationship types connecting to a faction" — not just the
+ *  'located_at' type factionsPresentAt itself checks for presence, since a
+ *  GM may have typed the link as Controls/Allied With/Member Of/etc.
+ *  instead; a second direct follow-up corrected the ownership check's own
+ *  label from an invented generic "Owns" to the real relationship type
+ *  underneath it, RELATIONSHIP_TYPE_LABEL.member_of — getEntityFaction
+ *  resolves that ownership via a literal member_of edge, so the label
+ *  should say so). A non-empty result IS the membership test for WHERE's
+ *  "Factions present here" digest now (locationFactionsBlock,
+ *  workspace/index.js — a full replacement for the narrower
+ *  factionsPresentAt as that block's own filter, though factionsPresentAt
+ *  itself is untouched for its other callers). Small, human-readable
+ *  labels for a thumbnail badge row, not a data structure meant for
+ *  further logic; a bare 'linked' relationship type is skipped as
+ *  uninformative noise (every OTHER typed relationship the location's
+ *  side names auto-mirrors back onto the faction's own side as generic
+ *  'linked' unless it's located_at/contains — see entities.js's _link —
+ *  so showing it here would just echo whichever real label already fired). */
+export function factionPresenceReasons(campaign, faction, locationIds) {
+  const ids = new Set(Array.isArray(locationIds) ? locationIds : [locationIds]);
+  const reasons = [];
+  if ((faction.factionAssets || []).some((a) => ids.has(a.locationId) && a.status === 'active' && !a.stealthed)) reasons.push('Asset here');
+  if (ids.has(faction.homeworldId)) reasons.push('Homeworld');
+  if ((faction.basesOfInfluence || []).some((b) => ids.has(b.locationId))) reasons.push('Base of Influence');
+  if ((faction.governedLocationIds || []).some((id) => ids.has(id))) reasons.push('Governs');
+  for (const id of ids) {
+    const owner = getEntityFaction(campaign, id);
+    if (owner && !owner.synthetic && owner.id === faction.id) { reasons.push(RELATIONSHIP_TYPE_LABEL.member_of); break; }
+  }
+  for (const r of faction.relationships || []) {
+    if (r.type !== 'linked' && ids.has(r.to)) {
+      const label = RELATIONSHIP_TYPE_LABEL[r.type] || r.label || 'Linked';
+      if (!reasons.includes(label)) reasons.push(label);
+    }
+  }
+  return reasons;
 }
 
 /** factionsAtLocation entries actually eligible as an Attack/Seize Planet

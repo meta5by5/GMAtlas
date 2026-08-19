@@ -243,7 +243,7 @@ function bondFieldFor(e, otherName) {
 function oracleLinkIcon(entityType, field) {
   const tags = oracleLinkTagsFor(entityType, field);
   if (!tags) return '';
-  return `<button class="icon-btn" data-oracle-field-link="${entityType}.${field}" title="Jump to relevant Oracle table(s): ${tags.map((t) => esc(t)).join(', ')}" aria-label="Jump to relevant Oracle tables">🔮</button>`;
+  return `<button class="icon-btn icon-mono" data-oracle-field-link="${entityType}.${field}" title="Jump to relevant Oracle table(s): ${tags.map((t) => esc(t)).join(', ')}" aria-label="Jump to relevant Oracle tables">🔮</button>`;
 }
 
 // A field label + its optional 🔮 link, right-aligned on the same line —
@@ -369,7 +369,7 @@ function inspector(doc, e, ui) {
         <select data-entity-link-target>${others.map((o) => `<option value="${esc(o.id)}">${esc(o.name) || 'Unnamed'}</option>`).join('')}</select>
         <input data-entity-link-label placeholder="label (ally, rival…)">
         <button class="btn sm" data-entity-link-add title="Link" aria-label="Link">🔗 Link</button>
-        <button class="btn ghost sm" data-rel-picker-open title="Search Cast for an entity to link">🔍 Find entity to link</button>
+        <button class="btn ghost sm" data-rel-picker-open title="Search Cast for an entity to link"><span class="icon-mono">🔍</span> Find entity to link</button>
       </div>${relPickerBlock(doc, e, ui)}` : '<p class="dim small">Add another entity to create relationships.</p>'}
     </div>`;
 }

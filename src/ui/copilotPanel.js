@@ -65,7 +65,7 @@ function storyOptionsBlock(doc, ui, { limit = 8 } = {}) {
         <span class="dim small">— ${esc(o.detail)}</span>
       </span>
       <span class="thread-actions">
-        <button class="icon-btn" data-story-option-roll="${esc(o.oracleGroup)}>${esc(o.oracleTable)}" data-story-option-id="${esc(o.id)}" title="Roll ${esc(o.oracleGroup)} → ${esc(o.oracleTable)} for inspiration">🔮</button>
+        <button class="icon-btn icon-mono" data-story-option-roll="${esc(o.oracleGroup)}>${esc(o.oracleTable)}" data-story-option-id="${esc(o.id)}" title="Roll ${esc(o.oracleGroup)} → ${esc(o.oracleTable)} for inspiration">🔮</button>
         <button class="icon-btn" data-story-option-journal="${esc(o.id)}" title="Add to Journal">＋</button>
         <button class="icon-btn" data-story-option-dismiss="${esc(o.id)}" title="Dismiss">✕</button>
       </span>
@@ -93,7 +93,7 @@ function suggestLensBlock(ui) {
     <div class="copilot-card">
       <h3>Suggest a Lens</h3>
       <p class="dim small">Weighted toward who/what is currently in scene.</p>
-      <button class="chip" data-why-lens-suggest title="Draw lens chips weighted toward who/what is currently in scene">🎭 Suggest a Lens</button>
+      <button class="chip" data-why-lens-suggest title="Draw lens chips weighted toward who/what is currently in scene"><span class="icon-mono">🎭</span> Suggest a Lens</button>
       ${lensPickerHtml(ui.whyLensPickerOpen, ui.whyLensDraw, { intro: 'Pick a lens to steer what happens next:' })}
     </div>`;
 }
@@ -192,7 +192,7 @@ function suggestedOracleEntryChips(entry, ui) {
         <button type="button" class="icon-btn" data-advisor-result-accept="${esc(key)}" data-advisor-draft-target="${esc(target)}" title="Add to ${esc(targetLabel)}">✓</button>
       </span>`;
     }
-    return `<button class="chip sm" data-advisor-oracle-roll="${esc(key)}" data-advisor-result-key="${esc(key)}" title="Roll ${esc(path.join(' > '))}">🔮 ${esc(path.join(' > '))}</button>`;
+    return `<button class="chip sm" data-advisor-oracle-roll="${esc(key)}" data-advisor-result-key="${esc(key)}" title="Roll ${esc(path.join(' > '))}"><span class="icon-mono">🔮</span> ${esc(path.join(' > '))}</button>`;
   }).join('')}</div>`;
 }
 // One draft editor per Scene Details field actually targeted by a chip
@@ -261,7 +261,7 @@ function consequenceOraclesBlock(doc, ui, observedConsequence) {
         <button type="button" class="icon-btn" data-advisor-result-accept="${esc(key)}" data-advisor-draft-target="consequence" title="Append to the draft below">✓</button>
       </span>`;
     }
-    return `<button class="chip sm" data-advisor-oracle-roll="${esc(key)}" data-advisor-result-key="${esc(key)}" title="Roll ${esc(path.join(' > '))}">🔮 ${esc(path.join(' > '))}</button>`;
+    return `<button class="chip sm" data-advisor-oracle-roll="${esc(key)}" data-advisor-result-key="${esc(key)}" title="Roll ${esc(path.join(' > '))}"><span class="icon-mono">🔮</span> ${esc(path.join(' > '))}</button>`;
   }).join('');
   const editor = advisorDraftEditor('consequence', ui, {
     placeholder: "Check an oracle result below to stage it here, or type your own — then Apply to send it to Scene Details' Likely consequence.",

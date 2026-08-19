@@ -36,6 +36,14 @@ export const ENTITY_FIELD_ORACLE_LINKS = {
   'scene.clue': ['discovery'],
   'scene.complication': ['discovery'],
   'scene.consequence': ['discovery'],
+  // WHERE's Site Description/Immediate Surroundings (direct follow-up
+  // request — "Reintroduce that functionality... and map each field to
+  // oracles"), same "kind.field" reuse as Latest Scene's split fields
+  // above; each gets its OWN tag rather than sharing 'setting' (scene.
+  // opening's tag) so its 🔮 icon resolves to just its own dedicated table
+  // instead of blending with Opening's.
+  'where.siteDescription': ['site'],
+  'where.surroundings': ['surroundings'],
 };
 
 export function oracleLinkTagsFor(entityType, field) {

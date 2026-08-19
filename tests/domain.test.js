@@ -427,6 +427,17 @@ test('contextSummary shows the first line of a multi-line situation', () => {
   assert.equal(contextSummary(ctx, 'what'), 'Find the medic');
 });
 
+test('contextSummary for "where" (direct follow-up request) joins Site Description/Immediate Surroundings, falls back to the legacy Focus field only when both are blank, and is empty otherwise', () => {
+  const ctx = defaultCampaign().context;
+  assert.equal(contextSummary(ctx, 'where'), '');
+  ctx.where.summary = 'An old Focus note from before the redesign';
+  assert.equal(contextSummary(ctx, 'where'), 'An old Focus note from before the redesign', 'falls back to summary when neither new field is set');
+  ctx.where.siteDescription = 'Settlement edge';
+  assert.equal(contextSummary(ctx, 'where'), 'Settlement edge', 'a new field, once set, takes over from the legacy summary fallback');
+  ctx.where.surroundings = 'Inside a building';
+  assert.equal(contextSummary(ctx, 'where'), 'Settlement edge — Inside a building');
+});
+
 // --- threads (new feature) ------------------------------------------------
 import {
   addThread, advanceThread, removeThread, threadUnderPressure,
@@ -5403,7 +5414,7 @@ test('gatherSceneContext reads WHO Actors from the current scene\'s curated list
   assert.deepEqual(bare.worldFlags, []);
   assert.equal(bare.activity, '');
   assert.equal(bare.whoSummary, '');
-  assert.equal(bare.whereSummary, '');
+  assert.equal(bare.whereDetail, '');
 
   let camp = defaultCampaign();
   let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Rust Cartel' }));
@@ -5416,7 +5427,8 @@ test('gatherSceneContext reads WHO Actors from the current scene\'s curated list
   scene.locationIds = [locId];
   camp.scenes = [scene];
   camp = addSceneAntagonist(camp, scene.id, npcId);
-  camp.context.where.summary = 'At the @[Docking Bay]';
+  camp.context.where.siteDescription = 'Settlement edge';
+  camp.context.where.surroundings = 'Inside a building';
   camp.context.how.activity = 'negotiate';
 
   const ctx = gatherSceneContext(camp);
@@ -5424,7 +5436,18 @@ test('gatherSceneContext reads WHO Actors from the current scene\'s curated list
   assert.deepEqual(ctx.whereLocations.map((l) => l.id), [locId]);
   assert.deepEqual(ctx.factionsHere.map((f) => f.id), [factionId]);
   assert.equal(ctx.activity, 'negotiate');
-  assert.equal(ctx.whereSummary, 'At the @[Docking Bay]');
+  assert.equal(ctx.whereDetail, 'Settlement edge — Inside a building');
+});
+
+test('gatherSceneContext\'s whereDetail joins Site Description and Immediate Surroundings with an em dash, falls back to just one when the other is blank, and is empty when both are', () => {
+  let camp = defaultCampaign();
+  camp.context.where.siteDescription = 'Docking bay';
+  assert.equal(gatherSceneContext(camp).whereDetail, 'Docking bay');
+  camp.context.where.siteDescription = '';
+  camp.context.where.surroundings = 'Open vacuum';
+  assert.equal(gatherSceneContext(camp).whereDetail, 'Open vacuum');
+  camp.context.where.surroundings = '';
+  assert.equal(gatherSceneContext(camp).whereDetail, '');
 });
 
 test('buildStoryOptions is genuinely cumulative — a faction agenda, a Conflict here, and an open Foreshadowing entry each contribute their OWN option in the same call, ranked by weight, with a real (data/tables.js-verified) oracle path on every entry', () => {
@@ -5504,7 +5527,8 @@ test('composeNarrativeDraft (docs/adr/0040 Phase 12b) is empty on a bare campaig
   let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Rust Cartel' }));
   let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Docking Bay' }));
   camp = updateEntity(camp, factionId, { agenda: 'Corner the **water** trade', homeworldId: locId });
-  camp.context.where.summary = 'At the @[Docking Bay]';
+  camp.context.where.siteDescription = 'Docking bay';
+  camp.context.where.surroundings = 'Cargo hold';
   camp.context.who.summary = 'Talking to @[Rust Cartel]';
   camp.context.what.situation = 'The docking clamps just failed.';
   camp.context.why.summary = 'Get the ship spaceworthy again';
@@ -5512,7 +5536,7 @@ test('composeNarrativeDraft (docs/adr/0040 Phase 12b) is empty on a bare campaig
 
   // No options selected: location/who/situation/objective still compose.
   const bare = composeNarrativeDraft(camp);
-  assert.match(bare, /@\[Docking Bay\]/);
+  assert.match(bare, /Docking bay — Cargo hold/);
   assert.match(bare, /@\[Rust Cartel\]/);
   assert.match(bare, /The docking clamps just failed\./);
   assert.match(bare, /Get the ship spaceworthy again/);
@@ -5531,21 +5555,22 @@ test('composeNarrativeDraft (docs/adr/0040 Phase 12b) is empty on a bare campaig
   assert.equal(unselected, bare);
 });
 
-test('composeNarrativeDraft (docs/adr/0040 Phase 12f fix) uses WHO/WHERE\'s raw Focus text verbatim, not just the @mentions parsed out of it — free prose the GM actually typed must reach the draft, not just entity names', () => {
+test('composeNarrativeDraft (docs/adr/0040 Phase 12f fix, updated for the Site Description/Immediate Surroundings follow-up) uses WHO\'s raw Focus text and WHERE\'s Site Description/Immediate Surroundings verbatim, not a synthetic sentence — free prose the GM actually typed must reach the draft, not just entity names', () => {
   let camp = defaultCampaign();
   let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Rust Cartel' }));
   camp.context.who.summary = 'Talking to @[Rust Cartel] about the missing shipment, tense and evasive';
-  camp.context.where.summary = 'A cramped cargo bay reeking of coolant, crates stacked to the ceiling';
+  camp.context.where.siteDescription = 'A cramped cargo bay reeking of coolant';
+  camp.context.where.surroundings = 'crates stacked to the ceiling';
 
   const draft = composeNarrativeDraft(camp);
   assert.match(draft, /about the missing shipment, tense and evasive/, 'WHO Focus prose beyond the @mention itself reaches the draft');
-  assert.match(draft, /A cramped cargo bay reeking of coolant, crates stacked to the ceiling/, 'WHERE Focus prose reaches the draft verbatim, not a synthetic "the scene is set at" sentence');
+  assert.match(draft, /A cramped cargo bay reeking of coolant — crates stacked to the ceiling/, 'WHERE\'s Site Description/Immediate Surroundings reach the draft verbatim, not a synthetic "the scene is set at" sentence');
   assert.match(draft, /@\[Rust Cartel\]/, 'the @mention inside the Focus text is still present');
 });
 
 // --- docs/adr/0041 Phase 13a/13b: Location Details + scene-scoped NPC state ---
 import { getNpcSceneState, addSceneBystander, removeSceneBystander, addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, moveSceneActor, addSceneLocation, setSceneSystem, NPC_SCENE_FIELD_ORACLE_PATH } from '../src/domain/scenes.js';
-import { rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField } from '../src/domain/session.js';
+import { rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField, rollWhereDetailField } from '../src/domain/session.js';
 
 test('a location entity defaults sector/objectType (World Profile) and sights/smells/sounds + sensorySource (all null) — nothing required to create one', () => {
   let camp = defaultCampaign();
@@ -5794,6 +5819,25 @@ test('rollLocationSensoryField/editLocationSensoryField mirror the NPC-field ver
   assert.deepEqual(getEntity(afterNpcRoll, npcId), getEntity(beforeNpcRoll, npcId), 'no-op on a non-location entity');
 });
 
+test('rollWhereDetailField (WHERE\'s Site Description/Immediate Surroundings 🔮, direct follow-up correction — "the value is not added to the text box") rolls from each field\'s own dedicated table and REPLACES context.where\'s field outright; no-ops on an unknown field', () => {
+  let camp = defaultCampaign();
+  camp = rollWhereDetailField(camp, 'siteDescription', { rng: makeRng(2) });
+  assert.ok(SCENE_TABLES['Location Themes']['Site Type'].includes(camp.context.where.siteDescription));
+
+  camp = rollWhereDetailField(camp, 'surroundings', { rng: makeRng(5) });
+  assert.ok(SCENE_TABLES['Location Themes']['Immediate Surroundings'].includes(camp.context.where.surroundings));
+
+  // A second roll REPLACES, doesn't append.
+  camp.context.where.siteDescription = 'A hand-typed value';
+  camp = rollWhereDetailField(camp, 'siteDescription', { rng: makeRng(3) });
+  assert.notEqual(camp.context.where.siteDescription, 'A hand-typed value');
+  assert.ok(SCENE_TABLES['Location Themes']['Site Type'].includes(camp.context.where.siteDescription));
+
+  const beforeUnknown = camp;
+  const afterUnknown = rollWhereDetailField(camp, 'notARealField', { rng: makeRng(1) });
+  assert.deepEqual(afterUnknown.context.where, beforeUnknown.context.where, 'no-op on an unknown field');
+});
+
 test('drawSuggestionLenses with no sceneContext is unaffected by this change (pure-random, exact prior behavior); with a sceneContext, a boosted lens (negotiation, while Activity is Negotiate) is drawn strictly more often across many seeds than without one', () => {
   const withoutContext = drawSuggestionLenses(defaultCampaign(), { rng: makeRng(7) });
   assert.equal(withoutContext.length, 4);
@@ -5813,7 +5857,7 @@ test('drawSuggestionLenses with no sceneContext is unaffected by this change (pu
 // --- Living Faction Engine, Phase A: universal membership, conquest flips,
 // region depth, faction dossier ---------------------------------------------
 import { getEntityFaction, setEntityFactionMembership } from '../src/domain/entities.js';
-import { factionsInRegion, getFactionDossier, factionsPresentAt, isFactionRoundDue, resetFactionPacing, factionEventsByRound } from '../src/domain/factionTurnEngine.js';
+import { factionsInRegion, getFactionDossier, factionsPresentAt, factionPresenceReasons, isFactionRoundDue, resetFactionPacing, factionEventsByRound } from '../src/domain/factionTurnEngine.js';
 
 test('factionsPresentAt lists every faction present exactly at a location — asset, homeworld, Base, governed, or member_of — with no anchor exclusion, and is empty for a location with no presence or a null id', () => {
   let camp = defaultCampaign();
@@ -5853,6 +5897,42 @@ test('factionsPresentAt also recognizes a manual `located_at` relationship (docs
   camp = updateRelationshipType(camp, locId, parentId, 'located_at');
   const region = factionsInRegion(camp, parentId);
   assert.ok(region.some((e) => e.faction.id === factionId), 'factionsInRegion sees the manually-linked faction via the region tree');
+});
+
+test('factionPresenceReasons (WHERE "Factions here", direct follow-up request: "include any linked relationship types connecting to a faction") reports every structural presence signal plus any relationships edge straight to the location, deduped and readable, and is empty for a faction with no connection to the given location(s)', () => {
+  let camp = defaultCampaign();
+  let assetFactionId, homeLocId; ({ campaign: camp, factionId: assetFactionId, locationId: homeLocId } = makeFactionWithHomeworld(camp, 'Home Faction'));
+  assert.deepEqual(factionPresenceReasons(camp, getEntity(camp, assetFactionId), [homeLocId]), ['Homeworld']);
+
+  // A second, unrelated location: no reasons at all.
+  let otherLocId; ({ campaign: camp, id: otherLocId } = createEntity(camp, { type: 'location', name: 'Elsewhere' }));
+  assert.deepEqual(factionPresenceReasons(camp, getEntity(camp, assetFactionId), [otherLocId]), []);
+
+  // A manual relationship of a non-'located_at' type still surfaces, using
+  // RELATIONSHIP_TYPE_LABEL's own readable label — "any linked relationship
+  // types," not just the one factionsPresentAt itself checks for presence.
+  let cartelId; ({ campaign: camp, id: cartelId } = createEntity(camp, { type: 'faction', name: 'Cartel' }));
+  let dockId; ({ campaign: camp, id: dockId } = createEntity(camp, { type: 'location', name: 'Docks' }));
+  camp = addRelationship(camp, cartelId, dockId, 'Controls the docks', 'controls');
+  assert.deepEqual(factionPresenceReasons(camp, getEntity(camp, cartelId), [dockId]), ['Controls']);
+
+  // Multiple simultaneous reasons for the SAME faction/location — both
+  // present, no duplicates, Homeworld (structural) ahead of the
+  // relationship-derived label in the fixed check order.
+  camp = addRelationship(camp, assetFactionId, homeLocId, 'Allied', 'allied_with');
+  assert.deepEqual(factionPresenceReasons(camp, getEntity(camp, assetFactionId), [homeLocId]), ['Homeworld', 'Allied With']);
+
+  // A location's member_of edge to a faction (getEntityFaction's own
+  // ownership resolution) reports the REAL relationship type label
+  // ("Member Of", RELATIONSHIP_TYPE_LABEL.member_of), not an invented
+  // generic "Owns" — direct follow-up correction. The faction's own
+  // mirrored edge back to the location auto-defaults to a bare 'linked'
+  // (entities.js's _link — only located_at/contains auto-mirror the exact
+  // type) and does NOT show up as a second, redundant "Linked" badge.
+  let ownedFactionId; ({ campaign: camp, id: ownedFactionId } = createEntity(camp, { type: 'faction', name: 'The Combine' }));
+  let ownedLocId; ({ campaign: camp, id: ownedLocId } = createEntity(camp, { type: 'location', name: 'Combine World' }));
+  camp = setEntityFactionMembership(camp, ownedLocId, ownedFactionId);
+  assert.deepEqual(factionPresenceReasons(camp, getEntity(camp, ownedFactionId), [ownedLocId]), ['Member Of']);
 });
 
 test('getEntityFaction resolves a real member_of edge, falls back to a synthetic Unaligned descriptor when there is none, and degrades to Unaligned rather than returning a non-faction entity', () => {

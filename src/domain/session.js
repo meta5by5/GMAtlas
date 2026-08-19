@@ -69,7 +69,7 @@ export function restartStory(campaign) {
   next.context = {
     active: 'what',
     who:   { summary: '', entityIds: [] },
-    where: { summary: '', entityIds: [] },
+    where: { summary: '', entityIds: [], siteDescription: '', surroundings: '' },
     what:  { situation: '', intent: 'Discovery', threat: 2, mystery: 2, resources: 5, reputation: 5, stress: 5 },
     why:   { summary: '', entityIds: [] },
     how:   { summary: 'Exploration', activity: '' },
@@ -484,6 +484,33 @@ export function rollLocationSensoryField(campaign, locationId, field, { rng = Ma
   e[field] = entries[index];
   if (!e.sensorySource || typeof e.sensorySource !== 'object') e.sensorySource = { sights: null, smells: null, sounds: null };
   e.sensorySource[field] = { path, index };
+  return next;
+}
+
+// WHERE's Site Description/Immediate Surroundings each map to exactly ONE
+// dedicated table — same "one field, one table" shape
+// LOCATION_SENSORY_ORACLE_PATH (entities.js) uses for a Location's Sights/
+// Smells/Sounds, just for context.where instead of an entity.
+const WHERE_DETAIL_ORACLE_PATH = {
+  siteDescription: ['Location Themes', 'Site Type'],
+  surroundings: ['Location Themes', 'Immediate Surroundings'],
+};
+
+/** Roll WHERE's Site Description/Immediate Surroundings from its mapped
+ *  oracle table and REPLACE the field outright (direct follow-up
+ *  correction — the 🔮 icon used to just jump to the Oracle drawer to
+ *  browse; "the value is not added to the... text box" — it now rolls and
+ *  fills, same immediate-replace convention rollLocationSensoryField above
+ *  already uses for a short single-phrase field). No-ops on an unknown
+ *  field or an empty table. */
+export function rollWhereDetailField(campaign, field, { rng = Math.random } = {}) {
+  const next = clone(campaign);
+  const path = WHERE_DETAIL_ORACLE_PATH[field];
+  if (!path) return next;
+  const entries = currentTableEntries(next, path);
+  if (!entries.length) return next;
+  const index = Math.floor(rng() * entries.length);
+  next.context.where[field] = entries[index];
   return next;
 }
 

@@ -10,7 +10,7 @@ import { contextSummary } from '../../domain/context.js';
 import { listThreads, THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { ACTIVITIES } from '../../domain/activities.js';
 import { isSameDistrict, getEntity, listEntities, LOCATION_OBJECT_TYPES, getSystemForLocation, getStarForLocation, getHexZoneForLocation, getEntityFaction } from '../../domain/entities.js';
-import { getCurrentWhereLocations, factionsPresentAt, factionsInRegion } from '../../domain/factionTurnEngine.js';
+import { getCurrentWhereLocations, factionsInRegion, factionPresenceReasons } from '../../domain/factionTurnEngine.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { buildMentionEditorHTML, richToolbarHTML, richToolbarToggleHTML, toolbarCollapsed } from '../mentionEditor.js';
 import { renderFactionEvents } from '../drawers/factionEvents.js';
@@ -298,6 +298,56 @@ function npcSceneGroupsBlock(doc, ui) {
     ${group('who:bystanders', 'Bystanders', 'a Bystander', "Observers you've added to this scene — react to events, not directly involved. Drag any Actor here, including a #character NPC, to demote them to a bystander.", bystanders, 'bystander')}`;
 }
 
+// WHERE's Site Description/Immediate Surroundings (direct follow-up
+// request: "Wire 'Change Location' to some new fields that include a Site
+// description and Immediate surroundings... Reintroduce that
+// functionality below the Location Details thumbnails and map each field
+// to oracles... This would replace FOCUS and be used in its place when
+// building the Scene Summary") — two first-class context.where fields
+// (schema.js), each its own row. Direct follow-up corrections reshaped
+// this from the first version: (1) "text fields should be visible...
+// where just the editor menu is collapsed as usual" — the field itself is
+// ALWAYS rendered (no whole-row expand/collapse); only the formatting-
+// toolbar row collapses. (2) "clicking the oracle... generates an
+// alert... but the value is not added" — the 🔮 icon is a direct roll-
+// and-fill (data-where-field-roll, session.js's rollWhereDetailField, same
+// immediate-replace convention as a Location's Sights/Smells/Sounds —
+// rollLocationSensoryField), not a jump-to-browse link; an oracle table
+// with no matching tag simply renders no icon at all (oracleLinkTagsFor
+// still gates whether one exists). (3) "reapply the same arrow... but
+// only collapse the editor menu and not the textbox too" — the toolbar
+// toggle is richToolbarToggleHTML (mentionEditor.js), same as WHAT/WHY/HOW.
+// A later direct follow-up ("apply that arrow architecture to all text
+// editors") retired that function's earlier pencil glyph in favor of the
+// same ◂ (collapsed) / ▾ (expanded) arrow pair used here from the start,
+// so this call site needed no further change — it already matches. Label
+// text and the icon group are two separate spans (field-label-text/
+// field-label-actions) rather than relying on the icon-being-first-child
+// CSS trick, so the icons stay right-aligned regardless of how many are
+// present.
+function whereDetailField(fieldKey, label, val, placeholder, doc, ui) {
+  const toolbarKey = `where:${fieldKey}`;
+  const collapsed = toolbarCollapsed(doc, ui, toolbarKey);
+  const tags = oracleLinkTagsFor('where', fieldKey);
+  const oracleIcon = tags
+    ? `<button type="button" class="icon-btn icon-mono" data-where-field-roll="${fieldKey}" title="Roll ${tags.map(esc).join(', ')} and fill this field">🔮</button>`
+    : '';
+  return `<div class="field-label sm">
+    <span class="field-label-row">
+      <span class="field-label-text">${esc(label)}</span>
+      <span class="field-label-actions">${oracleIcon}${richToolbarToggleHTML(toolbarKey, collapsed)}</span>
+    </span>
+    <div class="rich-field">${richToolbarHTML(toolbarKey, collapsed, { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-ctx="where.${fieldKey}" data-placeholder="${esc(placeholder)}">${buildMentionEditorHTML(doc, val)}</div></div>
+  </div>`;
+}
+function whereDetailFieldsBlock(doc, ui) {
+  const w = doc.context.where || {};
+  return `<div class="threads where-detail-fields">
+    ${whereDetailField('siteDescription', 'Site Description', w.siteDescription, 'e.g. Settlement edge…', doc, ui)}
+    ${whereDetailField('surroundings', 'Immediate Surroundings', w.surroundings, 'e.g. Inside a building…', doc, ui)}
+  </div>`;
+}
+
 // WHERE's docked-Faction-Events side panel (whole-card relocation, direct
 // request — see factionEventsDockedInWhere's original comment history)
 // keeps its exact logic, just returns a fragment now instead of wrapping
@@ -310,7 +360,8 @@ function npcSceneGroupsBlock(doc, ui) {
 function whereSectionBody(doc, ui) {
   const body = `
     ${whereLocationHierarchyBlock(doc, ui)}
-    ${locationFactionsBlock(doc)}
+    ${whereDetailFieldsBlock(doc, ui)}
+    ${locationFactionsBlock(doc, ui)}
     ${locationConflictsBlock(doc)}
     ${factionActivityHereBlock(doc)}`;
   if (!ui.factionEventsDockedInWhere) return body;
@@ -515,7 +566,7 @@ function whatSectionBody(doc, ui) {
       </select>
     </label>
     <div class="shift-actions">
-      <button class="chip" data-suggest-oracles title="Suggest Oracle tables in the Advisor, based on Intent and Scene Details">🔮 Suggest oracles</button>
+      <button class="chip" data-suggest-oracles title="Suggest Oracle tables in the Advisor, based on Intent and Scene Details"><span class="icon-mono">🔮</span> Suggest oracles</button>
     </div>
     ${lastScene(doc, ui)}
     ${worldFlagsBlock(doc)}`;
@@ -786,30 +837,41 @@ function factionActivityHereBlock(doc) {
     </div>`;
 }
 
-// Read-only digest: factions actually present AT the current location(s)
-// specifically (factionsPresentAt — the exact-location counterpart to
-// WHO's region-wide factionsActiveNearbyBlock), each with a truncated
-// Agenda snippet so "what is this faction doing here" reads at a glance
-// without opening the Entity Editor.
-// Direct follow-up request: the faction chip is now a real photo
-// thumbnail (entityThumb — same convention as every other faction/NPC/
-// location list in this app, e.g. WHO's own factionsActiveNearbyBlock
-// just above) instead of a plain text chip. Read-only, no remove/expand
-// controls — this digest has neither a curated list to remove FROM nor
-// scene-Actor membership to derive from the way factionsActiveNearbyBlock
-// does, just "which factions are present at the current location(s)."
-function locationFactionsBlock(doc) {
+// Read-only digest: every faction linked to the current location(s) by ANY
+// relationship type or structural presence signal (factionPresenceReasons,
+// factionTurnEngine.js — Homeworld/Base of Influence/Governs/Member Of/
+// Asset here, plus any `relationships` edge straight to the location
+// whatever its type) — direct follow-up request: "List all factions...
+// with any relationship type link related to locations under Location
+// Details," broadening this digest beyond factionsPresentAt's own narrower
+// structural+located_at-only check (factionsPresentAt itself is untouched,
+// still used by its other callers). Each thumbnail's topLabel (the same
+// small tag Location details' own thumbnails use for District/Site) shows
+// WHY that faction is linked, joined "·" when more than one reason
+// applies — "Member Of" instead of an earlier invented generic "Owns",
+// per a follow-up correction (factionPresenceReasons' own comment).
+// Direct follow-up request: renamed "Factions here" -> "Factions present
+// here," and reformatted from a bare heading into the SAME collapsible-
+// group shell ("Location details" above it, WHO's Factions active nearby)
+// instead of its own plain `.threads` block — count badge, help icon,
+// collapsed state remembered the same way.
+function locationFactionsBlock(doc, ui) {
   const whereLocations = getCurrentWhereLocations(doc);
   if (!whereLocations.length) return '';
-  const seen = new Map();
-  for (const loc of whereLocations) for (const f of factionsPresentAt(doc, loc.id)) if (!seen.has(f.id)) seen.set(f.id, f);
-  const factions = Array.from(seen.values());
+  const locationIds = whereLocations.map((l) => l.id);
+  const factions = listEntities(doc, 'faction')
+    .map((f) => ({ faction: f, reasons: factionPresenceReasons(doc, f, locationIds) }))
+    .filter((x) => x.reasons.length);
   if (!factions.length) return '';
-  const thumbs = factions.map((f) => entityThumb(doc, f)).join('');
-  return `<div class="threads">
-    <div class="threads-head"><h3>Factions here</h3></div>
-    <div class="actor-thumb-row">${thumbs}</div>
-  </div>`;
+  const thumbs = factions.map(({ faction, reasons }) => entityThumb(doc, faction, {
+    topLabel: reasons.join(' · '),
+  })).join('');
+  return collapsibleThumbGroup(ui, {
+    key: 'where:factions-here', label: 'Factions present here', count: factions.length,
+    helpKey: 'where:factions-here',
+    hint: 'Every faction linked to the current Location Details by any relationship type, or by a structural presence signal (Homeworld, Base of Influence, Governs, Member Of, an active Asset here).',
+    body: `<div class="actor-thumb-row">${thumbs}</div>`,
+  });
 }
 
 // Read-only digest: Conflicts (docs/adr/0036) whose `locationId` (the
@@ -971,7 +1033,7 @@ function worldFlagsBlock(doc) {
 function sceneFieldIcon(field) {
   const tags = oracleLinkTagsFor('scene', field);
   if (!tags) return '';
-  return `<button class="icon-btn" data-oracle-field-link="scene.${field}" title="Jump to relevant Oracle table(s): ${tags.map(esc).join(', ')}" aria-label="Jump to relevant Oracle tables">🔮</button>`;
+  return `<button class="icon-btn icon-mono" data-oracle-field-link="scene.${field}" title="Jump to relevant Oracle table(s): ${tags.map(esc).join(', ')}" aria-label="Jump to relevant Oracle tables">🔮</button>`;
 }
 
 // A <textarea>, not <input> — these can run to a full sentence or two, and

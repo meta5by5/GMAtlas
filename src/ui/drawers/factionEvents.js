@@ -136,7 +136,7 @@ function eventEntryRow(entry, doc) {
   const faction = getEntity(doc, entry.factionId);
   const readAloud = entry.readAloud
     ? `<div class="rich-field"><div class="mention-editor" contenteditable="true" data-faction-event-readaloud="${esc(entry.id)}" data-placeholder="Read-aloud text">${buildMentionEditorHTML(doc, entry.readAloud)}</div></div>`
-    : `<button class="btn ghost sm" data-faction-event-expand-readaloud="${esc(entry.id)}">🎭 Expand to Read-Aloud</button>`;
+    : `<button class="btn ghost sm" data-faction-event-expand-readaloud="${esc(entry.id)}"><span class="icon-mono">🎭</span> Expand to Read-Aloud</button>`;
   return `<div class="thread-row">
     <span class="thread-name">Turn ${entry.turnNumber} — ${factionNameLink(entry.factionId, entry.factionName, entry.id)} <span class="dim small">— ${esc(ACTION_LABEL[entry.action] || entry.action)}${entry.outcome ? ` (${esc(entry.outcome)})` : ''}${loc ? ` @ ${esc(loc.name)}` : ''}</span></span>
     <span class="dim small">${new Date(entry.createdAt).toLocaleString()}</span>

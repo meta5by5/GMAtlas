@@ -185,7 +185,9 @@ export function advise(doc) {
  *  scene," this just extends the same convention to WHY). */
 export function gatherSceneContext(campaign) {
   const whoText = (campaign.context && campaign.context.who && campaign.context.who.summary) || '';
-  const whereText = (campaign.context && campaign.context.where && campaign.context.where.summary) || '';
+  const whereCtx = (campaign.context && campaign.context.where) || {};
+  const siteDescription = String(whereCtx.siteDescription || '').trim();
+  const surroundings = String(whereCtx.surroundings || '').trim();
   // WHO's Actors (docs/adr/0041 WHO redesign) — Protagonists/Antagonists/
   // Bystanders are GM-curated id lists on the current scene (scenes.js),
   // not parsed from free text (WHO's old Focus mention-editor is gone).
@@ -207,18 +209,20 @@ export function gatherSceneContext(campaign) {
   const what = (campaign.context && campaign.context.what) || {};
   return {
     whoEntities, whereLocations, conflictsHere, openThreads, foreshadowing, worldFlags, activity,
-    // Raw WHERE Focus text (docs/adr/0040 Phase 12f) — whereLocations above
-    // is itself ALWAYS derived by parsing this exact text, so it's the true
-    // source of "what the GM actually wrote," not just the entities
-    // mentioned inside it. composeNarrativeDraft below uses this directly
-    // instead of re-deriving a synthetic sentence from it. WHO's own
-    // context.who.summary field still exists (schema/migration-safe) but
-    // has no editor in the UI anymore (docs/adr/0041 WHO redesign) — kept
-    // here for any old campaign that still has text in it, but empty on
-    // any campaign using the new Actor-list UI, so it contributes nothing
-    // to composeNarrativeDraft in practice going forward.
+    // WHO's own context.who.summary field still exists (schema/migration-
+    // safe) but has no editor in the UI anymore (docs/adr/0041 WHO
+    // redesign) — kept here for any old campaign that still has text in
+    // it, but empty on any campaign using the new Actor-list UI, so it
+    // contributes nothing to composeNarrativeDraft in practice going
+    // forward.
     whoSummary: whoText.trim(),
-    whereSummary: whereText.trim(),
+    // Site Description/Immediate Surroundings (direct follow-up request:
+    // "This would replace FOCUS and be used in its place when building
+    // the Scene Summary") — WHERE's own former Focus field
+    // (context.where.summary) has had no reachable editor since the
+    // WHO/WHERE redesign; these two first-class fields take over its role
+    // in composeNarrativeDraft below instead of reviving it.
+    whereDetail: [siteDescription, surroundings].filter(Boolean).join(' — '),
     factionsHere: Array.from(factionsHere.values()),
     threat: what.threat || 0,
     mystery: what.mystery || 0,
@@ -341,12 +345,12 @@ export function composeNarrativeDraft(campaign, { selectedOptionIds = [] } = {})
   const ctx = gatherSceneContext(campaign);
   const parts = [];
 
-  // WHERE/WHO's own raw Focus text (docs/adr/0040 Phase 12f fix) — used
-  // verbatim instead of a synthetic "the scene is set at X"/"Y is present"
-  // sentence, so the GM's own written context (not just the @mentions
-  // inside it) actually reaches the draft. Falls back to nothing when a
-  // Focus field is empty, same as before.
-  if (ctx.whereSummary) parts.push(ctx.whereSummary);
+  // WHERE's Site Description/Immediate Surroundings (whereDetail,
+  // gatherSceneContext above) and WHO's own raw Focus text — used verbatim
+  // instead of a synthetic "the scene is set at X"/"Y is present" sentence,
+  // so the GM's own written context reaches the draft. Falls back to
+  // nothing when both WHERE fields are empty, same as before.
+  if (ctx.whereDetail) parts.push(ctx.whereDetail);
   if (ctx.whoSummary) parts.push(ctx.whoSummary);
 
   const situation = String((campaign.context && campaign.context.what && campaign.context.what.situation) || '').trim();

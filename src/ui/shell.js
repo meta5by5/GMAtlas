@@ -6,7 +6,7 @@
 import { store } from '../core/store.js';
 import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
-import { continueStory, restartStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField } from '../domain/session.js';
+import { continueStory, restartStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField, rollWhereDetailField } from '../domain/session.js';
 import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, addSceneAsset, removeSceneAsset, addSceneLocation, removeSceneLocation, setSceneSystem, addSceneDismissedFaction, removeSceneDismissedFaction, moveSceneActor } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag } from '../domain/oracles.js';
@@ -318,7 +318,7 @@ let catalogPickerOpen = false; // ephemeral — the Cast drawer's "+ Item from c
 let enhancementDraft = {}; // ephemeral — entityId -> name text rolled into the Enhancements add-form's name field, overwritten by each 🎲 roll until "Install" commits it (docs/adr/next-request.md, 2026-07-06)
 let expandedEnhancements = new Set(); // ephemeral — entity ids whose Enhancements section is expanded (collapsed by default)
 let expandedWorldDemographics = new Set(); // ephemeral — entity ids whose World Demographics card is expanded (docs/adr/0026 follow-up, collapsed by default)
-let expandedSceneFields = new Set(); // ephemeral — "sceneId::field" keys whose Latest Scene field is expanded (UX batch, collapsed by default; click the label to expand)
+let expandedSceneFields = new Set(); // ephemeral — "sceneId::field" keys whose Scene Details field is expanded (UX batch, collapsed by default; click the label to expand)
 let collapsedToolbars = new Set(); // ephemeral — rich-text toolbar keys OVERRIDDEN away from campaign.settings.toolbarCollapsedByDefault (mentionEditor.js's toolbarCollapsed() XORs this against the default; see UX batch)
 let expandedPartyMembers = new Set(); // ephemeral — entity ids whose Party member card shows its statblocks (collapsed by default; click the name to expand, UX batch)
 let journalActionsOpen = true; // ephemeral — the Journal drawer's Actions row (Add note, Generate Mission, ...), open by default (UX batch)
@@ -591,7 +591,7 @@ export function mountShell(el) {
       <header class="mc-header">
         <div class="brand"><h1>GMAtlas</h1></div>
         <div class="header-actions">
-          <button class="btn ghost sm" data-search-toggle title="Search everything (Cast, Journal, Oracle, Documents, Party, Colony) — Ctrl/Cmd+K">🔍 Search</button>
+          <button class="btn ghost sm" data-search-toggle title="Search everything (Cast, Journal, Oracle, Documents, Party, Colony) — Ctrl/Cmd+K"><span class="icon-mono">🔍</span> Search</button>
           <span class="campaign-title" title="Campaign name"></span>
           <div class="header-drawer-tabs" data-header-drawer-tabs></div>
           <div class="settings-menu-wrap">
@@ -1422,6 +1422,15 @@ function onClick(ev) {
     const key = sceneFieldToggle.dataset.sceneFieldToggle;
     if (expandedSceneFields.has(key)) expandedSceneFields.delete(key); else expandedSceneFields.add(key);
     return render();
+  }
+  // WHERE's Site Description/Immediate Surroundings 🔮 (direct follow-up
+  // correction — "clicking the oracle... generates an alert... but the
+  // value is not added"): rolls and REPLACES the field outright
+  // (rollWhereDetailField, session.js), same immediate-fill convention a
+  // Location's Sights/Smells/Sounds already use, not a jump-to-browse link.
+  const whereFieldRoll = hit('[data-where-field-roll]');
+  if (whereFieldRoll) {
+    return store.update((d) => rollWhereDetailField(d, whereFieldRoll.dataset.whereFieldRoll));
   }
   const toolbarToggle = hit('[data-rich-toolbar-toggle]');
   if (toolbarToggle) {

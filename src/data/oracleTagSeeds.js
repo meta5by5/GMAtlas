@@ -29,4 +29,6 @@ export const ORACLE_TAG_SEEDS = {
   'Miscellaneous>Item of Narrative Significance': ['trade'],
   'Mysteries & Coverups>Discovery': ['discovery'],
   'Derelicts>What Happened': ['discovery'],
+  'Location Themes>Site Type': ['site'],
+  'Location Themes>Immediate Surroundings': ['surroundings'],
 };

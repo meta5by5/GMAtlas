@@ -78,5 +78,11 @@ export function contextSummary(context, key) {
     const firstLine = (c.situation || '').split('\n')[0];
     return firstLine || c.intent || '';
   }
+  // WHERE's own former Focus field (c.summary) has had no reachable editor
+  // since the WHO/WHERE redesign (see composeNarrativeDraft, copilot.js,
+  // for the same replacement) — Site Description/Immediate Surroundings
+  // are what a GM actually fills in now, so the collapsed section's own
+  // summary label reads from those instead of the permanently-empty field.
+  if (key === 'where') return [c.siteDescription, c.surroundings].filter(Boolean).join(' — ') || c.summary || '';
   return c.summary || '';
 }

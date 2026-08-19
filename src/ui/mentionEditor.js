@@ -261,27 +261,23 @@ export function toolbarCollapsed(doc, ui, key) {
 // override against the persisted campaign.settings.toolbarCollapsedByDefault —
 // see Settings' "Formatting toolbars" option) — these functions just render
 // whichever state they're told.
-/** The collapse toggle alone, styled as a pencil (direct follow-up request:
- *  "move the menu arrow to work like a right-aligned pencil icon on the
- *  same row as the... header" — Composer's Situation/WHY/HOW/Regional
- *  faction activity fields specifically). Callers render this themselves
- *  inside their own field-label row and pass `includeToggle: false` to
- *  richToolbarHTML below so it isn't rendered twice. Every OTHER rich-text
- *  field in the app (Entity Editor, Journal, Guide, Documents, Colony,
- *  Party gear) keeps richToolbarHTML's own built-in ▸/▾ toggle unchanged —
- *  out of scope for this request, and most of those have no adjacent
- *  header row to move it into anyway. */
+/** The collapse toggle alone, right-aligned in a caller's own field-label
+ *  row (direct follow-up request: "move the menu arrow to work like a
+ *  right-aligned pencil icon on the same row as the... header" —
+ *  Composer's Situation/WHY/HOW/Regional faction activity fields, later
+ *  joined by WHERE's Site Description/Immediate Surroundings). Callers
+ *  render this themselves and pass `includeToggle: false` to
+ *  richToolbarHTML below so it isn't rendered twice. Direct follow-up
+ *  request ("apply that arrow architecture to all text editors... left
+ *  arrow when collapsed, down arrow when displayed"): unified onto the
+ *  SAME ◂/▾ glyph pair cornerToggleHTML below now uses too — one
+ *  consistent "arrow language" for a text field's collapse state
+ *  everywhere in the app, whichever of the two POSITIONS (this header-row
+ *  placement vs. cornerToggleHTML's corner overlay) a given caller uses;
+ *  the earlier pencil-glyph version of this same function is retired. */
 export function richToolbarToggleHTML(key, collapsed) {
   if (!key) return '';
-  // Direct follow-up request (still showing as a large colorful emoji per
-  // a real screenshot even after switching to the bare U+270E character —
-  // some platforms/font stacks fall back to an emoji-style glyph for a
-  // codepoint with no explicit presentation selector) — U+FE0E (VS15,
-  // "text presentation") is appended explicitly to force the plain
-  // monochrome line-drawing glyph regardless of platform default, matching
-  // the SAME pencil every rename/edit toggle elsewhere in this app uses
-  // (Journal, Oracle, Party Trackers, Guide, Documents).
-  return `<button type="button" class="icon-btn rich-toolbar-toggle" data-rich-toolbar-toggle="${escAttr(key)}" title="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}" aria-label="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}">✎︎</button>`;
+  return `<button type="button" class="icon-btn rich-toolbar-toggle" data-rich-toolbar-toggle="${escAttr(key)}" title="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}" aria-label="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}">${collapsed ? '◂' : '▾'}</button>`;
 }
 // Direct follow-up request: the toggle no longer sits INSIDE the icon row
 // above the textbox — it's now a small overlay button pinned to the
@@ -292,10 +288,12 @@ export function richToolbarToggleHTML(key, collapsed) {
 // resize handle already uses in the OPPOSITE corner. Rendered as a SIBLING
 // of .rich-toolbar (not a child of it) precisely so it anchors to
 // .rich-field as a whole rather than to the icon row's own (collapsible,
-// variable-height) box.
+// variable-height) box. Glyphs unified with richToolbarToggleHTML above
+// (direct follow-up request: "left arrow when collapsed, down arrow when
+// displayed") — was ▾/▴ (down when collapsed, up when expanded).
 function cornerToggleHTML(key, collapsed) {
   return key
-    ? `<button type="button" class="icon-btn rich-toolbar-corner-toggle" data-rich-toolbar-toggle="${escAttr(key)}" title="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}" aria-label="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}">${collapsed ? '▾' : '▴'}</button>`
+    ? `<button type="button" class="icon-btn rich-toolbar-corner-toggle" data-rich-toolbar-toggle="${escAttr(key)}" title="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}" aria-label="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}">${collapsed ? '◂' : '▾'}</button>`
     : '';
 }
 // Both `key`/`collapsed` are optional (default: a key-less, always-expanded

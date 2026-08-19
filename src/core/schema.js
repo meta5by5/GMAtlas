@@ -39,7 +39,14 @@ export function defaultCampaign(now = new Date().toISOString()) {
     context: {
       active: 'what',
       who:   { summary: '', entityIds: [] },
-      where: { summary: '', entityIds: [] },
+      // siteDescription/surroundings (direct follow-up request — reintroduces
+      // the legacy Story Director's locationType/surroundings pair as
+      // first-class fields, mapped to their own Oracle tables) replace the
+      // long-unreachable `summary` ("Focus") field's role in
+      // composeNarrativeDraft's WHERE contribution; summary/entityIds stay
+      // declared per migration rule 5 even though nothing writes them
+      // anymore (getCurrentWhereLocations reads scene.locationIds instead).
+      where: { summary: '', entityIds: [], siteDescription: '', surroundings: '' },
       // threat/mystery are scene-immediate pressure; resources/reputation/
       // stress (Phase 6, pack 18's Narrative Trackers) are slower campaign-
       // level dials that persist across scenes the same way — nothing here
