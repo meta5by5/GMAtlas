@@ -817,6 +817,18 @@ function onClick(ev) {
     return renderSearchOverlay();
   }
   if (hit('[data-dice-roll-close]')) { diceRollResult = null; return renderDiceRollOverlay(); }
+  // Full-size image lightbox (direct follow-up request — "show the full
+  // sized image... when clicking the thumbnail image in the entity
+  // editor"). The clicked <img> already carries the real src/alt inline
+  // (it's a data: URL straight off the Gallery, same as the thumbnail
+  // itself) — read those directly rather than threading the image data
+  // through a second attribute.
+  const lightboxTrigger = hit('[data-open-image-lightbox]');
+  if (lightboxTrigger && lightboxTrigger.tagName === 'IMG') {
+    return openImageLightbox(lightboxTrigger.src, lightboxTrigger.alt);
+  }
+  if (hit('[data-image-lightbox-close]')) return closeImageLightbox();
+  if (hit('[data-image-lightbox-overlay]') && t.hasAttribute('data-image-lightbox-overlay')) return closeImageLightbox();
   if (hit('[data-dice-roll-copy]')) {
     if (!diceRollResult) return;
     navigator.clipboard.writeText(diceRollCopyText(diceRollResult)).then(() => toast('Copied'), () => toast('Could not copy'));
