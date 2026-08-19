@@ -5,7 +5,7 @@
 
 import { applyShift } from './context.js';
 import { generateScene, recomposeSceneText, ensureNpcSceneState, NPC_SCENE_FIELD_ORACLE_PATH } from './scenes.js';
-import { tablesWithOverrides, rollTable, rollGroup, formatRoll, pick, getTable, currentTableEntries, updateOracleEntry, oraclePathsWithAnyTag } from './oracles.js';
+import { tablesWithOverrides, rollTable, rollGroup, formatRoll, pick, getTable, currentTableEntries, updateOracleEntry, oraclePathsWithAnyTag, getOracleTags } from './oracles.js';
 import { linkMentions, parseMentions, createEntity, updateEntity, getEntity, LOCATION_SENSORY_ORACLE_PATH } from './entities.js';
 import { linkDocumentMentions, parseDocumentMentions, resolvedDocumentMentionNames } from './documents.js';
 import { SUGGESTION_LENSES, findLens, lensOracleCategories } from '../data/suggestionLenses.js';
@@ -48,6 +48,38 @@ export function continueStory(campaign, { toJournal = true } = {}) {
   pushTimeline(next, { kind: 'scene', label: `Scene ${scene.number}` });
   if (toJournal) addJournal(next, scene.text, 'Scene');
   bumpFactionPacing(next);
+  return next;
+}
+
+/** "Restart Story" (Advisor's Quick Apply, direct follow-up request) —
+ *  starts the NARRATIVE over (WHO/WHERE/WHAT/WHY/HOW context, the scene
+ *  log, the Journal, the timeline breadcrumb bar, open Threads,
+ *  Foreshadowing, and World State Flags — everything that's specifically
+ *  about THIS run of the story) while leaving every entity (NPCs,
+ *  Factions, Locations, Assets, Items, Lore) and the progress made on them
+ *  (relationships, faction turn state/Faction Events, Conflicts, the
+ *  Party, Documents, Battlemaps, Gallery, settings/oracle overrides)
+ *  completely untouched — "does not affect entities and any progress they
+ *  made; that should happen under New Campaign" is store.newCampaign()'s
+ *  job, a full wipe, not this one. Context defaults mirror
+ *  defaultCampaign() (schema.js) exactly; duplicated rather than imported
+ *  since the domain layer doesn't depend on core/schema.js anywhere else. */
+export function restartStory(campaign) {
+  const next = clone(campaign);
+  next.context = {
+    active: 'what',
+    who:   { summary: '', entityIds: [] },
+    where: { summary: '', entityIds: [] },
+    what:  { situation: '', intent: 'Discovery', threat: 2, mystery: 2, resources: 5, reputation: 5, stress: 5 },
+    why:   { summary: '', entityIds: [] },
+    how:   { summary: 'Exploration', activity: '' },
+  };
+  next.scenes = [];
+  next.journal = [];
+  next.timeline = [];
+  next.threads = [];
+  next.foreshadowing = [];
+  next.worldFlags = [];
   return next;
 }
 
@@ -135,38 +167,74 @@ function drawOraclesForTags(campaign, tags, { rng = Math.random, count = 6 } = {
   return drawn;
 }
 
+// Scene Details' own oracle-tag-linked fields, in a fixed priority order —
+// matches shell.js's SUGGEST_ORACLES_SCENE_FIELDS exactly. Some of these
+// share a tag (clue/complication/consequence all carry 'discovery'), so a
+// drawn table can't always be traced to the ONE field that caused it to be
+// drawn; the priority order is the tie-break for targetSceneFieldForPath
+// below, not a claim about provenance.
+const SCENE_ORACLE_FIELDS = ['opening', 'driver', 'clue', 'complication', 'consequence'];
+
+/** Which Scene Details field (if any) a drawn table path is a good fit
+ *  for — every Advisor oracle suggestion must map to a real Composer field
+ *  or fall back to the Journal (direct follow-up request), so this is what
+ *  the checkmark's eventual destination is decided by. A path fits a field
+ *  if it carries any of that field's own oracleLinkTagsFor('scene', field)
+ *  tags — the same locked vocabulary the field's own 🔮 icon uses. Returns
+ *  null (-> Journal) when no field's tags match at all (e.g. WHERE's
+ *  #faction/#agenda draw, which has no Scene Details field to land in). */
+function targetSceneFieldForPath(campaign, path) {
+  const pathTags = new Set((getOracleTags(campaign, path) || []).map((t) => t.toLowerCase()));
+  if (!pathTags.size) return null;
+  for (const field of SCENE_ORACLE_FIELDS) {
+    const fieldTags = oracleLinkTagsFor('scene', field) || [];
+    if (fieldTags.some((t) => pathTags.has(t.toLowerCase()))) return field;
+  }
+  return null;
+}
+
 /** "Suggest oracles" (WHAT, direct follow-up request: "a list of oracles
  *  ... customized from the Intent and the Latest Scene"). Reuses the same
  *  tag-based linking ADR 0016 already established for field 🔮 icons —
  *  INTENT_ORACLE_TAGS maps the current Intent to a few of that same locked
  *  tag vocabulary, and oracleLinkTagsFor('scene', field) contributes more
- *  for every Latest Scene field that's actually populated right now
+ *  for every Scene Details field that's actually populated right now
  *  (opening/driver/clue/complication/consequence — the same five fields
  *  that already carry a scene.<field> tag entry) — no separate content or
  *  NLP-guessing needed, just the field links already in place. Pure/
  *  deterministic given `rng`; the UI recomputes this on demand (the
  *  "Suggest oracles" click) and again automatically whenever Intent or a
- *  Latest Scene field actually changes, so it's never stale — never on
- *  every unrelated render. */
+ *  Scene Details field actually changes, so it's never stale — never on
+ *  every unrelated render. Each drawn item now carries its own `target`
+ *  (direct follow-up request: "each must map to one of the fields under
+ *  Latest: Scene... if a field is not mapped... add as an entry to
+ *  Journal") — the Advisor checkmark reads this per-chip instead of one
+ *  fixed destination for the whole batch. */
 export function drawSuggestedOracles(campaign, opts = {}) {
   const tags = new Set(INTENT_ORACLE_TAGS[campaign.context?.what?.intent] || []);
   const scenes = campaign.scenes || [];
   const scene = scenes[scenes.length - 1];
   if (scene) {
-    for (const field of ['opening', 'driver', 'clue', 'complication', 'consequence']) {
+    for (const field of SCENE_ORACLE_FIELDS) {
       if (scene[field]) (oracleLinkTagsFor('scene', field) || []).forEach((t) => tags.add(t));
     }
   }
-  return drawOraclesForTags(campaign, [...tags], opts);
+  const paths = drawOraclesForTags(campaign, [...tags], opts);
+  return paths.map((path) => ({ path, target: targetSceneFieldForPath(campaign, path) }));
 }
 
 /** WHERE's "Regional faction activity" 💡 (Location details' per-entity
  *  dropdown, direct follow-up request) — a fixed #faction/#agenda draw,
  *  same shared mechanism as drawSuggestedOracles above but with no
- *  Intent/Latest-Scene dependency, since this is scoped to "how are
- *  factions operating here" specifically, not the whole current scene. */
+ *  Intent/Scene-Details dependency, since this is scoped to "how are
+ *  factions operating here" specifically, not the whole current scene.
+ *  #faction/#agenda never overlap a Scene Details field's own tags, so
+ *  every item's target naturally resolves to null (-> Journal) — same
+ *  effective behavior as before, just expressed through the same per-item
+ *  target mechanism drawSuggestedOracles uses instead of a special case. */
 export function drawFactionActivityOracles(campaign, opts = {}) {
-  return drawOraclesForTags(campaign, ['faction', 'agenda'], opts);
+  const paths = drawOraclesForTags(campaign, ['faction', 'agenda'], opts);
+  return paths.map((path) => ({ path, target: targetSceneFieldForPath(campaign, path) }));
 }
 
 /** The Advisor's "If nothing changes…" card (direct follow-up request:

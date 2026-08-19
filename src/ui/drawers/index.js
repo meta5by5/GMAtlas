@@ -2262,6 +2262,28 @@ function partyMemberCard(e, doc, ui) {
     </div>`;
 }
 
+// Party drawer's own collapsible section headers (direct follow-up
+// request: "Make Party Roster header collapseable as well as... Party
+// Trackers, Shared Assets, Cargo Manifest and Contracts"). Same XOR-
+// against-a-default shape as workspace/index.js's collapsibleThumbGroup
+// (not imported directly — drawers/index.js can't import FROM workspace/
+// index.js without a circular dependency, since that module already
+// imports from this one) — ui.collapsedPartySections (shell.js) holds
+// keys TOGGLED AWAY from their own default, so Party Roster (default
+// open) and the other four (default collapsed) share one Set with
+// opposite defaults; shell.js resets it on a genuine fresh Party-drawer
+// open only, not a mere tab re-focus.
+function isPartySectionCollapsed(ui, key, defaultCollapsed) {
+  const toggled = ((ui && ui.collapsedPartySections) || new Set()).has(key);
+  return defaultCollapsed ? !toggled : toggled;
+}
+function partySectionHeaderHtml(key, title, collapsed, headerExtra = '') {
+  return `<div class="statblock-head" style="margin-top: var(--sp-4);">
+    <button type="button" class="party-section-toggle" data-party-section-toggle="${esc(key)}">${collapsed ? '▸' : '▾'} ${esc(title)}</button>
+    ${headerExtra}
+  </div>`;
+}
+
 function party(doc, ui = {}) {
   const members = listPartyMembers(doc);
   const trackers = listPartyTrackers(doc);
@@ -2280,25 +2302,35 @@ function party(doc, ui = {}) {
   // entity thumbnails") and open the Entity Editor.
   const sharedAssetVehicleThumbs = (party_.sharedAssetIds || []).map((id) => sharedAssetVehicleThumb(doc, id)).join('');
 
+  // Direct follow-up request: Party Roster starts open; the other four
+  // sections here start collapsed — see isPartySectionCollapsed's own
+  // comment for the fresh-open-vs-tab-refocus distinction.
+  const rosterCollapsed = isPartySectionCollapsed(ui, 'roster', false);
+  const trackersCollapsed = isPartySectionCollapsed(ui, 'trackers', true);
+  const sharedAssetsCollapsed = isPartySectionCollapsed(ui, 'sharedAssets', true);
+
   return `
-    <div class="statblock-head"><h4>Party Roster</h4><button class="chip" data-party-add-character>＋ Add NPC</button></div>
+    ${partySectionHeaderHtml('roster', 'Party Roster', rosterCollapsed, '<button class="chip" data-party-add-character>＋ Add NPC</button>')}
+    ${rosterCollapsed ? '' : `
     <p class="dim small">NPC entities tagged <code>#character</code> — tag an NPC in the Cast drawer to add one you already made, or add one here.</p>
     <div class="party-member-list">
       ${memberCards || '<p class="ws-placeholder">No party members yet. Add one above, or tag an existing NPC #character in Cast.</p>'}
-    </div>
-    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Party Trackers</h4>${ui.partyTrackerAddOpen ? '' : '<button class="chip" data-party-tracker-add-toggle>＋ Tracker</button>'}<button class="icon-btn" data-party-trackers-edit-toggle title="${trackersEditOpen ? 'Done editing' : 'Edit trackers (rename, remove)'}">${trackersEditOpen ? '💾' : '✎'}</button></div>
+    </div>`}
+    ${partySectionHeaderHtml('trackers', 'Party Trackers', trackersCollapsed, `${ui.partyTrackerAddOpen ? '' : '<button class="chip" data-party-tracker-add-toggle>＋ Tracker</button>'}<button class="icon-btn" data-party-trackers-edit-toggle title="${trackersEditOpen ? 'Done editing' : 'Edit trackers (rename, remove)'}">${trackersEditOpen ? '💾' : '✎'}</button>`)}
+    ${trackersCollapsed ? '' : `
     ${ui.partyTrackerAddOpen ? partyTrackerAddForm(ui, isStarforged) : ''}
     <div class="party-tracker-list">
       ${trackerRows || '<p class="ws-placeholder">No trackers yet — add one for credits, supply, or any shared resource.</p>'}
-    </div>
+    </div>`}
     <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Shared Gear</h4></div>
     <div class="rich-field">${richToolbarHTML(sharedGearKey, toolbarCollapsed(doc, ui, sharedGearKey))}<div class="mention-editor" contenteditable="true" data-party-field="sharedGear" data-placeholder="A shared toolkit, the ship's medkit, anything not tied to one character…">${buildMentionEditorHTML(doc, party_.sharedGear)}</div></div>
-    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Shared Assets</h4><button class="chip" data-entity-picker-open="party-vehicle">＋ Vehicle</button></div>
+    ${partySectionHeaderHtml('sharedAssets', 'Shared Assets', sharedAssetsCollapsed, '<button class="chip" data-entity-picker-open="party-vehicle">＋ Vehicle</button>')}
+    ${sharedAssetsCollapsed ? '' : `
     ${sharedAssetVehicleThumbs ? `<div class="actor-thumb-row">${sharedAssetVehicleThumbs}</div>` : ''}
     <div class="entity-chips">${sharedAssetChips || (sharedAssetVehicleThumbs ? '' : '<span class="dim small">None yet.</span>')}</div>
-    <div class="entity-add-row"><input class="doc-tag-input" data-party-shared-asset-input placeholder="Add a shared asset…"></div>
-    ${cargoManifestSection(doc)}
-    ${contractsSection(doc, ui)}`;
+    <div class="entity-add-row"><input class="doc-tag-input" data-party-shared-asset-input placeholder="Add a shared asset…"></div>`}
+    ${cargoManifestSection(doc, ui, { collapsible: true })}
+    ${contractsSection(doc, ui, { collapsible: true })}`;
 }
 
 // --- Colony: 5PFH Planetfall turn sheet + crew roster + lifeform filter ----
@@ -2463,10 +2495,20 @@ function contractRow(doc, c, ui) {
 // data-trade-contract-*) is already read by attribute selector in
 // shell.js, not container-scoped — rendering this markup a second time
 // in a different drawer needs zero new handler code.
-function cargoManifestSection(doc) {
+// `collapsible` (direct follow-up request, Party drawer only — "Make...
+// Cargo Manifest and Contracts [collapsible]" alongside Party Roster/
+// Trackers/Shared Assets) defaults false so trade()'s own call sites
+// below are completely unaffected — the Trade drawer never asked to
+// collapse these, only Party did, and both drawers share this exact
+// markup (see the comment above trade()'s own calls).
+function cargoManifestSection(doc, ui, { collapsible = false } = {}) {
   const manifest = listCargoManifest(doc);
-  return `
-    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Cargo Manifest</h4></div>
+  const collapsed = collapsible && isPartySectionCollapsed(ui, 'cargoManifest', true);
+  const header = collapsible
+    ? partySectionHeaderHtml('cargoManifest', 'Cargo Manifest', collapsed)
+    : '<div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Cargo Manifest</h4></div>';
+  if (collapsed) return header;
+  return `${header}
     <div class="trade-manifest-list">
       ${manifest.length ? manifest.map((row) => {
         const c = findCommodity(row.commodityId);
@@ -2475,18 +2517,23 @@ function cargoManifestSection(doc) {
     </div>`;
 }
 
-function contractsSection(doc, ui) {
+function contractsSection(doc, ui, { collapsible = false } = {}) {
   const locations = listEntities(doc, ['location']);
   const npcs = listEntities(doc, ['npc']);
   const contracts = listContracts(doc);
-  return `
-    <div class="statblock-head" style="margin-top: var(--sp-4);">
-      <h4>Contracts</h4>
-      <div class="trade-contract-head-actions">
+  const collapsed = collapsible && isPartySectionCollapsed(ui, 'contracts', true);
+  const headerActions = `<div class="trade-contract-head-actions">
         <button class="chip" data-trade-generate-contract title="Roll the Contract Type oracle table into a new contract">🎲 Generate</button>
         ${ui.tradeContractAddOpen ? '' : '<button class="chip" data-trade-contract-add-toggle>＋ Contract</button>'}
-      </div>
-    </div>
+      </div>`;
+  const header = collapsible
+    ? partySectionHeaderHtml('contracts', 'Contracts', collapsed, headerActions)
+    : `<div class="statblock-head" style="margin-top: var(--sp-4);">
+      <h4>Contracts</h4>
+      ${headerActions}
+    </div>`;
+  if (collapsed) return header;
+  return `${header}
     ${ui.tradeContractAddOpen ? contractAddForm(locations, npcs) : ''}
     <div class="trade-contract-list">
       ${contracts.length ? contracts.map((c) => contractRow(doc, c, ui)).join('') : '<p class="ws-placeholder">No contracts yet — generate one, or add one manually.</p>'}

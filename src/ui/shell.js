@@ -6,7 +6,7 @@
 import { store } from '../core/store.js';
 import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
-import { continueStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField } from '../domain/session.js';
+import { continueStory, restartStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField } from '../domain/session.js';
 import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, addSceneAsset, removeSceneAsset, addSceneLocation, removeSceneLocation, setSceneSystem, addSceneDismissedFaction, removeSceneDismissedFaction, moveSceneActor } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag } from '../domain/oracles.js';
@@ -264,9 +264,10 @@ let inlinePrompt = null;
 // <select> also carries data-ctx, so this scopes to .mention-editor
 // specifically rather than a bare [data-ctx] to exclude it.
 const MENTION_FIELD_SELECTOR = '[data-journal-input], [data-guide-input], .mention-editor[data-ctx], .mention-editor[data-entity-field], .mention-editor[data-faction-event-readaloud]';
-// The Latest Scene fields drawSuggestedOracles (session.js) actually reads
+// The Scene Details fields drawSuggestedOracles (session.js) actually reads
 // tag links for — matches its own field list exactly (see onChange below).
 const SUGGEST_ORACLES_SCENE_FIELDS = ['opening', 'driver', 'clue', 'complication', 'consequence'];
+const SCENE_FIELD_LABELS = { opening: 'Opening', driver: 'Driver', clue: 'Clue', complication: 'Complication', consequence: 'Likely consequence' };
 const DROP_TARGET_SELECTOR = `[data-drop-entity], ${MENTION_FIELD_SELECTOR}`;
 // Relationship graph pan/zoom — ephemeral, reset whenever the Graph tab is
 // freshly opened (see openDrawerTab). {scale, x, y} describes the SVG
@@ -341,53 +342,80 @@ let whyLensDraw = []; // ephemeral — WHY's scene-context-weighted lens draw, f
 // newest first, capped to 6 — copilotPanel.js's suggestedOraclesBlock
 // shows the first 3 expanded and the next 3 as collapsed <details> for
 // lookup, dropping anything older. Every draw trigger (WHAT's "Suggest
-// oracles" button, its Intent/Latest-Scene auto-trigger, WHERE's Regional
+// oracles" button, its Intent/Scene-Details auto-trigger, WHERE's Regional
 // faction activity 💡) pushes a new entry via pushSuggestedOracleEntry
 // below rather than overwriting a single slot.
-// `target` (direct follow-up request — "the results must go in the
-// Situation textbox instead of the Journal since the scene is still
-// under development") tags every entry pushed from WHAT so its 🔮 roll
-// buttons append to context.what.situation instead of rollOracle's normal
-// toJournal:true default (see the data-suggest-oracle-roll handler
-// below); WHERE's Regional faction activity 💡 leaves it unset, keeping
-// the ordinary journal-logging roll behavior every other oracle roll in
-// this app already has.
+// Each item in `items` is already a `{path, target}` pair (session.js's
+// drawSuggestedOracles/drawFactionActivityOracles) — direct follow-up
+// request: "each must map to one of the fields under [Scene Details]...
+// if a field is not mapped... add as an entry to Journal." `target` is one
+// of SUGGEST_ORACLES_SCENE_FIELDS (below) when the drawn table shares a tag
+// with that Scene Details field's own 🔮 link, or null when nothing
+// matches (WHERE's #faction/#agenda draw never matches one) — the
+// checkmark (data-advisor-result-accept, see advisorOracleResults/
+// advisorDrafts below) reads it PER ITEM now, not once for the whole
+// entry, since a single batch can legitimately span several fields.
 let suggestedOracleEntries = [];
-function pushSuggestedOracleEntry(label, paths, target = null) {
-  if (!paths || !paths.length) return;
-  suggestedOracleEntries = [{ id: 'sug_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), label, paths, target }, ...suggestedOracleEntries].slice(0, 6);
+function pushSuggestedOracleEntry(label, items) {
+  if (!items || !items.length) return;
+  suggestedOracleEntries = [{ id: 'sug_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), label, paths: items }, ...suggestedOracleEntries].slice(0, 6);
 }
 // Advisor "stage, then apply" mechanic (direct follow-up request: "any
 // oracle or suggestion made in the Advisor should have a field it modifies
 // in the Composer... each oracle should display its results in a text
 // label with a checkmark to accept it into the suggestion field by
-// appending it... The current text suggestion should be editable"). Two
-// cards use this — "Suggested oracles" (target 'situation' →
-// context.what.situation) and "If nothing changes…" (target 'consequence'
-// → Latest Scene's own consequence field) — both share this one small
-// mechanism rather than each getting a bespoke one:
+// appending it... The current text suggestion should be editable"). Every
+// card that offers a Scene Details target (target one of
+// SUGGEST_ORACLES_SCENE_FIELDS) uses this — "Suggested oracles" (whichever
+// of opening/driver/clue/complication/consequence the chip itself maps to)
+// and "If nothing changes…" (always 'consequence') — both share this one
+// small mechanism rather than each getting a bespoke one:
 //   1. Rolling a chip (data-advisor-oracle-roll) stores its result text in
 //      advisorOracleResults, keyed by a caller-chosen resultKey — shown as
 //      a plain text label, NOT committed anywhere yet.
 //   2. Checking it off (data-advisor-result-accept) appends that text into
-//      advisorDrafts[target] and clears the shown result.
+//      advisorDrafts[target] and clears the shown result — or, when target
+//      is the literal string 'journal' (nothing mapped), commits straight
+//      to a new Journal note instead, no staging step.
 //   3. advisorDrafts[target] is a normal editable textarea (direct typing
 //      updates it too, same live-sync pattern as inspirationDrafts below) —
 //      "the default value can be changed."
 //   4. data-advisor-draft-apply writes the CURRENT draft text into the real
-//      Composer field (appending to any existing content, same non-
-//      destructive convention the old direct-roll-to-situation behavior
-//      already used) and clears the draft, so "applied" is visually obvious.
+//      Scene Details field (updateSceneField, appending to any existing
+//      content, same non-destructive convention the old direct-roll
+//      behavior already used) and clears the draft, so "applied" is
+//      visually obvious.
 let advisorOracleResults = {}; // ephemeral — resultKey -> last-rolled text, cleared once accepted
-let advisorDrafts = { situation: '', consequence: '' }; // ephemeral — editable staging text per Composer-field target
+let advisorDrafts = {}; // ephemeral — editable staging text per Scene Details field target (opening/driver/clue/complication/consequence), keys created lazily
 let advisorConsequenceDraw = null; // ephemeral — "If nothing changes…"'s own on-demand table-path draw (drawConsequenceOracles), null until the GM asks for one
 let dismissedStoryOptionIds = new Set(); // ephemeral — Story Option ids the GM has accepted (rolled/journaled) or explicitly dismissed (docs/adr/0039 Phase 2, mirrors ADR 0036's dismissible-suggestion pattern) — filtered out of both storyOptionsBlock (WHY) and the Co-Pilot's condensed card so a used/dismissed option makes room for the next-ranked one instead of lingering
 let selectedStoryOptionIds = new Set(); // ephemeral — Story Option ids checked "in play" for the Story Dashboard's Narrative Composer (docs/adr/0040 Phase 12b) — a DIFFERENT concept from dismissedStoryOptionIds above ("used/not interested" vs. "include in the draft"), never persisted
+// Scene Summary (the Navigator's narrativeComposerBlock) — direct follow-up
+// request, now a real editable field. null means "nothing typed yet, still
+// live-tracking WHO/WHERE/Story-Options" (unchanged default behavior for a
+// GM who never touches it); once set to a string (by editing it directly,
+// clicking Clear, or clicking Reload), it's a frozen snapshot the GM owns
+// until Reload explicitly re-syncs it — never silently overwritten by an
+// unrelated render the way a perpetually-live field would be. Ephemeral,
+// never persisted, same convention as inspirationDrafts/advisorDrafts.
+let sceneSummaryOverride = null;
 let catalogSearch = ''; // ephemeral — the catalog picker's own name/tag search
 let relPickerOpen = false; // ephemeral — the Entity Editor Relationships section's "Find entity to link" searchable overlay (design/UX-ROADMAP.md, phone-focused), open or not
 let relPickerFilter = ''; // ephemeral — that overlay's own name/type/tags search
 let partyTrackerAddOpen = false; // ephemeral — the inline "+ Tracker" name/type creation form, open or not
 let partyTrackersEditOpen = false; // ephemeral — one shared edit-mode toggle (pencil icon, Party Trackers header) for the WHOLE tracker list, direct follow-up request: the ✕ remove button and the name's editable input are hidden by default (plain label instead) and only shown while this is on
+// Party drawer's own collapsible section headers (direct follow-up
+// request: "Make Party Roster header collapseable as well as... Party
+// Trackers, Shared Assets, Cargo Manifest and Contracts"). Same XOR-
+// against-a-default pattern collapsibleThumbGroup (workspace/index.js)
+// already uses — a key present in this Set means "toggled AWAY from its
+// own default," not "collapsed" outright, so Party Roster (default open)
+// and the other four (default collapsed) can share one Set with opposite
+// defaults. Reset specifically on a genuine fresh Party-drawer open (see
+// openDrawerTab below), NOT on merely switching focus to/from an already-
+// open tab — "collapsed by default when opening the Party Tracker (not
+// when switching focus to other open tabs)," direct quote.
+let collapsedPartySections = new Set();
 let partyTrackerDraftKind = 'meter'; // ephemeral — the creation form's in-progress type pick, so its size/difficulty sub-field can react before the tracker actually exists
 let partyTrackerDraftName = ''; // ephemeral — mirrors the creation form's name input so a kind-change re-render (which rebuilds that input from scratch) doesn't wipe out whatever the GM already typed
 let tradeLocationId = ''; // ephemeral — which Location's market the Trade drawer currently shows
@@ -868,6 +896,17 @@ function onClick(ev) {
     store.update((d) => continueStory(d, { toJournal: false }));
     return toast('Scene generated');
   }
+  // "Restart Story" (Advisor Quick Apply, direct follow-up request) — a
+  // destructive-but-scoped reset (session.js's restartStory: context,
+  // scenes, Journal, timeline, Threads, Foreshadowing, World State Flags
+  // only; every entity and its progress is untouched), so it gets the same
+  // window.confirm() guard every other destructive control in this app
+  // uses.
+  if (hit('[data-restart-story]')) {
+    if (!window.confirm('Restart the story? WHO/WHERE/WHAT/WHY/HOW, all scenes, the Journal, Threads, Foreshadowing, and World State Flags will be cleared. Entities and their progress are not affected. This cannot be undone.')) return;
+    store.update((d) => restartStory(d));
+    return toast('Story restarted');
+  }
   // "What Happens Next?" (docs/adr/0009-situation-engine-revisited.md,
   // Decision item 3): no longer an alias for Continue Story — it now opens
   // a small Suggestion Lens chip picker instead of generating immediately.
@@ -1130,6 +1169,12 @@ function onClick(ev) {
   const delEnt = hit('[data-entity-del]');
   if (delEnt) {
     const deletedId = delEnt.dataset.entityDel;
+    // Direct request: confirm before deleting an entity — this used to
+    // fire on click alone, no confirmation at all, unlike every other
+    // genuinely destructive delete in this app (Battlemap/Gallery image/
+    // Guide doc/campaign restore), which all gate on window.confirm first.
+    const deletedEntity = getEntity(store.get(), deletedId);
+    if (!window.confirm(`Delete "${deletedEntity ? (deletedEntity.name || 'Unnamed') : 'this entity'}"? This cannot be undone.`)) return;
     // removeEntity's own fallback (domain/entities.js) picks the first
     // entity in the WHOLE campaign, since the pure domain layer has no
     // idea Cast might currently be filtered to a type/tag/search — if it
@@ -1293,6 +1338,10 @@ function onClick(ev) {
   }
   const rmGroup = hit('[data-statblock-remove-group]');
   if (rmGroup) {
+    // Direct follow-up request ("anywhere else that record deletion is
+    // possible") — a whole statblock group can hold many filled-in
+    // fields; this used to remove it on click alone.
+    if (!window.confirm('Remove this statblock? All its fields and values go with it. This cannot be undone.')) return;
     const active = store.get().entities.activeId;
     store.update((d) => removeEntityStatblockGroup(d, active, Number(rmGroup.dataset.statblockRemoveGroup)));
     return toast('Statblock removed');
@@ -1545,6 +1594,12 @@ function onClick(ev) {
   // never changeable again once the tracker exists)
   if (hit('[data-party-tracker-add-toggle]')) { partyTrackerAddOpen = true; partyTrackerDraftKind = 'meter'; partyTrackerDraftName = ''; renderDrawerBody(); restoreFocus('[data-party-tracker-draft-name]'); return; }
   if (hit('[data-party-trackers-edit-toggle]')) { partyTrackersEditOpen = !partyTrackersEditOpen; return renderDrawerBody(); }
+  const partySectionToggle = hit('[data-party-section-toggle]');
+  if (partySectionToggle) {
+    const key = partySectionToggle.dataset.partySectionToggle;
+    if (collapsedPartySections.has(key)) collapsedPartySections.delete(key); else collapsedPartySections.add(key);
+    return renderDrawerBody();
+  }
   if (hit('[data-party-tracker-add-cancel]')) { partyTrackerAddOpen = false; partyTrackerDraftName = ''; return renderDrawerBody(); }
   if (hit('[data-party-tracker-create]')) {
     const nameInput = root.querySelector('[data-party-tracker-draft-name]');
@@ -1562,7 +1617,10 @@ function onClick(ev) {
     return toast('Tracker added');
   }
   const trkDel = hit('[data-party-tracker-remove]');
-  if (trkDel) return store.update((d) => removePartyTracker(d, trkDel.dataset.partyTrackerRemove));
+  if (trkDel) {
+    if (!window.confirm('Remove this tracker? This cannot be undone.')) return;
+    return store.update((d) => removePartyTracker(d, trkDel.dataset.partyTrackerRemove));
+  }
   const trkStep = hit('[data-party-tracker-step]');
   if (trkStep) return store.update((d) => stepPartyTracker(d, trkStep.dataset.partyTrackerStep, Number(trkStep.dataset.delta)));
   const trkBox = hit('[data-party-tracker-box]');
@@ -1600,7 +1658,10 @@ function onClick(ev) {
     return toast('NPC added to Crew Roster');
   }
   const crewDel = hit('[data-colony-crew-remove]');
-  if (crewDel) return store.update((d) => removeCrewRow(d, crewDel.dataset.colonyCrewRemove));
+  if (crewDel) {
+    if (!window.confirm('Remove this crew row? This cannot be undone.')) return;
+    return store.update((d) => removeCrewRow(d, crewDel.dataset.colonyCrewRemove));
+  }
 
   // --- trade (Merchant Rules Lens, ADR 0003/0004) ---
   const tradeBuy = hit('[data-trade-buy]');
@@ -2033,7 +2094,10 @@ function onClick(ev) {
   const back = hit('[data-thread-back]');
   if (back) return store.update((d) => advanceThread(d, back.dataset.threadBack, -1));
   const tdel = hit('[data-thread-del]');
-  if (tdel) return store.update((d) => removeThread(d, tdel.dataset.threadDel));
+  if (tdel) {
+    if (!window.confirm('Delete this thread? This cannot be undone.')) return;
+    return store.update((d) => removeThread(d, tdel.dataset.threadDel));
+  }
 
   const foreshadowingAdd = hit('[data-foreshadowing-add]');
   if (foreshadowingAdd) {
@@ -2056,7 +2120,10 @@ function onClick(ev) {
     return;
   }
   const foreshadowingRemove = hit('[data-foreshadowing-remove]');
-  if (foreshadowingRemove) return store.update((d) => removeForeshadowing(d, foreshadowingRemove.dataset.foreshadowingRemove));
+  if (foreshadowingRemove) {
+    if (!window.confirm('Delete this foreshadowing entry? This cannot be undone.')) return;
+    return store.update((d) => removeForeshadowing(d, foreshadowingRemove.dataset.foreshadowingRemove));
+  }
 
   const worldFlagAdd = hit('[data-worldflag-add]');
   if (worldFlagAdd) {
@@ -2064,7 +2131,10 @@ function onClick(ev) {
     return;
   }
   const worldFlagRemove = hit('[data-worldflag-remove]');
-  if (worldFlagRemove) return store.update((d) => removeWorldFlag(d, worldFlagRemove.dataset.worldflagRemove));
+  if (worldFlagRemove) {
+    if (!window.confirm('Delete this World State Flag? This cannot be undone.')) return;
+    return store.update((d) => removeWorldFlag(d, worldFlagRemove.dataset.worldflagRemove));
+  }
   const contractToggle = hit('[data-contract-toggle]');
   if (contractToggle) {
     const id = contractToggle.dataset.contractToggle;
@@ -2115,7 +2185,10 @@ function onClick(ev) {
     return store.update((d) => updateMissionStatus(d, missionId, status));
   }
   const missionRemove = hit('[data-mission-remove]');
-  if (missionRemove) return store.update((d) => removeMission(d, missionRemove.dataset.missionRemove));
+  if (missionRemove) {
+    if (!window.confirm('Delete this mission? This cannot be undone.')) return;
+    return store.update((d) => removeMission(d, missionRemove.dataset.missionRemove));
+  }
 
   // --- Faction Conflict (Living Faction Engine, docs/design/faction-
   // conflict-integration-plan.md) — hero-path controls first. ---
@@ -2317,14 +2390,15 @@ function onClick(ev) {
     return toast('Added to Journal');
   }
   // WHAT's "Suggest oracles" (direct follow-up request) — draws a fresh
-  // set (session.js's drawSuggestedOracles, customized from Intent + the
-  // Latest Scene) and pushes it as a new entry onto the Advisor's
-  // Suggested oracles history stack; see onChange below for the automatic
-  // re-draw+push on Intent/Latest-Scene change.
+  // set (session.js's drawSuggestedOracles, customized from Intent + Scene
+  // Details, each item already carrying its own target field) and pushes
+  // it as a new entry onto the Advisor's Suggested oracles history stack;
+  // see onChange below for the automatic re-draw+push on Intent/Scene-
+  // Details change.
   const suggestOracles = hit('[data-suggest-oracles]');
   if (suggestOracles) {
     const doc = store.get();
-    pushSuggestedOracleEntry(`WHAT: ${doc.context?.what?.intent || 'no Intent set'}`, drawSuggestedOracles(doc), 'situation');
+    pushSuggestedOracleEntry(`WHAT: ${doc.context?.what?.intent || 'no Intent set'}`, drawSuggestedOracles(doc));
     return render();
   }
   // WHERE's Location details "Regional faction activity" 💡 (direct
@@ -2338,31 +2412,13 @@ function onClick(ev) {
     pushSuggestedOracleEntry(`Regional faction activity — ${loc ? loc.name || 'Unnamed' : 'location'}`, drawFactionActivityOracles(doc));
     return render();
   }
-  // Rolls one suggested table directly — identical shape to
-  // data-story-option-roll above, just without an option id to dismiss.
-  // A "situation"-targeted entry now stages through advisorOracleResults/
-  // advisorDrafts (see data-advisor-oracle-roll below) instead of
-  // committing straight to context.what.situation — direct follow-up
-  // request turning the old one-click "roll = commit" into "roll, review,
-  // check off, then apply." An untargeted entry (WHERE's Regional faction
-  // activity 💡) keeps the original direct-to-Journal behavior — it never
-  // had an obvious single Composer field to stage into.
-  const suggestOracleRoll = hit('[data-suggest-oracle-roll]');
-  if (suggestOracleRoll) {
-    const path = suggestOracleRoll.dataset.suggestOracleRoll.split('>');
-    const target = suggestOracleRoll.dataset.suggestOracleTarget;
-    let text = '';
-    if (target === 'situation') {
-      store.update((d) => { const r = rollOracle(d, path, { toJournal: false }); text = r.text; return r.campaign; });
-      advisorOracleResults[path.join('>')] = text;
-      return render();
-    }
-    store.update((d) => { const r = rollOracle(d, path); text = r.text; return r.campaign; });
-    return toast(text || 'Rolled');
-  }
-  // Advisor stage-then-apply mechanic, shared by "Suggested oracles" and
-  // "If nothing changes…" (see the advisorOracleResults/advisorDrafts
-  // declaration comment above for the full 4-step flow).
+  // Advisor stage-then-apply mechanic, shared by every Advisor oracle chip
+  // now (audited/unified — direct follow-up request: "clicking the
+  // checkmark to add it to the Composer actually has a field associated
+  // to it... if no Composer field is mapped, then paste it to the
+  // Journal"). Every roll stages into advisorOracleResults first (never
+  // committing anywhere on its own); the accept handler below decides
+  // where the checkmark actually sends it.
   const advisorRoll = hit('[data-advisor-oracle-roll]');
   if (advisorRoll) {
     const path = advisorRoll.dataset.advisorOracleRoll.split('>');
@@ -2378,8 +2434,16 @@ function onClick(ev) {
     const target = advisorAccept.dataset.advisorDraftTarget;
     const text = advisorOracleResults[resultKey];
     if (text) {
-      const current = advisorDrafts[target] || '';
-      advisorDrafts[target] = current ? `${current}\n${text}` : text;
+      if (target === 'journal') {
+        // No Composer field is mapped for this one (e.g. WHERE's Regional
+        // faction activity) — the checkmark files it straight to the
+        // Journal instead, same as any other oracle roll in this app.
+        store.update((d) => addNote(d, text, 'Advisor'));
+        toast('Added to Journal');
+      } else {
+        const current = advisorDrafts[target] || '';
+        advisorDrafts[target] = current ? `${current}\n${text}` : text;
+      }
       delete advisorOracleResults[resultKey];
     }
     return render();
@@ -2388,50 +2452,41 @@ function onClick(ev) {
   if (advisorApply) {
     const target = advisorApply.dataset.advisorDraftApply;
     const text = (advisorDrafts[target] || '').trim();
-    if (!text) return;
-    if (target === 'consequence' && !currentSceneId()) return toast('No active scene to apply to yet');
+    if (!text || !SUGGEST_ORACLES_SCENE_FIELDS.includes(target)) return;
+    const sceneId = currentSceneId();
+    if (!sceneId) return toast('No active scene to apply to yet');
     // Cleared BEFORE store.update (not after) — store.update's own notify()
     // re-renders synchronously, so clearing afterward would apply to a
     // render that already happened, leaving the stale text visibly stuck
     // in the textarea until some LATER unrelated render caught up.
     advisorDrafts[target] = '';
-    if (target === 'situation') {
-      store.update((d) => {
-        const current = (d.context.what && d.context.what.situation) || '';
-        return editContextText(d, 'what', 'situation', current ? `${current}\n${text}` : text);
-      });
-    } else if (target === 'consequence') {
-      const sceneId = currentSceneId();
-      store.update((d) => {
-        const scene = (d.scenes || []).find((s) => s.id === sceneId);
-        const current = (scene && scene.consequence) || '';
-        return updateSceneField(d, sceneId, 'consequence', current ? `${current}\n${text}` : text);
-      });
-    }
-    return toast(`Applied to ${target === 'situation' ? 'Situation' : 'Likely consequence'}`);
+    store.update((d) => {
+      const scene = (d.scenes || []).find((s) => s.id === sceneId);
+      const current = (scene && scene[target]) || '';
+      return updateSceneField(d, sceneId, target, current ? `${current}\n${text}` : text);
+    });
+    return toast(`Applied to ${SCENE_FIELD_LABELS[target] || target}`);
   }
   const advisorConsequenceDrawBtn = hit('[data-advisor-consequence-draw]');
   if (advisorConsequenceDrawBtn) {
     advisorConsequenceDraw = drawConsequenceOracles(store.get());
     return render();
   }
-  // Story Dashboard's Narrative Composer (docs/adr/0040 Phase 12b) —
-  // recomputes the exact same draft narrativeComposerBlock just rendered
-  // (deterministic given current campaign state + selectedStoryOptionIds,
-  // so there's nothing to read back off the DOM) and either copies it or
-  // files it to the Journal verbatim (raw @[Name]/markup intact, same as
-  // every other Journal entry — addNote's own mention auto-linking picks
-  // it up from there).
+  // Story Dashboard's Narrative Composer (docs/adr/0040 Phase 12b) — Copy/
+  // Send to Journal act on whatever's CURRENTLY shown (currentSceneSummary,
+  // below — the GM's own edited override once one exists, else the live
+  // recompute), same "what you see is what you get" the field's own edit
+  // commit and Clear/Reload all share.
   const composerCopy = hit('[data-composer-copy]');
   if (composerCopy) {
-    const draft = composeNarrativeDraft(store.get(), { selectedOptionIds: Array.from(selectedStoryOptionIds) });
+    const draft = currentSceneSummary();
     if (!draft) return toast('Nothing to copy yet');
     navigator.clipboard.writeText(draft).then(() => toast('Copied'), () => toast('Could not copy'));
     return;
   }
   const composerJournal = hit('[data-composer-journal]');
   if (composerJournal) {
-    const draft = composeNarrativeDraft(store.get(), { selectedOptionIds: Array.from(selectedStoryOptionIds) });
+    const draft = currentSceneSummary();
     if (!draft) return toast('Nothing to send yet');
     store.update((d) => addNote(d, draft, 'Navigator'));
     // The Navigator's "add to Journal" button also opens the Journal drawer
@@ -2440,6 +2495,20 @@ function onClick(ev) {
     openDrawerTab('journal');
     render();
     return toast('Added to Journal');
+  }
+  // Direct follow-up request: Clear blanks the field; Reload explicitly
+  // re-pulls the CURRENT live WHO/WHERE/Story-Options recompute into it —
+  // both set a real override (not null), so neither one re-arms perpetual
+  // auto-tracking (see sceneSummaryOverride's own declaration comment for
+  // why that matters). Scene Summary can render in EITHER the always-
+  // visible .mc-workspace OR a drawer-panel tab depending on viewport tier
+  // (same as data-story-option-select just above, the closest existing
+  // precedent) — a full render() covers both, where renderDrawerBody()
+  // alone would only cover the latter.
+  if (hit('[data-composer-clear]')) { sceneSummaryOverride = ''; return render(); }
+  if (hit('[data-composer-reload]')) {
+    sceneSummaryOverride = composeNarrativeDraft(store.get(), { selectedOptionIds: Array.from(selectedStoryOptionIds) });
+    return render();
   }
 
   // --- WHO's scene-scoped NPC cards + WHERE's Location Details (docs/adr/
@@ -2499,22 +2568,13 @@ function onClick(ev) {
     if (!sceneId) return;
     return store.update((d) => removeSceneLocation(d, sceneId, locationRemove.dataset.sceneLocationRemove));
   }
-  // WHERE's "Nearby locations" chips (direct follow-up request) — clicking
-  // one adds it straight to Location details instead of opening its Entity
-  // Editor; addSceneLocation's own one-per-tag dedup (scenes.js) still
-  // applies the same as the "Pick location" picker.
-  const locationAdd = hit('[data-scene-location-add]');
-  if (locationAdd) {
-    const sceneId = currentSceneId();
-    if (!sceneId) return;
-    return store.update((d) => addSceneLocation(d, sceneId, locationAdd.dataset.sceneLocationAdd));
-  }
   // Advisor's "Located at <Location>" proximity card (direct follow-up
   // request — click-to-add, confirmed over drag-and-drop) — an NPC found
   // there (or under a sub-location, iteratively) routes the same way
   // Introduce NPC's create path already does (#character -> Protagonists,
-  // else Antagonists); a sub-location adds straight to Location details,
-  // same as a Nearby locations chip.
+  // else Antagonists); a sub-location adds straight to Location details
+  // via the same addSceneLocation dedup (scenes.js) as the "Pick location"
+  // picker.
   const proximityAddNpc = hit('[data-proximity-add-npc]');
   if (proximityAddNpc) {
     const sceneId = currentSceneId();
@@ -2910,9 +2970,9 @@ function onChange(ev) {
       .catch((err) => toast(`Couldn't add background — ${err.message}`));
     return;
   }
-  // Latest Scene fields that feed "Suggest oracles" (direct follow-up
-  // request: re-draw "every time... the Latest Scene changes") push a new
-  // history entry right after the field itself commits — only the 5
+  // Scene Details fields that feed "Suggest oracles" (direct follow-up
+  // request: re-draw "every time... the [Scene Details] changes") push a
+  // new history entry right after the field itself commits — only the 5
   // fields drawSuggestedOracles actually reads from (session.js);
   // decisionPoint/situationLine have no oracle tag link and don't affect
   // the draw, so they don't trigger one either.
@@ -2922,7 +2982,7 @@ function onChange(ev) {
     store.update((d) => updateSceneField(d, sceneId, field, t.value));
     if (SUGGEST_ORACLES_SCENE_FIELDS.includes(field)) {
       const doc = store.get();
-      pushSuggestedOracleEntry(`WHAT: ${doc.context?.what?.intent || 'no Intent set'} (Latest Scene edited)`, drawSuggestedOracles(doc), 'situation');
+      pushSuggestedOracleEntry(`WHAT: ${doc.context?.what?.intent || 'no Intent set'} (Scene Details edited)`, drawSuggestedOracles(doc));
     }
     return;
   }
@@ -2935,10 +2995,10 @@ function onChange(ev) {
     const [key, field] = ctx.dataset.ctx.split('.');
     store.update((d) => patchContext(d, key, { [field]: t.value }));
     // "Suggest oracles" pushes a new history entry on an Intent change too
-    // (direct follow-up request), same as a Latest Scene field edit above.
+    // (direct follow-up request), same as a Scene Details field edit above.
     if (key === 'what' && field === 'intent') {
       const doc = store.get();
-      pushSuggestedOracleEntry(`WHAT: ${doc.context?.what?.intent || 'no Intent set'}`, drawSuggestedOracles(doc), 'situation');
+      pushSuggestedOracleEntry(`WHAT: ${doc.context?.what?.intent || 'no Intent set'}`, drawSuggestedOracles(doc));
     }
     return;
   }
@@ -3649,6 +3709,12 @@ function openDrawerTab(id) {
     if (id === 'oracle') oracleFilter = '';
     if (id === 'documents') { docFilter = ''; docTagFilters = new Set(); docTagEditorOpen = new Set(); }
     if (id === 'graph') graphView = { scale: 1, x: 0, y: 0 };
+    // Direct request: sections other than Party Roster start collapsed
+    // "when opening the Party Tracker (not when switching focus to other
+    // open tabs)" — resetting here (inside the "newly added to openDrawers"
+    // guard) is exactly that: a genuine fresh open, not a mere re-focus of
+    // an already-pinned tab.
+    if (id === 'party') collapsedPartySections = new Set();
   }
   // Auto-populate Momentum/Supply on every Party open, not just the first
   // (direct request) — deliberately OUTSIDE the "already open" guard above,
@@ -4361,6 +4427,17 @@ function onFocusOut(ev) {
     if (value !== current) store.update((d) => editContextText(d, key, field, value));
   }
 
+  // Scene Summary (direct follow-up request — now editable): the first
+  // real edit is what sets sceneSummaryOverride, turning it from "still
+  // live-tracking WHO/WHERE/Story-Options" into "the GM's own frozen
+  // snapshot" — same blur-commit shape as ctxField above, just writing to
+  // ephemeral state instead of the campaign document.
+  const summaryField = ev.target.closest('[data-scene-summary-field]');
+  if (summaryField && summaryField.isContentEditable) {
+    const value = serializeMentionEditor(summaryField);
+    if (value !== currentSceneSummary()) { sceneSummaryOverride = value; render(); }
+  }
+
   // Guide autosaves on blur too now — no Save button (nothing else in the
   // app uses one; every other field commits on blur/change already, so
   // Guide having a separate explicit-save step was the odd one out).
@@ -4650,6 +4727,17 @@ function renderMentionSuggest() {
   el.style.top = (rect.bottom + 4) + 'px';
   el.style.width = Math.min(rect.width, 320) + 'px';
   el.hidden = false;
+}
+
+// Scene Summary's current effective text — the GM's own override once one
+// exists (edited directly, Cleared, or Reloaded), else the live WHO/WHERE/
+// Story-Options recompute, exactly matching what narrativeComposerBlock
+// itself just rendered. Shared by Copy/Send to Journal (above) and the
+// field's own blur-commit (below) so all three agree on "what's currently
+// there" the same way.
+function currentSceneSummary() {
+  if (sceneSummaryOverride !== null) return sceneSummaryOverride;
+  return composeNarrativeDraft(store.get(), { selectedOptionIds: Array.from(selectedStoryOptionIds) });
 }
 
 // Commits a mention-editor field's current content the same way its normal
@@ -5298,9 +5386,9 @@ function buildDrawerUi() {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
     enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts,
-    advisorOracleResults, advisorDrafts, advisorConsequenceDraw,
+    advisorOracleResults, advisorDrafts, advisorConsequenceDraw, sceneSummaryOverride,
     expandedGuideNodes, guideRenameOpen,
-    partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName, partyTrackersEditOpen,
+    partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName, partyTrackersEditOpen, collapsedPartySections,
     tradeLocationId, tradeContractAddOpen,
     journalEditOpen, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,

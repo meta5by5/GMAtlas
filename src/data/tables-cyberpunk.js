@@ -84,6 +84,16 @@ export const CYBERPUNK_TABLES = {
       "corporate arcology", "flooded underlevel", "black-market night market", "gang-controlled block",
       "abandoned megastructure squat", "augmentation clinic row", "data-haven server farm",
       "gated executive enclave", "transit hub black spot", "off-grid maker district"
+    ],
+    "Site Type": [
+      "street level", "rooftop access", "corporate lobby", "underlevel tunnel", "market stall row",
+      "server farm floor", "parking structure", "transit platform", "back-alley entrance",
+      "penthouse suite", "loading dock", "clinic backroom"
+    ],
+    "Immediate Surroundings": [
+      "inside a building", "crowded street", "narrow alley", "elevated walkway", "underground tunnel",
+      "rooftop edge", "behind cover", "exposed catwalk", "sealed server room", "flooded underlevel",
+      "dense crowd", "total darkness"
     ]
   },
   "Plot Engine": {

@@ -273,11 +273,15 @@ export function toolbarCollapsed(doc, ui, key) {
  *  header row to move it into anyway. */
 export function richToolbarToggleHTML(key, collapsed) {
   if (!key) return '';
-  // Direct follow-up request: a plain, monochrome pencil (U+270E, no
-  // emoji variation selector) matching the SAME glyph every rename/edit
-  // toggle elsewhere in this app already uses (Journal, Oracle, Party
-  // Trackers, Guide, Documents) — not the colorful "✏️" emoji variant.
-  return `<button type="button" class="icon-btn rich-toolbar-toggle" data-rich-toolbar-toggle="${escAttr(key)}" title="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}" aria-label="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}">✎</button>`;
+  // Direct follow-up request (still showing as a large colorful emoji per
+  // a real screenshot even after switching to the bare U+270E character —
+  // some platforms/font stacks fall back to an emoji-style glyph for a
+  // codepoint with no explicit presentation selector) — U+FE0E (VS15,
+  // "text presentation") is appended explicitly to force the plain
+  // monochrome line-drawing glyph regardless of platform default, matching
+  // the SAME pencil every rename/edit toggle elsewhere in this app uses
+  // (Journal, Oracle, Party Trackers, Guide, Documents).
+  return `<button type="button" class="icon-btn rich-toolbar-toggle" data-rich-toolbar-toggle="${escAttr(key)}" title="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}" aria-label="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}">✎︎</button>`;
 }
 // Direct follow-up request: the toggle no longer sits INSIDE the icon row
 // above the textbox — it's now a small overlay button pinned to the

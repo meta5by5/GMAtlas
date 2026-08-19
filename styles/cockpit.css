@@ -173,7 +173,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .workspace-card h2 { margin: 0 var(--sp-6) 10px 0; font-size: 1.2rem; flex: 0 0 auto; }
 .workspace-card .lead { color: var(--text-dim); margin: 0 var(--sp-6) var(--sp-4) 0; flex: 0 0 auto; }
 .workspace-card-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-.workspace-card-body-inner { padding-right: var(--sp-6); }
+/* Direct follow-up request ("reduce the margin space between scroll bar
+   and text") — narrowed from a full --sp-6 gutter to --sp-3, still enough
+   that the scrollbar track never touches text, just noticeably closer
+   than before. */
+.workspace-card-body-inner { padding-right: var(--sp-3); }
 @media (max-width: 1023px) {
   /* Composer/Navigator render inside the drawer panel instead now
      (design/UX-ROADMAP.md Steps 4/5 — permanently-pinned, unclosable tabs
@@ -551,17 +555,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
      track-box shrunk slightly too (1.75rem -> 1.55rem) for the same
      reason. align-self:center on the label is redundant with the grid's
      own align-items:center but stated explicitly (direct request to
-     ensure it) rather than relying only on the inherited value. */
-  .statblock-row.track-row, .statblock-row.attr-row {
+     ensure it) rather than relying only on the inherited value.
+     .attr-row is deliberately NOT included here any more — it's a small
+     self-contained box now (see the desktop rule), not a full-width grid
+     row, so it doesn't need a phone-specific layout of its own. */
+  .statblock-row.track-row {
     display: grid; grid-template-columns: minmax(4.5rem, 28%) 1fr;
     align-items: center; gap: var(--sp-2);
   }
-  .track-row .statblock-key, .attr-row .statblock-key { align-self: center; }
+  .track-row .statblock-key { align-self: center; }
   .track-row .track-widget { justify-content: flex-end; }
   .track-row .track-box { width: 1.55rem; height: 1.55rem; font-size: 0.72rem; }
   .track-row .track-value-badge { font-size: 0.85rem; padding: 0.28rem 0.5rem; }
-
-  .statblock-row.attr-row .attr-val-input { width: 100%; max-width: 2.8rem; min-height: 2.25rem; font-size: 1rem; justify-self: end; }
 
   /* The read-only Combat/Danger-style summary badges above the field list
      (attributeBadges()) get the same "room to breathe" treatment, so a
@@ -924,12 +929,14 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 /* WHERE's persistent "current location" indicator (docs/adr/0038) — a
    thin accent-colored left border is enough emphasis to read as "this is
    selected" without a new layout system. */
-/* Direct follow-up request: the +/- picker controls should sit closer to
-   the panel's own scrollbar than the rest of Composer's content does —
-   .workspace-card-body-inner reserves a full --sp-6 right gutter so the
-   scrollbar track never touches text, but that's more room than a small
-   icon-button row needs, so this one block claws part of it back. */
-.current-location-banner { border-left: 2px solid var(--accent); padding-left: var(--sp-2); margin-right: calc(-1 * var(--sp-4)); }
+/* This used to claw back part of .workspace-card-body-inner's own right
+   gutter with a negative margin (when that gutter was a full --sp-6) so
+   this row's +/- controls sat closer to the scrollbar than the rest of
+   Composer's content — now that the gutter itself is narrowed to --sp-3
+   (direct follow-up request, above), that claw-back would over-correct
+   into negative padding, so it's removed; the new baseline gutter alone
+   is already tight enough. */
+.current-location-banner { border-left: 2px solid var(--accent); padding-left: var(--sp-2); }
 
 /* WHO/WHERE's Faction Events tie-in (docs/adr/0031's Faction Events
    follow-up) — a small read-only summary + jump chips, same entity-chips
@@ -1356,6 +1363,12 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .statblock-block { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-3); }
 .statblock-head { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); }
 .statblock-head h4 { flex: 1; margin: 0; font-size: 0.8rem; color: var(--accent); }
+/* Party drawer's collapsible section headers (direct follow-up request) —
+   same size/color/weight as .statblock-head h4 above so a section reads
+   identically whether or not it happens to be collapsible, just as a real
+   button (background/border reset) instead of a plain heading. */
+.party-section-toggle { flex: 1; margin: 0; padding: 0; background: none; border: none; cursor: pointer; text-align: left; font: inherit; font-size: 0.8rem; color: var(--accent); }
+.party-section-toggle:hover { color: var(--accent-strong); }
 .statblock-collapse-toggle { font-size: 0.7rem; color: var(--text-dim); }
 .statblock-add-choices { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-2); }
 .chip.sm { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
@@ -1393,11 +1406,15 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 }
 .track-box:hover { border-color: var(--accent-strong); }
 .track-box.on { background: var(--accent-strong); border-color: var(--accent-strong); color: #0b1120; font-weight: 700; }
+/* Retinted to the same dark bg-inset/border recipe attr-row/party-stat-pill
+   use (direct follow-up request — one consistent "statblock box" look
+   everywhere), narrower padding included; only the value TEXT keeps the
+   accent color as the "this is interactive" cue. */
 .track-value-badge {
-  border: 1px solid var(--accent-strong); background: rgba(56,189,248,0.08); color: var(--accent);
-  border-radius: 4px; padding: 2px 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; user-select: none;
+  border: 1px solid var(--border); background: var(--bg-inset); color: var(--accent);
+  border-radius: var(--radius-sm); padding: 2px 6px; font-size: 0.8rem; font-weight: 700; cursor: pointer; user-select: none;
 }
-.track-value-badge:hover { background: rgba(56,189,248,0.18); }
+.track-value-badge:hover { border-color: var(--accent-strong); }
 .track-value-badge small { font-weight: 400; color: var(--text-dim); margin-left: 1px; }
 
 /* Attribute/stat row — a directly-editable, validated-numeric value
@@ -1419,15 +1436,49 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
   border-radius: 4px; padding: 2px 4px; font-size: 0.85rem; font-weight: 700;
 }
 .attr-val-input:focus { outline: 2px solid var(--accent-strong); outline-offset: 1px; }
+/* Direct follow-up request ("update all statblock boxes to have narrow
+   margins and look like [a small dark bordered pill: stat name on top,
+   bold value below]"): .statblock-row.attr-row itself becomes that one
+   pill — label and value stacked inside ONE narrow-padded bordered box,
+   sized to its own content (not stretched across a grid row) — instead of
+   the label and the input sitting as two separate side-by-side grid
+   cells. The label/input's own chrome (border/background/color) moves
+   here, onto the shared box, so they read as one unit; .attr-row-compact/
+   .track-row-compact/.party-stat-pill/.track-value-badge below are
+   retinted to the exact same background/border recipe for one consistent
+   "statblock box" look across the whole app, not four slightly different
+   ones. */
+.statblock-row.attr-row {
+  display: inline-flex; flex-direction: column; align-items: center; gap: 1px;
+  width: fit-content; min-width: 3.2rem; max-width: 100%;
+  padding: 0.25rem 0.5rem; margin-right: var(--sp-2);
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset);
+}
+.attr-row .statblock-key, .attr-row .statblock-key-roll {
+  font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim);
+  text-decoration: none; white-space: nowrap;
+}
+.attr-row .attr-val-input {
+  width: auto; min-width: 2rem; max-width: none;
+  border: none; background: none; padding: 0;
+  text-align: center; font-size: 1rem; font-weight: 700; color: var(--accent);
+}
+.attr-row .attr-val-input:focus { outline: none; }
 
 /* Character sheet (ruleset-driven stats + resource meters). Narrow +
    nowrap-with-scroll (not wrap) so a ruleset's whole stat row (5 stats for
    both Starforged and 5PFH today — see data/rulesets.js) reads as one
    scannable line in the ~388px drawer content width instead of spilling to
    a second row; overflow-x is the escape valve if a custom ruleset/added
-   field ever pushes past that. */
+   field ever pushes past that. inline-flex/width:fit-content (direct
+   follow-up request — "the statblock field... must look like the narrow
+   margin version") so this row hugs its actual stat pills instead of
+   always stretching into one full-width bar, most visible with just one
+   or two stats present; max-width keeps it from overflowing the drawer
+   once enough stats are present for overflow-x to take over. */
 .character-sheet-stats {
-  display: flex; flex-wrap: nowrap; overflow-x: auto; gap: var(--sp-1);
+  display: inline-flex; flex-wrap: nowrap; overflow-x: auto; gap: var(--sp-1);
+  width: fit-content; max-width: 100%;
   padding: var(--sp-2); margin-bottom: var(--sp-3);
   background: var(--tier2-bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
@@ -1437,7 +1488,7 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    width, same as before, just scrolling a little sooner. */
 .track-row-compact {
   display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 0 auto;
-  width: 5.2rem; margin-bottom: 0; padding: 0.4rem 0.3rem;
+  width: 5.2rem; margin-bottom: 0; padding: 0.25rem 0.3rem;
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset);
 }
 .track-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.68rem; white-space: normal; line-height: 1.2; }
@@ -1448,14 +1499,24 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 
 /* Compact attribute pill (Edge/Heart/... stat row atop a character sheet) —
    same bordered-pill language as .track-row-compact, single-number spinner
-   instead of boxes. */
+   instead of boxes. Markup always carries BOTH .attr-row and
+   .attr-row-compact together (attrRow()'s opts.compact just appends the
+   modifier class); .statblock-row.attr-row's own two-class selector
+   outranks this one-class selector on every property they both set
+   (width/padding/gap/display), so the fixed 5.2rem compact width would
+   otherwise silently lose to the base pill's width:fit-content. The
+   .statblock-row.attr-row.attr-row-compact override right below settles
+   that regardless of source order. */
 .attr-row-compact {
   display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 0 auto;
-  width: 5.2rem; margin-bottom: 0; padding: 0.4rem 0.3rem;
+  width: 5.2rem; margin-bottom: 0; padding: 0.25rem 0.3rem;
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset);
 }
+.statblock-row.attr-row.attr-row-compact {
+  display: flex; width: 5.2rem; min-width: 5.2rem; padding: 0.25rem 0.3rem; margin-right: 0; gap: 4px;
+}
 .attr-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.68rem; white-space: normal; line-height: 1.2; }
-.attr-row-compact .attr-val-input { width: 100%; padding: 3px 4px; font-size: 0.85rem; }
+.attr-row-compact .attr-val-input { width: 100%; padding: 0; font-size: 0.85rem; }
 
 /* Drag-and-drop (entity ↔ entity, entity → text) */
 [data-drag-entity] { cursor: grab; }
@@ -1734,21 +1795,35 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    is clickable to roll dice but not editable"): same bordered-pill
    language .attr-row-compact/.track-row-compact already established for a
    compact stat box, just standing alone as a real <button> (or a <span>
-   for a non-rollable/text field) instead of wrapping an editable input. */
+   for a non-rollable/text field) instead of wrapping an editable input.
+   The button element IS the whole pill (label + value both sit inside
+   one <button data-party-stat-roll>, drawers/index.js's partyStatPill) —
+   the entire box is the click target, not just the label text the way
+   attrRow's own roll trigger works in the main Entity Editor — direct
+   request, specifically to make it a bigger, easier target here since
+   there's no competing "click to edit" affordance on a read-only pill.
+   Sizing (direct follow-up request — "double the size of just one box in
+   a meter/counter like Health"): a single .track-box is 22px/1.375rem at
+   its base size, so this pill's width is fixed at exactly double that —
+   a real, deliberately small "consolidated and minimal" footprint (down
+   from an earlier, more arbitrary 4.4rem), not the compact character-
+   sheet pill's own wider 5.2rem. A longer field name (e.g. "Momentum")
+   wraps across two lines (white-space:normal below) rather than pushing
+   the box wider. */
 .party-stat-group { margin-bottom: var(--sp-2); }
 .party-stat-group-label { font-size: 0.6rem; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 2px; }
 .party-stat-pills { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .party-stat-pill {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  width: 4.4rem; padding: 0.35rem 0.3rem;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  width: 2.75rem; min-height: 2.75rem; padding: 0.15rem 0.2rem; box-sizing: border-box;
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset); color: var(--text);
   font: inherit;
 }
 button.party-stat-pill { cursor: pointer; }
-button.party-stat-pill:hover { border-color: var(--accent); color: var(--accent); }
+button.party-stat-pill:hover { border-color: var(--accent); }
 .party-stat-pill-static { opacity: 0.85; }
-.party-stat-pill-label { font-size: 0.62rem; letter-spacing: 0.04em; color: var(--text-dim); text-transform: uppercase; text-align: center; line-height: 1.2; white-space: normal; }
-.party-stat-pill-value { font-size: 0.9rem; font-weight: 700; }
+.party-stat-pill-label { font-size: 0.56rem; letter-spacing: 0.03em; color: var(--text-dim); text-transform: uppercase; text-align: center; line-height: 1.1; white-space: normal; }
+.party-stat-pill-value { font-size: 0.85rem; font-weight: 700; color: var(--accent); }
 .party-tracker-list { display: flex; flex-direction: column; gap: var(--sp-2); }
 .party-tracker-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: var(--sp-2); align-items: center; }
 .party-tracker-name-input { min-width: 0; }

@@ -85,6 +85,16 @@ export const FANTASY_TABLES = {
       "walled market town", "flooded ruin district", "temple quarter", "thieves' warren",
       "abandoned noble estate", "frontier trading post", "sacred grove", "mining settlement",
       "river port", "besieged border keep"
+    ],
+    "Site Type": [
+      "village edge", "village square", "castle gate", "great hall", "dungeon entrance",
+      "forest clearing", "mountain pass", "riverside dock", "temple courtyard", "market row",
+      "watchtower", "underground cavern"
+    ],
+    "Immediate Surroundings": [
+      "inside a building", "open field", "dense forest", "underground", "narrow passage",
+      "behind cover", "exposed ledge", "sealed chamber", "flooded cellar", "crowded market",
+      "total darkness", "ruined structure"
     ]
   },
   "Plot Engine": {

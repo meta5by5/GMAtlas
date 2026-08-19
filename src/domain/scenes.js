@@ -24,7 +24,20 @@ export function generateScene(campaign, tables, rng = Math.random, lensCategorie
   const what = campaign.context.what || {};
   const where = campaign.context.where || {};
   const form = campaign.settings.form || {};
-  const number = (campaign.scenes?.length || 0) + 1;
+  const scenes = campaign.scenes || [];
+  const number = (scenes.length || 0) + 1;
+  // Direct follow-up request: the party's cast carries forward into a new
+  // scene by default — "clearing NPCs is not" by design, unlike Composer's
+  // own textboxes, which already accumulate/append across scenes rather
+  // than reset. Only the three Actor lists (Protagonists/Antagonists/
+  // Bystanders) copy over; Assets present/Location details still start
+  // fresh each scene, unchanged — a new scene isn't necessarily in the
+  // same place or carrying the same gear, but it's very likely still
+  // about the same people until the GM says otherwise.
+  const prevScene = scenes[scenes.length - 1];
+  const carriedProtagonistIds = prevScene ? [...(prevScene.protagonistIds || [])] : [];
+  const carriedAntagonistIds = prevScene ? [...(prevScene.antagonistIds || [])] : [];
+  const carriedBystanderIds = prevScene ? [...(prevScene.bystanderIds || [])] : [];
 
   const action = safePick(tables, rng, 'Core Oracles', 'Action');
   const theme = safePick(tables, rng, 'Core Oracles', 'Theme');
@@ -83,9 +96,9 @@ export function generateScene(campaign, tables, rng = Math.random, lensCategorie
     // mutation or a new top-level campaign array — "specific to this
     // situation," same reasoning as the split Latest Scene fields above.
     npcStates: {},
-    protagonistIds: [],
-    antagonistIds: [],
-    bystanderIds: [],
+    protagonistIds: carriedProtagonistIds,
+    antagonistIds: carriedAntagonistIds,
+    bystanderIds: carriedBystanderIds,
     // "Assets present" (WHO redesign, direct follow-up request) — a
     // fourth GM-curated scene list, same shape as bystanderIds, but for
     // #asset-TYPE entities (not NPCs) — deliberately NOT part of

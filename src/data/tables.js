@@ -1098,6 +1098,42 @@ export const SCENE_TABLES = {
       "an alarm chirping once and going silent",
       "wind or vents moaning through a loose seal",
       "sudden total silence where machinery should be running"
+    ],
+    "Site Type": [
+      "Settlement edge",
+      "Settlement core",
+      "Docking bay",
+      "Cargo hold",
+      "Engineering deck",
+      "Habitation ring",
+      "Maintenance tunnel",
+      "Command center",
+      "Airlock corridor",
+      "Storage depot",
+      "Medical bay",
+      "Comms array",
+      "Perimeter fence",
+      "Landing pad",
+      "Server vault",
+      "Reactor room"
+    ],
+    "Immediate Surroundings": [
+      "Inside a building",
+      "Open vacuum",
+      "Underground",
+      "Elevated platform",
+      "Narrow corridor",
+      "Wide open bay",
+      "Behind cover",
+      "Exposed catwalk",
+      "Sealed chamber",
+      "Flooded compartment",
+      "Zero-gravity section",
+      "Debris field",
+      "Dense fog",
+      "Total darkness",
+      "Crowded space",
+      "Abandoned wreckage"
     ]
   },
   "Missions": {

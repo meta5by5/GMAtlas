@@ -147,55 +147,78 @@ function advisorDraftEditor(draftKey, ui, { placeholder, applyLabel }) {
   </div>`;
 }
 
+// Scene Details' own oracle-tag-linked fields and their display labels —
+// matches shell.js's SUGGEST_ORACLES_SCENE_FIELDS/SCENE_FIELD_LABELS
+// exactly (a small local copy rather than a cross-import, same posture as
+// every other small fixed-vocabulary constant in this file).
+const SCENE_FIELD_LABELS = { opening: 'Opening', driver: 'Driver', clue: 'Clue', complication: 'Complication', consequence: 'Likely consequence' };
+
 // "Suggested oracles" history stack (direct follow-up request: "whenever
 // anything is added to the Advisor, place it as a new entry in a box at
 // the top... move previous entries down. Show three entries plus
 // collapsed boxes for three before that"). Two triggers push onto the
 // same ui.suggestedOracleEntries array (shell.js's pushSuggestedOracleEntry
 // — newest first, capped at 6): WHAT's "Suggest oracles" button/Intent-
-// Latest-Scene auto-trigger, and WHERE's Location details "Regional
+// Scene-Details auto-trigger, and WHERE's Location details "Regional
 // faction activity" 💡. Each entry is a fixed draw at the moment it was
 // added (not recomputed on render) — the first 3 render as open boxes,
 // the next 3 as native <details> so a GM can still expand one to look up
 // what an older suggestion was without it competing for space by default.
-// A WHAT-sourced entry carries target:'situation' — rolling ONE of its
-// chips (data-advisor-oracle-roll) now shows the result as plain text with
-// a ✓ (data-advisor-result-accept) instead of committing straight to
-// context.what.situation the way it used to (direct follow-up request,
-// replacing the old one-click "roll = commit" with "roll, review, check
-// off, then Apply" via the shared editor below). WHERE's Regional faction
-// activity 💡 entries have no target and keep their original direct-roll-
-// to-Journal behavior (data-suggest-oracle-roll, unchanged) — there was
-// never one obvious Composer field for that one to stage into.
+// Direct follow-up request: "each [suggested oracle] must map to one of
+// the fields under [Scene Details] such that clicking the checkmark
+// appends that to the mapped field. If a field is not mapped to an actual
+// field in Composer, then add as an entry to Journal." Every entry's own
+// `paths` is now an array of `{path, target}` items (session.js's
+// drawSuggestedOracles/drawFactionActivityOracles) — target is whichever
+// Scene Details field shares a tag with that specific table, or null when
+// none does (e.g. WHERE's #faction/#agenda draw). Rolling a chip
+// (data-advisor-oracle-roll) shows the result as plain text with a ✓
+// (data-advisor-result-accept) rather than committing anywhere on its own
+// ("roll, review, check off, then Apply" via the per-field editors below);
+// the checkmark's own accept target is read PER ITEM now (shell.js's
+// data-advisor-result-accept branches on 'journal' -> straight to a new
+// Journal note, anything else -> that field's advisorDrafts staging area).
 function suggestedOracleEntryChips(entry, ui) {
-  if (entry.target !== 'situation') {
-    return `<div class="copilot-quick">${entry.paths.map((path) => `<button class="chip sm" data-suggest-oracle-roll="${esc(path.join('>'))}" title="Roll ${esc(path.join(' > '))}">🔮 ${esc(path.join(' > '))}</button>`).join('')}</div>`;
-  }
   const results = (ui && ui.advisorOracleResults) || {};
-  return `<div class="copilot-quick">${entry.paths.map((path) => {
+  return `<div class="copilot-quick">${entry.paths.map((item) => {
+    const path = item.path;
+    const target = item.target || 'journal';
+    const targetLabel = target === 'journal' ? 'the Journal' : `the ${SCENE_FIELD_LABELS[target] || target} draft below`;
     const key = path.join('>');
     const result = results[key];
     if (result) {
       return `<span class="advisor-oracle-result" title="${esc(path.join(' > '))}">
         <span class="advisor-oracle-result-text">${esc(result)}</span>
-        <button type="button" class="icon-btn" data-advisor-result-accept="${esc(key)}" data-advisor-draft-target="situation" title="Append to the Situation draft below">✓</button>
+        <button type="button" class="icon-btn" data-advisor-result-accept="${esc(key)}" data-advisor-draft-target="${esc(target)}" title="Add to ${esc(targetLabel)}">✓</button>
       </span>`;
     }
     return `<button class="chip sm" data-advisor-oracle-roll="${esc(key)}" data-advisor-result-key="${esc(key)}" title="Roll ${esc(path.join(' > '))}">🔮 ${esc(path.join(' > '))}</button>`;
   }).join('')}</div>`;
 }
+// One draft editor per Scene Details field actually targeted by a chip
+// currently on screen (open or collapsed) — dynamic rather than one fixed
+// "Situation" editor, since a single batch can span several fields (e.g.
+// one chip mapping to Driver, another to Clue). A field with no chip
+// targeting it right now gets no editor; as soon as a relevant suggestion
+// appears its editor shows up, ready for a checkmark OR direct typing.
+function suggestedOracleFieldEditors(entries, ui) {
+  const targets = new Set();
+  for (const e of entries) for (const item of e.paths) if (item.target) targets.add(item.target);
+  return SUGGEST_ORACLES_SCENE_FIELDS
+    .filter((field) => targets.has(field))
+    .map((field) => advisorDraftEditor(field, ui, {
+      placeholder: `Check an oracle result below to stage it here, or type your own — then Apply to send it to ${SCENE_FIELD_LABELS[field]}.`,
+      applyLabel: SCENE_FIELD_LABELS[field],
+    })).join('');
+}
+const SUGGEST_ORACLES_SCENE_FIELDS = ['opening', 'driver', 'clue', 'complication', 'consequence'];
 function suggestedOraclesBlock(ui) {
   const entries = (ui && ui.suggestedOracleEntries) || [];
-  const editor = advisorDraftEditor('situation', ui, {
-    placeholder: 'Check an oracle result below to stage it here, or type your own — then Apply to send it to Situation.',
-    applyLabel: 'Situation',
-  });
   if (!entries.length) {
     return `
     <div class="copilot-card">
       <h3>Suggested oracles</h3>
       <p class="dim small">Nothing suggested yet — click "Suggest oracles" on WHAT, or 💡 next to a Location's Regional faction activity on WHERE.</p>
-      ${editor}
     </div>`;
   }
   const open = entries.slice(0, 3);
@@ -211,7 +234,7 @@ function suggestedOraclesBlock(ui) {
         <summary class="dim small">${esc(e.label)}</summary>
         ${suggestedOracleEntryChips(e, ui)}
       </details>`).join('')}
-      ${editor}
+      ${suggestedOracleFieldEditors(entries, ui)}
     </div>`;
 }
 
@@ -241,7 +264,7 @@ function consequenceOraclesBlock(doc, ui, observedConsequence) {
     return `<button class="chip sm" data-advisor-oracle-roll="${esc(key)}" data-advisor-result-key="${esc(key)}" title="Roll ${esc(path.join(' > '))}">🔮 ${esc(path.join(' > '))}</button>`;
   }).join('');
   const editor = advisorDraftEditor('consequence', ui, {
-    placeholder: "Check an oracle result below to stage it here, or type your own — then Apply to send it to Latest Scene's Likely consequence.",
+    placeholder: "Check an oracle result below to stage it here, or type your own — then Apply to send it to Scene Details' Likely consequence.",
     applyLabel: 'Likely consequence',
   });
   return `
@@ -249,7 +272,7 @@ function consequenceOraclesBlock(doc, ui, observedConsequence) {
       <h3>If nothing changes…</h3>
       <p>${esc(observedConsequence)}</p>
       ${draw
-        ? (chips ? `<div class="copilot-quick">${chips}</div>` : '<p class="dim small">No linked oracle tables found — tag one #consequence-related, or set a Latest Scene field first.</p>')
+        ? (chips ? `<div class="copilot-quick">${chips}</div>` : '<p class="dim small">No linked oracle tables found — tag one #consequence-related, or set a Scene Details field first.</p>')
         : `<button class="chip sm" data-advisor-consequence-draw title="Draw oracle tables relevant to Likely consequence">🎲 Suggest oracles</button>`}
       ${editor}
     </div>`;
@@ -342,6 +365,7 @@ export function renderCopilot(doc, ui) {
       <div class="copilot-quick">
         <button class="btn primary sm" data-continue-story>▶ Continue Story</button>
         <button class="btn sm" data-what-next>What Happens Next?</button>
+        <button class="btn sm" data-restart-story title="Start the narrative over — WHO/WHERE/WHAT/WHY/HOW, scenes, Journal, Threads, Foreshadowing, and World State Flags. Entities and their progress are untouched; for a full wipe use New Campaign in Settings.">↺ Restart Story</button>
       </div>
       ${lensPickerHtml(ui.lensPickerOpen, ui.lensDraw)}
       <div class="copilot-quick">

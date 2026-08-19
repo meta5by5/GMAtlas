@@ -9,7 +9,7 @@
 import { contextSummary } from '../../domain/context.js';
 import { listThreads, THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { ACTIVITIES } from '../../domain/activities.js';
-import { isSameDistrict, getEntity, listEntities, getContainingLocation, getContainedLocations, LOCATION_OBJECT_TYPES, getSystemForLocation, getStarForLocation, getHexZoneForLocation, getEntityFaction } from '../../domain/entities.js';
+import { isSameDistrict, getEntity, listEntities, LOCATION_OBJECT_TYPES, getSystemForLocation, getStarForLocation, getHexZoneForLocation, getEntityFaction } from '../../domain/entities.js';
 import { getCurrentWhereLocations, factionsPresentAt, factionsInRegion } from '../../domain/factionTurnEngine.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { buildMentionEditorHTML, richToolbarHTML, richToolbarToggleHTML, toolbarCollapsed } from '../mentionEditor.js';
@@ -312,8 +312,7 @@ function whereSectionBody(doc, ui) {
     ${whereLocationHierarchyBlock(doc, ui)}
     ${locationFactionsBlock(doc)}
     ${locationConflictsBlock(doc)}
-    ${factionActivityHereBlock(doc)}
-    ${nearbyLocationsBlock(doc, ui)}`;
+    ${factionActivityHereBlock(doc)}`;
   if (!ui.factionEventsDockedInWhere) return body;
   const dockedPanel = renderFactionEvents(doc, {
     factionEventsDrafts: ui.factionEventsDrafts,
@@ -516,7 +515,7 @@ function whatSectionBody(doc, ui) {
       </select>
     </label>
     <div class="shift-actions">
-      <button class="chip" data-suggest-oracles title="Suggest Oracle tables in the Advisor, based on Intent and the Latest Scene">🔮 Suggest oracles</button>
+      <button class="chip" data-suggest-oracles title="Suggest Oracle tables in the Advisor, based on Intent and Scene Details">🔮 Suggest oracles</button>
     </div>
     ${lastScene(doc, ui)}
     ${worldFlagsBlock(doc)}`;
@@ -792,6 +791,13 @@ function factionActivityHereBlock(doc) {
 // WHO's region-wide factionsActiveNearbyBlock), each with a truncated
 // Agenda snippet so "what is this faction doing here" reads at a glance
 // without opening the Entity Editor.
+// Direct follow-up request: the faction chip is now a real photo
+// thumbnail (entityThumb — same convention as every other faction/NPC/
+// location list in this app, e.g. WHO's own factionsActiveNearbyBlock
+// just above) instead of a plain text chip. Read-only, no remove/expand
+// controls — this digest has neither a curated list to remove FROM nor
+// scene-Actor membership to derive from the way factionsActiveNearbyBlock
+// does, just "which factions are present at the current location(s)."
 function locationFactionsBlock(doc) {
   const whereLocations = getCurrentWhereLocations(doc);
   if (!whereLocations.length) return '';
@@ -799,16 +805,10 @@ function locationFactionsBlock(doc) {
   for (const loc of whereLocations) for (const f of factionsPresentAt(doc, loc.id)) if (!seen.has(f.id)) seen.set(f.id, f);
   const factions = Array.from(seen.values());
   if (!factions.length) return '';
-  const rows = factions.map((f) => {
-    const agenda = (f.agenda || '').replace(/<[^>]+>/g, ' ').trim();
-    const snippet = agenda ? agenda.slice(0, 80) + (agenda.length > 80 ? '…' : '') : '';
-    return `<div class="thread-row">
-      <span class="thread-name"><button type="button" class="entity-chip" data-open-entity="${esc(f.id)}">${esc(f.name || 'Unnamed')}</button>${snippet ? ` <span class="dim small">— ${esc(snippet)}</span>` : ''}</span>
-    </div>`;
-  }).join('');
+  const thumbs = factions.map((f) => entityThumb(doc, f)).join('');
   return `<div class="threads">
     <div class="threads-head"><h3>Factions here</h3></div>
-    ${rows}
+    <div class="actor-thumb-row">${thumbs}</div>
   </div>`;
 }
 
@@ -831,48 +831,6 @@ function locationConflictsBlock(doc) {
   </div>`;
 }
 
-// Jump list: every OTHER Location sharing the same immediate structural
-// parent as the current one (getContainedLocations on
-// getContainingLocation's result — i.e. its siblings, same "district"
-// concept isSameDistrict already established one hop out) — "what else is
-// around here," so a GM can add one to the scene without leaving WHERE.
-// Moved underneath the old "Location Story" section's slot (now that
-// Location Story itself is merged into each thumbnail's own dropdown,
-// below) and collapsed by default (direct follow-up request — "hide the
-// list of available entities... by default"), same collapsibleThumbGroup
-// shell WHO's groups use, just defaultCollapsed. Also now excludes any
-// sibling already present in the current scene (System/Star/Location
-// details, getCurrentWhereLocations) — "available entities that have not
-// already been added to the scene," direct quote — so it reads as "what
-// else COULD be added," distinct from Location details' actual added
-// list. Clicking a chip ADDS it straight to Location details
-// (data-scene-location-add, direct follow-up request — replacing the
-// previous "open its Entity Editor" click behavior; addSceneLocation's
-// own one-per-tag dedup, scenes.js, still applies) — once added, this
-// block's own addedIds filter drops it from view on the next render, so
-// nothing needs to track "already clicked" state separately. A Location
-// with no parent set (no `located_at` edge yet) simply shows nothing,
-// same posture as every other block here that's silent until there's
-// real structure to show.
-function nearbyLocationsBlock(doc, ui) {
-  const whereLocations = getCurrentWhereLocations(doc);
-  if (!whereLocations.length) return '';
-  const loc = whereLocations[0];
-  const parent = getContainingLocation(doc, loc.id);
-  if (!parent) return '';
-  const addedIds = new Set(whereLocations.map((l) => l.id));
-  const siblings = getContainedLocations(doc, parent.id).filter((l) => l.id !== loc.id && !addedIds.has(l.id));
-  if (!siblings.length) return '';
-  const chips = siblings.map((l) => `<button type="button" class="entity-chip" data-scene-location-add="${esc(l.id)}" title="Add ${esc(l.name || 'Unnamed')} to Location details">${esc(l.name || 'Unnamed')}</button>`).join('');
-  return collapsibleThumbGroup(ui, {
-    key: 'where:nearby-locations', label: 'Nearby locations', count: siblings.length,
-    helpKey: 'where:nearby-locations',
-    hint: `Other locations under ${esc(parent.name || 'Unnamed')}, not yet added to this scene.`,
-    defaultCollapsed: true,
-    body: `<div class="entity-chips">${chips}</div>`,
-  });
-}
-
 // Scene Summary, the Navigator card's top block — composeNarrativeDraft()
 // (copilot.js) pulls WHO/WHERE/WHAT/WHY's current state plus whichever
 // Story Options are checked (in the Advisor, copilotPanel.js) into one
@@ -887,16 +845,34 @@ function nearbyLocationsBlock(doc, ui) {
 // card itself is pinned via CSS `position: sticky` (`.navigator-card`,
 // styles/cockpit.css) so it stays visible while the GM scrolls Composer's
 // sections beside it.
+// Direct follow-up correction (reversing part of the previous entry below
+// after the user clarified intent): Scene Summary IS now a real editable
+// field, not a pure read-only live recompute — ui.sceneSummaryOverride
+// (shell.js, ephemeral, never persisted, same "never" as inspirationDrafts/
+// advisorDrafts) holds the GM's own edited/frozen text once set; while it's
+// still null (nothing typed, Reload never clicked), this keeps showing the
+// live WHO/WHERE/Story-Options recompute exactly as before, so a GM who
+// never touches this field sees no change at all. Clear blanks the override
+// outright; Reload explicitly re-pulls the CURRENT live recompute into the
+// override (an explicit one-time sync, not a mode switch back to
+// perpetual auto-tracking — that would silently clobber whatever the GM
+// just typed on the very next unrelated render, the exact risk this field
+// was originally built read-only to avoid).
 function narrativeComposerBlock(doc, ui) {
   const selected = (ui && ui.selectedStoryOptionIds) || new Set();
-  const draft = composeNarrativeDraft(doc, { selectedOptionIds: Array.from(selected) });
+  const liveDraft = composeNarrativeDraft(doc, { selectedOptionIds: Array.from(selected) });
+  const override = ui && ui.sceneSummaryOverride;
+  const draft = override !== null && override !== undefined ? override : liveDraft;
+  const helpKey = 'nav:scene-summary';
   return `<div class="threads narrative-composer">
-    <div class="threads-head"><h3>Scene Summary</h3></div>
-    <p class="dim small">Reflects WHO/WHERE's Focus text live, plus whichever Story Options you check in the Advisor.</p>
-    <div class="mention-editor narrative-composer-preview">${draft ? buildMentionEditorHTML(doc, draft) : '<span class="ws-placeholder">Nothing to compose yet — write something in WHO/WHERE\'s Focus field, or check a Story Option in the Advisor.</span>'}</div>
+    <div class="threads-head"><h3>Scene Summary</h3>${helpToggle(helpKey)}</div>
+    ${wsHelpBody(helpKey, "Reflects WHO/WHERE's Focus text live, plus whichever Story Options you check in the Advisor — until you edit it directly or click Reload, after which it's yours to keep editing.", ui)}
+    <div class="mention-editor narrative-composer-preview" contenteditable="true" data-scene-summary-field data-placeholder="Nothing to compose yet — write something in WHO/WHERE's Focus field, check a Story Option in the Advisor, or type your own.">${buildMentionEditorHTML(doc, draft)}</div>
     <div class="shift-actions">
-      <button class="chip" data-composer-copy title="Copy the draft to your clipboard">📋 Copy</button>
-      <button class="chip" data-composer-journal title="Add the draft to the Journal">＋ Send to Journal</button>
+      <button class="chip" data-composer-copy title="Copy the current text to your clipboard">📋 Copy</button>
+      <button class="chip" data-composer-journal title="Add the current text to the Journal">＋ Send to Journal</button>
+      <button class="chip" data-composer-clear title="Blank this field">🗑 Clear</button>
+      <button class="chip" data-composer-reload title="Pull WHO/WHERE's current Focus text and checked Story Options back in, replacing what's here now">🔄 Reload</button>
     </div>
   </div>`;
 }
@@ -1034,7 +1010,7 @@ function lastScene(doc, ui) {
   if (!scenes.length) return '<div class="ws-placeholder">No scenes yet. Continue Story (Advisor) to generate the opening beat.</div>';
   const s = scenes[scenes.length - 1];
   return `<details class="last-scene" open>
-    <summary>Latest: Scene ${s.number} — ${esc(s.summary)}</summary>
+    <summary>Scene Details ${s.number} — ${esc(s.summary)}</summary>
     <div class="last-scene-body">
       <div class="scene-fields">
         ${sceneField(s, 'opening', 'Opening', 'What the party notices first…', ui)}

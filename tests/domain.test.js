@@ -9,7 +9,7 @@ import { SCENE_TABLES, makeRng, rollTable, rollGroup, flattenKeys, getTable, tab
 import { ORACLE_TABLE_SOURCES } from '../src/data/oracleGroups.js';
 import { applyShift, listShifts, contextSummary } from '../src/domain/context.js';
 import { generateScene, recomposeSceneText } from '../src/domain/scenes.js';
-import { continueStory, applyStoryShift, rollOracle, patchContext, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles } from '../src/domain/session.js';
+import { continueStory, restartStory, applyStoryShift, rollOracle, patchContext, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles } from '../src/domain/session.js';
 import { SUGGESTION_LENSES, lensOracleCategories } from '../src/data/suggestionLenses.js';
 import { defaultCampaign } from '../src/core/schema.js';
 import { parseStatsString } from '../src/domain/statblocks.js';
@@ -246,6 +246,32 @@ test('continueStory increments settings.factionPacing.scenesSinceLastRound by ex
   assert.equal(camp.settings.factionPacing.scenesSinceLastRound, 2);
 });
 
+test('restartStory ("Restart Story", Advisor Quick Apply direct follow-up request) clears context/scenes/journal/timeline/threads/foreshadowing/worldFlags back to defaultCampaign() shape, but leaves entities, party, and settings completely untouched — a scoped reset, not New Campaign\'s full wipe', () => {
+  let camp = defaultCampaign();
+  ({ campaign: camp } = createEntity(camp, { type: 'npc', name: 'Kade' }));
+  camp = continueStory(camp); // populates scenes/journal/timeline/context.what dials
+  camp = patchContext(camp, 'who', { summary: 'The crew', entityIds: ['x'] });
+  camp.threads = [{ id: 't1', name: 'Debt', filled: 2, segments: 6, done: false }];
+  camp.foreshadowing = [{ id: 'f1', text: 'A locked door', payoffNote: '', paidOff: false, plantedAt: '2026-01-01' }];
+  camp.worldFlags = [{ id: 'w1', description: 'Reactor is failing', value: 'true', notes: '' }];
+  camp.settings.factionPacing.scenesSinceLastRound = 3;
+
+  const restarted = restartStory(camp);
+  assert.deepEqual(restarted.context, defaultCampaign().context, 'context resets to the exact defaultCampaign() shape');
+  assert.deepEqual(restarted.scenes, []);
+  assert.deepEqual(restarted.journal, []);
+  assert.deepEqual(restarted.timeline, []);
+  assert.deepEqual(restarted.threads, []);
+  assert.deepEqual(restarted.foreshadowing, []);
+  assert.deepEqual(restarted.worldFlags, []);
+  // Entities and settings are untouched — restartStory is not New Campaign.
+  assert.equal(restarted.entities.items.length, 1);
+  assert.equal(restarted.entities.items[0].name, 'Kade');
+  assert.equal(restarted.settings.factionPacing.scenesSinceLastRound, 3);
+  // Pure — the original campaign object is untouched.
+  assert.equal(camp.scenes.length, 1);
+});
+
 test('drawSuggestionLenses draws the requested count of distinct lenses from both Discovery and Approach lists combined', () => {
   const camp = defaultCampaign();
   const drawn = drawSuggestionLenses(camp, { rng: makeRng(3), count: 4 });
@@ -254,34 +280,41 @@ test('drawSuggestionLenses draws the requested count of distinct lenses from bot
   assert.equal(ids.size, 4); // no duplicates
 });
 
-test('drawSuggestedOracles ("Suggest oracles", WHAT direct follow-up request) is customized from Intent alone with no scene yet, then grows/shrinks as Latest Scene fields are populated/cleared — never surfacing a table unrelated to either', () => {
+test('drawSuggestedOracles ("Suggest oracles", WHAT direct follow-up request) is customized from Intent alone with no scene yet, then grows/shrinks as Scene Details fields are populated/cleared — never surfacing a table unrelated to either, and each item carries a target Scene Details field (or null -> Journal) matching which field\'s tags it shares', () => {
   let camp = defaultCampaign();
   camp = patchContext(camp, 'what', { intent: 'Trade opportunity' }); // INTENT_ORACLE_TAGS: ['trade']
   const tradeOnly = drawSuggestedOracles(camp, { rng: makeRng(1), count: 20 });
-  const tradeOnlyPaths = tradeOnly.map((p) => p.join('>'));
+  const tradeOnlyPaths = tradeOnly.map((item) => item.path.join('>'));
   assert.ok(tradeOnlyPaths.includes('Trade & Cargo>Trade Opportunity'), 'includes a #trade table (from Intent)');
   assert.ok(!tradeOnlyPaths.includes('Plot Engine>Plot Target'), 'excludes a #hook-only table — no scene yet to contribute one');
   assert.ok(!tradeOnlyPaths.includes('Mysteries & Coverups>Discovery'), 'excludes a #discovery-only table — Trade opportunity does not map to it');
+  // #trade has no Scene Details field link (only opening/driver/clue/complication/consequence do) -> every item falls back to the Journal
+  assert.ok(tradeOnly.every((item) => item.target === null), 'a #trade-only table has no Scene Details field to map to, so target is null (-> Journal)');
 
   camp.scenes = [{ id: 'scene1', number: 1, opening: '', driver: 'A rival crew wants this cargo too', clue: '', complication: '', consequence: '', decisionPoint: '', situationLine: '' }];
-  const withDriver = drawSuggestedOracles(camp, { rng: makeRng(1), count: 20 }).map((p) => p.join('>'));
-  assert.ok(withDriver.includes('Plot Engine>Plot Target'), 'a populated Driver field contributes #hook (scene.driver\'s own oracle link), growing the pool');
-  assert.ok(withDriver.includes('Trade & Cargo>Trade Opportunity'), 'Intent\'s own #trade tables are still included alongside it');
+  const withDriver = drawSuggestedOracles(camp, { rng: makeRng(1), count: 20 });
+  const withDriverPaths = withDriver.map((item) => item.path.join('>'));
+  assert.ok(withDriverPaths.includes('Plot Engine>Plot Target'), 'a populated Driver field contributes #hook (scene.driver\'s own oracle link), growing the pool');
+  assert.ok(withDriverPaths.includes('Trade & Cargo>Trade Opportunity'), 'Intent\'s own #trade tables are still included alongside it');
+  const hookItem = withDriver.find((item) => item.path.join('>') === 'Plot Engine>Plot Target');
+  assert.equal(hookItem.target, 'driver', 'the #hook table maps to Driver, the only Scene Details field carrying the #hook tag');
 
   camp.scenes[0].driver = ''; // cleared
-  const cleared = drawSuggestedOracles(camp, { rng: makeRng(1), count: 20 }).map((p) => p.join('>'));
+  const cleared = drawSuggestedOracles(camp, { rng: makeRng(1), count: 20 }).map((item) => item.path.join('>'));
   assert.ok(!cleared.includes('Plot Engine>Plot Target'), 'clearing Driver drops the #hook contribution again — an empty field links nothing');
 
   const capped = drawSuggestedOracles(camp, { rng: makeRng(2), count: 1 });
   assert.equal(capped.length, 1, 'respects the count cap');
 });
 
-test('drawFactionActivityOracles (WHERE "Regional faction activity" 💡, direct follow-up request) draws a fixed #faction/#agenda pool, independent of Intent/Latest Scene', () => {
+test('drawFactionActivityOracles (WHERE "Regional faction activity" 💡, direct follow-up request) draws a fixed #faction/#agenda pool, independent of Intent/Scene Details, and every item\'s target is null (-> Journal) since no Scene Details field carries #faction/#agenda', () => {
   const camp = defaultCampaign();
-  const drawn = drawFactionActivityOracles(camp, { rng: makeRng(1), count: 20 }).map((p) => p.join('>'));
-  assert.ok(drawn.includes('Factions>Faction Type'), 'includes a #faction table');
-  assert.ok(drawn.includes('Factions>Project') || drawn.includes('Corporate Powers>Hidden Agenda'), 'includes an #agenda table');
-  assert.ok(!drawn.includes('Trade & Cargo>Trade Opportunity'), 'excludes an unrelated #trade-only table');
+  const drawn = drawFactionActivityOracles(camp, { rng: makeRng(1), count: 20 });
+  const drawnPaths = drawn.map((item) => item.path.join('>'));
+  assert.ok(drawnPaths.includes('Factions>Faction Type'), 'includes a #faction table');
+  assert.ok(drawnPaths.includes('Factions>Project') || drawnPaths.includes('Corporate Powers>Hidden Agenda'), 'includes an #agenda table');
+  assert.ok(!drawnPaths.includes('Trade & Cargo>Trade Opportunity'), 'excludes an unrelated #trade-only table');
+  assert.ok(drawn.every((item) => item.target === null), 'no Scene Details field carries #faction/#agenda, so every item falls back to the Journal');
   const capped = drawFactionActivityOracles(camp, { rng: makeRng(1), count: 1 });
   assert.equal(capped.length, 1, 'respects the count cap');
 });
@@ -5539,6 +5572,31 @@ test('generateScene seeds npcStates:{} and bystanderIds:[] on every new scene; g
   for (const field of Object.keys(NPC_SCENE_FIELD_ORACLE_PATH)) {
     assert.deepEqual(blank[field], { value: '', sourcePath: null, sourceIndex: null }, `${field} defaults blank`);
   }
+});
+
+test('generateScene carries the previous scene\'s Protagonists/Antagonists/Bystanders forward into a new scene (direct follow-up request — "clearing NPCs is not" by design, unlike Composer\'s own textboxes which already accumulate) — Assets present/npcStates still start fresh each scene, unchanged', () => {
+  let camp = defaultCampaign();
+  let heroId, villainId, npcId2;
+  ({ campaign: camp, id: heroId } = createEntity(camp, { type: 'npc', name: 'Hero' }));
+  ({ campaign: camp, id: villainId } = createEntity(camp, { type: 'npc', name: 'Villain' }));
+  ({ campaign: camp, id: npcId2 } = createEntity(camp, { type: 'npc', name: 'Bystander' }));
+  const tables = tablesWithOverrides(camp.oracles?.overrides, camp.settings?.genrePack);
+  const first = generateScene(camp, tables, makeRng(1));
+  first.protagonistIds = [heroId];
+  first.antagonistIds = [villainId];
+  first.bystanderIds = [npcId2];
+  first.npcStates = { [heroId]: { disposition: { value: 'Wary', sourcePath: null, sourceIndex: null } } };
+  camp.scenes = [first];
+
+  const second = generateScene(camp, tables, makeRng(2));
+  assert.deepEqual(second.protagonistIds, [heroId], 'Protagonists carry over');
+  assert.deepEqual(second.antagonistIds, [villainId], 'Antagonists carry over');
+  assert.deepEqual(second.bystanderIds, [npcId2], 'Bystanders carry over');
+  assert.notStrictEqual(second.protagonistIds, first.protagonistIds, 'a real copy, not the same array reference — mutating one must not affect the other');
+  assert.deepEqual(second.npcStates, {}, 'npcStates itself still starts fresh — a real reported gap this fix does NOT extend to');
+
+  const third = generateScene(camp, tables, makeRng(3)); // camp.scenes still only has `first` — confirms an unsaved `second` doesn't leak in
+  assert.deepEqual(third.protagonistIds, [heroId]);
 });
 
 test('addSceneBystander/removeSceneBystander: adds deduped, removes just the one, no-ops on a missing scene', () => {
