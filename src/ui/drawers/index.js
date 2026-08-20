@@ -2073,14 +2073,37 @@ function templateFieldRow(systemId, f, i, count) {
 // dedicated data-party-stat-roll (shell.js) reuses performFieldRoll, the
 // exact same roll logic attrRow/trackRow's own triggers call, just without
 // any of their edit affordances riding along with it.
-function partyMemberStatblocks(e, doc) {
+// Direct follow-up request: "narrow the button-only statblock fields...
+// so that all five attribute fields fit on one line and then all five
+// tracker counters fit on one line" — attribute-kind and track-kind
+// fields now render as TWO separate .party-stat-pills rows (a plain-text
+// field, e.g. "Notable Gear", gets a third, since it's neither) instead of
+// one mixed row, which is what actually forced wrapping before (9+ pills
+// competing for one line, not 5). A track pill that's currently toggled
+// open (ui.expandedPartyStatFields, "clicking... acts as a toggle") gets
+// its full box-row view (partyStatTrackExpansion) rendered directly below
+// the tracks row — "the tracker for that one tracker is displayed in the
+// next row" — one shared row for however many are open at once, not one
+// per pill, so toggling a second one doesn't shove the first down further.
+function partyMemberStatblocks(e, doc, ui) {
   const sorted = sortStatblockGroups(e.statblocks, doc.settings);
+  const expanded = (ui && ui.expandedPartyStatFields) || new Set();
   return sorted.map(({ group, index: gi }) => {
-    const pills = (group.fields || []).map((f, fi) => partyStatPill(f, e.id, gi, fi)).join('');
-    if (!pills) return '';
+    const fields = (group.fields || []).map((f, fi) => ({ f, fi }));
+    const attrs = fields.filter(({ f }) => f.attribute);
+    const tracks = fields.filter(({ f }) => f.track);
+    const other = fields.filter(({ f }) => !f.attribute && !f.track);
+    const attrPills = attrs.map(({ f, fi }) => partyStatPill(f, e.id, gi, fi)).join('');
+    const trackPills = tracks.map(({ f, fi }) => partyStatPill(f, e.id, gi, fi, { expanded: expanded.has(`${e.id}::${gi}::${fi}`) })).join('');
+    const otherPills = other.map(({ f, fi }) => partyStatPill(f, e.id, gi, fi)).join('');
+    const openTracks = tracks.filter(({ fi }) => expanded.has(`${e.id}::${gi}::${fi}`));
+    if (!attrPills && !trackPills && !otherPills) return '';
     return `<div class="party-stat-group">
       <div class="party-stat-group-label">${esc(statblockGroupLabel(group, doc))}</div>
-      <div class="party-stat-pills">${pills}</div>
+      ${attrPills ? `<div class="party-stat-pills">${attrPills}</div>` : ''}
+      ${trackPills ? `<div class="party-stat-pills">${trackPills}</div>` : ''}
+      ${otherPills ? `<div class="party-stat-pills">${otherPills}</div>` : ''}
+      ${openTracks.length ? `<div class="party-stat-track-expansions">${openTracks.map(({ f, fi }) => partyStatTrackExpansion(f, e.id, gi, fi)).join('')}</div>` : ''}
     </div>`;
   }).join('');
 }
@@ -2091,14 +2114,28 @@ function partyMemberStatblocks(e, doc) {
 // predating Bestiary templates — see CLAUDE.md's own note on this), just
 // rendered as a plain <button>/<span> instead of an <input> or a row of
 // click-to-set boxes. A plain text field (e.g. "Notable Gear") has no roll
-// concept at all — shown the same way but never interactive.
-function partyStatPill(f, entityId, gi, fi) {
+// concept at all — shown the same way but never interactive. A track
+// field's click is now a TOGGLE (opts.expanded/data-party-stat-toggle,
+// direct follow-up request: "clicking... acts as a toggle") instead of a
+// roll — rolling moves into the expanded view itself (partyStatTrackExpansion
+// below) rather than double-click-on-the-pill, which would fire both the
+// toggle (click) and the roll (dblclick) off the same interaction.
+// Attribute fields are unaffected — still single-click-to-roll, no
+// expansion concept applies to them.
+function partyStatPill(f, entityId, gi, fi, opts = {}) {
   const key = `${entityId}::${gi}::${fi}`;
   const value = f.attribute ? esc(formatAttrValue(Number(f.value) || 0, f.format || 'sign'))
     : f.track ? esc(String(Number(f.value) || 0))
     : esc(f.value || '—');
-  const method = f.rollMethod || (f.attribute ? 'none' : f.track ? 'action' : 'none');
-  const rollable = (f.attribute || f.track) && method !== 'none';
+  if (f.track) {
+    const cls = `party-stat-pill${opts.expanded ? ' party-stat-pill-expanded' : ''}`;
+    return `<button type="button" class="${cls}" data-party-stat-toggle="${key}" title="${esc(f.key)}: click to ${opts.expanded ? 'hide' : 'show'} the tracker">
+      <span class="party-stat-pill-label">${esc(f.key)}</span>
+      <span class="party-stat-pill-value">${value}</span>
+    </button>`;
+  }
+  const method = f.rollMethod || 'none';
+  const rollable = f.attribute && method !== 'none';
   if (rollable) {
     return `<button type="button" class="party-stat-pill" data-party-stat-roll="${key}" title="Roll ${esc(f.key)}">
       <span class="party-stat-pill-label">${esc(f.key)}</span>
@@ -2109,6 +2146,33 @@ function partyStatPill(f, entityId, gi, fi) {
     <span class="party-stat-pill-label">${esc(f.key)}</span>
     <span class="party-stat-pill-value">${value}</span>
   </span>`;
+}
+
+// A toggled-open track pill's full box-row view — read-only boxes (plain
+// <span>s, not trackRow's own click-to-set <button> ones; editing still
+// only happens in the Entity Editor), same visual language trackRow
+// itself uses so a GM recognizes it instantly, plus a value badge that
+// rolls on double-click (data-statblock-roll, the exact same trigger/
+// handler track-value-badge already uses elsewhere) — rolling lives here,
+// not on the pill itself, so a click on the pill can mean just "toggle."
+function partyStatTrackExpansion(f, entityId, gi, fi) {
+  const key = `${entityId}::${gi}::${fi}`;
+  const max = f.max || 5;
+  const value = Number(f.value) || 0;
+  const boxes = Array.from({ length: max }, (_, k) => k + 1)
+    .map((n) => `<span class="track-box ${n <= value ? 'on' : ''}" aria-hidden="true">${n}</span>`).join('');
+  const method = f.rollMethod || 'action';
+  const rollable = method !== 'none';
+  const badge = rollable
+    ? `<button type="button" class="track-value-badge" data-statblock-roll="${key}" title="${esc(f.key)}: double-click to roll">${value}</button>`
+    : `<span class="track-value-badge track-value-badge-static" title="Not rollable">${value}</span>`;
+  return `<div class="party-stat-track-expansion">
+    <span class="party-stat-track-expansion-label">${esc(f.key)}</span>
+    <div class="track-widget">
+      <div class="track-boxes party-tracker-boxes">${boxes}</div>
+      ${badge}
+    </div>
+  </div>`;
 }
 
 // Small right-aligned counter on a collapsed Party Roster row — direct
@@ -2258,7 +2322,7 @@ function partyMemberCard(e, doc, ui) {
         ${partyMemberHeadlineCounters(doc, e)}
         <button class="icon-btn" data-open-entity="${esc(e.id)}" title="Open in entity editor" aria-label="Open in entity editor">↗</button>
       </div>
-      ${open ? partyMemberStatblocks(e, doc) : ''}
+      ${open ? partyMemberStatblocks(e, doc, ui) : ''}
     </div>`;
 }
 

@@ -321,6 +321,7 @@ let expandedWorldDemographics = new Set(); // ephemeral — entity ids whose Wor
 let expandedSceneFields = new Set(); // ephemeral — "sceneId::field" keys whose Scene Details field is expanded (UX batch, collapsed by default; click the label to expand)
 let collapsedToolbars = new Set(); // ephemeral — rich-text toolbar keys OVERRIDDEN away from campaign.settings.toolbarCollapsedByDefault (mentionEditor.js's toolbarCollapsed() XORs this against the default; see UX batch)
 let expandedPartyMembers = new Set(); // ephemeral — entity ids whose Party member card shows its statblocks (collapsed by default; click the name to expand, UX batch)
+let expandedPartyStatFields = new Set(); // ephemeral — "entityId::gi::fi" keys whose Party Roster track pill shows its full tracker view below (direct follow-up request, collapsed by default; click the pill to toggle)
 let journalActionsOpen = true; // ephemeral — the Journal drawer's Actions row (Add note, Generate Mission, ...), open by default (UX batch)
 let collapsedOverview = new Set(); // ephemeral — entity ids whose Overview field has been explicitly collapsed (open by default, UX batch)
 let expandedContracts = new Set(); // ephemeral — contract (Thread) ids whose full row is expanded (collapsed to just the name by default, UX batch)
@@ -1375,9 +1376,11 @@ function onClick(ev) {
   }
   // Party Roster's expanded card (direct follow-up correction — its stat
   // boxes are read-only, "not editable, that only happens in the entity
-  // editor"): a single click rolls, same performFieldRoll every other
-  // roll trigger in this app already calls — no edit path exists here at
-  // all, unlike attrRow/trackRow's own triggers.
+  // editor"): an attribute pill's single click rolls, same performFieldRoll
+  // every other roll trigger in this app already calls — no edit path
+  // exists here at all, unlike attrRow/trackRow's own triggers. Track
+  // pills no longer carry this attribute (see data-party-stat-toggle
+  // below) — their click means something else now.
   const partyStatRoll = hit('[data-party-stat-roll]');
   if (partyStatRoll) {
     const { entityId, gi, fi } = parseStatblockKey(partyStatRoll.dataset.partyStatRoll);
@@ -1386,6 +1389,18 @@ function onClick(ev) {
     const f = group && group.fields[fi];
     if (f) performFieldRoll(f, `${e.name || 'Unnamed'} — ${f.key || 'Stat'}`);
     return;
+  }
+  // Party Roster's track pills (direct follow-up request: "narrow the
+  // button-only statblock fields... clicking... acts as a toggle") — a
+  // click shows/hides that ONE field's full tracker view in the row below
+  // (ui.expandedPartyStatFields, ephemeral); rolling moved into that
+  // expanded view itself (a double-click-to-roll badge, drawers/index.js's
+  // partyStatTrackExpansion) rather than living on this same click.
+  const partyStatToggle = hit('[data-party-stat-toggle]');
+  if (partyStatToggle) {
+    const key = partyStatToggle.dataset.partyStatToggle;
+    if (expandedPartyStatFields.has(key)) expandedPartyStatFields.delete(key); else expandedPartyStatFields.add(key);
+    return render();
   }
   if (hit('[data-statblock-add-toggle]')) { statblockAddOpen = !statblockAddOpen; return renderDrawerBody(); }
   const enhToggle = hit('[data-enhancements-toggle]');
@@ -5394,7 +5409,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts,
+    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatFields, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts,
     advisorOracleResults, advisorDrafts, advisorConsequenceDraw, sceneSummaryOverride,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName, partyTrackersEditOpen, collapsedPartySections,
