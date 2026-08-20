@@ -6,7 +6,7 @@
 import { store } from '../core/store.js';
 import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
-import { continueStory, restartStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField, rollWhereDetailField } from '../domain/session.js';
+import { continueStory, restartStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField, rollWhereDetailField, addContextEntity, removeContextEntity } from '../domain/session.js';
 import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, addSceneAsset, removeSceneAsset, addSceneLocation, removeSceneLocation, setSceneSystem, addSceneDismissedFaction, removeSceneDismissedFaction, moveSceneActor } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag } from '../domain/oracles.js';
@@ -46,10 +46,10 @@ import {
   addDocument, updateDocument, removeDocument, getDocument, addDocumentTag, removeDocumentTag, renameDocument,
   openDocumentTab, closeDocumentTab, setActiveDocumentTab, resolveDocumentTab,
   listReferenceDocuments, renameRefDocument, addRefDocumentTag, removeRefDocumentTag, hideRefDocument, listDocuments,
-  sanitizeExternalLinkUrl, gviewEmbedUrl,
+  sanitizeExternalLinkUrl, mergeRefOverrides,
 } from '../domain/documents.js';
 import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue, setGaugeTrackerValue, ensurePartyStarforgedTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity } from '../domain/party.js';
-import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow } from '../domain/colony.js';
+import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, addColonyEncounter, updateColonyEncounter, removeColonyEncounter, listColonyEncounters } from '../domain/colony.js';
 import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract, updateContract } from '../domain/trade.js';
 import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors, resolveFactionTurn, formatFactionTurnResult, rollFactionAsset } from '../domain/factions.js';
 import {
@@ -321,6 +321,7 @@ let expandedWorldDemographics = new Set(); // ephemeral — entity ids whose Wor
 let expandedSceneFields = new Set(); // ephemeral — "sceneId::field" keys whose Scene Details field is expanded (UX batch, collapsed by default; click the label to expand)
 let collapsedToolbars = new Set(); // ephemeral — rich-text toolbar keys OVERRIDDEN away from campaign.settings.toolbarCollapsedByDefault (mentionEditor.js's toolbarCollapsed() XORs this against the default; see UX batch)
 let expandedPartyMembers = new Set(); // ephemeral — entity ids whose Party member card shows its statblocks (collapsed by default; click the name to expand, UX batch)
+let expandedWhatConflicts = new Set(); // ephemeral — Conflict entity ids whose chip under WHAT's Situation field shows its detail box (direct follow-up request, collapsed by default; click the chip to toggle)
 let expandedPartyStatField = null; // ephemeral — the single "entityId::gi::fi" key (or null) whose Party Roster track pill shows its full tracker view below; a single value, not a Set, so picking a different track field REPLACES the open one instead of stacking a second (direct follow-up request)
 let journalActionsOpen = true; // ephemeral — the Journal drawer's Actions row (Add note, Generate Mission, ...), open by default (UX batch)
 let collapsedOverview = new Set(); // ephemeral — entity ids whose Overview field has been explicitly collapsed (open by default, UX batch)
@@ -488,62 +489,62 @@ let inspirationDrafts = { site: null, seed: null };
 // reset the iframe to blank mid-load, stranding it white). Tracking "the
 // last src I myself set" sidesteps the mismatch entirely.
 let lastDocViewerSrc = null;
-// Reference Library docs not bundled locally fall back to a GitHub Release
-// URL (releaseConfig.js) — a real reported bug, twice over: the redirected
-// response carries Content-Type: application/octet-stream plus a forced
-// Content-Disposition: attachment, which makes essentially every browser
-// (phones especially — no inline PDF renderer to fall back to) download the
-// file instead of viewing it, AND a live cross-origin header check confirms
-// GitHub's release-asset host sends no CORS header at all — so fetching it
-// ourselves to work around the first problem is ALSO blocked outright by
-// the browser, every single time, not just occasionally.
-// Two-tier fix: (1) try to fetch it ourselves and cache the bytes locally
-// via the Cache API (the same mechanism sw.js already uses for the app
-// shell — "save it to the local cache like the rest of app data," direct
-// request), handing the iframe a blob: URL built with the CORRECT MIME
-// type — this only actually succeeds when the host grants CORS access,
-// which GitHub's doesn't, so in practice this tier fails every time for a
-// non-bundled doc; it stays in place in case that ever changes, and (2), the
-// tier that actually fixes the reported bug — falling back to Google's own
-// generic embeddable PDF viewer (gviewEmbedUrl, a normal cross-origin
-// iframe NAVIGATION, not a fetch, so CORS doesn't apply to it) instead of
-// the raw GitHub URL. Falling back to that raw URL (the first attempt at
-// this fix) just reproduced the exact download-prompt bug, since it's the
-// literal thing that forces it — a real regression, caught after a live
-// device test. refDocBlobUrls/refDocBlobFailed are keyed by the fragment-
-// stripped base URL (a #page=N anchor is re-appended after resolving,
-// meaningless to the fetch/cache lookup itself); refDocBlobFailed
-// remembers a tier-1 failure for the session so a bad connection doesn't
-// retry (and re-show "Loading…") on every unrelated re-render. Local
-// (already-bundled) Reference Library paths and user-uploaded (kind:'lib')
-// data: URLs are both untouched — no bug reported there, and fetching a
-// relative file:// path would hit the same CORS wall PDF.js's own file://
-// gotcha already documents.
+// Reference Library doc blobs (direct follow-up request — bulk export/
+// import "transfers the docs themselves" via store.js's new IndexedDB
+// doc-blob store): refDocBlobUrls caches key -> a real blob: object URL
+// once resolved; refDocBlobCheckedKeys remembers which keys have already
+// been checked (whether or not a blob existed) so the render loop doesn't
+// re-query IndexedDB on every single render — see the doc-viewer render
+// section below for where these are populated/read.
 let refDocBlobUrls = new Map();
-let refDocBlobFailed = new Set();
-let refDocBlobPending = null;
-async function loadRefDocBlobUrl(url) {
-  if (!(typeof caches !== 'undefined' && caches) || !window.fetch) return null;
-  try {
-    // Cache name matches sw.js's own REF_DOC_CACHE constant — the two
-    // contexts (this bundle, the service worker) can't share a real JS
-    // reference, so sw.js's activate handler keys off this exact string
-    // to make sure it never gets swept as an "unrecognized" cache on a
-    // service-worker update.
-    const cache = await caches.open('gmatlas-refdocs-v1');
-    let response = await cache.match(url);
-    if (!response) {
-      const fetched = await fetch(url);
-      if (!fetched.ok) return null;
-      await cache.put(url, fetched.clone());
-      response = fetched;
-    }
-    const rawBlob = await response.blob();
-    const pdfBlob = rawBlob.type === 'application/pdf' ? rawBlob : new Blob([rawBlob], { type: 'application/pdf' });
-    return URL.createObjectURL(pdfBlob);
-  } catch {
-    return null;
+let refDocBlobCheckedKeys = new Set();
+// Which Reference Library keys have an imported blob at all — populated
+// async (openDrawerTab's 'documents' case, below) so the Documents
+// drawer's "☁ Imported" badge (drawers/index.js) can render without the
+// pure drawer-render functions needing to touch IndexedDB themselves.
+let refDocBlobKeys = new Set();
+function refreshRefDocBlobKeys() {
+  store.listDocBlobKeys().then((keys) => { refDocBlobKeys = new Set(keys); render(); });
+}
+// blob.arrayBuffer() + manual base64 (not FileReader.readAsDataURL) —
+// avoids a real cross-realm gotcha FileReader's strict Blob type-checking
+// can hit (confirmed while testing this: a Blob round-tripped through
+// IndexedDB can come back as a different-but-functionally-identical Blob
+// implementation than the one FileReader insists on), and chunks the
+// String.fromCharCode call since spreading a multi-MB Uint8Array into it
+// in one call risks blowing the engine's argument-count limit.
+async function blobToDataUrl(blob) {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  return `data:${blob.type || 'application/pdf'};base64,${btoa(binary)}`;
+}
+// Builds and downloads the bulk Reference Library export bundle — every
+// key currently in store.js's doc-blob store, each converted to a data:
+// URL (same "plain text, zero-dependency" shape a user-uploaded library
+// document's own dataUrl already uses, rather than pulling in a ZIP
+// library), plus this campaign's refOverrides (titles/tags/hidden flags).
+async function exportRefLibrary() {
+  const keys = await store.listDocBlobKeys();
+  if (!keys.length) return toast('No imported Reference Library docs to export yet — use "Import PDF(s)" first.');
+  const docs = [];
+  for (const key of keys) {
+    const blob = await store.getDocBlob(key);
+    if (!blob) continue;
+    docs.push({ key, mimeType: blob.type || 'application/pdf', dataUrl: await blobToDataUrl(blob) });
   }
+  const refOverrides = (store.get().documents && store.get().documents.refOverrides) || {};
+  const bundle = { kind: 'gmatlas-reflib-export', version: 1, exportedAt: new Date().toISOString(), refOverrides, docs };
+  const blobUrl = URL.createObjectURL(new Blob([JSON.stringify(bundle)], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = blobUrl;
+  a.download = `gmatlas-reference-library-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+  toast(`Exported ${docs.length} doc${docs.length === 1 ? '' : 's'}`);
 }
 // A shared, reused iframe reliably leaves Chromium's built-in PDF viewer
 // stuck in a bad state after enough src changes — confirmed, two real
@@ -1654,6 +1655,27 @@ function onClick(ev) {
   if (trkBox) return store.update((d) => setPartyTrackerValue(d, trkBox.dataset.partyTrackerBox, Number(trkBox.dataset.trackN)));
   const trkGaugeBox = hit('[data-party-tracker-gauge-box]');
   if (trkGaugeBox) return store.update((d) => setGaugeTrackerValue(d, trkGaugeBox.dataset.partyTrackerGaugeBox, Number(trkGaugeBox.dataset.trackN)));
+  // Generic +/- stepper (drawers/index.js's numStepper, direct follow-up
+  // request: "use this number counter textbox as the default for all
+  // textboxes used for numbers") — nudges the wrapped <input type="number">
+  // by ±1 (clamped to its own min/max) and dispatches real 'change'/'input'
+  // events on it so whichever data-* commit attribute it already carries
+  // fires normally; this handler never touches the campaign document
+  // itself or knows what any given input commits to.
+  const numStep = hit('[data-num-step]');
+  if (numStep) {
+    const input = numStep.closest('.num-stepper')?.querySelector('input[type="number"]');
+    if (input) {
+      const delta = Number(numStep.dataset.numStep) || 0;
+      const min = input.min !== '' ? Number(input.min) : -Infinity;
+      const max = input.max !== '' ? Number(input.max) : Infinity;
+      const next = Math.min(max, Math.max(min, (Number(input.value) || 0) + delta));
+      input.value = String(next);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    return;
+  }
   const partyMemberToggle = hit('[data-party-member-toggle]');
   if (partyMemberToggle) {
     const id = partyMemberToggle.dataset.partyMemberToggle;
@@ -1673,22 +1695,15 @@ function onClick(ev) {
   if (sharedAssetEntityDel) return store.update((d) => removePartySharedAssetEntity(d, sharedAssetEntityDel.dataset.partySharedAssetEntityRemove));
 
   // --- colony ---
-  if (hit('[data-colony-crew-add]')) { store.update((d) => addCrewRow(d, {})); return toast('Crew row added'); }
-  // "+ Add NPC" (same quick-create+tag shape as Party's above) — creates
-  // the NPC AND its crew-row assignment in one action.
-  if (hit('[data-colony-add-character]')) {
-    store.update((d) => {
-      const r = createEntity(d, { type: 'npc' });
-      const tagged = addEntityTag(r.campaign, r.id, 'character');
-      return addCrewRow(tagged, { characterId: r.id });
-    });
-    return toast('NPC added to Crew Roster');
-  }
   const crewDel = hit('[data-colony-crew-remove]');
   if (crewDel) {
     if (!window.confirm('Remove this crew row? This cannot be undone.')) return;
     return store.update((d) => removeCrewRow(d, crewDel.dataset.colonyCrewRemove));
   }
+  const encounterAdd = hit('[data-colony-encounter-add]');
+  if (encounterAdd) return store.update((d) => addColonyEncounter(d));
+  const encounterDel = hit('[data-colony-encounter-remove]');
+  if (encounterDel) return store.update((d) => removeColonyEncounter(d, encounterDel.dataset.colonyEncounterRemove));
 
   // --- trade (Merchant Rules Lens, ADR 0003/0004) ---
   const tradeBuy = hit('[data-trade-buy]');
@@ -2029,6 +2044,15 @@ function onClick(ev) {
     }
     return;
   }
+  // Bulk Reference Library export (direct follow-up request: "create a
+  // bulk export/import to transfer the library records and docs
+  // themselves from one browser to another") — bundles every doc this
+  // browser has actually imported into its own IndexedDB doc-blob store
+  // (store.js) plus this campaign's title/tag refOverrides into one
+  // downloadable JSON file. A doc that's only ever been read from
+  // assets/docs/ on disk (never imported) has no blob and isn't included
+  // — "Import PDF(s)" first is what makes a doc exportable.
+  if (hit('[data-ref-library-export]')) { exportRefLibrary(); return; }
   const tagToggle = hit('[data-doc-tag-toggle]');
   if (tagToggle) {
     const key = tagToggle.dataset.docTagToggle;
@@ -2650,13 +2674,19 @@ function onClick(ev) {
       ? { entityType: 'asset', mode: 'asset', scope: null, query: '' }
       : raw === 'party-vehicle'
         ? { entityType: 'party-vehicle', mode: 'party-vehicle', scope: null, query: '' }
-        : raw === 'location-current'
-          ? { entityType: 'location-current', mode: 'current', scope: null, query: '' }
-          : raw === 'system'
-            ? { entityType: 'system', mode: 'system', scope: null, query: '' }
-            : raw.startsWith('where-faction-link:')
-              ? { entityType: 'where-faction-link', mode: 'link', scope: raw.slice('where-faction-link:'.length), query: '' }
-              : { entityType: 'npc', mode: raw, scope: null, query: '' };
+        : raw === 'colony-crew'
+          ? { entityType: 'colony-crew', mode: 'colony-crew', scope: null, query: '' }
+          : raw === 'what-conflict'
+            ? { entityType: 'what-conflict', mode: 'what-conflict', scope: null, query: '' }
+            : raw === 'location-current'
+              ? { entityType: 'location-current', mode: 'current', scope: null, query: '' }
+              : raw === 'system'
+                ? { entityType: 'system', mode: 'system', scope: null, query: '' }
+                : raw.startsWith('where-faction-link:')
+                  ? { entityType: 'where-faction-link', mode: 'link', scope: raw.slice('where-faction-link:'.length), query: '' }
+                  : raw.startsWith('colony-encounter::')
+                    ? { entityType: 'colony-encounter', mode: 'colony-encounter', scope: raw.slice('colony-encounter::'.length), query: '' }
+                    : { entityType: 'npc', mode: raw, scope: null, query: '' };
     renderEntityPickerOverlay();
     const inp = root.querySelector('[data-entity-picker-query]');
     if (inp) { inp.value = ''; inp.focus(); }
@@ -2692,6 +2722,29 @@ function onClick(ev) {
       // return below.
       return store.update((d) => addPartySharedAssetEntity(d, id));
     }
+    if (picker.entityType === 'colony-crew') {
+      // Colony's Crew Roster "+Crew" (direct follow-up request — "select
+      // from available NPCs" instead of adding a blank row to fill in, and
+      // removing the separate "+ Add NPC" quick-create shortcut) — not
+      // scene-scoped (a colony's crew persists across scenes), same
+      // posture as party-vehicle above.
+      return store.update((d) => addCrewRow(d, { characterId: id }));
+    }
+    if (picker.entityType === 'what-conflict') {
+      // WHAT's "+" (direct follow-up request: "adds a Conflict entity as
+      // a chip under the Situation textbox") — context.what.entityIds is
+      // the same generic array/addContextEntity every other context
+      // question already has; not scene-scoped, since Situation itself
+      // isn't either (a GM's attached Conflicts persist the same way).
+      return store.update((d) => addContextEntity(d, 'what', id));
+    }
+    if (picker.entityType === 'colony-encounter') {
+      // Colony's Lifeform Encounters row "+" (direct follow-up request) —
+      // attaches the picked Lifeform entity to the row's own entityId, not
+      // scene-scoped (the Encounters log persists across scenes like the
+      // rest of Colony).
+      return store.update((d) => updateColonyEncounter(d, picker.scope, { entityId: id }));
+    }
     const sceneId = currentSceneId();
     if (!sceneId) return renderEntityPickerOverlay();
     if (picker.entityType === 'asset') return store.update((d) => addSceneAsset(d, sceneId, id));
@@ -2722,6 +2775,19 @@ function onClick(ev) {
     const id = locationDetailsToggle.dataset.locationDetailsToggle;
     if (expandedLocationDetails.has(id)) expandedLocationDetails.delete(id); else expandedLocationDetails.add(id);
     return render();
+  }
+  // WHAT's Conflict chips (direct follow-up request: "clicking the chip
+  // just opens the box") — toggle only, never opens the Entity Editor;
+  // that's the detail box's own title button (data-open-entity) instead.
+  const whatConflictToggle = hit('[data-what-conflict-toggle]');
+  if (whatConflictToggle) {
+    const id = whatConflictToggle.dataset.whatConflictToggle;
+    if (expandedWhatConflicts.has(id)) expandedWhatConflicts.delete(id); else expandedWhatConflicts.add(id);
+    return render();
+  }
+  const whatConflictRemove = hit('[data-what-conflict-remove]');
+  if (whatConflictRemove) {
+    return store.update((d) => removeContextEntity(d, 'what', whatConflictRemove.dataset.whatConflictRemove));
   }
   const locationSensoryRoll = hit('[data-location-sensory-roll]');
   if (locationSensoryRoll) {
@@ -3352,6 +3418,16 @@ function onChange(ev) {
     const value = field === 'cohesion' ? Number(t.value) || 0 : t.value;
     return store.update((d) => setConflictFactionPosture(d, id, factionId, { [field]: value }));
   }
+  // WHAT's Conflict-chip detail box (direct follow-up request) — an
+  // entity-scoped counterpart to data-entity-field (which always targets
+  // doc.entities.activeId, the wrong entity here since the GM is looking
+  // at WHAT, not Cast) for status/statedCause/rootCause/causeGapHook/
+  // thirdPartyCasualty.
+  const conflictField = t.closest('[data-conflict-field]');
+  if (conflictField) {
+    const [id, field] = conflictField.dataset.conflictField.split('::');
+    return store.update((d) => updateEntity(d, id, { [field]: t.value }));
+  }
   const asymmetryField = t.closest('[data-conflict-asymmetry-field]');
   if (asymmetryField) {
     const [id, field] = asymmetryField.dataset.conflictAsymmetryField.split('::');
@@ -3405,6 +3481,11 @@ function onChange(ev) {
   if (crewField) {
     const [id, field] = crewField.dataset.colonyCrewField.split('::');
     return store.update((d) => updateCrewRow(d, id, { [field]: t.value }));
+  }
+  const encounterField = t.closest('[data-colony-encounter-field]');
+  if (encounterField) {
+    const [id, field] = encounterField.dataset.colonyEncounterField.split('::');
+    return store.update((d) => updateColonyEncounter(d, id, { [field]: t.value }));
   }
 
   // --- trade ---
@@ -3622,6 +3703,64 @@ function onChange(ev) {
     t.value = '';
     return;
   }
+
+  // "Import PDF(s)" — real files off disk, matched to a Reference Library
+  // catalog entry by filename, read straight into store.js's doc-blob
+  // store as real Blobs (a File IS a Blob, no FileReader/base64 round trip
+  // needed) — direct follow-up request, the RECEIVING half of "transfer
+  // the docs themselves from one browser to another" for a GM who has the
+  // real files on disk but wants them portable, or is populating a fresh
+  // browser from files they already have. A file whose name doesn't match
+  // any catalog entry is skipped, not silently dropped — reported by name
+  // in the toast, since adding a brand-new (not-yet-cataloged) Reference
+  // Library entry is a separate, larger feature this doesn't attempt.
+  if (t.closest('[data-ref-doc-import]')) {
+    const files = Array.from(t.files || []);
+    if (!files.length) return;
+    const byBasename = new Map(listReferenceDocuments(store.get()).map((r) => [r.file.split('/').pop().toLowerCase(), r.file]));
+    const unmatched = [];
+    const puts = [];
+    for (const file of files) {
+      const key = byBasename.get(file.name.toLowerCase());
+      if (!key) { unmatched.push(file.name); continue; }
+      puts.push(store.putDocBlob(key, file));
+    }
+    Promise.all(puts).then(() => {
+      const matched = puts.length;
+      toast(`Imported ${matched} file${matched === 1 ? '' : 's'}${unmatched.length ? ` — ${unmatched.length} skipped (no matching catalog entry): ${unmatched.join(', ')}` : ''}`);
+      refreshRefDocBlobKeys();
+    });
+    t.value = '';
+    return;
+  }
+
+  // Bulk Reference Library import — the counterpart to exportRefLibrary
+  // above: restores every doc's blob into store.js's doc-blob store, plus
+  // merging refOverrides (mergeRefOverrides, documents.js) so titles/tags
+  // travel too, not just the raw bytes.
+  if (t.closest('[data-ref-library-import]')) {
+    const file = (t.files || [])[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const bundle = JSON.parse(reader.result);
+        if (!bundle || !Array.isArray(bundle.docs)) throw new Error('not a GMAtlas Reference Library export file');
+        for (const entry of bundle.docs) {
+          const blob = await (await fetch(entry.dataUrl)).blob();
+          await store.putDocBlob(entry.key, blob);
+        }
+        if (bundle.refOverrides) store.update((d) => mergeRefOverrides(d, bundle.refOverrides));
+        toast(`Imported ${bundle.docs.length} doc${bundle.docs.length === 1 ? '' : 's'} into the Reference Library`);
+        refreshRefDocBlobKeys();
+      } catch (e) {
+        toast(`Couldn't import Reference Library — ${e.message}`);
+      }
+    };
+    reader.readAsText(file);
+    t.value = '';
+    return;
+  }
 }
 
 // Live feedback that must NOT trigger a full re-render (keeps focus/caret).
@@ -3734,7 +3873,7 @@ function openDrawerTab(id) {
   if (!openDrawers.includes(id)) {
     openDrawers = [...openDrawers, id];
     if (id === 'oracle') oracleFilter = '';
-    if (id === 'documents') { docFilter = ''; docTagFilters = new Set(); docTagEditorOpen = new Set(); }
+    if (id === 'documents') { docFilter = ''; docTagFilters = new Set(); docTagEditorOpen = new Set(); refreshRefDocBlobKeys(); }
     if (id === 'graph') graphView = { scale: 1, x: 0, y: 0 };
     // Direct request: sections other than Party Roster start collapsed
     // "when opening the Party Tracker (not when switching focus to other
@@ -4118,10 +4257,23 @@ function onDragOver(ev) {
     const bmTarget = ev.target.closest('[data-drop-battlemap]');
     if (bmTarget) { ev.preventDefault(); bmTarget.classList.add('drop-hover'); return; }
   }
-  if (types.includes(ACTOR_DRAG_TYPE)) {
+  // A Cast entity's own drag (ENTITY_DRAG_TYPE) is ALSO a valid drop onto
+  // WHO's Actor groups (direct follow-up request: "allow drag of entities
+  // into sections designed to load and list them... adding NPCs to WHO
+  // is here") — same [data-drop-actor-group] targets ACTOR_DRAG_TYPE
+  // (moving an Actor BETWEEN groups) already uses, just a different
+  // source drag type completing a different action (completeActorEntityDrop
+  // below, adding a NEW Actor rather than moving an existing one).
+  if (types.includes(ACTOR_DRAG_TYPE) || types.includes(ENTITY_DRAG_TYPE)) {
     const actorTarget = ev.target.closest('[data-drop-actor-group]');
-    if (actorTarget) { ev.preventDefault(); actorTarget.classList.add('drop-hover'); }
-    return;
+    if (actorTarget) { ev.preventDefault(); actorTarget.classList.add('drop-hover'); return; }
+  }
+  // Same request, WHERE's Location Details ("...and Locations to 'WHERE
+  // it happens'") — a dedicated attribute, not WHO's data-drop-actor-group
+  // (workspace/index.js's collapsibleThumbGroup dropAttr option).
+  if (types.includes(ENTITY_DRAG_TYPE)) {
+    const locTarget = ev.target.closest('[data-drop-location-group]');
+    if (locTarget) { ev.preventDefault(); locTarget.classList.add('drop-hover'); return; }
   }
   if (!types.includes(ENTITY_DRAG_TYPE) && !types.includes(DOCUMENT_DRAG_TYPE)) return;
   const target = ev.target.closest(DROP_TARGET_SELECTOR);
@@ -4145,6 +4297,21 @@ function onDrop(ev) {
     const actorTarget = ev.target.closest('[data-drop-actor-group]');
     if (actorTarget) { ev.preventDefault(); actorTarget.classList.remove('drop-hover'); completeActorDrop(actorTarget.dataset.dropActorGroup, actorRef); }
     return;
+  }
+  // Direct follow-up request: "allow drag of entities into sections
+  // designed to load and list them... adding NPCs to 'WHO is here' and
+  // Locations to 'WHERE it happens'" — a Cast entity's own drag
+  // (ENTITY_DRAG_TYPE) dropped onto WHO's Actor-group containers or
+  // WHERE's Location Details container ADDS it there, the same real
+  // mutation each section's own "+" picker already performs; checked
+  // BEFORE the generic entity-drop-onto-entity/mention-field handling
+  // below so those don't also fire for the same drop.
+  const entityIdForGroup = ev.dataTransfer.getData(ENTITY_DRAG_TYPE);
+  if (entityIdForGroup) {
+    const actorTarget = ev.target.closest('[data-drop-actor-group]');
+    if (actorTarget) { ev.preventDefault(); actorTarget.classList.remove('drop-hover'); completeActorEntityDrop(actorTarget.dataset.dropActorGroup, entityIdForGroup); return; }
+    const locTarget = ev.target.closest('[data-drop-location-group]');
+    if (locTarget) { ev.preventDefault(); locTarget.classList.remove('drop-hover'); completeLocationEntityDrop(entityIdForGroup); return; }
   }
   const entityId = ev.dataTransfer.getData(ENTITY_DRAG_TYPE);
   const documentId = ev.dataTransfer.getData(DOCUMENT_DRAG_TYPE);
@@ -4177,6 +4344,35 @@ function completeActorDrop(toKind, actorRef) {
   const sceneId = currentSceneId();
   if (!sceneId) return;
   store.update((d) => moveSceneActor(d, sceneId, fromKind, toKind, npcId));
+}
+
+// A Cast entity's own drag dropped onto a WHO Actor-group container
+// (direct follow-up request — see onDragOver/onDrop's own comments above)
+// — adds it as a NEW Actor of that kind, the exact same mutation each
+// group's own "+" picker already performs (addSceneProtagonist/
+// -Antagonist/-Bystander). Silently no-ops for a non-NPC entity (nothing
+// else is a valid Actor) or with no active scene, rather than surprising
+// the GM with a toast for a drop that was never going to do anything.
+function completeActorEntityDrop(toKind, entityId) {
+  if (!toKind || !entityId) return;
+  const entity = getEntity(store.get(), entityId);
+  if (!entity || entity.type !== 'npc') return;
+  const sceneId = currentSceneId();
+  if (!sceneId) return;
+  if (toKind === 'protagonist') store.update((d) => addSceneProtagonist(d, sceneId, entityId));
+  else if (toKind === 'antagonist') store.update((d) => addSceneAntagonist(d, sceneId, entityId));
+  else if (toKind === 'bystander') store.update((d) => addSceneBystander(d, sceneId, entityId));
+}
+
+// Same shape, WHERE's Location Details — adds a dragged Location entity
+// the same way that group's own "+" picker does (addSceneLocation, whose
+// own one-per-#district/#site-tag dedup, scenes.js, still applies).
+function completeLocationEntityDrop(entityId) {
+  const entity = getEntity(store.get(), entityId);
+  if (!entity || entity.type !== 'location') return;
+  const sceneId = currentSceneId();
+  if (!sceneId) return;
+  store.update((d) => addSceneLocation(d, sceneId, entityId));
 }
 
 // Shared drop target for both placing a NEW token (dragging a Cast entity
@@ -5061,55 +5257,30 @@ function render() {
     const resolvedActive = resolveDocumentTab(doc, activeTab);
     const frame = viewer.querySelector('[data-doc-viewer-frame]');
     const empty = viewer.querySelector('[data-doc-viewer-empty]');
-    // A remote (GitHub Release-hosted) Reference Library doc routes through
-    // the fetch-then-cache-then-blob-URL path above instead of a direct
-    // src; a local Reference Library path or a user-uploaded (kind:'lib')
-    // data: URL both go straight to the existing direct-src branch,
-    // unchanged — see loadRefDocBlobUrl's own comment for why only this
-    // one case needs it.
-    const isRemoteRefDoc = !!resolvedActive && resolvedActive.kind === 'ref' && /^https?:/i.test(resolvedActive.src);
-    if (resolvedActive && resolvedActive.src && isRemoteRefDoc) {
-      const baseUrl = resolvedActive.src.split('#')[0];
-      const withPage = (blobUrl) => (resolvedActive.page ? `${blobUrl}#page=${resolvedActive.page}` : blobUrl);
-      if (refDocBlobUrls.has(baseUrl)) {
-        frame.hidden = false;
-        empty.hidden = true;
-        const nextSrc = withPage(refDocBlobUrls.get(baseUrl));
-        if (lastDocViewerSrc !== nextSrc) loadDocViewerFrame(frame, nextSrc);
-      } else if (refDocBlobFailed.has(baseUrl)) {
-        // Couldn't fetch/cache it — confirmed why, via a live cross-origin
-        // header check: GitHub's release-asset host sends no CORS header at
-        // all, so this ISN'T a rare failure, it's the expected outcome
-        // every time for a doc not bundled locally. Falling back to the raw
-        // GitHub URL here (the original, first-attempt fix) just
-        // reproduces the exact download-prompt bug this whole mechanism
-        // exists to avoid — a real reported regression. Falling back to
-        // Google's own generic PDF embed viewer instead: a normal cross-
-        // origin iframe NAVIGATION, not a fetch, so CORS doesn't block it,
-        // and it's never a native "download/open externally" prompt on any
-        // platform, phones included.
-        frame.hidden = false;
-        empty.hidden = true;
-        const fallbackSrc = gviewEmbedUrl(baseUrl);
-        if (lastDocViewerSrc !== fallbackSrc) loadDocViewerFrame(frame, fallbackSrc);
-      } else {
-        frame.hidden = true;
-        empty.hidden = false;
-        empty.textContent = `Loading "${resolvedActive.title}"…`;
-        lastDocViewerSrc = null;
-        if (refDocBlobPending !== baseUrl) {
-          refDocBlobPending = baseUrl;
-          loadRefDocBlobUrl(baseUrl).then((blobUrl) => {
-            refDocBlobPending = null;
-            if (blobUrl) refDocBlobUrls.set(baseUrl, blobUrl); else refDocBlobFailed.add(baseUrl);
-            render();
-          });
-        }
+    // A Reference Library doc with an imported IndexedDB blob (direct
+    // follow-up request — the bulk-transferred/portable form) is preferred
+    // over its local assets/docs/ path, since the blob is guaranteed
+    // present on THIS machine regardless of what's on disk. IndexedDB is
+    // local and fast, so this is a one-time-per-tab check (cached in
+    // refDocBlobCheckedKeys), not a "Loading…" state the way the old
+    // remote-fetch mechanism needed — nothing to wait on visibly.
+    let activeSrc = resolvedActive && resolvedActive.src;
+    if (resolvedActive && resolvedActive.kind === 'ref' && activeTab && activeTab.startsWith('ref:')) {
+      const refKey = activeTab.slice('ref:'.length);
+      if (!refDocBlobCheckedKeys.has(refKey)) {
+        refDocBlobCheckedKeys.add(refKey);
+        store.getDocBlob(refKey).then((blob) => {
+          if (blob) { refDocBlobUrls.set(refKey, URL.createObjectURL(blob)); render(); }
+        });
       }
-    } else if (resolvedActive && resolvedActive.src) {
+      if (refDocBlobUrls.has(refKey)) {
+        activeSrc = resolvedActive.page ? `${refDocBlobUrls.get(refKey)}#page=${resolvedActive.page}` : refDocBlobUrls.get(refKey);
+      }
+    }
+    if (activeSrc) {
       frame.hidden = false;
       empty.hidden = true;
-      if (lastDocViewerSrc !== resolvedActive.src) {
+      if (lastDocViewerSrc !== activeSrc) {
         // Two mentions of the SAME document at different pages (docs/adr's
         // @[Name#12] vs @[Name#45]) resolve to a src differing only in its
         // #page=N fragment — a browser's built-in PDF viewer doesn't
@@ -5121,7 +5292,7 @@ function render() {
         // element, replaced after it proved unreliable on a real device)
         // makes clicking the second mention actually jump, not just
         // silently update the src attribute with no visible effect.
-        loadDocViewerFrame(frame, resolvedActive.src);
+        loadDocViewerFrame(frame, activeSrc);
       }
     } else {
       // A resolved 'lib' entry with no dataUrl means the file never actually
@@ -5187,6 +5358,24 @@ function renderEntityPickerOverlay() {
     const excludeIds = new Set((doc.party && doc.party.sharedAssetIds) || []);
     candidates = listEntities(doc, ['asset']).filter((a) => (a.tags || []).includes('vehicle') && !excludeIds.has(a.id));
     emptyMessage = 'No #vehicle Asset entities yet — add one in Cast (type Asset, tag #vehicle) first.';
+  } else if (entityPicker.entityType === 'colony-crew') {
+    // Colony's Crew Roster "+Crew" — every NPC not already assigned to a
+    // crew row (direct follow-up request: "select from available NPCs").
+    const assignedIds = new Set(listCrewRows(doc).map((r) => r.characterId).filter(Boolean));
+    candidates = listEntities(doc, ['npc']).filter((n) => !assignedIds.has(n.id));
+    emptyMessage = 'No available NPCs — every NPC is already assigned, or add one in Cast first.';
+  } else if (entityPicker.entityType === 'what-conflict') {
+    // WHAT's "+" — every Conflict entity not already attached, direct
+    // follow-up request.
+    const attachedIds = new Set((doc.context.what && doc.context.what.entityIds) || []);
+    candidates = listEntities(doc, ['conflict']).filter((c) => !attachedIds.has(c.id));
+    emptyMessage = 'No available Conflicts — add one in Cast first.';
+  } else if (entityPicker.entityType === 'colony-encounter') {
+    // Colony's Lifeform Encounters row "+" — every Lifeform entity, direct
+    // follow-up request (no exclusion of already-linked ones: the same
+    // Lifeform can plausibly show up in more than one logged encounter).
+    candidates = listEntities(doc, ['lifeform']);
+    emptyMessage = 'No Lifeform entities yet — add one in Cast first.';
   } else if (entityPicker.entityType === 'location-current') {
     const scenes = doc.scenes || [];
     const scene = scenes[scenes.length - 1];
@@ -5412,7 +5601,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts,
+    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, expandedWhatConflicts,
     advisorOracleResults, advisorDrafts, advisorConsequenceDraw, sceneSummaryOverride,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName, partyTrackersEditOpen, collapsedPartySections,

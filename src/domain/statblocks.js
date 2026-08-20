@@ -186,7 +186,11 @@ export function ensureAutoStatblock(entity, settings) {
   if (!entity) return entity;
   ensureStatblocksArray(entity);
   const wantsVehicle = entity.type === 'asset' && hasVehicleTag(entity);
-  const wantsNpc = entity.type === 'npc';
+  // lifeform (direct follow-up request adding it as a peer entities.js
+  // ENTITY_TYPES entry) is structurally identical to npc here — a creature
+  // almost always wants a Bestiary statblock, same convenience an NPC
+  // already gets on creation.
+  const wantsNpc = entity.type === 'npc' || entity.type === 'lifeform';
   const wantsCharacter = wantsNpc && hasCharacterTag(entity);
   if (wantsVehicle && !entity.statblocks.some((g) => g.kind === 'vehicle')) {
     entity.statblocks.push(makeStatblock('vehicle', null, 'vehicle', settings));

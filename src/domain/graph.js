@@ -5,7 +5,7 @@
 
 import { makeRng } from './oracles.js';
 
-const TYPE_COLOR = { npc: '#7dd3fc', location: '#4ade80', faction: '#fbbf24', asset: '#a78bfa', lore: '#f472b6', conflict: '#f87171' };
+const TYPE_COLOR = { npc: '#7dd3fc', location: '#4ade80', faction: '#fbbf24', asset: '#a78bfa', lore: '#f472b6', conflict: '#f87171', lifeform: '#2dd4bf' };
 export function nodeColor(type) { return TYPE_COLOR[type] || '#94a3b8'; }
 
 /** Build {nodes, edges} from a campaign. Edges are undirected + deduplicated

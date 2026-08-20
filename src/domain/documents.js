@@ -370,6 +370,20 @@ export function listReferenceDocuments(campaign) {
   }).filter((r) => !r.hidden);
 }
 
+/** Bulk-restore refOverrides from an imported Reference Library export
+ *  (direct follow-up request: "transfer the library records and docs
+ *  themselves from one browser to another") — a shallow merge, one key
+ *  (the manifest's stable `file` path) at a time: an imported doc's title/
+ *  tags/hidden REPLACE whatever this campaign already had for that same
+ *  key (a bulk restore, not a tag-array union), while every OTHER doc's
+ *  overrides this campaign already has are left untouched. */
+export function mergeRefOverrides(campaign, overrides) {
+  const next = clone(campaign);
+  const docs = ensure(next);
+  docs.refOverrides = { ...docs.refOverrides, ...(overrides || {}) };
+  return next;
+}
+
 export function hideRefDocument(campaign, key) {
   const next = clone(campaign);
   const docs = ensure(next);
@@ -463,19 +477,6 @@ export function setActiveDocumentTab(campaign, tabKey) {
 function withPageAnchor(src, page) {
   if (!src || !page) return src;
   return src.split('#')[0] + '#page=' + page;
-}
-
-/** Google's own (undocumented, but long-standing and widely relied upon)
- *  generic PDF embed viewer — used as the LAST-RESORT fallback (ui/
- *  shell.js) when a Reference Library doc's fetch-and-cache attempt fails
- *  (GitHub's release-asset host sends no CORS header at all, confirmed via
- *  a live header check, so the browser's fetch() is blocked outright, not
- *  just slow). A normal cross-origin iframe NAVIGATION to this URL, not a
- *  fetch, so CORS doesn't apply to it at all — critically, the fallback
- *  must never be the raw source URL itself, since that's the literal thing
- *  that forces the download this whole mechanism exists to avoid. */
-export function gviewEmbedUrl(fileUrl) {
-  return `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(fileUrl)}`;
 }
 
 // --- Lightweight rich text (bold/italic/underline/lists), ADR 0018 --------

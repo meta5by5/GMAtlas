@@ -1826,18 +1826,19 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    the box wider. */
 .party-stat-group { margin-bottom: var(--sp-2); }
 .party-stat-group-label { font-size: 0.6rem; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 2px; }
-/* Direct follow-up request: "narrow the button-only statblock fields...
-   so that all five attribute fields fit on one line and then all five
-   tracker counters fit on one line" — attributes and tracks already
-   render as two SEPARATE rows now (drawers/index.js's
-   partyMemberStatblocks), which alone fixes most of the wrapping (a
-   mixed 9+-pill row was the real cause, not 5 alone); narrowed further
-   here (2.75rem -> 2.3rem, tighter gap) so 5-in-a-row is comfortable even
-   in a narrow/phone-width drawer. */
-.party-stat-pills { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+/* "narrow the button-only statblock fields... so that all five attribute
+   fields fit on one line and then all five tracker counters fit on one
+   line" was fixed by SPLITTING attributes and tracks into two separate
+   rows (drawers/index.js's partyMemberStatblocks) — a mixed 9+-pill row
+   was the real cause of wrapping, not 5 alone. A direct follow-up then
+   asked for the pill size itself back to its original larger scale (the
+   split alone was enough; narrowing on top of it wasn't wanted), so the
+   size/padding/font values below are back to what they were before that
+   narrowing pass. */
+.party-stat-pills { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .party-stat-pill {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
-  width: 2.3rem; min-height: 2.3rem; padding: 0.1rem 0.15rem; box-sizing: border-box;
+  width: 2.75rem; min-height: 2.75rem; padding: 0.15rem 0.2rem; box-sizing: border-box;
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset); color: var(--text);
   font: inherit;
 }
@@ -1849,8 +1850,8 @@ button.party-stat-pill:hover { border-color: var(--accent); }
    pill's tracker is the one showing below. */
 .party-stat-pill-expanded { border-color: var(--accent-strong); background: rgba(56,189,248,0.1); }
 .party-stat-pill-static { opacity: 0.85; }
-.party-stat-pill-label { font-size: 0.52rem; letter-spacing: 0.02em; color: var(--text-dim); text-transform: uppercase; text-align: center; line-height: 1.1; white-space: normal; }
-.party-stat-pill-value { font-size: 0.78rem; font-weight: 700; color: var(--accent); }
+.party-stat-pill-label { font-size: 0.56rem; letter-spacing: 0.03em; color: var(--text-dim); text-transform: uppercase; text-align: center; line-height: 1.1; white-space: normal; }
+.party-stat-pill-value { font-size: 0.85rem; font-weight: 700; color: var(--accent); }
 /* A toggled-open track pill's full box-row view (partyStatTrackExpansion,
    drawers/index.js) — "the tracker for that one tracker is displayed in
    the next row." One shared column below the tracks row so several open
@@ -1860,8 +1861,18 @@ button.party-stat-pill:hover { border-color: var(--accent); }
 .party-stat-track-expansion {
   display: flex; align-items: center; gap: var(--sp-2); padding: 0.25rem 0.4rem;
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset);
+  min-width: 0; /* lets the child .track-boxes' own overflow-x actually engage inside a flex row */
 }
 .party-stat-track-expansion-label { font-size: 0.62rem; letter-spacing: 0.04em; color: var(--text-dim); text-transform: uppercase; white-space: nowrap; }
+/* Direct follow-up request: "trackers such as Momentum with 10 pills must
+   keep all 10 pills on the same row" — .track-boxes itself never wraps
+   (flex-wrap defaults to nowrap), but this expansion had been reusing
+   .party-tracker-boxes (the PARTY-LEVEL Party Trackers section's own
+   class), whose flex-wrap:wrap + max-width:14rem was wrapping a 10-box
+   Momentum row onto two lines. A dedicated class instead — no wrap ever,
+   overflow-x:auto as the escape valve for a custom ruleset with an even
+   larger max, same posture .character-sheet-stats already uses. */
+.party-stat-track-boxes { flex-wrap: nowrap; overflow-x: auto; }
 .party-tracker-list { display: flex; flex-direction: column; gap: var(--sp-2); }
 .party-tracker-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: var(--sp-2); align-items: center; }
 .party-tracker-name-input { min-width: 0; }
@@ -1872,8 +1883,30 @@ button.party-stat-pill:hover { border-color: var(--accent); }
    renders the original input+✕ row unchanged. */
 .party-tracker-row-view { grid-template-columns: 1fr auto auto; }
 .party-tracker-name-label { font-weight: 600; white-space: normal; overflow: visible; word-break: break-word; }
-.party-tracker-counter { display: inline-flex; align-items: center; gap: var(--sp-1); white-space: nowrap; }
+/* +/- order swapped (direct follow-up request: "the + on the left and -
+   on the right of the textbox") from the field-order-matches-visual-order
+   default; gap tightened and the buttons' own horizontal padding trimmed
+   (direct follow-up request: "move the +/- closer [to] the text box") so
+   they read as part of the same control instead of sitting apart from it. */
+.party-tracker-counter { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+.party-tracker-counter .icon-btn { padding-left: 0.15rem; padding-right: 0.15rem; }
 .party-tracker-value-input { width: 3.2rem; text-align: center; }
+/* Direct follow-up request: "text fields... without the value changer
+   built into the text field... just use the +/- [buttons]," then
+   generalized ("use this number counter textbox as the default for all
+   textboxes used for numbers") — EVERY number input in the app suppresses
+   the browser's own native spin arrows now, since numStepper's own +/-
+   buttons (drawers/index.js) are the intended stepper everywhere a number
+   field appears, not just Party Trackers. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
+/* numStepper's own wrapper (drawers/index.js) — the same tight, no-gap
+   "+/- flanking a plain textbox" look Party Trackers' counter fields
+   established, generalized to every number field in the app. */
+.num-stepper { display: inline-flex; align-items: center; gap: 2px; }
+.num-stepper .icon-btn { padding-left: 0.15rem; padding-right: 0.15rem; }
+.num-stepper input[type="number"] { width: 3.2rem; text-align: center; }
 /* Type is fixed once a tracker exists (see domain/party.js) — a plain
    caption, not a control, replaces the old per-tracker kind <select>. */
 .party-tracker-kind-label { font-size: 0.7rem; color: var(--text-dim); white-space: nowrap; }
@@ -1895,10 +1928,14 @@ button.party-stat-pill:hover { border-color: var(--accent); }
 .party-tracker-draft-max-input { width: 3.2rem; text-align: center; }
 
 /* Colony */
-.colony-fields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); margin: var(--sp-2) 0 var(--sp-3); }
+.colony-fields { display: grid; grid-template-columns: 1fr 1fr; row-gap: var(--sp-2); column-gap: var(--sp-3); margin: var(--sp-2) 0 var(--sp-3); }
+.colony-fields .field-label { margin-top: 0; }
 .colony-fields .field-label:has(textarea) { grid-column: 1 / -1; }
 .colony-crew-list { display: flex; flex-direction: column; gap: var(--sp-2); }
-.colony-crew-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: var(--sp-2); align-items: center; }
+.colony-crew-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: var(--sp-2); align-items: center; }
+.colony-encounter-list { display: flex; flex-direction: column; gap: var(--sp-2); }
+.colony-encounter-row { display: flex; align-items: center; gap: var(--sp-2); }
+.colony-encounter-row input[type="text"] { flex: 1 1 auto; min-width: 0; }
 
 /* Trade (Merchant Rules Lens, ADR 0003/0004) */
 .trade-market-table { width: 100%; border-collapse: collapse; margin: var(--sp-2) 0 var(--sp-3); font-size: 0.85rem; }

@@ -219,13 +219,18 @@ function locationTypeTopLabel(entity) {
 // became clickable — direct request ("without changing the current font
 // style") — styles/cockpit.css resets just its button-chrome (background/
 // border/padding/cursor), not its type styling. `dropGroup`, if given,
-// marks this as a valid data-drop-actor-group drag target (WHO Actor
-// groups only — Factions/Assets/Nearby locations never participate in
-// moveSceneActor's drag-between-groups).
-function collapsibleThumbGroup(ui, { key, label, count, helpKey, hint, dropGroup, headerExtra, body, defaultCollapsed = false }) {
+// marks this as a drag target — `dropAttr` (default 'data-drop-actor-
+// group', WHO's own Actor groups, moveSceneActor's drag-between-groups)
+// lets a DIFFERENT caller opt into a different attribute name/semantic
+// instead (direct follow-up request: "allow drag of entities into
+// sections designed to load and list them... adding NPCs to WHO... and
+// Locations to WHERE" — WHERE's Location Details group uses
+// 'data-drop-location-group' so it isn't mistaken for one of WHO's own
+// protagonist/antagonist/bystander kinds).
+function collapsibleThumbGroup(ui, { key, label, count, helpKey, hint, dropGroup, dropAttr = 'data-drop-actor-group', headerExtra, body, defaultCollapsed = false }) {
   const toggled = ((ui && ui.collapsedActorGroups) || new Set()).has(key);
   const collapsed = defaultCollapsed ? !toggled : toggled;
-  return `<div class="workspace-mini-section npc-scene-group"${dropGroup ? ` data-drop-actor-group="${esc(dropGroup)}"` : ''}>
+  return `<div class="workspace-mini-section npc-scene-group"${dropGroup ? ` ${dropAttr}="${esc(dropGroup)}"` : ''}>
     <div class="section-head-row">
       <button type="button" class="field-label-static actor-group-toggle" data-actor-group-toggle="${esc(key)}">${collapsed ? '▸' : '▾'} ${esc(label)} (${count})</button>
       <span class="entity-chip-row">
@@ -540,8 +545,16 @@ function whereLocationHierarchyBlock(doc, ui) {
   const locationDetailsGroup = collapsibleThumbGroup(ui, {
     key: 'where:location-details', label: 'Location details', count: entries.length,
     helpKey: 'where:location-details',
-    hint: 'Locations in the current scene, not counting the System above — one per type (picking a second #district or #site replaces the first).',
+    hint: 'Locations in the current scene, not counting the System above — one per type (picking a second #district or #site replaces the first). Drag a Location entity in from Cast to add it the same way.',
     headerExtra: `<button type="button" class="icon-btn" data-entity-picker-open="location-current" title="Add a Location">＋</button>`,
+    // Direct follow-up request: "allow drag of entities into sections
+    // designed to load and list them... Locations to 'WHERE it happens'"
+    // — a Cast entity row's own drag (data-drag-entity, ENTITY_DRAG_TYPE)
+    // dropped here adds it the same way the "+" picker does
+    // (completeLocationEntityDrop, shell.js); a dedicated attribute name
+    // (not WHO's own data-drop-actor-group) since "current" isn't one of
+    // WHO's protagonist/antagonist/bystander kinds.
+    dropGroup: 'current', dropAttr: 'data-drop-location-group',
     body: `${entries.length ? `<div class="actor-thumb-row">${thumbs}</div>` : '<p class="dim small">None yet.</p>'}
       ${entries.filter((l) => expandedSet.has(l.id)).map((l) => locationDetailBody(doc, ui, l)).join('')}`,
   });
@@ -549,6 +562,89 @@ function whereLocationHierarchyBlock(doc, ui) {
   return `
     <div class="workspace-mini-section current-location-banner">${systemRow}</div>
     ${locationDetailsGroup}`;
+}
+
+// Direct follow-up request: "Add a '+' icon button to the 'WHAT is
+// happening' section row that adds a Conflict entity as a chip under the
+// Situation textbox." Same header-row "+" convention whoHeaderExtra above
+// already established, opening the shared entity-picker overlay
+// (data-entity-picker-open="what-conflict", shell.js) filtered to Conflict
+// entities instead of a bespoke picker.
+function whatHeaderExtra() {
+  return `<button type="button" class="icon-btn" data-entity-picker-open="what-conflict" title="Attach a Conflict">＋</button>`;
+}
+
+// A Conflict chip attached to WHAT (context.what.entityIds — the exact
+// same generic entityIds array/addContextEntity/removeContextEntity every
+// other context question already has, WHAT just never had a picker
+// writing to it before this). Direct follow-up request: "When click on
+// the chip, it opens a box with fields from the Conflict entity record...
+// clicking the title of the Conflict opens the entity editor to that
+// record. otherwise the chip just opens the box" — the chip itself
+// (data-what-conflict-toggle) only ever toggles the detail box; the
+// title INSIDE that box (data-open-entity) is the one thing that opens
+// the real Entity Editor.
+function whatConflictsBlock(doc, ui) {
+  const ids = (doc.context.what && doc.context.what.entityIds) || [];
+  const conflicts = ids.map((id) => getEntity(doc, id)).filter((e) => e && e.type === 'conflict');
+  if (!conflicts.length) return '';
+  const expandedSet = (ui && ui.expandedWhatConflicts) || new Set();
+  const chips = conflicts.map((c) => `
+    <button type="button" class="entity-chip ${expandedSet.has(c.id) ? 'active' : ''}" data-what-conflict-toggle="${esc(c.id)}" title="${esc(c.name) || 'Unnamed'}">${esc(c.name) || 'Unnamed'}</button>`).join('');
+  const bodies = conflicts.filter((c) => expandedSet.has(c.id)).map((c) => whatConflictDetailBody(c)).join('');
+  return `<div class="workspace-mini-section">
+    <div class="entity-chips">${chips}</div>
+    ${bodies}
+  </div>`;
+}
+
+// Exact field order per direct request: Conflict status, "What people say
+// it's about" (statedCause), "What's actually driving it" (rootCause),
+// "Why the gap matters" (causeGapHook), "Someone innocent gets hurt
+// regardless" (thirdPartyCasualty), then the session hooks list. Every
+// input commits through data-conflict-field="<entityId>::<field>"
+// (shell.js) — a NEW entity-scoped attribute, not the Entity Editor's own
+// data-entity-field (which always targets doc.entities.activeId, the
+// WRONG entity here — the GM is looking at WHAT, not Cast). Session hooks
+// reuse the Entity Editor's own conflict-hook attributes verbatim
+// (data-conflict-hook-toggle/-remove/-input/-add), which already carry
+// an explicit entity id the same way.
+function whatConflictDetailBody(c) {
+  const hookRows = (c.sessionHooks || []).map((h) => `<div class="thread-row">
+      <span class="thread-name"><label><input type="checkbox" data-conflict-hook-toggle="${esc(c.id)}::${esc(h.id)}" ${h.used ? 'checked' : ''}> <span class="${h.used ? 'dim small' : ''}">${esc(h.text)}</span></label></span>
+      <span class="thread-actions"><button class="icon-btn" data-conflict-hook-remove="${esc(c.id)}::${esc(h.id)}" title="Remove">✕</button></span>
+    </div>`).join('');
+  return `<div class="npc-scene-card npc-scene-card-detail">
+    <div class="section-head-row">
+      <button type="button" class="entity-chip" data-open-entity="${esc(c.id)}">${esc(c.name) || 'Unnamed'}</button>
+      <span class="entity-chip-row">
+        <button type="button" class="icon-btn" data-what-conflict-remove="${esc(c.id)}" title="Detach from WHAT (does not delete the Conflict)">✕</button>
+      </span>
+    </div>
+    <div class="npc-scene-card-body">
+      <label class="field-label sm">Status
+        <select data-conflict-field="${esc(c.id)}::status">${CONFLICT_STATUS_OPTIONS.map(([v, l]) => `<option value="${esc(v)}" ${c.status === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
+      </label>
+      <label class="field-label sm">What people say it's about
+        <input data-conflict-field="${esc(c.id)}::statedCause" value="${esc(c.statedCause)}" placeholder="The public story">
+      </label>
+      <label class="field-label sm">What's actually driving it
+        <input data-conflict-field="${esc(c.id)}::rootCause" value="${esc(c.rootCause)}" placeholder="The real reason">
+      </label>
+      <label class="field-label sm">Why the gap matters
+        <input data-conflict-field="${esc(c.id)}::causeGapHook" value="${esc(c.causeGapHook)}" placeholder="What happens if the party notices">
+      </label>
+      <label class="field-label sm">Someone innocent gets hurt regardless
+        <input data-conflict-field="${esc(c.id)}::thirdPartyCasualty" value="${esc(c.thirdPartyCasualty)}" placeholder="Who, and how">
+      </label>
+      <span class="field-label-static">Session hooks</span>
+      ${hookRows || '<p class="dim small">None yet.</p>'}
+      <div class="rel-add">
+        <input data-conflict-hook-input="${esc(c.id)}" placeholder="New session hook…">
+        <button class="btn ghost sm" data-conflict-hook-add="${esc(c.id)}">+ Add</button>
+      </div>
+    </div>
+  </div>`;
 }
 
 // Threat/Mystery/Stress/Resources/Reputation dials now live once, in the
@@ -560,6 +656,7 @@ function whatSectionBody(doc, ui) {
       <span class="field-label-row">Situation${richToolbarToggleHTML('what:situation', toolbarCollapsed(doc, ui, 'what:situation'))}</span>
       <div class="rich-field">${richToolbarHTML('what:situation', toolbarCollapsed(doc, ui, 'what:situation'), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-ctx="what.situation" data-placeholder="What is unresolved right now?">${buildMentionEditorHTML(doc, c.situation)}</div></div>
     </div>
+    ${whatConflictsBlock(doc, ui)}
     <label class="field-label">Intent
       <select data-ctx="what.intent">
         ${INTENTS.map((i) => `<option ${i === c.intent ? 'selected' : ''}>${i}</option>`).join('')}
@@ -629,7 +726,7 @@ export function composerBodyHtml(doc, ui) {
     </label>
     ${dashboardSection('who', 'WHO is here', 'People and factions in play.', whoSectionBody(doc, ui), doc, ui, whoHeaderExtra())}
     ${dashboardSection('where', 'WHERE it happens', 'The place the scene is set.', whereSectionBody(doc, ui), doc, ui)}
-    ${dashboardSection('what', 'WHAT is happening', 'The active situation.', whatSectionBody(doc, ui), doc, ui)}
+    ${dashboardSection('what', 'WHAT is happening', 'The active situation.', whatSectionBody(doc, ui), doc, ui, whatHeaderExtra())}
     ${dashboardSection('why', 'WHY they are here', 'The objective driving the party, tracked as progress clocks.', whySectionBody(doc, ui), doc, ui)}
     ${dashboardSection('how', 'HOW it plays', 'Mode and pacing for the current scene.', howSectionBody(doc, ui), doc, ui)}
   `;
@@ -1067,12 +1164,25 @@ function sceneField(scene, key, label, placeholder, ui) {
 // holds the FULL line's content (not a fragment nested in a fixed
 // template) — editing it directly rewrites what "Opening:" reads in the
 // derived text used elsewhere.
+// The heading below is deliberately computed live from context.what.intent
+// and context.where.siteDescription/surroundings rather than read from the
+// scene's own frozen s.summary (set once at generateScene() time) — a GM
+// editing Site Description/Immediate Surroundings mid-scene expects the
+// heading to reflect that edit immediately, not just future scenes.
+function sceneDetailsSummary(doc) {
+  const what = (doc.context && doc.context.what) || {};
+  const where = (doc.context && doc.context.where) || {};
+  const location = [where.siteDescription, where.surroundings].filter(Boolean).join(' — ') || 'the current location';
+  const intent = what.intent || 'Discovery';
+  return `${intent} at ${location}`;
+}
+
 function lastScene(doc, ui) {
   const scenes = doc.scenes || [];
   if (!scenes.length) return '<div class="ws-placeholder">No scenes yet. Continue Story (Advisor) to generate the opening beat.</div>';
   const s = scenes[scenes.length - 1];
   return `<details class="last-scene" open>
-    <summary>Scene Details ${s.number} — ${esc(s.summary)}</summary>
+    <summary>Scene Details ${s.number} — ${esc(sceneDetailsSummary(doc))}</summary>
     <div class="last-scene-body">
       <div class="scene-fields">
         ${sceneField(s, 'opening', 'Opening', 'What the party notices first…', ui)}

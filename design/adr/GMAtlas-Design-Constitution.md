@@ -269,9 +269,12 @@ run by double-clicking `index.html` with no server — so `scripts/build.js` is
 a hand-written, zero-dependency, regex-based bundler that inlines every
 `src/` module into `dist/app.bundle.js` as one classic script, including
 aggregate re-exports (`export { A, B }`). It also builds the gitignored
-`src/data/docsManifest.js` at build time, resolving each Reference Library
-entry to a local path or a GitHub Release URL depending on what's actually
-on disk. `npm run build` regenerates the bundle; `npm test` (`pretest` builds
+`src/data/docsManifest.js` at build time, mapping each Reference Library
+entry to its local `assets/docs/` path (a prior GitHub-Release-hosting
+fallback for entries missing locally has been reversed — docs map to
+`assets/docs/` only now; a doc's own IndexedDB blob, when imported, is
+what makes it portable to a machine that doesn't have the real file). `npm
+run build` regenerates the bundle; `npm test` (`pretest` builds
 first) runs `tests/domain.test.js` + `tests/migrate.test.js` explicitly
 (never a bare `node --test`, which would recurse into unrelated content
 under `requirements/`).

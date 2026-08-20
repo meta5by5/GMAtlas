@@ -12,7 +12,6 @@ import { dirname, join, posix, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { titleFromFilename } from '../src/domain/titleCase.js';
 import { REFERENCE_LIBRARY_MANIFEST } from '../src/data/referenceLibraryManifest.js';
-import { releaseAssetUrl } from '../src/data/releaseConfig.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ENTRY = 'src/main.js';
@@ -39,22 +38,17 @@ function isRealFile(path) {
   }
 }
 
-// Reference Library manifest (docs/adr/0039-reference-library-release-
-// hosting.md): `file` (the stable local-style identity every campaign's
-// refOverrides/tab-keys/etc. are keyed by — see documents.js) is unchanged
-// from before this ADR; the NEW `src` field (what the iframe viewer/PDF.js
-// scans actually fetch, see documents.js's resolveDocumentTab and
-// ui/mechanicsScan.js / ui/tocScan.js) is the local relative path when this
-// machine actually has the real bytes on disk right now, or a GitHub
-// Release asset URL (releaseAssetUrl) otherwise — decided once per build,
-// per machine, so a dev machine with the real PDFs gets fast local access
-// and CI/a fresh clone (no real bytes, per isRealFile above) automatically
-// falls back to the Release. Every entry in the committed catalog is
-// listed even when its file is missing entirely, so the Reference Library
-// stays complete on any machine; any EXTRA local-only file not yet in the
-// catalog (a personal drop-in) is still picked up via a live directory
-// scan, same "drop a PDF in, rebuild, it shows up" convenience as before —
-// just without a Release fallback until the catalog is updated for it.
+// Reference Library manifest: `file` (the stable local-style identity
+// every campaign's refOverrides/tab-keys/etc. are keyed by — see
+// documents.js) doubles as the fetch target too now — direct follow-up
+// request ("map the docs to the assets/docs folder as original design...
+// instead of github or another source"), reversing the GitHub-Release
+// fallback a previous ADR added for a GitHub Pages LFS-bandwidth problem.
+// `src` is always the local relative path; a machine without the real
+// bytes on disk (per isRealFile below) just can't open that one doc — the
+// Reference Library's bulk export/import (documents.js/store.js's doc
+// blob store) is what actually makes a doc portable to another
+// browser/machine now, not a build-time remote-hosting decision.
 const DOCS_DIR = join(ROOT, 'assets', 'docs');
 const catalogFiles = new Set(REFERENCE_LIBRARY_MANIFEST.map((e) => e.file));
 const catalogEntries = REFERENCE_LIBRARY_MANIFEST.map((entry) => {
@@ -65,7 +59,7 @@ const catalogEntries = REFERENCE_LIBRARY_MANIFEST.map((entry) => {
     title: entry.title,
     ext: entry.ext,
     sizeBytes: real ? statSync(localPath).size : entry.sizeBytes,
-    src: real ? entry.file : releaseAssetUrl(entry.releaseAsset),
+    src: entry.file,
   };
 });
 const extraLocalEntries = existsSync(DOCS_DIR)

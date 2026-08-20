@@ -12,10 +12,13 @@ import { listEntities } from './entities.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 
+const MAX_ENCOUNTERS = 10;
+
 function ensure(campaign) {
-  if (!campaign.colony || typeof campaign.colony !== 'object') campaign.colony = { fields: {}, crew: [] };
+  if (!campaign.colony || typeof campaign.colony !== 'object') campaign.colony = { fields: {}, crew: [], encounters: [] };
   if (!campaign.colony.fields || typeof campaign.colony.fields !== 'object') campaign.colony.fields = {};
   if (!Array.isArray(campaign.colony.crew)) campaign.colony.crew = [];
+  if (!Array.isArray(campaign.colony.encounters)) campaign.colony.encounters = [];
   return campaign.colony;
 }
 
@@ -58,6 +61,23 @@ export function setColonyField(campaign, key, value) {
   return next;
 }
 
+// Provisional Crew Role list (direct follow-up request — "the 2nd dropdown
+// is the role a Crew can play in 5PFH Planetfall... rules added later for
+// managing combat and exploration"). The real Planetfall role table isn't
+// transcribed into this repo yet — these are common colony-crew archetypes
+// standing in until it is, kept as data (not hardcoded in the UI) so
+// swapping in the real table later is a one-place edit.
+export const CREW_ROLES = [
+  { id: 'pilot', label: 'Pilot' },
+  { id: 'engineer', label: 'Engineer' },
+  { id: 'medic', label: 'Medic' },
+  { id: 'scout', label: 'Scout' },
+  { id: 'gunner', label: 'Gunner' },
+  { id: 'quartermaster', label: 'Quartermaster' },
+  { id: 'scientist', label: 'Scientist' },
+  { id: 'diplomat', label: 'Diplomat' },
+];
+
 export function listCrewRows(campaign) {
   return ((campaign.colony && campaign.colony.crew) || []);
 }
@@ -84,8 +104,47 @@ export function removeCrewRow(campaign, id) {
   return next;
 }
 
-/** Live filter over entities tagged #lifeform — encounters worth tracking
- *  across a Planetfall campaign, not a separate stored list. */
+/** Live filter over entities tagged #lifeform, OR (direct follow-up
+ *  request — lifeform is now a peer entity type, entities.js's
+ *  ENTITY_TYPES) typed 'lifeform' directly — encounters worth tracking
+ *  across a Planetfall campaign, not a separate stored list. Both count so
+ *  a campaign that used the old #lifeform-tagged-NPC convention keeps
+ *  showing those entries unchanged. */
 export function listLifeformEncounters(campaign) {
-  return listEntities(campaign).filter((e) => Array.isArray(e.tags) && e.tags.some((t) => /^lifeforms?$/i.test(String(t).trim())));
+  return listEntities(campaign).filter((e) => e.type === 'lifeform' || (Array.isArray(e.tags) && e.tags.some((t) => /^lifeforms?$/i.test(String(t).trim()))));
+}
+
+/** The Colony's own Encounters log (direct follow-up request — "follow the
+ *  rules and workflow for Encounters in the 5PFH Planetfall rules"): up to
+ *  MAX_ENCOUNTERS rows, each a free-text note plus an optional reference to
+ *  a specific Lifeform entity once one's been identified in play. Distinct
+ *  from listLifeformEncounters() above (an unbounded, automatic filter over
+ *  every Lifeform-typed/tagged Cast entity) — this is the GM's own
+ *  per-campaign turn-sheet row list, capped to match the physical 10-row
+ *  Encounters table. */
+export function listColonyEncounters(campaign) {
+  return ((campaign.colony && campaign.colony.encounters) || []);
+}
+
+export function addColonyEncounter(campaign) {
+  const next = clone(campaign);
+  const colony = ensure(next);
+  if (colony.encounters.length >= MAX_ENCOUNTERS) return next;
+  colony.encounters.push({ id: 'enc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), note: '', entityId: '' });
+  return next;
+}
+
+export function updateColonyEncounter(campaign, id, patch) {
+  const next = clone(campaign);
+  const colony = ensure(next);
+  const row = colony.encounters.find((r) => r.id === id);
+  if (row) Object.assign(row, patch);
+  return next;
+}
+
+export function removeColonyEncounter(campaign, id) {
+  const next = clone(campaign);
+  const colony = ensure(next);
+  colony.encounters = colony.encounters.filter((r) => r.id !== id);
+  return next;
 }

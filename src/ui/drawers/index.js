@@ -20,7 +20,7 @@ import { buildGraph, computeLayout, nodeColor } from '../../domain/graph.js';
 import { BUILD } from '../../core/buildInfo.js';
 import { getDocument, listDocuments, listDocumentMentions, allDocumentTags, filterDocuments, listReferenceDocuments } from '../../domain/documents.js';
 import { listPartyMembers, listPartyTrackers, gaugeWindow, listPartyHeadlineTracks } from '../../domain/party.js';
-import { COLONY_FIELDS, getColonyFields, listCrewRows, listLifeformEncounters } from '../../domain/colony.js';
+import { COLONY_FIELDS, getColonyFields, listCrewRows, listLifeformEncounters, CREW_ROLES, listColonyEncounters } from '../../domain/colony.js';
 import { getMarket, priceAt, listCargoManifest, listContracts } from '../../domain/trade.js';
 import { COMMODITIES, findCommodity } from '../../data/commodities.js';
 import { THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
@@ -56,6 +56,27 @@ const esc = (s) => String(s == null ? '' : s)
 
 // "a Faction" / "an NPC" / "an Asset" — for the relationship-flag tooltip below.
 const withArticle = (word) => (/^[aeiou]/i.test(word) ? `an ${word}` : `a ${word}`);
+
+// Wraps a <input type="number"> with +/- stepper buttons on either side —
+// direct follow-up request: "use this number counter textbox as the
+// default for all textboxes used for numbers," generalizing the pattern
+// Party Trackers' own counter fields established (+ on the left, - on the
+// right, no native spin-arrow chrome — see .party-tracker-value-input's
+// own CSS comment). Deliberately generic and DOM-only: the buttons don't
+// know or need to know what the input commits to — a click nudges the
+// wrapped input's OWN value by ±1 (clamped to whatever min/max attributes
+// it already carries) and dispatches a real 'change' AND 'input' event on
+// it (shell.js's data-num-step handler), so whichever data-* commit
+// attribute the input already has fires exactly as if the GM had typed
+// the new value and blurred it — no new per-field wiring needed at any of
+// this helper's call sites, only wrapping the existing <input> markup.
+function numStepper(inputHtml) {
+  return `<span class="num-stepper">
+    <button type="button" class="icon-btn num-stepper-btn" data-num-step="1" tabindex="-1" title="+1">＋</button>
+    ${inputHtml}
+    <button type="button" class="icon-btn num-stepper-btn" data-num-step="-1" tabindex="-1" title="-1">−</button>
+  </span>`;
+}
 
 export function renderDrawer(id, doc, ui = {}) {
   switch (id) {
@@ -305,7 +326,7 @@ function inspector(doc, e, ui) {
     const strengthOrBond = !showStrength ? '' : (bond
       ? `<span class="rel-bond-value" title="Bond progress — tracked on the Character Sheet below, not editable here">${bond.field.value}<small>/${bond.field.max}</small></span>
          <button type="button" class="icon-btn" data-view-bond-track="${bond.gi}" title="View in Character Sheet">↧</button>`
-      : `<input type="number" class="rel-strength-input" data-entity-rel-strength="${esc(r.to)}" min="0" max="10" value="${Number(r.strength) || 0}" title="Strength/weight 0-10">`);
+      : numStepper(`<input type="number" class="rel-strength-input" data-entity-rel-strength="${esc(r.to)}" min="0" max="10" value="${Number(r.strength) || 0}" title="Strength/weight 0-10">`));
     return `<span class="rel-chip ${flagged ? 'rel-flagged' : ''}">${flagged ? `<span class="rel-flag" title="Flagged: ${RELATIONSHIP_TYPE_LABEL[r.type]} doesn't usually apply between ${withArticle(TYPE_LABEL[e.type] || e.type)} entity and ${withArticle(TYPE_LABEL[other.type] || other.type)} entity — nothing changed, just worth a review">⚠</span>` : ''}<select class="rel-type-select" data-entity-rel-type="${esc(r.to)}" title="Relationship type">${relTypeOptions(r.type)}</select>
       <button type="button" class="rel-chip-name" data-open-entity="${esc(other.id)}" title="Open ${esc(other.name) || 'Unnamed'}">${esc(other.name) || 'Unnamed'}</button>
       <input class="rel-label-input" data-entity-rel-label="${esc(r.to)}" value="${esc(r.label)}" placeholder="note (ally, rival…)" title="Edit this relationship's note">
@@ -521,7 +542,7 @@ function conflictDepthHtml(doc, e, ui, involvedFactions) {
   const postureRows = involvedFactions.map((f) => {
     const p = (e.factionPostures || []).find((x) => x.factionId === f.id) || { cohesion: 5, notes: '' };
     return `<div class="thread-row">
-      <span class="thread-name">${esc(f.name)} <span class="dim small">— cohesion</span> <input type="number" min="0" max="10" class="rel-strength-input" data-conflict-posture-field="${esc(e.id)}::${esc(f.id)}::cohesion" value="${Number(p.cohesion) || 0}"></span>
+      <span class="thread-name">${esc(f.name)} <span class="dim small">— cohesion</span> ${numStepper(`<input type="number" min="0" max="10" class="rel-strength-input" data-conflict-posture-field="${esc(e.id)}::${esc(f.id)}::cohesion" value="${Number(p.cohesion) || 0}">`)}</span>
       <span class="thread-actions"><button class="icon-btn" data-conflict-posture-remove="${esc(e.id)}::${esc(f.id)}" title="Remove posture">✕</button></span>
     </div>
     <input data-conflict-posture-field="${esc(e.id)}::${esc(f.id)}::notes" value="${esc(p.notes)}" placeholder="Dependency, doctrine, public vs. private goal — in your own words">`;
@@ -685,9 +706,9 @@ export function factionTurnSectionHtml(doc, e, ui = {}) {
     <div class="faction-card">
       <h4>Faction Turn (${esc(provider.label)})</h4>
       <div class="faction-stats-row">
-        <label class="field-label">HP <input type="number" min="0" max="${maxHp}" data-faction-field="${esc(e.id)}::hp" value="${Number(e.hp) || 0}"> <span class="dim small">/ ${maxHp}</span></label>
-        <label class="field-label">FacCreds <input type="number" min="0" data-faction-field="${esc(e.id)}::facCreds" value="${Number(e.facCreds) || 0}"></label>
-        <label class="field-label">XP <input type="number" min="0" data-faction-field="${esc(e.id)}::xp" value="${Number(e.xp) || 0}"></label>
+        <label class="field-label">HP ${numStepper(`<input type="number" min="0" max="${maxHp}" data-faction-field="${esc(e.id)}::hp" value="${Number(e.hp) || 0}">`)} <span class="dim small">/ ${maxHp}</span></label>
+        <label class="field-label">FacCreds ${numStepper(`<input type="number" min="0" data-faction-field="${esc(e.id)}::facCreds" value="${Number(e.facCreds) || 0}">`)}</label>
+        <label class="field-label">XP ${numStepper(`<input type="number" min="0" data-faction-field="${esc(e.id)}::xp" value="${Number(e.xp) || 0}">`)}</label>
       </div>
       ${busy ? `<p class="dim small">🚀 In transit until turn ${e.busyUntilTurn}.</p>` : ''}
       ${e.seizeProgress ? `<div class="thread-row">
@@ -980,7 +1001,7 @@ function diplomacyFieldsHtml(e) {
 function factionStatsHtml(e) {
   const stat = (key, label) => `
     <label class="field-label faction-stat">${label}
-      <input type="number" min="0" max="10" data-faction-stat="${esc(e.id)}::${key}" value="${Number(e[key]) || 0}">
+      ${numStepper(`<input type="number" min="0" max="10" data-faction-stat="${esc(e.id)}::${key}" value="${Number(e[key]) || 0}">`)}
     </label>`;
   const assets = (e.assets || []).map((a, i) => `
     <span class="chip sm faction-asset-chip">${esc(a)} <button type="button" class="icon-btn" data-faction-asset-remove="${esc(e.id)}::${i}" title="Remove asset">✕</button></span>`).join('');
@@ -1083,7 +1104,7 @@ function enhancementsSection(e, ui) {
       <div class="enhancement-add">
         <input data-enhancement-name-input="${esc(e.id)}" placeholder="Enhancement name" value="${esc(draftName)}">
         <select data-enhancement-type-input="${esc(e.id)}">${ENHANCEMENT_TYPES.map((t) => `<option value="${t.id}">${esc(t.label)}</option>`).join('')}</select>
-        <input type="number" min="0" data-enhancement-strain-input="${esc(e.id)}" placeholder="Strain" value="1">
+        ${numStepper(`<input type="number" min="0" data-enhancement-strain-input="${esc(e.id)}" placeholder="Strain" value="1">`)}
         <button class="btn sm" data-enhancement-install="${esc(e.id)}">＋ Install</button>
       </div>` : ''}
     </div>`;
@@ -1205,7 +1226,22 @@ function statblockGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
   if (group.kind === 'character') return characterSheetGroupBlock(e, group, gi, doc, ui, opts);
   const key = `${e.id}::${gi}`;
   const collapsed = !!(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
-  const rows = group.fields.map((f, fi) => statblockFieldRow(f, gi, fi, opts)).join('');
+  // Direct follow-up request: "the 'LifeForm (NPC) · Starforged' statblock
+  // should put the editable stat field pill on the top row like other
+  // statblocks" — attribute-kind fields (a Bestiary template's rollable
+  // modifiers, e.g. Combat/Danger) now get the SAME compact top-row
+  // treatment characterSheetGroupBlock already gives a character sheet's
+  // stats, instead of sitting mixed into the same full-width vertical
+  // list as track/text fields. Split on f.attribute directly (not
+  // f.group === 'stat', characterSheetGroupBlock's own split key) since
+  // that field-level marker is a character-sheet-template-only concept —
+  // a Bestiary field never carries it — while f.attribute is universal
+  // (statblockFieldRow's own dispatch key). Still fully editable — opts
+  // .compact only changes CSS sizing (attrRow's own narrow pill styling),
+  // never removes the live input.
+  const indexed = group.fields.map((f, fi) => ({ f, fi }));
+  const stats = indexed.filter(({ f }) => f.attribute);
+  const rest = indexed.filter(({ f }) => !f.attribute);
   return `<div class="statblock-block">
     <div class="statblock-head">
       <button class="icon-btn statblock-collapse-toggle" data-statblock-group-toggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button>
@@ -1214,7 +1250,8 @@ function statblockGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
     </div>
     ${collapsed ? '' : `
     ${attributeBadges(group.fields)}
-    ${rows}`}
+    ${stats.length ? `<div class="character-sheet-stats">${stats.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}
+    ${rest.map(({ f, fi }) => statblockFieldRow(f, gi, fi, opts)).join('')}`}
   </div>`;
 }
 
@@ -1228,19 +1265,23 @@ function templateLabel(templateId, settings) {
 // already present as a group, so adding one is always additive, never a
 // replace/toggle. Character Sheet and Bestiary are both NPC subtypes (an
 // NPC either plays as a full PC-style character or as a Bestiary creature —
-// or both at once); Vehicle Stats is an Asset subtype. Other entity types
-// (Faction, Location, Lore) get no statblock options — they aren't stat-
-// blocked concepts.
+// or both at once); Vehicle Stats is an Asset subtype. Lifeform (direct
+// follow-up request adding it as a peer entity type) gets the exact same
+// options an NPC does — structurally it's a creature/beast, same shape a
+// Bestiary template already covers, just not filed under "Non-Player
+// Character." Other entity types (Faction, Location, Lore, Conflict) get
+// no statblock options — they aren't statblocked concepts.
 function statblockAddChoices(e, groups, doc) {
-  if (e.type !== 'npc' && e.type !== 'asset' && e.type !== 'item') return '';
+  const isNpcLike = e.type === 'npc' || e.type === 'lifeform';
+  if (!isNpcLike && e.type !== 'asset' && e.type !== 'item') return '';
   const presentRulesets = new Set(groups.filter((g) => g.kind === 'character').map((g) => g.ruleset));
   const presentTemplates = new Set(groups.filter((g) => g.kind === 'npc').map((g) => g.templateId));
   const presentGearSystems = new Set(groups.filter((g) => g.kind === 'gear').map((g) => g.ruleset));
   const hasVehicle = groups.some((g) => g.kind === 'vehicle');
 
-  const charChips = e.type === 'npc' ? RULESETS.filter((r) => !presentRulesets.has(r.id))
+  const charChips = isNpcLike ? RULESETS.filter((r) => !presentRulesets.has(r.id))
     .map((r) => `<button class="chip" data-statblock-add="character" data-statblock-ruleset="${esc(r.id)}">＋ Character Sheet (${esc(r.label)})</button>`).join('') : '';
-  const bestiaryChips = e.type === 'npc' ? listTemplates(doc.settings).filter((t) => t.id !== 'vehicle' && !presentTemplates.has(t.id))
+  const bestiaryChips = isNpcLike ? listTemplates(doc.settings).filter((t) => t.id !== 'vehicle' && !presentTemplates.has(t.id))
     .map((t) => `<button class="chip" data-statblock-add="npc" data-statblock-template="${esc(t.id)}">＋ ${bestiaryTerm(doc.settings.genrePack)}: ${esc(t.label)}</button>`).join('') : '';
   const vehicleChip = e.type === 'asset' && !hasVehicle ? `<button class="chip" data-statblock-add="vehicle">＋ Vehicle Stats</button>` : '';
   // Gear groups (ADR 0012, Item entities) are discriminated by ruleset like
@@ -1827,7 +1868,7 @@ function factionPacingSection(doc) {
     <div class="settings-group">
       <h4>Faction Pacing</h4>
       <label class="field-label">Scenes per faction round
-        <input type="number" min="0" data-faction-pacing-scenes-per-round value="${Number(p.scenesPerRound) || 0}">
+        ${numStepper(`<input type="number" min="0" data-faction-pacing-scenes-per-round value="${Number(p.scenesPerRound) || 0}">`)}
       </label>
       <p class="dim small">The Advisor suggests a Step or Full Round in Faction Events once this many scenes have passed since the last one committed (currently ${Number(p.scenesSinceLastRound) || 0} since). Set to 0 to turn the reminder off.</p>
     </div>`;
@@ -2046,8 +2087,8 @@ function templateFieldRow(systemId, f, i, count) {
         <select data-tpl-field-format="${key}">
           ${FIELD_FORMATS.map((fmt) => `<option value="${fmt.id}" ${fmt.id === (f.format || 'sign') ? 'selected' : ''}>${fmt.label}</option>`).join('')}
         </select>` : ''}
-        ${f.kind === 'track' ? `<label class="tpl-field-max">Max <input type="number" min="1" data-tpl-field-max="${key}" value="${f.max || 5}"></label>` : ''}
-        ${(rollMethod === 'flat' || rollMethod === 'traveller') ? `<label class="tpl-field-max">Target <input type="number" min="1" data-tpl-field-target="${key}" value="${f.target || (rollMethod === 'traveller' ? 8 : 6)}"></label>` : ''}
+        ${f.kind === 'track' ? `<label class="tpl-field-max">Max ${numStepper(`<input type="number" min="1" data-tpl-field-max="${key}" value="${f.max || 5}">`)}</label>` : ''}
+        ${(rollMethod === 'flat' || rollMethod === 'traveller') ? `<label class="tpl-field-max">Target ${numStepper(`<input type="number" min="1" data-tpl-field-target="${key}" value="${f.target || (rollMethod === 'traveller' ? 8 : 6)}">`)}</label>` : ''}
       ` : ''}
       <span class="tpl-field-actions">
         <button class="icon-btn" data-tpl-field-up="${key}" title="Move up" ${i === 0 ? 'disabled' : ''}>↑</button>
@@ -2069,12 +2110,17 @@ function templateFieldRow(systemId, f, i, count) {
 // currently-active one (see shell.js's parseStatblockKey).
 // Expanded Party Roster card (direct follow-up correction — reversing the
 // earlier "reuse statblockSection() wholesale" approach after trying it):
-// every field renders as a small READ-ONLY "button-like box" — the stat's
-// name on the first line, its current value on the second, clickable only
-// to ROLL it, never to edit it ("that only happens in the entity editor").
-// Unlike the Entity Editor's own attrRow/trackRow (a live-editable input /
-// click-to-set boxes), nothing here writes to the field directly — a new
-// dedicated data-party-stat-roll (shell.js) reuses performFieldRoll, the
+// every field's PILL renders as a small "button-like box" — the stat's
+// name on the first line, its current value on the second. An attribute
+// pill is click-to-ROLL only, never editable directly ("that only
+// happens in the entity editor" — still true for attributes). A track
+// pill's click TOGGLES its own tracker open below instead
+// (partyStatTrackExpansion) — and a later direct follow-up request
+// ("make the tracker editable... in the party roster as well as entity
+// editor") made THAT expanded view genuinely editable, the one exception
+// to "read-only here" — its boxes are the same click-to-set control
+// trackRow's own Entity Editor view uses. A new dedicated
+// data-party-stat-roll (shell.js) reuses performFieldRoll, the
 // exact same roll logic attrRow/trackRow's own triggers call, just without
 // any of their edit affordances riding along with it.
 // Direct follow-up request: "narrow the button-only statblock fields...
@@ -2154,23 +2200,26 @@ function partyStatPill(f, entityId, gi, fi, opts = {}) {
   </span>`;
 }
 
-// A toggled-open track pill's full box-row view — read-only boxes (plain
-// <span>s, not trackRow's own click-to-set <button> ones; editing still
-// only happens in the Entity Editor), same visual language trackRow
-// itself uses so a GM recognizes it instantly. Direct follow-up request
-// ("for all trackers in the app do not display the subtotal on the end of
-// the tracker... that subtotal is used separately as in the Party Tracker
-// header row of the NPC"): no trailing value badge here either — the
-// SAME value is already shown in partyMemberHeadlineCounters, right above
-// on the member row. Double-click-to-roll (data-statblock-roll, the same
-// trigger/handler track-value-badge elsewhere uses) moves onto
-// .track-widget itself so rolling still works without that badge.
+// A toggled-open track pill's full box-row view. Direct follow-up
+// request ("make the tracker editable to adjust... trackers in the party
+// roster as well as entity editor") reverses the earlier read-only
+// design here — the boxes are now the SAME click-to-set <button>s
+// trackRow's own Entity Editor view uses (data-statblock-track-set,
+// entity-scoped via the 3-part key parseStatblockKey already handles),
+// not plain read-only <span>s. Direct follow-up request ("for all
+// trackers in the app do not display the subtotal on the end of the
+// tracker... that subtotal is used separately as in the Party Tracker
+// header row of the NPC"): still no trailing value badge — the SAME
+// value is already shown in partyMemberHeadlineCounters, right above on
+// the member row. Double-click-to-roll (data-statblock-roll, the same
+// trigger/handler track-value-badge elsewhere uses) stays on
+// .track-widget itself, same as trackRow.
 function partyStatTrackExpansion(f, entityId, gi, fi) {
   const key = `${entityId}::${gi}::${fi}`;
   const max = f.max || 5;
   const value = Number(f.value) || 0;
-  const boxes = Array.from({ length: max }, (_, k) => k + 1)
-    .map((n) => `<span class="track-box ${n <= value ? 'on' : ''}" aria-hidden="true">${n}</span>`).join('');
+  const boxes = Array.from({ length: max }, (_, k) => k + 1).map((n) => `
+    <button type="button" class="track-box ${n <= value ? 'on' : ''}" data-statblock-track-set="${key}" data-track-n="${n}" aria-label="Set ${n}">${n}</button>`).join('');
   const method = f.rollMethod || 'action';
   const rollable = method !== 'none';
   const widgetAttrs = rollable
@@ -2179,7 +2228,7 @@ function partyStatTrackExpansion(f, entityId, gi, fi) {
   return `<div class="party-stat-track-expansion">
     <span class="party-stat-track-expansion-label">${esc(f.key)}</span>
     <div class="track-widget"${widgetAttrs}>
-      <div class="track-boxes party-tracker-boxes">${boxes}</div>
+      <div class="track-boxes party-stat-track-boxes">${boxes}</div>
     </div>
   </div>`;
 }
@@ -2230,9 +2279,9 @@ function partyTrackerRow(t, editOpen) {
       <button type="button" class="track-box ${n === t.value ? 'on' : ''} ${n === 0 ? 'gauge-zero' : ''}" data-party-tracker-gauge-box="${esc(t.id)}" data-track-n="${n}" aria-label="Set ${n}" title="${n === 0 ? 'Reset (0)' : n}">${n}</button>`).join('')}</div>`
     : `
     <span class="party-tracker-counter">
-      <button class="icon-btn" data-party-tracker-step="${esc(t.id)}" data-delta="-1" title="-1">−</button>
-      <input class="party-tracker-value-input" type="number" data-party-tracker-value="${esc(t.id)}" value="${t.value}">
       <button class="icon-btn" data-party-tracker-step="${esc(t.id)}" data-delta="1" title="+1">＋</button>
+      <input class="party-tracker-value-input" type="number" data-party-tracker-value="${esc(t.id)}" value="${t.value}">
+      <button class="icon-btn" data-party-tracker-step="${esc(t.id)}" data-delta="-1" title="-1">−</button>
     </span>`;
   // Direct follow-up request: the name reads as a plain, fully-sized label
   // by default (no truncation, no input-box chrome) and the ✕ remove
@@ -2270,7 +2319,7 @@ function partyTrackerAddForm(ui, isStarforged) {
         <option value="currency" ${kind === 'currency' ? 'selected' : ''}>Currency</option>
       </select>
       ${kind === 'meter' ? `
-        <label class="party-tracker-draft-size">Size <input type="number" min="1" max="40" class="party-tracker-draft-max-input" data-party-tracker-draft-max value="5"></label>` : ''}
+        <label class="party-tracker-draft-size">Size ${numStepper(`<input type="number" min="1" max="40" class="party-tracker-draft-max-input" data-party-tracker-draft-max value="5">`)}</label>` : ''}
       ${kind === 'counter' && isStarforged ? `
         <select data-party-tracker-draft-difficulty title="Starforged progress track difficulty — steps by this rank's tick count instead of +1">
           <option value="">No difficulty (plain +1)</option>
@@ -2389,7 +2438,7 @@ function party(doc, ui = {}) {
     <div class="party-member-list">
       ${memberCards || '<p class="ws-placeholder">No party members yet. Add one above, or tag an existing NPC #character in Cast.</p>'}
     </div>`}
-    ${partySectionHeaderHtml('trackers', 'Party Trackers', trackersCollapsed, `${ui.partyTrackerAddOpen ? '' : '<button class="chip" data-party-tracker-add-toggle>＋ Tracker</button>'}<button class="icon-btn" data-party-trackers-edit-toggle title="${trackersEditOpen ? 'Done editing' : 'Edit trackers (rename, remove)'}">${trackersEditOpen ? '💾' : '✎'}</button>`)}
+    ${partySectionHeaderHtml('trackers', 'Party Trackers', trackersCollapsed, `${ui.partyTrackerAddOpen ? '' : '<button class="icon-btn" data-party-tracker-add-toggle title="Add tracker">＋</button>'}<button class="icon-btn" data-party-trackers-edit-toggle title="${trackersEditOpen ? 'Done editing' : 'Edit trackers (rename, remove)'}">${trackersEditOpen ? '💾' : '✎'}</button>`)}
     ${trackersCollapsed ? '' : `
     ${ui.partyTrackerAddOpen ? partyTrackerAddForm(ui, isStarforged) : ''}
     <div class="party-tracker-list">
@@ -2411,7 +2460,6 @@ function colony(doc, ui = {}) {
   const fields = getColonyFields(doc);
   const crew = listCrewRows(doc);
   const characters = listEntities(doc, ['npc']);
-  const vehicles = listEntities(doc, ['asset']);
   const lifeforms = listLifeformEncounters(doc);
 
   const fieldRows = COLONY_FIELDS.map((f) => {
@@ -2420,7 +2468,10 @@ function colony(doc, ui = {}) {
       const toolbarKey = `colony:${f.key}`;
       return `<label class="field-label">${esc(f.label)}<div class="rich-field">${richToolbarHTML(toolbarKey, toolbarCollapsed(doc, ui, toolbarKey))}<div class="mention-editor" contenteditable="true" data-colony-field="${f.key}">${buildMentionEditorHTML(doc, v)}</div></div></label>`;
     }
-    return `<label class="field-label">${esc(f.label)}<input type="${f.type === 'number' ? 'number' : 'text'}" data-colony-field="${f.key}" value="${esc(v == null ? '' : v)}"></label>`;
+    if (f.type === 'number') {
+      return `<label class="field-label">${esc(f.label)}${numStepper(`<input type="number" data-colony-field="${f.key}" value="${esc(v == null ? '' : v)}">`)}</label>`;
+    }
+    return `<label class="field-label">${esc(f.label)}<input type="text" data-colony-field="${f.key}" value="${esc(v == null ? '' : v)}"></label>`;
   }).join('');
 
   const crewRows = crew.map((row) => `
@@ -2429,27 +2480,53 @@ function colony(doc, ui = {}) {
         <option value="">— Character —</option>
         ${characters.map((c) => `<option value="${esc(c.id)}" ${c.id === row.characterId ? 'selected' : ''}>${esc(c.name) || 'Unnamed'}</option>`).join('')}
       </select>
-      <select data-colony-crew-field="${esc(row.id)}::assetId">
-        <option value="">— Vehicle/Asset —</option>
-        ${vehicles.map((a) => `<option value="${esc(a.id)}" ${a.id === row.assetId ? 'selected' : ''}>${esc(a.name) || 'Unnamed'}</option>`).join('')}
+      <select data-colony-crew-field="${esc(row.id)}::role">
+        <option value="">— Role —</option>
+        ${CREW_ROLES.map((r) => `<option value="${esc(r.id)}" ${r.id === row.role ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
       </select>
-      <input class="colony-crew-role-input" data-colony-crew-field="${esc(row.id)}::role" value="${esc(row.role)}" placeholder="Role">
       <button class="icon-btn" data-colony-crew-remove="${esc(row.id)}" title="Remove">✕</button>
     </div>`).join('');
 
   const lifeformRows = lifeforms.map((e) => `
     <button class="entity-chip" data-open-entity="${esc(e.id)}">${esc(e.name) || 'Unnamed'}</button>`).join('');
 
+  // Encounters log (direct follow-up request — "follow the rules and
+  // workflow for Encounters in the 5PFH Planetfall rules"): up to 10
+  // GM-authored rows, each a free-text note plus an optional chip linking
+  // a specific Lifeform entity once identified in play. Distinct from the
+  // always-on #lifeform/type filter below (listLifeformEncounters), which
+  // stays untouched as a separate "everything tagged/typed Lifeform" view.
+  const encounters = listColonyEncounters(doc);
+  const encounterRows = encounters.map((row) => {
+    const linked = row.entityId ? getEntity(doc, row.entityId) : null;
+    const chip = linked
+      ? `<button type="button" class="entity-chip" data-open-entity="${esc(linked.id)}">${esc(linked.name) || 'Unnamed'}</button>`
+      : '';
+    return `<div class="colony-encounter-row">
+      <input type="text" data-colony-encounter-field="${esc(row.id)}::note" value="${esc(row.note)}" placeholder="Encounter…">
+      ${chip}
+      <button type="button" class="icon-btn" data-entity-picker-open="colony-encounter::${esc(row.id)}" title="Attach a Lifeform entity">＋</button>
+      <button type="button" class="icon-btn" data-colony-encounter-remove="${esc(row.id)}" title="Remove row">✕</button>
+    </div>`;
+  }).join('');
+
+  const turnSheetCollapsed = isPartySectionCollapsed(ui, 'colonyTurnSheet', false);
   return `
-    <div class="statblock-head"><h4>Colony Turn Sheet</h4></div>
-    <p class="dim small">5PFH Planetfall campaign-turn tracker.</p>
-    <div class="colony-fields">${fieldRows}</div>
-    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Crew Roster</h4><button class="chip" data-colony-add-character>＋ Add NPC</button><button class="chip" data-colony-crew-add>＋ Crew</button></div>
+    ${partySectionHeaderHtml('colonyTurnSheet', 'Colony Turn Sheet', turnSheetCollapsed, helpToggle('colony-turn-sheet'))}
+    ${helpBody('colony-turn-sheet', '5PFH Planetfall campaign-turn tracker.', ui)}
+    ${turnSheetCollapsed ? '' : `<div class="colony-fields">${fieldRows}</div>`}
+    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Crew Roster</h4><button class="chip" data-entity-picker-open="colony-crew">＋ Crew</button></div>
     <div class="colony-crew-list">
       ${crewRows || '<p class="ws-placeholder">No crew rows yet.</p>'}
     </div>
-    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Lifeform Encounters</h4></div>
-    <p class="dim small">Live filter over entities tagged <code>#lifeform</code>.</p>
+    <div class="statblock-head" style="margin-top: var(--sp-4);">
+      <h4>Lifeform Encounters</h4>
+      ${encounters.length < 10 ? '<button type="button" class="icon-btn" data-colony-encounter-add title="Add an encounter row (up to 10)">＋</button>' : ''}
+    </div>
+    <div class="colony-encounter-list">
+      ${encounterRows || '<p class="ws-placeholder">No encounters logged yet.</p>'}
+    </div>
+    <p class="dim small">All Lifeform entities in Cast:</p>
     <div class="entity-chips">
       ${lifeformRows || '<p class="ws-placeholder">No lifeform encounters tracked yet — tag a Cast entity #lifeform.</p>'}
     </div>`;
@@ -2469,11 +2546,11 @@ function marketTable(location) {
     const price = priceAt(location, c.id);
     return `<tr>
       <td>${esc(c.label)}</td>
-      <td><input type="number" min="0" max="100" class="trade-dial-input" data-trade-dial="${esc(location.id)}::${c.id}::supply" value="${m.supply}"></td>
-      <td><input type="number" min="0" max="100" class="trade-dial-input" data-trade-dial="${esc(location.id)}::${c.id}::demand" value="${m.demand}"></td>
+      <td>${numStepper(`<input type="number" min="0" max="100" class="trade-dial-input" data-trade-dial="${esc(location.id)}::${c.id}::supply" value="${m.supply}">`)}</td>
+      <td>${numStepper(`<input type="number" min="0" max="100" class="trade-dial-input" data-trade-dial="${esc(location.id)}::${c.id}::demand" value="${m.demand}">`)}</td>
       <td class="trade-price">${price}</td>
       <td class="trade-buy-sell">
-        <input type="number" min="1" value="1" class="trade-qty-input" data-trade-qty="${c.id}">
+        ${numStepper(`<input type="number" min="1" value="1" class="trade-qty-input" data-trade-qty="${c.id}">`)}
         <button class="chip sm" data-trade-buy="${esc(location.id)}::${c.id}">Buy</button>
         <button class="chip sm" data-trade-sell="${esc(location.id)}::${c.id}">Sell</button>
       </td>
@@ -2506,7 +2583,7 @@ function contractAddForm(locations, npcs) {
       <option value="">— Destination —</option>
       ${locations.map((l) => `<option value="${esc(l.id)}">${esc(l.name) || 'Unnamed'}</option>`).join('')}
     </select>
-    <input type="number" min="0" class="trade-contract-draft-payout" data-trade-contract-draft-payout placeholder="Payout" value="50">
+    ${numStepper(`<input type="number" min="0" class="trade-contract-draft-payout" data-trade-contract-draft-payout placeholder="Payout" value="50">`)}
     <button class="btn sm" data-trade-contract-create>Create</button>
     <button class="icon-btn" data-trade-contract-add-cancel title="Cancel">✕</button>
   </div>`;
@@ -2897,12 +2974,20 @@ function documents(doc, ui = {}) {
       ${tagEditorOpen.has(d.id) ? docTagEditor(d) : ''}
     </div>`).join('');
 
+  // Direct follow-up request: "create a bulk export/import to transfer the
+  // library records and docs themselves from one browser to another" — a
+  // doc whose bytes are imported into this browser's own IndexedDB doc-
+  // blob store (store.js) is portable regardless of what's on disk;
+  // ui.refDocBlobKeys (populated async, shell.js's openDrawerTab) is what
+  // that "☁ Imported" badge below reads.
+  const blobKeys = ui.refDocBlobKeys || new Set();
   const refRows = refDocs.map((r) => `
     <div class="doc-card ref-doc-card">
       <div class="doc-card-head">
         ${renameOpen.has(r.key)
           ? `<input class="doc-rename-input" data-ref-rename-input="${esc(r.key)}" value="${esc(r.title)}" placeholder="Untitled document" autofocus>`
           : `<a href="#" class="doc-card-title-link" data-doc-open="ref:${esc(r.key)}" data-drag-document="ref:${esc(r.key)}" draggable="true" title="${esc(r.ext.toUpperCase())} · ${formatBytes(r.sizeBytes)} — open in viewer, or drag into a note or context field to insert a @ pointer">${esc(r.title)}</a>`}
+        ${blobKeys.has(r.key) ? '<span class="ref-doc-blob-badge" title="Imported into this browser — portable via Export Library, works even if the file isn\'t on disk here">☁</span>' : ''}
         <div class="doc-card-actions">
           <button class="icon-btn" data-doc-tag-toggle="${esc(r.key)}" title="Tags">🏷</button>
           <button class="icon-btn" data-ref-rename="${esc(r.key)}" title="${renameOpen.has(r.key) ? 'Save' : 'Rename entry'}">${renameOpen.has(r.key) ? '💾' : '✎'}</button>
@@ -2930,7 +3015,12 @@ function documents(doc, ui = {}) {
     <div class="doc-list">${rows}</div>` : ''}
     ${(uploadedFileItems.length || refDocs.length) ? `
     <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Reference Library</h4>${helpToggle('documents-reflib')}</div>
-    ${helpBody('documents-reflib', 'Bundled rulebooks and setting docs from <code>assets/docs/</code>, plus anything you upload — refreshed on every build.', ui)}
+    ${helpBody('documents-reflib', 'Bundled rulebooks and setting docs from <code>assets/docs/</code>, plus anything you upload — refreshed on every build. "Import PDF(s)" reads real files off your disk into this browser\'s own storage (matched to a catalog entry by filename) so they open even when assets/docs/ is empty on this machine; "Export Library"/"Import Library" bundle every doc imported that way (plus your title/tag edits) into one file to carry to another browser.', ui)}
+    <div class="drawer-note ref-doc-transfer-row">
+      <label class="btn ghost sm file-btn">📥 Import PDF(s)<input type="file" data-ref-doc-import multiple accept="application/pdf" hidden></label>
+      <button class="btn ghost sm" data-ref-library-export title="Download every imported Reference Library doc, plus your title/tag edits, as one file">⬇ Export Library</button>
+      <label class="btn ghost sm file-btn">⬆ Import Library<input type="file" data-ref-library-import accept="application/json" hidden></label>
+    </div>
     <div class="doc-list">${uploadedFileRows}${refRows}</div>` : ''}`;
 }
 
@@ -3080,7 +3170,7 @@ function battlemap(doc, ui = {}) {
         ${pickableImages.map((img) => `<option value="${esc(img.id)}" ${active.backgroundImageId === img.id ? 'selected' : ''}>${esc(img.title || img.id)}</option>`).join('')}
       </select>` : ''}
       <label class="chip sm"><input type="checkbox" data-battlemap-grid-toggle="${esc(active.id)}" ${active.gridEnabled ? 'checked' : ''}> Grid</label>
-      ${active.gridEnabled ? `<input type="number" class="battlemap-grid-size-input" min="10" max="200" value="${active.gridSize}" data-battlemap-grid-size="${esc(active.id)}" title="Grid cell size (px)">` : ''}
+      ${active.gridEnabled ? numStepper(`<input type="number" class="battlemap-grid-size-input" min="10" max="200" value="${active.gridSize}" data-battlemap-grid-size="${esc(active.id)}" title="Grid cell size (px)">`) : ''}
       <span class="battlemap-camera-controls">
         <button type="button" class="icon-btn" data-battlemap-camera-zoom="out" title="Zoom out">－</button>
         <button type="button" class="icon-btn" data-battlemap-camera-zoom="in" title="Zoom in">＋</button>

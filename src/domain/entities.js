@@ -26,8 +26,20 @@ import { SWN_XP_TABLE } from '../data/swnFactionData.js';
 // @mentions/Graph/Universal Search/Cast listing for free, and "which
 // factions are involved" becomes the existing relationship system (a new
 // `involves` type, below) instead of a bespoke id-pointer array.
-export const ENTITY_TYPES = ['npc', 'location', 'faction', 'asset', 'lore', 'item', 'conflict'];
-export const TYPE_LABEL = { npc: 'NPC', location: 'Location', faction: 'Faction', asset: 'Asset', lore: 'Lore', item: 'Item', conflict: 'Conflict' };
+// `lifeform` (direct follow-up request — see design/lifeform-and-conflict-
+// entity-types.md) is a peer entity type, not a Bestiary-tagged NPC (the
+// prior convention, Colony's own listLifeformEncounters still ALSO
+// recognizes a #lifeform tag for backward compatibility with campaigns
+// that used it) — a first-class type gets @mentions/Graph/Universal
+// Search/Cast listing/its own filter chip for free, same reasoning `item`
+// and `conflict` above were added for. No bespoke fields of its own
+// (unlike conflict's rich session-hooks/postures/asymmetry model) — it's
+// structurally identical to an NPC (statblockAddChoices grants it the
+// same Character Sheet/Bestiary options), just a different label so a
+// creature/beast doesn't read as a "Non-Player Character" in Cast/Graph/
+// Search.
+export const ENTITY_TYPES = ['npc', 'location', 'faction', 'asset', 'lore', 'item', 'conflict', 'lifeform'];
+export const TYPE_LABEL = { npc: 'NPC', location: 'Location', faction: 'Faction', asset: 'Asset', lore: 'Lore', item: 'Item', conflict: 'Conflict', lifeform: 'Lifeform' };
 
 // Relationship edge taxonomy (Phase 7, Constitution pack 66's Context Graph
 // depth item): a relationship now carries a semantic `type` alongside its

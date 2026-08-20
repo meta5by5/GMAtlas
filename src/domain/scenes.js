@@ -53,7 +53,12 @@ export function generateScene(campaign, tables, rng = Math.random, lensCategorie
 
   const threat = what.threat || 0;
   const mystery = what.mystery || 0;
-  const location = where.summary || [form.locationType, form.surroundings].filter(Boolean).join(' — ') || 'the current location';
+  // Site Description/Immediate Surroundings (direct follow-up request —
+  // these replaced the long-dead where.summary/"Focus" field, and the
+  // legacy settings.form.locationType/surroundings fallback before that,
+  // as WHERE's actual current-location description) are what a fresh
+  // scene's own summary/memory fields are seeded from now.
+  const location = [where.siteDescription, where.surroundings].filter(Boolean).join(' — ') || 'the current location';
   const intent = what.intent || 'Discovery';
 
   // "Opening" is stored as the FULL sentence, computed once here from its

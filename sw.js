@@ -19,17 +19,13 @@ const SHELL = [
   './assets/icon-192.png',
   './assets/icon-512.png',
 ];
-// Reference Library PDFs fetched-and-cached-as-a-blob (shell.js's
-// loadRefDocBlobUrl, direct follow-up request — "save it to the local
-// cache like the rest of app data") live in their OWN cache, not CACHE
-// above — a real reported bug this fix would otherwise reintroduce:
-// activate's own cleanup below deletes every cache name it doesn't
-// recognize, which would have silently wiped the doc cache on every SW
-// update (a rebuilt bundle bumps nothing about that cache's own name),
-// discarding what the GM just downloaded. Keeping both names in one
-// KEEP_CACHES list is what activate now checks against.
-const REF_DOC_CACHE = 'gmatlas-refdocs-v1';
-const KEEP_CACHES = [CACHE, REF_DOC_CACHE];
+// A prior GitHub-Release-hosting design (since reversed — Reference
+// Library docs map to assets/docs/ again, or the app's own IndexedDB doc
+// blob store, never a remote URL) fetched-and-cached PDFs into a second
+// cache here, 'gmatlas-refdocs-v1'. That mechanism is gone; activate's
+// cleanup below now correctly sweeps any leftover copy of that cache from
+// an older install instead of preserving it forever.
+const KEEP_CACHES = [CACHE];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

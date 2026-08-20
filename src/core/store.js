@@ -31,8 +31,20 @@ const BACKUP_KEY = 'sagaatlas.campaign.backup'; // ditto
 const MIGRATED_FLAG = 'sagaatlas.migratedFromLegacy';
 
 const DB_NAME = 'gmatlas';
-const DB_VERSION = 1;
+// Bumped 1 -> 2 to add DOC_BLOB_STORE (Reference Library doc bytes, direct
+// follow-up request — "create a bulk export/import to transfer the
+// library records and docs themselves from one browser to another so the
+// docs can be transferred like the campaign data"). A deliberate,
+// documented exception to "one object store" — doc bytes are a
+// meaningfully different shape of data (potentially hundreds of MB across
+// many PDFs) than the campaign document, with their own lifecycle
+// (imported once, read many times, never touched by the campaign
+// document's own save/backup cycle) — kept in this one module, alongside
+// the campaign store, rather than a second persistence mechanism
+// elsewhere in the app.
+const DB_VERSION = 2;
 const STORE_NAME = 'kv';
+const DOC_BLOB_STORE = 'docBlobs';
 const CAMPAIGN_KEY = 'campaign';
 const CAMPAIGN_BACKUP_KEY = 'campaignBackup';
 
@@ -41,6 +53,7 @@ function idbOpen() {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       if (!req.result.objectStoreNames.contains(STORE_NAME)) req.result.createObjectStore(STORE_NAME);
+      if (!req.result.objectStoreNames.contains(DOC_BLOB_STORE)) req.result.createObjectStore(DOC_BLOB_STORE);
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error || new Error('IndexedDB open failed'));
@@ -48,21 +61,39 @@ function idbOpen() {
   });
 }
 
-function idbGet(db, key) {
+function idbGet(db, key, storeName = STORE_NAME) {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const req = tx.objectStore(STORE_NAME).get(key);
+    const tx = db.transaction(storeName, 'readonly');
+    const req = tx.objectStore(storeName).get(key);
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error || new Error('IndexedDB get failed'));
   });
 }
 
-function idbPut(db, key, value) {
+function idbPut(db, key, value, storeName = STORE_NAME) {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).put(value, key);
+    const tx = db.transaction(storeName, 'readwrite');
+    tx.objectStore(storeName).put(value, key);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error || new Error('IndexedDB write failed'));
+  });
+}
+
+function idbDelete(db, key, storeName = STORE_NAME) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    tx.objectStore(storeName).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error || new Error('IndexedDB delete failed'));
+  });
+}
+
+function idbKeys(db, storeName) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readonly');
+    const req = tx.objectStore(storeName).getAllKeys();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error || new Error('IndexedDB getAllKeys failed'));
   });
 }
 
@@ -229,6 +260,32 @@ function createStore() {
     return { ok: true };
   }
 
+  // --- Reference Library doc blobs (direct follow-up request: "create a
+  // bulk export/import to transfer the library records and docs
+  // themselves from one browser to another") -----------------------------
+  // Keyed by the SAME stable "file" identity documents.js's DOCS_MANIFEST/
+  // refOverrides already use (e.g. "assets/docs/Foo.pdf") — never a
+  // separate id, so a blob and its manifest entry/title-tag overrides
+  // always agree on which real doc they're both talking about. Plain
+  // Blobs in, plain Blobs out — the UI layer builds a blob: object URL
+  // from whatever's returned when it actually needs to display one.
+  async function putDocBlob(key, blob) {
+    const database = await db();
+    await idbPut(database, key, blob, DOC_BLOB_STORE);
+  }
+  async function getDocBlob(key) {
+    const database = await db();
+    return idbGet(database, key, DOC_BLOB_STORE);
+  }
+  async function deleteDocBlob(key) {
+    const database = await db();
+    await idbDelete(database, key, DOC_BLOB_STORE);
+  }
+  async function listDocBlobKeys() {
+    const database = await db();
+    return idbKeys(database, DOC_BLOB_STORE);
+  }
+
   // --- optional File System Access binding (OneDrive-synced folder) -----
   function supportsFileBinding() { return typeof window !== 'undefined' && 'showSaveFilePicker' in window; }
   async function bindFile() {
@@ -251,6 +308,7 @@ function createStore() {
     export: exportDocument, import: importDocument, newCampaign,
     supportsFileBinding, bindFile, saveBoundFile,
     storageInfo, restoreBackup,
+    putDocBlob, getDocBlob, deleteDocBlob, listDocBlobKeys,
     STORAGE_KEY, BACKUP_KEY, LEGACY_KEYS,
   };
 }

@@ -447,23 +447,10 @@ import { advise } from '../src/domain/copilot.js';
 import {
   addDocument, updateDocument, removeDocument, parseDocumentMentions, parseDocumentMentionRefs, linkDocumentMentions, listDocumentMentions,
   findDocumentTabByTitle, openDocumentTab, closeDocumentTab, resolveDocumentTab, resolvedDocumentMentionNames, listReferenceDocuments,
-  parseTextBlocks, parseInlineNodes, sanitizeExternalLinkUrl, sanitizeColorValue, gviewEmbedUrl,
+  renameRefDocument, addRefDocumentTag, mergeRefOverrides,
+  parseTextBlocks, parseInlineNodes, sanitizeExternalLinkUrl, sanitizeColorValue,
 } from '../src/domain/documents.js';
 import { titleFromFilename } from '../src/domain/titleCase.js';
-import { releaseAssetUrl, REFERENCE_LIBRARY_RELEASE_TAG } from '../src/data/releaseConfig.js';
-
-// --- docs/adr/0039: Reference Library Release hosting ----------------------
-test('releaseAssetUrl builds a GitHub Release download URL, URL-encoding filenames with spaces/parens, and defaults to REFERENCE_LIBRARY_RELEASE_TAG', () => {
-  assert.equal(
-    releaseAssetUrl('Hostile setting.pdf'),
-    `https://github.com/meta5by5/GMAtlas/releases/download/${REFERENCE_LIBRARY_RELEASE_TAG}/Hostile%20setting.pdf`
-  );
-  assert.equal(
-    releaseAssetUrl('Intergalactic Space Trader (IST) 01_PlanetEconomy.pdf'),
-    `https://github.com/meta5by5/GMAtlas/releases/download/${REFERENCE_LIBRARY_RELEASE_TAG}/Intergalactic%20Space%20Trader%20(IST)%2001_PlanetEconomy.pdf`
-  );
-  assert.equal(releaseAssetUrl('plain.pdf', 'v2'), 'https://github.com/meta5by5/GMAtlas/releases/download/v2/plain.pdf');
-});
 
 // --- lightweight rich text (ADR 0018) --------------------------------------
 test('parseTextBlocks: a plain single-line/multi-line paragraph stays one text block', () => {
@@ -1028,14 +1015,6 @@ test('parseDocumentMentionRefs extracts a custom @[Label|Target] display label, 
   ]);
 });
 
-test('gviewEmbedUrl builds Google\'s generic PDF embed viewer URL, correctly percent-encoding the wrapped URL (never the raw source URL itself, since that\'s what forces a download)', () => {
-  assert.equal(
-    gviewEmbedUrl('https://github.com/meta5by5/GMAtlas/releases/download/reference-library-v1/5PFH-3e-Compendium-Includes-Bug-Hunt.pdf'),
-    'https://docs.google.com/gview?embedded=true&url=https%3A%2F%2Fgithub.com%2Fmeta5by5%2FGMAtlas%2Freleases%2Fdownload%2Freference-library-v1%2F5PFH-3e-Compendium-Includes-Bug-Hunt.pdf',
-  );
-  assert.equal(gviewEmbedUrl('https://example.com/a b.pdf'), 'https://docs.google.com/gview?embedded=true&url=https%3A%2F%2Fexample.com%2Fa%20b.pdf');
-});
-
 test('findDocumentTabByTitle resolves a library file as openable and a text note as not', () => {
   let camp = defaultCampaign();
   camp = addDocument(camp, { title: 'Station Manual', content: 'Docking procedures' });
@@ -1061,6 +1040,18 @@ test('findDocumentTabByTitle prefers an openable match over a same-titled upload
   const resolved = findDocumentTabByTitle(camp, refTitle);
   assert.equal(resolved.openable, true, 'the real PDF is reachable, not shadowed by the phantom note');
   assert.ok(resolved.tabKey.startsWith('ref:'));
+});
+
+test('mergeRefOverrides (bulk Reference Library import, direct follow-up request) shallow-merges imported title/tag overrides one key at a time — an imported key REPLACES this campaign\'s existing override for that same key, but every other key\'s override is left untouched', () => {
+  let camp = defaultCampaign();
+  const [firstKey, secondKey] = listReferenceDocuments(camp).map((r) => r.key);
+  camp = renameRefDocument(camp, firstKey, 'My local rename');
+  camp = addRefDocumentTag(camp, secondKey, 'untouched-tag');
+
+  camp = mergeRefOverrides(camp, { [firstKey]: { title: 'Imported title', tags: ['imported-tag'] } });
+  assert.equal(listReferenceDocuments(camp).find((r) => r.key === firstKey).title, 'Imported title', 'the imported override replaces the local rename for that key');
+  assert.deepEqual(listReferenceDocuments(camp).find((r) => r.key === firstKey).tags, ['imported-tag']);
+  assert.ok(listReferenceDocuments(camp).find((r) => r.key === secondKey).tags.includes('untouched-tag'), 'a DIFFERENT key\'s existing override is untouched by an import that never mentioned it');
 });
 
 test('linkDocumentMentions does not create a phantom document for a name that already matches a Reference Library doc', () => {
@@ -1474,6 +1465,12 @@ test('statblock field CRUD (groupIndex + fieldIndex)', () => {
   const before = e.statblocks[0].fields.length;
   removeStatblockField(e, 0, 0);
   assert.equal(e.statblocks[0].fields.length, before - 1);
+});
+
+test('createEntity auto-attaches a Bestiary statblock for a \'lifeform\' entity, same as \'npc\' (direct follow-up request — lifeform is a peer ENTITY_TYPES entry, structurally identical to npc for statblock purposes)', () => {
+  let camp = defaultCampaign();
+  let lifeformId; ({ campaign: camp, id: lifeformId } = createEntity(camp, { type: 'lifeform', name: 'Void Serpent' }));
+  assert.equal(getEntity(camp, lifeformId).statblocks[0].kind, 'npc');
 });
 
 test('createEntity auto-attaches statblock groups through the campaign-level API', () => {
@@ -1941,7 +1938,7 @@ test('addPartySharedAssetEntity links a real Asset entity (deduped, distinct fro
 });
 
 // --- colony (5PFH Planetfall turn sheet + crew + lifeform filter) ----------
-import { COLONY_FIELDS, setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, listLifeformEncounters } from '../src/domain/colony.js';
+import { COLONY_FIELDS, setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, listLifeformEncounters, listColonyEncounters, addColonyEncounter, updateColonyEncounter, removeColonyEncounter } from '../src/domain/colony.js';
 
 test('setColonyField coerces number fields and leaves text/textarea fields as strings', () => {
   let camp = defaultCampaign();
@@ -1963,13 +1960,30 @@ test('colony crew rows reference entities by id and round-trip through add/updat
   assert.equal(listCrewRows(camp).length, 0);
 });
 
-test('listLifeformEncounters filters entities tagged #lifeform', () => {
+test('listLifeformEncounters filters entities tagged #lifeform, AND (direct follow-up request — lifeform is now a peer entities.js ENTITY_TYPES entry) any entity typed \'lifeform\' directly, even with no tag at all — both count, neither excludes the other', () => {
   let camp = defaultCampaign();
-  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Creeper' }));
-  camp = setEntityTags(camp, id, 'lifeform, hostile');
-  const found = listLifeformEncounters(camp);
-  assert.equal(found.length, 1);
-  assert.equal(found[0].id, id);
+  let taggedId; ({ campaign: camp, id: taggedId } = createEntity(camp, { type: 'npc', name: 'Creeper' }));
+  camp = setEntityTags(camp, taggedId, 'lifeform, hostile');
+  let typedId; ({ campaign: camp, id: typedId } = createEntity(camp, { type: 'lifeform', name: 'Void Serpent' }));
+  const found = listLifeformEncounters(camp).map((e) => e.id).sort();
+  assert.deepEqual(found, [taggedId, typedId].sort());
+});
+
+test('colony encounter rows round-trip through add/update/remove and are capped at 10', () => {
+  let camp = defaultCampaign();
+  camp = addColonyEncounter(camp);
+  const row = listColonyEncounters(camp)[0];
+  assert.equal(row.note, '');
+  assert.equal(row.entityId, '');
+  let lifeformId; ({ campaign: camp, id: lifeformId } = createEntity(camp, { type: 'lifeform', name: 'Void Serpent' }));
+  camp = updateColonyEncounter(camp, row.id, { note: 'Something moved in the ridge grass.', entityId: lifeformId });
+  assert.equal(listColonyEncounters(camp)[0].note, 'Something moved in the ridge grass.');
+  assert.equal(listColonyEncounters(camp)[0].entityId, lifeformId);
+  camp = removeColonyEncounter(camp, row.id);
+  assert.equal(listColonyEncounters(camp).length, 0);
+
+  for (let i = 0; i < 12; i++) camp = addColonyEncounter(camp);
+  assert.equal(listColonyEncounters(camp).length, 10);
 });
 
 // --- guide (docs/adr/0017: multi-doc tree, was one freeform field) --------

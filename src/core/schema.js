@@ -137,8 +137,11 @@ export function defaultCampaign(now = new Date().toISOString()) {
 
     // A flat key/value turn sheet matching the 5PFH Planetfall campaign
     // turn tracker, plus a crew roster that references character/vehicle
-    // entities by id rather than duplicating their stats.
-    colony: { fields: {}, crew: [] },
+    // entities by id rather than duplicating their stats, plus an
+    // Encounters log (up to 10 rows — matches the 5PFH Planetfall
+    // Encounters table) each with a free-text note and an optional
+    // reference to a Lifeform entity.
+    colony: { fields: {}, crew: [], encounters: [] },
 
     // A tree of freeform reference documents (docs/adr/0017-multi-doc-
     // guide-tree.md) — each a table of contents with @mentions/@[Doc]
