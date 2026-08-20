@@ -1040,9 +1040,8 @@ function strainMeter(used, cap, over) {
     .map((n) => `<span class="track-box ${n <= used ? 'on' : ''}" aria-hidden="true">${n}</span>`).join('');
   return `<div class="statblock-row track-row">
     <span class="statblock-key">Strain</span>
-    <div class="track-widget">
+    <div class="track-widget ${over ? 'over-strain' : ''}" title="Strain: ${used}/${cap}${over ? ' — over capacity' : ''}">
       <div class="track-boxes">${boxes}</div>
-      <span class="track-value-badge track-value-badge-static ${over ? 'over-strain' : ''}" title="Strain — not rollable${over ? ', over capacity' : ''}">${used}</span>
     </div>
   </div>`;
 }
@@ -1355,10 +1354,20 @@ function textRow(f, gi, fi, opts = {}) {
     </div>`;
 }
 
-// Crew-Link-style numeric scale: a row of click-to-set boxes plus a value
-// badge that rolls (d6 + value vs 2d10) on double-click. `compact` renders
-// it as a narrow stat pill (character sheet's top stat row) instead of the
-// full-width statblock row.
+// Crew-Link-style numeric scale: a row of click-to-set boxes, double-click
+// anywhere on the row to roll (d6 + value vs 2d10). `compact` renders it
+// as a narrow stat pill (character sheet's top stat row) instead of the
+// full-width statblock row. Direct follow-up request ("for all trackers
+// in the app do not display the subtotal on the end of the tracker...
+// that subtotal is used separately as in the Party Tracker header row of
+// the NPC"): the trailing numeric value-badge is gone — the box row
+// itself already shows the fill count AND the max (its own box count)
+// visually, so a bare repeated number added nothing once the SAME value
+// is already shown elsewhere (partyMemberHeadlineCounters' Health/
+// Momentum counters). The double-click-to-roll trigger moves from that
+// removed badge onto .track-widget itself (data-statblock-roll), so
+// rolling still works exactly the same way, just without a dedicated
+// visible number to carry it.
 function trackRow(f, gi, fi, opts = {}) {
   const max = f.max || 5;
   const value = Number(f.value) || 0;
@@ -1378,19 +1387,14 @@ function trackRow(f, gi, fi, opts = {}) {
   const method = f.rollMethod || 'action';
   const rollable = method !== 'none';
   const rollTitle = rollMethodTitle(method, value, f.target).replace('Click', 'Double-click');
-  // The trailing "/max" ratio is gone (direct follow-up request) — the row
-  // of boxes already shows both the fill count AND the max (its own box
-  // count) visually, so the badge now reads as just the bare current value,
-  // narrow enough to match the modifier-style boxes elsewhere in the sheet.
-  const badge = rollable
-    ? `<button type="button" class="track-value-badge" data-statblock-roll="${key}" title="${esc(rollTitle)}">${value}</button>`
-    : `<span class="track-value-badge track-value-badge-static" title="Progress track — not rollable">${value}</span>`;
+  const widgetAttrs = rollable
+    ? ` data-statblock-roll="${key}" title="${esc(rollTitle)}"`
+    : ` title="Progress track — not rollable"`;
   return `
     <div class="statblock-row track-row ${opts.compact ? 'track-row-compact' : ''}">
       <span class="statblock-key">${esc(f.key)}</span>
-      <div class="track-widget">
+      <div class="track-widget"${widgetAttrs}>
         <div class="track-boxes">${boxes}</div>
-        ${badge}
       </div>
     </div>`;
 }
@@ -2079,31 +2083,33 @@ function templateFieldRow(systemId, f, i, count) {
 // fields now render as TWO separate .party-stat-pills rows (a plain-text
 // field, e.g. "Notable Gear", gets a third, since it's neither) instead of
 // one mixed row, which is what actually forced wrapping before (9+ pills
-// competing for one line, not 5). A track pill that's currently toggled
-// open (ui.expandedPartyStatFields, "clicking... acts as a toggle") gets
-// its full box-row view (partyStatTrackExpansion) rendered directly below
-// the tracks row — "the tracker for that one tracker is displayed in the
-// next row" — one shared row for however many are open at once, not one
-// per pill, so toggling a second one doesn't shove the first down further.
+// competing for one line, not 5). A track pill's click shows its full
+// box-row view (partyStatTrackExpansion) directly below the tracks row —
+// "the tracker for that one tracker is displayed in the next row." Direct
+// follow-up request: "it should disappear if clicked again or be replaced
+// with another tracker if another field is picked" — at most ONE
+// expansion is ever open at a time app-wide (ui.expandedPartyStatField, a
+// single nullable key, not a Set), so picking a different track field
+// swaps the open one instead of stacking a second below it.
 function partyMemberStatblocks(e, doc, ui) {
   const sorted = sortStatblockGroups(e.statblocks, doc.settings);
-  const expanded = (ui && ui.expandedPartyStatFields) || new Set();
+  const openKey = (ui && ui.expandedPartyStatField) || null;
   return sorted.map(({ group, index: gi }) => {
     const fields = (group.fields || []).map((f, fi) => ({ f, fi }));
     const attrs = fields.filter(({ f }) => f.attribute);
     const tracks = fields.filter(({ f }) => f.track);
     const other = fields.filter(({ f }) => !f.attribute && !f.track);
     const attrPills = attrs.map(({ f, fi }) => partyStatPill(f, e.id, gi, fi)).join('');
-    const trackPills = tracks.map(({ f, fi }) => partyStatPill(f, e.id, gi, fi, { expanded: expanded.has(`${e.id}::${gi}::${fi}`) })).join('');
+    const trackPills = tracks.map(({ f, fi }) => partyStatPill(f, e.id, gi, fi, { expanded: openKey === `${e.id}::${gi}::${fi}` })).join('');
     const otherPills = other.map(({ f, fi }) => partyStatPill(f, e.id, gi, fi)).join('');
-    const openTracks = tracks.filter(({ fi }) => expanded.has(`${e.id}::${gi}::${fi}`));
+    const openTrack = tracks.find(({ fi }) => openKey === `${e.id}::${gi}::${fi}`);
     if (!attrPills && !trackPills && !otherPills) return '';
     return `<div class="party-stat-group">
       <div class="party-stat-group-label">${esc(statblockGroupLabel(group, doc))}</div>
       ${attrPills ? `<div class="party-stat-pills">${attrPills}</div>` : ''}
       ${trackPills ? `<div class="party-stat-pills">${trackPills}</div>` : ''}
       ${otherPills ? `<div class="party-stat-pills">${otherPills}</div>` : ''}
-      ${openTracks.length ? `<div class="party-stat-track-expansions">${openTracks.map(({ f, fi }) => partyStatTrackExpansion(f, e.id, gi, fi)).join('')}</div>` : ''}
+      ${openTrack ? `<div class="party-stat-track-expansions">${partyStatTrackExpansion(openTrack.f, e.id, gi, openTrack.fi)}</div>` : ''}
     </div>`;
   }).join('');
 }
@@ -2151,10 +2157,14 @@ function partyStatPill(f, entityId, gi, fi, opts = {}) {
 // A toggled-open track pill's full box-row view — read-only boxes (plain
 // <span>s, not trackRow's own click-to-set <button> ones; editing still
 // only happens in the Entity Editor), same visual language trackRow
-// itself uses so a GM recognizes it instantly, plus a value badge that
-// rolls on double-click (data-statblock-roll, the exact same trigger/
-// handler track-value-badge already uses elsewhere) — rolling lives here,
-// not on the pill itself, so a click on the pill can mean just "toggle."
+// itself uses so a GM recognizes it instantly. Direct follow-up request
+// ("for all trackers in the app do not display the subtotal on the end of
+// the tracker... that subtotal is used separately as in the Party Tracker
+// header row of the NPC"): no trailing value badge here either — the
+// SAME value is already shown in partyMemberHeadlineCounters, right above
+// on the member row. Double-click-to-roll (data-statblock-roll, the same
+// trigger/handler track-value-badge elsewhere uses) moves onto
+// .track-widget itself so rolling still works without that badge.
 function partyStatTrackExpansion(f, entityId, gi, fi) {
   const key = `${entityId}::${gi}::${fi}`;
   const max = f.max || 5;
@@ -2163,14 +2173,13 @@ function partyStatTrackExpansion(f, entityId, gi, fi) {
     .map((n) => `<span class="track-box ${n <= value ? 'on' : ''}" aria-hidden="true">${n}</span>`).join('');
   const method = f.rollMethod || 'action';
   const rollable = method !== 'none';
-  const badge = rollable
-    ? `<button type="button" class="track-value-badge" data-statblock-roll="${key}" title="${esc(f.key)}: double-click to roll">${value}</button>`
-    : `<span class="track-value-badge track-value-badge-static" title="Not rollable">${value}</span>`;
+  const widgetAttrs = rollable
+    ? ` data-statblock-roll="${key}" title="${esc(f.key)}: double-click to roll"`
+    : ` title="${esc(f.key)}: not rollable"`;
   return `<div class="party-stat-track-expansion">
     <span class="party-stat-track-expansion-label">${esc(f.key)}</span>
-    <div class="track-widget">
+    <div class="track-widget"${widgetAttrs}>
       <div class="track-boxes party-tracker-boxes">${boxes}</div>
-      ${badge}
     </div>
   </div>`;
 }

@@ -566,7 +566,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .track-row .statblock-key { align-self: center; }
   .track-row .track-widget { justify-content: flex-end; }
   .track-row .track-box { width: 1.55rem; height: 1.55rem; font-size: 0.72rem; }
-  .track-row .track-value-badge { font-size: 0.85rem; padding: 0.28rem 0.5rem; }
 
   /* The read-only Combat/Danger-style summary badges above the field list
      (attributeBadges()) get the same "room to breathe" treatment, so a
