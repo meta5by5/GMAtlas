@@ -378,7 +378,15 @@ export function listReferenceDocuments(campaign) {
   return DOCS_MANIFEST.map((r) => {
     const o = overrides[r.file] || {};
     return { ...r, key: r.file, title: (o.title || r.title), tags: Array.isArray(o.tags) ? o.tags : [], hidden: !!o.hidden };
-  }).filter((r) => !r.hidden);
+  }).filter((r) => !r.hidden)
+    // Sorted by (possibly renamed) title — DOCS_MANIFEST's own order is
+    // just whatever order the build-time directory scan happened to
+    // return, so a newly imported/renamed doc used to land wherever that
+    // scan put it rather than its alphabetical position. Matches
+    // listDocuments()'s own title sort just above, so the two lists the
+    // Documents drawer renders together (uploaded docs + Reference
+    // Library) are both consistently name-ordered.
+    .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
 }
 
 /** Bulk-restore refOverrides from an imported Reference Library export

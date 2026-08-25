@@ -61,6 +61,30 @@ export function setColonyField(campaign, key, value) {
   return next;
 }
 
+// Campaign Turn / Campaign Milestones (COLONY_FIELDS above) are the ONE
+// real "what turn/milestone is it" state for a 5PFH Planetfall campaign —
+// the World Tracker module (worldTracker.js) reads/writes these same
+// fields via these helpers rather than keeping its own separate counter,
+// so a GM never has two different turn numbers to keep in sync by hand.
+// Milestones clamp 0-7 (the campaign's fixed win condition) only through
+// these dedicated +/- actions — direct edits to the underlying field via
+// setColonyField above stay a plain unclamped number, matching every other
+// COLONY_FIELDS entry's generic-number-input convention.
+export function advanceCampaignTurn(campaign) {
+  const current = Number(getColonyFields(campaign).campaignTurn) || 0;
+  return setColonyField(campaign, 'campaignTurn', current + 1);
+}
+
+export function incrementCampaignMilestones(campaign) {
+  const current = Number(getColonyFields(campaign).campaignMilestones) || 0;
+  return setColonyField(campaign, 'campaignMilestones', Math.min(7, current + 1));
+}
+
+export function decrementCampaignMilestones(campaign) {
+  const current = Number(getColonyFields(campaign).campaignMilestones) || 0;
+  return setColonyField(campaign, 'campaignMilestones', Math.max(0, current - 1));
+}
+
 // Provisional Crew Role list (direct follow-up request — "the 2nd dropdown
 // is the role a Crew can play in 5PFH Planetfall... rules added later for
 // managing combat and exploration"). The real Planetfall role table isn't

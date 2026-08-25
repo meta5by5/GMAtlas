@@ -42,6 +42,8 @@ import { SOURCEBOOK_INVENTORY } from '../../data/sourcebookInventory.js';
 import { listGalleryImages, listGalleryTagVocabulary, getGalleryImage } from '../../domain/gallery.js';
 import { listBattlemaps, getActiveBattlemap } from '../../domain/battlemaps.js';
 import { BATTLEMAP_ICONS, findBattlemapIcon } from '../../data/battlemapIcons.js';
+import { getSector, listTouchedSectors, adjacentSectors, deriveSectorIcon, generateMissionHooks, gridSizeOf } from '../../domain/worldTracker.js';
+import { WORLD_TRACKER_ICONS, findWorldTrackerIcon } from '../../data/worldTrackerIcons.js';
 import { GENRE_PACKS, bestiaryTerm } from '../../data/genrePacks.js';
 import { ECONOMY_MODELS, economyTypesForModel } from '../../data/economyTypes.js';
 import { biomesForGenrePack } from '../../data/biomes.js';
@@ -93,6 +95,7 @@ export function renderDrawer(id, doc, ui = {}) {
     case 'documents': return documents(doc, ui);
     case 'gallery': return gallery(doc, ui);
     case 'battlemap': return battlemap(doc, ui);
+    case 'world-tracker': return worldTracker(doc, ui);
     default: return `<p class="ws-placeholder">Drawer “${esc(id)}”.</p>`;
   }
 }
@@ -1733,6 +1736,11 @@ function settings(doc, ui = {}) {
         </div>
         <p class="dim small storage-usage">Campaign size: ${formatBytes(info.campaignBytes)}${info.hasBackup ? ` · backup: ${formatBytes(info.backupBytes)}` : ' · no backup saved yet'}</p>
         ${info.hasBackup ? `<button class="btn ghost" data-restore-backup title="Replaces the current campaign with the last save that persisted before this one">↺ Restore last backup</button>` : ''}
+        <p class="dim small" style="margin-top: var(--sp-3);">Reference Library docs imported via "Import File(s)" (Documents drawer) live in this browser's own storage, separate from the campaign file — bundle them as a zip to carry to another browser:</p>
+        <div class="btn-col">
+          <button class="btn ghost" data-ref-library-export title="Download every imported Reference Library doc, plus your title/tag edits, as one zip">⬇ Export Library</button>
+          <label class="btn ghost file-btn">⬆ Import Library<input type="file" data-ref-library-import accept=".zip,.json,application/zip,application/json" hidden></label>
+        </div>
       </div>
       ${contentPackSection(ui)}
       <div class="settings-group">
@@ -2470,7 +2478,14 @@ function colony(doc, ui = {}) {
     const v = fields[f.key];
     if (f.type === 'textarea') {
       const toolbarKey = `colony:${f.key}`;
-      return `<label class="field-label">${esc(f.label)}<div class="rich-field">${richToolbarHTML(toolbarKey, toolbarCollapsed(doc, ui, toolbarKey))}<div class="mention-editor" contenteditable="true" data-colony-field="${f.key}">${buildMentionEditorHTML(doc, v)}</div></div></label>`;
+      // Direct request: Colony's rich-text fields (four of them, back to
+      // back) start with their formatting toolbar collapsed regardless of
+      // the app-wide "Formatting toolbars start collapsed" setting — force
+      // the default to true here (reusing toolbarCollapsed's own session-
+      // override XOR logic unchanged) rather than touching that global
+      // setting, which every OTHER rich field in the app still respects.
+      const collapsed = toolbarCollapsed({ ...doc, settings: { ...doc.settings, toolbarCollapsedByDefault: true } }, ui, toolbarKey);
+      return `<label class="field-label">${esc(f.label)}<div class="rich-field">${richToolbarHTML(toolbarKey, collapsed)}<div class="mention-editor" contenteditable="true" data-colony-field="${f.key}">${buildMentionEditorHTML(doc, v)}</div></div></label>`;
     }
     if (f.type === 'number') {
       return `<label class="field-label">${esc(f.label)}${numStepper(`<input type="number" data-colony-field="${f.key}" value="${esc(v == null ? '' : v)}">`)}</label>`;
@@ -3018,11 +3033,9 @@ function documents(doc, ui = {}) {
     <div class="doc-list">${rows}</div>` : ''}
     ${(uploadedFileItems.length || refDocs.length) ? `
     <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Reference Library</h4>${helpToggle('documents-reflib')}</div>
-    ${helpBody('documents-reflib', 'Bundled rulebooks and setting docs from <code>assets/docs/</code>, plus anything you import — refreshed on every build. "Import File(s)" reads real files off your device into this browser\'s own storage: a filename matching a catalog entry joins the Reference Library so it opens even when assets/docs/ is empty on this machine; anything else becomes a new personal document (no size limit). "Export Library"/"Import Library" bundle every Reference Library doc imported that way (plus your title/tag edits) into one file to carry to another browser.', ui)}
+    ${helpBody('documents-reflib', 'Bundled rulebooks and setting docs from <code>assets/docs/</code>, plus anything you import — refreshed on every build. "Import File(s)" reads real files off your device into this browser\'s own storage: a filename matching a catalog entry joins the Reference Library so it opens even when assets/docs/ is empty on this machine; anything else becomes a new personal document (no size limit). Bulk "Export Library"/"Import Library" (a zip of every such doc, to carry to another browser) live in Settings → General → Data.', ui)}
     <div class="drawer-note ref-doc-transfer-row">
       <label class="btn ghost sm file-btn">📥 Import File(s)<input type="file" data-ref-doc-import multiple hidden></label>
-      <button class="btn ghost sm" data-ref-library-export title="Download every imported Reference Library doc, plus your title/tag edits, as one file">⬇ Export Library</button>
-      <label class="btn ghost sm file-btn">⬆ Import Library<input type="file" data-ref-library-import accept="application/json" hidden></label>
     </div>
     <div class="doc-list">${uploadedFileRows}${refRows}</div>` : ''}`;
 }
@@ -3188,4 +3201,194 @@ function battlemap(doc, ui = {}) {
         ${markers}
       </div>
     </div>`;
+}
+
+// --- World Tracker (requirements/PLANETFALL_world_tracker.md) -------------
+// Strategic 6x6 sector map — distinct from the TACTICAL battlemap() above
+// (different layout model entirely: fixed integer grid cells here vs.
+// battlemap's freeform 0-1 fractional placement, so no shared markup/CSS).
+// Plain click-based internal tab strip, exactly SETTINGS_TABS' own pattern
+// — no pan/zoom camera needed since the grid is fixed-size and small
+// enough to fit on screen outright.
+const WORLD_TRACKER_TABS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'sectors', label: 'Sectors' },
+  { id: 'features', label: 'Features' },
+  { id: 'missions', label: 'Missions' },
+  { id: 'notes', label: 'Notes' },
+];
+
+const WT_CORNERS = ['top_left', 'top_right', 'bottom_left', 'bottom_right'];
+const WT_FEATURE_KINDS = [
+  { kind: 'alien_site', label: 'Alien Site' },
+  { kind: 'enemy_camp', label: 'Enemy Camp' },
+  { kind: 'resource_node', label: 'Resource Node' },
+  { kind: 'milestone_site', label: 'Milestone Site' },
+];
+function wtFeatureLabel(kind) { return (WT_FEATURE_KINDS.find((f) => f.kind === kind) || {}).label || kind; }
+
+function worldTracker(doc, ui = {}) {
+  const activeTab = WORLD_TRACKER_TABS.some((t) => t.id === ui.worldTrackerTab) ? ui.worldTrackerTab : 'overview';
+  const tabBar = `<div class="settings-tab-bar">${WORLD_TRACKER_TABS.map((t) => `
+    <button class="btn ghost sm ${t.id === activeTab ? 'active' : ''}" data-world-tracker-tab="${t.id}" aria-selected="${t.id === activeTab}">${esc(t.label)}</button>`).join('')}</div>`;
+  const sections = {
+    overview: () => worldTrackerOverview(doc),
+    sectors: () => worldTrackerSectorsTab(doc, ui),
+    features: () => worldTrackerFeaturesTab(doc, ui),
+    missions: () => worldTrackerMissionsTab(doc),
+    notes: () => worldTrackerNotesTab(doc),
+  };
+  return `${tabBar}${sections[activeTab]()}`;
+}
+
+function worldTrackerOverview(doc) {
+  const fields = getColonyFields(doc);
+  const turn = Number(fields.campaignTurn) || 0;
+  const milestones = Math.max(0, Math.min(7, Number(fields.campaignMilestones) || 0));
+  const hb = doc.worldTracker && doc.worldTracker.homeBaseSector;
+  return `
+    <div class="settings-group">
+      <h3>Campaign Progress</h3>
+      <p>Turn <b>${turn}</b> <button class="btn ghost sm" data-world-turn-advance title="Advance to the next turn — also clears any camp's 'moved from' marker">End Turn ▸</button></p>
+      <p>Milestones <span class="num-stepper"><button type="button" class="icon-btn num-stepper-btn" data-world-milestone-dec title="-1">−</button> <b>${milestones} / 7</b> <button type="button" class="icon-btn num-stepper-btn" data-world-milestone-inc title="+1">＋</button></span></p>
+      <p class="dim small">Shared with Colony's own Turn Sheet (Campaign Turn/Campaign Milestones) — editing either place updates the same value.</p>
+    </div>
+    <div class="settings-group">
+      <h3>Home Base</h3>
+      ${hb ? `<p>Sector <b>${hb.x},${hb.y}</b></p>` : `<p class="dim small">Not set yet.</p>`}
+      <div class="btn-col"><button class="btn ghost sm" data-home-base-roll>🎲 Roll Home Base (1d6 × 1d6)</button></div>
+      <p class="dim small">Or open a sector in the Sectors tab and use "Set as Home Base."</p>
+    </div>`;
+}
+
+function worldTrackerGrid(doc, ui) {
+  const gridSize = gridSizeOf(doc);
+  const hb = doc.worldTracker && doc.worldTracker.homeBaseSector;
+  const selected = ui.worldTrackerSelectedSector;
+  let cells = '';
+  for (let y = 1; y <= gridSize; y++) {
+    for (let x = 1; x <= gridSize; x++) {
+      const sector = getSector(doc, x, y);
+      const isHome = !!(hb && hb.x === x && hb.y === y);
+      const iconKey = sector.overlayIcon || deriveSectorIcon(sector, isHome);
+      const icon = iconKey ? findWorldTrackerIcon(iconKey) : null;
+      const corners = WT_CORNERS.map((c) => {
+        const label = sector.cornerLabels.find((l) => l.corner === c);
+        return `<span class="wt-corner wt-corner-${c}">${label ? esc(label.text) : ''}</span>`;
+      }).join('');
+      const isSelected = !!(selected && selected.x === x && selected.y === y);
+      cells += `<button type="button" class="wt-sector wt-sector-${sector.state} ${isSelected ? 'active' : ''}" style="--wt-resource:${sector.resourceLevel || 0};--wt-hazard:${sector.hazardLevel || 0}" data-sector-select="${x},${y}" title="Sector ${x},${y} — ${sector.state}">
+        ${corners}
+        ${icon ? `<span class="wt-sector-icon">${esc(icon.glyph)}</span>` : ''}
+      </button>`;
+    }
+  }
+  return `<div class="wt-grid" style="--wt-grid-size:${gridSize}">${cells}</div>`;
+}
+
+function worldTrackerMigratePicker(doc, ui, x, y, feature) {
+  if (!ui.worldTrackerMigrateOpen || !ui.worldTrackerMigrateOpen.has(feature.id)) return '';
+  const targets = adjacentSectors(x, y, gridSizeOf(doc));
+  return `<div class="wt-migrate-picker">
+    <span class="dim small">Migrate to:</span>
+    ${targets.map((c) => `<button class="btn ghost sm" data-feature-migrate-to data-from-x="${x}" data-from-y="${y}" data-feature-id="${esc(feature.id)}" data-to-x="${c.x}" data-to-y="${c.y}">${c.x},${c.y}</button>`).join('')}
+  </div>`;
+}
+
+function worldTrackerFeatureRow(doc, ui, sx, sy, f, { withSector = false } = {}) {
+  return `
+    <div class="doc-card wt-feature-card">
+      <div class="doc-card-head">
+        <span>${withSector ? `Sector ${sx},${sy} — ` : ''}${esc(wtFeatureLabel(f.kind))}${f.discovered ? '' : ' <span class="dim small">(undiscovered)</span>'}${f.movedFrom ? ` <span class="dim small">(moved from ${f.movedFrom.x},${f.movedFrom.y})</span>` : ''}</span>
+        <div class="doc-card-actions">
+          ${!f.discovered ? `<button class="icon-btn" data-feature-discover="${esc(f.id)}" data-sector-coord="${sx},${sy}" title="Mark discovered">👁</button>` : ''}
+          ${f.mobile ? `<button class="icon-btn" data-feature-migrate-toggle="${esc(f.id)}" title="Migrate to an adjacent sector">➤</button>` : ''}
+          <button class="icon-btn" data-feature-remove="${esc(f.id)}" data-sector-coord="${sx},${sy}" title="Remove">✕</button>
+        </div>
+      </div>
+      ${f.mobile ? worldTrackerMigratePicker(doc, ui, sx, sy, f) : ''}
+    </div>`;
+}
+
+function worldTrackerSectorDetail(doc, ui, x, y) {
+  const sector = getSector(doc, x, y);
+  const hb = doc.worldTracker && doc.worldTracker.homeBaseSector;
+  const isHome = !!(hb && hb.x === x && hb.y === y);
+  const cornerRows = WT_CORNERS.map((c) => {
+    const label = sector.cornerLabels.find((l) => l.corner === c);
+    return `<div class="wt-corner-row">
+      <span class="dim small">${esc(c.replace('_', ' '))}</span>
+      <span>${label ? esc(label.text) : '—'}</span>
+      <button class="icon-btn" data-corner-label-edit="${x},${y}:${c}" title="Edit">✎</button>
+      ${label ? `<button class="icon-btn" data-corner-label-remove="${x},${y}:${c}" title="Remove">✕</button>` : ''}
+    </div>`;
+  }).join('');
+  const featureRows = sector.features.map((f) => worldTrackerFeatureRow(doc, ui, x, y, f)).join('');
+  const iconOptions = WORLD_TRACKER_ICONS.map((i) => `<option value="${i.key}" ${sector.overlayIcon === i.key ? 'selected' : ''}>${esc(i.label)}</option>`).join('');
+
+  return `
+    <div class="settings-group wt-sector-detail">
+      <h3>Sector ${x},${y}${isHome ? ' 🏠' : ''}</h3>
+      <p>State: <b>${esc(sector.state)}</b></p>
+      <div class="btn-col">
+        ${sector.state === 'unexplored' ? `<button class="btn ghost sm" data-sector-reveal="${x},${y}">Reveal</button>` : ''}
+        ${sector.state === 'explored' ? `<button class="btn ghost sm" data-sector-survey="${x},${y}">Survey</button>` : ''}
+        ${!isHome ? `<button class="btn ghost sm" data-home-base-set="${x},${y}">Set as Home Base</button>` : ''}
+      </div>
+      ${sector.state !== 'unexplored' ? `
+        <p>Resource level: <b>${sector.resourceLevel}</b> ${sector.resourceHarvested ? '<span class="dim small">(harvested)</span>' : `<button class="btn ghost sm" data-sector-harvest="${x},${y}">Mark Harvested</button>`}</p>
+        <p>Hazard level: <b>${sector.hazardLevel}</b></p>` : ''}
+      <h4>Corner Labels</h4>
+      ${cornerRows}
+      <h4>Overlay Icon</h4>
+      <label class="field-label">Manual override (blank = automatic)
+        <select data-sector-overlay-icon data-sector-coord="${x},${y}">
+          <option value="">— Automatic —</option>
+          ${iconOptions}
+        </select>
+      </label>
+      <h4>Features</h4>
+      <div class="btn-col">
+        ${WT_FEATURE_KINDS.map((f) => `<button class="btn ghost sm" data-sector-add-feature="${x},${y}" data-feature-kind="${f.kind}">+ ${esc(f.label)}</button>`).join('')}
+      </div>
+      ${featureRows || '<p class="dim small">No features yet.</p>'}
+      <h4>Notes</h4>
+      <textarea rows="3" data-sector-notes="${x},${y}" placeholder="Sector notes…">${esc(sector.notes)}</textarea>
+    </div>`;
+}
+
+function worldTrackerSectorsTab(doc, ui) {
+  const selected = ui.worldTrackerSelectedSector;
+  return `
+    <div class="settings-group">${worldTrackerGrid(doc, ui)}</div>
+    ${selected ? worldTrackerSectorDetail(doc, ui, selected.x, selected.y) : '<p class="dim small">Tap a sector to see its detail.</p>'}`;
+}
+
+function worldTrackerFeaturesTab(doc, ui) {
+  const sectors = listTouchedSectors(doc).filter((s) => s.features.length);
+  if (!sectors.length) return '<p class="dim small">No features placed yet — add one from a sector\'s detail (Sectors tab).</p>';
+  const rows = sectors.flatMap((s) => s.features.map((f) => worldTrackerFeatureRow(doc, ui, s.x, s.y, f, { withSector: true }))).join('');
+  return `<div class="doc-list">${rows}</div>`;
+}
+
+function worldTrackerMissionsTab(doc) {
+  const hooks = generateMissionHooks(doc);
+  if (!hooks.length) return '<p class="dim small">No mission hooks yet — reveal sectors and add features to generate some.</p>';
+  const rows = hooks.map((h) => `
+    <div class="doc-card">
+      <div class="doc-card-head">
+        <span>Sector ${h.x},${h.y} — <b>${esc(h.missionType)}</b></span>
+        <button class="btn ghost sm" data-mission-hook-run data-x="${h.x}" data-y="${h.y}" data-mission-type="${esc(h.missionType)}" data-reason="${esc(h.reason)}">Run this ▸</button>
+      </div>
+      <p class="dim small">${esc(h.reason)}</p>
+    </div>`).join('');
+  return `<div class="doc-list">${rows}</div>`;
+}
+
+function worldTrackerNotesTab(doc) {
+  const wt = doc.worldTracker || {};
+  return `<div class="settings-group">
+    <h3>World Notes</h3>
+    <textarea rows="8" data-worldtracker-notes placeholder="Campaign-wide scratchpad…">${esc(wt.notes || '')}</textarea>
+  </div>`;
 }

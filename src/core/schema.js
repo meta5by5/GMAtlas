@@ -130,6 +130,21 @@ export function defaultCampaign(now = new Date().toISOString()) {
     // no migrate.js step needed.
     battlemaps: { maps: [], activeId: null },
 
+    // Strategic sector/world map (requirements/PLANETFALL_world_tracker.md)
+    // — a fixed 6x6 grid of sectors (5PFH Planetfall p.52+, sized by the
+    // rulebook's own two-d6 mechanic), distinct from battlemaps above
+    // (that's the TACTICAL miniatures grid; this is the strategic colony/
+    // exploration map). `sectors` is sparse, keyed "x,y" (1-6 each) — a
+    // coordinate with no entry yet reads as a synthesized default
+    // unexplored sector (domain/worldTracker.js's getSector()), same
+    // additive-lazy-init posture as everywhere else in this file. Campaign
+    // Turn / Campaign Milestones are deliberately NOT duplicated here —
+    // they already exist as colony.fields.campaignTurn/campaignMilestones
+    // (same 5PFH Planetfall ruleset); worldTracker.js reads/writes those
+    // directly via colony.js's own helpers instead of keeping a second,
+    // driftable counter.
+    worldTracker: { gridSize: 6, sectors: {}, homeBaseSector: null, notes: '' },
+
     // Party-wide resource trackers not tied to any one entity (credits,
     // custom clocks, timers) — the Party tab's member roster is instead a
     // live filter over entities (NPC + #character tag), not stored here.

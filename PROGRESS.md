@@ -14,6 +14,17 @@ reorganized — treat them as history, not current pointers.
 
 ## Status Summary
 
+**2026-08-25 New module: World Tracker** (`requirements/PLANETFALL_world_tracker.md`,
+`src/domain/worldTracker.js`, new `campaign.worldTracker`) — a strategic
+6x6-sector map for 5PFH Planetfall colony play (home base, exploration/
+resource/hazard state, mobile enemy-camp features with GM-manual
+migration, mission-hook suggestions), deliberately sharing Colony's
+existing Campaign Turn/Milestones fields rather than duplicating a second
+counter, and reusing Settings' click-based internal-tab-strip pattern
+instead of the spec's own net-new mobile bottom-sheet/swipe UX (no
+precedent elsewhere in this app). Full detail in `src/core/buildInfo.js`'s
+2026-08-25 changelog entry. 494 domain tests (16 new), clean build.
+
 **2026-08-25 Reference Library GitHub-Release hosting rollback, finished**
 (deploy-pages.yml catches up to the 2026-08-20 code-side revert): the
 2026-08-20 "colony update" commit already reverted `scripts/build.js`,

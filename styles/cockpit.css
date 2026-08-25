@@ -338,6 +338,20 @@ button { font: inherit; color: inherit; cursor: pointer; }
   padding: var(--sp-2) 0;
   background: var(--tier3-bg);
   border-left: 1px solid var(--tier3-border);
+  /* Real reported bug: .mc-edge had no explicit z-index (auto), so
+     .mc-drawer's z-index:20 — an entirely separate stacking context, since
+     `position: fixed` always creates one regardless of z-index — outranked
+     it wholesale. On desktop this never showed (the drawer sits to the
+     LEFT of the edge nav there, not overlapping it), but at compact widths
+     .mc-drawer spans left:0 up to the edge nav (see the <=1023px rule
+     below), so the Settings gear's dropdown (relocated into .mc-edge on
+     phone, .settings-menu's own z-index:25) — which pops open wider than
+     the narrow edge column and so visually overlaps the drawer's area —
+     was rendering BEHIND the open drawer's background instead of over it,
+     regardless of its own z-index (a child's z-index only ever competes
+     within its own parent's stacking context). One level above .mc-drawer
+     fixes it for the edge nav generally, not just this one dropdown. */
+  z-index: 21;
 }
 .mc-edge button {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
@@ -1136,6 +1150,39 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
   background: var(--bg-raised); border: 1px solid var(--border-strong); border-radius: 50%; opacity: 0;
 }
 .battlemap-icon:hover .battlemap-icon-remove, .battlemap-icon:focus-within .battlemap-icon-remove { opacity: 1; }
+
+/* World Tracker (requirements/PLANETFALL_world_tracker.md) — a fixed,
+   small integer grid, so plain CSS grid + flat buttons is enough; no
+   canvas/pan-zoom camera needed the way battlemap's variable-size freeform
+   canvas above requires one. --wt-resource/--wt-hazard (0-6, set inline
+   per cell) drive a green/red intensity wash via color-mix rather than six
+   hardcoded level classes — spec 4: resource as base cell shading, hazard
+   kept to its own corner badge so the two scales never visually collide. */
+.wt-grid {
+  display: grid; grid-template-columns: repeat(var(--wt-grid-size, 6), 1fr);
+  gap: 2px; max-width: 420px; margin: 0 auto;
+}
+.wt-sector {
+  position: relative; aspect-ratio: 1; min-width: 44px; min-height: 44px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: color-mix(in srgb, #4ade80 calc(var(--wt-resource, 0) * 10%), var(--bg-inset));
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.wt-sector-unexplored { background: var(--bg-inset); filter: grayscale(1) brightness(0.7); }
+.wt-sector.active { outline: 2px solid var(--accent); outline-offset: -2px; }
+.wt-corner {
+  position: absolute; font-size: 0.55rem; line-height: 1; color: var(--text-dim);
+  padding: 1px 2px; pointer-events: none;
+}
+.wt-corner-top_left { top: 1px; left: 2px; }
+.wt-corner-top_right { top: 1px; right: 2px; color: var(--danger); font-weight: bold; }
+.wt-corner-bottom_left { bottom: 1px; left: 2px; }
+.wt-corner-bottom_right { bottom: 1px; right: 2px; }
+.wt-sector-icon { font-size: 1rem; opacity: 0.7; }
+.wt-corner-row { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-1); }
+.wt-corner-row > span:first-child { min-width: 6rem; text-transform: capitalize; }
+.wt-migrate-picker { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; margin-top: var(--sp-2); }
+.wt-feature-card .doc-card-head { align-items: center; }
 
 /* Toast */
 .toast {

@@ -4391,6 +4391,192 @@ test('multiple named maps coexist independently — icons/background/grid on one
   assert.equal(getBattlemap(camp, idB).icons.length, 0);
 });
 
+// --- World Tracker (requirements/PLANETFALL_world_tracker.md) -------------
+import {
+  getSector, listTouchedSectors, revealSector, surveySector, harvestSectorResource,
+  setSectorNotes, setSectorOverlayIcon, setSectorCornerLabel, removeSectorCornerLabel,
+  addSectorFeature, discoverSectorFeature, removeSectorFeature, adjacentSectors,
+  migrateFeature, setHomeBase, rollHomeBase, advanceWorldTurn, deriveSectorIcon,
+  generateMissionHooks, setWorldTrackerNotes, gridSizeOf,
+} from '../src/domain/worldTracker.js';
+import { advanceCampaignTurn, incrementCampaignMilestones, decrementCampaignMilestones } from '../src/domain/colony.js';
+
+test('a fresh campaign reads every coordinate as a synthesized default unexplored sector, with no real record stored', () => {
+  const camp = defaultCampaign();
+  assert.equal(gridSizeOf(camp), 6);
+  const sector = getSector(camp, 3, 4);
+  assert.equal(sector.state, 'unexplored');
+  assert.deepEqual(sector.features, []);
+  assert.deepEqual(listTouchedSectors(camp), [], 'nothing has been touched yet, so nothing is listed');
+});
+
+test('revealSector rolls resource/hazard levels and flips to explored exactly once — a second call on the same sector no-ops', () => {
+  let camp = defaultCampaign();
+  const rng = makeRng(1);
+  camp = revealSector(camp, 2, 2, { rng });
+  const first = getSector(camp, 2, 2);
+  assert.equal(first.state, 'explored');
+  assert.ok(first.resourceLevel >= 1 && first.resourceLevel <= 6);
+  assert.ok(first.hazardLevel >= 1 && first.hazardLevel <= 6);
+  assert.deepEqual(first.cornerLabels, [
+    { corner: 'top_left', text: `R${first.resourceLevel}`, source: 'resource' },
+    { corner: 'top_right', text: `H${first.hazardLevel}`, source: 'hazard' },
+  ], 'the spec\'s "standard use" corners are auto-populated on reveal');
+  camp = revealSector(camp, 2, 2, { rng: () => 0.999 }); // would roll a different level if it re-rolled
+  assert.deepEqual(getSector(camp, 2, 2).resourceLevel, first.resourceLevel);
+});
+
+test('surveySector only transitions explored -> surveyed; no-ops on a still-unexplored sector', () => {
+  let camp = defaultCampaign();
+  camp = surveySector(camp, 1, 1);
+  assert.equal(getSector(camp, 1, 1).state, 'unexplored', 'cannot survey a sector that was never revealed');
+  camp = revealSector(camp, 1, 1, { rng: makeRng(2) });
+  camp = surveySector(camp, 1, 1);
+  assert.equal(getSector(camp, 1, 1).state, 'surveyed');
+});
+
+test('harvestSectorResource flags a resource sector, and generateMissionHooks then suppresses ONLY that sector\'s resource hook — a coexisting alien-site hook on the same sector still surfaces', () => {
+  let camp = defaultCampaign();
+  camp = revealSector(camp, 5, 5, { rng: makeRng(3) });
+  camp = addSectorFeature(camp, 5, 5, 'resource_node');
+  camp = addSectorFeature(camp, 5, 5, 'alien_site');
+  let hooks = generateMissionHooks(camp);
+  assert.ok(hooks.some((h) => h.x === 5 && h.y === 5 && h.missionType === 'Salvage/Harvest'));
+  assert.ok(hooks.some((h) => h.x === 5 && h.y === 5 && h.missionType === 'Delve'));
+  camp = harvestSectorResource(camp, 5, 5);
+  hooks = generateMissionHooks(camp);
+  assert.ok(!hooks.some((h) => h.x === 5 && h.y === 5 && h.missionType === 'Salvage/Harvest'), 'harvested — resource hook suppressed');
+  assert.ok(hooks.some((h) => h.x === 5 && h.y === 5 && h.missionType === 'Delve'), 'alien-site hook is untouched by harvesting');
+});
+
+test('generateMissionHooks only scans touched sectors — a fresh 6x6 grid produces zero hooks, not 36 "unexplored" ones', () => {
+  const camp = defaultCampaign();
+  assert.deepEqual(generateMissionHooks(camp), []);
+});
+
+test('adjacentSectors is plain 4-neighbor, clamped at grid edges and corners', () => {
+  assert.deepEqual(new Set(adjacentSectors(3, 3, 6)), new Set([{ x: 3, y: 2 }, { x: 3, y: 4 }, { x: 2, y: 3 }, { x: 4, y: 3 }]));
+  assert.deepEqual(adjacentSectors(1, 1, 6).sort((a, b) => a.x - b.x || a.y - b.y), [{ x: 1, y: 2 }, { x: 2, y: 1 }]);
+});
+
+test('migrateFeature moves a mobile feature to an adjacent sector and stamps movedFrom; no-ops on a non-adjacent target or an immobile feature', () => {
+  let camp = defaultCampaign();
+  camp = addSectorFeature(camp, 2, 2, 'enemy_camp');
+  const campId = getSector(camp, 2, 2).features[0].id;
+  const noMove = migrateFeature(camp, 2, 2, campId, 5, 5);
+  assert.equal(getSector(noMove, 2, 2).features.length, 1, 'non-adjacent target — no-op');
+  camp = migrateFeature(camp, 2, 2, campId, 2, 3);
+  assert.equal(getSector(camp, 2, 2).features.length, 0);
+  const arrived = getSector(camp, 2, 3).features[0];
+  assert.equal(arrived.id, campId);
+  assert.deepEqual(arrived.movedFrom, { x: 2, y: 2 });
+
+  let camp2 = addSectorFeature(defaultCampaign(), 1, 1, 'alien_site');
+  const siteId = getSector(camp2, 1, 1).features[0].id;
+  const stillThere = migrateFeature(camp2, 1, 1, siteId, 1, 2);
+  assert.equal(getSector(stillThere, 1, 1).features.length, 1, 'alien_site is not mobile — no-op');
+});
+
+test('advanceWorldTurn clears every movedFrom exactly one turn after a migration', () => {
+  let camp = defaultCampaign();
+  camp = addSectorFeature(camp, 4, 4, 'enemy_camp');
+  const id = getSector(camp, 4, 4).features[0].id;
+  camp = migrateFeature(camp, 4, 4, id, 4, 3);
+  assert.deepEqual(getSector(camp, 4, 3).features[0].movedFrom, { x: 4, y: 4 });
+  camp = advanceWorldTurn(camp);
+  assert.equal(getSector(camp, 4, 3).features[0].movedFrom, null);
+});
+
+test('setHomeBase/rollHomeBase set homeBaseSector within the grid; deriveSectorIcon gives home base top priority over any feature', () => {
+  let camp = defaultCampaign();
+  camp = setHomeBase(camp, 3, 3);
+  assert.deepEqual(camp.worldTracker.homeBaseSector, { x: 3, y: 3 });
+  camp = rollHomeBase(camp, { rng: makeRng(7) });
+  const hb = camp.worldTracker.homeBaseSector;
+  assert.ok(hb.x >= 1 && hb.x <= 6 && hb.y >= 1 && hb.y <= 6);
+  camp = addSectorFeature(camp, hb.x, hb.y, 'enemy_camp');
+  assert.equal(deriveSectorIcon(getSector(camp, hb.x, hb.y), true), 'home_base');
+});
+
+test('deriveSectorIcon priority: active camp beats alien site beats milestone site beats plain unexplored; a fully surveyed quiet sector has no icon at all', () => {
+  const campSector = { features: [{ kind: 'enemy_camp' }, { kind: 'alien_site' }, { kind: 'milestone_site' }], state: 'explored' };
+  assert.equal(deriveSectorIcon(campSector, false), 'enemy_camp');
+  const siteSector = { features: [{ kind: 'alien_site' }, { kind: 'milestone_site' }], state: 'explored' };
+  assert.equal(deriveSectorIcon(siteSector, false), 'alien_site');
+  const unexplored = { features: [], state: 'unexplored' };
+  assert.equal(deriveSectorIcon(unexplored, false), 'unexplored');
+  const quiet = { features: [], state: 'surveyed' };
+  assert.equal(deriveSectorIcon(quiet, false), null);
+});
+
+test('setSectorCornerLabel replaces only the same corner\'s label, leaving the other three untouched; removeSectorCornerLabel drops just one', () => {
+  let camp = defaultCampaign();
+  camp = setSectorCornerLabel(camp, 1, 1, 'top_left', 'R3', 'resource');
+  camp = setSectorCornerLabel(camp, 1, 1, 'top_right', 'H5', 'hazard');
+  camp = setSectorCornerLabel(camp, 1, 1, 'top_left', 'R6', 'resource'); // replaces the R3 at the same corner
+  const labels = getSector(camp, 1, 1).cornerLabels;
+  assert.equal(labels.length, 2);
+  assert.ok(labels.some((l) => l.corner === 'top_left' && l.text === 'R6'));
+  assert.ok(labels.some((l) => l.corner === 'top_right' && l.text === 'H5'));
+  camp = removeSectorCornerLabel(camp, 1, 1, 'top_right');
+  assert.equal(getSector(camp, 1, 1).cornerLabels.length, 1);
+});
+
+test('setSectorOverlayIcon manually overrides the derived icon; passing null clears the override back to automatic derivation', () => {
+  let camp = defaultCampaign();
+  camp = setSectorOverlayIcon(camp, 2, 2, 'milestone_site');
+  assert.equal(getSector(camp, 2, 2).overlayIcon, 'milestone_site');
+  camp = setSectorOverlayIcon(camp, 2, 2, null);
+  assert.equal(getSector(camp, 2, 2).overlayIcon, null);
+});
+
+test('discoverSectorFeature/removeSectorFeature/setSectorNotes/setWorldTrackerNotes all act on just the one targeted thing', () => {
+  let camp = defaultCampaign();
+  camp = addSectorFeature(camp, 6, 6, 'milestone_site');
+  const id = getSector(camp, 6, 6).features[0].id;
+  camp = discoverSectorFeature(camp, 6, 6, id);
+  assert.equal(getSector(camp, 6, 6).features[0].discovered, true);
+  camp = removeSectorFeature(camp, 6, 6, id);
+  assert.equal(getSector(camp, 6, 6).features.length, 0);
+  camp = setSectorNotes(camp, 6, 6, 'Ruins here.');
+  assert.equal(getSector(camp, 6, 6).notes, 'Ruins here.');
+  camp = setWorldTrackerNotes(camp, 'Campaign-wide scratchpad.');
+  assert.equal(camp.worldTracker.notes, 'Campaign-wide scratchpad.');
+  assert.equal(getSector(camp, 6, 6).notes, 'Ruins here.', 'per-sector notes are untouched by the world-level notes field');
+});
+
+test('sectors do not leak into each other — features/notes/corner labels on one coordinate never affect a neighboring one', () => {
+  let camp = defaultCampaign();
+  camp = addSectorFeature(camp, 1, 1, 'alien_site');
+  camp = setSectorNotes(camp, 1, 1, 'Sector A');
+  camp = setSectorCornerLabel(camp, 1, 1, 'top_left', 'R1', 'resource');
+  assert.equal(getSector(camp, 1, 2).features.length, 0);
+  assert.equal(getSector(camp, 1, 2).notes, '');
+  assert.deepEqual(getSector(camp, 1, 2).cornerLabels, []);
+});
+
+// Campaign Turn / Campaign Milestones — shared with colony.js's Turn Sheet
+// (worldTracker.js deliberately keeps no counter of its own; see its file
+// header) — tested here since these are the functions the World Tracker's
+// Overview tab actually calls.
+test('advanceCampaignTurn increments colony.fields.campaignTurn from whatever it currently holds, including unset', () => {
+  let camp = defaultCampaign();
+  camp = advanceCampaignTurn(camp);
+  assert.equal(getColonyFields(camp).campaignTurn, 1);
+  camp = advanceCampaignTurn(camp);
+  assert.equal(getColonyFields(camp).campaignTurn, 2);
+});
+
+test('incrementCampaignMilestones/decrementCampaignMilestones clamp to the fixed 0-7 win condition', () => {
+  let camp = defaultCampaign();
+  camp = setColonyField(camp, 'campaignMilestones', 7);
+  camp = incrementCampaignMilestones(camp);
+  assert.equal(getColonyFields(camp).campaignMilestones, 7, 'clamped at the ceiling');
+  camp = setColonyField(camp, 'campaignMilestones', 0);
+  camp = decrementCampaignMilestones(camp);
+  assert.equal(getColonyFields(camp).campaignMilestones, 0, 'clamped at the floor');
+});
+
 // --- Content Packs (ad-hoc Entities/Guide/Journal transfer between campaigns) --
 import { exportContentPack, importContentPack } from '../src/domain/contentPack.js';
 

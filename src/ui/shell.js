@@ -34,6 +34,7 @@ import { installEnhancement, removeEnhancement } from '../domain/enhancements.js
 import { getMechanicsIndex } from '../domain/mechanicsIndex.js';
 import { scanMechanicsIndex } from './mechanicsScan.js';
 import { scanAndGenerateToc } from './tocScan.js';
+import { buildZip, readZip } from './zip.js';
 import { loadAndMaybeResize } from './imageResize.js';
 import { addGalleryImages, removeGalleryImage, addGalleryTag, removeGalleryTag } from '../domain/gallery.js';
 import {
@@ -49,7 +50,13 @@ import {
   sanitizeExternalLinkUrl, mergeRefOverrides, referencedBlobKeys,
 } from '../domain/documents.js';
 import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue, setGaugeTrackerValue, ensurePartyStarforgedTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity } from '../domain/party.js';
-import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, addColonyEncounter, updateColonyEncounter, removeColonyEncounter, listColonyEncounters } from '../domain/colony.js';
+import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, addColonyEncounter, updateColonyEncounter, removeColonyEncounter, listColonyEncounters, advanceCampaignTurn, incrementCampaignMilestones, decrementCampaignMilestones } from '../domain/colony.js';
+import {
+  getSector, listTouchedSectors, revealSector, surveySector, harvestSectorResource,
+  setSectorNotes, setSectorOverlayIcon, setSectorCornerLabel, removeSectorCornerLabel,
+  addSectorFeature, discoverSectorFeature, removeSectorFeature, adjacentSectors,
+  migrateFeature, setHomeBase, rollHomeBase, advanceWorldTurn, generateMissionHooks, setWorldTrackerNotes, gridSizeOf,
+} from '../domain/worldTracker.js';
 import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract, updateContract } from '../domain/trade.js';
 import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors, resolveFactionTurn, formatFactionTurnResult, rollFactionAsset } from '../domain/factions.js';
 import {
@@ -96,6 +103,7 @@ const DRAWERS = [
   { id: 'party', glyph: '👥', label: 'Party' },
   { id: 'cast', glyph: '☷', label: 'Cast' },
   { id: 'colony', glyph: '🏛', label: 'Colony' },
+  { id: 'world-tracker', glyph: '🪐', label: 'World' },
   { id: 'faction-events', glyph: '⚔', label: 'Faction Events' },
   { id: 'trade', glyph: '💰', label: 'Trade' },
   { id: 'documents', glyph: '📄', label: 'Docs' },
@@ -154,7 +162,7 @@ const EDGE_ORDER = ['guide', 'oracle', 'cast', 'faction-events', 'trade', 'docum
 // open] branch has no idea which container a button lives in), rendered by
 // the separate headerTabButtonHTML() below since the header is a compact
 // horizontal bar, not the edge nav's vertical icon-tile strip.
-const HEADER_ORDER = ['party', 'colony', 'journal'];
+const HEADER_ORDER = ['party', 'colony', 'world-tracker', 'journal'];
 
 // data-shift-prompt's generic inline-prompt placeholder text, per shift
 // name — a nicety, not a requirement (the fallback `${name}…` reads fine
@@ -217,6 +225,15 @@ let battlemapPlacingIcon = null;
 // layer is translated by (see updateBattlemapWorldTransform below).
 let battlemapCamera = { scale: 1, x: 0, y: 0 };
 let battlemapPan = null; // { world, startClientX, startClientY, startX, startY } while a drag-pan is in progress
+// World Tracker (requirements/PLANETFALL_world_tracker.md) — ephemeral UI
+// only, same click-based internal-tab-strip shape as Settings' own
+// settingsTab/SETTINGS_TABS below. worldTrackerSelectedSector is which
+// sector's detail the Sectors tab is currently showing (null = none
+// selected yet); worldTrackerMigrateOpen is the Set of feature ids
+// currently showing their adjacent-sector migrate picker inline.
+let worldTrackerTab = 'overview';
+let worldTrackerSelectedSector = null; // {x,y} | null
+let worldTrackerMigrateOpen = new Set();
 // Content Pack export checkboxes (Settings > General) — ephemeral, which
 // sections the next "Export Content Pack" click includes; unrelated to
 // campaign data itself (domain/contentPack.js's exportContentPack takes
@@ -531,31 +548,47 @@ async function blobToDataUrl(blob) {
   for (let i = 0; i < bytes.length; i += chunkSize) binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
   return `data:${blob.type || 'application/pdf'};base64,${btoa(binary)}`;
 }
-// Builds and downloads the bulk Reference Library export bundle — every
-// key currently in store.js's doc-blob store, each converted to a data:
-// URL (same "plain text, zero-dependency" shape a user-uploaded library
-// document's own dataUrl already uses, rather than pulling in a ZIP
-// library), plus this campaign's refOverrides (titles/tags/hidden flags).
+// Builds and downloads the bulk Reference Library export as a real .zip —
+// every doc-blob-store key as its own separate, individually-openable file
+// (zip.js, hand-rolled STORE-only — direct request, reversing the prior
+// "one JSON blob of base64 data URLs" design) plus one index.json mapping
+// each zip path back to its store key/mimeType, alongside this campaign's
+// refOverrides (titles/tags/hidden flags). A Reference Library key uses
+// its real assets/docs/-style path as the zip entry name (opens directly
+// if the GM ever wants to browse the zip by hand); a personal "Import
+// File(s)"-added doc (no such path) uses library/<its real filename>
+// instead, deduped against a collision by prefixing the store key.
 async function exportRefLibrary() {
   const keys = await store.listDocBlobKeys();
-  if (!keys.length) return toast('No imported Reference Library docs to export yet — use "Import PDF(s)" first.');
-  const docs = [];
+  if (!keys.length) return toast('No imported Reference Library docs to export yet — use "Import File(s)" first.');
+  const refDocs = listReferenceDocuments(store.get());
+  const library = listDocuments(store.get());
+  const usedPaths = new Set();
+  const files = [];
+  const docsIndex = [];
   for (const key of keys) {
     const blob = await store.getDocBlob(key);
     if (!blob) continue;
-    docs.push({ key, mimeType: blob.type || 'application/pdf', dataUrl: await blobToDataUrl(blob) });
+    const ref = refDocs.find((r) => r.key === key);
+    const libDoc = library.find((d) => d.blobKey === key);
+    let path = ref ? ref.file : (libDoc ? `library/${libDoc.fileName || libDoc.title}` : `unknown/${key}`);
+    if (usedPaths.has(path)) path = `${key}-${path}`;
+    usedPaths.add(path);
+    files.push({ name: path, data: new Uint8Array(await blob.arrayBuffer()) });
+    docsIndex.push({ key, path, mimeType: blob.type || 'application/octet-stream' });
   }
   const refOverrides = (store.get().documents && store.get().documents.refOverrides) || {};
-  const bundle = { kind: 'gmatlas-reflib-export', version: 1, exportedAt: new Date().toISOString(), refOverrides, docs };
-  const blobUrl = URL.createObjectURL(new Blob([JSON.stringify(bundle)], { type: 'application/json' }));
+  const index = { kind: 'gmatlas-reflib-export', version: 2, exportedAt: new Date().toISOString(), refOverrides, docs: docsIndex };
+  files.push({ name: 'index.json', data: new TextEncoder().encode(JSON.stringify(index, null, 2)) });
+  const blobUrl = URL.createObjectURL(new Blob([buildZip(files)], { type: 'application/zip' }));
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = `gmatlas-reference-library-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `gmatlas-reference-library-${new Date().toISOString().slice(0, 10)}.zip`;
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-  toast(`Exported ${docs.length} doc${docs.length === 1 ? '' : 's'}`);
+  toast(`Exported ${docsIndex.length} doc${docsIndex.length === 1 ? '' : 's'} as a zip`);
 }
 // A shared, reused iframe reliably leaves Chromium's built-in PDF viewer
 // stuck in a bad state after enough src changes — confirmed, two real
@@ -1715,6 +1748,98 @@ function onClick(ev) {
   if (encounterAdd) return store.update((d) => addColonyEncounter(d));
   const encounterDel = hit('[data-colony-encounter-remove]');
   if (encounterDel) return store.update((d) => removeColonyEncounter(d, encounterDel.dataset.colonyEncounterRemove));
+
+  // --- world tracker (requirements/PLANETFALL_world_tracker.md) ---
+  if (hit('[data-world-tracker-tab]')) { worldTrackerTab = hit('[data-world-tracker-tab]').dataset.worldTrackerTab; return renderDrawerBody(); }
+  const sectorSelect = hit('[data-sector-select]');
+  if (sectorSelect) {
+    const [sx, sy] = sectorSelect.dataset.sectorSelect.split(',').map(Number);
+    worldTrackerSelectedSector = { x: sx, y: sy };
+    worldTrackerTab = 'sectors';
+    return renderDrawerBody();
+  }
+  const sectorReveal = hit('[data-sector-reveal]');
+  if (sectorReveal) {
+    const [sx, sy] = sectorReveal.dataset.sectorReveal.split(',').map(Number);
+    return store.update((d) => revealSector(d, sx, sy));
+  }
+  const sectorSurvey = hit('[data-sector-survey]');
+  if (sectorSurvey) {
+    const [sx, sy] = sectorSurvey.dataset.sectorSurvey.split(',').map(Number);
+    return store.update((d) => surveySector(d, sx, sy));
+  }
+  const sectorHarvest = hit('[data-sector-harvest]');
+  if (sectorHarvest) {
+    const [sx, sy] = sectorHarvest.dataset.sectorHarvest.split(',').map(Number);
+    return store.update((d) => harvestSectorResource(d, sx, sy));
+  }
+  const sectorAddFeature = hit('[data-sector-add-feature]');
+  if (sectorAddFeature) {
+    const [sx, sy] = sectorAddFeature.dataset.sectorAddFeature.split(',').map(Number);
+    return store.update((d) => addSectorFeature(d, sx, sy, sectorAddFeature.dataset.featureKind));
+  }
+  const featureDiscover = hit('[data-feature-discover]');
+  if (featureDiscover) {
+    const [sx, sy] = featureDiscover.dataset.sectorCoord.split(',').map(Number);
+    return store.update((d) => discoverSectorFeature(d, sx, sy, featureDiscover.dataset.featureDiscover));
+  }
+  const featureRemove = hit('[data-feature-remove]');
+  if (featureRemove) {
+    const [sx, sy] = featureRemove.dataset.sectorCoord.split(',').map(Number);
+    return store.update((d) => removeSectorFeature(d, sx, sy, featureRemove.dataset.featureRemove));
+  }
+  const featureMigrateToggle = hit('[data-feature-migrate-toggle]');
+  if (featureMigrateToggle) {
+    const id = featureMigrateToggle.dataset.featureMigrateToggle;
+    if (worldTrackerMigrateOpen.has(id)) worldTrackerMigrateOpen.delete(id); else worldTrackerMigrateOpen.add(id);
+    return renderDrawerBody();
+  }
+  const featureMigrateTo = hit('[data-feature-migrate-to]');
+  if (featureMigrateTo) {
+    const { fromX, fromY, featureId, toX, toY } = featureMigrateTo.dataset;
+    worldTrackerMigrateOpen.delete(featureId);
+    return store.update((d) => migrateFeature(d, Number(fromX), Number(fromY), featureId, Number(toX), Number(toY)));
+  }
+  const cornerLabelEdit = hit('[data-corner-label-edit]');
+  if (cornerLabelEdit) {
+    const [sx, sy, corner] = cornerLabelEdit.dataset.cornerLabelEdit.split(':');
+    const sector = getSector(store.get(), Number(sx), Number(sy));
+    const existing = sector.cornerLabels.find((c) => c.corner === corner);
+    openInlinePrompt('sector-corner-label', {
+      label: 'Corner label (short)', placeholder: 'e.g. R3', value: existing ? existing.text : '',
+      meta: { x: Number(sx), y: Number(sy), corner }, anchorRect: cornerLabelEdit.getBoundingClientRect(),
+    });
+    return;
+  }
+  const cornerLabelRemove = hit('[data-corner-label-remove]');
+  if (cornerLabelRemove) {
+    const [sx, sy, corner] = cornerLabelRemove.dataset.cornerLabelRemove.split(':');
+    return store.update((d) => removeSectorCornerLabel(d, Number(sx), Number(sy), corner));
+  }
+  const overlayIconPick = hit('[data-sector-overlay-icon]');
+  if (overlayIconPick) {
+    const [sx, sy] = overlayIconPick.dataset.sectorCoord.split(',').map(Number);
+    const iconKey = overlayIconPick.dataset.sectorOverlayIcon || null;
+    return store.update((d) => setSectorOverlayIcon(d, sx, sy, iconKey));
+  }
+  if (hit('[data-home-base-roll]')) { store.update((d) => rollHomeBase(d)); return toast('Home base rolled'); }
+  const homeBaseSet = hit('[data-home-base-set]');
+  if (homeBaseSet) {
+    const [sx, sy] = homeBaseSet.dataset.homeBaseSet.split(',').map(Number);
+    return store.update((d) => setHomeBase(d, sx, sy));
+  }
+  if (hit('[data-world-turn-advance]')) {
+    store.update((d) => advanceWorldTurn(advanceCampaignTurn(d)));
+    return toast('Turn advanced');
+  }
+  if (hit('[data-world-milestone-inc]')) return store.update((d) => incrementCampaignMilestones(d));
+  if (hit('[data-world-milestone-dec]')) return store.update((d) => decrementCampaignMilestones(d));
+  const missionRun = hit('[data-mission-hook-run]');
+  if (missionRun) {
+    const { x, y, missionType, reason } = missionRun.dataset;
+    store.update((d) => addNote(d, `Ran "${missionType}" at sector ${x},${y} — ${reason}.`, 'Mission'));
+    return toast(`Logged "${missionType}" to Journal`);
+  }
 
   // --- trade (Merchant Rules Lens, ADR 0003/0004) ---
   const tradeBuy = hit('[data-trade-buy]');
@@ -3516,6 +3641,14 @@ function onChange(ev) {
     return store.update((d) => updateColonyEncounter(d, id, { [field]: t.value }));
   }
 
+  // --- world tracker ---
+  const sectorNotes = t.closest('[data-sector-notes]');
+  if (sectorNotes) {
+    const [sx, sy] = sectorNotes.dataset.sectorNotes.split(',').map(Number);
+    return store.update((d) => setSectorNotes(d, sx, sy, t.value));
+  }
+  if (t.closest('[data-worldtracker-notes]')) return store.update((d) => setWorldTrackerNotes(d, t.value));
+
   // --- trade ---
   const tradeLoc = t.closest('[data-trade-location]');
   if (tradeLoc) { tradeLocationId = tradeLoc.value; return renderDrawerBody(); }
@@ -3772,27 +3905,48 @@ function onChange(ev) {
   // Bulk Reference Library import — the counterpart to exportRefLibrary
   // above: restores every doc's blob into store.js's doc-blob store, plus
   // merging refOverrides (mergeRefOverrides, documents.js) so titles/tags
-  // travel too, not just the raw bytes.
+  // travel too, not just the raw bytes. Accepts the current .zip format
+  // (zip.js's readZip + index.json) AND the older single-JSON-of-base64
+  // format (a file exported before this change) — old exports must keep
+  // importing (same posture as the schema's own "never drop old data").
   if (t.closest('[data-ref-library-import]')) {
     const file = (t.files || [])[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async () => {
+    (async () => {
       try {
-        const bundle = JSON.parse(reader.result);
-        if (!bundle || !Array.isArray(bundle.docs)) throw new Error('not a GMAtlas Reference Library export file');
-        for (const entry of bundle.docs) {
-          const blob = await (await fetch(entry.dataUrl)).blob();
-          await store.putDocBlob(entry.key, blob);
+        const isZip = file.name.toLowerCase().endsWith('.zip') || file.type === 'application/zip';
+        let refOverrides = null;
+        let count = 0;
+        if (isZip) {
+          const entries = readZip(new Uint8Array(await file.arrayBuffer()));
+          const indexEntry = entries.find((e) => e.name === 'index.json');
+          if (!indexEntry) throw new Error('zip has no index.json');
+          const index = JSON.parse(new TextDecoder().decode(indexEntry.data));
+          if (!index || !Array.isArray(index.docs)) throw new Error('not a GMAtlas Reference Library export');
+          for (const docEntry of index.docs) {
+            const fileEntry = entries.find((e) => e.name === docEntry.path);
+            if (!fileEntry) continue;
+            await store.putDocBlob(docEntry.key, new Blob([fileEntry.data], { type: docEntry.mimeType }));
+            count += 1;
+          }
+          refOverrides = index.refOverrides;
+        } else {
+          const bundle = JSON.parse(await file.text());
+          if (!bundle || !Array.isArray(bundle.docs)) throw new Error('not a GMAtlas Reference Library export file');
+          for (const entry of bundle.docs) {
+            const blob = await (await fetch(entry.dataUrl)).blob();
+            await store.putDocBlob(entry.key, blob);
+            count += 1;
+          }
+          refOverrides = bundle.refOverrides;
         }
-        if (bundle.refOverrides) store.update((d) => mergeRefOverrides(d, bundle.refOverrides));
-        toast(`Imported ${bundle.docs.length} doc${bundle.docs.length === 1 ? '' : 's'} into the Reference Library`);
+        if (refOverrides) store.update((d) => mergeRefOverrides(d, refOverrides));
+        toast(`Imported ${count} doc${count === 1 ? '' : 's'} into the Reference Library`);
         refreshRefDocBlobKeys();
       } catch (e) {
         toast(`Couldn't import Reference Library — ${e.message}`);
       }
-    };
-    reader.readAsText(file);
+    })();
     t.value = '';
     return;
   }
@@ -3910,6 +4064,7 @@ function openDrawerTab(id) {
     if (id === 'oracle') oracleFilter = '';
     if (id === 'documents') { docFilter = ''; docTagFilters = new Set(); docTagEditorOpen = new Set(); refreshRefDocBlobKeys(); }
     if (id === 'graph') graphView = { scale: 1, x: 0, y: 0 };
+    if (id === 'world-tracker') { worldTrackerTab = 'overview'; worldTrackerSelectedSector = null; worldTrackerMigrateOpen = new Set(); }
     // Direct request: sections other than Party Roster start collapsed
     // "when opening the Party Tracker (not when switching focus to other
     // open tabs)" — resetting here (inside the "newly added to openDrawers"
@@ -4937,6 +5092,8 @@ function commitInlinePrompt() {
     store.update((d) => createBattlemap(d, value).campaign);
   } else if (kind === 'battlemap-icon-note') {
     store.update((d) => updateBattlemapIcon(d, meta.mapId, meta.iconId, { note: value }));
+  } else if (kind === 'sector-corner-label') {
+    store.update((d) => setSectorCornerLabel(d, meta.x, meta.y, meta.corner, value, 'custom'));
   }
 }
 
@@ -5668,6 +5825,7 @@ function buildDrawerUi() {
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
     contentPackFlags, hostileLocationsImporting, exportIncludeAttachments, exportAttachmentsPreview,
+    worldTrackerTab, worldTrackerSelectedSector, worldTrackerMigrateOpen,
     // Faction Events' own docked-in-WHERE state (see factionEventsDockedInWhere's
     // comment above) — workspace/index.js's WHERE view reads these to render
     // the same renderFactionEvents() body a second way when docked.
