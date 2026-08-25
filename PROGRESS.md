@@ -14,6 +14,40 @@ reorganized — treat them as history, not current pointers.
 
 ## Status Summary
 
+**2026-08-25 Reference Library GitHub-Release hosting rollback, finished**
+(deploy-pages.yml catches up to the 2026-08-20 code-side revert): the
+2026-08-20 "colony update" commit already reverted `scripts/build.js`,
+`referenceLibraryManifest.js`, and `sw.js` back to mapping Reference
+Library PDFs at local `assets/docs/...` paths (deleting `releaseConfig.js`
+and its `releaseAssetUrl()`), reversing `docs/adr/0039`'s GitHub-Release
+design — direct request: "map the docs to the assets/docs folder as
+original design... instead of github or another source." That commit
+never touched `.github/workflows/deploy-pages.yml`, which still skipped
+`lfs: true` on checkout, still deleted `assets/docs/` from the published
+`_site/`, and still spot-checked a `github.com/.../releases/download/...`
+URL the app no longer fetches — so every Reference Library doc 404'd on
+the deployed/mobile site (a real reported bug: opening a doc, or
+reimporting a campaign JSON that references one, gave a GitHub 404 "as
+though pointing to github instead of the local cached version").
+Explicit decision on how to close the gap: keep PDFs off the deployed
+site rather than re-add `lfs: true` (which would reopen the original
+~469MB-per-push LFS bandwidth quota problem `docs/adr/0039` existed to
+fix) — the deployed/mobile site's Reference Library entries stay
+intentionally unopenable there; a phone GM uses "Import PDF(s)" (matches
+a locally-picked file to a catalog entry by filename, stores the real
+Blob via `store.putDocBlob`) or the Reference Library bulk export/import
+bundle to get PDFs into their own browser's IndexedDB instead. Updated
+deploy-pages.yml's checkout/assemble comments to state this as the
+current design (not a to-do), and swapped the workflow's dead
+Release-asset verification for a live check that `assets/docs/` is
+correctly ABSENT from the deployed site (guards the decision instead of
+testing a code path that no longer exists). Separately flagged, not yet
+built: "Upload file(s)" (for a personal PDF never in the catalog at all)
+is still capped at 5MB since it stores as a base64 dataURL inside the
+main campaign document rather than through the doc-blob store — a real
+gap for a phone GM wanting to add a large non-cataloged PDF, but a
+separate feature from this hosting fix.
+
 **2026-07-16 Phase 13a/13b built: Location Details + WHO's scene-scoped
 NPC groups** (`docs/adr/0041-scene-operating-model.md`, same-day follow-up
 to the roadmap below — the confirmed first increment). **13a**: WHERE's

@@ -30,7 +30,13 @@ export function addDocument(campaign, patch = {}) {
   const next = clone(campaign);
   const docs = ensure(next);
   const entry = {
-    id: 'doc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    // A caller (shell.js's Import File(s) handler) may supply an id up
+    // front so it can use that SAME id as the IndexedDB blob-store key in
+    // a follow-up store.putDocBlob() call, without needing to read the
+    // entry back out after the fact — mirrors how a Reference Library
+    // entry's stable `file` path is decided once, never derived after
+    // creation.
+    id: String(patch.id || ('doc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6))),
     title: String(patch.title || 'Untitled document').trim(),
     content: String(patch.content || ''),
     kind: patch.kind === 'file' ? 'file' : 'note',
@@ -38,13 +44,18 @@ export function addDocument(campaign, patch = {}) {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-  // Uploaded-file documents carry the file as a data URL instead of text
-  // content — kept on the entry so the store's single localStorage module
-  // still owns persistence (no second storage mechanism for uploads).
+  // Uploaded-file documents carry the file's bytes separately from this
+  // entry — `blobKey` (the current, and only newly-written, form) points
+  // into store.js's IndexedDB blob store (no practical size ceiling, same
+  // mechanism a Reference Library import already uses); `dataUrl` (legacy)
+  // is inline base64 kept ONLY so an already-imported old campaign's
+  // entries keep opening (migration never drops data) — nothing writes a
+  // new `dataUrl` any more.
   if (entry.kind === 'file') {
     entry.fileName = String(patch.fileName || entry.title);
     entry.mimeType = String(patch.mimeType || 'application/octet-stream');
-    entry.dataUrl = String(patch.dataUrl || '');
+    if (patch.blobKey) entry.blobKey = String(patch.blobKey);
+    else entry.dataUrl = String(patch.dataUrl || '');
   }
   docs.library.push(entry);
   return next;
@@ -700,5 +711,29 @@ export function resolveDocumentTab(campaign, tabKey) {
   }
   const entry = getDocument(campaign, id);
   if (!entry) return null;
-  return { title: entry.title || entry.fileName, src: withPageAnchor(entry.dataUrl || '', page), kind: 'lib', page };
+  // `blobKey` (current uploads) is resolved by the UI layer via
+  // store.getDocBlob — this pure function can't touch IndexedDB itself
+  // (rule 3) — `src` here only ever carries the legacy inline `dataUrl`
+  // fallback for an old entry that predates the blob store.
+  return { title: entry.title || entry.fileName, src: withPageAnchor(entry.dataUrl || '', page), kind: 'lib', page, blobKey: entry.blobKey || null };
+}
+
+/** Every IndexedDB blob-store key this campaign actually points at right
+ *  now — every uploaded library document's `blobKey`, plus every
+ *  Reference Library `file` path this campaign has an override for or
+ *  currently has open as a tab. Used by the Export Campaign JSON "include
+ *  attached files" option to bundle only reachable blobs, never every
+ *  orphaned blob that happens to still be sitting in IndexedDB (e.g. left
+ *  over from a "New Campaign" reset). Order-preserving, deduplicated. */
+export function referencedBlobKeys(campaign) {
+  const keys = new Set();
+  for (const entry of ((campaign.documents && campaign.documents.library) || [])) {
+    if (entry && entry.kind === 'file' && entry.blobKey) keys.add(entry.blobKey);
+  }
+  const docs = (campaign.documents) || {};
+  for (const file of Object.keys(docs.refOverrides || {})) keys.add(file);
+  for (const tabKey of (docs.openTabs || [])) {
+    if (String(tabKey).startsWith('ref:')) keys.add(String(tabKey).slice('ref:'.length));
+  }
+  return [...keys];
 }

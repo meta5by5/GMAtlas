@@ -55,15 +55,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        # No `lfs: true` (docs/adr/0039-reference-library-release-hosting.md,
-        # 2026-07-14) — this checkout used to pull the full ~469MB of
+        # No `lfs: true` — this checkout used to pull the full ~469MB of
         # assets/docs/*.pdf via Git LFS on EVERY push, which is what burned
-        # the repo's monthly LFS bandwidth quota. Reference Library PDFs now
-        # live in a GitHub Release instead (releaseConfig.js); this checkout
-        # gets LFS pointer-stub text files at those paths, which
-        # scripts/build.js's isRealFile() check correctly treats as "not
-        # present," falling the manifest back to the Release URL. Do not
-        # re-add lfs: true without re-reading that ADR first.
+        # the repo's monthly LFS bandwidth quota (the reason a GitHub-Release-
+        # hosting design existed briefly; that design was reversed — Reference
+        # Library PDFs map to assets/docs/ again in the app's own code). This
+        # checkout deliberately still skips LFS, so it only ever sees
+        # pointer-stub text files at those paths — the "Assemble" step below
+        # strips assets/docs/ from the published site entirely rather than
+        # publish stub text files, by explicit choice (2026-08-25): the
+        # deployed/mobile site simply doesn't host the Reference Library's
+        # PDFs; a GM there uses "Import PDF(s)" (or the Reference Library
+        # bulk export/import bundle) to load files they already have onto
+        # their own device's browser storage instead. Don't re-add lfs: true
+        # to "fix" a 404 on the deployed site without revisiting that choice
+        # first — it directly reopens the LFS bandwidth problem.
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -79,10 +85,11 @@ jobs:
           cp -r styles _site/styles
           cp -r assets _site/assets
           # assets/docs/ is LFS pointer stubs on this runner (no lfs: true
-          # above, docs/adr/0039) and nothing in the app points at a local
-          # assets/docs/ path on the deployed site anymore (docsManifest.js's
-          # `src` field resolves to a GitHub Release URL instead) — dead
-          # weight, so drop it rather than publish stub text files.
+          # above) — dead weight, so drop it rather than publish stub text
+          # files. The app's Reference Library manifest DOES point at local
+          # assets/docs/<file>.pdf paths (reverted from GitHub-Release
+          # hosting), so those entries are intentionally unopenable on the
+          # deployed/mobile site — see the checkout step's comment above.
           rm -rf _site/assets/docs
           cp dist/app.bundle.js _site/app.bundle.js
           sed 's|\./dist/app\.bundle\.js|./app.bundle.js|' index.html > _site/index.html
@@ -118,28 +125,17 @@ jobs:
             echo "::error::$BUNDLE_URL returned $code (expected 200) — the app would show a black screen"
             exit 1
           fi
-          # Reference Library PDFs are Release-hosted now (docs/adr/0039),
-          # not served from this deploy at all — spot-check one resolves to
-          # real content there instead of checking a local assets/docs/ path
-          # (which is deliberately NOT published anymore, see the assemble
-          # step above). The Release is confirmed live (2026-07-15) — a hard
-          # failure again, same as the pre-ADR-0039 local-PDF check used to
-          # be. NOTE: GitHub sanitizes an uploaded release asset's filename
-          # (spaces/parens collapse to `.` — verified against the real
-          # upload, see referenceLibraryManifest.js's own comment) — this
-          # URL uses the asset's ACTUAL name, not the original local
-          # filename naively URL-encoded.
-          PDF_URL="https://github.com/meta5by5/GMAtlas/releases/download/reference-library-v1/Hostile.setting.pdf"
-          if ! curl -sfL "$PDF_URL" -o /tmp/live-sample.pdf; then
-            echo "::error::$PDF_URL did not download"
+          # Reference Library PDFs are deliberately NOT published on this
+          # deploy (2026-08-25 decision, see the assemble step above) — spot-
+          # check that assets/docs/ is actually absent rather than silently
+          # serving stale/partial PDF content nobody's expecting there.
+          DOCS_URL="${URL%/}/assets/docs/"
+          docs_code=$(curl -s -o /dev/null -w "%{http_code}" "$DOCS_URL")
+          if [ "$docs_code" = "200" ]; then
+            echo "::error::$DOCS_URL returned 200 — assets/docs/ should not be published on this deploy"
             exit 1
           fi
-          if ! head -c 4 /tmp/live-sample.pdf | grep -q '%PDF'; then
-            echo "::error::$PDF_URL is not a real PDF"
-            exit 1
-          fi
-          echo "Reference Library Release asset verified: $PDF_URL resolves to a real PDF."
-          echo "Deploy verified: $URL loads and app.bundle.js is reachable (HTTP $code)."
+          echo "Deploy verified: $URL loads, app.bundle.js is reachable (HTTP $code), and assets/docs/ is correctly absent."
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

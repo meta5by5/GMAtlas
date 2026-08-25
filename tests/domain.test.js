@@ -447,7 +447,7 @@ import { advise } from '../src/domain/copilot.js';
 import {
   addDocument, updateDocument, removeDocument, parseDocumentMentions, parseDocumentMentionRefs, linkDocumentMentions, listDocumentMentions,
   findDocumentTabByTitle, openDocumentTab, closeDocumentTab, resolveDocumentTab, resolvedDocumentMentionNames, listReferenceDocuments,
-  renameRefDocument, addRefDocumentTag, mergeRefOverrides,
+  renameRefDocument, addRefDocumentTag, mergeRefOverrides, referencedBlobKeys,
   parseTextBlocks, parseInlineNodes, sanitizeExternalLinkUrl, sanitizeColorValue,
 } from '../src/domain/documents.js';
 import { titleFromFilename } from '../src/domain/titleCase.js';
@@ -957,6 +957,40 @@ test('document library supports uploaded files distinctly from text notes', () =
   assert.equal(entry.fileName, 'Crew Manifest.pdf');
   assert.equal(entry.dataUrl, 'data:application/pdf;base64,AAAA');
   assert.equal(entry.content, '');
+});
+
+test('document library uploaded-file entries carry an IndexedDB blobKey instead of inline dataUrl, with a caller-supplied id honored', () => {
+  let camp = defaultCampaign();
+  camp = addDocument(camp, { id: 'doc_fixed123', kind: 'file', title: 'Crew Manifest.pdf', fileName: 'Crew Manifest.pdf', mimeType: 'application/pdf', blobKey: 'doc_fixed123' });
+  const entry = camp.documents.library[0];
+  assert.equal(entry.id, 'doc_fixed123', 'a caller-supplied id is used verbatim, not regenerated');
+  assert.equal(entry.kind, 'file');
+  assert.equal(entry.blobKey, 'doc_fixed123');
+  assert.equal(entry.dataUrl, undefined, 'a blobKey entry never also carries a dataUrl');
+});
+
+test('resolveDocumentTab exposes blobKey for a lib entry that has one, and still falls back to the legacy inline dataUrl for one that does not', () => {
+  let camp = defaultCampaign();
+  camp = addDocument(camp, { kind: 'file', title: 'New Upload.pdf', fileName: 'New Upload.pdf', mimeType: 'application/pdf', blobKey: 'doc_new' });
+  camp = addDocument(camp, { kind: 'file', title: 'Legacy Upload.pdf', fileName: 'Legacy Upload.pdf', mimeType: 'application/pdf', dataUrl: 'data:application/pdf;base64,AAAA' });
+  const newEntry = camp.documents.library.find((d) => d.title === 'New Upload.pdf');
+  const legacyEntry = camp.documents.library.find((d) => d.title === 'Legacy Upload.pdf');
+  const resolvedNew = resolveDocumentTab(camp, 'lib:' + newEntry.id);
+  assert.equal(resolvedNew.blobKey, 'doc_new');
+  assert.equal(resolvedNew.src, '', 'no inline src for a blob-backed entry — the UI layer resolves it from IndexedDB');
+  const resolvedLegacy = resolveDocumentTab(camp, 'lib:' + legacyEntry.id);
+  assert.equal(resolvedLegacy.blobKey, null);
+  assert.equal(resolvedLegacy.src, 'data:application/pdf;base64,AAAA');
+});
+
+test('referencedBlobKeys collects library blobKeys plus overridden/open Reference Library files, and ignores anything not referenced', () => {
+  let camp = defaultCampaign();
+  camp = addDocument(camp, { kind: 'file', title: 'Uploaded.pdf', fileName: 'Uploaded.pdf', mimeType: 'application/pdf', blobKey: 'doc_uploaded' });
+  camp = addDocument(camp, { title: 'Plain Note' }); // kind:'note' — never contributes a blob key
+  camp = renameRefDocument(camp, 'assets/docs/Overridden.pdf', 'Overridden Title');
+  camp = openDocumentTab(camp, 'ref:assets/docs/OpenOnly.pdf');
+  const keys = referencedBlobKeys(camp);
+  assert.deepEqual(new Set(keys), new Set(['doc_uploaded', 'assets/docs/Overridden.pdf', 'assets/docs/OpenOnly.pdf']));
 });
 
 test('titleFromFilename derives a clean, proper-cased display title from a raw filename (shared by the Reference Library build step and the upload handler)', () => {

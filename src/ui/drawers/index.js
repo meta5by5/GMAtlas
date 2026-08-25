@@ -1720,7 +1720,11 @@ function settings(doc, ui = {}) {
       </div>
       <div class="settings-group">
         ${sectionHeadRow('h3', 'Data (local-first)', 'settings-data')}
-        ${helpBody('settings-data', "Everything is stored in this browser. Export a backup or bind a file in a OneDrive-synced folder. A browser's storage for this app is commonly 5-10MB total. Large uploaded documents are the usual reason this fills up — move big rulebooks into <code>assets/docs/</code> (via a rebuild) instead, which has no such limit.", ui)}
+        ${helpBody('settings-data', "Everything is stored in this browser. Export a backup or bind a file in a OneDrive-synced folder. Imported documents (Documents drawer's \"Import File(s)\") live in this browser's own local storage, separate from the campaign file itself — check \"Include attached files\" below to carry them along when moving to another device.", ui)}
+        <label class="chip sm"><input type="checkbox" data-export-include-attachments ${ui.exportIncludeAttachments ? 'checked' : ''}> Include attached files in this export</label>
+        <p class="dim small">${ui.exportIncludeAttachments
+          ? (ui.exportAttachmentsPreview ? `${ui.exportAttachmentsPreview.count} file${ui.exportAttachmentsPreview.count === 1 ? '' : 's'}, ${formatBytes(ui.exportAttachmentsPreview.bytes)} — this export will be that much larger.` : 'Checking what’s on this device…')
+          : 'Off by default: keeps the export small. Turn on when moving to a new device so imported documents open there too.'}</p>
         <div class="btn-col">
           <button class="btn" data-export-campaign>Export Campaign JSON</button>
           <label class="btn ghost file-btn">Import Campaign JSON<input type="file" accept=".json,application/json" data-import-campaign hidden></label>
@@ -3000,8 +3004,7 @@ function documents(doc, ui = {}) {
   return `
     <datalist id="doc-tag-list">${allTags.map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
     <div class="drawer-note">
-      <label class="btn ghost file-btn">Upload file(s)<input type="file" data-doc-upload multiple hidden></label>
-      ${helpBody('documents-intro', 'A note is free text stored here; an uploaded file joins the Reference Library below, alongside the bundled rulebooks. Drag either into a note or context field to insert a @ pointer.', ui)}
+      ${helpBody('documents-intro', 'A note is free text stored here; an imported file (see "Import File(s)" below) joins the Reference Library, alongside the bundled rulebooks. Drag either into a note or context field to insert a @ pointer.', ui)}
     </div>
     <input class="drawer-search" data-doc-filter value="${esc(search)}" placeholder="Search by name or tag…">
     ${allTags.length ? `
@@ -3015,9 +3018,9 @@ function documents(doc, ui = {}) {
     <div class="doc-list">${rows}</div>` : ''}
     ${(uploadedFileItems.length || refDocs.length) ? `
     <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Reference Library</h4>${helpToggle('documents-reflib')}</div>
-    ${helpBody('documents-reflib', 'Bundled rulebooks and setting docs from <code>assets/docs/</code>, plus anything you upload — refreshed on every build. "Import PDF(s)" reads real files off your disk into this browser\'s own storage (matched to a catalog entry by filename) so they open even when assets/docs/ is empty on this machine; "Export Library"/"Import Library" bundle every doc imported that way (plus your title/tag edits) into one file to carry to another browser.', ui)}
+    ${helpBody('documents-reflib', 'Bundled rulebooks and setting docs from <code>assets/docs/</code>, plus anything you import — refreshed on every build. "Import File(s)" reads real files off your device into this browser\'s own storage: a filename matching a catalog entry joins the Reference Library so it opens even when assets/docs/ is empty on this machine; anything else becomes a new personal document (no size limit). "Export Library"/"Import Library" bundle every Reference Library doc imported that way (plus your title/tag edits) into one file to carry to another browser.', ui)}
     <div class="drawer-note ref-doc-transfer-row">
-      <label class="btn ghost sm file-btn">📥 Import PDF(s)<input type="file" data-ref-doc-import multiple accept="application/pdf" hidden></label>
+      <label class="btn ghost sm file-btn">📥 Import File(s)<input type="file" data-ref-doc-import multiple hidden></label>
       <button class="btn ghost sm" data-ref-library-export title="Download every imported Reference Library doc, plus your title/tag edits, as one file">⬇ Export Library</button>
       <label class="btn ghost sm file-btn">⬆ Import Library<input type="file" data-ref-library-import accept="application/json" hidden></label>
     </div>

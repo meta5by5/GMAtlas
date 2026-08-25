@@ -46,7 +46,7 @@ import {
   addDocument, updateDocument, removeDocument, getDocument, addDocumentTag, removeDocumentTag, renameDocument,
   openDocumentTab, closeDocumentTab, setActiveDocumentTab, resolveDocumentTab,
   listReferenceDocuments, renameRefDocument, addRefDocumentTag, removeRefDocumentTag, hideRefDocument, listDocuments,
-  sanitizeExternalLinkUrl, mergeRefOverrides,
+  sanitizeExternalLinkUrl, mergeRefOverrides, referencedBlobKeys,
 } from '../domain/documents.js';
 import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue, setGaugeTrackerValue, ensurePartyStarforgedTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity } from '../domain/party.js';
 import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, addColonyEncounter, updateColonyEncounter, removeColonyEncounter, listColonyEncounters } from '../domain/colony.js';
@@ -78,13 +78,6 @@ import { renderFactionEvents } from './drawers/factionEvents.js';
 import { renderSearchPanel } from './searchPanel.js';
 import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
 
-// localStorage's shared per-origin quota is commonly 5-10MB for the WHOLE
-// campaign document, not just one file — 5MB of raw file (~6.7MB once
-// base64-encoded) is a conservative line under that, leaving room for the
-// rest of the campaign and any other embedded uploads. Large, static
-// rulebooks (the ones already in assets/docs/, several 20-60MB) belong in
-// the Reference Library instead, which has no such limit.
-const MAX_DOC_UPLOAD_BYTES = 5 * 1024 * 1024;
 // 'cast' IS a real drawer (2026-07-06 restructure), an ordinary DRAWERS/
 // openDrawers member with no special-cased open/close behavior (docs/adr/
 // 0032 removed the anchor-slot mechanism it used to open into by default —
@@ -229,6 +222,21 @@ let battlemapPan = null; // { world, startClientX, startClientY, startX, startY 
 // campaign data itself (domain/contentPack.js's exportContentPack takes
 // this exact shape as its second argument).
 let contentPackFlags = { entities: false, guide: false, journal: false };
+// Export Campaign JSON's opt-in "Include attached files" checkbox (off by
+// default — a GM transferring devices ticks it on deliberately, everyone
+// else keeps the small plain export). The size preview is computed async
+// (IndexedDB) only once the box is actually checked, same lazy-refresh
+// shape as refDocBlobKeys/refreshRefDocBlobKeys above.
+let exportIncludeAttachments = false;
+let exportAttachmentsPreview = null; // null = not yet computed; else {count, bytes}
+function refreshExportAttachmentsPreview() {
+  const keys = referencedBlobKeys(store.get());
+  Promise.all(keys.map((k) => store.getDocBlob(k))).then((blobs) => {
+    const present = blobs.filter(Boolean);
+    exportAttachmentsPreview = { count: present.length, bytes: present.reduce((sum, b) => sum + b.size, 0) };
+    renderDrawerBody();
+  });
+}
 // Rich-text toolbar color button: the field/Range captured at mousedown,
 // consulted once the native <input type="color"> the button triggers
 // fires its own 'change' — by then the field's live Selection has moved
@@ -489,15 +497,18 @@ let inspirationDrafts = { site: null, seed: null };
 // reset the iframe to blank mid-load, stranding it white). Tracking "the
 // last src I myself set" sidesteps the mismatch entirely.
 let lastDocViewerSrc = null;
-// Reference Library doc blobs (direct follow-up request — bulk export/
-// import "transfers the docs themselves" via store.js's new IndexedDB
-// doc-blob store): refDocBlobUrls caches key -> a real blob: object URL
-// once resolved; refDocBlobCheckedKeys remembers which keys have already
-// been checked (whether or not a blob existed) so the render loop doesn't
+// Doc blobs in store.js's IndexedDB blob store — originally Reference-
+// Library-only (bulk export/import "transfers the docs themselves"), now
+// also where every "Import File(s)"-added personal document's bytes live
+// (kind:'file' entries with a blobKey; the tab key's `ref:`/`lib:` prefix
+// doesn't matter here, both resolve through the same store keyed by an
+// opaque string): docBlobUrls caches key -> a real blob: object URL once
+// resolved; docBlobCheckedKeys remembers which keys have already been
+// checked (whether or not a blob existed) so the render loop doesn't
 // re-query IndexedDB on every single render — see the doc-viewer render
 // section below for where these are populated/read.
-let refDocBlobUrls = new Map();
-let refDocBlobCheckedKeys = new Set();
+let docBlobUrls = new Map();
+let docBlobCheckedKeys = new Set();
 // Which Reference Library keys have an imported blob at all — populated
 // async (openDrawerTab's 'documents' case, below) so the Documents
 // drawer's "☁ Imported" badge (drawers/index.js) can render without the
@@ -2209,7 +2220,24 @@ function onClick(ev) {
     return;
   }
 
-  if (hit('[data-export-campaign]')) return download(`gmatlas-${stamp()}.json`, store.export());
+  if (hit('[data-export-campaign]')) {
+    // Unchecked: unchanged plain export, still importable by anything that
+    // already reads a GMAtlas campaign file (rule 5 — a schema change must
+    // keep old exports importable; this is the inverse, keep NEW exports
+    // readable by old tooling too, when nothing extra was asked for).
+    if (!exportIncludeAttachments) return download(`gmatlas-${stamp()}.json`, store.export());
+    const keys = referencedBlobKeys(store.get());
+    Promise.all(keys.map(async (k) => {
+      const blob = await store.getDocBlob(k);
+      return blob ? { key: k, mimeType: blob.type || 'application/octet-stream', dataUrl: await blobToDataUrl(blob) } : null;
+    })).then((entries) => {
+      const attachments = entries.filter(Boolean);
+      const bundle = { kind: 'gmatlas-campaign-export', version: 1, exportedAt: new Date().toISOString(), campaign: JSON.parse(store.export()), attachments };
+      download(`gmatlas-${stamp()}.json`, JSON.stringify(bundle));
+      toast(`Exported campaign + ${attachments.length} attached file${attachments.length === 1 ? '' : 's'}`);
+    });
+    return;
+  }
   if (hit('[data-export-content-pack]')) {
     if (!contentPackFlags.entities && !contentPackFlags.guide && !contentPackFlags.journal) return toast('Select at least one section to export');
     const pack = exportContentPack(store.get(), contentPackFlags);
@@ -3557,8 +3585,30 @@ function onChange(ev) {
     const reader = new FileReader();
     // store.import() is async (IndexedDB) — an async function's own thrown
     // errors become a rejected Promise, not a synchronous throw, so this
-    // must await it inside the try, not just call it.
-    reader.onload = async () => { try { await store.import(reader.result); toast('Campaign imported'); } catch (e) { toast('Import failed'); } };
+    // must await it inside the try, not just call it. A file produced by
+    // the "Include attached files" export option is a bundle wrapping the
+    // real campaign JSON plus every attached file's bytes (same shape the
+    // Reference Library's own bulk import already uses below) — imported
+    // in one step here rather than needing a second manual action; a bare
+    // campaign JSON (any export made without that box checked, an older
+    // export, or another tool's file) still imports exactly as before.
+    reader.onload = async () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        if (parsed && parsed.kind === 'gmatlas-campaign-export' && Array.isArray(parsed.attachments)) {
+          await store.import(JSON.stringify(parsed.campaign));
+          for (const entry of parsed.attachments) {
+            const blob = await (await fetch(entry.dataUrl)).blob();
+            await store.putDocBlob(entry.key, blob);
+          }
+          refreshRefDocBlobKeys();
+          toast(`Campaign imported with ${parsed.attachments.length} attached file${parsed.attachments.length === 1 ? '' : 's'}`);
+        } else {
+          await store.import(reader.result);
+          toast('Campaign imported');
+        }
+      } catch (e) { toast('Import failed'); }
+    };
     reader.readAsText(file);
     return;
   }
@@ -3580,6 +3630,11 @@ function onChange(ev) {
   const packFlag = t.closest('[data-content-pack-flag]');
   if (packFlag) {
     contentPackFlags = { ...contentPackFlags, [packFlag.dataset.contentPackFlag]: t.checked };
+    return renderDrawerBody();
+  }
+  if (t.closest('[data-export-include-attachments]')) {
+    exportIncludeAttachments = t.checked;
+    if (exportIncludeAttachments && !exportAttachmentsPreview) refreshExportAttachmentsPreview();
     return renderDrawerBody();
   }
   if (t.closest('[data-import-content-pack]')) {
@@ -3634,101 +3689,81 @@ function onChange(ev) {
     return;
   }
 
-  if (t.closest('[data-doc-upload]')) {
-    const files = Array.from(t.files || []);
-    if (!files.length) return;
-    let done = 0;
-    const total = files.length;
-    for (const file of files) {
-      // localStorage's shared per-origin quota (commonly 5-10MB, holding the
-      // WHOLE campaign, not just this file) can't reliably hold a large
-      // rulebook PDF base64-encoded — this used to fail silently (store.js's
-      // persist() only logged a console.warn), so an upload like this could
-      // look like it worked and then be gone on the next reload. Large,
-      // static rulebooks belong in assets/docs/ (rebuilt into the
-      // size-unlimited Reference Library) instead of embedded here.
-      if (file.size > MAX_DOC_UPLOAD_BYTES) {
-        done += 1;
-        toast(`"${file.name}" (${formatBytes(file.size)}) is too big to store this way — add rulebook-sized PDFs to assets/docs/ and rebuild instead.`);
-        continue;
-      }
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          // The display title is derived from the filename (extension/
-          // hyphens stripped, ALL-CAPS segments proper-cased — see
-          // titleCase.js, shared with the Reference Library's own build-time
-          // titles) — fileName itself is untouched, still the exact
-          // original filename.
-          const uploadTitle = titleFromFilename(file.name);
-          store.update((d) => addDocument(d, { kind: 'file', title: uploadTitle, fileName: file.name, mimeType: file.type, dataUrl: reader.result }));
-          done += 1;
-          toast(done === total ? `Uploaded ${done} file${done === 1 ? '' : 's'}` : `Uploading… (${done}/${total})`);
-          // Reference Table of Contents (docs/adr/0020) — per the user's
-          // explicit choice, this is prompted per upload, not silent/
-          // automatic: a real bookmark scan is real work (and needs
-          // npm run serve, same file:// restriction as Mechanics Index),
-          // so a GM opts in per document rather than it firing unasked.
-          if (file.type === 'application/pdf' && window.confirm(`Generate a Table of Contents entry for "${uploadTitle}"? (scans its PDF bookmarks)`)) {
-            scanAndGenerateToc(store, { onlyDoc: { title: uploadTitle, source: reader.result } })
-              .then(({ generated, unresolved }) => {
-                if (generated > 0) {
-                  // The new/updated entry lands nested under a "Table of
-                  // Contents" Guide doc, which the tree renders collapsed by
-                  // default (expandedGuideNodes starts empty) — without this,
-                  // a successful scan looked identical to "nothing happened"
-                  // unless the GM already knew to click the parent's caret.
-                  const parent = ((store.get().guide && store.get().guide.docs) || []).find((g) => !g.parentId && g.title === 'Table of Contents');
-                  if (parent) expandedGuideNodes.add(parent.id);
-                  toast(`Table of Contents added for "${uploadTitle}" — see Guide → Table of Contents`);
-                } else if (unresolved > 0) {
-                  // The PDF has real bookmarks (seen during the scan) but
-                  // none resolved to a page — a different, more diagnostic
-                  // message than "no bookmarks," since the fix belongs in
-                  // this scanner rather than the PDF itself.
-                  toast(`"${uploadTitle}" has bookmarks, but none could be resolved to a page — its bookmark format isn't supported yet`);
-                } else {
-                  toast(`"${uploadTitle}" has no bookmarks — nothing to generate`);
-                }
-              })
-              .catch((err) => toast(`Table of Contents scan failed — ${err.message}`));
-          }
-        } catch (e) {
-          done += 1;
-          toast(`"${file.name}" couldn't be saved — browser storage is full. Add large rulebooks to assets/docs/ and rebuild instead.`);
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-    t.value = '';
-    return;
-  }
-
-  // "Import PDF(s)" — real files off disk, matched to a Reference Library
-  // catalog entry by filename, read straight into store.js's doc-blob
-  // store as real Blobs (a File IS a Blob, no FileReader/base64 round trip
-  // needed) — direct follow-up request, the RECEIVING half of "transfer
-  // the docs themselves from one browser to another" for a GM who has the
-  // real files on disk but wants them portable, or is populating a fresh
-  // browser from files they already have. A file whose name doesn't match
-  // any catalog entry is skipped, not silently dropped — reported by name
-  // in the toast, since adding a brand-new (not-yet-cataloged) Reference
-  // Library entry is a separate, larger feature this doesn't attempt.
+  // "Import File(s)" — real files off disk, read straight into store.js's
+  // doc-blob store as real Blobs (a File IS a Blob, no FileReader/base64
+  // round trip needed, and no practical size ceiling the way inline base64
+  // in the campaign document had). A file whose name matches a Reference
+  // Library catalog entry is stored under that entry's stable key (the
+  // RECEIVING half of "transfer the docs themselves from one browser to
+  // another" — a GM who has the real files on disk and wants them
+  // portable, or is populating a fresh browser from files they already
+  // have); anything else becomes a brand-new personal document instead of
+  // a dead-end "no matching catalog entry" error, generating its own
+  // stable id up front (addDocument's optional `patch.id`) so that SAME id
+  // can be used as this file's blob-store key.
   if (t.closest('[data-ref-doc-import]')) {
     const files = Array.from(t.files || []);
     if (!files.length) return;
     const byBasename = new Map(listReferenceDocuments(store.get()).map((r) => [r.file.split('/').pop().toLowerCase(), r.file]));
-    const unmatched = [];
+    let matched = 0;
+    const added = [];
     const puts = [];
     for (const file of files) {
-      const key = byBasename.get(file.name.toLowerCase());
-      if (!key) { unmatched.push(file.name); continue; }
-      puts.push(store.putDocBlob(key, file));
+      const catalogKey = byBasename.get(file.name.toLowerCase());
+      if (catalogKey) {
+        matched += 1;
+        puts.push(store.putDocBlob(catalogKey, file));
+        continue;
+      }
+      const id = 'doc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      // The display title is derived from the filename (extension/hyphens
+      // stripped, ALL-CAPS segments proper-cased — see titleCase.js,
+      // shared with the Reference Library's own build-time titles) —
+      // fileName itself is untouched, still the exact original filename.
+      const title = titleFromFilename(file.name);
+      store.update((d) => addDocument(d, { id, kind: 'file', title, fileName: file.name, mimeType: file.type, blobKey: id }));
+      added.push({ id, title, file });
+      puts.push(store.putDocBlob(id, file));
     }
     Promise.all(puts).then(() => {
-      const matched = puts.length;
-      toast(`Imported ${matched} file${matched === 1 ? '' : 's'}${unmatched.length ? ` — ${unmatched.length} skipped (no matching catalog entry): ${unmatched.join(', ')}` : ''}`);
+      const parts = [];
+      if (matched) parts.push(`${matched} to the Reference Library`);
+      if (added.length) parts.push(`${added.length} as new document${added.length === 1 ? '' : 's'}`);
+      toast(`Imported ${parts.join(', ') || '0 files'}`);
       refreshRefDocBlobKeys();
+      // Reference Table of Contents (docs/adr/0020) — per the user's
+      // explicit choice, this is prompted per upload, not silent/automatic:
+      // a real bookmark scan is real work (and needs npm run serve, same
+      // file:// restriction as Mechanics Index), so a GM opts in per
+      // document rather than it firing unasked. Only offered for a NEW
+      // personal document (a catalog-matched file already has whatever ToC
+      // handling the Reference Library gives it).
+      for (const { title, file } of added) {
+        if (file.type !== 'application/pdf') continue;
+        if (!window.confirm(`Generate a Table of Contents entry for "${title}"? (scans its PDF bookmarks)`)) continue;
+        scanAndGenerateToc(store, { onlyDoc: { title, source: URL.createObjectURL(file) } })
+          .then(({ generated, unresolved }) => {
+            if (generated > 0) {
+              // The new/updated entry lands nested under a "Table of
+              // Contents" Guide doc, which the tree renders collapsed by
+              // default (expandedGuideNodes starts empty) — without this,
+              // a successful scan looked identical to "nothing happened"
+              // unless the GM already knew to click the parent's caret.
+              const parent = ((store.get().guide && store.get().guide.docs) || []).find((g) => !g.parentId && g.title === 'Table of Contents');
+              if (parent) expandedGuideNodes.add(parent.id);
+              toast(`Table of Contents added for "${title}" — see Guide → Table of Contents`);
+            } else if (unresolved > 0) {
+              // The PDF has real bookmarks (seen during the scan) but none
+              // resolved to a page — a different, more diagnostic message
+              // than "no bookmarks," since the fix belongs in this scanner
+              // rather than the PDF itself.
+              toast(`"${title}" has bookmarks, but none could be resolved to a page — its bookmark format isn't supported yet`);
+            } else {
+              toast(`"${title}" has no bookmarks — nothing to generate`);
+            }
+          })
+          .catch((err) => toast(`Table of Contents scan failed — ${err.message}`));
+      }
     });
     t.value = '';
     return;
@@ -5257,24 +5292,28 @@ function render() {
     const resolvedActive = resolveDocumentTab(doc, activeTab);
     const frame = viewer.querySelector('[data-doc-viewer-frame]');
     const empty = viewer.querySelector('[data-doc-viewer-empty]');
-    // A Reference Library doc with an imported IndexedDB blob (direct
-    // follow-up request — the bulk-transferred/portable form) is preferred
-    // over its local assets/docs/ path, since the blob is guaranteed
-    // present on THIS machine regardless of what's on disk. IndexedDB is
-    // local and fast, so this is a one-time-per-tab check (cached in
-    // refDocBlobCheckedKeys), not a "Loading…" state the way the old
-    // remote-fetch mechanism needed — nothing to wait on visibly.
+    // A doc backed by an IndexedDB blob — a Reference Library entry with an
+    // imported blob (the bulk-transferred/portable form, preferred over its
+    // local assets/docs/ path since it's guaranteed present on THIS machine
+    // regardless of what's on disk), or a "lib" personal document added via
+    // Import File(s) (which has no other src at all) — resolves through the
+    // same blob store either way. IndexedDB is local and fast, so this is a
+    // one-time-per-tab check (cached in docBlobCheckedKeys), not a
+    // "Loading…" state the way the old remote-fetch mechanism needed —
+    // nothing to wait on visibly.
     let activeSrc = resolvedActive && resolvedActive.src;
-    if (resolvedActive && resolvedActive.kind === 'ref' && activeTab && activeTab.startsWith('ref:')) {
-      const refKey = activeTab.slice('ref:'.length);
-      if (!refDocBlobCheckedKeys.has(refKey)) {
-        refDocBlobCheckedKeys.add(refKey);
-        store.getDocBlob(refKey).then((blob) => {
-          if (blob) { refDocBlobUrls.set(refKey, URL.createObjectURL(blob)); render(); }
+    const blobKey = resolvedActive && activeTab && activeTab.startsWith('ref:') && resolvedActive.kind === 'ref'
+      ? activeTab.slice('ref:'.length)
+      : (resolvedActive && resolvedActive.kind === 'lib' ? resolvedActive.blobKey : null);
+    if (blobKey) {
+      if (!docBlobCheckedKeys.has(blobKey)) {
+        docBlobCheckedKeys.add(blobKey);
+        store.getDocBlob(blobKey).then((blob) => {
+          if (blob) { docBlobUrls.set(blobKey, URL.createObjectURL(blob)); render(); }
         });
       }
-      if (refDocBlobUrls.has(refKey)) {
-        activeSrc = resolvedActive.page ? `${refDocBlobUrls.get(refKey)}#page=${resolvedActive.page}` : refDocBlobUrls.get(refKey);
+      if (docBlobUrls.has(blobKey)) {
+        activeSrc = resolvedActive.page ? `${docBlobUrls.get(blobKey)}#page=${resolvedActive.page}` : docBlobUrls.get(blobKey);
       }
     }
     if (activeSrc) {
@@ -5609,7 +5648,7 @@ function buildDrawerUi() {
     journalEditOpen, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
-    contentPackFlags, hostileLocationsImporting,
+    contentPackFlags, hostileLocationsImporting, exportIncludeAttachments, exportAttachmentsPreview,
     // Faction Events' own docked-in-WHERE state (see factionEventsDockedInWhere's
     // comment above) — workspace/index.js's WHERE view reads these to render
     // the same renderFactionEvents() body a second way when docked.
