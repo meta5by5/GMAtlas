@@ -67,17 +67,31 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .mc-edge .settings-menu-wrap [data-settings-menu-toggle] .glyph { font-size: 1.1rem; }
 .mc-edge .settings-menu-wrap b { display: block; }
+/* Real reported bug (still visible after giving .mc-edge its own z-index,
+   see that rule's own comment below): .mc-edge got `overflow-y: auto` a
+   while back so a tall edge-nav button list could scroll instead of
+   clipping (see that rule's own comment, styles/cockpit.css). Setting
+   EITHER overflow axis to non-`visible` forces the OTHER axis to compute
+   as `auto` too (a real CSS rule, not a bug) — so once relocated into
+   .mc-edge on phone, this dropdown (min-width 9rem, wider than the narrow
+   edge column, opening bottom:100% relative to a position:relative
+   ancestor) was getting clipped by that same scroll container, no matter
+   what z-index either element had — overflow clipping and stacking order
+   are separate mechanisms; a higher z-index can't rescue a clipped box.
+   Fix: position:fixed unconditionally, with the actual top/left/right/
+   bottom set as inline styles by shell.js's render() (computed fresh from
+   the toggle button's real getBoundingClientRect() every time the menu
+   opens) — position:fixed is NEVER clipped by an ancestor's overflow, only
+   by an ancestor that establishes its own containing block (transform/
+   filter/will-change), which nothing between here and the viewport does.
+   Same technique .inline-prompt (openInlinePrompt, shell.js) already uses
+   for exactly this reason. */
 .settings-menu {
-  position: absolute; top: 100%; right: 0; margin-top: var(--sp-1); z-index: 25;
+  position: fixed; z-index: 25;
   display: flex; flex-direction: column; min-width: 9rem;
   background: var(--tier3-bg); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
   box-shadow: var(--shadow); overflow: hidden;
 }
-/* Relocated into the edge nav (bottom of the screen) — open upward
-   instead of off the bottom edge of the viewport. Scoped to the actual
-   DOM relationship (only true once shell.js has moved the wrap there),
-   not a second copy of the phone media query. */
-.mc-edge .settings-menu { top: auto; bottom: 100%; margin-top: 0; margin-bottom: var(--sp-1); }
 .settings-menu[hidden] { display: none; }
 .settings-menu button { text-align: left; background: none; border: none; color: var(--text); padding: 0.5rem 0.75rem; font-size: 0.85rem; }
 .settings-menu button:hover { background: var(--tier2-bg); }

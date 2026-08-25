@@ -5321,7 +5321,33 @@ function render() {
   }
 
   const settingsMenuEl = root.querySelector('[data-settings-menu]');
-  if (settingsMenuEl) settingsMenuEl.hidden = !settingsMenuOpen;
+  if (settingsMenuEl) {
+    settingsMenuEl.hidden = !settingsMenuOpen;
+    // position:fixed (styles/cockpit.css's own comment on .settings-menu
+    // explains why: escaping .mc-edge's overflow-y:auto clipping, which a
+    // z-index alone can't do) needs real viewport pixels, not the CSS
+    // top:100%/bottom:100% percentages a position:absolute-relative-to-its-
+    // wrapper approach could rely on — computed fresh from the toggle
+    // button's CURRENT position every time the menu opens, since that
+    // button may have just been relocated into .mc-edge (phone) or left in
+    // the header (desktop/tablet) by the relocation logic just above.
+    if (settingsMenuOpen) {
+      const toggleBtn = root.querySelector('[data-settings-menu-toggle]');
+      if (toggleBtn) {
+        const rect = toggleBtn.getBoundingClientRect();
+        const openUpward = rect.bottom + 200 > window.innerHeight;
+        settingsMenuEl.style.right = `${Math.max(4, window.innerWidth - rect.right)}px`;
+        settingsMenuEl.style.left = '';
+        if (openUpward) {
+          settingsMenuEl.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+          settingsMenuEl.style.top = '';
+        } else {
+          settingsMenuEl.style.top = `${rect.bottom + 4}px`;
+          settingsMenuEl.style.bottom = '';
+        }
+      }
+    }
+  }
 
   const aboutEl = root.querySelector('[data-about-overlay]');
   if (aboutEl) {

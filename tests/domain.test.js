@@ -1985,11 +1985,11 @@ test('setColonyField coerces number fields and leaves text/textarea fields as st
 
 test('colony crew rows reference entities by id and round-trip through add/update/remove', () => {
   let camp = defaultCampaign();
-  camp = addCrewRow(camp, { role: 'Pilot' });
+  camp = addCrewRow(camp, { role: 'scout' });
   const row = listCrewRows(camp)[0];
-  assert.equal(row.role, 'Pilot');
-  camp = updateCrewRow(camp, row.id, { role: 'Gunner' });
-  assert.equal(listCrewRows(camp)[0].role, 'Gunner');
+  assert.equal(row.role, 'scout');
+  camp = updateCrewRow(camp, row.id, { role: 'trooper' });
+  assert.equal(listCrewRows(camp)[0].role, 'trooper');
   camp = removeCrewRow(camp, row.id);
   assert.equal(listCrewRows(camp).length, 0);
 });
