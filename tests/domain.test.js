@@ -4398,6 +4398,7 @@ import {
   addSectorFeature, discoverSectorFeature, removeSectorFeature, adjacentSectors,
   migrateFeature, setHomeBase, rollHomeBase, advanceWorldTurn, deriveSectorIcon,
   generateMissionHooks, setWorldTrackerNotes, gridSizeOf,
+  toggleInvestigationSite, countInvestigationSites, MAX_INVESTIGATION_SITES, worldTrackerAttentionItems,
 } from '../src/domain/worldTracker.js';
 import { advanceCampaignTurn, incrementCampaignMilestones, decrementCampaignMilestones } from '../src/domain/colony.js';
 
@@ -4447,6 +4448,48 @@ test('harvestSectorResource flags a resource sector, and generateMissionHooks th
   hooks = generateMissionHooks(camp);
   assert.ok(!hooks.some((h) => h.x === 5 && h.y === 5 && h.missionType === 'Salvage/Harvest'), 'harvested — resource hook suppressed');
   assert.ok(hooks.some((h) => h.x === 5 && h.y === 5 && h.missionType === 'Delve'), 'alien-site hook is untouched by harvesting');
+});
+
+test('an explored (not yet surveyed) sector offers an Exploration Mission hook regardless of investigation-site marking; surveying it retires that exact hook', () => {
+  let camp = defaultCampaign();
+  camp = revealSector(camp, 4, 1, { rng: makeRng(9) }); // not marked as an investigation site
+  let hooks = generateMissionHooks(camp);
+  const hook = hooks.find((h) => h.x === 4 && h.y === 1);
+  assert.ok(hook, 'an explored sector offers a mission even without the investigation-site marker');
+  assert.equal(hook.missionType, 'Exploration Mission');
+  assert.equal(hook.signal, 'explored');
+  camp = surveySector(camp, 4, 1);
+  hooks = generateMissionHooks(camp);
+  assert.ok(!hooks.some((h) => h.x === 4 && h.y === 1), 'surveyed — the Exploration Mission hook is gone');
+});
+
+test('a marked investigation site still unexplored offers an Investigation hook carrying its featureId-free signal; revealing it retires that hook (and immediately offers the next one, Exploration Mission)', () => {
+  let camp = defaultCampaign();
+  camp = toggleInvestigationSite(camp, 6, 2);
+  let hooks = generateMissionHooks(camp);
+  let hook = hooks.find((h) => h.x === 6 && h.y === 2);
+  assert.equal(hook.missionType, 'Investigation');
+  assert.equal(hook.signal, 'unexplored');
+  assert.equal(hook.featureId, undefined);
+  camp = revealSector(camp, 6, 2, { rng: makeRng(4) });
+  hooks = generateMissionHooks(camp);
+  assert.ok(!hooks.some((h) => h.x === 6 && h.y === 2 && h.missionType === 'Investigation'), 'revealed — the Investigation hook is gone');
+  assert.ok(hooks.some((h) => h.x === 6 && h.y === 2 && h.missionType === 'Exploration Mission'), 'immediately offers the next stage');
+});
+
+test('a feature\'s own mission hook carries its featureId and disappears once that specific feature is marked discovered, without affecting a sibling feature\'s hook', () => {
+  let camp = defaultCampaign();
+  camp = addSectorFeature(camp, 1, 5, 'alien_site');
+  camp = addSectorFeature(camp, 1, 5, 'enemy_camp');
+  const [site, campFeature] = getSector(camp, 1, 5).features;
+  let hooks = generateMissionHooks(camp);
+  const siteHook = hooks.find((h) => h.missionType === 'Delve');
+  assert.equal(siteHook.featureId, site.id);
+  assert.equal(hooks.filter((h) => h.x === 1 && h.y === 5).length, 2);
+  camp = discoverSectorFeature(camp, 1, 5, site.id);
+  hooks = generateMissionHooks(camp);
+  assert.ok(!hooks.some((h) => h.missionType === 'Delve'), 'the discovered alien_site\'s hook is gone');
+  assert.ok(hooks.some((h) => h.missionType === 'Pitched Battle' && h.featureId === campFeature.id), 'the still-undiscovered enemy_camp hook is untouched');
 });
 
 test('generateMissionHooks only scans touched sectors — a fresh 6x6 grid produces zero hooks, not 36 "unexplored" ones', () => {
@@ -4503,10 +4546,24 @@ test('deriveSectorIcon priority: active camp beats alien site beats milestone si
   assert.equal(deriveSectorIcon(campSector, false), 'enemy_camp');
   const siteSector = { features: [{ kind: 'alien_site' }, { kind: 'milestone_site' }], state: 'explored' };
   assert.equal(deriveSectorIcon(siteSector, false), 'alien_site');
-  const unexplored = { features: [], state: 'unexplored' };
-  assert.equal(deriveSectorIcon(unexplored, false), 'unexplored');
+  const plainUnexplored = { features: [], state: 'unexplored', investigationSite: false };
+  assert.equal(deriveSectorIcon(plainUnexplored, false), null, 'an unmarked unexplored sector shows no icon (p.53 — only marked investigation sites show \'?\')');
+  const markedUnexplored = { features: [], state: 'unexplored', investigationSite: true };
+  assert.equal(deriveSectorIcon(markedUnexplored, false), 'unexplored');
   const quiet = { features: [], state: 'surveyed' };
   assert.equal(deriveSectorIcon(quiet, false), null);
+});
+
+test('toggleInvestigationSite marks/unmarks a sector, and countInvestigationSites tallies only marked ones (MAX_INVESTIGATION_SITES is advisory, not enforced here)', () => {
+  let camp = defaultCampaign();
+  assert.equal(MAX_INVESTIGATION_SITES, 10);
+  assert.equal(countInvestigationSites(camp), 0);
+  camp = toggleInvestigationSite(camp, 2, 2);
+  assert.equal(getSector(camp, 2, 2).investigationSite, true);
+  assert.equal(countInvestigationSites(camp), 1);
+  camp = toggleInvestigationSite(camp, 2, 2);
+  assert.equal(getSector(camp, 2, 2).investigationSite, false);
+  assert.equal(countInvestigationSites(camp), 0);
 });
 
 test('setSectorCornerLabel replaces only the same corner\'s label, leaving the other three untouched; removeSectorCornerLabel drops just one', () => {
@@ -4553,6 +4610,34 @@ test('sectors do not leak into each other — features/notes/corner labels on on
   assert.equal(getSector(camp, 1, 2).features.length, 0);
   assert.equal(getSector(camp, 1, 2).notes, '');
   assert.deepEqual(getSector(camp, 1, 2).cornerLabels, []);
+});
+
+test('worldTrackerAttentionItems surfaces home base, then remaining investigation-site count, then every current mission hook — in that order, and never decides anything itself', () => {
+  let camp = defaultCampaign();
+  let items = worldTrackerAttentionItems(camp);
+  assert.equal(items[0].kind, 'home-base');
+  assert.equal(items[1].kind, 'investigation-sites');
+  assert.equal(items[1].label, '10 more investigation sites to mark');
+
+  camp = setHomeBase(camp, 3, 3);
+  camp = toggleInvestigationSite(camp, 1, 1);
+  items = worldTrackerAttentionItems(camp);
+  assert.ok(!items.some((i) => i.kind === 'home-base'), 'home base is set — no longer a pending item');
+  assert.equal(items[0].kind, 'investigation-sites');
+  assert.equal(items[0].label, '9 more investigation sites to mark');
+
+  camp = revealSector(camp, 1, 1, { rng: makeRng(5) });
+  items = worldTrackerAttentionItems(camp);
+  const missionItems = items.filter((i) => i.kind === 'mission');
+  assert.equal(missionItems.length, 1);
+  assert.equal(missionItems[0].x, 1);
+  assert.equal(missionItems[0].missionType, 'Exploration Mission');
+
+  // Marking all 10 removes the investigation-sites nudge entirely.
+  for (const [x, y] of [[2, 1], [3, 1], [4, 1], [5, 1], [6, 1], [1, 2], [2, 2], [3, 2], [4, 2]]) camp = toggleInvestigationSite(camp, x, y);
+  assert.equal(countInvestigationSites(camp), MAX_INVESTIGATION_SITES);
+  items = worldTrackerAttentionItems(camp);
+  assert.ok(!items.some((i) => i.kind === 'investigation-sites'));
 });
 
 // Campaign Turn / Campaign Milestones — shared with colony.js's Turn Sheet

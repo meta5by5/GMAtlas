@@ -42,7 +42,7 @@ import { SOURCEBOOK_INVENTORY } from '../../data/sourcebookInventory.js';
 import { listGalleryImages, listGalleryTagVocabulary, getGalleryImage } from '../../domain/gallery.js';
 import { listBattlemaps, getActiveBattlemap } from '../../domain/battlemaps.js';
 import { BATTLEMAP_ICONS, findBattlemapIcon } from '../../data/battlemapIcons.js';
-import { getSector, listTouchedSectors, adjacentSectors, deriveSectorIcon, generateMissionHooks, gridSizeOf } from '../../domain/worldTracker.js';
+import { getSector, listTouchedSectors, adjacentSectors, deriveSectorIcon, generateMissionHooks, gridSizeOf, countInvestigationSites, MAX_INVESTIGATION_SITES, worldTrackerAttentionItems } from '../../domain/worldTracker.js';
 import { WORLD_TRACKER_ICONS, findWorldTrackerIcon } from '../../data/worldTrackerIcons.js';
 import { GENRE_PACKS, bestiaryTerm } from '../../data/genrePacks.js';
 import { ECONOMY_MODELS, economyTypesForModel } from '../../data/economyTypes.js';
@@ -3241,12 +3241,50 @@ function worldTracker(doc, ui = {}) {
   return `${tabBar}${sections[activeTab]()}`;
 }
 
+// Direct request: surface each pending decision as a step in the tool's
+// own UI (the GM shouldn't have to notice by clicking through Sectors/
+// Missions on their own) — never decide it for them, only point at it;
+// every item below still needs the GM to click something to act.
+function worldTrackerAttentionSection(doc) {
+  const items = worldTrackerAttentionItems(doc);
+  if (!items.length) return `
+    <div class="settings-group">
+      <h3>What needs your attention</h3>
+      <p class="dim small">Nothing pending right now.</p>
+    </div>`;
+  const rows = items.map((item) => {
+    if (item.kind === 'home-base') {
+      return `<div class="doc-card">
+        <div class="doc-card-head"><span><b>${esc(item.label)}</b></span><button class="btn ghost sm" data-home-base-roll>🎲 Roll</button></div>
+        <p class="dim small">${esc(item.detail)}</p>
+      </div>`;
+    }
+    if (item.kind === 'investigation-sites') {
+      return `<div class="doc-card">
+        <div class="doc-card-head"><span><b>${esc(item.label)}</b></span><button class="btn ghost sm" data-world-tracker-tab="sectors">Go to Sectors</button></div>
+        <p class="dim small">${esc(item.detail)}</p>
+      </div>`;
+    }
+    // 'mission'
+    return `<div class="doc-card">
+      <div class="doc-card-head"><span><b>${esc(item.label)}</b></span>${worldTrackerMissionRunButton(item)}</div>
+      <p class="dim small">${esc(item.detail)}</p>
+    </div>`;
+  }).join('');
+  return `
+    <div class="settings-group">
+      <h3>What needs your attention</h3>
+      <div class="doc-list">${rows}</div>
+    </div>`;
+}
+
 function worldTrackerOverview(doc) {
   const fields = getColonyFields(doc);
   const turn = Number(fields.campaignTurn) || 0;
   const milestones = Math.max(0, Math.min(7, Number(fields.campaignMilestones) || 0));
   const hb = doc.worldTracker && doc.worldTracker.homeBaseSector;
   return `
+    ${worldTrackerAttentionSection(doc)}
     <div class="settings-group">
       <h3>Campaign Progress</h3>
       <p>Turn <b>${turn}</b> <button class="btn ghost sm" data-world-turn-advance title="Advance to the next turn — also clears any camp's 'moved from' marker">End Turn ▸</button></p>
@@ -3326,10 +3364,14 @@ function worldTrackerSectorDetail(doc, ui, x, y) {
   const featureRows = sector.features.map((f) => worldTrackerFeatureRow(doc, ui, x, y, f)).join('');
   const iconOptions = WORLD_TRACKER_ICONS.map((i) => `<option value="${i.key}" ${sector.overlayIcon === i.key ? 'selected' : ''}>${esc(i.label)}</option>`).join('');
 
+  const investigationCount = countInvestigationSites(doc);
   return `
     <div class="settings-group wt-sector-detail">
       <h3>Sector ${x},${y}${isHome ? ' 🏠' : ''}</h3>
       <p>State: <b>${esc(sector.state)}</b></p>
+      ${sector.state === 'unexplored' ? `
+      <label class="chip sm"><input type="checkbox" data-sector-investigation-toggle="${x},${y}" ${sector.investigationSite ? 'checked' : ''} ${!sector.investigationSite && investigationCount >= MAX_INVESTIGATION_SITES ? 'disabled' : ''}> Investigation site (p.53 "?" marker)</label>
+      <p class="dim small">${investigationCount} / ${MAX_INVESTIGATION_SITES} marked</p>` : ''}
       <div class="btn-col">
         ${sector.state === 'unexplored' ? `<button class="btn ghost sm" data-sector-reveal="${x},${y}">Reveal</button>` : ''}
         ${sector.state === 'explored' ? `<button class="btn ghost sm" data-sector-survey="${x},${y}">Survey</button>` : ''}
@@ -3371,14 +3413,29 @@ function worldTrackerFeaturesTab(doc, ui) {
   return `<div class="doc-list">${rows}</div>`;
 }
 
+// Every hook here is a CURRENTLY AVAILABLE mission (generateMissionHooks
+// recomputes live from sector/feature state — direct question answered:
+// this is an options list, not a completion log). "Run this" logs the
+// choice to the Journal AND resolves the underlying signal (see the data
+// file's own `resolve` field comment) — reveal/survey advance the
+// sector's state, discover marks the specific feature — which is what
+// actually retires that exact hook from this list afterward; nothing here
+// tracks "completed missions" as its own record.
+// Shared by the Missions tab and the Overview checklist below — one
+// markup source for "Run this" so both surfaces resolve a hook through
+// the exact same shell.js data-mission-hook-run handler.
+function worldTrackerMissionRunButton(h) {
+  return `<button class="btn ghost sm" data-mission-hook-run data-x="${h.x}" data-y="${h.y}" data-mission-type="${esc(h.missionType)}" data-reason="${esc(h.reason)}" data-signal="${esc(h.signal)}" ${h.featureId ? `data-feature-id="${esc(h.featureId)}"` : ''}>Run this ▸</button>`;
+}
+
 function worldTrackerMissionsTab(doc) {
   const hooks = generateMissionHooks(doc);
-  if (!hooks.length) return '<p class="dim small">No mission hooks yet — reveal sectors and add features to generate some.</p>';
+  if (!hooks.length) return '<p class="dim small">No mission hooks available right now — reveal a marked investigation site, explore a sector, or add a feature to generate one.</p>';
   const rows = hooks.map((h) => `
     <div class="doc-card">
       <div class="doc-card-head">
         <span>Sector ${h.x},${h.y} — <b>${esc(h.missionType)}</b></span>
-        <button class="btn ghost sm" data-mission-hook-run data-x="${h.x}" data-y="${h.y}" data-mission-type="${esc(h.missionType)}" data-reason="${esc(h.reason)}">Run this ▸</button>
+        ${worldTrackerMissionRunButton(h)}
       </div>
       <p class="dim small">${esc(h.reason)}</p>
     </div>`).join('');

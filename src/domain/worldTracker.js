@@ -44,9 +44,19 @@ function clampCoord(n, gridSize) {
 
 function rollDie(sides, rng) { return Math.floor(rng() * sides) + 1; }
 
+// 5PFH Planetfall p.53 "Initial Placements": after picking/rolling a home
+// sector, the GM marks exactly 10 OTHER sectors as investigation sites
+// (the only ones that start showing a '?') — NOT every unexplored sector
+// on the grid, which is what this used to assume (a real reported
+// inaccuracy). This cap is advisory, not enforced here (see
+// toggleInvestigationSite below) — a GM correcting a mistake mid-campaign
+// shouldn't be hard-blocked by a rule about INITIAL setup.
+export const MAX_INVESTIGATION_SITES = 10;
+
 function defaultSector() {
   return {
     state: 'unexplored',
+    investigationSite: false,
     resourceLevel: null, resourceHarvested: false,
     hazardLevel: null, hazardTags: [],
     features: [],
@@ -80,6 +90,22 @@ export function listTouchedSectors(campaign) {
     const [x, y] = k.split(',').map(Number);
     return { ...rec, x, y };
   });
+}
+
+export function countInvestigationSites(campaign) {
+  return listTouchedSectors(campaign).filter((s) => s.investigationSite).length;
+}
+
+/** Toggles the p.53 "investigation site" marker for one sector — the only
+ *  thing that makes an unexplored sector show a '?' (see deriveSectorIcon
+ *  below). Un-marking is always allowed; marking is advisory-capped (see
+ *  MAX_INVESTIGATION_SITES's own comment) rather than hard-blocked. */
+export function toggleInvestigationSite(campaign, x, y) {
+  const next = clone(campaign);
+  const wt = ensure(next);
+  const sector = getOrCreateSectorRecord(wt, clampCoord(x, wt.gridSize), clampCoord(y, wt.gridSize));
+  sector.investigationSite = !sector.investigationSite;
+  return next;
 }
 
 function getOrCreateSectorRecord(wt, x, y) {
@@ -276,35 +302,56 @@ export function advanceWorldTurn(campaign) {
 const ICON_PRIORITY = ['enemy_camp', 'alien_site', 'resource_node', 'milestone_site'];
 
 /** Pure — never reads/writes IndexedDB or the DOM. Only consulted by the
- *  UI when sector.overlayIcon (a manual override) is null. */
+ *  UI when sector.overlayIcon (a manual override) is null. An unexplored
+ *  sector only shows '?' if it's one of the GM's marked investigation
+ *  sites (p.53 "Initial Placements" — a real reported inaccuracy: this
+ *  used to show '?' on EVERY unexplored sector); a plain untouched/
+ *  unmarked sector shows no icon at all. */
 export function deriveSectorIcon(sector, isHomeBase) {
   if (isHomeBase) return 'home_base';
   for (const kind of ICON_PRIORITY) {
     if ((sector.features || []).some((f) => f.kind === kind)) return kind;
   }
-  if (sector.state === 'unexplored') return 'unexplored';
+  if (sector.state === 'unexplored' && sector.investigationSite) return 'unexplored';
   return null;
 }
+
+function hookFor(signal) { return WORLD_TRACKER_MISSION_HOOKS.find((h) => h.signal === signal) || null; }
 
 /** Scans every TOUCHED sector (listTouchedSectors — an untouched, never-
  *  interacted-with coordinate isn't "on the map" for hook purposes yet, so
  *  a fresh 6x6 grid doesn't start with 36 identical "go explore" hooks)
- *  against WORLD_TRACKER_MISSION_HOOKS' signal->missionType data, applying
- *  the harvested-resource suppression (see harvestSectorResource above).
- *  Returns [{x, y, missionType, reason}], most-recently-touched order is
- *  NOT guaranteed — this is a suggestion list, not a log. */
+ *  against WORLD_TRACKER_MISSION_HOOKS' signal->missionType data. A hook
+ *  retires itself once its underlying signal no longer applies — the
+ *  harvested-resource flag suppresses a resource_node's hook (spec 1.3),
+ *  and a feature's own `discovered` flag suppresses its hook the same way
+ *  once the GM has run that mission (see the `resolve` field's own
+ *  comment in the data file). Returns [{x, y, missionType, reason, signal,
+ *  featureId}] — `featureId` only set for a feature-kind hook, since a
+ *  sector can carry more than one feature (each gets its own hook, not
+ *  deduplicated by kind); most-recently-touched order is NOT guaranteed —
+ *  this is a suggestion list of currently-available missions, not a log
+ *  of completed ones. */
 export function generateMissionHooks(campaign) {
   const hooks = [];
   for (const sector of listTouchedSectors(campaign)) {
-    const signals = new Set();
-    if (sector.state === 'unexplored') signals.add('unexplored');
-    for (const feature of sector.features) {
-      if (feature.kind === 'resource_node' && sector.resourceHarvested) continue;
-      signals.add(feature.kind);
+    // Only a marked investigation site's own "Investigation" hook (p.53) —
+    // not every touched-but-still-unexplored sector (e.g. one that merely
+    // has a note or a corner label on it isn't automatically a mission
+    // hook).
+    if (sector.state === 'unexplored' && sector.investigationSite) {
+      const def = hookFor('unexplored');
+      if (def) hooks.push({ x: sector.x, y: sector.y, missionType: def.missionType, reason: def.reason, signal: 'unexplored' });
     }
-    for (const signal of signals) {
-      const def = WORLD_TRACKER_MISSION_HOOKS.find((h) => h.signal === signal);
-      if (def) hooks.push({ x: sector.x, y: sector.y, missionType: def.missionType, reason: def.reason });
+    if (sector.state === 'explored') {
+      const def = hookFor('explored');
+      if (def) hooks.push({ x: sector.x, y: sector.y, missionType: def.missionType, reason: def.reason, signal: 'explored' });
+    }
+    for (const feature of sector.features) {
+      if (feature.discovered) continue;
+      if (feature.kind === 'resource_node' && sector.resourceHarvested) continue;
+      const def = hookFor(feature.kind);
+      if (def) hooks.push({ x: sector.x, y: sector.y, missionType: def.missionType, reason: def.reason, signal: feature.kind, featureId: feature.id });
     }
   }
   return hooks;
@@ -314,4 +361,38 @@ export function setWorldTrackerNotes(campaign, notes) {
   const next = clone(campaign);
   ensure(next).notes = String(notes || '');
   return next;
+}
+
+/** The Overview tab's guided-workflow checklist (direct request: surface
+ *  each pending decision as a step in the tool's own UI instead of
+ *  requiring the GM to notice it by clicking through tabs — and never
+ *  decide it FOR them; every item here is something the GM still has to
+ *  act on). Pure and read-only, same "just look at current state" shape
+ *  generateMissionHooks already uses — nothing here is itself a decision,
+ *  only a surfaced one. Order matches the natural p.53 setup sequence
+ *  (home base, then investigation sites) followed by whatever's currently
+ *  actionable in play (every generateMissionHooks entry, one item each).
+ *  Returns [{ kind: 'home-base' | 'investigation-sites' | 'mission', label, detail, ...hook }]
+ *  — a 'mission' item spreads its generateMissionHooks entry directly
+ *  (x/y/missionType/reason/signal/featureId) so the UI can reuse the exact
+ *  same "Run this" control the Missions tab already has, no duplicate
+ *  markup or a second resolution code path. */
+export function worldTrackerAttentionItems(campaign) {
+  const items = [];
+  const wt = campaign.worldTracker || {};
+  if (!wt.homeBaseSector) {
+    items.push({ kind: 'home-base', label: 'Set your home base', detail: 'Pick one on the grid (Sectors tab), or roll it randomly (5PFH Planetfall p.53).' });
+  }
+  const marked = countInvestigationSites(campaign);
+  if (marked < MAX_INVESTIGATION_SITES) {
+    items.push({
+      kind: 'investigation-sites',
+      label: `${MAX_INVESTIGATION_SITES - marked} more investigation site${MAX_INVESTIGATION_SITES - marked === 1 ? '' : 's'} to mark`,
+      detail: `${marked} / ${MAX_INVESTIGATION_SITES} marked so far — mark them from a sector's own detail panel (Sectors tab).`,
+    });
+  }
+  for (const hook of generateMissionHooks(campaign)) {
+    items.push({ kind: 'mission', label: `Sector ${hook.x},${hook.y}: ${hook.missionType} available`, detail: hook.reason, ...hook });
+  }
+  return items;
 }

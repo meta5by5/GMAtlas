@@ -56,6 +56,7 @@ import {
   setSectorNotes, setSectorOverlayIcon, setSectorCornerLabel, removeSectorCornerLabel,
   addSectorFeature, discoverSectorFeature, removeSectorFeature, adjacentSectors,
   migrateFeature, setHomeBase, rollHomeBase, advanceWorldTurn, generateMissionHooks, setWorldTrackerNotes, gridSizeOf,
+  toggleInvestigationSite,
 } from '../domain/worldTracker.js';
 import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract, updateContract } from '../domain/trade.js';
 import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors, resolveFactionTurn, formatFactionTurnResult, rollFactionAsset } from '../domain/factions.js';
@@ -1816,12 +1817,6 @@ function onClick(ev) {
     const [sx, sy, corner] = cornerLabelRemove.dataset.cornerLabelRemove.split(':');
     return store.update((d) => removeSectorCornerLabel(d, Number(sx), Number(sy), corner));
   }
-  const overlayIconPick = hit('[data-sector-overlay-icon]');
-  if (overlayIconPick) {
-    const [sx, sy] = overlayIconPick.dataset.sectorCoord.split(',').map(Number);
-    const iconKey = overlayIconPick.dataset.sectorOverlayIcon || null;
-    return store.update((d) => setSectorOverlayIcon(d, sx, sy, iconKey));
-  }
   if (hit('[data-home-base-roll]')) { store.update((d) => rollHomeBase(d)); return toast('Home base rolled'); }
   const homeBaseSet = hit('[data-home-base-set]');
   if (homeBaseSet) {
@@ -1836,8 +1831,25 @@ function onClick(ev) {
   if (hit('[data-world-milestone-dec]')) return store.update((d) => decrementCampaignMilestones(d));
   const missionRun = hit('[data-mission-hook-run]');
   if (missionRun) {
-    const { x, y, missionType, reason } = missionRun.dataset;
-    store.update((d) => addNote(d, `Ran "${missionType}" at sector ${x},${y} — ${reason}.`, 'Mission'));
+    const { x, y, missionType, reason, signal, featureId } = missionRun.dataset;
+    const sx = Number(x), sy = Number(y);
+    // Logs the choice AND resolves the underlying signal that produced
+    // this hook (WORLD_TRACKER_MISSION_HOOKS' own `resolve` field) — this
+    // is what actually retires this exact hook from the Missions list
+    // afterward (generateMissionHooks recomputes live from sector/feature
+    // state on every render, so there's no separate "completed" flag to
+    // set): 'unexplored' -> reveal it (an Investigation mission puts eyes
+    // on the sector), 'explored' -> survey it (an Exploration Mission
+    // finishes the job), any feature kind -> mark that specific feature
+    // discovered (its own hook won't reappear, but it stays trackable/
+    // migratable in the Features tab).
+    store.update((d) => {
+      let next = addNote(d, `Ran "${missionType}" at sector ${sx},${sy} — ${reason}.`, 'Mission');
+      if (signal === 'unexplored') next = revealSector(next, sx, sy);
+      else if (signal === 'explored') next = surveySector(next, sx, sy);
+      else if (featureId) next = discoverSectorFeature(next, sx, sy, featureId);
+      return next;
+    });
     return toast(`Logged "${missionType}" to Journal`);
   }
 
@@ -3648,6 +3660,16 @@ function onChange(ev) {
     return store.update((d) => setSectorNotes(d, sx, sy, t.value));
   }
   if (t.closest('[data-worldtracker-notes]')) return store.update((d) => setWorldTrackerNotes(d, t.value));
+  const overlayIconPick = t.closest('[data-sector-overlay-icon]');
+  if (overlayIconPick) {
+    const [sx, sy] = overlayIconPick.dataset.sectorCoord.split(',').map(Number);
+    return store.update((d) => setSectorOverlayIcon(d, sx, sy, t.value || null));
+  }
+  const investigationToggle = t.closest('[data-sector-investigation-toggle]');
+  if (investigationToggle) {
+    const [sx, sy] = investigationToggle.dataset.sectorInvestigationToggle.split(',').map(Number);
+    return store.update((d) => toggleInvestigationSite(d, sx, sy));
+  }
 
   // --- trade ---
   const tradeLoc = t.closest('[data-trade-location]');
