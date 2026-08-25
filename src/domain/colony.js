@@ -85,21 +85,15 @@ export function decrementCampaignMilestones(campaign) {
   return setColonyField(campaign, 'campaignMilestones', Math.max(0, current - 1));
 }
 
-// Provisional Crew Role list (direct follow-up request — "the 2nd dropdown
-// is the role a Crew can play in 5PFH Planetfall... rules added later for
-// managing combat and exploration"). The real Planetfall role table isn't
-// transcribed into this repo yet — these are common colony-crew archetypes
-// standing in until it is, kept as data (not hardcoded in the UI) so
-// swapping in the real table later is a one-place edit.
+// Crew Role list — the three character classes 5PFH Planetfall's colony
+// roster actually uses (assets/docs/5PFH Planetfall 1.2.pdf, "Your Colony
+// Crew"). There is no Pilot/Engineer/Medic/Gunner/Quartermaster/Diplomat
+// role table in the book — that was a placeholder guess pending the real
+// source, since replaced with the actual class list.
 export const CREW_ROLES = [
-  { id: 'pilot', label: 'Pilot' },
-  { id: 'engineer', label: 'Engineer' },
-  { id: 'medic', label: 'Medic' },
   { id: 'scout', label: 'Scout' },
-  { id: 'gunner', label: 'Gunner' },
-  { id: 'quartermaster', label: 'Quartermaster' },
   { id: 'scientist', label: 'Scientist' },
-  { id: 'diplomat', label: 'Diplomat' },
+  { id: 'trooper', label: 'Trooper' },
 ];
 
 export function listCrewRows(campaign) {
