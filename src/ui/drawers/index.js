@@ -2991,8 +2991,8 @@ function documents(doc, ui = {}) {
         ${renameOpen.has(r.key)
           ? `<input class="doc-rename-input" data-ref-rename-input="${esc(r.key)}" value="${esc(r.title)}" placeholder="Untitled document" autofocus>`
           : `<a href="#" class="doc-card-title-link" data-doc-open="ref:${esc(r.key)}" data-drag-document="ref:${esc(r.key)}" draggable="true" title="${esc(r.ext.toUpperCase())} · ${formatBytes(r.sizeBytes)} — open in viewer, or drag into a note or context field to insert a @ pointer">${esc(r.title)}</a>`}
-        ${blobKeys.has(r.key) ? '<span class="ref-doc-blob-badge" title="Imported into this browser — portable via Export Library, works even if the file isn\'t on disk here">☁</span>' : ''}
         <div class="doc-card-actions">
+          ${blobKeys.has(r.key) ? '<span class="ref-doc-blob-badge" title="Imported into this browser — portable via Export Library, works even if the file isn\'t on disk here">☁</span>' : ''}
           <button class="icon-btn" data-doc-tag-toggle="${esc(r.key)}" title="Tags">🏷</button>
           <button class="icon-btn" data-ref-rename="${esc(r.key)}" title="${renameOpen.has(r.key) ? 'Save' : 'Rename entry'}">${renameOpen.has(r.key) ? '💾' : '✎'}</button>
           <button class="icon-btn" data-ref-delete="${esc(r.key)}" title="Remove from Reference Library">✕</button>

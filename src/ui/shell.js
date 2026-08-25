@@ -5302,6 +5302,7 @@ function render() {
     // "Loading…" state the way the old remote-fetch mechanism needed —
     // nothing to wait on visibly.
     let activeSrc = resolvedActive && resolvedActive.src;
+    let pendingBlob = false;
     const blobKey = resolvedActive && activeTab && activeTab.startsWith('ref:') && resolvedActive.kind === 'ref'
       ? activeTab.slice('ref:'.length)
       : (resolvedActive && resolvedActive.kind === 'lib' ? resolvedActive.blobKey : null);
@@ -5314,6 +5315,19 @@ function render() {
       }
       if (docBlobUrls.has(blobKey)) {
         activeSrc = resolvedActive.page ? `${docBlobUrls.get(blobKey)}#page=${resolvedActive.page}` : docBlobUrls.get(blobKey);
+      } else if (refDocBlobKeys.has(blobKey)) {
+        // refDocBlobKeys (despite the name, every doc-blob-store key, ref
+        // AND lib — populated by store.listDocBlobKeys(), refreshed right
+        // after every import) already confirms a blob exists for this key;
+        // its object URL just hasn't resolved THIS tick yet. Don't race
+        // that against `resolvedActive.src` (a local assets/docs/ path
+        // that may well be absent on this machine, or deliberately absent
+        // on the deployed site) — show nothing for this one instant rather
+        // than briefly loading a broken fallback the async blob check
+        // would otherwise immediately replace anyway (the actual reported
+        // bug: a freshly-imported doc still flashed a dead 404 first).
+        activeSrc = null;
+        pendingBlob = true;
       }
     }
     if (activeSrc) {
@@ -5336,13 +5350,18 @@ function render() {
     } else {
       // A resolved 'lib' entry with no dataUrl means the file never actually
       // saved (e.g. an old campaign that predates store.js's quota-rollback
-      // fix) — show a message instead of a blank iframe.
+      // fix) — show a message instead of a blank iframe. A confirmed-
+      // present blob whose object URL just hasn't resolved yet this tick
+      // (pendingBlob, see above) gets a neutral loading message instead —
+      // it's about to render, not actually broken.
       frame.hidden = true;
       frame.removeAttribute('src');
       empty.hidden = false;
-      empty.textContent = resolvedActive
-        ? `"${resolvedActive.title}" couldn't be loaded — it may have failed to save (browser storage limits). Try re-adding it, or for large rulebooks add the PDF to assets/docs/ and rebuild.`
-        : 'This document is no longer available.';
+      empty.textContent = pendingBlob
+        ? `Loading "${resolvedActive.title}"…`
+        : resolvedActive
+          ? `"${resolvedActive.title}" couldn't be loaded — it may have failed to save (browser storage limits). Try re-adding it, or for large rulebooks add the PDF to assets/docs/ and rebuild.`
+          : 'This document is no longer available.';
       lastDocViewerSrc = null;
     }
   }
