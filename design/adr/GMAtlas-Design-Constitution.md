@@ -95,22 +95,43 @@ keys, global function reassignment, and a per-element listener for every
 control. Every one of these is enforced in the current code, not just
 documented:
 
-1. **One versioned campaign document is the single source of truth.**
-   `src/core/schema.js`'s `defaultCampaign()` defines its exact shape and a
-   `schemaVersion`. Every feature reads and writes through it — no feature
-   keeps a separate store.
+1. **One versioned campaign document is the single source of truth for ONE
+   active campaign among several stored.** `src/core/schema.js`'s
+   `defaultCampaign()` defines its exact shape and a `schemaVersion`; every
+   feature reads and writes through whichever document `store.get()`
+   currently returns — no feature keeps a separate store. Multiple
+   campaigns coexist (docs/adr/00XX-rules-profiles-multi-campaign.md) via a
+   small app-level registry (`appConfig`: which campaigns exist, which one
+   is active, and the Rules Profiles — see rule 2) kept separate from any
+   one campaign's own document; `store.get()`/`store.update()` always
+   operate on the ACTIVE campaign only, so this remains true for any single
+   call site even though the underlying storage now holds more than one
+   document.
 2. **Exactly one module touches persistence: `src/core/store.js`.** IndexedDB
-   (one database, one key/value object store, two keys: the live document and
-   a one-slot backup written best-effort immediately before every real
-   write). Its public surface: synchronous `get()` (always the in-memory
-   doc), synchronous-call-shape `update(fn)` (persists in the background,
-   notifies subscribers immediately, rolls back and re-notifies on a failed
-   persist unless a newer edit has already landed on top), `subscribe(fn)`,
-   `onPersistError(fn)`, synchronous `export()`, and real `async`
-   `import()`/`newCampaign()`/`bindFile()`/`restoreBackup()`. A handful of
-   legacy `localStorage` keys are read once, on first boot only, as a
-   lossless fallback for pre-IndexedDB campaigns — never written to again.
-   Nothing else calls `localStorage` or `indexedDB` directly.
+   (one database, one key/value object store; each campaign under its own
+   `campaign:<id>` key plus a `campaignBackup:<id>` one-slot backup written
+   best-effort immediately before every real write, and one `appConfig` key
+   for the campaign/profile registry above). Its public surface: synchronous
+   `get()` (the active campaign doc, with the active Rules Profile's six
+   ruleset fields — Genre Pack, Stat System, Trade Economy Model, Rules
+   Constitution choices, Game System Activation, Party headline fields —
+   overlaid onto its `settings`), synchronous-call-shape `update(fn)`
+   (persists the active campaign in the background, notifies subscribers
+   immediately, rolls back and re-notifies on a failed persist unless a
+   newer edit has already landed on top; its mutator clones the RAW
+   un-overlaid doc, so profile values are never baked back into a
+   persisted campaign record), `subscribe(fn)`, `onPersistError(fn)`,
+   synchronous `export()`, and real `async`
+   `import()`/`newCampaign()`/`switchCampaign()`/`renameCampaign()`/
+   `bindFile()`/`restoreBackup()`, plus profile-registry surface
+   (`listProfiles()`/`getActiveProfile()`/`createProfile()`/
+   `updateProfile()`/`renameProfile()`). `newCampaign()` no longer replaces
+   the current campaign — it registers an additional one. A handful of
+   legacy `localStorage` keys, plus the old pre-Rules-Profile fixed
+   `campaign`/`campaignBackup` IndexedDB keys, are read once, on first
+   boot only, as a lossless fallback for pre-multi-campaign installs —
+   never written to again. Nothing else calls `localStorage` or
+   `indexedDB` directly.
 3. **The domain layer (`src/domain/*.js`, 34 files) is pure and DOM-free.**
    Every mutator takes a campaign object and returns a new one — no mutation
    of the input, no side effects, no DOM access. This is what makes 451

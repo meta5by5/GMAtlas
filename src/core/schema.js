@@ -12,6 +12,11 @@ export const APP_NAME = 'GMAtlas';
 // Bump this whenever the shape changes; add a matching step in migrate.js.
 export const SCHEMA_VERSION = 1;
 
+// Modules a Rules Profile can hide entirely (design/adr/rules-profiles-
+// multi-campaign.md). Party is deliberately NOT here — it stays always-
+// reachable regardless of profile, same as Guide/Oracle/Cast/Journal/etc.
+export const GATEABLE_MODULES = ['colony', 'world-tracker', 'trade', 'battlemap', 'graph', 'faction-events'];
+
 // The canonical WHO / WHERE / WHAT / WHY / HOW context — a first-class stored
 // model, not something re-derived on every render (that was a v0.53 weakness).
 export const CONTEXT_QUESTIONS = ['who', 'where', 'what', 'why', 'how'];
@@ -169,16 +174,18 @@ export function defaultCampaign(now = new Date().toISOString()) {
 
     settings: {
       genre: 'Hostile',  // genre-aware, not genre-locked
-      // Which oracle table set (data/genrePacks.js) is active — separate
-      // from `genre` above, which stays a free-text flavor label a GM can
-      // type anything into. An old campaign with no genrePack reads as
-      // 'hostile' (findGenrePack's own fallback), so this needed no
-      // migration step.
+      // genrePack/tradeEconomyModel/statRuleset/rulesProviderChoices/
+      // gameSystemActivations/partyHeadlineFields below are INERT as of
+      // the Rules Profile feature (design/adr/rules-profiles-multi-
+      // campaign.md) — a Rules Profile now owns these, and store.get()
+      // overlays the active profile's values onto this object on every
+      // read, shadowing whatever's persisted here. Kept declared (not
+      // removed) only so an old exported campaign JSON stays losslessly
+      // importable per migration rule 5 — same "preserved but inert"
+      // posture as `director`/`form` below. Never read these fields
+      // directly; read them off the active profile (store.getActiveProfile()
+      // or the overlaid doc.settings, which is the same thing).
       genrePack: 'hostile',
-      // Which Location economy-type list (data/economyTypes.js) is active
-      // for the Merchant Rules Lens (docs/adr/0013) — only one model
-      // operates at a time. An old campaign with no tradeEconomyModel reads
-      // as 'hostile', matching genrePack's own fallback convention above.
       tradeEconomyModel: 'hostile',
       tone: '',
       statRuleset: 'starforged',
@@ -244,6 +251,50 @@ export function defaultCampaign(now = new Date().toISOString()) {
     // transformation provably drops nothing. Inspected by tests.
     _legacy: {},
   };
+}
+
+// A Rules Profile bundles: which of GATEABLE_MODULES are visible, what
+// fills the Storyboard's three positions, and the six ruleset fields that
+// used to live directly on a campaign's `settings` (see the comment on
+// defaultCampaign().settings.genrePack above). Shared across every campaign
+// that picks it — editing a profile changes it everywhere it's used, by
+// design (design/adr/rules-profiles-multi-campaign.md).
+export function defaultRulesProfile(name = 'Default', now = new Date().toISOString()) {
+  return {
+    id: uid('profile'),
+    name,
+    createdAt: now,
+    updatedAt: now,
+    // Values are CONTENT ids, a deliberately separate namespace from this
+    // object's own keys (the three fixed SLOT names) — 'dashboard'/
+    // 'narrative'/'copilot' mean "this position's own built-in content"
+    // (the former Dashboard/Narrative/Advisor); any other DRAWERS id
+    // (colony, world-tracker, party, trade, …) is equally valid here.
+    // Content ids must never equal a slot name (domain/rulesProfiles.js's
+    // resolvePositionContentId treats that as legacy/unset data) — this is
+    // what lets a freed built-in, opened directly from the top nav once
+    // something else occupies its slot, render itself instead of being
+    // mistaken for a reference back to whatever now fills that slot.
+    storyboardPositions: { composer: 'dashboard', navigator: 'narrative', advisor: 'copilot' },
+    moduleEnabled: GATEABLE_MODULES.reduce((acc, id) => { acc[id] = true; return acc; }, {}),
+    ruleset: {
+      genrePack: 'hostile',
+      tradeEconomyModel: 'hostile',
+      statRuleset: 'starforged',
+      rulesProviderChoices: {},
+      gameSystemActivations: { swn: false },
+      partyHeadlineFields: ['Health', 'Momentum'],
+    },
+  };
+}
+
+// The app-level registry: which campaigns exist (a lightweight index, not
+// full documents — each campaign's actual document lives under its own
+// store.js key), which Rules Profiles exist, and which campaign is active.
+// Separate from any one campaign document since a profile is shared across
+// campaigns and a campaign list obviously can't live inside one campaign.
+export function defaultAppConfig() {
+  return { activeCampaignId: null, campaigns: [], profiles: [] };
 }
 
 /** Deep-merge a partial document onto defaults so old/partial docs stay valid. */

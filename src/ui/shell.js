@@ -79,60 +79,20 @@ import { titleFromFilename } from '../domain/titleCase.js';
 import { buildSessionRecap, formatSessionRecap } from '../domain/recap.js';
 import { addTemplateSystem, addTemplateField, updateTemplateField, removeTemplateField, moveTemplateField } from '../domain/statblockTemplates.js';
 import { universalSearch } from '../domain/search.js';
-import { renderWorkspace, composerBodyHtml, navigatorBodyHtml } from './workspace/index.js';
+import { positionCardHtml, composerBodyHtml, navigatorBodyHtml } from './workspace/index.js';
 import { renderCopilot } from './copilotPanel.js';
 import { renderDrawer, formatBytes, helpToggle } from './drawers/index.js';
 import { renderFactionEvents } from './drawers/factionEvents.js';
 import { renderSearchPanel } from './searchPanel.js';
 import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
+import { isModuleVisible, setModuleEnabled, setStoryboardPosition, updateProfileRuleset, applyProfileDraft, resolvePositionContentId } from '../domain/rulesProfiles.js';
+import { DRAWER_META, drawerMeta } from './drawerMeta.js';
 
-// 'cast' IS a real drawer (2026-07-06 restructure), an ordinary DRAWERS/
-// openDrawers member with no special-cased open/close behavior (docs/adr/
-// 0032 removed the anchor-slot mechanism it used to open into by default —
-// dragging an entity into another tab's fields is now the touch-drag
-// hover-to-switch-tab gesture instead, see onTouchMove below).
-// 'entity-detail' (an entity's actual name/tags/overview/statblocks/
-// relationships form) is NOT here — it has no edge nav button at all, and
-// only ever opens via openDrawerTab('entity-detail') from an entity click
-// anywhere (mention link, Cast row, relationship chip, graph node, ...),
-// never picked from the tab list directly. See DRAWER_META for how the tab
-// strip still labels it despite that.
-const DRAWERS = [
-  { id: 'guide', glyph: '📘', label: 'Guide' },
-  { id: 'journal', glyph: '📖', label: 'Journal' },
-  { id: 'oracle', glyph: '🎲', label: 'Oracle' },
-  { id: 'party', glyph: '👥', label: 'Party' },
-  { id: 'cast', glyph: '☷', label: 'Cast' },
-  { id: 'colony', glyph: '🏛', label: 'Colony' },
-  { id: 'world-tracker', glyph: '🪐', label: 'World' },
-  { id: 'faction-events', glyph: '⚔', label: 'Faction Events' },
-  { id: 'trade', glyph: '💰', label: 'Trade' },
-  { id: 'documents', glyph: '📄', label: 'Docs' },
-  { id: 'gallery', glyph: '🖼', label: 'Gallery' },
-  { id: 'battlemap', glyph: '🗺', label: 'Battlemap' },
-  { id: 'graph', glyph: '🔗', label: 'Graph' },
-  { id: 'settings', glyph: '⚙', label: 'Settings' },
-];
-// Tab-strip label/glyph lookup that also covers drawer ids with no edge
-// button (currently just entity-detail) — DRAWERS.find(...) alone would
-// come up empty for those.
-const DRAWER_META = {
-  'entity-detail': { id: 'entity-detail', glyph: '👤', label: 'Entity' },
-  // None of these three are real pinned drawers (never added to
-  // `openDrawers`) — see renderActiveDrawerHtml/the drawer-tabs render
-  // below. At compact widths (isCompactTab() — phone AND tablet, design/
-  // UX-ROADMAP.md Steps 4/5) 'composer'/'navigator'/'advisor' are ALWAYS in
-  // the tab strip, permanently pinned, unclosable — this tab menu IS how
-  // the Storyboard is reached there, since .mc-workspace's own always-
-  // both-visible rendering is hidden at that tier (styles/cockpit.css) in
-  // favor of this. On desktop only 'advisor' rides along, and only once a
-  // real drawer is open (Step 3) — Composer/Navigator stay their own
-  // permanent columns there.
-  composer: { id: 'composer', glyph: '📝', label: 'Composer' },
-  navigator: { id: 'navigator', glyph: '🧭', label: 'Navigator' },
-  advisor: { id: 'advisor', glyph: '💡', label: 'Advisor' },
-};
-function drawerMeta(id) { return DRAWERS.find((d) => d.id === id) || DRAWER_META[id] || null; }
+// DRAWERS/DRAWER_META/drawerMeta live in ./drawerMeta.js — shared with
+// drawers/index.js's Settings > Ruleset Profile Editor tab (design/adr/rules-profiles-multi-campaign.md),
+// which needs the same id/label list to build its Storyboard position
+// selects and module-enable checkboxes without a circular import back to
+// this file.
 // Compact tier boundary (phone AND tablet) — matches styles/cockpit.css's
 // own `max-width: 1023px` breakpoint for .mc-workspace/.mc-copilot exactly;
 // keep these two in sync if either changes. Widened from phone-only
@@ -157,13 +117,153 @@ function isPhoneWidth() { return window.innerWidth <= PHONE_BREAKPOINT; }
 // CHANGES" QoL batch — they're still ordinary drawers otherwise (DRAWERS/
 // drawerMeta above is unchanged, still the source of truth for both groups'
 // glyph/label).
-const EDGE_ORDER = ['guide', 'oracle', 'cast', 'faction-events', 'trade', 'documents', 'gallery', 'battlemap', 'graph', 'copilot'];
+// 'advisor-toggle' is a sentinel (not a real content id — kept distinct
+// from 'copilot', the Advisor's actual built-in content id, precisely to
+// avoid the same slot/content ambiguity this whole scheme exists to
+// avoid) meaning "toggle the .mc-copilot aside open/closed"; its button's
+// own glyph/label follow whatever content the Advisor position currently
+// holds (see computeVisibleEdgeOrder's render loop).
+const EDGE_ORDER = ['guide', 'oracle', 'cast', 'faction-events', 'trade', 'documents', 'gallery', 'battlemap', 'graph', 'advisor-toggle'];
 // The header's own small drawer-tab group, right-aligned in .header-actions
 // — same data-drawer-open routing as the edge nav (onClick's [data-drawer-
 // open] branch has no idea which container a button lives in), rendered by
 // the separate headerTabButtonHTML() below since the header is a compact
 // horizontal bar, not the edge nav's vertical icon-tile strip.
 const HEADER_ORDER = ['party', 'colony', 'world-tracker', 'journal'];
+
+// Rules Profile module gating + Storyboard positions (design/adr/rules-
+// profiles-multi-campaign.md). EDGE_ORDER/HEADER_ORDER above are the full,
+// ungated candidate lists — computeVisibleEdgeOrder/computeVisibleHeaderOrder
+// filter+augment them per the active profile on every render:
+//  - a GATEABLE_MODULES id the profile has disabled drops out entirely;
+//  - an id currently occupying a Storyboard position drops out of its
+//    normal nav slot (it's reachable via the position instead);
+//  - 'dashboard'/'narrative'/'copilot' (the built-in Composer/Navigator/
+//    Advisor content) surface in the header whenever they are NOT the
+//    content filling their own position — "move the current three to the
+//    top navigation" when something else takes over a position.
+// BUILTIN_POSITION_IDS = the three fixed SLOT names; BUILTIN_CONTENT_IDS =
+// the three built-in CONTENT ids each slot points at by default — a
+// deliberately separate namespace (domain/rulesProfiles.js's
+// resolvePositionContentId/BUILTIN_SLOT_CONTENT). Conflating them was a
+// real reported bug: a freed built-in's own top-nav button resolved
+// through the SLOT mapping instead of rendering itself, so — once a
+// profile reassigned the slot elsewhere (5PFH's Composer -> Colony) —
+// clicking "Composer" in the top nav kept showing Colony instead of the
+// actual Composer/Dashboard content the button was labeled with.
+const BUILTIN_POSITION_IDS = ['composer', 'navigator', 'advisor'];
+const BUILTIN_CONTENT_IDS = ['dashboard', 'narrative', 'copilot'];
+function positionContentIds(profile) {
+  if (!profile) return new Set();
+  return new Set(BUILTIN_POSITION_IDS.map((slot) => resolvePositionContentId(profile, slot)));
+}
+function computeVisibleEdgeOrder(profile) {
+  const positioned = positionContentIds(profile);
+  return EDGE_ORDER.filter((id) => {
+    if (id === 'advisor-toggle') return true; // aside toggle always present; its content follows the Advisor position
+    if (!isModuleVisible(profile, id)) return false;
+    return !positioned.has(id);
+  });
+}
+function computeVisibleHeaderOrder(profile) {
+  const positioned = positionContentIds(profile);
+  const base = HEADER_ORDER.filter((id) => isModuleVisible(profile, id) && !positioned.has(id));
+  const freedBuiltins = BUILTIN_CONTENT_IDS.filter((id) => !positioned.has(id));
+  return [...base, ...freedBuiltins];
+}
+// Resolve a content id (built-in dashboard/narrative/copilot, or any real
+// DRAWERS id) into real HTML. Lives here (not workspace/index.js or
+// drawers/index.js) because it's the one place that can import all three
+// content sources — composerBodyHtml/navigatorBodyHtml (workspace/
+// index.js), renderCopilot (copilotPanel.js), and renderDrawer (drawers/
+// index.js) — without creating a circular import between those files
+// (drawers/index.js -> workspace/index.js already runs the other way via
+// factionEvents.js's shared helpers). Callers pass an already-resolved
+// content id — a raw SLOT id ('composer'/'navigator'/'advisor') must go
+// through resolvePositionContentId first (see resolveSlotContentId below).
+function renderPositionContent(contentId, doc, ui) {
+  if (contentId === 'dashboard') return composerBodyHtml(doc, ui);
+  if (contentId === 'narrative') return navigatorBodyHtml(doc, ui);
+  if (contentId === 'copilot') return renderCopilot(doc, ui);
+  if (contentId === 'faction-events') {
+    return renderFactionEvents(doc, { factionEventsDrafts, factionEventsFactionFilterId, factionEventsLocationFilterId, factionEventsStepFactionId, factionRoundHistoryOpen, conflictEscalationSuggestions });
+  }
+  if (!isModuleVisible(store.getActiveProfile(), contentId)) return '';
+  return renderDrawer(contentId, doc, ui);
+}
+function renderStoryboardGrid(doc, ui, profile) {
+  const composerContentId = resolvePositionContentId(profile, 'composer');
+  const navigatorContentId = resolvePositionContentId(profile, 'navigator');
+  const composerLabel = (drawerMeta(composerContentId) || DRAWER_META.composer).label;
+  const navigatorLabel = (drawerMeta(navigatorContentId) || DRAWER_META.navigator).label;
+  return `<div class="storyboard-grid">${positionCardHtml(composerLabel, renderPositionContent(composerContentId, doc, ui))}${positionCardHtml(navigatorLabel, renderPositionContent(navigatorContentId, doc, ui), 'navigator-card')}</div>`;
+}
+// A Storyboard SLOT id ('composer'/'navigator'/'advisor') resolves through
+// the active profile (resolvePositionContentId) to whatever CONTENT id
+// currently fills it — used anywhere a SLOT id shows up as a pinned tab or
+// activeDrawer value, so its label/glyph/rendered body reflect the real
+// content, not the fixed slot name (e.g. the 5PFH profile's Composer slot
+// reads/shows as "Colony"). Any OTHER id (a real content id already, e.g.
+// 'dashboard' or 'colony') passes through unresolved — it's not a slot, it
+// IS the content.
+function resolveSlotContentId(id, profile) {
+  if (!BUILTIN_POSITION_IDS.includes(id)) return id;
+  return resolvePositionContentId(profile, id);
+}
+function currentEditingProfileId() {
+  if (settingsSelectedProfileId && store.listProfiles().some((p) => p.id === settingsSelectedProfileId)) return settingsSelectedProfileId;
+  const active = store.getActiveProfile();
+  return active ? active.id : null;
+}
+
+// Same fallback shape as store.js's own structuredCloneSafe — most runtimes
+// this app targets have a real global structuredClone, but this avoids a
+// hard dependency on it.
+function cloneProfileSafe(profile) {
+  try { return structuredClone(profile); } catch { return JSON.parse(JSON.stringify(profile)); }
+}
+
+// --- Ruleset Profile Editor drafts (direct request: explicit Save/Cancel,
+// not instant-apply) --------------------------------------------------------
+// Seeds a profile's draft from the STORED value the first time it's
+// touched this session; every later call returns the SAME draft object
+// (further edits mutate it in place via the setX helpers below, each of
+// which already returns a new object per the pure-mutator convention —
+// this just re-stores whatever they return).
+function getProfileDraft(profileId) {
+  if (!profileId) return null;
+  if (!profileDrafts.has(profileId)) {
+    const stored = store.listProfiles().find((p) => p.id === profileId);
+    if (!stored) return null;
+    profileDrafts.set(profileId, cloneProfileSafe(stored));
+  }
+  return profileDrafts.get(profileId);
+}
+function setProfileDraft(profileId, nextDraft) { profileDrafts.set(profileId, nextDraft); }
+// Only the three fields a profile draft ever touches are compared — never
+// id/name/createdAt/updatedAt, so simply opening the editor (which seeds a
+// draft equal to the stored value) never reads as "dirty."
+function isProfileDraftDirty(profileId) {
+  const draft = profileDrafts.get(profileId);
+  if (!draft) return false;
+  const stored = store.listProfiles().find((p) => p.id === profileId);
+  if (!stored) return false;
+  const shape = (p) => JSON.stringify({ storyboardPositions: p.storyboardPositions, moduleEnabled: p.moduleEnabled, ruleset: p.ruleset });
+  return shape(draft) !== shape(stored);
+}
+function saveProfileDraft(profileId) {
+  const draft = profileDrafts.get(profileId);
+  if (!draft) return;
+  store.updateProfile(profileId, (stored) => applyProfileDraft(stored, draft));
+  profileDrafts.delete(profileId);
+  toast('Profile saved');
+  render();
+}
+function cancelProfileDraft(profileId) {
+  if (!profileDrafts.has(profileId)) return;
+  profileDrafts.delete(profileId);
+  render();
+}
 
 // data-shift-prompt's generic inline-prompt placeholder text, per shift
 // name — a nicety, not a requirement (the fallback `${name}…` reads fine
@@ -196,7 +296,27 @@ let docFilter = '';
 let graphFilter = ''; // ephemeral — highlights/dims graph-svg nodes by name substring, never removes them
 let helpOpen = new Set(); // ephemeral — which collapsible "?" tip icons are currently expanded, keyed by a stable per-instance string
 let settingsMenuOpen = false; // ephemeral — the header gear's Settings/About dropdown (New Campaign lives only in the Settings drawer now, not this menu)
-let settingsTab = 'general'; // ephemeral — which of the 4 topical Settings tabs is active (UX batch)
+let settingsTab = 'general'; // ephemeral — which of the 6 topical Settings tabs is active (UX batch)
+// Ruleset Profile Editor tab (design/adr/rules-profiles-multi-campaign.md) —
+// which profile the ruleset/module/position editor is currently showing;
+// null falls back to the active campaign's own profile
+// (currentEditingProfileId()).
+let settingsSelectedProfileId = null;
+// Buffered fields for the "New Campaign" bespoke inline form (title + a
+// Rules Profile <select>) — a genuinely multi-field create action, so per
+// CLAUDE.md this is its own inline form rather than window.prompt() or the
+// single-field openInlinePrompt.
+let newCampaignDraft = { title: '', profileId: '' };
+// Ruleset Profile Editor drafts (direct request: profile edits apply "when
+// the changes are saved," not instantly like the rest of Settings) — one
+// uncommitted draft per profile id touched this session, so switching which
+// profile you're editing never discards another profile's in-progress
+// edits. Only ever holds storyboardPositions/moduleEnabled/ruleset — a
+// profile's id/name/createdAt are never drafted (rename is its own,
+// separately-committed inline-prompt action). Cleared for a given id on
+// Save (re-seeds fresh from the store next time that profile is opened) or
+// Cancel (discards, reverting the form to the stored value).
+let profileDrafts = new Map();
 let aboutOpen = false; // ephemeral — the About overlay
 let docTagFilters = new Set();
 let docTagEditorOpen = new Set(); // ephemeral — which doc/ref cards' tag editors are expanded
@@ -638,7 +758,7 @@ export function mountShell(el) {
       <header class="mc-header">
         <div class="brand"><h1>GMAtlas</h1></div>
         <div class="header-actions">
-          <button class="btn ghost sm" data-search-toggle title="Search everything (Cast, Journal, Oracle, Documents, Party, Colony) — Ctrl/Cmd+K"><span class="icon-mono">🔍</span> Search</button>
+          <button class="btn ghost sm" data-search-toggle title="Search everything (Cast, Journal, Oracle, Documents, Party, Colony) — Ctrl/Cmd+K"><span class="icon-mono">🔍</span> <span class="btn-label">Search</span></button>
           <span class="campaign-title" title="Campaign name"></span>
           <div class="header-drawer-tabs" data-header-drawer-tabs></div>
           <div class="settings-menu-wrap">
@@ -661,7 +781,7 @@ export function mountShell(el) {
       </div>
       <div class="mc-breadcrumb" data-breadcrumb></div>
       <main class="mc-workspace" data-workspace aria-live="polite"></main>
-      <aside class="mc-copilot" data-copilot aria-label="Advisor"><h2>Advisor</h2><div data-copilot-body></div></aside>
+      <aside class="mc-copilot" data-copilot aria-label="Advisor"><h2 data-copilot-title>Advisor</h2><div data-copilot-body></div></aside>
       <div class="mc-doc-viewer" data-doc-viewer hidden>
         <div class="doc-viewer-tabs" data-doc-viewer-tabs></div>
         <div class="doc-viewer-empty" data-doc-viewer-empty hidden></div>
@@ -869,11 +989,20 @@ function onClick(ev) {
   const settingsTabBtn = hit('[data-settings-tab]');
   if (settingsTabBtn) { settingsTab = settingsTabBtn.dataset.settingsTab; return renderDrawerBody(); }
 
-  // --- Phase 9: Activity -> Rules Lens suggestion, apply as default ruleset ---
+  // --- Phase 9: Activity -> Rules Lens suggestion, apply as default ruleset
+  // --- A one-click "use this" from the Advisor's own suggestion, not a
+  // Ruleset Profile Editor form field — applies immediately (not staged as
+  // a draft) since the toast promises it took effect right now; also drops
+  // any in-progress unsaved draft for this profile so it can't later
+  // overwrite this change back to a stale value on a later Save. ---
   const applyRuleset = hit('[data-apply-ruleset]');
   if (applyRuleset) {
     const id = applyRuleset.dataset.applyRuleset;
-    store.update((d) => { d.settings.statRuleset = id; return d; });
+    const profileId = currentEditingProfileId();
+    if (profileId) {
+      store.updateProfile(profileId, (p) => updateProfileRuleset(p, { statRuleset: id }));
+      profileDrafts.delete(profileId);
+    }
     return toast(`Default ruleset set to ${id}`);
   }
 
@@ -2968,7 +3097,56 @@ function onClick(ev) {
     return store.update((d) => editLocationSensoryField(d, locId, field, ''));
   }
 
-  if (hit('[data-new-campaign]')) return confirmNewCampaign();
+  // Campaigns / Ruleset Profile Editor (design/adr/rules-profiles-multi-
+  // campaign.md) — campaign switch/create/rename, profile select/create/
+  // rename. Multiple
+  // campaigns coexist now, so "New Campaign" no longer destroys the current
+  // one (confirmNewCampaign's old window.confirm() is gone) — it registers
+  // a new one from the buffered newCampaignDraft form and switches to it.
+  const campaignSwitchBtn = hit('[data-campaign-switch]');
+  if (campaignSwitchBtn) {
+    return store.switchCampaign(campaignSwitchBtn.dataset.campaignSwitch).then(() => toast('Switched campaign'));
+  }
+  const campaignRenameBtn = hit('[data-campaign-rename]');
+  if (campaignRenameBtn) {
+    const id = campaignRenameBtn.dataset.campaignRename;
+    const current = store.listCampaigns().find((c) => c.id === id);
+    return openInlinePrompt('campaign-rename', { label: 'Campaign title', value: current ? current.title : '', meta: { id }, anchorRect: campaignRenameBtn.getBoundingClientRect() });
+  }
+  if (hit('[data-campaign-create]')) {
+    const profiles = store.listProfiles();
+    const profileId = newCampaignDraft.profileId || (profiles[0] && profiles[0].id);
+    const title = newCampaignDraft.title.trim();
+    store.newCampaign({ title: title || undefined, profileId }).then(() => toast('Campaign created'));
+    newCampaignDraft = { title: '', profileId: '' };
+    return;
+  }
+  const profileSelectBtn = hit('[data-profile-select-edit]');
+  if (profileSelectBtn) { settingsSelectedProfileId = profileSelectBtn.dataset.profileSelectEdit; return render(); }
+  if (hit('[data-profile-create]')) {
+    const cloneFromId = currentEditingProfileId();
+    return store.createProfile({ name: 'New Profile', cloneFromId }).then(() => {
+      // createProfile() appends — the new one is always last.
+      const profiles = store.listProfiles();
+      settingsSelectedProfileId = profiles.length ? profiles[profiles.length - 1].id : null;
+      toast('Profile created');
+      render();
+    });
+  }
+  const profileRenameBtn = hit('[data-profile-rename]');
+  if (profileRenameBtn) {
+    const id = profileRenameBtn.dataset.profileRename;
+    const current = store.listProfiles().find((p) => p.id === id);
+    return openInlinePrompt('profile-rename', { label: 'Profile name', value: current ? current.name : '', meta: { id }, anchorRect: profileRenameBtn.getBoundingClientRect() });
+  }
+  // Ruleset Profile Editor Save/Cancel (direct request: edits apply "when
+  // the changes are saved") — saveProfileDraft commits the draft to
+  // store.updateProfile (every campaign using this profile updates live);
+  // cancelProfileDraft discards it, reverting the form to the stored value.
+  const profileDraftSaveBtn = hit('[data-profile-draft-save]');
+  if (profileDraftSaveBtn) { saveProfileDraft(profileDraftSaveBtn.dataset.profileDraftSave); return; }
+  const profileDraftCancelBtn = hit('[data-profile-draft-cancel]');
+  if (profileDraftCancelBtn) { cancelProfileDraft(profileDraftCancelBtn.dataset.profileDraftCancel); return; }
   if (hit('[data-bind-file]')) return store.bindFile().then(() => toast('Save file bound')).catch(() => {});
   if (hit('[data-restore-backup]')) {
     if (!window.confirm('Restore the last backup? This replaces the current campaign with the previous save — export the current one first if you want to keep it.')) return;
@@ -3551,19 +3729,25 @@ function onChange(ev) {
     return toast(msg);
   }
 
-  // --- Rules Constitution / Game System Activation (docs/adr/0032) — same
-  // direct-mutation-of-the-already-cloned-doc shape as the existing
-  // data-settings-stat-ruleset/data-settings-toolbar-default toggles just
-  // below (store.update's mutator always receives a fresh clone). ---
+  // --- Rules Constitution / Game System Activation (Ruleset Profile
+  // Editor) — edits a draft, not the stored profile directly; Save/Cancel
+  // below commit or discard (direct request: profile edits apply "when the
+  // changes are saved," not instantly). ---
   const rulesProviderChoice = t.closest('[data-rules-provider-choice]');
   if (rulesProviderChoice) {
     const areaId = rulesProviderChoice.dataset.rulesProviderChoice;
-    return store.update((d) => { d.settings.rulesProviderChoices = { ...(d.settings.rulesProviderChoices || {}), [areaId]: t.value }; return d; });
+    const profileId = currentEditingProfileId();
+    const draft = getProfileDraft(profileId);
+    if (draft) setProfileDraft(profileId, updateProfileRuleset(draft, { rulesProviderChoices: { ...draft.ruleset.rulesProviderChoices, [areaId]: t.value } }));
+    return render();
   }
   const gameSystemActivate = t.closest('[data-game-system-activate]');
   if (gameSystemActivate) {
     const systemId = gameSystemActivate.dataset.gameSystemActivate;
-    return store.update((d) => { d.settings.gameSystemActivations = { ...(d.settings.gameSystemActivations || {}), [systemId]: t.checked }; return d; });
+    const profileId = currentEditingProfileId();
+    const draft = getProfileDraft(profileId);
+    if (draft) setProfileDraft(profileId, updateProfileRuleset(draft, { gameSystemActivations: { ...draft.ruleset.gameSystemActivations, [systemId]: t.checked } }));
+    return render();
   }
   if (t.closest('[data-faction-pacing-scenes-per-round]')) {
     const n = Math.max(0, Number(t.value) || 0);
@@ -3720,18 +3904,60 @@ function onChange(ev) {
   const guideTitleInput = t.closest('[data-guide-title-input]');
   if (guideTitleInput) { const id = getActiveGuideDoc(store.get()).id; if (t.value.trim()) return store.update((d) => renameGuideDoc(d, id, t.value.trim())); return; }
   if (t.closest('[data-genre-input]')) return store.update((d) => { d.settings.genre = t.value; return d; });
+  // Ruleset Profile Editor fields (design/adr/rules-profiles-multi-
+  // campaign.md): these six used to write straight onto the campaign doc's
+  // own settings; they now edit an uncommitted DRAFT of whichever profile
+  // the Ruleset Profile Editor tab currently has selected (defaults to the
+  // active campaign's own profile) — nothing applies to real campaigns
+  // until that draft is explicitly Saved (data-profile-draft-save, below).
   if (t.closest('[data-genre-pack-select]')) {
-    store.update((d) => { d.settings.genrePack = t.value; return d; });
-    return toast(`Genre Pack set to ${t.value}`);
+    const profileId = currentEditingProfileId();
+    const draft = getProfileDraft(profileId);
+    if (draft) setProfileDraft(profileId, updateProfileRuleset(draft, { genrePack: t.value }));
+    return render();
   }
-  if (t.closest('[data-settings-stat-ruleset]')) return store.update((d) => { d.settings.statRuleset = t.value; return d; });
+  if (t.closest('[data-settings-stat-ruleset]')) {
+    const profileId = currentEditingProfileId();
+    const draft = getProfileDraft(profileId);
+    if (draft) setProfileDraft(profileId, updateProfileRuleset(draft, { statRuleset: t.value }));
+    return render();
+  }
   if (t.closest('[data-settings-party-headline-fields]')) {
-    return store.update((d) => { d.settings.partyHeadlineFields = t.value.split(',').map((s) => s.trim()).filter(Boolean); return d; });
+    const profileId = currentEditingProfileId();
+    const draft = getProfileDraft(profileId);
+    const fields = t.value.split(',').map((s) => s.trim()).filter(Boolean);
+    if (draft) setProfileDraft(profileId, updateProfileRuleset(draft, { partyHeadlineFields: fields }));
+    return render();
   }
   if (t.closest('[data-settings-toolbar-default]')) return store.update((d) => { d.settings.toolbarCollapsedByDefault = t.checked; return d; });
   if (t.closest('[data-trade-economy-model-select]')) {
-    store.update((d) => { d.settings.tradeEconomyModel = t.value; return d; });
-    return toast(`Trade Economy Model set to ${t.value}`);
+    const profileId = currentEditingProfileId();
+    const draft = getProfileDraft(profileId);
+    if (draft) setProfileDraft(profileId, updateProfileRuleset(draft, { tradeEconomyModel: t.value }));
+    return render();
+  }
+  const moduleToggle = t.closest('[data-module-enabled-toggle]');
+  if (moduleToggle) {
+    const profileId = currentEditingProfileId();
+    const moduleId = moduleToggle.dataset.moduleEnabledToggle;
+    const draft = getProfileDraft(profileId);
+    if (draft) setProfileDraft(profileId, setModuleEnabled(draft, moduleId, t.checked));
+    return render();
+  }
+  const positionSelect = t.closest('[data-storyboard-position-select]');
+  if (positionSelect) {
+    const profileId = currentEditingProfileId();
+    const slot = positionSelect.dataset.storyboardPositionSelect;
+    const draft = getProfileDraft(profileId);
+    if (draft) setProfileDraft(profileId, setStoryboardPosition(draft, slot, t.value));
+    return render();
+  }
+  if (t.closest('[data-profile-select]')) { settingsSelectedProfileId = t.value; return render(); }
+  if (t.closest('[data-new-campaign-profile]')) { newCampaignDraft.profileId = t.value; return; }
+  const campaignReassignSelect = t.closest('[data-campaign-reassign-profile]');
+  if (campaignReassignSelect) {
+    const campaignId = campaignReassignSelect.dataset.campaignReassignProfile;
+    return store.setCampaignProfile(campaignId, t.value).then(() => toast('Campaign profile changed'));
   }
 
   if (t.closest('[data-import-campaign]')) {
@@ -4006,6 +4232,9 @@ function onInput(ev) {
   const expDial = t.closest('[data-expedition-dial]');
   if (expDial) { const lbl = expDial.previousElementSibling; if (lbl && lbl.classList.contains('metric')) lbl.textContent = `${t.value}/10`; return; }
 
+  const newCampaignTitle = t.closest('[data-new-campaign-title]');
+  if (newCampaignTitle) { newCampaignDraft.title = t.value; return; }
+
   const of = t.closest('[data-oracle-filter]');
   if (of) { oracleFilter = t.value; oracleTagFilter = null; renderDrawerBody(); restoreFocus('[data-oracle-filter]'); return; }
 
@@ -4061,14 +4290,6 @@ function onInput(ev) {
   if (mf) updateMentionSuggest(mf);
 }
 
-// Shared by the Settings drawer's own "New Campaign" button and the header
-// gear menu's identical item — one place owns the confirm text.
-function confirmNewCampaign() {
-  if (window.confirm('Start a new campaign? Your current one stays exportable but will be replaced in this browser.')) {
-    store.newCampaign().then(() => toast('New campaign'));
-  }
-}
-
 // Edge-tab click: closes if it's the currently-active tab (matches the old
 // single-drawer toggle behavior for the common case), otherwise opens it as
 // a new tab (or just switches to it if already pinned open) — never resets
@@ -4081,6 +4302,10 @@ function toggleDrawer(id) {
 
 function openDrawerTab(id) {
   if (!id) return;
+  // Defense in depth (design/adr/rules-profiles-multi-campaign.md): a profile switch can leave a stale
+  // openDrawers/activeDrawer entry pointing at a module the NEW active
+  // profile hides — never let it be (re)opened while hidden.
+  if (!isModuleVisible(store.getActiveProfile(), id)) return;
   if (!openDrawers.includes(id)) {
     openDrawers = [...openDrawers, id];
     if (id === 'oracle') oracleFilter = '';
@@ -5116,6 +5341,10 @@ function commitInlinePrompt() {
     store.update((d) => updateBattlemapIcon(d, meta.mapId, meta.iconId, { note: value }));
   } else if (kind === 'sector-corner-label') {
     store.update((d) => setSectorCornerLabel(d, meta.x, meta.y, meta.corner, value, 'custom'));
+  } else if (kind === 'campaign-rename') {
+    if (value) store.renameCampaign(meta.id, value).then(() => toast('Campaign renamed'));
+  } else if (kind === 'profile-rename') {
+    if (value) { store.renameProfile(meta.id, value); toast('Profile renamed'); }
   }
 }
 
@@ -5276,6 +5505,18 @@ function render() {
   const crumbs = doc.timeline.length ? doc.timeline : [{ label: doc.meta.title }, { label: `Scene ${doc.scenes.length}` }];
   bc.innerHTML = crumbs.map((c, i) => `${i ? '<span class="sep">▸</span>' : ''}<span class="crumb">${escapeHtml(c.label || '')}</span>`).join(' ');
 
+  // Rules Profile (design/adr/rules-profiles-multi-campaign.md): every
+  // module-visibility/Storyboard-position decision below reads this one
+  // value, computed once per render. Defense in depth against a stale
+  // openDrawers/activeDrawer entry surviving a profile switch (a real
+  // GATEABLE_MODULES id the NEW profile hides) — openDrawerTab() already
+  // refuses to (re)open one, this prunes any that got in before the switch.
+  const profile = store.getActiveProfile();
+  openDrawers = openDrawers.filter((id) => isModuleVisible(profile, id));
+  if (activeDrawer && !BUILTIN_POSITION_IDS.includes(activeDrawer) && activeDrawer !== 'faction-events' && !isModuleVisible(profile, activeDrawer)) {
+    activeDrawer = openDrawers[openDrawers.length - 1] || null;
+  }
+
   const workspaceUi = buildDrawerUi();
   // Compact widths — phone AND tablet (design/UX-ROADMAP.md Steps 4/5):
   // Composer/Navigator render inside the drawer panel instead (as
@@ -5284,14 +5525,21 @@ function render() {
   // rather than duplicating the same fields into two places in the DOM at
   // once.
   if (isCompactTab()) root.querySelector('[data-workspace]').innerHTML = '';
-  else replaceWorkspacePreservingScroll(root.querySelector('[data-workspace]'), renderWorkspace(doc, workspaceUi));
+  else replaceWorkspacePreservingScroll(root.querySelector('[data-workspace]'), renderStoryboardGrid(doc, workspaceUi, profile));
   // A freshly-rendered Scene field textarea starts at its rows="1" default
   // regardless of how much text it holds — only typing into it fires the
   // 'input' event that would otherwise trigger autoGrowSceneField, so a
   // field that already holds a long value needs this one-time sizing pass
   // to open at its real height instead of waiting for the next keystroke.
   root.querySelectorAll('[data-scene-field]').forEach(autoGrowSceneField);
-  root.querySelector('[data-copilot-body]').innerHTML = renderCopilot(doc, workspaceUi);
+  // The Advisor aside always shows whatever content the active profile has
+  // assigned to the 'advisor' Storyboard position — Co-Pilot by default,
+  // but e.g. Party under the 5PFH profile (see renderPositionContent).
+  const advisorContentId = resolvePositionContentId(profile, 'advisor');
+  const advisorMeta = drawerMeta(advisorContentId) || DRAWER_META.advisor;
+  root.querySelector('[data-copilot-body]').innerHTML = renderPositionContent(advisorContentId, doc, workspaceUi);
+  const copilotTitleEl = root.querySelector('[data-copilot-title]');
+  if (copilotTitleEl) copilotTitleEl.textContent = advisorMeta.label;
   root.querySelector('[data-copilot]').dataset.open = String(copilotOpen);
 
   const edge = root.querySelector('[data-edge]');
@@ -5307,8 +5555,8 @@ function render() {
   // relationship rather than a second copy of the same media query.
   const settingsWrap = root.querySelector('.settings-menu-wrap');
   if (settingsWrap) settingsWrap.remove();
-  edge.innerHTML = EDGE_ORDER.map((id) => {
-    if (id === 'copilot') return `<button data-toggle-copilot title="Advisor"><span class="glyph">💡</span><b>Advisor</b></button>`;
+  edge.innerHTML = computeVisibleEdgeOrder(profile).map((id) => {
+    if (id === 'advisor-toggle') return `<button data-toggle-copilot title="${escapeHtml(advisorMeta.label)}"><span class="glyph">${advisorMeta.glyph}</span><b>${escapeHtml(advisorMeta.label)}</b></button>`;
     // Faction Events (docs/adr/0031/0032) is an ordinary DRAWERS entry now
     // (see renderDrawer()'s switch) — special-cased ONLY because opening it
     // also narrows Cast's own type filter to Faction (see the click
@@ -5335,7 +5583,7 @@ function render() {
   // compact horizontal button instead of the edge nav's icon tile.
   const headerTabs = root.querySelector('[data-header-drawer-tabs]');
   if (headerTabs) {
-    headerTabs.innerHTML = HEADER_ORDER.map((id) => {
+    headerTabs.innerHTML = computeVisibleHeaderOrder(profile).map((id) => {
       const d = drawerMeta(id);
       if (!d) return '';
       return `<button class="btn ghost sm" data-drawer-open="${d.id}" aria-expanded="${activeDrawer === d.id}" title="${d.label}"><span class="glyph">${d.glyph}</span> <span class="btn-label">${d.label}</span></button>`;
@@ -5413,7 +5661,7 @@ function render() {
   // reachable from the tab strip instead now (design/UX-ROADMAP.md Step 3).
   root.querySelector('.cockpit').classList.toggle('has-open-drawer', openDrawers.length > 0);
   const titleEl = drawer.querySelector('[data-drawer-title]');
-  titleEl.textContent = titleForDrawer(doc, activeDrawer);
+  titleEl.textContent = titleForDrawer(doc, activeDrawer, profile);
   titleEl.classList.remove('drawer-title-toggle'); // Cast's own collapse-via-title is gone — Cast isn't a drawer tab anymore
   titleEl.title = '';
   // Direct follow-up request: every drawer, and the Advisor panel/grid
@@ -5451,8 +5699,12 @@ function render() {
   drawerTabsEl.hidden = compact ? false : tabIds.length < 2;
   drawerTabsEl.innerHTML = (!compact && tabIds.length < 2) ? '' : (
     `<div class="drawer-tabs-scroll">${tabIds.map((id) => {
-      const m = drawerMeta(id);
-      const pending = id === 'advisor' && hasPendingAdvisorDecision(doc);
+      // Pinned slot ids resolve through the active profile to whatever
+      // content actually fills them (design/adr/rules-profiles-multi-campaign.md) — the tab reads
+      // "Colony" under a profile that put Colony in the Composer slot,
+      // not the fixed "Composer" slot name.
+      const m = drawerMeta(resolveSlotContentId(id, profile));
+      const pending = id === 'advisor' && resolveSlotContentId('advisor', profile) === 'copilot' && hasPendingAdvisorDecision(doc);
       const pinned = PINNED_TAB_IDS.includes(id);
       const close = pinned ? '' : `<span class="drawer-tab-close" data-drawer-tab-close="${id}" aria-label="Close ${m ? m.label : id}">✕</span>`;
       return `<button class="drawer-tab ${id === activeDrawer ? 'active' : ''} ${pending ? 'pending' : ''}" data-drawer-tab="${id}" title="${m ? m.label : id}${pending ? ' — a decision is waiting' : ''}">
@@ -5823,12 +6075,12 @@ function diceRollCardHtml(label, method, r) {
 // Entity Detail's title names whichever entity it's currently showing —
 // there's only ever the one active entity, so unlike every other drawer
 // there's no separate list to distinguish it from.
-function titleForDrawer(doc, id) {
+function titleForDrawer(doc, id, profile) {
   if (id === 'entity-detail') {
     const active = getEntity(doc, doc.entities && doc.entities.activeId);
     return active ? `Entity — ${active.name || 'Unnamed'}` : 'Entity';
   }
-  const meta = drawerMeta(id);
+  const meta = drawerMeta(resolveSlotContentId(id, profile));
   return meta ? meta.label : 'Drawer';
 }
 
@@ -5879,6 +6131,17 @@ function buildDrawerUi() {
     // the same renderFactionEvents() body a second way when docked.
     factionEventsDockedInWhere, factionEventsDrafts, factionEventsFactionFilterId, factionEventsLocationFilterId, factionEventsStepFactionId,
     factionRoundHistoryOpen, entityDetailFocusEventId, conflictEscalationSuggestions, locationProximity,
+    // Campaigns / Ruleset Profile Editor Settings tabs (design/adr/rules-
+    // profiles-multi-campaign.md) — drawers/index.js stays a pure
+    // (doc, ui) -> html renderer with no store.js import of its own, so
+    // this campaign/profile registry data (which lives outside any one
+    // campaign document) is threaded through the same ui bag every other
+    // drawer already reads.
+    campaigns: store.listCampaigns(), profiles: store.listProfiles(),
+    activeProfileId: (store.getActiveProfile() || {}).id, editingProfileId: currentEditingProfileId(),
+    newCampaignDraft,
+    profileDraft: getProfileDraft(currentEditingProfileId()),
+    profileDraftDirty: isProfileDraftDirty(currentEditingProfileId()),
   };
 }
 
@@ -5939,9 +6202,22 @@ function renderActiveDrawerHtml(doc) {
   if (activeDrawer === 'faction-events') {
     return renderFactionEvents(doc, { factionEventsDrafts, factionEventsFactionFilterId, factionEventsLocationFilterId, factionEventsStepFactionId, factionRoundHistoryOpen, conflictEscalationSuggestions });
   }
-  if (activeDrawer === 'advisor') return renderCopilot(doc, buildDrawerUi());
-  if (activeDrawer === 'composer') return composerBodyHtml(doc, buildDrawerUi());
-  if (activeDrawer === 'navigator') return navigatorBodyHtml(doc, buildDrawerUi());
+  // Pinned SLOT ids (design/adr/rules-profiles-multi-campaign.md) resolve
+  // through the active profile — renderPositionContent() then dispatches
+  // to the right renderer, whether that's a built-in or some other
+  // module. A bare BUILTIN_CONTENT_IDS value (a freed built-in opened
+  // directly from the top nav, e.g. activeDrawer === 'dashboard') is
+  // already a resolved content id, not a slot — render it AS ITSELF,
+  // never re-resolved through a slot mapping (that was the actual bug:
+  // clicking the freed "Composer" button used to re-resolve through the
+  // Composer SLOT, which a profile may have long since reassigned
+  // elsewhere, e.g. to Colony under 5PFH).
+  if (BUILTIN_POSITION_IDS.includes(activeDrawer)) {
+    return renderPositionContent(resolveSlotContentId(activeDrawer, store.getActiveProfile()), doc, buildDrawerUi());
+  }
+  if (BUILTIN_CONTENT_IDS.includes(activeDrawer)) {
+    return renderPositionContent(activeDrawer, doc, buildDrawerUi());
+  }
   return renderDrawer(activeDrawer, doc, buildDrawerUi());
 }
 
@@ -5958,6 +6234,32 @@ function renderDrawerBody() {
   const doc = store.get();
   const body = root && root.querySelector('[data-drawer-body]');
   if (body) replaceBodyPreservingScroll(body, renderActiveDrawerHtml(doc));
+  // Rules Profile Storyboard positions (design/adr/rules-profiles-multi-
+  // campaign.md): a module's own local UI state (a tab, a toggle, a
+  // collapsed section — World Tracker's Sectors tab, Party's member
+  // expand, ...) lives in the SAME module whether it's opened as an
+  // ordinary drawer OR pinned to Composer/Navigator/Advisor by the active
+  // profile — but Composer/Navigator/Advisor are a completely separate DOM
+  // subtree from [data-drawer-body] (renderActiveDrawerHtml above never
+  // touches them). Without this, every renderDrawerBody()-driven local
+  // toggle (this is by far the majority of onClick's handlers) would
+  // silently mutate state while the visibly-positioned copy of that same
+  // module never repaints — a real reported bug (World Tracker's Sectors
+  // grid and Party's member statblocks not opening once positioned).
+  // Cheap relative to a full render(): no nav/header/edge recomputation,
+  // just re-running the same three content renderers render() already
+  // calls unconditionally on every full render.
+  const workspaceEl = root && root.querySelector('[data-workspace]');
+  if (workspaceEl && !isCompactTab()) {
+    const profile = store.getActiveProfile();
+    replaceWorkspacePreservingScroll(workspaceEl, renderStoryboardGrid(doc, buildDrawerUi(), profile));
+  }
+  const copilotBodyEl = root && root.querySelector('[data-copilot-body]');
+  if (copilotBodyEl) {
+    const profile = store.getActiveProfile();
+    const advisorContentId = resolvePositionContentId(profile, 'advisor');
+    copilotBodyEl.innerHTML = renderPositionContent(advisorContentId, doc, buildDrawerUi());
+  }
   // Clicking any entity link (inline mention, WHO/WHERE chip, relationship
   // chip, graph node, ...) sets this so the Cast inspector's name field is
   // immediately focused+selected once it renders — "single click opens it

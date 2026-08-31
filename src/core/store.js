@@ -20,11 +20,24 @@
 // surfaced a beat later than a synchronous throw would have been). Only the
 // handful of call sites that already wanted a real success/failure signal
 // (import, restoreBackup, newCampaign) are real async functions now.
+//
+// Rules Profiles + multi-campaign (design/adr/rules-profiles-multi-
+// campaign.md): this module now also owns a small app-level registry
+// (`appConfig` — which campaigns exist, which Rules Profiles exist, which
+// campaign is active), stored under its own IndexedDB key, separate from
+// any one campaign's document. `get()`/`update()` keep their exact old
+// call shape — they always operate on "the active campaign" — so nothing
+// outside this file needed to change for the ~100 existing call sites.
+// `get()` additionally overlays the active profile's ruleset fields onto
+// the returned doc's `settings` (see overlayProfile below); `update()`'s
+// mutator still clones the RAW un-overlaid doc, so profile values are never
+// baked back into a persisted campaign record.
 
-import { defaultCampaign } from './schema.js';
+import { defaultCampaign, defaultAppConfig } from './schema.js';
 import {
-  importCampaign, migrateDocument, migrateFromLegacyKeys, readLegacyKeys, LEGACY_KEYS,
+  importCampaign, migrateDocument, migrateFromLegacyKeys, readLegacyKeys, wrapLegacyCampaignIntoAppConfig, LEGACY_KEYS,
 } from './migrate.js';
+import { createCampaign, renameCampaignEntry, setActiveCampaign, createRulesProfile, reassignCampaignProfile } from '../domain/rulesProfiles.js';
 
 const STORAGE_KEY = 'sagaatlas.campaign'; // legacy localStorage key — read-only fallback for pre-IndexedDB campaigns, never written again
 const BACKUP_KEY = 'sagaatlas.campaign.backup'; // ditto
@@ -45,8 +58,17 @@ const DB_NAME = 'gmatlas';
 const DB_VERSION = 2;
 const STORE_NAME = 'kv';
 const DOC_BLOB_STORE = 'docBlobs';
+// Pre-Rules-Profile fixed keys — a single campaign lived here. Now a
+// read-only legacy fallback (load() absorbs it once into the new
+// per-campaign-key scheme below and never writes here again), same
+// treatment as STORAGE_KEY/BACKUP_KEY above.
 const CAMPAIGN_KEY = 'campaign';
 const CAMPAIGN_BACKUP_KEY = 'campaignBackup';
+// New scheme: one appConfig record (the campaign index + Rules Profiles),
+// each campaign's actual document under its own key.
+const APP_CONFIG_KEY = 'appConfig';
+const campaignDocKey = (id) => `campaign:${id}`;
+const campaignBackupDocKey = (id) => `campaignBackup:${id}`;
 
 function idbOpen() {
   return new Promise((resolve, reject) => {
@@ -100,12 +122,16 @@ function idbKeys(db, storeName) {
 function createStore() {
   const subs = new Set();
   const persistErrorSubs = new Set();
-  let doc = null;
+  // appConfig: { activeCampaignId, campaigns: [{id,title,profileId,...}], profiles: [...] }
+  let appConfig = defaultAppConfig();
+  // Loaded campaign documents, keyed by campaign id — the active one is
+  // always present once load() resolves; others load lazily on switch.
+  const docs = new Map();
   let dbPromise = null;
   let boundFileHandle = null;
-  // Kept in sync with the actual backup record so storageInfo() (read by
-  // every Settings render) stays synchronous — an async IndexedDB read on
-  // every render would be a much bigger ripple for no real benefit.
+  // Kept in sync with the ACTIVE campaign's backup record so storageInfo()
+  // (read by every Settings render) stays synchronous — an async IndexedDB
+  // read on every render would be a much bigger ripple for no real benefit.
   let backupMeta = { exists: false, bytes: 0 };
 
   function db() {
@@ -115,7 +141,7 @@ function createStore() {
 
   function notify() {
     for (const fn of subs) {
-      try { fn(doc); } catch (e) { console.error('subscriber failed', e); }
+      try { fn(get()); } catch (e) { console.error('subscriber failed', e); }
     }
   }
 
@@ -125,43 +151,75 @@ function createStore() {
     }
   }
 
-  /** Load on boot: absorb legacy keys once, else read our own document.
+  function activeCampaignEntry() {
+    return appConfig.campaigns.find((c) => c.id === appConfig.activeCampaignId) || null;
+  }
+
+  function activeProfile() {
+    const entry = activeCampaignEntry();
+    const byId = entry && appConfig.profiles.find((p) => p.id === entry.profileId);
+    return byId || appConfig.profiles[0] || null;
+  }
+
+  // The six ruleset fields (design/adr/rules-profiles-multi-campaign.md) shadow whatever is persisted in
+  // the raw doc's own `settings` — see this file's header comment.
+  function overlayProfile(rawDoc) {
+    if (!rawDoc) return rawDoc;
+    const profile = activeProfile();
+    if (!profile) return rawDoc;
+    return { ...rawDoc, settings: { ...rawDoc.settings, ...profile.ruleset } };
+  }
+
+  async function refreshBackupMeta(campaignId) {
+    const database = await db();
+    const backup = await idbGet(database, campaignBackupDocKey(campaignId));
+    backupMeta = { exists: !!backup, bytes: byteSize(JSON.stringify(backup || null)) };
+  }
+
+  /** Load on boot: absorb legacy keys once, else read our own registry.
    *  Async now (IndexedDB) — main.js awaits this before mounting the shell. */
   async function load() {
     const database = await db();
-    const fromIdb = await idbGet(database, CAMPAIGN_KEY);
-    if (fromIdb) {
-      doc = migrateDocument(fromIdb);
-      const backup = await idbGet(database, CAMPAIGN_BACKUP_KEY);
-      backupMeta = { exists: !!backup, bytes: byteSize(JSON.stringify(backup || null)) };
+    const savedAppConfig = await idbGet(database, APP_CONFIG_KEY);
+    if (savedAppConfig) {
+      appConfig = savedAppConfig;
+      const activeId = appConfig.activeCampaignId;
+      let activeDoc = await idbGet(database, campaignDocKey(activeId));
+      activeDoc = activeDoc ? migrateDocument(activeDoc) : defaultCampaign();
+      docs.set(activeId, activeDoc);
+      await refreshBackupMeta(activeId);
       notify();
-      return doc;
+      return get();
     }
-    // No IndexedDB record yet — same legacy-absorption logic as before,
-    // just reading from localStorage as a one-time fallback source instead
-    // of as the ongoing store. The old keys are left in place afterward
-    // (rule 5: migration never drops data), just never written to again.
-    const existing = safeParse(localStorage.getItem(STORAGE_KEY));
-    if (existing) {
-      doc = migrateDocument(existing);
-    } else if (!localStorage.getItem(MIGRATED_FLAG)) {
-      const legacy = readLegacyKeys(localStorage);
-      doc = Object.keys(legacy).length
-        ? migrateFromLegacyKeys(legacy)
-        : defaultCampaign();
-      localStorage.setItem(MIGRATED_FLAG, new Date().toISOString());
-    } else if (typeof window !== 'undefined' && window.__importedCampaign) {
-      try { doc = migrateDocument(window.__importedCampaign); }
-      catch (e) { doc = defaultCampaign(); }
-    } else {
-      doc = defaultCampaign();
+
+    // No appConfig yet — one-time upgrade path (mirrors the pre-Rules-
+    // Profile legacy-absorption logic exactly, just wrapped into the new
+    // registry afterward instead of written straight to CAMPAIGN_KEY).
+    let legacyDoc = await idbGet(database, CAMPAIGN_KEY);
+    if (!legacyDoc) {
+      const existing = safeParse(localStorage.getItem(STORAGE_KEY));
+      if (existing) {
+        legacyDoc = existing;
+      } else if (!localStorage.getItem(MIGRATED_FLAG)) {
+        const legacy = readLegacyKeys(localStorage);
+        legacyDoc = Object.keys(legacy).length ? migrateFromLegacyKeys(legacy) : defaultCampaign();
+        localStorage.setItem(MIGRATED_FLAG, new Date().toISOString());
+      } else if (typeof window !== 'undefined' && window.__importedCampaign) {
+        try { legacyDoc = window.__importedCampaign; } catch (e) { legacyDoc = defaultCampaign(); }
+      } else {
+        legacyDoc = defaultCampaign();
+      }
     }
-    await idbPut(database, CAMPAIGN_KEY, doc);
+    const wrapped = wrapLegacyCampaignIntoAppConfig(legacyDoc);
+    appConfig = wrapped.appConfig;
+    docs.set(wrapped.campaignDoc.meta.id, wrapped.campaignDoc);
+    await idbPut(database, APP_CONFIG_KEY, appConfig);
+    await idbPut(database, campaignDocKey(wrapped.campaignDoc.meta.id), wrapped.campaignDoc);
     notify();
-    return doc;
+    return get();
   }
 
-  function get() { return doc; }
+  function get() { return overlayProfile(docs.get(appConfig.activeCampaignId)); }
 
   /** Mutate immutably: pass a function that returns a new (or mutated) doc.
    *  Updates the in-memory doc and notifies subscribers immediately (same
@@ -173,18 +231,19 @@ function createStore() {
    *  onPersistError(fn), not a thrown exception (there is no synchronous
    *  outcome to throw from anymore). */
   function update(mutator) {
-    const prev = doc;
-    const next = mutator(structuredCloneSafe(doc));
-    doc = next || doc;
-    doc.meta.updatedAt = new Date().toISOString();
-    const thisWrite = doc;
+    const activeId = appConfig.activeCampaignId;
+    const prev = docs.get(activeId);
+    const next = mutator(structuredCloneSafe(prev));
+    const nextDoc = next || prev;
+    nextDoc.meta.updatedAt = new Date().toISOString();
+    docs.set(activeId, nextDoc);
     notify();
-    persist(prev, doc).catch((err) => {
+    persistCampaignDoc(activeId, prev, nextDoc).catch((err) => {
       console.warn('persist failed (IndexedDB)', err);
-      if (doc === thisWrite) { doc = prev; notify(); }
+      if (docs.get(activeId) === nextDoc) { docs.set(activeId, prev); notify(); }
       notifyPersistError(err);
     });
-    return doc;
+    return get();
   }
 
   function subscribe(fn) { subs.add(fn); return () => subs.delete(fn); }
@@ -192,33 +251,143 @@ function createStore() {
 
   /** Best-effort one-slot backup of the outgoing doc, then the real write —
    *  same ordering/intent as the pre-IndexedDB version (ADR 0005: a failed
-   *  backup write is never fatal, only a failed real write is), just async. */
-  async function persist(prevDoc, nextDoc) {
+   *  backup write is never fatal, only a failed real write is), just async,
+   *  and now scoped per-campaign-id rather than one fixed key pair. */
+  async function persistCampaignDoc(campaignId, prevDoc, nextDoc) {
     const database = await db();
     try {
-      await idbPut(database, CAMPAIGN_BACKUP_KEY, prevDoc);
-      backupMeta = { exists: true, bytes: byteSize(JSON.stringify(prevDoc)) };
+      await idbPut(database, campaignBackupDocKey(campaignId), prevDoc);
+      if (campaignId === appConfig.activeCampaignId) backupMeta = { exists: true, bytes: byteSize(JSON.stringify(prevDoc)) };
     } catch (e) {
       console.warn('backup write skipped (quota?)', e);
     }
-    await idbPut(database, CAMPAIGN_KEY, nextDoc);
+    await idbPut(database, campaignDocKey(campaignId), nextDoc);
+  }
+
+  async function persistAppConfig() {
+    const database = await db();
+    await idbPut(database, APP_CONFIG_KEY, appConfig);
   }
 
   // --- portability: one serialize path → lossless by construction -------
-  function exportDocument() { return JSON.stringify(doc, null, 2); }
+  function exportDocument() { return JSON.stringify(get(), null, 2); }
 
+  // Imported JSON replaces the ACTIVE campaign's content in place — same
+  // "Import Campaign JSON" behavior as before multi-campaign existed. It
+  // does not create a new campaign entry; switch to (or create) the
+  // campaign you want the import to land in first if that's the goal.
   async function importDocument(rawText) {
-    doc = importCampaign(safeParse(rawText));
-    await persist(doc, doc);
+    const activeId = appConfig.activeCampaignId;
+    const imported = importCampaign(safeParse(rawText));
+    imported.meta.id = activeId;
+    docs.set(activeId, imported);
+    await persistCampaignDoc(activeId, imported, imported);
+    appConfig = renameCampaignEntry(appConfig, activeId, imported.meta.title);
+    await persistAppConfig();
     notify();
-    return doc;
+    return get();
   }
 
-  async function newCampaign() {
-    doc = defaultCampaign();
-    await persist(doc, doc);
+  /** Register + switch to a brand-new campaign under the given (or default)
+   *  Rules Profile. Does NOT touch any other campaign's data. */
+  async function newCampaign({ title, profileId } = {}) {
+    const chosenProfileId = profileId || (appConfig.profiles[0] && appConfig.profiles[0].id) || null;
+    const created = createCampaign(appConfig, { title, profileId: chosenProfileId });
+    appConfig = setActiveCampaign(created.appConfig, created.doc.meta.id);
+    docs.set(created.doc.meta.id, created.doc);
+    const database = await db();
+    await idbPut(database, APP_CONFIG_KEY, appConfig);
+    await idbPut(database, campaignDocKey(created.doc.meta.id), created.doc);
+    backupMeta = { exists: false, bytes: 0 };
     notify();
-    return doc;
+    return get();
+  }
+
+  /** Switch the active campaign, lazily loading its document if this is the
+   *  first time it's been visited this session. */
+  async function switchCampaign(campaignId) {
+    if (!appConfig.campaigns.some((c) => c.id === campaignId)) return get();
+    if (campaignId === appConfig.activeCampaignId) return get();
+    const database = await db();
+    let target = docs.get(campaignId);
+    if (!target) {
+      const raw = await idbGet(database, campaignDocKey(campaignId));
+      target = migrateDocument(raw || defaultCampaign());
+      docs.set(campaignId, target);
+    }
+    appConfig = setActiveCampaign(appConfig, campaignId);
+    await idbPut(database, APP_CONFIG_KEY, appConfig);
+    await refreshBackupMeta(campaignId);
+    notify();
+    return get();
+  }
+
+  /** Rename a campaign's title — keeps the campaign-list entry and (once
+   *  loaded) its own document's meta.title in sync. */
+  async function renameCampaign(campaignId, title) {
+    const database = await db();
+    let targetDoc = docs.get(campaignId);
+    if (!targetDoc) targetDoc = await idbGet(database, campaignDocKey(campaignId));
+    if (targetDoc) {
+      const renamedDoc = { ...targetDoc, meta: { ...targetDoc.meta, title, updatedAt: new Date().toISOString() } };
+      docs.set(campaignId, renamedDoc);
+      await idbPut(database, campaignDocKey(campaignId), renamedDoc);
+    }
+    appConfig = renameCampaignEntry(appConfig, campaignId, title);
+    await persistAppConfig();
+    notify();
+    return get();
+  }
+
+  function listCampaigns() {
+    return appConfig.campaigns.map((c) => ({ ...c, active: c.id === appConfig.activeCampaignId }));
+  }
+
+  /** Reassign an existing campaign to a different Rules Profile — appConfig
+   *  only, never touches that campaign's own document, so its data is
+   *  never at risk. */
+  async function setCampaignProfile(campaignId, profileId) {
+    appConfig = reassignCampaignProfile(appConfig, campaignId, profileId);
+    await persistAppConfig();
+    notify();
+    return get();
+  }
+
+  function listProfiles() { return appConfig.profiles; }
+  function getActiveProfile() { return activeProfile(); }
+
+  /** Create a new Rules Profile, optionally cloning an existing one's
+   *  ruleset/moduleEnabled/storyboardPositions. */
+  async function createProfile({ name, cloneFromId } = {}) {
+    appConfig = createRulesProfile(appConfig, { name, cloneFromId });
+    await persistAppConfig();
+    notify();
+    return get();
+  }
+
+  /** Generic Rules Profile mutator — same optimistic/persist/rollback shape
+   *  as update(), but scoped to one profile in appConfig.profiles. Pass any
+   *  pure mutator from domain/rulesProfiles.js (setModuleEnabled,
+   *  setStoryboardPosition, updateProfileRuleset, ...). */
+  function updateProfile(profileId, mutator) {
+    const prevConfig = appConfig;
+    const prevProfile = appConfig.profiles.find((p) => p.id === profileId);
+    if (!prevProfile) return get();
+    const nextProfile = mutator(structuredCloneSafe(prevProfile)) || prevProfile;
+    appConfig = { ...appConfig, profiles: appConfig.profiles.map((p) => (p.id === profileId ? nextProfile : p)) };
+    notify();
+    const thisConfig = appConfig;
+    persistAppConfig().catch((err) => {
+      console.warn('profile persist failed (IndexedDB)', err);
+      if (appConfig === thisConfig) { appConfig = prevConfig; notify(); }
+      notifyPersistError(err);
+    });
+    return get();
+  }
+
+  // Sync-call-shape, same contract as updateProfile()/update() themselves.
+  function renameProfile(profileId, name) {
+    return updateProfile(profileId, (p) => ({ ...p, name }));
   }
 
   // --- storage visibility + recovery (ADR 0005 follow-up) ----------------
@@ -230,29 +399,32 @@ function createStore() {
 
   function storageInfo() {
     return {
-      campaignBytes: byteSize(JSON.stringify(doc)),
+      campaignBytes: byteSize(JSON.stringify(docs.get(appConfig.activeCampaignId))),
       hasBackup: backupMeta.exists,
       backupBytes: backupMeta.bytes,
     };
   }
 
-  // Restore the one-slot backup as the active campaign — the counterpart
-  // to persist()'s backup write. Same "never show a change as there when
-  // it didn't really happen" posture as update(): a bad/missing backup
+  // Restore the ACTIVE campaign's one-slot backup — the counterpart to
+  // persistCampaignDoc()'s backup write. Same "never show a change as there
+  // when it didn't really happen" posture as update(): a bad/missing backup
   // rolls back to whatever was current rather than leaving doc
   // half-replaced.
   async function restoreBackup() {
-    const prevDoc = doc;
+    const activeId = appConfig.activeCampaignId;
+    const prevDoc = docs.get(activeId);
     const database = await db();
     let backup;
-    try { backup = await idbGet(database, CAMPAIGN_BACKUP_KEY); }
+    try { backup = await idbGet(database, campaignBackupDocKey(activeId)); }
     catch (e) { return { ok: false, error: e }; }
     if (!backup) return { ok: false, error: new Error('No backup available.') };
-    doc = importCampaign(backup);
+    const restored = importCampaign(backup);
+    restored.meta.id = activeId;
+    docs.set(activeId, restored);
     try {
-      await persist(doc, doc);
+      await persistCampaignDoc(activeId, restored, restored);
     } catch (e) {
-      doc = prevDoc;
+      docs.set(activeId, prevDoc);
       notify();
       return { ok: false, error: e };
     }
@@ -309,6 +481,8 @@ function createStore() {
     supportsFileBinding, bindFile, saveBoundFile,
     storageInfo, restoreBackup,
     putDocBlob, getDocBlob, deleteDocBlob, listDocBlobKeys,
+    listCampaigns, switchCampaign, renameCampaign, setCampaignProfile,
+    listProfiles, getActiveProfile, createProfile, updateProfile, renameProfile,
     STORAGE_KEY, BACKUP_KEY, LEGACY_KEYS,
   };
 }

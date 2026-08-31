@@ -12,7 +12,7 @@
 // Pure functions. No DOM, no localStorage. Runnable in the browser and Node.
 
 import {
-  SCHEMA_VERSION, APP_NAME, defaultCampaign, withDefaults, deepMerge, isObject,
+  SCHEMA_VERSION, APP_NAME, defaultCampaign, defaultAppConfig, defaultRulesProfile, withDefaults, deepMerge, isObject,
 } from './schema.js';
 
 // Every legacy key the old app is known to write, plus the very old aliases.
@@ -184,6 +184,56 @@ export function migrateDocument(doc, now = new Date().toISOString()) {
   d.schemaVersion = SCHEMA_VERSION;
   d.app = APP_NAME;
   return d;
+}
+
+/** One-time upgrade path (design/adr/rules-profiles-multi-campaign.md):
+ *  a pre-Rules-Profile install has exactly one campaign document and no
+ *  appConfig at all. Wraps that single already-migrated document into the
+ *  new registry — a "Default" profile carrying its current six ruleset
+ *  fields, a "5PFH" profile cloned from Default with Battlemap/Graph/Trade/
+ *  Faction Events off and Composer/Navigator/Advisor repointed to Colony/
+ *  World Tracker/Party, one campaign entry (the legacy doc's own identity)
+ *  assigned to Default and made active. Pure — store.js is the only caller,
+ *  responsible for actually persisting the result. */
+export function wrapLegacyCampaignIntoAppConfig(legacyDoc, now = new Date().toISOString()) {
+  const doc = migrateDocument(legacyDoc, now);
+  const settings = doc.settings || {};
+
+  const defaultProfile = defaultRulesProfile('Default', now);
+  defaultProfile.ruleset = {
+    genrePack: settings.genrePack || 'hostile',
+    tradeEconomyModel: settings.tradeEconomyModel || 'hostile',
+    statRuleset: settings.statRuleset || 'starforged',
+    rulesProviderChoices: { ...(settings.rulesProviderChoices || {}) },
+    gameSystemActivations: { ...(settings.gameSystemActivations || { swn: false }) },
+    partyHeadlineFields: [...(settings.partyHeadlineFields || ['Health', 'Momentum'])],
+  };
+
+  const fivePfhProfile = defaultRulesProfile('5PFH', now);
+  fivePfhProfile.ruleset = {
+    ...defaultProfile.ruleset,
+    rulesProviderChoices: { ...defaultProfile.ruleset.rulesProviderChoices },
+    gameSystemActivations: { ...defaultProfile.ruleset.gameSystemActivations },
+    partyHeadlineFields: [...defaultProfile.ruleset.partyHeadlineFields],
+  };
+  fivePfhProfile.moduleEnabled = {
+    ...defaultProfile.moduleEnabled,
+    trade: false, battlemap: false, graph: false, 'faction-events': false,
+  };
+  fivePfhProfile.storyboardPositions = { composer: 'colony', navigator: 'world-tracker', advisor: 'party' };
+
+  const campaignEntry = {
+    id: doc.meta.id, title: doc.meta.title, profileId: defaultProfile.id, createdAt: now, updatedAt: now,
+  };
+
+  const appConfig = {
+    ...defaultAppConfig(),
+    activeCampaignId: doc.meta.id,
+    campaigns: [campaignEntry],
+    profiles: [defaultProfile, fivePfhProfile],
+  };
+
+  return { appConfig, campaignDoc: doc };
 }
 
 /** Read every legacy key from a Storage-like object (browser localStorage). */

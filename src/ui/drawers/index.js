@@ -52,6 +52,9 @@ import {
 } from '../../data/hostileUwpTables.js';
 import { HOSTILE_LOCATIONS_META } from '../../data/hostileLocationsMeta.js';
 import { DOCS_MANIFEST } from '../../data/docsManifest.js';
+import { GATEABLE_MODULES } from '../../core/schema.js';
+import { drawerMeta, POSITION_ASSIGNABLE_IDS } from '../drawerMeta.js';
+import { resolvePositionContentId } from '../../domain/rulesProfiles.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -59,23 +62,25 @@ const esc = (s) => String(s == null ? '' : s)
 // "a Faction" / "an NPC" / "an Asset" — for the relationship-flag tooltip below.
 const withArticle = (word) => (/^[aeiou]/i.test(word) ? `an ${word}` : `a ${word}`);
 
-// Wraps a <input type="number"> with +/- stepper buttons on either side —
-// direct follow-up request: "use this number counter textbox as the
-// default for all textboxes used for numbers," generalizing the pattern
-// Party Trackers' own counter fields established (+ on the left, - on the
-// right, no native spin-arrow chrome — see .party-tracker-value-input's
-// own CSS comment). Deliberately generic and DOM-only: the buttons don't
-// know or need to know what the input commits to — a click nudges the
-// wrapped input's OWN value by ±1 (clamped to whatever min/max attributes
-// it already carries) and dispatches a real 'change' AND 'input' event on
-// it (shell.js's data-num-step handler), so whichever data-* commit
-// attribute the input already has fires exactly as if the GM had typed
-// the new value and blurred it — no new per-field wiring needed at any of
-// this helper's call sites, only wrapping the existing <input> markup.
+// Wraps a <input type="number"> with +/- stepper buttons — direct
+// follow-up request: "use this number counter textbox as the default for
+// all textboxes used for numbers," generalizing the pattern Party
+// Trackers' own counter fields established, no native spin-arrow chrome
+// (see .party-tracker-value-input's own CSS comment). Both buttons sit
+// AFTER the field, "+" then "-" (direct follow-up request — previously "+"
+// sat before the field and "-" after it). Deliberately generic and
+// DOM-only: the buttons don't know or need to know what the input commits
+// to — a click nudges the wrapped input's OWN value by ±1 (clamped to
+// whatever min/max attributes it already carries) and dispatches a real
+// 'change' AND 'input' event on it (shell.js's data-num-step handler), so
+// whichever data-* commit attribute the input already has fires exactly
+// as if the GM had typed the new value and blurred it — no new per-field
+// wiring needed at any of this helper's call sites, only wrapping the
+// existing <input> markup.
 function numStepper(inputHtml) {
   return `<span class="num-stepper">
-    <button type="button" class="icon-btn num-stepper-btn" data-num-step="1" tabindex="-1" title="+1">＋</button>
     ${inputHtml}
+    <button type="button" class="icon-btn num-stepper-btn" data-num-step="1" tabindex="-1" title="+1">＋</button>
     <button type="button" class="icon-btn num-stepper-btn" data-num-step="-1" tabindex="-1" title="-1">−</button>
   </span>`;
 }
@@ -1702,6 +1707,8 @@ function oracleGroupRow(doc, node, forceOpen, expanded, editorOpen, tagEditorOpe
 // cost of rendering the other three.
 const SETTINGS_TABS = [
   { id: 'general', label: 'General' },
+  { id: 'campaigns', label: 'Campaigns' },
+  { id: 'ruleset-profile-editor', label: 'Ruleset Profile Editor' },
   { id: 'genre-rules', label: 'Genre & Rules' },
   { id: 'trade-economy', label: 'Trade & Economy' },
   { id: 'reference-tools', label: 'Reference Tools' },
@@ -1720,6 +1727,10 @@ function settings(doc, ui = {}) {
         <label class="field-label">Title
           <input data-campaign-title-input value="${esc(doc.meta.title)}">
         </label>
+        <label class="field-label">Setting
+          <input data-genre-input value="${esc(doc.settings.genre || '')}" placeholder="Hostile, generic sci-fi, …">
+        </label>
+        <p class="dim small">A free-text flavor label — doesn't change any oracle content. See Campaigns for which campaigns exist and which Rules Profile each uses.</p>
       </div>
       <div class="settings-group">
         ${sectionHeadRow('h3', 'Data (local-first)', 'settings-data')}
@@ -1732,7 +1743,6 @@ function settings(doc, ui = {}) {
           <button class="btn" data-export-campaign>Export Campaign JSON</button>
           <label class="btn ghost file-btn">Import Campaign JSON<input type="file" accept=".json,application/json" data-import-campaign hidden></label>
           <button class="btn ghost" data-bind-file>Bind Save File / OneDrive</button>
-          <button class="btn ghost" data-new-campaign>New Campaign</button>
         </div>
         <p class="dim small storage-usage">Campaign size: ${formatBytes(info.campaignBytes)}${info.hasBackup ? ` · backup: ${formatBytes(info.backupBytes)}` : ' · no backup saved yet'}</p>
         ${info.hasBackup ? `<button class="btn ghost" data-restore-backup title="Replaces the current campaign with the last save that persisted before this one">↺ Restore last backup</button>` : ''}
@@ -1748,6 +1758,7 @@ function settings(doc, ui = {}) {
         <label class="chip sm"><input type="checkbox" data-settings-toolbar-default ${doc.settings.toolbarCollapsedByDefault ? 'checked' : ''}> Rich-text formatting toolbars start collapsed</label>
         <p class="dim small">Every field's own toolbar (Journal, Overview, Guide, …) still has its own ▸/▾ icon to override this per-field for the rest of the session.</p>
       </div>
+      ${factionPacingSection(doc)}
       <div class="settings-group">
         ${sectionHeadRow('h3', 'Companion tools', 'settings-companion')}
         ${helpBody('settings-companion', "GMAtlas tracks character sheets in-app, ruleset-aware. For full character-building wizards this app doesn't replicate, the community Crew Link tool is one Ironsworn/Starforged option:", ui)}
@@ -1761,43 +1772,14 @@ function settings(doc, ui = {}) {
         <p class="dim small">Phase ${esc(BUILD.phase)} · v${esc(BUILD.version)} — ${esc(BUILD.label)}</p>
         <ul class="build-notes">${BUILD.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>
       </div>`,
+    campaigns: () => campaignsSection(doc, ui),
+    'ruleset-profile-editor': () => rulesetProfileEditorSection(doc, ui),
     'genre-rules': () => `
-      <div class="settings-group">
-        ${sectionHeadRow('h3', 'Genre lens', 'settings-genre')}
-        ${helpBody('settings-genre', "A free-text flavor label — doesn't change any oracle content. The Genre Pack below is which oracle table set the whole campaign rolls against (Continue Story, Oracle drawer, Generate NPC, Universal Search) — genre-aware, not genre-locked, so this is a data swap, not a different engine.", ui)}
-        <label class="field-label">Setting
-          <input data-genre-input value="${esc(doc.settings.genre || '')}" placeholder="Hostile, generic sci-fi, …">
-        </label>
-        <label class="field-label">Genre Pack
-          <select data-genre-pack-select>
-            ${GENRE_PACKS.map((p) => `<option value="${p.id}" ${p.id === (doc.settings.genrePack || 'hostile') ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}
-          </select>
-        </label>
-      </div>
-      <div class="settings-group">
-        ${sectionHeadRow('h3', 'Stat system', 'settings-statsystem')}
-        ${helpBody('settings-statsystem', 'Creates entity stat templates aligned to the chosen rule system.', ui)}
-        <label class="field-label">Default ruleset
-          <select data-settings-stat-ruleset>
-            ${RULESETS.map((r) => `<option value="${r.id}" ${r.id === (doc.settings.statRuleset || 'starforged') ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
-          </select>
-        </label>
-        ${(() => {
-          const activeRuleset = findRuleset(doc.settings.statRuleset || 'starforged');
-          return activeRuleset.doc
-            ? `<p class="dim small">Reference: <a href="${activeRuleset.doc}" target="_blank" rel="noreferrer">${esc(activeRuleset.label)} PDF</a></p>`
-            : `<p class="dim small">No sourcebook in this repo's library — ${esc(activeRuleset.label)}'s stats here are original content, not a transcription.</p>`;
-        })()}
-        <label class="field-label">Party Roster headline fields
-          <input data-settings-party-headline-fields value="${esc((doc.settings.partyHeadlineFields || []).join(', '))}" placeholder="Health, Momentum">
-        </label>
-        <p class="dim small">Comma-separated track-field names (matched case-insensitively) shown as small counters on a collapsed Party Roster member row — differs per ruleset, since a 5PFH sheet has no field literally named "Momentum."</p>
-      </div>
+      <p class="dim small">Genre Pack, Stat System, Rules Constitution, and Game System Activation moved to <b>Ruleset Profile Editor</b> — they're a Rules Profile's own settings now, shared across every campaign that uses it.</p>
       ${statblockTemplateEditor(doc)}
-      ${rulesConstitutionSection(doc, ui)}
       ${sourcebookInventorySection(ui)}`,
     'trade-economy': () => `
-      ${tradeEconomyModelSection(doc, ui)}
+      <p class="dim small">Trade Economy Model moved to <b>Ruleset Profile Editor</b> — it's a Rules Profile setting now.</p>
       ${hostileCanonLocationsSection(doc, ui)}`,
     'reference-tools': () => `
       ${mechanicsIndexSection(doc, ui)}
@@ -1837,6 +1819,157 @@ const FIELD_FORMATS = [
 // other row just records a stated preference for the still-future Phase 9
 // Activity -> Rules Lens recommender, called out explicitly below so a GM
 // doesn't assume the whole table is already live.
+// Ruleset Profile Editor (design/adr/rules-profiles-multi-campaign.md):
+// reusing rulesConstitutionSection/tradeEconomyModelSection verbatim below
+// for every ruleset field a Rules Profile now owns instead of the campaign
+// document. Those two functions only ever read `doc.settings.*`; wrapping
+// the profile draft BEING EDITED (which may not be the active campaign's
+// own profile, and may hold unsaved edits) into a doc-shaped object lets
+// them run completely unmodified.
+function profileAsSettingsDoc(doc, profile) {
+  return { ...doc, settings: { ...doc.settings, ...profile.ruleset } };
+}
+
+function campaignsSection(doc, ui) {
+  const campaigns = ui.campaigns || [];
+  const profiles = ui.profiles || [];
+  const draft = ui.newCampaignDraft || { title: '', profileId: '' };
+
+  const campaignRows = campaigns.map((c) => `
+    <div class="campaign-row${c.active ? ' active' : ''}">
+      <span class="campaign-row-title">${esc(c.title)}</span>
+      <label class="field-label sm campaign-profile-picker">Profile
+        <select data-campaign-reassign-profile="${esc(c.id)}">
+          ${profiles.map((p) => `<option value="${esc(p.id)}" ${p.id === c.profileId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+        </select>
+      </label>
+      ${c.active ? '<span class="chip sm">Active</span>' : `<button class="btn ghost sm" data-campaign-switch="${esc(c.id)}">Switch</button>`}
+      <button class="btn ghost sm" data-campaign-rename="${esc(c.id)}">Rename</button>
+    </div>`).join('');
+
+  return `
+    <div class="settings-group">
+      ${sectionHeadRow('h3', 'Campaigns', 'settings-campaigns')}
+      ${helpBody('settings-campaigns', "Each campaign is fully independent (its own Cast, Journal, scenes, ...) and is assigned one Rules Profile — change which one with the Profile dropdown at any time; reassigning never touches that campaign's own data, it only changes which ruleset/visible-modules/Storyboard-positions it reads. Edit a profile's own contents in Ruleset Profile Editor.", ui)}
+      <div class="campaign-list">${campaignRows || '<p class="dim small">No campaigns yet.</p>'}</div>
+      <div class="new-campaign-form">
+        <label class="field-label sm">New campaign title
+          <input data-new-campaign-title value="${esc(draft.title)}" placeholder="New Campaign">
+        </label>
+        <label class="field-label sm">Rules Profile
+          <select data-new-campaign-profile>
+            ${profiles.map((p) => `<option value="${esc(p.id)}" ${(draft.profileId || ui.activeProfileId) === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+          </select>
+        </label>
+        <button class="btn" data-campaign-create>+ Create Campaign</button>
+      </div>
+    </div>`;
+}
+
+// Ruleset Profile Editor (design/adr/rules-profiles-multi-campaign.md,
+// direct follow-up request): select a profile, then edit everything it
+// owns — ruleset fields, Rules Constitution/Game System Activation, which
+// modules are visible, and what fills the Storyboard's three positions.
+// Edits a DRAFT (shell.js's profileDrafts, threaded through as
+// ui.profileDraft/ui.profileDraftDirty) — nothing applies to any real
+// campaign until Save is clicked (data-profile-draft-save); Discard
+// Changes (data-profile-draft-cancel) reverts the form to the last-saved
+// value. Every campaign using this profile picks up a saved edit
+// immediately (store.updateProfile's notify() re-renders the whole shell),
+// since a profile is shared state, not per-campaign-duplicated.
+function rulesetProfileEditorSection(doc, ui) {
+  const profiles = ui.profiles || [];
+  const editingProfile = profiles.find((p) => p.id === ui.editingProfileId) || profiles[0];
+
+  const profilePicker = `
+    <div class="settings-group">
+      ${sectionHeadRow('h3', 'Rules Profiles', 'settings-profiles-list')}
+      ${helpBody('settings-profiles-list', "A Rules Profile bundles which modules are visible, what fills the Storyboard's three positions, and the ruleset (genre pack, stat system, trade economy, Rules Constitution, Game System Activation). Shared across every campaign that picks it. Select one below to edit it.", ui)}
+      <div class="profile-list btn-col">
+        ${profiles.map((p) => `<button class="btn ghost sm${editingProfile && p.id === editingProfile.id ? ' active' : ''}" data-profile-select-edit="${esc(p.id)}">${esc(p.name)}</button>`).join('')}
+      </div>
+      <div class="btn-col">
+        <button class="btn ghost sm" data-profile-create>+ New Profile (clone the one shown below)</button>
+        ${editingProfile ? `<button class="btn ghost sm" data-profile-rename="${esc(editingProfile.id)}">Rename "${esc(editingProfile.name)}"</button>` : ''}
+      </div>
+    </div>`;
+
+  const draft = ui.profileDraft;
+  if (!editingProfile || !draft) return profilePicker;
+
+  const dirty = !!ui.profileDraftDirty;
+  const saveBar = `
+    <div class="settings-group profile-draft-bar${dirty ? ' dirty' : ''}">
+      <p class="dim small">${dirty ? '● Unsaved changes.' : 'No unsaved changes.'} Editing "${esc(editingProfile.name)}" — nothing below applies to any campaign until you Save.</p>
+      <div class="btn-col-row">
+        <button class="btn" data-profile-draft-save="${esc(editingProfile.id)}" ${dirty ? '' : 'disabled'}>Save Profile</button>
+        <button class="btn ghost" data-profile-draft-cancel="${esc(editingProfile.id)}" ${dirty ? '' : 'disabled'}>Discard Changes</button>
+      </div>
+    </div>`;
+
+  const positionSelect = (slot, label) => {
+    const current = resolvePositionContentId(draft, slot);
+    return `
+    <label class="field-label sm">${esc(label)}
+      <select data-storyboard-position-select="${slot}">
+        ${POSITION_ASSIGNABLE_IDS.map((id) => `<option value="${esc(id)}" ${current === id ? 'selected' : ''}>${esc((drawerMeta(id) || {}).label || id)}</option>`).join('')}
+      </select>
+    </label>`;
+  };
+  const positionsGroup = `
+    <div class="settings-group">
+      ${sectionHeadRow('h3', 'Storyboard positions', 'settings-positions')}
+      ${helpBody('settings-positions', "What fills each of the Storyboard's three always-visible positions. Anything not currently assigned to a position is reachable from the top navigation instead.", ui)}
+      ${positionSelect('composer', 'Composer')}
+      ${positionSelect('navigator', 'Navigator')}
+      ${positionSelect('advisor', 'Advisor')}
+    </div>`;
+
+  const moduleChecks = GATEABLE_MODULES.map((id) => `
+    <label class="chip sm"><input type="checkbox" data-module-enabled-toggle="${id}" ${draft.moduleEnabled[id] !== false ? 'checked' : ''}> ${esc((drawerMeta(id) || {}).label || id)}</label>`).join('');
+  const modulesGroup = `
+    <div class="settings-group">
+      ${sectionHeadRow('h3', 'Visible modules', 'settings-modules')}
+      ${helpBody('settings-modules', 'Modules a campaign on this profile can see. Party and every other module not listed here always stays visible.', ui)}
+      <div class="module-enable-checks">${moduleChecks}</div>
+    </div>`;
+
+  const pseudoDoc = profileAsSettingsDoc(doc, draft);
+  const rulesetGroup = `
+    <div class="settings-group">
+      ${sectionHeadRow('h3', 'Genre Pack', 'settings-genre-pack')}
+      ${helpBody('settings-genre-pack', 'Which oracle table set the whole campaign rolls against (Continue Story, Oracle drawer, Generate NPC, Universal Search) — genre-aware, not genre-locked, so this is a data swap, not a different engine.', ui)}
+      <label class="field-label">Genre Pack
+        <select data-genre-pack-select>
+          ${GENRE_PACKS.map((p) => `<option value="${p.id}" ${p.id === (draft.ruleset.genrePack || 'hostile') ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}
+        </select>
+      </label>
+    </div>
+    <div class="settings-group">
+      ${sectionHeadRow('h3', 'Stat system', 'settings-statsystem')}
+      ${helpBody('settings-statsystem', 'Creates entity stat templates aligned to the chosen rule system.', ui)}
+      <label class="field-label">Default ruleset
+        <select data-settings-stat-ruleset>
+          ${RULESETS.map((r) => `<option value="${r.id}" ${r.id === (draft.ruleset.statRuleset || 'starforged') ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
+        </select>
+      </label>
+      ${(() => {
+        const activeRuleset = findRuleset(draft.ruleset.statRuleset || 'starforged');
+        return activeRuleset.doc
+          ? `<p class="dim small">Reference: <a href="${activeRuleset.doc}" target="_blank" rel="noreferrer">${esc(activeRuleset.label)} PDF</a></p>`
+          : `<p class="dim small">No sourcebook in this repo's library — ${esc(activeRuleset.label)}'s stats here are original content, not a transcription.</p>`;
+      })()}
+      <label class="field-label">Party Roster headline fields
+        <input data-settings-party-headline-fields value="${esc((draft.ruleset.partyHeadlineFields || []).join(', '))}" placeholder="Health, Momentum">
+      </label>
+      <p class="dim small">Comma-separated track-field names (matched case-insensitively) shown as small counters on a collapsed Party Roster member row — differs per ruleset, since a 5PFH sheet has no field literally named "Momentum."</p>
+    </div>
+    ${tradeEconomyModelSection(pseudoDoc, ui)}
+    ${rulesConstitutionSection(pseudoDoc, ui)}`;
+
+  return `${profilePicker}${saveBar}${positionsGroup}${modulesGroup}${rulesetGroup}`;
+}
+
 function rulesConstitutionSection(doc, ui) {
   const rows = GAMEPLAY_AREAS.map((area) => {
     const chosen = resolveProviderChoice(doc.settings, area.id);
@@ -1863,7 +1996,6 @@ function rulesConstitutionSection(doc, ui) {
       </div>
       <ul class="rules-provider-legend">${legend}</ul>
       ${gameSystemActivationSection(doc)}
-      ${factionPacingSection(doc)}
     </div>`;
 }
 
@@ -2291,8 +2423,8 @@ function partyTrackerRow(t, editOpen) {
       <button type="button" class="track-box ${n === t.value ? 'on' : ''} ${n === 0 ? 'gauge-zero' : ''}" data-party-tracker-gauge-box="${esc(t.id)}" data-track-n="${n}" aria-label="Set ${n}" title="${n === 0 ? 'Reset (0)' : n}">${n}</button>`).join('')}</div>`
     : `
     <span class="party-tracker-counter">
-      <button class="icon-btn" data-party-tracker-step="${esc(t.id)}" data-delta="1" title="+1">＋</button>
       <input class="party-tracker-value-input" type="number" data-party-tracker-value="${esc(t.id)}" value="${t.value}">
+      <button class="icon-btn" data-party-tracker-step="${esc(t.id)}" data-delta="1" title="+1">＋</button>
       <button class="icon-btn" data-party-tracker-step="${esc(t.id)}" data-delta="-1" title="-1">−</button>
     </span>`;
   // Direct follow-up request: the name reads as a plain, fully-sized label

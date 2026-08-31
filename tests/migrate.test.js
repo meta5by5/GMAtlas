@@ -12,9 +12,9 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import {
-  importCampaign, migrateFromLegacyKeys, migrateDocument, readLegacyKeys, LEGACY_KEYS,
+  importCampaign, migrateFromLegacyKeys, migrateDocument, readLegacyKeys, wrapLegacyCampaignIntoAppConfig, LEGACY_KEYS,
 } from '../src/core/migrate.js';
-import { SCHEMA_VERSION, defaultCampaign } from '../src/core/schema.js';
+import { SCHEMA_VERSION, defaultCampaign, GATEABLE_MODULES } from '../src/core/schema.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const v053 = JSON.parse(readFileSync(join(here, 'fixtures', 'v053-export.json'), 'utf8'));
@@ -158,4 +158,48 @@ test('LEGACY_KEYS covers the documented v0.53 storage surface', () => {
   ]) {
     assert.ok(LEGACY_KEYS.includes(k), `${k} should be in LEGACY_KEYS`);
   }
+});
+
+// --- Rules Profiles + multi-campaign one-time upgrade (design/adr/rules-profiles-multi-campaign.md) ------
+test('wrapLegacyCampaignIntoAppConfig: a pre-Rules-Profile single campaign becomes one Default profile carrying its current ruleset, one campaign entry assigned to it, and it is made active', () => {
+  const legacy = defaultCampaign();
+  legacy.meta.title = 'My Old Campaign';
+  legacy.settings.statRuleset = 'traveller';
+  legacy.settings.genrePack = 'cyberpunk';
+  legacy.settings.partyHeadlineFields = ['Luck', 'XP'];
+
+  const { appConfig, campaignDoc } = wrapLegacyCampaignIntoAppConfig(legacy);
+
+  assert.equal(appConfig.campaigns.length, 1);
+  assert.equal(appConfig.campaigns[0].id, campaignDoc.meta.id);
+  assert.equal(appConfig.campaigns[0].title, 'My Old Campaign');
+  assert.equal(appConfig.activeCampaignId, campaignDoc.meta.id);
+
+  assert.equal(appConfig.profiles.length, 2);
+  const [defaultProfile, fivePfhProfile] = appConfig.profiles;
+  assert.equal(defaultProfile.name, 'Default');
+  assert.equal(appConfig.campaigns[0].profileId, defaultProfile.id);
+  assert.equal(defaultProfile.ruleset.statRuleset, 'traveller', 'carries over the legacy doc\'s own ruleset choice');
+  assert.equal(defaultProfile.ruleset.genrePack, 'cyberpunk');
+  assert.deepEqual(defaultProfile.ruleset.partyHeadlineFields, ['Luck', 'XP']);
+  for (const id of GATEABLE_MODULES) assert.equal(defaultProfile.moduleEnabled[id], true, `Default profile: ${id} stays enabled (nothing was hidden before)`);
+
+  assert.equal(fivePfhProfile.name, '5PFH');
+  assert.equal(fivePfhProfile.ruleset.statRuleset, 'traveller', 'same ruleset as Default');
+  assert.equal(fivePfhProfile.moduleEnabled.trade, false);
+  assert.equal(fivePfhProfile.moduleEnabled.battlemap, false);
+  assert.equal(fivePfhProfile.moduleEnabled.graph, false);
+  assert.equal(fivePfhProfile.moduleEnabled['faction-events'], false);
+  assert.equal(fivePfhProfile.moduleEnabled.colony, true, 'Colony/World Tracker stay enabled in 5PFH');
+  assert.equal(fivePfhProfile.moduleEnabled['world-tracker'], true);
+  assert.deepEqual(fivePfhProfile.storyboardPositions, { composer: 'colony', navigator: 'world-tracker', advisor: 'party' });
+});
+
+test('wrapLegacyCampaignIntoAppConfig runs the campaign doc through the normal migrateDocument upgrade path (e.g. the SWN grandfather step still fires)', () => {
+  const legacy = defaultCampaign();
+  legacy.factionEvents = [{ id: 'e1' }]; // legacy SWN usage signal, no explicit gameSystemActivations
+  delete legacy.settings.gameSystemActivations;
+  const { appConfig, campaignDoc } = wrapLegacyCampaignIntoAppConfig(legacy);
+  assert.equal(campaignDoc.schemaVersion, SCHEMA_VERSION);
+  assert.equal(appConfig.profiles[0].ruleset.gameSystemActivations.swn, true, 'Default profile inherits the grandfathered activation');
 });

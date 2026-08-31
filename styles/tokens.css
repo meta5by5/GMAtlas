@@ -54,5 +54,11 @@
 @media (max-width: 480px) {
   :root {
     --sp-1: 0.15rem; --sp-2: 0.35rem; --sp-3: 0.5rem; --sp-4: 0.65rem; --sp-6: 1rem;
+    /* Direct request: the header row (Party/Colony/World/Journal tabs +
+       Settings gear) felt too compressed on a phone once every tab shows
+       an icon+label pair — 10% taller (3rem -> 3.3rem) gives those a more
+       comfortable tap target now that cockpit.css also drops the label
+       text at this width (see .header-drawer-tabs .btn-label below). */
+    --header-h: 3.3rem;
   }
 }

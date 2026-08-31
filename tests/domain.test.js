@@ -11,8 +11,12 @@ import { applyShift, listShifts, contextSummary } from '../src/domain/context.js
 import { generateScene, recomposeSceneText } from '../src/domain/scenes.js';
 import { continueStory, restartStory, applyStoryShift, rollOracle, patchContext, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles } from '../src/domain/session.js';
 import { SUGGESTION_LENSES, lensOracleCategories } from '../src/data/suggestionLenses.js';
-import { defaultCampaign } from '../src/core/schema.js';
+import { defaultCampaign, defaultAppConfig, defaultRulesProfile, GATEABLE_MODULES } from '../src/core/schema.js';
 import { parseStatsString } from '../src/domain/statblocks.js';
+import {
+  createRulesProfile, renameProfile, updateProfileRuleset, setModuleEnabled, setStoryboardPosition, isModuleVisible, resolveOverlaySettings,
+  createCampaign, renameCampaignEntry, setActiveCampaign, reassignCampaignProfile, applyProfileDraft, resolvePositionContentId,
+} from '../src/domain/rulesProfiles.js';
 
 // --- oracles --------------------------------------------------------------
 test('oracle tables loaded as a module', () => {
@@ -6735,4 +6739,160 @@ test('an NPC entity defaults currentGoal to "" (ensureNpcFields), mirroring fact
 
   let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Some Place' }));
   assert.equal(getEntity(camp, locId).currentGoal, undefined, 'currentGoal is NPC-only, not a generic entity field');
+});
+
+// --- Rules Profiles + multi-campaign (design/adr/rules-profiles-multi-campaign.md) -----------------------
+test('defaultRulesProfile: every GATEABLE_MODULES id defaults enabled, positions default to the three built-ins', () => {
+  const p = defaultRulesProfile('Default');
+  for (const id of GATEABLE_MODULES) assert.equal(p.moduleEnabled[id], true, `${id} defaults enabled`);
+  assert.deepEqual(p.storyboardPositions, { composer: 'dashboard', navigator: 'narrative', advisor: 'copilot' });
+});
+
+// Real reported bug: a freed built-in's own top-nav button resolved through
+// the SLOT mapping instead of rendering itself, so once a profile
+// reassigned a slot elsewhere (5PFH's Composer -> Colony), clicking the
+// freed "Composer" button in top nav kept showing Colony instead of the
+// actual Composer/Dashboard content. Root cause was reusing the SAME three
+// strings ('composer'/'navigator'/'advisor') as both the slot names AND
+// their default content values — resolvePositionContentId is the fix.
+test('resolvePositionContentId: a slot whose stored value is its OWN name (legacy/malformed data) normalizes to that slot\'s built-in content, not the raw name; any other value (including a slot reassigned elsewhere) passes through unresolved', () => {
+  const fresh = defaultRulesProfile('Fresh');
+  assert.equal(resolvePositionContentId(fresh, 'composer'), 'dashboard');
+  assert.equal(resolvePositionContentId(fresh, 'navigator'), 'narrative');
+  assert.equal(resolvePositionContentId(fresh, 'advisor'), 'copilot');
+
+  // Legacy/malformed: a slot's stored value literally equals its own slot
+  // name (the OLD, buggy default before this fix) — must normalize, not
+  // pass through as-is (that's the exact bug: resolving 'composer' meant
+  // "look up whatever the Composer slot points at," which is circular).
+  const legacy = { ...fresh, storyboardPositions: { composer: 'composer', navigator: 'navigator', advisor: 'advisor' } };
+  assert.equal(resolvePositionContentId(legacy, 'composer'), 'dashboard');
+  assert.equal(resolvePositionContentId(legacy, 'navigator'), 'narrative');
+  assert.equal(resolvePositionContentId(legacy, 'advisor'), 'copilot');
+
+  // Reassigned (5PFH-style): the actual content id passes through
+  // unresolved, distinct from the built-in content ids.
+  const reassigned = setStoryboardPosition(fresh, 'composer', 'colony');
+  assert.equal(resolvePositionContentId(reassigned, 'composer'), 'colony');
+  // The OTHER two slots are untouched, still resolve to their own
+  // built-ins — this is what makes the freed "Navigator"/"Advisor" top-nav
+  // buttons correctly show Narrative/Co-Pilot content, not get dragged
+  // into whatever Composer now points at.
+  assert.equal(resolvePositionContentId(reassigned, 'navigator'), 'narrative');
+  assert.equal(resolvePositionContentId(reassigned, 'advisor'), 'copilot');
+
+  assert.equal(resolvePositionContentId(null, 'composer'), 'dashboard', 'no profile at all falls back to the built-in default');
+});
+
+test('createProfile appends a new profile, optionally cloning an existing one\'s ruleset/moduleEnabled/positions without aliasing them', () => {
+  let cfg = defaultAppConfig();
+  cfg = createRulesProfile(cfg, { name: 'Default' });
+  const sourceId = cfg.profiles[0].id;
+  cfg = updateProfileRulesetIn(cfg, sourceId, { statRuleset: 'traveller' });
+  cfg = setModuleEnabledIn(cfg, sourceId, 'trade', false);
+  cfg = createRulesProfile(cfg, { name: '5PFH', cloneFromId: sourceId });
+  assert.equal(cfg.profiles.length, 2);
+  const clone = cfg.profiles[1];
+  assert.equal(clone.name, '5PFH');
+  assert.equal(clone.ruleset.statRuleset, 'traveller', 'clone inherits the source ruleset');
+  assert.equal(clone.moduleEnabled.trade, false, 'clone inherits the source moduleEnabled');
+  // Mutating the clone's nested objects must never touch the source's (no aliasing).
+  const reClone = setModuleEnabledIn({ profiles: [clone] }, clone.id, 'graph', false);
+  assert.equal(cfg.profiles[0].moduleEnabled.graph, true, 'source unaffected by a mutation on the clone');
+  assert.equal(reClone.profiles[0].moduleEnabled.graph, false);
+});
+
+function updateProfileRulesetIn(appConfig, profileId, patch) {
+  return { ...appConfig, profiles: appConfig.profiles.map((p) => (p.id === profileId ? updateProfileRuleset(p, patch) : p)) };
+}
+function setModuleEnabledIn(appConfig, profileId, moduleId, enabled) {
+  return { ...appConfig, profiles: appConfig.profiles.map((p) => (p.id === profileId ? setModuleEnabled(p, moduleId, enabled) : p)) };
+}
+
+test('renameProfile only renames the targeted profile; setStoryboardPosition only changes the targeted slot', () => {
+  let cfg = createRulesProfile(defaultAppConfig(), { name: 'A' });
+  cfg = createRulesProfile(cfg, { name: 'B' });
+  const aId = cfg.profiles[0].id;
+  cfg = renameProfile(cfg, aId, 'Renamed');
+  assert.deepEqual(cfg.profiles.map((p) => p.name), ['Renamed', 'B']);
+  cfg = renameProfile(cfg, 'not-a-real-id', 'Should Not Apply');
+  assert.deepEqual(cfg.profiles.map((p) => p.name), ['Renamed', 'B'], 'unknown id is a no-op');
+
+  const withPosition = setStoryboardPosition(cfg.profiles[1], 'composer', 'colony');
+  assert.equal(withPosition.storyboardPositions.composer, 'colony');
+  assert.equal(withPosition.storyboardPositions.navigator, 'narrative', 'other slots untouched');
+});
+
+test('isModuleVisible: GATEABLE_MODULES ids follow moduleEnabled, everything else (Party, Guide, ...) is always visible regardless of profile', () => {
+  let profile = defaultRulesProfile('P');
+  assert.equal(isModuleVisible(profile, 'colony'), true);
+  profile = setModuleEnabled(profile, 'colony', false);
+  assert.equal(isModuleVisible(profile, 'colony'), false);
+  assert.equal(isModuleVisible(profile, 'party'), true, 'Party is not gateable');
+  assert.equal(isModuleVisible(profile, 'journal'), true, 'non-gateable ids always visible');
+  assert.equal(isModuleVisible(null, 'colony'), true, 'no profile at all never hides anything');
+});
+
+test('resolveOverlaySettings returns exactly the profile\'s ruleset object (the shape store.get() splices onto a campaign doc\'s settings)', () => {
+  const profile = defaultRulesProfile('P');
+  const overlay = resolveOverlaySettings(profile);
+  assert.deepEqual(overlay, profile.ruleset);
+});
+
+test('createCampaign registers a campaign entry + a fresh document but does not activate it; setActiveCampaign only activates a REGISTERED campaign id', () => {
+  let cfg = defaultAppConfig();
+  const { appConfig: cfg1, doc } = createCampaign(cfg, { title: 'Campaign One', profileId: 'prof_1' });
+  assert.equal(cfg1.campaigns.length, 1);
+  assert.equal(cfg1.campaigns[0].id, doc.meta.id);
+  assert.equal(cfg1.campaigns[0].title, 'Campaign One');
+  assert.equal(cfg1.campaigns[0].profileId, 'prof_1');
+  assert.equal(doc.meta.title, 'Campaign One');
+  assert.equal(cfg1.activeCampaignId, null, 'createCampaign does not itself switch the active campaign');
+
+  const activated = setActiveCampaign(cfg1, doc.meta.id);
+  assert.equal(activated.activeCampaignId, doc.meta.id);
+  const rejected = setActiveCampaign(cfg1, 'not-a-real-id');
+  assert.equal(rejected.activeCampaignId, null, 'switching to an unregistered id is a no-op');
+});
+
+test('renameCampaignEntry renames only the targeted campaign-list entry, leaving its document untouched (store.js syncs the document separately)', () => {
+  let cfg = defaultAppConfig();
+  const a = createCampaign(cfg, { title: 'A' });
+  cfg = a.appConfig;
+  const b = createCampaign(cfg, { title: 'B' });
+  cfg = b.appConfig;
+  cfg = renameCampaignEntry(cfg, a.doc.meta.id, 'A Renamed');
+  assert.deepEqual(cfg.campaigns.map((c) => c.title), ['A Renamed', 'B']);
+});
+
+test('reassignCampaignProfile only changes the targeted campaign\'s profileId (never its document, never other campaigns), and rejects an unregistered profile id', () => {
+  let cfg = defaultAppConfig();
+  cfg = createRulesProfile(cfg, { name: 'Default' });
+  cfg = createRulesProfile(cfg, { name: '5PFH' });
+  const [defaultProfile, fivePfhProfile] = cfg.profiles;
+  const a = createCampaign(cfg, { title: 'A', profileId: defaultProfile.id });
+  cfg = a.appConfig;
+  const b = createCampaign(cfg, { title: 'B', profileId: defaultProfile.id });
+  cfg = b.appConfig;
+
+  cfg = reassignCampaignProfile(cfg, a.doc.meta.id, fivePfhProfile.id);
+  assert.equal(cfg.campaigns.find((c) => c.id === a.doc.meta.id).profileId, fivePfhProfile.id);
+  assert.equal(cfg.campaigns.find((c) => c.id === b.doc.meta.id).profileId, defaultProfile.id, 'campaign B untouched');
+
+  const rejected = reassignCampaignProfile(cfg, a.doc.meta.id, 'not-a-real-profile-id');
+  assert.equal(rejected.campaigns.find((c) => c.id === a.doc.meta.id).profileId, fivePfhProfile.id, 'unregistered profile id is a no-op');
+});
+
+test('applyProfileDraft commits only storyboardPositions/moduleEnabled/ruleset from a draft onto the stored profile, preserving id/name/createdAt and stamping a fresh updatedAt', () => {
+  const stored = defaultRulesProfile('Default', '2026-01-01T00:00:00.000Z');
+  const draft = setStoryboardPosition(setModuleEnabled(updateProfileRuleset(structuredClone(stored), { statRuleset: 'traveller' }), 'trade', false), 'composer', 'colony');
+  const applied = applyProfileDraft(stored, draft);
+  assert.equal(applied.id, stored.id);
+  assert.equal(applied.name, 'Default');
+  assert.equal(applied.createdAt, '2026-01-01T00:00:00.000Z');
+  assert.notEqual(applied.updatedAt, stored.updatedAt);
+  assert.equal(applied.ruleset.statRuleset, 'traveller');
+  assert.equal(applied.moduleEnabled.trade, false);
+  assert.equal(applied.storyboardPositions.composer, 'colony');
+  assert.notEqual(applied, stored, 'returns a new object, does not mutate the stored profile');
 });

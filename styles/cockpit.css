@@ -93,7 +93,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   box-shadow: var(--shadow); overflow: hidden;
 }
 .settings-menu[hidden] { display: none; }
-.settings-menu button { text-align: left; background: none; border: none; color: var(--text); padding: 0.5rem 0.75rem; font-size: 0.85rem; }
+.settings-menu button { text-align: left; background: none; border: none; color: var(--text); padding: 0.65rem 0.9rem; font-size: 1rem; }
 .settings-menu button:hover { background: var(--tier2-bg); }
 
 /* Party/Colony/Journal's header tab group (right-aligned in .header-actions,
@@ -536,6 +536,21 @@ button { font: inherit; color: inherit; cursor: pointer; }
    established just above, not !important overrides. */
 @media (max-width: 480px) {
   .mc-drawer { padding: var(--sp-3); }
+  /* Direct request: the header's Party/Colony/World/Journal tab group
+     (.header-drawer-tabs, HEADER_ORDER in shell.js) was too compressed at
+     phone width once it always showed icon+label (a prior narrow-viewport
+     rule hiding just this label used to exist and was removed by an
+     earlier direct request — reinstated here, scoped to this one width,
+     since the actual complaint is specifically about phone crowding, not
+     tablet/desktop where the row has room). Icon-only; the button's own
+     title attribute still names it for a long-press/hover. */
+  .header-drawer-tabs .btn-label { display: none; }
+  /* Direct request: drop the campaign name and the "Search" label from the
+     phone header too, same compression complaint — the campaign title is
+     still reachable in Settings (its own editable field there), and the
+     search button keeps its icon plus its title="" tooltip. */
+  .mc-header .campaign-title { display: none; }
+  .mc-header [data-search-toggle] .btn-label { display: none; }
   .field-row2, .colony-fields, .rel-add, .party-tracker-row, .colony-crew-row,
   .thread-row, .trade-contract-row {
     grid-template-columns: 1fr;
@@ -1065,6 +1080,25 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .file-btn { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 .content-pack-checks { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-2); }
 .content-pack-checks .chip { display: inline-flex; align-items: center; gap: 0.3rem; cursor: pointer; }
+
+/* Campaigns / Ruleset Profile Editor (design/adr/rules-profiles-multi-campaign.md) */
+.campaign-list { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.campaign-row { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2); border: 1px solid var(--border); border-radius: var(--radius, 6px); flex-wrap: wrap; }
+.campaign-row.active { border-color: var(--accent); }
+.campaign-row-title { font-weight: 600; flex: 1; }
+.campaign-profile-picker { margin: 0; }
+.new-campaign-form { display: flex; flex-direction: column; gap: var(--sp-2); padding-top: var(--sp-2); border-top: 1px solid var(--border); }
+.profile-list { flex-direction: row; flex-wrap: wrap; }
+.profile-list .btn.active { color: var(--accent); border-color: var(--accent); }
+.module-enable-checks { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.module-enable-checks .chip { display: inline-flex; align-items: center; gap: 0.3rem; cursor: pointer; }
+/* Ruleset Profile Editor's Save/Discard bar — sticky so it stays reachable
+   below a long profile form; .dirty accents it so an unsaved edit is
+   visually obvious even after scrolling past the fields that caused it. */
+.profile-draft-bar { position: sticky; top: 0; z-index: 1; background: var(--tier2-bg, inherit); border: 1px solid var(--border); border-radius: var(--radius, 6px); padding: var(--sp-2) var(--sp-3); }
+.profile-draft-bar.dirty { border-color: var(--accent); }
+.profile-draft-bar p { margin: 0 0 var(--sp-2); }
+.btn-col-row { display: flex; gap: var(--sp-2); }
 
 /* Rules Constitution reference table (Settings) */
 .tablewrap-narrow { overflow-x: auto; margin: var(--sp-2) 0; }
@@ -1944,11 +1978,11 @@ button.party-stat-pill:hover { border-color: var(--accent); }
    renders the original input+✕ row unchanged. */
 .party-tracker-row-view { grid-template-columns: 1fr auto auto; }
 .party-tracker-name-label { font-weight: 600; white-space: normal; overflow: visible; word-break: break-word; }
-/* +/- order swapped (direct follow-up request: "the + on the left and -
-   on the right of the textbox") from the field-order-matches-visual-order
-   default; gap tightened and the buttons' own horizontal padding trimmed
-   (direct follow-up request: "move the +/- closer [to] the text box") so
-   they read as part of the same control instead of sitting apart from it. */
+/* Both +/- buttons sit after the field, "+" then "-" (direct follow-up
+   request — previously "+" sat before the field and "-" after it); gap
+   tightened and the buttons' own horizontal padding trimmed (direct
+   follow-up request: "move the +/- closer [to] the text box") so they
+   read as part of the same control instead of sitting apart from it. */
 .party-tracker-counter { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
 .party-tracker-counter .icon-btn { padding-left: 0.15rem; padding-right: 0.15rem; }
 .party-tracker-value-input { width: 3.2rem; text-align: center; }

@@ -711,8 +711,19 @@ function howSectionBody(doc, ui) {
 // unreachable below it; tablet has the same "no room for 3 columns plus a
 // drawer side by side" problem desktop doesn't, so it gets the identical
 // treatment rather than a third, separate layout).
-export function renderWorkspace(doc, ui) {
-  return `<div class="storyboard-grid">${composerCard(doc, ui)}${navigatorCard(doc, ui)}</div>`;
+//
+// Rules Profiles (design/adr/rules-profiles-multi-campaign.md): which
+// content fills Composer/Navigator/Advisor is now a per-profile choice, not
+// fixed to this file's own two bodies below — shell.js owns resolving a
+// position's assigned content id (built-in, or any other module) and
+// assembling the two-column grid, since that dispatch needs renderDrawer()
+// (drawers/index.js) and renderCopilot() (copilotPanel.js) alongside these,
+// which this file can't import without a circular dependency (drawers/
+// index.js already imports this file's dashboardSection helpers indirectly
+// via factionEvents.js). `positionCardHtml` below is the shared chrome
+// shell.js wraps ANY position's content in, built-in or not.
+export function positionCardHtml(title, body, extraClass) {
+  return card(title, '', body, extraClass);
 }
 
 export function composerBodyHtml(doc, ui) {
@@ -732,19 +743,11 @@ export function composerBodyHtml(doc, ui) {
   `;
 }
 
-function composerCard(doc, ui) {
-  return card('Composer', '', composerBodyHtml(doc, ui));
-}
-
 export function navigatorBodyHtml(doc, ui) {
   return `
     ${narrativeComposerBlock(doc, ui)}
     ${dashboardTrackersBlock(doc)}
   `;
-}
-
-function navigatorCard(doc, ui) {
-  return card('Navigator', '', navigatorBodyHtml(doc, ui), 'navigator-card');
 }
 
 // Threat/Mystery/Stress/Resources/Reputation — moved out of the shared

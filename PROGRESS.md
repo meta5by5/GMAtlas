@@ -14,6 +14,41 @@ reorganized — treat them as history, not current pointers.
 
 ## Status Summary
 
+**2026-08-30 Phase 15 follow-up: Ruleset Profile Editor split + draft/save,
+bundler bug fix** — direct follow-up. Fixed a real bug where the previous
+entry's build failed to execute at all (blank page): the bundler doesn't
+support `import { X as Y }` aliasing; renamed the colliding domain function
+instead. Split the combined Profiles & Campaigns settings tab into
+**Campaigns** (list/switch/rename/create, plus reassigning an existing
+campaign to a different profile — appConfig-only, never touches campaign
+data) and **Ruleset Profile Editor** (select a profile, edit everything it
+owns: Storyboard positions, visible modules, Genre Pack, Stat System, Trade
+Economy Model, Rules Constitution, Game System Activation). Edits are now a
+draft, applied only on an explicit Save (every campaign using that profile
+updates live once saved); Discard reverts. 510 tests (2 new), clean build,
+verified end-to-end against the real built bundle.
+
+**2026-08-30 Phase 15: Rules Profiles + multi-campaign**
+(`design/adr/rules-profiles-multi-campaign.md`) — direct request. Multiple
+independent campaigns now coexist (`store.js`'s new `appConfig` registry,
+separate from any one campaign's own document; `store.get()`/`store.update()`
+keep their exact prior call shape, always operating on the active campaign).
+A new "Rules Profile" (`src/domain/rulesProfiles.js`) bundles the six
+ruleset fields that used to live directly on a campaign's `settings`
+(Genre Pack, Stat System, Trade Economy Model, Rules Constitution, Game
+System Activation, Party headline fields — overlaid onto the active
+campaign's `settings` at `store.get()` time, not duplicated per campaign),
+which `GATEABLE_MODULES` (Colony, World Tracker, Trade, Battlemap, Graph,
+Faction Events) are visible, and what fills the Storyboard's three
+positions (Composer/Navigator/Advisor — any module assignable). Each
+campaign picks one profile; editing a profile changes it everywhere it's
+used. Migration seeds a "Default" profile from a pre-existing campaign's
+current settings, plus a "5PFH" profile (Battlemap/Graph/Trade/Faction
+Events off, Composer/Navigator/Advisor repointed to Colony/World
+Tracker/Party). New Settings > Profiles & Campaigns tab. Amends the Design
+Constitution's rules #1/#2 (single campaign document / two fixed
+persistence keys) in place. 508 domain+migrate tests (9 new), clean build.
+
 **2026-08-25 New module: World Tracker** (`requirements/PLANETFALL_world_tracker.md`,
 `src/domain/worldTracker.js`, new `campaign.worldTracker`) — a strategic
 6x6-sector map for 5PFH Planetfall colony play (home base, exploration/
