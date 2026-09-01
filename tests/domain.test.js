@@ -3498,6 +3498,16 @@ test('switching settings.tradeEconomyModel never orphans a Location already tagg
   assert.notEqual(economyBiasAt(getEntity(camp, id), 'water'), 1); // the tag still applies
 });
 
+test('"none" (direct follow-up request — opting a profile out of the Trade Economy Model mechanic entirely) has no ECONOMY_TYPES of its own, and never orphans a Location tagged under a real model beforehand', () => {
+  assert.deepEqual(economyTypesForModel('none'), [], '"none" has zero economy types by construction');
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'Meridian' }));
+  const hostileType = economyTypesForModel('hostile')[0];
+  camp = addEntityTag(camp, id, hostileType.label);
+  camp.settings.tradeEconomyModel = 'none';
+  assert.notEqual(economyBiasAt(getEntity(camp, id), 'water'), 1, 'the existing tag still biases price even with the model switched to none');
+});
+
 test('a fresh campaign defaults settings.tradeEconomyModel to hostile, and Location tag vocabulary offers only the active model\'s economy types', () => {
   const camp = defaultCampaign();
   assert.equal(camp.settings.tradeEconomyModel, 'hostile');
@@ -4399,10 +4409,11 @@ test('multiple named maps coexist independently — icons/background/grid on one
 import {
   getSector, listTouchedSectors, revealSector, surveySector, harvestSectorResource,
   setSectorNotes, setSectorOverlayIcon, setSectorCornerLabel, removeSectorCornerLabel,
-  addSectorFeature, discoverSectorFeature, removeSectorFeature, adjacentSectors,
+  addSectorFeature, discoverSectorFeature, toggleSectorFeatureDiscovered, removeSectorFeature, adjacentSectors,
   migrateFeature, setHomeBase, rollHomeBase, advanceWorldTurn, deriveSectorIcon,
   generateMissionHooks, setWorldTrackerNotes, gridSizeOf,
-  toggleInvestigationSite, countInvestigationSites, MAX_INVESTIGATION_SITES, worldTrackerAttentionItems,
+  toggleInvestigationSite, rollRandomInvestigationSite, countInvestigationSites, MAX_INVESTIGATION_SITES, worldTrackerAttentionItems,
+  setSectorResourceLevel, setSectorHazardLevel,
 } from '../src/domain/worldTracker.js';
 import { advanceCampaignTurn, incrementCampaignMilestones, decrementCampaignMilestones } from '../src/domain/colony.js';
 
@@ -4425,8 +4436,8 @@ test('revealSector rolls resource/hazard levels and flips to explored exactly on
   assert.ok(first.hazardLevel >= 1 && first.hazardLevel <= 6);
   assert.deepEqual(first.cornerLabels, [
     { corner: 'top_left', text: `R${first.resourceLevel}`, source: 'resource' },
-    { corner: 'top_right', text: `H${first.hazardLevel}`, source: 'hazard' },
-  ], 'the spec\'s "standard use" corners are auto-populated on reveal');
+    { corner: 'bottom_left', text: `H${first.hazardLevel}`, source: 'hazard' },
+  ], 'the spec\'s "standard use" corners are auto-populated on reveal (hazard defaults bottom_left, direct follow-up request)');
   camp = revealSector(camp, 2, 2, { rng: () => 0.999 }); // would roll a different level if it re-rolled
   assert.deepEqual(getSector(camp, 2, 2).resourceLevel, first.resourceLevel);
 });
@@ -4642,6 +4653,64 @@ test('worldTrackerAttentionItems surfaces home base, then remaining investigatio
   assert.equal(countInvestigationSites(camp), MAX_INVESTIGATION_SITES);
   items = worldTrackerAttentionItems(camp);
   assert.ok(!items.some((i) => i.kind === 'investigation-sites'));
+});
+
+test('toggleSectorFeatureDiscovered flips discovered back and forth (unlike discoverSectorFeature, which only ever sets it true — that one-way path is also how a resolved mission hook marks a feature discovered, and reversing THAT must stay a deliberate separate action)', () => {
+  let camp = defaultCampaign();
+  camp = addSectorFeature(camp, 6, 6, 'milestone_site');
+  const id = getSector(camp, 6, 6).features[0].id;
+  assert.equal(getSector(camp, 6, 6).features[0].discovered, false);
+  camp = toggleSectorFeatureDiscovered(camp, 6, 6, id);
+  assert.equal(getSector(camp, 6, 6).features[0].discovered, true);
+  camp = toggleSectorFeatureDiscovered(camp, 6, 6, id);
+  assert.equal(getSector(camp, 6, 6).features[0].discovered, false, 'rolls back to undiscovered');
+  camp = toggleSectorFeatureDiscovered(camp, 6, 6, 'not-a-real-id'); // no-op, no throw
+  assert.equal(getSector(camp, 6, 6).features[0].discovered, false);
+});
+
+test('setSectorResourceLevel/setSectorHazardLevel are directly editable (direct follow-up request — same number-field format as Colony) and keep the auto-managed R#/H# corner label in sync, but never touch a corner the GM has since overwritten by hand', () => {
+  let camp = defaultCampaign();
+  camp = revealSector(camp, 3, 3, { rng: makeRng(1) });
+  camp = setSectorResourceLevel(camp, 3, 3, 6);
+  assert.equal(getSector(camp, 3, 3).resourceLevel, 6);
+  assert.ok(getSector(camp, 3, 3).cornerLabels.some((c) => c.corner === 'top_left' && c.text === 'R6' && c.source === 'resource'));
+  camp = setSectorHazardLevel(camp, 3, 3, 2);
+  assert.equal(getSector(camp, 3, 3).hazardLevel, 2);
+  assert.ok(getSector(camp, 3, 3).cornerLabels.some((c) => c.corner === 'bottom_left' && c.text === 'H2' && c.source === 'hazard'));
+  // A GM's own custom override at that same corner is left alone by a later level edit.
+  camp = setSectorCornerLabel(camp, 3, 3, 'bottom_left', 'Custom text', 'custom');
+  camp = setSectorHazardLevel(camp, 3, 3, 4);
+  assert.equal(getSector(camp, 3, 3).hazardLevel, 4, 'the level itself still updates');
+  assert.ok(getSector(camp, 3, 3).cornerLabels.some((c) => c.corner === 'bottom_left' && c.text === 'Custom text'), 'the GM\'s own custom label is untouched');
+  // Blank clears back to unset.
+  camp = setSectorResourceLevel(camp, 3, 3, '');
+  assert.equal(getSector(camp, 3, 3).resourceLevel, null);
+});
+
+test('rollRandomInvestigationSite (direct follow-up request — 1d(gridSize) x 1d(gridSize), first roll X, second Y) never picks the home base sector or an already-marked one, and is a no-op once the cap is reached', () => {
+  let camp = defaultCampaign();
+  camp = setHomeBase(camp, 3, 3);
+  const seq = [3, 3, 1, 1, 1, 1]; // first roll (3,3) collides with home base, rerolls to (1,1)
+  let i = 0;
+  const rng = () => { const n = seq[Math.min(i, seq.length - 1)]; i++; return (n - 1) / 6 + 0.001; };
+  const result = rollRandomInvestigationSite(camp, { rng });
+  assert.notDeepEqual({ x: result.x, y: result.y }, { x: 3, y: 3 }, 'never lands on home base');
+  assert.equal(getSector(result.campaign, result.x, result.y).investigationSite, true);
+
+  // At the cap: a no-op, campaign unchanged, x/y both null.
+  let atCap = defaultCampaign();
+  let n = 0;
+  for (let gx = 1; gx <= 6 && n < MAX_INVESTIGATION_SITES; gx++) {
+    for (let gy = 1; gy <= 6 && n < MAX_INVESTIGATION_SITES; gy++) {
+      atCap = toggleInvestigationSite(atCap, gx, gy);
+      n++;
+    }
+  }
+  assert.equal(countInvestigationSites(atCap), MAX_INVESTIGATION_SITES);
+  const capped = rollRandomInvestigationSite(atCap, { rng: makeRng(1) });
+  assert.equal(capped.x, null);
+  assert.equal(capped.y, null);
+  assert.equal(capped.campaign, atCap, 'campaign reference unchanged — a true no-op');
 });
 
 // Campaign Turn / Campaign Milestones — shared with colony.js's Turn Sheet

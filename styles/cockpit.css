@@ -1223,14 +1223,23 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
   padding: 1px 2px; pointer-events: none;
 }
 .wt-corner-top_left { top: 1px; left: 2px; }
-.wt-corner-top_right { top: 1px; right: 2px; color: var(--danger); font-weight: bold; }
-.wt-corner-bottom_left { bottom: 1px; left: 2px; }
+.wt-corner-top_right { top: 1px; right: 2px; }
+/* Hazard's own "H#" corner label defaults here now (direct follow-up
+   request — was top_right); the danger/bold treatment moves with it. */
+.wt-corner-bottom_left { bottom: 1px; left: 2px; color: var(--danger); font-weight: bold; }
 .wt-corner-bottom_right { bottom: 1px; right: 2px; }
 .wt-sector-icon { font-size: 1rem; opacity: 0.7; }
 .wt-corner-row { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-1); }
 .wt-corner-row > span:first-child { min-width: 6rem; text-transform: capitalize; }
 .wt-migrate-picker { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; margin-top: var(--sp-2); }
 .wt-feature-card .doc-card-head { align-items: center; }
+/* Sector detail's Features "+" add buttons, two per row (direct follow-up
+   request — was one per row in a plain .btn-col). */
+.wt-feature-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-2); }
+/* The Investigation Site icon toggle's "on" state — same accent treatment
+   .profile-list .btn.active already uses for a selected pick, reused here
+   since this app has no other "toggled icon button" precedent to match. */
+.wt-sector-detail .icon-btn.active { color: var(--accent); background: var(--tier2-bg); }
 
 /* Toast */
 .toast {

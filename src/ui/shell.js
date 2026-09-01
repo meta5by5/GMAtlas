@@ -54,9 +54,10 @@ import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewR
 import {
   getSector, listTouchedSectors, revealSector, surveySector, harvestSectorResource,
   setSectorNotes, setSectorOverlayIcon, setSectorCornerLabel, removeSectorCornerLabel,
-  addSectorFeature, discoverSectorFeature, removeSectorFeature, adjacentSectors,
+  addSectorFeature, discoverSectorFeature, toggleSectorFeatureDiscovered, removeSectorFeature, adjacentSectors,
   migrateFeature, setHomeBase, rollHomeBase, advanceWorldTurn, generateMissionHooks, setWorldTrackerNotes, gridSizeOf,
-  toggleInvestigationSite,
+  toggleInvestigationSite, rollRandomInvestigationSite, setSectorResourceLevel, setSectorHazardLevel,
+  MAX_INVESTIGATION_SITES,
 } from '../domain/worldTracker.js';
 import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract, updateContract } from '../domain/trade.js';
 import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors, resolveFactionTurn, formatFactionTurnResult, rollFactionAsset } from '../domain/factions.js';
@@ -355,6 +356,16 @@ let battlemapPan = null; // { world, startClientX, startClientY, startX, startY 
 let worldTrackerTab = 'overview';
 let worldTrackerSelectedSector = null; // {x,y} | null
 let worldTrackerMigrateOpen = new Set();
+// A sector detail's Corner Labels sub-section (direct follow-up request —
+// collapsed by default, moved below Notes); only one sector's detail is
+// ever shown at a time, so a single flat boolean is enough.
+let worldTrackerCornerLabelsOpen = false;
+// Feature-kind labels for World Tracker Journal entries (direct follow-up
+// request) — drawers/index.js's own WT_FEATURE_KINDS/wtFeatureLabel are
+// private to that file; this is the same handful of labels, just where
+// shell.js's addNote() call sites can reach them.
+const WT_FEATURE_KIND_LABELS = { alien_site: 'Alien Site', enemy_camp: 'Enemy Camp', resource_node: 'Resource Node', milestone_site: 'Milestone Site' };
+function wtFeatureKindLabel(kind) { return WT_FEATURE_KIND_LABELS[kind] || kind; }
 // Content Pack export checkboxes (Settings > General) — ephemeral, which
 // sections the next "Export Content Pack" click includes; unrelated to
 // campaign data itself (domain/contentPack.js's exportContentPack takes
@@ -1880,6 +1891,11 @@ function onClick(ev) {
   if (encounterDel) return store.update((d) => removeColonyEncounter(d, encounterDel.dataset.colonyEncounterRemove));
 
   // --- world tracker (requirements/PLANETFALL_world_tracker.md) ---
+  // Direct follow-up request: a Journal entry for every discrete GM action
+  // that actually changes the World Tracker's state (reveal/survey/
+  // harvest/home base/investigation sites/features) — NOT for free-text
+  // edits (notes, corner labels) or numeric corrections (Resource/Hazard
+  // Level), which aren't really "the world changing" as a narrative beat.
   if (hit('[data-world-tracker-tab]')) { worldTrackerTab = hit('[data-world-tracker-tab]').dataset.worldTrackerTab; return renderDrawerBody(); }
   const sectorSelect = hit('[data-sector-select]');
   if (sectorSelect) {
@@ -1891,32 +1907,48 @@ function onClick(ev) {
   const sectorReveal = hit('[data-sector-reveal]');
   if (sectorReveal) {
     const [sx, sy] = sectorReveal.dataset.sectorReveal.split(',').map(Number);
-    return store.update((d) => revealSector(d, sx, sy));
+    return store.update((d) => {
+      const next = revealSector(d, sx, sy);
+      const s = getSector(next, sx, sy);
+      return addNote(next, `Sector ${sx},${sy} revealed — resource ${s.resourceLevel}, hazard ${s.hazardLevel}.`, 'World Tracker');
+    });
   }
   const sectorSurvey = hit('[data-sector-survey]');
   if (sectorSurvey) {
     const [sx, sy] = sectorSurvey.dataset.sectorSurvey.split(',').map(Number);
-    return store.update((d) => surveySector(d, sx, sy));
+    return store.update((d) => addNote(surveySector(d, sx, sy), `Sector ${sx},${sy} surveyed.`, 'World Tracker'));
   }
   const sectorHarvest = hit('[data-sector-harvest]');
   if (sectorHarvest) {
     const [sx, sy] = sectorHarvest.dataset.sectorHarvest.split(',').map(Number);
-    return store.update((d) => harvestSectorResource(d, sx, sy));
+    return store.update((d) => addNote(harvestSectorResource(d, sx, sy), `Sector ${sx},${sy}'s resource marked harvested.`, 'World Tracker'));
   }
   const sectorAddFeature = hit('[data-sector-add-feature]');
   if (sectorAddFeature) {
     const [sx, sy] = sectorAddFeature.dataset.sectorAddFeature.split(',').map(Number);
-    return store.update((d) => addSectorFeature(d, sx, sy, sectorAddFeature.dataset.featureKind));
+    const kind = sectorAddFeature.dataset.featureKind;
+    return store.update((d) => addNote(addSectorFeature(d, sx, sy, kind), `${wtFeatureKindLabel(kind)} added to sector ${sx},${sy}.`, 'World Tracker'));
   }
-  const featureDiscover = hit('[data-feature-discover]');
-  if (featureDiscover) {
-    const [sx, sy] = featureDiscover.dataset.sectorCoord.split(',').map(Number);
-    return store.update((d) => discoverSectorFeature(d, sx, sy, featureDiscover.dataset.featureDiscover));
+  const featureDiscoverToggle = hit('[data-feature-discover-toggle]');
+  if (featureDiscoverToggle) {
+    const [sx, sy] = featureDiscoverToggle.dataset.sectorCoord.split(',').map(Number);
+    const featureId = featureDiscoverToggle.dataset.featureDiscoverToggle;
+    return store.update((d) => {
+      const next = toggleSectorFeatureDiscovered(d, sx, sy, featureId);
+      const f = getSector(next, sx, sy).features.find((ft) => ft.id === featureId);
+      if (!f) return next;
+      return addNote(next, `${wtFeatureKindLabel(f.kind)} at sector ${sx},${sy} marked ${f.discovered ? 'discovered' : 'undiscovered'}.`, 'World Tracker');
+    });
   }
   const featureRemove = hit('[data-feature-remove]');
   if (featureRemove) {
     const [sx, sy] = featureRemove.dataset.sectorCoord.split(',').map(Number);
-    return store.update((d) => removeSectorFeature(d, sx, sy, featureRemove.dataset.featureRemove));
+    const featureId = featureRemove.dataset.featureRemove;
+    return store.update((d) => {
+      const f = getSector(d, sx, sy).features.find((ft) => ft.id === featureId);
+      const next = removeSectorFeature(d, sx, sy, featureId);
+      return f ? addNote(next, `${wtFeatureKindLabel(f.kind)} removed from sector ${sx},${sy}.`, 'World Tracker') : next;
+    });
   }
   const featureMigrateToggle = hit('[data-feature-migrate-toggle]');
   if (featureMigrateToggle) {
@@ -1928,7 +1960,11 @@ function onClick(ev) {
   if (featureMigrateTo) {
     const { fromX, fromY, featureId, toX, toY } = featureMigrateTo.dataset;
     worldTrackerMigrateOpen.delete(featureId);
-    return store.update((d) => migrateFeature(d, Number(fromX), Number(fromY), featureId, Number(toX), Number(toY)));
+    return store.update((d) => {
+      const f = getSector(d, Number(fromX), Number(fromY)).features.find((ft) => ft.id === featureId);
+      const next = migrateFeature(d, Number(fromX), Number(fromY), featureId, Number(toX), Number(toY));
+      return f ? addNote(next, `${wtFeatureKindLabel(f.kind)} migrated from ${fromX},${fromY} to ${toX},${toY}.`, 'World Tracker') : next;
+    });
   }
   const cornerLabelEdit = hit('[data-corner-label-edit]');
   if (cornerLabelEdit) {
@@ -1946,11 +1982,46 @@ function onClick(ev) {
     const [sx, sy, corner] = cornerLabelRemove.dataset.cornerLabelRemove.split(':');
     return store.update((d) => removeSectorCornerLabel(d, Number(sx), Number(sy), corner));
   }
-  if (hit('[data-home-base-roll]')) { store.update((d) => rollHomeBase(d)); return toast('Home base rolled'); }
+  if (hit('[data-sector-corner-labels-toggle]')) { worldTrackerCornerLabelsOpen = !worldTrackerCornerLabelsOpen; return renderDrawerBody(); }
+  if (hit('[data-home-base-roll]')) {
+    store.update((d) => {
+      const next = rollHomeBase(d);
+      const hb = next.worldTracker.homeBaseSector;
+      return addNote(next, `Home base rolled: sector ${hb.x},${hb.y}.`, 'World Tracker');
+    });
+    return toast('Home base rolled');
+  }
   const homeBaseSet = hit('[data-home-base-set]');
   if (homeBaseSet) {
     const [sx, sy] = homeBaseSet.dataset.homeBaseSet.split(',').map(Number);
-    return store.update((d) => setHomeBase(d, sx, sy));
+    return store.update((d) => addNote(setHomeBase(d, sx, sy), `Home base set to sector ${sx},${sy}.`, 'World Tracker'));
+  }
+  const investigationToggle = hit('[data-sector-investigation-toggle]');
+  if (investigationToggle) {
+    const [sx, sy] = investigationToggle.dataset.sectorInvestigationToggle.split(',').map(Number);
+    return store.update((d) => {
+      const next = toggleInvestigationSite(d, sx, sy);
+      const marked = getSector(next, sx, sy).investigationSite;
+      return addNote(next, `Sector ${sx},${sy} ${marked ? 'marked' : 'un-marked'} as an investigation site.`, 'World Tracker');
+    });
+  }
+  const investigationRandom = hit('[data-sector-investigation-random]');
+  if (investigationRandom) {
+    // rollRandomInvestigationSite must run INSIDE the mutator (on the raw
+    // clone store.update() hands it, not store.get()'s profile-overlaid
+    // view — see store.js's own comment on why) — rolledXY is a closure
+    // capture, not a second roll, so the coordinate the GM sees selected
+    // afterward is exactly the one that was actually marked.
+    let rolledXY = null;
+    store.update((d) => {
+      const rolled = rollRandomInvestigationSite(d);
+      if (rolled.x == null) return d;
+      rolledXY = { x: rolled.x, y: rolled.y };
+      return addNote(rolled.campaign, `Investigation site randomly rolled: sector ${rolled.x},${rolled.y}.`, 'World Tracker');
+    });
+    if (rolledXY) worldTrackerSelectedSector = rolledXY;
+    else toast(`Investigation site limit reached (${MAX_INVESTIGATION_SITES} marked)`);
+    return;
   }
   if (hit('[data-world-turn-advance]')) {
     store.update((d) => advanceWorldTurn(advanceCampaignTurn(d)));
@@ -3121,8 +3192,6 @@ function onClick(ev) {
     newCampaignDraft = { title: '', profileId: '' };
     return;
   }
-  const profileSelectBtn = hit('[data-profile-select-edit]');
-  if (profileSelectBtn) { settingsSelectedProfileId = profileSelectBtn.dataset.profileSelectEdit; return render(); }
   if (hit('[data-profile-create]')) {
     const cloneFromId = currentEditingProfileId();
     return store.createProfile({ name: 'New Profile', cloneFromId }).then(() => {
@@ -3849,10 +3918,18 @@ function onChange(ev) {
     const [sx, sy] = overlayIconPick.dataset.sectorCoord.split(',').map(Number);
     return store.update((d) => setSectorOverlayIcon(d, sx, sy, t.value || null));
   }
-  const investigationToggle = t.closest('[data-sector-investigation-toggle]');
-  if (investigationToggle) {
-    const [sx, sy] = investigationToggle.dataset.sectorInvestigationToggle.split(',').map(Number);
-    return store.update((d) => toggleInvestigationSite(d, sx, sy));
+  // Investigation Site is an icon BUTTON now (direct follow-up request),
+  // not a checkbox — its toggle lives in onClick, with the rest of the
+  // World Tracker action handlers.
+  const resourceLevelInput = t.closest('[data-sector-resource-level]');
+  if (resourceLevelInput) {
+    const [sx, sy] = resourceLevelInput.dataset.sectorResourceLevel.split(',').map(Number);
+    return store.update((d) => setSectorResourceLevel(d, sx, sy, t.value));
+  }
+  const hazardLevelInput = t.closest('[data-sector-hazard-level]');
+  if (hazardLevelInput) {
+    const [sx, sy] = hazardLevelInput.dataset.sectorHazardLevel.split(',').map(Number);
+    return store.update((d) => setSectorHazardLevel(d, sx, sy, t.value));
   }
 
   // --- trade ---
@@ -6125,7 +6202,7 @@ function buildDrawerUi() {
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
     contentPackFlags, hostileLocationsImporting, exportIncludeAttachments, exportAttachmentsPreview,
-    worldTrackerTab, worldTrackerSelectedSector, worldTrackerMigrateOpen,
+    worldTrackerTab, worldTrackerSelectedSector, worldTrackerMigrateOpen, worldTrackerCornerLabelsOpen,
     // Faction Events' own docked-in-WHERE state (see factionEventsDockedInWhere's
     // comment above) — workspace/index.js's WHERE view reads these to render
     // the same renderFactionEvents() body a second way when docked.

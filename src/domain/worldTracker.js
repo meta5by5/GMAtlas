@@ -108,6 +108,49 @@ export function toggleInvestigationSite(campaign, x, y) {
   return next;
 }
 
+/** "Random" convenience (direct follow-up request): rolls 1d(gridSize) x
+ *  1d(gridSize) — the same die the home-base roll always uses, first roll
+ *  = X, second = Y — to pick a sector to mark as an investigation site,
+ *  rerolling if that lands on the home base sector, an already-marked
+ *  sector, or one that's no longer unexplored (5PFH Planetfall p.53:
+ *  investigation sites are 10 UNEXPLORED sectors other than home base).
+ *  No-op once already at the advisory MAX_INVESTIGATION_SITES cap (see its
+ *  own comment) — same "never hard-blocks a GM correcting mid-campaign"
+ *  posture as toggleInvestigationSite, just refusing to pick a NEW one
+ *  past the cap rather than refusing to un-mark an existing one. Bounded
+ *  retry, then an in-order scan fallback, so a nearly-full grid can't
+ *  spin forever re-rolling the same handful of occupied sectors. Returns
+ *  { campaign, x, y } — x/y null (campaign unchanged) if the cap is
+ *  already reached or no eligible sector exists at all. */
+export function rollRandomInvestigationSite(campaign, { rng = Math.random } = {}) {
+  if (countInvestigationSites(campaign) >= MAX_INVESTIGATION_SITES) return { campaign, x: null, y: null };
+  const wt = campaign.worldTracker || {};
+  const gridSize = wt.gridSize || 6;
+  const home = wt.homeBaseSector;
+  const isEligible = (x, y) => {
+    if (home && home.x === x && home.y === y) return false;
+    const sector = getSector(campaign, x, y);
+    return sector.state === 'unexplored' && !sector.investigationSite;
+  };
+  let x = null;
+  let y = null;
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const rx = rollDie(gridSize, rng);
+    const ry = rollDie(gridSize, rng);
+    if (isEligible(rx, ry)) { x = rx; y = ry; break; }
+  }
+  if (x == null) {
+    scan:
+    for (let sx = 1; sx <= gridSize; sx++) {
+      for (let sy = 1; sy <= gridSize; sy++) {
+        if (isEligible(sx, sy)) { x = sx; y = sy; break scan; }
+      }
+    }
+  }
+  if (x == null) return { campaign, x: null, y: null };
+  return { campaign: toggleInvestigationSite(campaign, x, y), x, y };
+}
+
 function getOrCreateSectorRecord(wt, x, y) {
   const k = key(x, y);
   if (!wt.sectors[k]) wt.sectors[k] = defaultSector();
@@ -132,9 +175,39 @@ export function revealSector(campaign, x, y, { rng = Math.random } = {}) {
   // another — applied automatically on reveal; a GM can still overwrite
   // either corner with setSectorCornerLabel afterward (source:'custom'
   // simply replaces whatever was here, same one-label-per-corner rule).
-  sector.cornerLabels = sector.cornerLabels.filter((c) => c.corner !== 'top_left' && c.corner !== 'top_right');
+  // Hazard defaults to bottom_left (direct follow-up request — was
+  // top_right); resource stays top_left.
+  sector.cornerLabels = sector.cornerLabels.filter((c) => c.corner !== 'top_left' && c.corner !== 'bottom_left');
   sector.cornerLabels.push({ corner: 'top_left', text: `R${sector.resourceLevel}`, source: 'resource' });
-  sector.cornerLabels.push({ corner: 'top_right', text: `H${sector.hazardLevel}`, source: 'hazard' });
+  sector.cornerLabels.push({ corner: 'bottom_left', text: `H${sector.hazardLevel}`, source: 'hazard' });
+  return next;
+}
+
+// Resource/Hazard Level editable fields (direct follow-up request — same
+// number-field format as Colony's own COLONY_FIELDS). Keeps the
+// auto-managed R#/H# corner label (source 'resource'/'hazard') in sync
+// with the edited number so the grid cell's corner text never drifts from
+// the sidebar's own value; a corner the GM has since overwritten by hand
+// (source:'custom') is left alone — editing the level only ever touches
+// the label IT put there.
+export function setSectorResourceLevel(campaign, x, y, value) {
+  const next = clone(campaign);
+  const wt = ensure(next);
+  const sector = getOrCreateSectorRecord(wt, clampCoord(x, wt.gridSize), clampCoord(y, wt.gridSize));
+  const level = value === '' || value == null || !Number.isFinite(Number(value)) ? null : Math.round(Number(value));
+  sector.resourceLevel = level;
+  const label = sector.cornerLabels.find((c) => c.corner === 'top_left' && c.source === 'resource');
+  if (label) label.text = level == null ? '' : `R${level}`;
+  return next;
+}
+export function setSectorHazardLevel(campaign, x, y, value) {
+  const next = clone(campaign);
+  const wt = ensure(next);
+  const sector = getOrCreateSectorRecord(wt, clampCoord(x, wt.gridSize), clampCoord(y, wt.gridSize));
+  const level = value === '' || value == null || !Number.isFinite(Number(value)) ? null : Math.round(Number(value));
+  sector.hazardLevel = level;
+  const label = sector.cornerLabels.find((c) => c.corner === 'bottom_left' && c.source === 'hazard');
+  if (label) label.text = level == null ? '' : `H${level}`;
   return next;
 }
 
@@ -223,6 +296,20 @@ export function discoverSectorFeature(campaign, x, y, featureId) {
   const sector = wt.sectors[key(clampCoord(x, wt.gridSize), clampCoord(y, wt.gridSize))];
   const feature = sector && sector.features.find((f) => f.id === featureId);
   if (feature) feature.discovered = true;
+  return next;
+}
+
+/** The Features tab/Sector detail's own eye icon toggle (direct follow-up
+ *  request — able to roll a decision back, unlike discoverSectorFeature
+ *  above, which stays one-way since it's also how a resolved mission hook
+ *  marks its feature discovered — reversing THAT should be a deliberate
+ *  separate action, not implied by running a mission). */
+export function toggleSectorFeatureDiscovered(campaign, x, y, featureId) {
+  const next = clone(campaign);
+  const wt = ensure(next);
+  const sector = wt.sectors[key(clampCoord(x, wt.gridSize), clampCoord(y, wt.gridSize))];
+  const feature = sector && sector.features.find((f) => f.id === featureId);
+  if (feature) feature.discovered = !feature.discovered;
   return next;
 }
 

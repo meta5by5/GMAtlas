@@ -304,9 +304,12 @@ function helpBody(key, html, ui) {
 
 // An <h3>/<h4> section title plus its "?" toggle, right-aligned on the
 // same line — the shape every Settings group (and any other section-level
-// header) uses to pair with helpBody below it.
-function sectionHeadRow(tag, title, key) {
-  return `<div class="section-head-row"><${tag}>${esc(title)}</${tag}>${helpToggle(key)}</div>`;
+// header) uses to pair with helpBody below it. `extra` (optional) is more
+// icon-button HTML inserted before the "?" toggle, same convention as
+// workspace/index.js's dashboardSection headerExtra — e.g. the Ruleset
+// Profile Editor's "+ New Profile"/Rename icons.
+function sectionHeadRow(tag, title, key, extra = '') {
+  return `<div class="section-head-row"><${tag}>${esc(title)}</${tag}><span class="entity-chip-row">${extra}${helpToggle(key)}</span></div>`;
 }
 
 function inspector(doc, e, ui) {
@@ -1770,7 +1773,6 @@ function settings(doc, ui = {}) {
       <div class="settings-group">
         <h3>Build</h3>
         <p class="dim small">Phase ${esc(BUILD.phase)} · v${esc(BUILD.version)} — ${esc(BUILD.label)}</p>
-        <ul class="build-notes">${BUILD.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>
       </div>`,
     campaigns: () => campaignsSection(doc, ui),
     'ruleset-profile-editor': () => rulesetProfileEditorSection(doc, ui),
@@ -1881,29 +1883,32 @@ function rulesetProfileEditorSection(doc, ui) {
   const profiles = ui.profiles || [];
   const editingProfile = profiles.find((p) => p.id === ui.editingProfileId) || profiles[0];
 
+  const profilePickerHeaderExtra = `
+    <button type="button" class="icon-btn" data-profile-create title="New Profile — clones the one currently selected below">📄＋</button>
+    ${editingProfile ? `<button type="button" class="icon-btn" data-profile-rename="${esc(editingProfile.id)}" title="Rename &quot;${esc(editingProfile.name)}&quot;">✎</button>` : ''}`;
   const profilePicker = `
     <div class="settings-group">
-      ${sectionHeadRow('h3', 'Rules Profiles', 'settings-profiles-list')}
-      ${helpBody('settings-profiles-list', "A Rules Profile bundles which modules are visible, what fills the Storyboard's three positions, and the ruleset (genre pack, stat system, trade economy, Rules Constitution, Game System Activation). Shared across every campaign that picks it. Select one below to edit it.", ui)}
-      <div class="profile-list btn-col">
-        ${profiles.map((p) => `<button class="btn ghost sm${editingProfile && p.id === editingProfile.id ? ' active' : ''}" data-profile-select-edit="${esc(p.id)}">${esc(p.name)}</button>`).join('')}
-      </div>
-      <div class="btn-col">
-        <button class="btn ghost sm" data-profile-create>+ New Profile (clone the one shown below)</button>
-        ${editingProfile ? `<button class="btn ghost sm" data-profile-rename="${esc(editingProfile.id)}">Rename "${esc(editingProfile.name)}"</button>` : ''}
-      </div>
+      ${sectionHeadRow('h3', 'Rules Profiles', 'settings-profiles-list', profilePickerHeaderExtra)}
+      ${helpBody('settings-profiles-list', "A Rules Profile bundles which modules are visible, what fills the Storyboard's three positions, and the ruleset (genre pack, stat system, trade economy, Rules Constitution, Game System Activation). Shared across every campaign that picks it.", ui)}
+      <label class="field-label sm">Editing
+        <select data-profile-select>
+          ${profiles.map((p) => `<option value="${esc(p.id)}" ${editingProfile && p.id === editingProfile.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+        </select>
+      </label>
     </div>`;
 
   const draft = ui.profileDraft;
   if (!editingProfile || !draft) return profilePicker;
 
   const dirty = !!ui.profileDraftDirty;
-  const saveBar = `
-    <div class="settings-group profile-draft-bar${dirty ? ' dirty' : ''}">
-      <p class="dim small">${dirty ? '● Unsaved changes.' : 'No unsaved changes.'} Editing "${esc(editingProfile.name)}" — nothing below applies to any campaign until you Save.</p>
+  // Only shown once an edit has actually been made — hidden again the
+  // instant it's Saved or Discarded (direct follow-up request).
+  const saveBar = !dirty ? '' : `
+    <div class="settings-group profile-draft-bar dirty">
+      <p class="dim small">● Unsaved changes. Editing "${esc(editingProfile.name)}" — nothing below applies to any campaign until you Save.</p>
       <div class="btn-col-row">
-        <button class="btn" data-profile-draft-save="${esc(editingProfile.id)}" ${dirty ? '' : 'disabled'}>Save Profile</button>
-        <button class="btn ghost" data-profile-draft-cancel="${esc(editingProfile.id)}" ${dirty ? '' : 'disabled'}>Discard Changes</button>
+        <button class="btn" data-profile-draft-save="${esc(editingProfile.id)}">Save Profile</button>
+        <button class="btn ghost" data-profile-draft-cancel="${esc(editingProfile.id)}">Discard Changes</button>
       </div>
     </div>`;
 
@@ -2099,6 +2104,24 @@ function sourcebookInventorySection(ui) {
 // trade.js's economyBiasAt checks both models regardless of which is active.
 function tradeEconomyModelSection(doc, ui) {
   const active = doc.settings.tradeEconomyModel || 'hostile';
+  const modelSelect = `
+    <label class="field-label">Model
+      <select data-trade-economy-model-select>
+        ${ECONOMY_MODELS.map((m) => `<option value="${m.id}" ${m.id === active ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}
+      </select>
+    </label>`;
+  // 'none' (direct follow-up request) hides and collapses everything below
+  // the model switch itself — this app is a sandbox for one ruleset or a
+  // mix, not every feature always on, so a profile that doesn't use the
+  // Trade Economy Model mechanic shouldn't show its reference lists at all.
+  if (active === 'none') {
+    return `
+    <div class="settings-group">
+      ${sectionHeadRow('h3', 'Trade Economy Model', 'settings-trade-economy')}
+      ${helpBody('settings-trade-economy', "Set a Location's Development Level (on its Location card) to one of these to bias its market prices beyond the manual supply/demand dials — unset Locations are unaffected. \"None\" turns this mechanic off entirely for this profile; a Location already tagged from when a model was active keeps working if you switch a model back on.", ui)}
+      ${modelSelect}
+    </div>`;
+  }
   const types = economyTypesForModel(active);
   const rows = types.map((t) => `
     <li><b>${esc(t.label)}</b> — <span class="dim small">scarcity ${t.scarcity}/10, manufacturing ${t.manufacturing}/10.</span> ${esc(t.description)}</li>`).join('');
@@ -2109,11 +2132,7 @@ function tradeEconomyModelSection(doc, ui) {
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Trade Economy Model', 'settings-trade-economy')}
       ${helpBody('settings-trade-economy', 'Set a Location\'s Development Level (on its Location card) to one of these to bias its market prices beyond the manual supply/demand dials — unset Locations are unaffected. Only one model is active at a time, but a Location already tagged the old way (a matching tag instead of the field) keeps working if you switch.', ui)}
-      <label class="field-label">Model
-        <select data-trade-economy-model-select>
-          ${ECONOMY_MODELS.map((m) => `<option value="${m.id}" ${m.id === active ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}
-        </select>
-      </label>
+      ${modelSelect}
       <ul class="rules-provider-legend">${rows}</ul>
       <h4>Biomes (${esc((GENRE_PACKS.find((p) => p.id === (doc.settings.genrePack || 'hostile')) || {}).label || 'active pack')})</h4>
       <p class="dim small">Set a Location's Biome (on its Location card) to one of these to bias prices by resource type, independent of and compounding with Development Level. Dials are 0-10, 0 = locally abundant/cheap, 10 = scarce/expensive.</p>
@@ -3471,7 +3490,7 @@ function worldTrackerFeatureRow(doc, ui, sx, sy, f, { withSector = false } = {})
       <div class="doc-card-head">
         <span>${withSector ? `Sector ${sx},${sy} — ` : ''}${esc(wtFeatureLabel(f.kind))}${f.discovered ? '' : ' <span class="dim small">(undiscovered)</span>'}${f.movedFrom ? ` <span class="dim small">(moved from ${f.movedFrom.x},${f.movedFrom.y})</span>` : ''}</span>
         <div class="doc-card-actions">
-          ${!f.discovered ? `<button class="icon-btn" data-feature-discover="${esc(f.id)}" data-sector-coord="${sx},${sy}" title="Mark discovered">👁</button>` : ''}
+          <button class="icon-btn" data-feature-discover-toggle="${esc(f.id)}" data-sector-coord="${sx},${sy}" title="${f.discovered ? 'Mark undiscovered' : 'Mark discovered'}">${f.discovered ? '🙈' : '👁'}</button>
           ${f.mobile ? `<button class="icon-btn" data-feature-migrate-toggle="${esc(f.id)}" title="Migrate to an adjacent sector">➤</button>` : ''}
           <button class="icon-btn" data-feature-remove="${esc(f.id)}" data-sector-coord="${sx},${sy}" title="Remove">✕</button>
         </div>
@@ -3497,23 +3516,27 @@ function worldTrackerSectorDetail(doc, ui, x, y) {
   const iconOptions = WORLD_TRACKER_ICONS.map((i) => `<option value="${i.key}" ${sector.overlayIcon === i.key ? 'selected' : ''}>${esc(i.label)}</option>`).join('');
 
   const investigationCount = countInvestigationSites(doc);
+  const atInvestigationCap = investigationCount >= MAX_INVESTIGATION_SITES;
+  const cornerLabelsOpen = !!ui.worldTrackerCornerLabelsOpen;
   return `
     <div class="settings-group wt-sector-detail">
       <h3>Sector ${x},${y}${isHome ? ' 🏠' : ''}</h3>
       <p>State: <b>${esc(sector.state)}</b></p>
       ${sector.state === 'unexplored' ? `
-      <label class="chip sm"><input type="checkbox" data-sector-investigation-toggle="${x},${y}" ${sector.investigationSite ? 'checked' : ''} ${!sector.investigationSite && investigationCount >= MAX_INVESTIGATION_SITES ? 'disabled' : ''}> Investigation site (p.53 "?" marker)</label>
+      <div class="btn-col-row">
+        <button class="icon-btn ${sector.investigationSite ? 'active' : ''}" data-sector-investigation-toggle="${x},${y}" title="Investigation site (p.53 &quot;?&quot; marker)" ${!sector.investigationSite && atInvestigationCap ? 'disabled' : ''}>❓</button>
+        <button class="btn ghost sm" data-sector-investigation-random="${x},${y}" title="Roll 1d6 × 1d6 to randomly pick an unexplored sector to mark" ${atInvestigationCap ? 'disabled' : ''}>🎲 Random</button>
+      </div>
       <p class="dim small">${investigationCount} / ${MAX_INVESTIGATION_SITES} marked</p>` : ''}
-      <div class="btn-col">
+      <div class="btn-col-row">
         ${sector.state === 'unexplored' ? `<button class="btn ghost sm" data-sector-reveal="${x},${y}">Reveal</button>` : ''}
         ${sector.state === 'explored' ? `<button class="btn ghost sm" data-sector-survey="${x},${y}">Survey</button>` : ''}
         ${!isHome ? `<button class="btn ghost sm" data-home-base-set="${x},${y}">Set as Home Base</button>` : ''}
       </div>
       ${sector.state !== 'unexplored' ? `
-        <p>Resource level: <b>${sector.resourceLevel}</b> ${sector.resourceHarvested ? '<span class="dim small">(harvested)</span>' : `<button class="btn ghost sm" data-sector-harvest="${x},${y}">Mark Harvested</button>`}</p>
-        <p>Hazard level: <b>${sector.hazardLevel}</b></p>` : ''}
-      <h4>Corner Labels</h4>
-      ${cornerRows}
+        <label class="field-label">Resource level${numStepper(`<input type="number" data-sector-resource-level="${x},${y}" value="${sector.resourceLevel == null ? '' : sector.resourceLevel}">`)}</label>
+        ${sector.resourceHarvested ? '<p class="dim small">(harvested)</p>' : `<button class="btn ghost sm" data-sector-harvest="${x},${y}">Mark Harvested</button>`}
+        <label class="field-label">Hazard level${numStepper(`<input type="number" data-sector-hazard-level="${x},${y}" value="${sector.hazardLevel == null ? '' : sector.hazardLevel}">`)}</label>` : ''}
       <h4>Overlay Icon</h4>
       <label class="field-label">Manual override (blank = automatic)
         <select data-sector-overlay-icon data-sector-coord="${x},${y}">
@@ -3522,12 +3545,14 @@ function worldTrackerSectorDetail(doc, ui, x, y) {
         </select>
       </label>
       <h4>Features</h4>
-      <div class="btn-col">
+      <div class="wt-feature-buttons">
         ${WT_FEATURE_KINDS.map((f) => `<button class="btn ghost sm" data-sector-add-feature="${x},${y}" data-feature-kind="${f.kind}">+ ${esc(f.label)}</button>`).join('')}
       </div>
       ${featureRows || '<p class="dim small">No features yet.</p>'}
       <h4>Notes</h4>
       <textarea rows="3" data-sector-notes="${x},${y}" placeholder="Sector notes…">${esc(sector.notes)}</textarea>
+      <h4 class="section-head-row"><button type="button" class="btn ghost sm" data-sector-corner-labels-toggle>${cornerLabelsOpen ? '▾' : '▸'} Corner Labels</button></h4>
+      ${cornerLabelsOpen ? cornerRows : ''}
     </div>`;
 }
 

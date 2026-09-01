@@ -35,7 +35,16 @@
 // legible when it's used instead). Content on both models is original,
 // checked against Hostile's own world descriptions, and Hostile's lore
 // wins any conflict between the two, per that same request.
+// 'none' (direct follow-up request — the app is a sandbox for one ruleset
+// or a mix, not every feature always on) opts a profile out of the Trade
+// Economy Model mechanic entirely: no reference list, no tag-vocabulary
+// suggestions. It deliberately has no ECONOMY_TYPES entries of its own —
+// economyTypesForModel('none') is an empty list by construction, and
+// economyBiasAt reads a Location's own tags regardless of the active
+// model (see its own comment: switching models never orphans an existing
+// tag), so choosing 'none' is safe to switch away from later too.
 export const ECONOMY_MODELS = [
+  { id: 'none', label: 'None' },
   { id: 'hostile', label: 'Hostile (setting-native)' },
   { id: 'traveller', label: 'Traveller-style' },
 ];
