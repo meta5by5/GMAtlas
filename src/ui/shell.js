@@ -18,6 +18,8 @@ import { addWorldFlag, updateWorldFlagValue, updateWorldFlagNotes, removeWorldFl
 import {
   rollAction, formatRollText, formatRollCopyText, rollFlat, formatFlatRollText, formatFlatRollCopyText,
   rollTraveller, formatTravellerRollText, formatTravellerRollCopyText,
+  rollCustomDice, parseDiceNotation, formatCustomDiceRollText, formatCustomDiceRollCopyText,
+  rollDicePool, formatDicePoolRollText, formatDicePoolRollCopyText,
 } from '../domain/dice.js';
 import {
   createEntity, updateEntity, addEntityTag, removeEntityTag, removeEntity, filterEntities, setActiveEntity, addRelationship, removeRelationship,
@@ -512,7 +514,7 @@ let collapsedToolbars = new Set(); // ephemeral — rich-text toolbar keys OVERR
 let expandedPartyMembers = new Set(); // ephemeral — entity ids whose Party member card shows its statblocks (collapsed by default; click the name to expand, UX batch)
 let expandedWhatConflicts = new Set(); // ephemeral — Conflict entity ids whose chip under WHAT's Situation field shows its detail box (direct follow-up request, collapsed by default; click the chip to toggle)
 let expandedPartyStatField = null; // ephemeral — the single "entityId::gi::fi" key (or null) whose Party Roster track pill shows its full tracker view below; a single value, not a Set, so picking a different track field REPLACES the open one instead of stacking a second (direct follow-up request)
-let journalActionsOpen = true; // ephemeral — the Journal drawer's Actions row (Add note, Generate Mission, ...), open by default (UX batch)
+let journalActionsOpen = false; // ephemeral — the Journal drawer's Actions row (Add note, Generate Mission, ...), collapsed by default (direct follow-up request — was open by default)
 let collapsedOverview = new Set(); // ephemeral — entity ids whose Overview field has been explicitly collapsed (open by default, UX batch)
 let expandedContracts = new Set(); // ephemeral — contract (Thread) ids whose full row is expanded (collapsed to just the name by default, UX batch)
 let tradeLocationTagFilter = ''; // ephemeral — Trade tab's Location tag filter (UX batch), narrows the Location <select>'s options
@@ -789,6 +791,35 @@ function loadDocViewerFrame(frame, nextSrc) {
 // click. Shape: { label, method, r } where method picks which fields of r
 // (rollAction/rollFlat/rollTraveller's return shape) the window renders.
 let diceRollResult = null;
+// The floating top-right dice roller (direct request, modeled on the Iron
+// Fellowship/Crew-Link Ironsworn companion app's dice roller button, then
+// reworked per direct follow-ups: rather than one die type + a quantity
+// counter summed into a total, Builder mode is a POOL — click a die type to
+// add one to the list (diceRollerPool, an array of {sides, modifier} in
+// the order added, e.g. [{sides:20,modifier:0}, {sides:20,modifier:3},
+// {sides:6,modifier:0}] for two d20s — one with a +3 — and a d6), each
+// rolled and shown SEPARATELY, never summed (rollDicePool). Clicking a pool
+// entry doesn't remove it — it SELECTS/highlights it (diceRollerPoolSelected,
+// an index or null, single-select — clicking the same one again deselects);
+// Clear then removes just the selected die, or the WHOLE pool if nothing is
+// selected. The Modifier number field next to Clear edits the selected
+// die's own modifier, disabled when nothing is selected. This is
+// deliberately the SAME for every Rules Profile, including one with
+// Starforged active — the Starforged action-roll mechanic (d6+stat vs 2d10,
+// rollAction) lives entirely in performFieldRoll for Move/stat rolls on an
+// entity, a completely separate code path this widget never touched and
+// still doesn't; this is only ever a free-form "roll some raw dice" utility
+// with no stat of its own to fold in. Custom mode (diceRollerCustomMode)
+// is unchanged — a single NdX+modifier notation summed into one total,
+// typed into diceRollerCustomText — a genuinely different tool from the
+// pool, not something the pool converts into or out of. Rolling reuses the
+// existing diceRollResult/renderDiceRollOverlay result window (method:
+// 'pool' or 'custom') rather than a second result display.
+let diceRollerOpen = false;
+let diceRollerPool = [];
+let diceRollerPoolSelected = null;
+let diceRollerCustomMode = false;
+let diceRollerCustomText = '';
 let focusInspectorNameNextRender = false; // ephemeral — set by clicking any data-open-entity link/chip, so Entity Detail's name field is focused+selected the moment it renders
 let focusInspectorRelationshipNextRender = false; // ephemeral — set by Current Location's "🔗" link (data-location-edit-relationships), so Entity Detail's "add relationship" type field is focused once it renders
 let entityDetailFocusEventId = ''; // ephemeral — set when a data-open-entity link also carries data-open-entity-event (a Faction Events turn's faction-name link); factionTurnSectionHtml highlights/expands that one Turn History entry
@@ -859,6 +890,10 @@ export function mountShell(el) {
       <div class="dice-roll-overlay" data-dice-roll-overlay data-open="false" aria-label="Dice roll result">
         <div class="dice-roll-card" data-dice-roll-card></div>
       </div>
+      <button type="button" class="dice-roller-toggle" data-dice-roller-toggle title="Roll dice" aria-label="Roll dice" aria-expanded="false">
+        <img src="assets/d20-thm.png" alt="" width="32" height="32">
+      </button>
+      <div class="dice-roller-panel" data-dice-roller-panel hidden></div>
       <div class="image-lightbox-overlay" data-image-lightbox-overlay hidden aria-label="Full-size image">
         <button type="button" class="icon-btn image-lightbox-close" data-image-lightbox-close aria-label="Close">✕</button>
         <img class="image-lightbox-img" data-image-lightbox-img src="" alt="">
@@ -1063,6 +1098,33 @@ function onClick(ev) {
     return renderSearchOverlay();
   }
   if (hit('[data-dice-roll-close]')) { diceRollResult = null; return renderDiceRollOverlay(); }
+  // Floating top-right dice roller (direct request) — Builder mode is a
+  // mixed dice POOL (each die type click adds one to the list, rolled and
+  // shown separately, never summed); Custom mode is a separate NdX+modifier
+  // notation tool, unrelated to the pool.
+  if (hit('[data-dice-roller-toggle]')) { return diceRollerOpen ? closeDiceRoller() : openDiceRoller(); }
+  if (hit('[data-dice-roller-close]')) return closeDiceRoller();
+  const sidesBtn = hit('[data-dice-roller-sides]');
+  if (sidesBtn) { diceRollerPool.push({ sides: Number(sidesBtn.dataset.diceRollerSides), modifier: 0 }); return renderDiceRollerPanel(); }
+  // Clicking a pool chip SELECTS/highlights it (single-select, toggle off on
+  // a repeat click) rather than removing it — direct follow-up request:
+  // Clear then removes just the selected die, or the whole pool if nothing
+  // is selected (see below), and the Modifier field edits the selected
+  // die's own modifier.
+  const poolSelectBtn = hit('[data-dice-roller-pool-select]');
+  if (poolSelectBtn) {
+    const i = Number(poolSelectBtn.dataset.diceRollerPoolSelect);
+    diceRollerPoolSelected = diceRollerPoolSelected === i ? null : i;
+    return renderDiceRollerPanel();
+  }
+  if (hit('[data-dice-roller-pool-clear]')) {
+    if (diceRollerPoolSelected != null) diceRollerPool.splice(diceRollerPoolSelected, 1);
+    else diceRollerPool = [];
+    diceRollerPoolSelected = null;
+    return renderDiceRollerPanel();
+  }
+  if (hit('[data-dice-roller-mode-toggle]')) { diceRollerCustomMode = !diceRollerCustomMode; return renderDiceRollerPanel(); }
+  if (hit('[data-dice-roller-roll]')) return rollFromDiceRoller();
   // Full-size image lightbox (direct follow-up request — "show the full
   // sized image... when clicking the thumbnail image in the entity
   // editor"). The clicked <img> already carries the real src/alt inline
@@ -3413,6 +3475,14 @@ function onKeydown(ev) {
     if (ev.key === 'Escape') { ev.preventDefault(); closeInlinePrompt(); return; }
   }
 
+  // Dice roller's custom-notation field: Enter rolls (same as clicking Roll,
+  // a no-op if the notation doesn't parse), Escape closes the whole roller —
+  // same "no <form> element" reasoning as the inline prompt above.
+  if (ev.target.closest('[data-dice-roller-custom-input]')) {
+    if (ev.key === 'Enter') { ev.preventDefault(); rollFromDiceRoller(); return; }
+    if (ev.key === 'Escape') { ev.preventDefault(); closeDiceRoller(); return; }
+  }
+
   // Tab-indent inside a rich-text field ("USER CHANGES" batch): a
   // contenteditable's default Tab behavior moves focus to the next control
   // (unhelpful here — a GM writing an indented list/note wants a literal
@@ -3479,6 +3549,7 @@ function onKeydown(ev) {
   if (ev.key === 'Escape') {
     if (imageLightboxOpen) return closeImageLightbox();
     if (diceRollResult) { diceRollResult = null; return renderDiceRollOverlay(); }
+    if (diceRollerOpen) return closeDiceRoller();
     if (searchOpen) {
       searchOpen = false; searchQuery = '';
       const inp = root.querySelector('[data-search-input]'); if (inp) inp.value = '';
@@ -3515,6 +3586,16 @@ function onDblClick(ev) {
 
 function onChange(ev) {
   const t = ev.target;
+  // Dice roller pool's per-die Modifier field (direct follow-up request) —
+  // edits the currently-selected die's own modifier; a no-op if nothing is
+  // selected (the field is disabled in that state, but guard anyway since
+  // the generic [data-num-step] handler dispatches this same change event).
+  if (t.closest('[data-dice-roller-pool-modifier]')) {
+    if (diceRollerPoolSelected != null && diceRollerPool[diceRollerPoolSelected]) {
+      diceRollerPool[diceRollerPoolSelected].modifier = Math.round(Number(t.value)) || 0;
+    }
+    return renderDiceRollerPanel();
+  }
   // Story Dashboard's per-option "include in the draft" checkbox
   // (docs/adr/0040 Phase 12b) — toggles selectedStoryOptionIds, read live
   // by narrativeComposerBlock on the next render.
@@ -4399,6 +4480,9 @@ function onInput(ev) {
 
   const newCampaignTitle = t.closest('[data-new-campaign-title]');
   if (newCampaignTitle) { newCampaignDraft.title = t.value; return; }
+
+  const diceRollerCustom = t.closest('[data-dice-roller-custom-input]');
+  if (diceRollerCustom) { diceRollerCustomText = t.value; return; }
 
   const of = t.closest('[data-oracle-filter]');
   if (of) { oracleFilter = t.value; oracleTagFilter = null; renderDrawerBody(); restoreFocus('[data-oracle-filter]'); return; }
@@ -6167,6 +6251,109 @@ function renderDiceRollOverlay() {
   card.innerHTML = diceRollResult ? diceRollCardHtml(diceRollResult.label, diceRollResult.method, diceRollResult.r) : '';
 }
 
+const DICE_ROLLER_SIDES_OPTIONS = [4, 6, 8, 10, 12, 20, 100];
+
+// The floating top-right dice roller's popover — always-closed by default
+// (diceRollerOpen), targeted-updated on every state change the same way
+// renderDiceRollOverlay/renderInlinePrompt are, rather than a full render().
+// A short label describing the current pool for the result card/journal —
+// groups same-sided dice together in the order their first one was added
+// (e.g. [{sides:20},{sides:20},{sides:6}] -> "2d20, 1d6"), never a single
+// NdX+mod notation, since the pool is a genuinely mixed set of die types;
+// per-die modifiers show up in the roll result rows themselves, not here.
+function diceRollerPoolLabel(pool) {
+  const counts = new Map();
+  for (const { sides } of pool) counts.set(sides, (counts.get(sides) || 0) + 1);
+  return Array.from(counts.entries()).map(([s, n]) => `${n}d${s}`).join(', ');
+}
+function diceRollerPoolChipLabel(entry) {
+  const modPart = entry.modifier > 0 ? `+${entry.modifier}` : entry.modifier < 0 ? `${entry.modifier}` : '';
+  return `d${entry.sides}${modPart}`;
+}
+function renderDiceRollerPanel() {
+  const toggle = root && root.querySelector('[data-dice-roller-toggle]');
+  const panel = root && root.querySelector('[data-dice-roller-panel]');
+  if (!toggle || !panel) return;
+  toggle.setAttribute('aria-expanded', String(diceRollerOpen));
+  panel.hidden = !diceRollerOpen;
+  if (!diceRollerOpen) { panel.innerHTML = ''; return; }
+  const parsedCustom = diceRollerCustomMode ? parseDiceNotation(diceRollerCustomText) : null;
+  const canRoll = diceRollerCustomMode ? !!parsedCustom : diceRollerPool.length > 0;
+  const isInvalidCustom = diceRollerCustomMode && !!diceRollerCustomText.trim() && !parsedCustom;
+  const selected = diceRollerPoolSelected != null ? diceRollerPool[diceRollerPoolSelected] : null;
+  panel.innerHTML = `
+    <div class="dice-roller-head">
+      <h3>Roll Dice</h3>
+      <button type="button" class="icon-btn" data-dice-roller-close aria-label="Close">✕</button>
+    </div>
+    <div class="dice-roller-body">
+      ${!diceRollerCustomMode ? `
+        <div class="dice-roller-sides">
+          ${DICE_ROLLER_SIDES_OPTIONS.map((s) => `<button type="button" class="chip sm" data-dice-roller-sides="${s}" title="Add a d${s}">+ d${s}</button>`).join('')}
+        </div>
+        <div class="dice-roller-pool">
+          ${diceRollerPool.length
+            ? diceRollerPool.map((entry, i) => `<button type="button" class="chip sm dice-roller-pool-item ${i === diceRollerPoolSelected ? 'active' : ''}" data-dice-roller-pool-select="${i}" title="${i === diceRollerPoolSelected ? 'Selected — Clear removes just this one' : 'Select this die (to remove just it, or set its own modifier)'}">${diceRollerPoolChipLabel(entry)}</button>`).join('')
+            : '<p class="dim small">Tap a die type above to add it to the roll.</p>'}
+        </div>
+        ${diceRollerPool.length ? `
+        <div class="dice-roller-pool-actions">
+          <button type="button" class="btn ghost sm" data-dice-roller-pool-clear title="${selected ? `Remove the selected d${selected.sides}` : 'Remove every die'}">Clear</button>
+          <label class="field-label sm dice-roller-modifier-field">Modifier
+            <span class="num-stepper">
+              <input type="number" data-dice-roller-pool-modifier value="${selected ? selected.modifier : ''}" placeholder="0" ${selected ? '' : 'disabled'}>
+              <button type="button" class="icon-btn num-stepper-btn" data-num-step="1" tabindex="-1" title="+1" ${selected ? '' : 'disabled'}>＋</button>
+              <button type="button" class="icon-btn num-stepper-btn" data-num-step="-1" tabindex="-1" title="-1" ${selected ? '' : 'disabled'}>−</button>
+            </span>
+          </label>
+        </div>` : ''}
+      ` : `
+        <label class="field-label sm">Dice notation
+          <input type="text" data-dice-roller-custom-input placeholder="e.g. 2d20+3" value="${escapeHtml(diceRollerCustomText)}" autocomplete="off">
+        </label>
+        <p class="dim small dice-roller-error" ${isInvalidCustom ? '' : 'hidden'}>Invalid notation (e.g. 2d20+3)</p>
+      `}
+    </div>
+    <div class="dice-roller-foot">
+      <button type="button" class="btn ghost sm" data-dice-roller-mode-toggle>${diceRollerCustomMode ? 'Use Builder' : 'Custom…'}</button>
+      <button type="button" class="btn sm" data-dice-roller-roll ${canRoll ? '' : 'disabled'}>🎲 Roll</button>
+    </div>`;
+  if (diceRollerCustomMode) {
+    const input = panel.querySelector('[data-dice-roller-custom-input]');
+    if (input) { input.focus(); input.select(); }
+  }
+}
+function openDiceRoller() {
+  diceRollerOpen = true;
+  diceRollerCustomMode = false;
+  diceRollerCustomText = '';
+  diceRollerPool = [];
+  diceRollerPoolSelected = null;
+  renderDiceRollerPanel();
+}
+function closeDiceRoller() {
+  diceRollerOpen = false;
+  renderDiceRollerPanel();
+}
+function rollFromDiceRoller() {
+  if (diceRollerCustomMode) {
+    const parsed = parseDiceNotation(diceRollerCustomText);
+    if (!parsed) return;
+    const notation = diceRollerCustomText.trim();
+    const r = rollCustomDice(parsed.count, parsed.sides, parsed.modifier);
+    store.update((d) => logRoll(d, formatCustomDiceRollText(notation, r)));
+    diceRollResult = { label: notation, method: 'custom', r };
+  } else {
+    if (!diceRollerPool.length) return;
+    const label = diceRollerPoolLabel(diceRollerPool);
+    const r = rollDicePool(diceRollerPool);
+    store.update((d) => logRoll(d, formatDicePoolRollText(label, r)));
+    diceRollResult = { label, method: 'pool', r };
+  }
+  closeDiceRoller();
+  renderDiceRollOverlay();
+}
+
 // Full-size image lightbox (direct follow-up request) — a fixed skeleton
 // element (shell.js's root markup), targeted-updated rather than a full
 // re-render, same posture as renderDiceRollOverlay above. Src/alt are set
@@ -6213,8 +6400,12 @@ function diePipsIcon(n) {
 // Shared by the dice roll window's copy (⧉) and "add to Journal" buttons —
 // both want the exact same plain-text rendering of the result, just sent
 // to a different place.
-function diceRollCopyText({ method, r }) {
-  return method === 'flat' ? formatFlatRollCopyText(r) : method === 'traveller' ? formatTravellerRollCopyText(r) : formatRollCopyText(r);
+function diceRollCopyText({ label, method, r }) {
+  if (method === 'flat') return formatFlatRollCopyText(r);
+  if (method === 'traveller') return formatTravellerRollCopyText(r);
+  if (method === 'custom') return formatCustomDiceRollCopyText(label, r);
+  if (method === 'pool') return formatDicePoolRollCopyText(label, r);
+  return formatRollCopyText(r);
 }
 
 // An open-book outline, not the 📖 emoji — color-emoji glyph coverage is
@@ -6242,6 +6433,23 @@ function diceRollCardHtml(label, method, r) {
     ];
     outcomeLabel = r.outcomeLabel;
     outcomeClass = r.outcome; // 'success' | 'fail'
+  } else if (method === 'custom') {
+    const modifierPart = r.modifier > 0 ? ` + ${r.modifier}` : r.modifier < 0 ? ` - ${Math.abs(r.modifier)}` : '';
+    rows = [{ icon: DICE_DIAMOND_ICON, label: 'Roll', text: `${r.dieValues.join(', ')}${modifierPart}` }];
+    outcomeLabel = `Total: ${r.total}`;
+    outcomeClass = 'neutral'; // no success/fail — a free-form roll has nothing to succeed or fail against
+  } else if (method === 'pool') {
+    // One row per die, each result standing on its own — deliberately no
+    // outcome banner at all (outcomeLabel stays null), since a mixed pool
+    // (direct follow-up request) is never summed into one number. A die's
+    // own modifier (also a direct follow-up request) shows inline on just
+    // its own row, e.g. "d20 + 3 = 23" — never combined with another die's.
+    rows = r.rolls.map((x) => {
+      const modPart = x.modifier > 0 ? ` + ${x.modifier}` : x.modifier < 0 ? ` - ${Math.abs(x.modifier)}` : '';
+      const text = x.modifier ? `d${x.sides}: ${x.value}${modPart} = ${x.total}` : `d${x.sides}: ${x.value}`;
+      return { icon: x.sides === 6 ? diePipsIcon(x.value) : DICE_DIAMOND_ICON, label: `d${x.sides}`, text };
+    });
+    outcomeLabel = null;
   } else {
     rows = [
       { icon: diePipsIcon(r.actionDie), label: 'Action', text: `${r.actionDie} + ${r.value}${addsPart} = ${r.total}` },
@@ -6266,7 +6474,7 @@ function diceRollCardHtml(label, method, r) {
     </div>
     <div class="dice-roll-body">
       <div class="dice-roll-rows">${rowsHtml}</div>
-      <div class="dice-roll-outcome dice-outcome-${outcomeClass}">${escapeHtml(outcomeLabel.toUpperCase())}</div>
+      ${outcomeLabel != null ? `<div class="dice-roll-outcome dice-outcome-${outcomeClass}">${escapeHtml(outcomeLabel.toUpperCase())}</div>` : ''}
     </div>`;
 }
 

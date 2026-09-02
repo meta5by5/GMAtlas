@@ -1826,6 +1826,52 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .dice-outcome-strong-hit, .dice-outcome-success { background: rgba(74, 222, 128, 0.16); color: var(--ok); border: 1px solid rgba(74, 222, 128, 0.4); }
 .dice-outcome-weak-hit { background: rgba(251, 191, 36, 0.16); color: var(--warn); border: 1px solid rgba(251, 191, 36, 0.4); }
 .dice-outcome-miss, .dice-outcome-fail { background: rgba(248, 113, 113, 0.16); color: var(--danger); border: 1px solid rgba(248, 113, 113, 0.4); }
+.dice-outcome-neutral { background: rgba(56, 189, 248, 0.12); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.35); }
+
+/* Floating top-right dice roller (direct request, modeled on the Iron
+   Fellowship/Crew-Link Ironsworn companion app's "Custom Dice Roll"
+   button) — a free-form NdX+modifier roller, always reachable regardless of
+   which drawer/panel is open, pinned to the actual top-right corner of the
+   browser window rather than living inside .mc-header (unlike every other
+   header control, this one shouldn't disappear behind a drawer's own head
+   row on a narrow screen). Its result reuses .dice-roll-overlay/-card above
+   (a new method:'custom' case) rather than a second result display. */
+.dice-roller-toggle {
+  position: fixed; top: var(--sp-3); right: var(--sp-3); z-index: 55;
+  width: 2rem; height: 2rem; border-radius: 50%; padding: 0; /* same badge size as .mc-edge's own glyphs (1.1rem) plus their usual padding, direct follow-up request */
+  background: #fff; border: 1px solid var(--border-strong); /* white — the d20-thm.png icon's own background, not the app's dark tier2-bg, so it doesn't show a mismatched edge */
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  box-shadow: var(--shadow); cursor: pointer;
+}
+.dice-roller-toggle:hover { border-color: var(--accent); }
+/* d20-thm.png has a lot of built-in white margin around the die graphic
+   itself (matches this button's own white background, so it's invisible as
+   padding rather than as a visible border) — scaled up so the die shape,
+   not the margin, is what actually fills the circle (direct follow-up
+   request), cropped by this button's own overflow:hidden. */
+.dice-roller-toggle img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
+.dice-roller-panel {
+  position: fixed; top: calc(var(--sp-3) + 2rem + var(--sp-2)); right: var(--sp-3); z-index: 60;
+  width: min(19rem, 92vw);
+  background: var(--tier3-bg); border: 1px solid var(--border-strong); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: var(--sp-3);
+}
+.dice-roller-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-2); }
+.dice-roller-head h3 { margin: 0; font-size: 0.9rem; }
+.dice-roller-sides { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: var(--sp-3); }
+/* The pool list (direct follow-up request: click a die type to add one to
+   a list, roll them all separately, unsummed) — each entry is a plain chip
+   (same visual language as the "add" chips above it) until clicked, which
+   SELECTS/highlights it (.chip.active's existing accent style, direct
+   follow-up request — no more per-chip ✕; Clear removes just the selected
+   one instead, or the whole pool if nothing's selected) rather than
+   removing it outright. */
+.dice-roller-pool { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; min-height: 1.8rem; margin-bottom: var(--sp-2); }
+.dice-roller-pool-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.dice-roller-modifier-field { flex: 0 0 auto; margin: 0; }
+.dice-roller-modifier-field input[type="number"] { width: 3.2rem; }
+.dice-roller-error { color: var(--danger); margin-top: 0.25rem; }
+.dice-roller-foot { display: flex; align-items: center; justify-content: space-between; margin-top: var(--sp-3); padding-top: var(--sp-2); border-top: 1px solid var(--border); }
 
 /* Full-size image lightbox (direct follow-up request) — a centered,
    backdrop-dimmed modal (same visual language as .mc-search-overlay)
@@ -2035,6 +2081,12 @@ input[type="number"] { -moz-appearance: textfield; }
 .colony-fields { display: grid; grid-template-columns: 1fr 1fr; row-gap: var(--sp-2); column-gap: var(--sp-3); margin: var(--sp-2) 0 var(--sp-3); }
 .colony-fields .field-label { margin-top: 0; }
 .colony-fields .field-label:has(textarea) { grid-column: 1 / -1; }
+/* Step Text (direct follow-up request: relocated between the Campaign Turn
+   and Campaign Milestones rows, so it now lives INSIDE .colony-fields'
+   grid) spans both columns like a textarea field does above, instead of
+   only occupying column 1 and pushing every field after it into the wrong
+   column. */
+.colony-fields .turn-step-text-row { grid-column: 1 / -1; }
 .colony-crew-list { display: flex; flex-direction: column; gap: var(--sp-2); }
 .colony-crew-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: var(--sp-2); align-items: center; }
 .colony-encounter-list { display: flex; flex-direction: column; gap: var(--sp-2); }

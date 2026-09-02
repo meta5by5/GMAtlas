@@ -1741,7 +1741,7 @@ test('formatFlatRollCopyText matches the dice roll window\'s layout for a flat c
 });
 
 // --- Traveller roll (2d6 + value vs target) --------------------------------
-import { rollTraveller, formatTravellerRollText, formatTravellerRollCopyText } from '../src/domain/dice.js';
+import { rollTraveller, formatTravellerRollText, formatTravellerRollCopyText, rollCustomDice, parseDiceNotation, formatCustomDiceRollText, formatCustomDiceRollCopyText, rollDicePool, formatDicePoolRollText, formatDicePoolRollCopyText } from '../src/domain/dice.js';
 
 test('rollTraveller succeeds/fails against a target (default 8) and is deterministic under a seeded rng', () => {
   const a = rollTraveller(1, { rng: makeRng(5) });
@@ -1768,6 +1768,92 @@ test('formatTravellerRollCopyText matches the dice roll window\'s layout for a T
   assert.equal(lines[0], `\tRoll: ${r.die1} + ${r.die2} = ${r.total}`);
   assert.equal(lines[1], '\tTarget: 8');
   assert.equal(lines[2], r.outcomeLabel.toUpperCase());
+});
+
+test('rollCustomDice rolls `count` dice of `sides` plus a flat modifier, is deterministic under a seeded rng, and clamps count/sides to sane bounds', () => {
+  const a = rollCustomDice(3, 6, 2, { rng: makeRng(5) });
+  const b = rollCustomDice(3, 6, 2, { rng: makeRng(5) });
+  assert.deepEqual(a, b);
+  assert.equal(a.count, 3);
+  assert.equal(a.sides, 6);
+  assert.equal(a.dieValues.length, 3);
+  assert.ok(a.dieValues.every((v) => v >= 1 && v <= 6));
+  assert.equal(a.total, a.dieValues.reduce((s, v) => s + v, 0) + 2);
+
+  const clamped = rollCustomDice(500, 1, 0, { rng: makeRng(1) });
+  assert.equal(clamped.count, 100); // clamped to the 1-100 range
+  assert.equal(clamped.sides, 2); // sides below 2 clamps up (no 1-sided die)
+
+  const negative = rollCustomDice(0, 0, -3, { rng: makeRng(1) });
+  assert.equal(negative.count, 1); // count below 1 clamps up
+  assert.equal(negative.modifier, -3);
+});
+
+test('parseDiceNotation accepts "NdX", "dX" (implicit count 1), and a trailing +/- modifier; rejects anything else', () => {
+  assert.deepEqual(parseDiceNotation('2d6+3'), { count: 2, sides: 6, modifier: 3 });
+  assert.deepEqual(parseDiceNotation('d20'), { count: 1, sides: 20, modifier: 0 });
+  assert.deepEqual(parseDiceNotation('1d20-1'), { count: 1, sides: 20, modifier: -1 });
+  assert.deepEqual(parseDiceNotation('  4d10 + 2  '), { count: 4, sides: 10, modifier: 2 });
+  assert.equal(parseDiceNotation(''), null);
+  assert.equal(parseDiceNotation('not dice'), null);
+  assert.equal(parseDiceNotation('2x6'), null);
+  assert.equal(parseDiceNotation('0d6'), null); // count must be >= 1
+});
+
+test('formatCustomDiceRollText/formatCustomDiceRollCopyText render the notation, individual die values, and total — no outcome line, since a free-form roll has nothing to succeed or fail against', () => {
+  const r = rollCustomDice(2, 6, 1, { rng: makeRng(5) });
+  const text = formatCustomDiceRollText('2d6+1', r);
+  assert.match(text, /2d6\+1/);
+  assert.match(text, new RegExp(`\\[${r.dieValues.join(', ')}\\]`));
+  assert.match(text, new RegExp(`= ${r.total}$`));
+
+  const lines = formatCustomDiceRollCopyText('2d6+1', r).split('\n');
+  assert.equal(lines[0], `\tRoll: 2d6+1 → ${r.dieValues.join(', ')} + 1`);
+  assert.equal(lines[1], `\tTotal: ${r.total}`);
+});
+
+test('rollDicePool rolls each die in the list SEPARATELY (no pool-wide sum/total) — preserves order/duplicates, is deterministic under a seeded rng, clamps a bogus side-count up to 2, and caps an oversized pool at 50 dice', () => {
+  const pool = [{ sides: 20, modifier: 0 }, { sides: 20, modifier: 0 }, { sides: 6, modifier: 0 }];
+  const a = rollDicePool(pool, { rng: makeRng(5) });
+  const b = rollDicePool(pool, { rng: makeRng(5) });
+  assert.deepEqual(a, b);
+  assert.equal(a.rolls.length, 3);
+  assert.deepEqual(a.rolls.map((r) => r.sides), [20, 20, 6]);
+  assert.ok(a.rolls[0].value >= 1 && a.rolls[0].value <= 20);
+  assert.ok(a.rolls[2].value >= 1 && a.rolls[2].value <= 6);
+  assert.equal(a.total, undefined); // deliberately no summed total anywhere on the pool result itself
+
+  const bogus = rollDicePool([{ sides: 1, modifier: 0 }, { sides: 0, modifier: 0 }, { sides: -5, modifier: 0 }], { rng: makeRng(1) });
+  assert.deepEqual(bogus.rolls.map((r) => r.sides), [2, 2, 2]); // sides below 2 clamp up
+
+  const oversized = rollDicePool(new Array(80).fill({ sides: 6, modifier: 0 }), { rng: makeRng(1) });
+  assert.equal(oversized.rolls.length, 50);
+
+  assert.deepEqual(rollDicePool([], { rng: makeRng(1) }).rolls, []);
+  assert.deepEqual(rollDicePool(null, { rng: makeRng(1) }).rolls, []);
+});
+
+test('rollDicePool applies each die\'s OWN modifier independently (direct follow-up request) — a die\'s own total is value+modifier, never combined with another die\'s value or modifier', () => {
+  const r = rollDicePool([{ sides: 20, modifier: 3 }, { sides: 6, modifier: -1 }, { sides: 8, modifier: 0 }], { rng: makeRng(5) });
+  assert.equal(r.rolls[0].modifier, 3);
+  assert.equal(r.rolls[0].total, r.rolls[0].value + 3);
+  assert.equal(r.rolls[1].modifier, -1);
+  assert.equal(r.rolls[1].total, r.rolls[1].value - 1);
+  assert.equal(r.rolls[2].modifier, 0);
+  assert.equal(r.rolls[2].total, r.rolls[2].value);
+});
+
+test('formatDicePoolRollText/formatDicePoolRollCopyText render each die\'s own result (and its own modifier, if any) on its own line — no pool-wide total anywhere, matching rollDicePool\'s "separate, unsummed" contract', () => {
+  const r = rollDicePool([{ sides: 20, modifier: 3 }, { sides: 6, modifier: 0 }], { rng: makeRng(5) });
+  const text = formatDicePoolRollText('2d20, 1d6', r);
+  assert.match(text, /2d20, 1d6/);
+  assert.match(text, new RegExp(`d20\\+3=${r.rolls[0].total}`));
+  assert.match(text, new RegExp(`d6=${r.rolls[1].total}`));
+
+  const lines = formatDicePoolRollCopyText('2d20, 1d6', r).split('\n');
+  assert.equal(lines[0], '\tRoll: 2d20, 1d6');
+  assert.equal(lines[1], `\td20 + 3 → ${r.rolls[0].value} = ${r.rolls[0].total}`);
+  assert.equal(lines[2], `\td6 → ${r.rolls[1].value}`);
 });
 
 // --- party (Party tab: #character roster + free trackers) ------------------

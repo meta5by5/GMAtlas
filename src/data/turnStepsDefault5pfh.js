@@ -35,19 +35,19 @@ export const TURN_STEPS_5PFH = [
     id: 'mission-steps',
     label: 'Mission Steps',
     steps: [
-      { id: 'ms1', text: 'Determine the objective (may use Expanded Missions, @[p.74|5PFH Five Parsecs From Home v3#76])', branchTo: null },
+      { id: 'ms1', text: 'Determine the objective (may use Expanded Missions, @[CBH p.74|5PFH 3e Compendium/Bug Hunt#76])', branchTo: null },
       { id: 'ms2', text: 'Mission Selection (Salvage Jobs)', branchTo: null },
       { id: 'ms3', text: 'Faction Involvement* (unknown during selection; could be a surprise) (@[CBH p.110|5PFH 3e Compendium/Bug Hunt#110])', branchTo: null },
       { id: 'ms4', text: 'Check for Connections (@[p.164|5PFH Five Parsecs From Home v3#166], or Expanded Connection @[CBH p.80|5PFH 3e Compendium/Bug Hunt#80] – Opportunity mission only)', branchTo: null },
       { id: 'ms5', text: 'Assign equipment (@[p.85|5PFH Five Parsecs From Home v3#87])', branchTo: null },
-      { id: 'ms6', text: 'Deployment (@[pp.88-94|5PFH Five Parsecs From Home v3#90]) — see Deployment Considerations.', branchTo: 'deployment-considerations' },
+      { id: 'ms6', text: 'Deployment (@[pp.88-94|5PFH Five Parsecs From Home v3#90]) — see Deployment Steps.', branchTo: 'deployment-considerations' },
       { id: 'ms7', text: 'Battle (go to tabletop)', branchTo: null },
       { id: 'ms8', text: 'Resolve Tabletop Post-battle activities — see Post-battle Activities.', branchTo: 'post-battle-activities' },
     ],
   },
   {
     id: 'deployment-considerations',
-    label: 'Deployment Considerations',
+    label: 'Deployment Steps',
     steps: [
       { id: 'dc1', text: 'Check deployment conditions (not Salvage)', branchTo: null },
       { id: 'dc2', text: 'Determine notable sights (not Salvage)', branchTo: null },

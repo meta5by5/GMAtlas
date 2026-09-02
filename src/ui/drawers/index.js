@@ -356,8 +356,7 @@ function inspector(doc, e, ui) {
   // collapsibles) — it's an entity's core identifying summary, the first
   // thing a GM wants on opening one, not a rarely-needed detail; the
   // Set here tracks which entities have been explicitly COLLAPSED
-  // (inverse of the usual "tracks expanded" convention), matching
-  // journalActionsOpen's same "!== closed" default-open shape.
+  // (inverse of the usual "tracks expanded" convention).
   const overviewOpen = !((ui.collapsedOverview || new Set()).has(e.id));
   return `
     <div class="inspector-head">
@@ -1529,18 +1528,19 @@ function plainText(s) { return String(s || '').replace(/<[^>]+>/g, ' ').replace(
 function journal(doc, ui = {}) {
   const entries = (doc.journal || []).slice().reverse();
   const recapOpen = !!ui.recapOpen;
-  // Defaults OPEN (unlike this session's other new collapsibles) — "Add
-  // note" lives in here, the single most common Journal action, so
-  // hiding it by default would cost every GM an extra click on the
-  // drawer's most frequent workflow. The toggle still exists for anyone
-  // who wants the row out of the way once they've seen it.
-  const actionsOpen = ui.journalActionsOpen !== false;
+  // Collapsed by default (direct follow-up request — was open by default);
+  // same collapsible-section-header look as Party/Colony's own sections
+  // (.party-section-toggle) instead of a plain button, for visual
+  // consistency across the app's collapsible sections.
+  const actionsOpen = !!ui.journalActionsOpen;
   return `
     <button class="btn ghost recap-toggle" data-recap-toggle>${recapOpen ? '▾' : '▸'} Previously on…</button>
     ${recapOpen ? recapPanel(doc) : ''}
     <div class="drawer-note">
       <div class="rich-field">${richToolbarHTML('journal:new', toolbarCollapsed(doc, ui, 'journal:new'))}<div class="mention-editor" contenteditable="true" data-journal-input data-placeholder="Add a note, ruling, or clue… (drag an entity here, or type @, to mention it)"></div></div>
-      <button class="btn ghost sm" data-journal-actions-toggle>${actionsOpen ? '▾' : '▸'} Actions</button>
+      <div class="statblock-head" style="margin-top: var(--sp-3);">
+        <button type="button" class="party-section-toggle" data-journal-actions-toggle>${actionsOpen ? '▾' : '▸'} Actions</button>
+      </div>
       ${actionsOpen ? `<div class="drawer-note-actions">
         <button class="btn" data-journal-add>Add note</button>
         <button class="btn ghost" data-export-journal>Export</button>
@@ -2734,14 +2734,6 @@ function colony(doc, ui = {}) {
   const nameFieldHtml = nameField ? colonyFieldHtml(doc, ui, fields, nameField) : '';
 
   const currentStep = getCurrentTurnStep(doc);
-  // Campaign Turn now leads the grid (column 1, direct follow-up request —
-  // it's the first item once Name is pulled out above), with the new Turn
-  // Step widget inserted right after it, landing column 2 — "the place
-  // Campaign Turn was located" before Name was pulled out.
-  const fieldRows = COLONY_FIELDS.filter((f) => f.key !== 'name').map((f) => {
-    const html = colonyFieldHtml(doc, ui, fields, f);
-    return f.key === 'campaignTurn' ? html + colonyTurnStepWidgetHtml(currentStep) : html;
-  }).join('');
   // Step Text — rendered through the exact same mention-link machinery
   // Journal/Guide/Colony's own rich fields already use, so a doc link in
   // it is a real clickable [data-doc-open] span; data-turn-step-text-body on
@@ -2754,6 +2746,17 @@ function colony(doc, ui = {}) {
       <div class="turn-step-text-body" data-turn-step-text-body>${buildMentionEditorHTML(doc, currentStep.step.text)}</div>
       <button type="button" class="btn ghost sm" data-turn-step-start title="Runs a ruleset for this step — placeholder, TBD">▶ Start</button>
     </div>` : '';
+  // Campaign Turn leads the grid (column 1, direct follow-up request — it's
+  // the first item once Name is pulled out above), with the Turn Step
+  // widget right after it landing column 2 — "the place Campaign Turn was
+  // located" before Name was pulled out — and Step Text (spans both
+  // columns, .turn-step-text-row's own grid-column rule) inserted right
+  // after THAT row and before Campaign Milestones (direct follow-up
+  // request: was rendered after the whole grid instead).
+  const fieldRows = COLONY_FIELDS.filter((f) => f.key !== 'name').map((f) => {
+    const html = colonyFieldHtml(doc, ui, fields, f);
+    return f.key === 'campaignTurn' ? html + colonyTurnStepWidgetHtml(currentStep) + stepTextHtml : html;
+  }).join('');
 
   const crewRows = crew.map((row) => `
     <div class="colony-crew-row">
@@ -2796,7 +2799,7 @@ function colony(doc, ui = {}) {
     ${nameFieldHtml}
     ${partySectionHeaderHtml('colonyTurnSheet', 'Colony Turn Sheet', turnSheetCollapsed, helpToggle('colony-turn-sheet'))}
     ${helpBody('colony-turn-sheet', '5PFH Planetfall campaign-turn tracker.', ui)}
-    ${turnSheetCollapsed ? '' : `<div class="colony-fields">${fieldRows}</div>${stepTextHtml}`}
+    ${turnSheetCollapsed ? '' : `<div class="colony-fields">${fieldRows}</div>`}
     <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Crew Roster</h4><button class="chip" data-entity-picker-open="colony-crew">＋ Crew</button></div>
     <div class="colony-crew-list">
       ${crewRows || '<p class="ws-placeholder">No crew rows yet.</p>'}
@@ -3604,13 +3607,20 @@ function worldTrackerMigratePicker(doc, ui, x, y, feature) {
   </div>`;
 }
 
+// A traditional "hidden/not visible" icon — eye outline crossed by a
+// diagonal slash — replacing the 🙈 "see-no-evil monkey" emoji that used to
+// mark a feature "Mark undiscovered" (direct follow-up request: it read as
+// a joke/animal glyph, not "hidden"). The reverse action ("Mark discovered")
+// keeps the plain 👁 emoji — only the confusing one needed replacing.
+const EYE_SLASH_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2.5 12S6 6 12 6c1.6 0 3 .4 4.3 1M21.5 12s-1.2 2.1-3.2 3.8M9.8 9.9a3 3 0 0 0 4.3 4.3"/><path d="M2.5 2.5l19 19"/></svg>';
+
 function worldTrackerFeatureRow(doc, ui, sx, sy, f, { withSector = false } = {}) {
   return `
     <div class="doc-card wt-feature-card">
       <div class="doc-card-head">
         <span>${withSector ? `Sector ${sx},${sy} — ` : ''}${esc(wtFeatureLabel(f.kind))}${f.discovered ? '' : ' <span class="dim small">(undiscovered)</span>'}${f.movedFrom ? ` <span class="dim small">(moved from ${f.movedFrom.x},${f.movedFrom.y})</span>` : ''}</span>
         <div class="doc-card-actions">
-          <button class="icon-btn" data-feature-discover-toggle="${esc(f.id)}" data-sector-coord="${sx},${sy}" title="${f.discovered ? 'Mark undiscovered' : 'Mark discovered'}">${f.discovered ? '🙈' : '👁'}</button>
+          <button class="icon-btn" data-feature-discover-toggle="${esc(f.id)}" data-sector-coord="${sx},${sy}" title="${f.discovered ? 'Mark undiscovered' : 'Mark discovered'}">${f.discovered ? EYE_SLASH_ICON : '👁'}</button>
           ${f.mobile ? `<button class="icon-btn" data-feature-migrate-toggle="${esc(f.id)}" title="Migrate to an adjacent sector">➤</button>` : ''}
           <button class="icon-btn" data-feature-remove="${esc(f.id)}" data-sector-coord="${sx},${sy}" title="Remove">✕</button>
         </div>
@@ -3654,9 +3664,11 @@ function worldTrackerSectorDetail(doc, ui, x, y) {
         ${!isHome ? `<button class="btn ghost sm" data-home-base-set="${x},${y}">Set as Home Base</button>` : ''}
       </div>
       ${sector.state !== 'unexplored' ? `
-        <label class="field-label">Resource level${numStepper(`<input type="number" min="0" data-sector-resource-level="${x},${y}" value="${sector.resourceLevel == null ? '' : sector.resourceLevel}">`)}</label>
-        ${sector.resourceHarvested ? '<p class="dim small">(harvested)</p>' : `<button class="btn ghost sm" data-sector-harvest="${x},${y}">Mark Harvested</button>`}
-        <label class="field-label">Hazard level${numStepper(`<input type="number" min="0" data-sector-hazard-level="${x},${y}" value="${sector.hazardLevel == null ? '' : sector.hazardLevel}">`)}</label>` : ''}
+        <div class="field-row-2col">
+          <label class="field-label">Resource level${numStepper(`<input type="number" min="0" data-sector-resource-level="${x},${y}" value="${sector.resourceLevel == null ? '' : sector.resourceLevel}">`)}</label>
+          <label class="field-label">Hazard level${numStepper(`<input type="number" min="0" data-sector-hazard-level="${x},${y}" value="${sector.hazardLevel == null ? '' : sector.hazardLevel}">`)}</label>
+        </div>
+        ${sector.resourceHarvested ? '<p class="dim small">(harvested)</p>' : `<button class="btn ghost sm" data-sector-harvest="${x},${y}">Mark Harvested</button>`}` : ''}
       <h4>Overlay Icon</h4>
       <label class="field-label">Manual override (blank = automatic)
         <select data-sector-overlay-icon data-sector-coord="${x},${y}">
