@@ -16,6 +16,7 @@ import { parseStatsString } from '../src/domain/statblocks.js';
 import {
   createRulesProfile, renameProfile, updateProfileRuleset, setModuleEnabled, setStoryboardPosition, isModuleVisible, resolveOverlaySettings,
   createCampaign, renameCampaignEntry, setActiveCampaign, reassignCampaignProfile, applyProfileDraft, resolvePositionContentId,
+  backfillDefaultTurnSteps,
 } from '../src/domain/rulesProfiles.js';
 
 // --- oracles --------------------------------------------------------------
@@ -4413,7 +4414,7 @@ import {
   migrateFeature, setHomeBase, rollHomeBase, advanceWorldTurn, deriveSectorIcon,
   generateMissionHooks, setWorldTrackerNotes, gridSizeOf,
   toggleInvestigationSite, rollRandomInvestigationSite, countInvestigationSites, MAX_INVESTIGATION_SITES, worldTrackerAttentionItems,
-  setSectorResourceLevel, setSectorHazardLevel,
+  setSectorResourceLevel, setSectorHazardLevel, resetWorldTracker,
 } from '../src/domain/worldTracker.js';
 import { advanceCampaignTurn, incrementCampaignMilestones, decrementCampaignMilestones } from '../src/domain/colony.js';
 
@@ -4655,6 +4656,30 @@ test('worldTrackerAttentionItems surfaces home base, then remaining investigatio
   assert.ok(!items.some((i) => i.kind === 'investigation-sites'));
 });
 
+test('worldTrackerAttentionItems shows only ONE mission item per sector (direct follow-up request) — an explored-but-not-surveyed sector\'s own state hook wins over its undiscovered feature\'s hook, matching sector.state and the Sectors tab\'s "State:" label; once surveyed, the feature hook takes over as the sole item; generateMissionHooks itself is untouched (still returns both, for the Missions tab\'s own full-list browse)', () => {
+  let camp = defaultCampaign();
+  camp = setHomeBase(camp, 6, 6);
+  camp = revealSector(camp, 2, 2, { rng: makeRng(5) });
+  camp = addSectorFeature(camp, 2, 2, 'alien_site');
+
+  // generateMissionHooks (Missions tab) still surfaces both.
+  const allHooks = generateMissionHooks(camp).filter((h) => h.x === 2 && h.y === 2);
+  assert.equal(allHooks.length, 2);
+
+  // The Attention list collapses them to just the state hook.
+  let items = worldTrackerAttentionItems(camp).filter((i) => i.kind === 'mission' && i.x === 2 && i.y === 2);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].missionType, 'Exploration Mission');
+  assert.equal(items[0].signal, 'explored');
+
+  // Once surveyed, no more state hook — the feature hook becomes the one shown.
+  camp = surveySector(camp, 2, 2);
+  items = worldTrackerAttentionItems(camp).filter((i) => i.kind === 'mission' && i.x === 2 && i.y === 2);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].missionType, 'Delve');
+  assert.equal(items[0].signal, 'alien_site');
+});
+
 test('toggleSectorFeatureDiscovered flips discovered back and forth (unlike discoverSectorFeature, which only ever sets it true — that one-way path is also how a resolved mission hook marks a feature discovered, and reversing THAT must stay a deliberate separate action)', () => {
   let camp = defaultCampaign();
   camp = addSectorFeature(camp, 6, 6, 'milestone_site');
@@ -4711,6 +4736,67 @@ test('rollRandomInvestigationSite (direct follow-up request — 1d(gridSize) x 1
   assert.equal(capped.x, null);
   assert.equal(capped.y, null);
   assert.equal(capped.campaign, atCap, 'campaign reference unchanged — a true no-op');
+});
+
+test('setSectorResourceLevel/setSectorHazardLevel clamp to 0 and up (direct follow-up request — no negative levels)', () => {
+  let camp = defaultCampaign();
+  camp = revealSector(camp, 3, 3, { rng: makeRng(1) });
+  camp = setSectorResourceLevel(camp, 3, 3, -5);
+  assert.equal(getSector(camp, 3, 3).resourceLevel, 0, 'negative resource level clamps to 0');
+  assert.equal(getSector(camp, 3, 3).cornerLabels.find((c) => c.corner === 'top_left').text, 'R0');
+  camp = setSectorHazardLevel(camp, 3, 3, -2);
+  assert.equal(getSector(camp, 3, 3).hazardLevel, 0, 'negative hazard level clamps to 0');
+  assert.equal(getSector(camp, 3, 3).cornerLabels.find((c) => c.corner === 'bottom_left').text, 'H0');
+  camp = setSectorResourceLevel(camp, 3, 3, 4);
+  assert.equal(getSector(camp, 3, 3).resourceLevel, 4, 'a normal positive value still works');
+});
+
+test('setSectorOverlayIcon("unexplored") resets the sector back to blank (direct follow-up request) — levels, features, corner labels, harvested flag, and investigation-site marker all cleared, state back to unexplored, notes untouched, and the override itself stays \'unexplored\'', () => {
+  let camp = defaultCampaign();
+  camp = revealSector(camp, 5, 5, { rng: makeRng(1) });
+  camp = addSectorFeature(camp, 5, 5, 'alien_site');
+  camp = toggleInvestigationSite(camp, 5, 5); // harmless even though explored — exercises the clear path regardless
+  camp = setSectorNotes(camp, 5, 5, 'GM scratch notes');
+  camp = harvestSectorResource(camp, 5, 5);
+  camp = setSectorOverlayIcon(camp, 5, 5, 'unexplored');
+  const s = getSector(camp, 5, 5);
+  assert.equal(s.state, 'unexplored');
+  assert.equal(s.resourceLevel, null);
+  assert.equal(s.hazardLevel, null);
+  assert.equal(s.resourceHarvested, false);
+  assert.equal(s.investigationSite, false);
+  assert.deepEqual(s.features, []);
+  assert.deepEqual(s.cornerLabels, []);
+  assert.equal(s.overlayIcon, 'unexplored', 'the override itself stays set — the GM explicitly asked for the "?" glyph to show');
+  assert.equal(s.notes, 'GM scratch notes', 'notes are untouched — GM scratch text, not "Levels and other features"');
+
+  // Every OTHER icon key keeps the original cosmetic-only behavior.
+  let other = defaultCampaign();
+  other = revealSector(other, 1, 1, { rng: makeRng(1) });
+  other = setSectorOverlayIcon(other, 1, 1, 'milestone_site');
+  assert.equal(getSector(other, 1, 1).overlayIcon, 'milestone_site');
+  assert.equal(getSector(other, 1, 1).resourceLevel, getSector(other, 1, 1).resourceLevel, 'unaffected — resourceLevel still whatever reveal rolled');
+  assert.notEqual(getSector(other, 1, 1).state, 'unexplored', 'state untouched by a non-unexplored override');
+});
+
+test('resetWorldTracker (direct follow-up request — a bottom-of-page "start over" button) clears every sector, the home base, and world-level notes, preserving only gridSize; other campaign data (colony, entities) is untouched', () => {
+  let camp = defaultCampaign();
+  camp = revealSector(camp, 2, 2, { rng: makeRng(1) });
+  camp = addSectorFeature(camp, 2, 2, 'alien_site');
+  camp = setHomeBase(camp, 4, 4);
+  camp = setWorldTrackerNotes(camp, 'Campaign-wide notes');
+  camp.worldTracker.gridSize = 8;
+  camp = setColonyField(camp, 'campaignTurn', 3);
+  let entId; ({ campaign: camp, id: entId } = createEntity(camp, { type: 'npc', name: 'Survivor' }));
+
+  camp = resetWorldTracker(camp);
+  assert.deepEqual(camp.worldTracker.sectors, {});
+  assert.equal(camp.worldTracker.homeBaseSector, null);
+  assert.equal(camp.worldTracker.notes, '');
+  assert.equal(camp.worldTracker.gridSize, 8, 'gridSize is preserved — a structural setting, not "the grid" being cleared');
+  assert.equal(getSector(camp, 2, 2).state, 'unexplored', 'the previously-revealed sector reads as a fresh synthesized default');
+  assert.equal(getColonyFields(camp).campaignTurn, 3, 'unrelated campaign data (Colony) untouched');
+  assert.ok(getEntity(camp, entId), 'unrelated campaign data (entities) untouched');
 });
 
 // Campaign Turn / Campaign Milestones — shared with colony.js's Turn Sheet
@@ -6964,4 +7050,141 @@ test('applyProfileDraft commits only storyboardPositions/moduleEnabled/ruleset f
   assert.equal(applied.moduleEnabled.trade, false);
   assert.equal(applied.storyboardPositions.composer, 'colony');
   assert.notEqual(applied, stored, 'returns a new object, does not mutate the stored profile');
+});
+
+// --- Turn Step workflow (design/adr/rules-profiles-multi-campaign.md,
+// converted from the Guide entry "5PFH Campaign Turn Sequence") ------------
+import {
+  moveTurnStepInGroup, updateTurnStepText, loadDefaultTurnSteps, getCurrentTurnStep, advanceTurnStep, retreatTurnStep,
+} from '../src/domain/turnSteps.js';
+import { TURN_STEPS_5PFH } from '../src/data/turnStepsDefault5pfh.js';
+
+function profileWithTurnSteps(groups) {
+  return { ...defaultRulesProfile('P'), turnSteps: { groups } };
+}
+// A small 3-group fixture mirroring the real shape (root -> branch ->
+// nested branch) without the real content's size, so tests stay readable.
+function fixtureGroups() {
+  return [
+    { id: 'root', label: 'Root', steps: [
+      { id: 'r1', text: 'first', branchTo: null },
+      { id: 'r2', text: 'branches out', branchTo: 'branch' },
+      { id: 'r3', text: 'last', branchTo: null },
+    ] },
+    { id: 'branch', label: 'Branch', steps: [
+      { id: 'b1', text: 'b one', branchTo: null },
+      { id: 'b2', text: 'b two, branches further', branchTo: 'nested' },
+    ] },
+    { id: 'nested', label: 'Nested', steps: [
+      { id: 'n1', text: 'n one', branchTo: null },
+    ] },
+  ];
+}
+
+test('loadDefaultTurnSteps replaces turnSteps.groups with a deep clone (mutating the result never touches the seed data)', () => {
+  const profile = defaultRulesProfile('P');
+  const loaded = loadDefaultTurnSteps(profile, TURN_STEPS_5PFH);
+  assert.equal(loaded.turnSteps.groups.length, TURN_STEPS_5PFH.length);
+  assert.equal(loaded.turnSteps.groups[0].id, 'daily-life');
+  loaded.turnSteps.groups[0].steps[0].text = 'mutated';
+  assert.notEqual(TURN_STEPS_5PFH[0].steps[0].text, 'mutated', 'the seed data itself is untouched');
+});
+
+test('moveTurnStepInGroup reorders within one group only, splice-based, bounds-checked no-op', () => {
+  let profile = profileWithTurnSteps(fixtureGroups());
+  profile = moveTurnStepInGroup(profile, 'root', 0, 1); // r1 swaps with r2
+  assert.deepEqual(profile.turnSteps.groups.find((g) => g.id === 'root').steps.map((s) => s.id), ['r2', 'r1', 'r3']);
+  const beforeNoop = profile;
+  profile = moveTurnStepInGroup(profile, 'root', 0, -1); // already at the top — no-op
+  assert.deepEqual(profile.turnSteps.groups.find((g) => g.id === 'root').steps.map((s) => s.id), ['r2', 'r1', 'r3']);
+  assert.equal(profile.turnSteps.groups.find((g) => g.id === 'branch').steps.map((s) => s.id).join(','), 'b1,b2', 'the OTHER group is untouched');
+  profile = moveTurnStepInGroup(beforeNoop, 'not-a-real-group', 0, 1);
+  assert.ok(profile, 'unknown group id is a no-op, not a throw');
+});
+
+test('updateTurnStepText edits just the one targeted step\'s text, no-op on an unknown group/step', () => {
+  let profile = profileWithTurnSteps(fixtureGroups());
+  profile = updateTurnStepText(profile, 'root', 'r1', 'edited text');
+  assert.equal(profile.turnSteps.groups[0].steps[0].text, 'edited text');
+  assert.equal(profile.turnSteps.groups[0].steps[1].text, 'branches out', 'sibling step untouched');
+  profile = updateTurnStepText(profile, 'root', 'not-a-real-step', 'nope');
+  assert.equal(profile.turnSteps.groups[0].steps.length, 3, 'unknown step id is a no-op');
+});
+
+test('getCurrentTurnStep resolves the current position, or null when the active profile has no turn steps at all', () => {
+  const emptyCampaign = { turnSteps: { groups: [] }, turnStepProgress: { groupId: null, stepIndex: 0, returnStack: [] } };
+  assert.equal(getCurrentTurnStep(emptyCampaign), null);
+
+  const campaign = { turnSteps: { groups: fixtureGroups() }, turnStepProgress: { groupId: null, stepIndex: 0, returnStack: [] } };
+  const current = getCurrentTurnStep(campaign);
+  assert.equal(current.group.id, 'root');
+  assert.equal(current.step.id, 'r1');
+  assert.equal(current.index, 0);
+  assert.equal(current.total, 3);
+  assert.equal(current.hasPrev, false, 'nothing before the very first step');
+  assert.equal(current.hasNext, true);
+});
+
+test('advanceTurnStep auto-jumps into a branchTo, pushing a returnStack entry, and resumes the parent one step further once the branch itself is exhausted (confirmed: auto-jump on Next)', () => {
+  let campaign = { turnSteps: { groups: fixtureGroups() }, turnStepProgress: { groupId: 'root', stepIndex: 0, returnStack: [] } };
+  campaign = advanceTurnStep(campaign); // r1 -> r2
+  assert.deepEqual({ g: campaign.turnStepProgress.groupId, i: campaign.turnStepProgress.stepIndex }, { g: 'root', i: 1 });
+  campaign = advanceTurnStep(campaign); // r2 branches -> branch/b1, pushes {root,1}
+  assert.deepEqual({ g: campaign.turnStepProgress.groupId, i: campaign.turnStepProgress.stepIndex }, { g: 'branch', i: 0 });
+  assert.deepEqual(campaign.turnStepProgress.returnStack, [{ groupId: 'root', stepIndex: 1 }]);
+  campaign = advanceTurnStep(campaign); // b1 -> b2 (branches further -> nested/n1, pushes {branch,1})
+  assert.deepEqual({ g: campaign.turnStepProgress.groupId, i: campaign.turnStepProgress.stepIndex }, { g: 'branch', i: 1 });
+  campaign = advanceTurnStep(campaign);
+  assert.deepEqual({ g: campaign.turnStepProgress.groupId, i: campaign.turnStepProgress.stepIndex }, { g: 'nested', i: 0 });
+  assert.equal(campaign.turnStepProgress.returnStack.length, 2);
+  campaign = advanceTurnStep(campaign); // nested has only 1 step -> pop back to branch, resume at index 2 (past its end!) -> pop again to root, resume at index 2
+  assert.deepEqual({ g: campaign.turnStepProgress.groupId, i: campaign.turnStepProgress.stepIndex }, { g: 'root', i: 2 }, 'a branch that ends exactly where its own parent also ends keeps popping instead of landing out of range');
+  assert.deepEqual(campaign.turnStepProgress.returnStack, []);
+  const beforeEnd = campaign;
+  campaign = advanceTurnStep(campaign); // root's last step (r3), no branch, nothing on the stack -> true end, no-op
+  assert.deepEqual(campaign.turnStepProgress, beforeEnd.turnStepProgress, 'true end of the whole workflow is a no-op');
+});
+
+test('advanceTurnStep/retreatTurnStep are no-ops when the active profile has no turn steps configured', () => {
+  const campaign = { turnSteps: { groups: [] }, turnStepProgress: { groupId: null, stepIndex: 0, returnStack: [] } };
+  assert.equal(advanceTurnStep(campaign), campaign);
+  assert.equal(retreatTurnStep(campaign), campaign);
+});
+
+test('retreatTurnStep mirrors advanceTurnStep — steps back within a group, and at index 0 of a branched-into group pops back to the parent\'s saved position WITHOUT advancing it', () => {
+  let campaign = { turnSteps: { groups: fixtureGroups() }, turnStepProgress: { groupId: 'root', stepIndex: 1, returnStack: [{ groupId: 'root', stepIndex: 0 }] } };
+  // Simulate having just branched in: currently at branch/b1 (index 0), with root's own position (0) saved on the stack.
+  campaign = { ...campaign, turnStepProgress: { groupId: 'branch', stepIndex: 0, returnStack: [{ groupId: 'root', stepIndex: 1 }] } };
+  campaign = retreatTurnStep(campaign);
+  assert.deepEqual({ g: campaign.turnStepProgress.groupId, i: campaign.turnStepProgress.stepIndex }, { g: 'root', i: 1 }, 'pops back to exactly where the branch was taken, not one further');
+  assert.deepEqual(campaign.turnStepProgress.returnStack, []);
+  campaign = retreatTurnStep(campaign); // root index 1 -> 0
+  assert.deepEqual({ g: campaign.turnStepProgress.groupId, i: campaign.turnStepProgress.stepIndex }, { g: 'root', i: 0 });
+  const atStart = campaign;
+  campaign = retreatTurnStep(campaign); // already at the very start of the root — no-op
+  assert.deepEqual(campaign.turnStepProgress, atStart.turnStepProgress);
+});
+
+test('backfillDefaultTurnSteps only fills the 5PFH seed onto a profile named exactly "5PFH" with no steps of its own yet — never a differently-named profile, never a "5PFH" profile that already has ANY steps', () => {
+  let cfg = defaultAppConfig();
+  cfg = createRulesProfile(cfg, { name: 'Default' });
+  cfg = createRulesProfile(cfg, { name: '5PFH' });
+  const fivePfhId = cfg.profiles[1].id;
+
+  const backfilled = backfillDefaultTurnSteps(cfg, TURN_STEPS_5PFH);
+  assert.notEqual(backfilled, cfg, 'a change was made');
+  const fivePfh = backfilled.profiles.find((p) => p.id === fivePfhId);
+  assert.equal(fivePfh.turnSteps.groups.length, TURN_STEPS_5PFH.length);
+  assert.equal(backfilled.profiles[0].turnSteps.groups.length, 0, 'the differently-named Default profile is untouched');
+
+  // Idempotent — running it again on the now-backfilled config is a true no-op.
+  const secondPass = backfillDefaultTurnSteps(backfilled, TURN_STEPS_5PFH);
+  assert.equal(secondPass, backfilled);
+
+  // A "5PFH" profile that already has even one manually-added step is never touched.
+  let withOneStep = defaultAppConfig();
+  withOneStep = createRulesProfile(withOneStep, { name: '5PFH' });
+  withOneStep.profiles[0].turnSteps = { groups: [{ id: 'g', label: 'G', steps: [{ id: 's', text: 'manual', branchTo: null }] }] };
+  const notBackfilled = backfillDefaultTurnSteps(withOneStep, TURN_STEPS_5PFH);
+  assert.equal(notBackfilled, withOneStep);
 });

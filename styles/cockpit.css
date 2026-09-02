@@ -2041,6 +2041,21 @@ input[type="number"] { -moz-appearance: textfield; }
 .colony-encounter-row { display: flex; align-items: center; gap: var(--sp-2); }
 .colony-encounter-row input[type="text"] { flex: 1 1 auto; min-width: 0; }
 
+/* Turn Step widget (Colony) + Step Text row (design/adr/rules-profiles-
+   multi-campaign.md) */
+.turn-step-nav { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.turn-step-current { white-space: nowrap; }
+.turn-step-text-row { display: flex; align-items: flex-start; gap: var(--sp-3); margin: 0 0 var(--sp-3); }
+.turn-step-text-body { flex: 1 1 auto; min-width: 0; }
+.turn-step-text-row .btn { flex: 0 0 auto; }
+
+/* Turn Step Settings tab — each group's reorderable step list. */
+.turn-step-list { display: flex; flex-direction: column; gap: var(--sp-2); }
+.turn-step-row { display: flex; align-items: flex-start; gap: var(--sp-2); }
+.turn-step-order { display: flex; flex-direction: column; flex: 0 0 auto; }
+.turn-step-row textarea { flex: 1 1 auto; min-width: 0; }
+.turn-step-branch { flex: 0 0 auto; white-space: nowrap; padding-top: var(--sp-1); }
+
 /* Trade (Merchant Rules Lens, ADR 0003/0004) */
 .trade-market-table { width: 100%; border-collapse: collapse; margin: var(--sp-2) 0 var(--sp-3); font-size: 0.85rem; }
 .trade-market-table th { text-align: left; font-size: 0.7rem; letter-spacing: 0.06em; color: var(--text-dim); text-transform: uppercase; padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--border); }

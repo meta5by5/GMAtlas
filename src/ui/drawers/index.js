@@ -55,6 +55,7 @@ import { DOCS_MANIFEST } from '../../data/docsManifest.js';
 import { GATEABLE_MODULES } from '../../core/schema.js';
 import { drawerMeta, POSITION_ASSIGNABLE_IDS } from '../drawerMeta.js';
 import { resolvePositionContentId } from '../../domain/rulesProfiles.js';
+import { getCurrentTurnStep } from '../../domain/turnSteps.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -1712,6 +1713,7 @@ const SETTINGS_TABS = [
   { id: 'general', label: 'General' },
   { id: 'campaigns', label: 'Campaigns' },
   { id: 'ruleset-profile-editor', label: 'Ruleset Profile Editor' },
+  { id: 'turn-steps', label: 'Turn Step' },
   { id: 'genre-rules', label: 'Genre & Rules' },
   { id: 'trade-economy', label: 'Trade & Economy' },
   { id: 'reference-tools', label: 'Reference Tools' },
@@ -1776,6 +1778,7 @@ function settings(doc, ui = {}) {
       </div>`,
     campaigns: () => campaignsSection(doc, ui),
     'ruleset-profile-editor': () => rulesetProfileEditorSection(doc, ui),
+    'turn-steps': () => turnStepsSettingsSection(doc, ui),
     'genre-rules': () => `
       <p class="dim small">Genre Pack, Stat System, Rules Constitution, and Game System Activation moved to <b>Ruleset Profile Editor</b> — they're a Rules Profile's own settings now, shared across every campaign that uses it.</p>
       ${statblockTemplateEditor(doc)}
@@ -1879,6 +1882,23 @@ function campaignsSection(doc, ui) {
 // value. Every campaign using this profile picks up a saved edit
 // immediately (store.updateProfile's notify() re-renders the whole shell),
 // since a profile is shared state, not per-campaign-duplicated.
+// Shared by Ruleset Profile Editor and the Turn Step tab — both edit the
+// SAME draft (shell.js's profileDrafts), so one Save/Discard bar covers
+// edits made from either tab. Only shown once an edit has actually been
+// made — hidden again the instant it's Saved or Discarded (direct
+// follow-up request).
+function profileDraftSaveBar(editingProfile, dirty) {
+  if (!dirty || !editingProfile) return '';
+  return `
+    <div class="settings-group profile-draft-bar dirty">
+      <p class="dim small">● Unsaved changes. Editing "${esc(editingProfile.name)}" — nothing below applies to any campaign until you Save.</p>
+      <div class="btn-col-row">
+        <button class="btn" data-profile-draft-save="${esc(editingProfile.id)}">Save Profile</button>
+        <button class="btn ghost" data-profile-draft-cancel="${esc(editingProfile.id)}">Discard Changes</button>
+      </div>
+    </div>`;
+}
+
 function rulesetProfileEditorSection(doc, ui) {
   const profiles = ui.profiles || [];
   const editingProfile = profiles.find((p) => p.id === ui.editingProfileId) || profiles[0];
@@ -1901,16 +1921,7 @@ function rulesetProfileEditorSection(doc, ui) {
   if (!editingProfile || !draft) return profilePicker;
 
   const dirty = !!ui.profileDraftDirty;
-  // Only shown once an edit has actually been made — hidden again the
-  // instant it's Saved or Discarded (direct follow-up request).
-  const saveBar = !dirty ? '' : `
-    <div class="settings-group profile-draft-bar dirty">
-      <p class="dim small">● Unsaved changes. Editing "${esc(editingProfile.name)}" — nothing below applies to any campaign until you Save.</p>
-      <div class="btn-col-row">
-        <button class="btn" data-profile-draft-save="${esc(editingProfile.id)}">Save Profile</button>
-        <button class="btn ghost" data-profile-draft-cancel="${esc(editingProfile.id)}">Discard Changes</button>
-      </div>
-    </div>`;
+  const saveBar = profileDraftSaveBar(editingProfile, dirty);
 
   const positionSelect = (slot, label) => {
     const current = resolvePositionContentId(draft, slot);
@@ -2002,6 +2013,62 @@ function rulesConstitutionSection(doc, ui) {
       <ul class="rules-provider-legend">${legend}</ul>
       ${gameSystemActivationSection(doc)}
     </div>`;
+}
+
+// Turn Step (design/adr/rules-profiles-multi-campaign.md, direct follow-up
+// request — converted from the Guide entry "5PFH Campaign Turn Sequence"):
+// a Rules Profile's own reorderable campaign-turn workflow, edited on the
+// SAME draft Ruleset Profile Editor uses (profileDraftSaveBar above covers
+// both tabs' edits with one Save/Discard action). Step text stays a plain
+// textarea (the same `@[Label|Target]` document-mention syntax the seed
+// content already uses) — display-side rendering in Colony is what turns
+// it into real clickable links (buildMentionEditorHTML), so no rich editor
+// is needed here. Groups collapse by default (7 groups, up to 17 steps
+// each) so the tab doesn't open to an overwhelming wall of fields; only
+// steps reorder within their own group — the groups themselves, and which
+// group a step belongs to, are fixed by the seed data (or however the GM
+// authored them), matching this feature's confirmed scope.
+function turnStepsSettingsSection(doc, ui) {
+  const profiles = ui.profiles || [];
+  const editingProfile = profiles.find((p) => p.id === ui.editingProfileId) || profiles[0];
+  const draft = ui.profileDraft;
+  if (!editingProfile || !draft) {
+    return `<div class="settings-group"><p class="dim small">Select a profile in Ruleset Profile Editor first.</p></div>`;
+  }
+  const dirty = !!ui.profileDraftDirty;
+  const groups = (draft.turnSteps && draft.turnSteps.groups) || [];
+  const expanded = (ui && ui.expandedTurnStepGroups) || new Set();
+
+  const groupBlocks = groups.map((g) => {
+    const isOpen = expanded.has(g.id);
+    const stepRows = g.steps.map((s, i) => {
+      const branchLabel = s.branchTo ? (groups.find((x) => x.id === s.branchTo) || {}).label : null;
+      return `
+      <div class="turn-step-row">
+        <div class="turn-step-order">
+          <button type="button" class="icon-btn" data-turn-step-move="${g.id}::${i}::-1" title="Move up" ${i === 0 ? 'disabled' : ''}>▴</button>
+          <button type="button" class="icon-btn" data-turn-step-move="${g.id}::${i}::1" title="Move down" ${i === g.steps.length - 1 ? 'disabled' : ''}>▾</button>
+        </div>
+        <textarea rows="2" data-turn-step-text="${g.id}::${esc(s.id)}">${esc(s.text)}</textarea>
+        ${branchLabel ? `<span class="dim small turn-step-branch">→ ${esc(branchLabel)}</span>` : ''}
+      </div>`;
+    }).join('');
+    return `
+      <div class="settings-group">
+        <h4 class="section-head-row"><button type="button" class="btn ghost sm" data-turn-step-group-toggle="${esc(g.id)}">${isOpen ? '▾' : '▸'} ${esc(g.label)} (${g.steps.length})</button></h4>
+        ${isOpen ? `<div class="turn-step-list">${stepRows}</div>` : ''}
+      </div>`;
+  }).join('');
+
+  return `
+    ${profileDraftSaveBar(editingProfile, dirty)}
+    <div class="settings-group">
+      ${sectionHeadRow('h3', 'Turn Step', 'settings-turn-steps')}
+      ${helpBody('settings-turn-steps', "A Rules Profile's own reorderable campaign-turn workflow — Colony's ◂/▸ Turn Step buttons walk through these, following a step's branch into another list automatically. Empty by default; load the 5PFH sequence below, or type your own steps.", ui)}
+      <p class="dim small">Editing "${esc(editingProfile.name)}".</p>
+      <button class="btn ghost" data-turn-steps-load-default>Load 5PFH Default Steps</button>
+    </div>
+    ${groups.length ? groupBlocks : '<div class="settings-group"><p class="dim small">No steps yet for this profile.</p></div>'}`;
 }
 
 // Living Faction Engine Phase B: how many scenes pass before Co-Pilot
@@ -2619,30 +2686,74 @@ function party(doc, ui = {}) {
 }
 
 // --- Colony: 5PFH Planetfall turn sheet + crew roster + lifeform filter ----
+function colonyFieldHtml(doc, ui, fields, f) {
+  const v = fields[f.key];
+  if (f.type === 'textarea') {
+    const toolbarKey = `colony:${f.key}`;
+    // Direct request: Colony's rich-text fields (four of them, back to
+    // back) start with their formatting toolbar collapsed regardless of
+    // the app-wide "Formatting toolbars start collapsed" setting — force
+    // the default to true here (reusing toolbarCollapsed's own session-
+    // override XOR logic unchanged) rather than touching that global
+    // setting, which every OTHER rich field in the app still respects.
+    const collapsed = toolbarCollapsed({ ...doc, settings: { ...doc.settings, toolbarCollapsedByDefault: true } }, ui, toolbarKey);
+    return `<label class="field-label">${esc(f.label)}<div class="rich-field">${richToolbarHTML(toolbarKey, collapsed)}<div class="mention-editor" contenteditable="true" data-colony-field="${f.key}">${buildMentionEditorHTML(doc, v)}</div></div></label>`;
+  }
+  if (f.type === 'number') {
+    return `<label class="field-label">${esc(f.label)}${numStepper(`<input type="number" data-colony-field="${f.key}" value="${esc(v == null ? '' : v)}">`)}</label>`;
+  }
+  return `<label class="field-label">${esc(f.label)}<input type="text" data-colony-field="${f.key}" value="${esc(v == null ? '' : v)}"></label>`;
+}
+
+// Turn Step widget (design/adr/rules-profiles-multi-campaign.md, direct
+// follow-up request): ◂/▸ walks getCurrentTurnStep's live position for the
+// ACTIVE profile — quietly shows "—" with both arrows disabled when that
+// profile has no turn steps configured (Starforged, a fresh "Default"),
+// rather than erroring or showing an irrelevant 5PFH-shaped control.
+function colonyTurnStepWidgetHtml(currentStep) {
+  return `
+    <label class="field-label">Turn Step
+      <span class="turn-step-nav">
+        <button type="button" class="icon-btn" data-turn-step-prev title="Previous Step" ${currentStep && currentStep.hasPrev ? '' : 'disabled'}>◂</button>
+        <b class="turn-step-current">${currentStep ? `${esc(currentStep.group.label)} ${currentStep.index + 1}/${currentStep.total}` : '—'}</b>
+        <button type="button" class="icon-btn" data-turn-step-next title="Next Step" ${currentStep && currentStep.hasNext ? '' : 'disabled'}>▸</button>
+      </span>
+    </label>`;
+}
+
 function colony(doc, ui = {}) {
   const fields = getColonyFields(doc);
   const crew = listCrewRows(doc);
   const characters = listEntities(doc, ['npc']);
   const lifeforms = listLifeformEncounters(doc);
 
-  const fieldRows = COLONY_FIELDS.map((f) => {
-    const v = fields[f.key];
-    if (f.type === 'textarea') {
-      const toolbarKey = `colony:${f.key}`;
-      // Direct request: Colony's rich-text fields (four of them, back to
-      // back) start with their formatting toolbar collapsed regardless of
-      // the app-wide "Formatting toolbars start collapsed" setting — force
-      // the default to true here (reusing toolbarCollapsed's own session-
-      // override XOR logic unchanged) rather than touching that global
-      // setting, which every OTHER rich field in the app still respects.
-      const collapsed = toolbarCollapsed({ ...doc, settings: { ...doc.settings, toolbarCollapsedByDefault: true } }, ui, toolbarKey);
-      return `<label class="field-label">${esc(f.label)}<div class="rich-field">${richToolbarHTML(toolbarKey, collapsed)}<div class="mention-editor" contenteditable="true" data-colony-field="${f.key}">${buildMentionEditorHTML(doc, v)}</div></div></label>`;
-    }
-    if (f.type === 'number') {
-      return `<label class="field-label">${esc(f.label)}${numStepper(`<input type="number" data-colony-field="${f.key}" value="${esc(v == null ? '' : v)}">`)}</label>`;
-    }
-    return `<label class="field-label">${esc(f.label)}<input type="text" data-colony-field="${f.key}" value="${esc(v == null ? '' : v)}"></label>`;
+  // Colony Name is rendered separately, above the Turn Sheet header (direct
+  // follow-up request) — always visible regardless of the Turn Sheet's own
+  // collapsed state, so it stays out of the grid below entirely.
+  const nameField = COLONY_FIELDS.find((f) => f.key === 'name');
+  const nameFieldHtml = nameField ? colonyFieldHtml(doc, ui, fields, nameField) : '';
+
+  const currentStep = getCurrentTurnStep(doc);
+  // Campaign Turn now leads the grid (column 1, direct follow-up request —
+  // it's the first item once Name is pulled out above), with the new Turn
+  // Step widget inserted right after it, landing column 2 — "the place
+  // Campaign Turn was located" before Name was pulled out.
+  const fieldRows = COLONY_FIELDS.filter((f) => f.key !== 'name').map((f) => {
+    const html = colonyFieldHtml(doc, ui, fields, f);
+    return f.key === 'campaignTurn' ? html + colonyTurnStepWidgetHtml(currentStep) : html;
   }).join('');
+  // Step Text — rendered through the exact same mention-link machinery
+  // Journal/Guide/Colony's own rich fields already use, so a doc link in
+  // it is a real clickable [data-doc-open] span; data-turn-step-text-body on
+  // the wrapper is how shell.js tells THIS doc link apart from every other
+  // one in the app, to open it in the right-two-section position instead
+  // of the default. "Start" is a placeholder — the step's own ruleset is
+  // TBD, this just acknowledges the click honestly.
+  const stepTextHtml = currentStep ? `
+    <div class="turn-step-text-row">
+      <div class="turn-step-text-body" data-turn-step-text-body>${buildMentionEditorHTML(doc, currentStep.step.text)}</div>
+      <button type="button" class="btn ghost sm" data-turn-step-start title="Runs a ruleset for this step — placeholder, TBD">▶ Start</button>
+    </div>` : '';
 
   const crewRows = crew.map((row) => `
     <div class="colony-crew-row">
@@ -2682,9 +2793,10 @@ function colony(doc, ui = {}) {
 
   const turnSheetCollapsed = isPartySectionCollapsed(ui, 'colonyTurnSheet', false);
   return `
+    ${nameFieldHtml}
     ${partySectionHeaderHtml('colonyTurnSheet', 'Colony Turn Sheet', turnSheetCollapsed, helpToggle('colony-turn-sheet'))}
     ${helpBody('colony-turn-sheet', '5PFH Planetfall campaign-turn tracker.', ui)}
-    ${turnSheetCollapsed ? '' : `<div class="colony-fields">${fieldRows}</div>`}
+    ${turnSheetCollapsed ? '' : `<div class="colony-fields">${fieldRows}</div>${stepTextHtml}`}
     <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Crew Roster</h4><button class="chip" data-entity-picker-open="colony-crew">＋ Crew</button></div>
     <div class="colony-crew-list">
       ${crewRows || '<p class="ws-placeholder">No crew rows yet.</p>'}
@@ -3361,9 +3473,12 @@ function battlemap(doc, ui = {}) {
 // Plain click-based internal tab strip, exactly SETTINGS_TABS' own pattern
 // — no pan/zoom camera needed since the grid is fixed-size and small
 // enough to fit on screen outright.
+// Sectors first, and the default tab (direct follow-up request — this is
+// where the actual play happens; Actions is secondary). 'actions' was
+// 'overview' before its own direct-follow-up rename.
 const WORLD_TRACKER_TABS = [
-  { id: 'overview', label: 'Overview' },
   { id: 'sectors', label: 'Sectors' },
+  { id: 'actions', label: 'Actions' },
   { id: 'features', label: 'Features' },
   { id: 'missions', label: 'Missions' },
   { id: 'notes', label: 'Notes' },
@@ -3379,12 +3494,12 @@ const WT_FEATURE_KINDS = [
 function wtFeatureLabel(kind) { return (WT_FEATURE_KINDS.find((f) => f.kind === kind) || {}).label || kind; }
 
 function worldTracker(doc, ui = {}) {
-  const activeTab = WORLD_TRACKER_TABS.some((t) => t.id === ui.worldTrackerTab) ? ui.worldTrackerTab : 'overview';
+  const activeTab = WORLD_TRACKER_TABS.some((t) => t.id === ui.worldTrackerTab) ? ui.worldTrackerTab : 'sectors';
   const tabBar = `<div class="settings-tab-bar">${WORLD_TRACKER_TABS.map((t) => `
     <button class="btn ghost sm ${t.id === activeTab ? 'active' : ''}" data-world-tracker-tab="${t.id}" aria-selected="${t.id === activeTab}">${esc(t.label)}</button>`).join('')}</div>`;
   const sections = {
-    overview: () => worldTrackerOverview(doc),
     sectors: () => worldTrackerSectorsTab(doc, ui),
+    actions: () => worldTrackerActionsTab(doc),
     features: () => worldTrackerFeaturesTab(doc, ui),
     missions: () => worldTrackerMissionsTab(doc),
     notes: () => worldTrackerNotesTab(doc),
@@ -3429,7 +3544,7 @@ function worldTrackerAttentionSection(doc) {
     </div>`;
 }
 
-function worldTrackerOverview(doc) {
+function worldTrackerActionsTab(doc) {
   const fields = getColonyFields(doc);
   const turn = Number(fields.campaignTurn) || 0;
   const milestones = Math.max(0, Math.min(7, Number(fields.campaignMilestones) || 0));
@@ -3447,6 +3562,11 @@ function worldTrackerOverview(doc) {
       ${hb ? `<p>Sector <b>${hb.x},${hb.y}</b></p>` : `<p class="dim small">Not set yet.</p>`}
       <div class="btn-col"><button class="btn ghost sm" data-home-base-roll>🎲 Roll Home Base (1d6 × 1d6)</button></div>
       <p class="dim small">Or open a sector in the Sectors tab and use "Set as Home Base."</p>
+    </div>
+    <div class="settings-group">
+      <h3>Reset</h3>
+      <p class="dim small">Clears every sector, the home base, and the world-level notes — starts the grid over from scratch. This cannot be undone.</p>
+      <button class="btn ghost" data-world-tracker-reset>🗑 Reset World Tracker</button>
     </div>`;
 }
 
@@ -3534,9 +3654,9 @@ function worldTrackerSectorDetail(doc, ui, x, y) {
         ${!isHome ? `<button class="btn ghost sm" data-home-base-set="${x},${y}">Set as Home Base</button>` : ''}
       </div>
       ${sector.state !== 'unexplored' ? `
-        <label class="field-label">Resource level${numStepper(`<input type="number" data-sector-resource-level="${x},${y}" value="${sector.resourceLevel == null ? '' : sector.resourceLevel}">`)}</label>
+        <label class="field-label">Resource level${numStepper(`<input type="number" min="0" data-sector-resource-level="${x},${y}" value="${sector.resourceLevel == null ? '' : sector.resourceLevel}">`)}</label>
         ${sector.resourceHarvested ? '<p class="dim small">(harvested)</p>' : `<button class="btn ghost sm" data-sector-harvest="${x},${y}">Mark Harvested</button>`}
-        <label class="field-label">Hazard level${numStepper(`<input type="number" data-sector-hazard-level="${x},${y}" value="${sector.hazardLevel == null ? '' : sector.hazardLevel}">`)}</label>` : ''}
+        <label class="field-label">Hazard level${numStepper(`<input type="number" min="0" data-sector-hazard-level="${x},${y}" value="${sector.hazardLevel == null ? '' : sector.hazardLevel}">`)}</label>` : ''}
       <h4>Overlay Icon</h4>
       <label class="field-label">Manual override (blank = automatic)
         <select data-sector-overlay-icon data-sector-coord="${x},${y}">

@@ -163,6 +163,17 @@ export function defaultCampaign(now = new Date().toISOString()) {
     // reference to a Lifeform entity.
     colony: { fields: {}, crew: [], encounters: [] },
 
+    // Turn Step workflow PLAY POSITION (design/adr/rules-profiles-multi-
+    // campaign.md) — which step the GM is currently on, real per-campaign
+    // state (unlike the step DEFINITIONS themselves, which live on the
+    // active Rules Profile and are only ever read here via store.get()'s
+    // overlay, never persisted onto the campaign document). groupId/
+    // stepIndex null/0 until the GM clicks Next Step the first time.
+    // returnStack holds { groupId, stepIndex } entries to resume a parent
+    // list after a branch (Daily Life -> Mission Steps -> ...) reaches its
+    // own end — see domain/turnSteps.js's advanceTurnStep/retreatTurnStep.
+    turnStepProgress: { groupId: null, stepIndex: 0, returnStack: [] },
+
     // A tree of freeform reference documents (docs/adr/0017-multi-doc-
     // guide-tree.md) — each a table of contents with @mentions/@[Doc]
     // pointers into the Cast and Document Library. `docs` is populated
@@ -285,6 +296,18 @@ export function defaultRulesProfile(name = 'Default', now = new Date().toISOStri
       gameSystemActivations: { swn: false },
       partyHeadlineFields: ['Health', 'Momentum'],
     },
+    // Turn Step workflow (design/adr/rules-profiles-multi-campaign.md,
+    // direct follow-up request — converted from the Guide entry "5PFH
+    // Campaign Turn Sequence"): a Rules Profile's own reorderable sequence
+    // of named step-lists (Colony's "Next Step"/"Previous Step" walk
+    // through these; Settings > Turn Step edits them). Empty by default —
+    // a profile with no campaign-turn concept (Starforged, a fresh
+    // "Default") shows nothing in Colony rather than an irrelevant 5PFH
+    // workflow. src/data/turnStepsDefault5pfh.js is the seed content a GM
+    // opts into via "Load 5PFH Default Steps," never auto-applied to an
+    // arbitrary profile. Shape: [{ id, label, steps: [{ id, text,
+    // branchTo }] }] — see domain/turnSteps.js.
+    turnSteps: { groups: [] },
   };
 }
 

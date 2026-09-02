@@ -56,7 +56,7 @@ import {
   setSectorNotes, setSectorOverlayIcon, setSectorCornerLabel, removeSectorCornerLabel,
   addSectorFeature, discoverSectorFeature, toggleSectorFeatureDiscovered, removeSectorFeature, adjacentSectors,
   migrateFeature, setHomeBase, rollHomeBase, advanceWorldTurn, generateMissionHooks, setWorldTrackerNotes, gridSizeOf,
-  toggleInvestigationSite, rollRandomInvestigationSite, setSectorResourceLevel, setSectorHazardLevel,
+  toggleInvestigationSite, rollRandomInvestigationSite, setSectorResourceLevel, setSectorHazardLevel, resetWorldTracker,
   MAX_INVESTIGATION_SITES,
 } from '../domain/worldTracker.js';
 import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract, updateContract } from '../domain/trade.js';
@@ -88,6 +88,8 @@ import { renderSearchPanel } from './searchPanel.js';
 import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
 import { isModuleVisible, setModuleEnabled, setStoryboardPosition, updateProfileRuleset, applyProfileDraft, resolvePositionContentId } from '../domain/rulesProfiles.js';
 import { DRAWER_META, drawerMeta } from './drawerMeta.js';
+import { moveTurnStepInGroup, updateTurnStepText, loadDefaultTurnSteps, getCurrentTurnStep, advanceTurnStep, retreatTurnStep } from '../domain/turnSteps.js';
+import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
 
 // DRAWERS/DRAWER_META/drawerMeta live in ./drawerMeta.js — shared with
 // drawers/index.js's Settings > Ruleset Profile Editor tab (design/adr/rules-profiles-multi-campaign.md),
@@ -217,6 +219,26 @@ function currentEditingProfileId() {
   return active ? active.id : null;
 }
 
+// store.update()'s mutator receives the RAW campaign doc — unlike store.get(),
+// it does NOT run overlayProfile(), so campaign.turnSteps is never populated
+// there. advanceTurnStep/retreatTurnStep need it to resolve group order, so
+// this overlays it just for the call and strips it back off the result
+// before returning — turnSteps is profile content and must never actually
+// get persisted onto the campaign doc (design/adr/rules-profiles-multi-
+// campaign.md's "never persisted back" invariant for every overlaid field).
+function applyTurnStepMutation(mutatorFn) {
+  return store.update((d) => {
+    const profile = store.getActiveProfile();
+    const withSteps = profile ? { ...d, turnSteps: profile.turnSteps } : d;
+    const next = mutatorFn(withSteps);
+    if (next && Object.prototype.hasOwnProperty.call(next, 'turnSteps')) {
+      const { turnSteps, ...clean } = next;
+      return clean;
+    }
+    return next;
+  });
+}
+
 // Same fallback shape as store.js's own structuredCloneSafe — most runtimes
 // this app targets have a real global structuredClone, but this avoids a
 // hard dependency on it.
@@ -249,7 +271,7 @@ function isProfileDraftDirty(profileId) {
   if (!draft) return false;
   const stored = store.listProfiles().find((p) => p.id === profileId);
   if (!stored) return false;
-  const shape = (p) => JSON.stringify({ storyboardPositions: p.storyboardPositions, moduleEnabled: p.moduleEnabled, ruleset: p.ruleset });
+  const shape = (p) => JSON.stringify({ storyboardPositions: p.storyboardPositions, moduleEnabled: p.moduleEnabled, ruleset: p.ruleset, turnSteps: p.turnSteps });
   return shape(draft) !== shape(stored);
 }
 function saveProfileDraft(profileId) {
@@ -308,16 +330,26 @@ let settingsSelectedProfileId = null;
 // CLAUDE.md this is its own inline form rather than window.prompt() or the
 // single-field openInlinePrompt.
 let newCampaignDraft = { title: '', profileId: '' };
-// Ruleset Profile Editor drafts (direct request: profile edits apply "when
-// the changes are saved," not instantly like the rest of Settings) — one
-// uncommitted draft per profile id touched this session, so switching which
-// profile you're editing never discards another profile's in-progress
-// edits. Only ever holds storyboardPositions/moduleEnabled/ruleset — a
-// profile's id/name/createdAt are never drafted (rename is its own,
-// separately-committed inline-prompt action). Cleared for a given id on
-// Save (re-seeds fresh from the store next time that profile is opened) or
-// Cancel (discards, reverting the form to the stored value).
+// Ruleset Profile Editor + Turn Step drafts (direct request: profile edits
+// apply "when the changes are saved," not instantly like the rest of
+// Settings) — one uncommitted draft per profile id touched this session,
+// so switching which profile you're editing never discards another
+// profile's in-progress edits. Only ever holds storyboardPositions/
+// moduleEnabled/ruleset/turnSteps — a profile's id/name/createdAt are
+// never drafted (rename is its own, separately-committed inline-prompt
+// action). Cleared for a given id on Save (re-seeds fresh from the store
+// next time that profile is opened) or Cancel (discards, reverting the
+// form to the stored value).
 let profileDrafts = new Map();
+// Turn Step Settings tab (design/adr/rules-profiles-multi-campaign.md) —
+// which step-group sections are expanded; collapsed by default (7 groups,
+// up to 17 steps each — too much to show open at once).
+let expandedTurnStepGroups = new Set();
+// Doc viewer's "right-two-section" position (direct follow-up request) —
+// set fresh on every [data-doc-open] click based on where the click came
+// from (Colony's Step Text vs. anywhere else), not tracked per tab; never
+// persisted, purely a display concern.
+let docViewerRightSection = false;
 let aboutOpen = false; // ephemeral — the About overlay
 let docTagFilters = new Set();
 let docTagEditorOpen = new Set(); // ephemeral — which doc/ref cards' tag editors are expanded
@@ -353,7 +385,7 @@ let battlemapPan = null; // { world, startClientX, startClientY, startX, startY 
 // sector's detail the Sectors tab is currently showing (null = none
 // selected yet); worldTrackerMigrateOpen is the Set of feature ids
 // currently showing their adjacent-sector migrate picker inline.
-let worldTrackerTab = 'overview';
+let worldTrackerTab = 'sectors';
 let worldTrackerSelectedSector = null; // {x,y} | null
 let worldTrackerMigrateOpen = new Set();
 // A sector detail's Corner Labels sub-section (direct follow-up request —
@@ -468,7 +500,7 @@ let oracleTagFilter = null; // ephemeral — array of tags a field's 🔮 link j
 let expandedGuideNodes = new Set(); // ephemeral — which Guide tree nodes are expanded (docs/adr/0017)
 let guideRenameOpen = new Set(); // ephemeral — which Guide docs (tree row or the active title) are showing an inline rename input
 let entitySearch = ''; // ephemeral — Cast panel name/tag search
-let entityTypeFilter = ''; // ephemeral — Cast panel type filter ('' = all)
+let entityTypeFilter = 'npc'; // ephemeral — Cast panel type filter (direct follow-up request: NPC is the default on open, '' = all)
 let entityTagFilters = new Set(); // ephemeral — Cast panel cumulative tag sub-filter (ADR 0012), AND semantics, mirrors docTagFilters
 let entityTagListOpen = false; // ephemeral — collapses the tag sub-filter chip row, mirrors docTagListOpen
 let catalogPickerOpen = false; // ephemeral — the Cast drawer's "+ Item from catalog" (ADR 0012) inline picker, open or not
@@ -1968,18 +2000,23 @@ function onClick(ev) {
   }
   const cornerLabelEdit = hit('[data-corner-label-edit]');
   if (cornerLabelEdit) {
-    const [sx, sy, corner] = cornerLabelEdit.dataset.cornerLabelEdit.split(':');
+    // Fix: dataset value is "x,y:corner" — a plain split(':') left corner
+    // undefined and folded "x,y" into sx, so every edit ran on NaN
+    // coordinates and never actually rendered/persisted (real bug, caught
+    // from the direct report that Corner Label edits weren't sticking).
+    const [sx, sy, corner] = cornerLabelEdit.dataset.cornerLabelEdit.split(/[,:]/);
     const sector = getSector(store.get(), Number(sx), Number(sy));
     const existing = sector.cornerLabels.find((c) => c.corner === corner);
     openInlinePrompt('sector-corner-label', {
       label: 'Corner label (short)', placeholder: 'e.g. R3', value: existing ? existing.text : '',
-      meta: { x: Number(sx), y: Number(sy), corner }, anchorRect: cornerLabelEdit.getBoundingClientRect(),
+      meta: { x: Number(sx), y: Number(sy), corner, source: existing ? existing.source : null },
+      anchorRect: cornerLabelEdit.getBoundingClientRect(),
     });
     return;
   }
   const cornerLabelRemove = hit('[data-corner-label-remove]');
   if (cornerLabelRemove) {
-    const [sx, sy, corner] = cornerLabelRemove.dataset.cornerLabelRemove.split(':');
+    const [sx, sy, corner] = cornerLabelRemove.dataset.cornerLabelRemove.split(/[,:]/);
     return store.update((d) => removeSectorCornerLabel(d, Number(sx), Number(sy), corner));
   }
   if (hit('[data-sector-corner-labels-toggle]')) { worldTrackerCornerLabelsOpen = !worldTrackerCornerLabelsOpen; return renderDrawerBody(); }
@@ -2029,6 +2066,12 @@ function onClick(ev) {
   }
   if (hit('[data-world-milestone-inc]')) return store.update((d) => incrementCampaignMilestones(d));
   if (hit('[data-world-milestone-dec]')) return store.update((d) => decrementCampaignMilestones(d));
+  if (hit('[data-world-tracker-reset]')) {
+    if (!window.confirm('Reset the World Tracker? Every sector, the home base, and the world-level notes will be cleared. This cannot be undone.')) return;
+    store.update((d) => addNote(resetWorldTracker(d), 'World Tracker reset — every sector cleared, starting over.', 'World Tracker'));
+    worldTrackerSelectedSector = null;
+    return toast('World Tracker reset');
+  }
   const missionRun = hit('[data-mission-hook-run]');
   if (missionRun) {
     const { x, y, missionType, reason, signal, featureId } = missionRun.dataset;
@@ -2346,6 +2389,12 @@ function onClick(ev) {
       if (entry && entry.kind !== 'file') { toast('Text notes open inline below — not a PDF file.'); return; }
     }
     const page = docOpen.dataset.docOpenPage ? Number(docOpen.dataset.docOpenPage) : undefined;
+    // Right-two-section position (direct follow-up request): a doc link
+    // clicked from Colony's Turn Step text opens overlapping Navigator+
+    // Advisor instead of the default full-width position, so Composer
+    // (Colony under 5PFH) stays visible to read rules in tandem with it.
+    // Reflects only the MOST RECENT open's origin — not per-tab state.
+    docViewerRightSection = !!docOpen.closest('[data-turn-step-text-body]');
     store.update((d) => openDocumentTab(d, docOpen.dataset.docOpen, page));
     return;
   }
@@ -3216,6 +3265,37 @@ function onClick(ev) {
   if (profileDraftSaveBtn) { saveProfileDraft(profileDraftSaveBtn.dataset.profileDraftSave); return; }
   const profileDraftCancelBtn = hit('[data-profile-draft-cancel]');
   if (profileDraftCancelBtn) { cancelProfileDraft(profileDraftCancelBtn.dataset.profileDraftCancel); return; }
+  // Turn Step Settings tab (design/adr/rules-profiles-multi-campaign.md) —
+  // reorder/load-default edit the SAME draft Ruleset Profile Editor uses;
+  // Save/Cancel above already cover these.
+  const turnStepGroupToggle = hit('[data-turn-step-group-toggle]');
+  if (turnStepGroupToggle) {
+    const id = turnStepGroupToggle.dataset.turnStepGroupToggle;
+    if (expandedTurnStepGroups.has(id)) expandedTurnStepGroups.delete(id); else expandedTurnStepGroups.add(id);
+    return renderDrawerBody();
+  }
+  const turnStepMove = hit('[data-turn-step-move]');
+  if (turnStepMove) {
+    const [groupId, index, dir] = turnStepMove.dataset.turnStepMove.split('::');
+    const profileId = currentEditingProfileId();
+    const draft = getProfileDraft(profileId);
+    if (draft) setProfileDraft(profileId, moveTurnStepInGroup(draft, groupId, Number(index), Number(dir)));
+    return render();
+  }
+  if (hit('[data-turn-steps-load-default]')) {
+    const profileId = currentEditingProfileId();
+    const draft = getProfileDraft(profileId);
+    if (draft) setProfileDraft(profileId, loadDefaultTurnSteps(draft, TURN_STEPS_5PFH));
+    return render();
+  }
+  // Colony's Turn Step ◂/▸ (direct follow-up request) — real per-campaign
+  // play state, applies instantly like any other campaign data, no draft.
+  if (hit('[data-turn-step-prev]')) return applyTurnStepMutation(retreatTurnStep);
+  if (hit('[data-turn-step-next]')) return applyTurnStepMutation(advanceTurnStep);
+  // "Start" — the step's own ruleset is a placeholder for other triggered
+  // actions TBD (direct quote); this just acknowledges the click honestly
+  // rather than inventing behavior.
+  if (hit('[data-turn-step-start]')) return toast('No ruleset wired up for this step yet — placeholder for future step actions.');
   if (hit('[data-bind-file]')) return store.bindFile().then(() => toast('Save file bound')).catch(() => {});
   if (hit('[data-restore-backup]')) {
     if (!window.confirm('Restore the last backup? This replaces the current campaign with the previous save — export the current one first if you want to keep it.')) return;
@@ -4006,6 +4086,14 @@ function onChange(ev) {
     if (draft) setProfileDraft(profileId, updateProfileRuleset(draft, { partyHeadlineFields: fields }));
     return render();
   }
+  const turnStepTextArea = t.closest('[data-turn-step-text]');
+  if (turnStepTextArea) {
+    const [groupId, stepId] = turnStepTextArea.dataset.turnStepText.split('::');
+    const profileId = currentEditingProfileId();
+    const draft = getProfileDraft(profileId);
+    if (draft) setProfileDraft(profileId, updateTurnStepText(draft, groupId, stepId, t.value));
+    return render();
+  }
   if (t.closest('[data-settings-toolbar-default]')) return store.update((d) => { d.settings.toolbarCollapsedByDefault = t.checked; return d; });
   if (t.closest('[data-trade-economy-model-select]')) {
     const profileId = currentEditingProfileId();
@@ -4388,7 +4476,7 @@ function openDrawerTab(id) {
     if (id === 'oracle') oracleFilter = '';
     if (id === 'documents') { docFilter = ''; docTagFilters = new Set(); docTagEditorOpen = new Set(); refreshRefDocBlobKeys(); }
     if (id === 'graph') graphView = { scale: 1, x: 0, y: 0 };
-    if (id === 'world-tracker') { worldTrackerTab = 'overview'; worldTrackerSelectedSector = null; worldTrackerMigrateOpen = new Set(); }
+    if (id === 'world-tracker') { worldTrackerTab = 'sectors'; worldTrackerSelectedSector = null; worldTrackerMigrateOpen = new Set(); }
     // Direct request: sections other than Party Roster start collapsed
     // "when opening the Party Tracker (not when switching focus to other
     // open tabs)" — resetting here (inside the "newly added to openDrawers"
@@ -5417,7 +5505,24 @@ function commitInlinePrompt() {
   } else if (kind === 'battlemap-icon-note') {
     store.update((d) => updateBattlemapIcon(d, meta.mapId, meta.iconId, { note: value }));
   } else if (kind === 'sector-corner-label') {
-    store.update((d) => setSectorCornerLabel(d, meta.x, meta.y, meta.corner, value, 'custom'));
+    // The number field is the primary editor for Resource/Hazard Level, but
+    // editing THIS corner's label directly must not silently drift out of
+    // sync with it (direct follow-up request) — if this corner is the one
+    // auto-linked to a level (source 'resource'/'hazard') and the typed
+    // text still contains a number, route through the same setter the
+    // number field uses so both the level and the corner text update
+    // together and stay linked; otherwise (a different corner, or text with
+    // no number) fall back to a plain custom label, same as before.
+    const linkedField = meta.corner === 'top_left' && meta.source === 'resource' ? 'resource'
+      : meta.corner === 'bottom_left' && meta.source === 'hazard' ? 'hazard' : null;
+    const parsed = linkedField ? value.match(/-?\d+/) : null;
+    if (linkedField && parsed) {
+      store.update((d) => (linkedField === 'resource'
+        ? setSectorResourceLevel(d, meta.x, meta.y, parsed[0])
+        : setSectorHazardLevel(d, meta.x, meta.y, parsed[0])));
+    } else {
+      store.update((d) => setSectorCornerLabel(d, meta.x, meta.y, meta.corner, value, 'custom'));
+    }
   } else if (kind === 'campaign-rename') {
     if (value) store.renameCampaign(meta.id, value).then(() => toast('Campaign renamed'));
   } else if (kind === 'profile-rename') {
@@ -5811,6 +5916,23 @@ function render() {
   viewer.style.right = (!compact && openTabs.length > 0 && openDrawers.length > 0 && !drawerCollapsed)
     ? `calc(var(--edge-w) + min(var(--drawer-w, 420px), 88vw))`
     : '';
+  // "Right-two-section" position (direct follow-up request, design/adr/
+  // rules-profiles-multi-campaign.md) — a doc opened from Colony's Turn
+  // Step text overlaps Navigator+Advisor (positions 2/3) instead of the
+  // default full width, leaving Composer (position 1, Colony under 5PFH)
+  // visible to read rules in tandem with it. No CSS token marks exactly
+  // where Composer ends and Navigator begins (.storyboard-grid's two
+  // columns are `1fr 1fr`, not a fixed fraction of the viewport), so this
+  // measures the real boundary — same "compute it in JS" approach the
+  // `right` narrowing just above already uses — falling back to the CSS
+  // default (left:0) if the grid isn't there (compact widths already
+  // excluded via !compact, matching the confirmed phone fallback) or has
+  // no first card yet.
+  viewer.style.left = '';
+  if (!compact && docViewerRightSection && openTabs.length) {
+    const firstCard = root.querySelector('.storyboard-grid > *:first-child');
+    if (firstCard) viewer.style.left = `${Math.round(firstCard.getBoundingClientRect().right)}px`;
+  }
   if (openTabs.length) {
     const activeTab = doc.documents.activeTab && openTabs.includes(doc.documents.activeTab)
       ? doc.documents.activeTab : openTabs[openTabs.length - 1];
@@ -6203,6 +6325,7 @@ function buildDrawerUi() {
     battlemapPlacingIcon, battlemapCamera,
     contentPackFlags, hostileLocationsImporting, exportIncludeAttachments, exportAttachmentsPreview,
     worldTrackerTab, worldTrackerSelectedSector, worldTrackerMigrateOpen, worldTrackerCornerLabelsOpen,
+    expandedTurnStepGroups,
     // Faction Events' own docked-in-WHERE state (see factionEventsDockedInWhere's
     // comment above) — workspace/index.js's WHERE view reads these to render
     // the same renderFactionEvents() body a second way when docked.

@@ -119,15 +119,42 @@ export function reassignCampaignProfile(appConfig, campaignId, profileId) {
 }
 
 /** Commit a draft's edited slices (storyboardPositions/moduleEnabled/
- *  ruleset — the Ruleset Profile Editor's own "Save" action) onto whatever
- *  is currently stored for that profile id, preserving id/name/createdAt
- *  and stamping a fresh updatedAt. Never touches any campaign document. */
+ *  ruleset/turnSteps — the Ruleset Profile Editor's and Turn Step tab's
+ *  shared "Save" action) onto whatever is currently stored for that
+ *  profile id, preserving id/name/createdAt and stamping a fresh
+ *  updatedAt. Never touches any campaign document. */
 export function applyProfileDraft(profile, draft) {
   return {
     ...profile,
     storyboardPositions: draft.storyboardPositions,
     moduleEnabled: draft.moduleEnabled,
     ruleset: draft.ruleset,
+    turnSteps: draft.turnSteps,
     updatedAt: new Date().toISOString(),
+  };
+}
+
+// --- Turn Step default backfill (design/adr/rules-profiles-multi-
+// campaign.md, direct follow-up request) -----------------------------------
+
+/** One-time, narrowly-scoped upgrade for an install that already has an
+ *  appConfig (so wrapLegacyCampaignIntoAppConfig, migrate.js's first-boot
+ *  path, won't run again): fills in the 5PFH Turn Step seed content ONLY
+ *  for a profile named exactly "5PFH" whose turnSteps.groups is still
+ *  empty. Never touches a profile with ANY steps already on it, even a
+ *  single manually-added one, and never touches a profile with a
+ *  different name — additive-default-only, same "never overwrites
+ *  something already there" posture as every other lazily-defaulted field
+ *  in this app (see schema.js's toolbarCollapsedByDefault comment). Called
+ *  once from store.js's load(). */
+export function backfillDefaultTurnSteps(appConfig, seedGroups) {
+  const needsBackfill = appConfig.profiles.some((p) => p.name === '5PFH' && (!p.turnSteps || !p.turnSteps.groups || p.turnSteps.groups.length === 0));
+  if (!needsBackfill) return appConfig;
+  return {
+    ...appConfig,
+    profiles: appConfig.profiles.map((p) => {
+      if (p.name !== '5PFH' || (p.turnSteps && p.turnSteps.groups && p.turnSteps.groups.length)) return p;
+      return { ...p, turnSteps: { groups: JSON.parse(JSON.stringify(seedGroups)) } };
+    }),
   };
 }

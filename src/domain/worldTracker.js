@@ -184,17 +184,19 @@ export function revealSector(campaign, x, y, { rng = Math.random } = {}) {
 }
 
 // Resource/Hazard Level editable fields (direct follow-up request — same
-// number-field format as Colony's own COLONY_FIELDS). Keeps the
-// auto-managed R#/H# corner label (source 'resource'/'hazard') in sync
-// with the edited number so the grid cell's corner text never drifts from
-// the sidebar's own value; a corner the GM has since overwritten by hand
-// (source:'custom') is left alone — editing the level only ever touches
-// the label IT put there.
+// number-field format as Colony's own COLONY_FIELDS). Clamped to 0 and up
+// (direct follow-up request — no negative levels); keeps the auto-managed
+// R#/H# corner label (source 'resource'/'hazard') in sync with the edited
+// number so the grid cell's corner text — and, via its own CSS custom
+// property, the cell's resource-shading/hazard-badge intensity — never
+// drifts from the sidebar's own value; a corner the GM has since
+// overwritten by hand (source:'custom') is left alone — editing the level
+// only ever touches the label IT put there.
 export function setSectorResourceLevel(campaign, x, y, value) {
   const next = clone(campaign);
   const wt = ensure(next);
   const sector = getOrCreateSectorRecord(wt, clampCoord(x, wt.gridSize), clampCoord(y, wt.gridSize));
-  const level = value === '' || value == null || !Number.isFinite(Number(value)) ? null : Math.round(Number(value));
+  const level = value === '' || value == null || !Number.isFinite(Number(value)) ? null : Math.max(0, Math.round(Number(value)));
   sector.resourceLevel = level;
   const label = sector.cornerLabels.find((c) => c.corner === 'top_left' && c.source === 'resource');
   if (label) label.text = level == null ? '' : `R${level}`;
@@ -204,7 +206,7 @@ export function setSectorHazardLevel(campaign, x, y, value) {
   const next = clone(campaign);
   const wt = ensure(next);
   const sector = getOrCreateSectorRecord(wt, clampCoord(x, wt.gridSize), clampCoord(y, wt.gridSize));
-  const level = value === '' || value == null || !Number.isFinite(Number(value)) ? null : Math.round(Number(value));
+  const level = value === '' || value == null || !Number.isFinite(Number(value)) ? null : Math.max(0, Math.round(Number(value)));
   sector.hazardLevel = level;
   const label = sector.cornerLabels.find((c) => c.corner === 'bottom_left' && c.source === 'hazard');
   if (label) label.text = level == null ? '' : `H${level}`;
@@ -245,11 +247,24 @@ export function setSectorNotes(campaign, x, y, notes) {
 /** `iconKey: null` clears a manual override back to deriveSectorIcon's
  *  automatic, feature-priority-based choice (see below) — the same
  *  "explicit override coexists with automatic derivation" shape
- *  CornerLabel's own source:'custom' already uses. */
+ *  CornerLabel's own source:'custom' already uses. Picking 'unexplored'
+ *  specifically (direct follow-up request) does more than swap the icon —
+ *  it resets the sector back to blank: rolled levels, resourceHarvested,
+ *  investigation-site marker, features, and corner labels all cleared,
+ *  state back to 'unexplored'. Notes are left alone (GM scratch text, not
+ *  "Levels and other features"); overlayIcon stays 'unexplored' so the
+ *  '?' the GM explicitly asked for keeps showing regardless of
+ *  investigationSite (which the reset just cleared). Every other icon key
+ *  keeps the original cosmetic-only behavior. */
 export function setSectorOverlayIcon(campaign, x, y, iconKey) {
   const next = clone(campaign);
   const wt = ensure(next);
   const sector = getOrCreateSectorRecord(wt, clampCoord(x, wt.gridSize), clampCoord(y, wt.gridSize));
+  if (iconKey === 'unexplored') {
+    const notes = sector.notes;
+    Object.assign(sector, defaultSector(), { notes, overlayIcon: 'unexplored' });
+    return next;
+  }
   sector.overlayIcon = iconKey || null;
   return next;
 }
@@ -450,6 +465,19 @@ export function setWorldTrackerNotes(campaign, notes) {
   return next;
 }
 
+/** "Reset" (direct follow-up request — a button at the bottom of the
+ *  World Tracker): wipes every sector, the home base, and the world-level
+ *  notes back to a brand-new grid — gridSize is the one thing preserved
+ *  (a structural setting, not "the grid" being cleared). The UI gates this
+ *  behind a confirm() dialog, same posture as every other hard-to-reverse
+ *  action in this app. */
+export function resetWorldTracker(campaign) {
+  const next = clone(campaign);
+  const gridSize = gridSizeOf(next);
+  next.worldTracker = { gridSize, sectors: {}, homeBaseSector: null, notes: '' };
+  return next;
+}
+
 /** The Overview tab's guided-workflow checklist (direct request: surface
  *  each pending decision as a step in the tool's own UI instead of
  *  requiring the GM to notice it by clicking through tabs — and never
@@ -478,7 +506,29 @@ export function worldTrackerAttentionItems(campaign) {
       detail: `${marked} / ${MAX_INVESTIGATION_SITES} marked so far — mark them from a sector's own detail panel (Sectors tab).`,
     });
   }
+  // Only one actionable mission per sector here (direct follow-up request:
+  // "Only one actionable option should be available for a Sector" — this
+  // Attention list was showing a sector's state-progression hook, e.g.
+  // Investigation Mission for a still-unexplored marked sector, right next
+  // to that SAME sector's own feature hooks, which read as contradictory
+  // since the two aren't about the same thing). A sector's own state
+  // (unexplored -> explored -> surveyed, the exact field the Sectors tab's
+  // "State:" label reads) takes priority over any of its individual
+  // undiscovered features — so whatever's shown here always matches
+  // "State:" on the Sectors tab, and "Run this" (which resolves 'reveal'/
+  // 'survey' for a state hook) always advances that same state. Once a
+  // sector has no more state hook (fully surveyed), its own feature hooks
+  // become the one shown instead — generateMissionHooks itself, and the
+  // Missions tab that reads it directly, are unaffected: this dedup is
+  // Attention-list-only, since Missions is a deliberate full-list browse.
+  const bySector = new Map();
+  const isStateHook = (h) => h.signal === 'unexplored' || h.signal === 'explored';
   for (const hook of generateMissionHooks(campaign)) {
+    const key = `${hook.x},${hook.y}`;
+    const existing = bySector.get(key);
+    if (!existing || (isStateHook(hook) && !isStateHook(existing))) bySector.set(key, hook);
+  }
+  for (const hook of bySector.values()) {
     items.push({ kind: 'mission', label: `Sector ${hook.x},${hook.y}: ${hook.missionType} available`, detail: hook.reason, ...hook });
   }
   return items;

@@ -14,6 +14,7 @@
 import {
   SCHEMA_VERSION, APP_NAME, defaultCampaign, defaultAppConfig, defaultRulesProfile, withDefaults, deepMerge, isObject,
 } from './schema.js';
+import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
 
 // Every legacy key the old app is known to write, plus the very old aliases.
 export const LEGACY_KEYS = [
@@ -221,6 +222,11 @@ export function wrapLegacyCampaignIntoAppConfig(legacyDoc, now = new Date().toIS
     trade: false, battlemap: false, graph: false, 'faction-events': false,
   };
   fivePfhProfile.storyboardPositions = { composer: 'colony', navigator: 'world-tracker', advisor: 'party' };
+  // Turn Step workflow (direct follow-up request): a first-time install
+  // gets the 5PFH Campaign Turn Sequence out of the box; an already-
+  // migrated install (this function won't run again) gets it via store.js's
+  // narrow backfillDefaultTurnSteps instead — see that function's comment.
+  fivePfhProfile.turnSteps = { groups: JSON.parse(JSON.stringify(TURN_STEPS_5PFH)) };
 
   const campaignEntry = {
     id: doc.meta.id, title: doc.meta.title, profileId: defaultProfile.id, createdAt: now, updatedAt: now,
