@@ -2709,14 +2709,18 @@ function colonyFieldHtml(doc, ui, fields, f) {
 // follow-up request): ◂/▸ walks getCurrentTurnStep's live position for the
 // ACTIVE profile — quietly shows "—" with both arrows disabled when that
 // profile has no turn steps configured (Starforged, a fresh "Default"),
-// rather than erroring or showing an irrelevant 5PFH-shaped control.
+// rather than erroring or showing an irrelevant 5PFH-shaped control. Next
+// stays enabled even once hasNext goes false (the true end of the
+// workflow) — direct follow-up request: shell.js's click handler catches
+// that case and asks "Do you want to start the next Campaign Turn?"
+// instead of just no-op'ing a disabled button.
 function colonyTurnStepWidgetHtml(currentStep) {
   return `
     <label class="field-label">Turn Step
       <span class="turn-step-nav">
         <button type="button" class="icon-btn" data-turn-step-prev title="Previous Step" ${currentStep && currentStep.hasPrev ? '' : 'disabled'}>◂</button>
         <b class="turn-step-current">${currentStep ? `${esc(currentStep.group.label)} ${currentStep.index + 1}/${currentStep.total}` : '—'}</b>
-        <button type="button" class="icon-btn" data-turn-step-next title="Next Step" ${currentStep && currentStep.hasNext ? '' : 'disabled'}>▸</button>
+        <button type="button" class="icon-btn" data-turn-step-next title="${currentStep && !currentStep.hasNext ? 'Start the next Campaign Turn' : 'Next Step'}" ${currentStep ? '' : 'disabled'}>▸</button>
       </span>
     </label>`;
 }
@@ -2746,17 +2750,24 @@ function colony(doc, ui = {}) {
       <div class="turn-step-text-body" data-turn-step-text-body>${buildMentionEditorHTML(doc, currentStep.step.text)}</div>
       <button type="button" class="btn ghost sm" data-turn-step-start title="Runs a ruleset for this step — placeholder, TBD">▶ Start</button>
     </div>` : '';
-  // Campaign Turn leads the grid (column 1, direct follow-up request — it's
-  // the first item once Name is pulled out above), with the Turn Step
-  // widget right after it landing column 2 — "the place Campaign Turn was
-  // located" before Name was pulled out — and Step Text (spans both
-  // columns, .turn-step-text-row's own grid-column rule) inserted right
-  // after THAT row and before Campaign Milestones (direct follow-up
-  // request: was rendered after the whole grid instead).
-  const fieldRows = COLONY_FIELDS.filter((f) => f.key !== 'name').map((f) => {
-    const html = colonyFieldHtml(doc, ui, fields, f);
-    return f.key === 'campaignTurn' ? html + colonyTurnStepWidgetHtml(currentStep) + stepTextHtml : html;
-  }).join('');
+  // Campaign Turn leads the grid (direct follow-up request — it's the first
+  // item once Name is pulled out above), with the Turn Step widget right
+  // next to it — NOT in its own 1fr grid column (that pinned it to the
+  // 50% column line regardless of how narrow Campaign Turn's own content
+  // was, leaving a big dead gap between them — direct follow-up request:
+  // "move the Turn Step button more to the left, aligned to Campaign
+  // Turn") — both sit inside one spanning flex row (.colony-turn-row) that
+  // packs them close together by actual content width instead. Step Text
+  // (still spans both grid columns, .turn-step-text-row's own grid-column
+  // rule) comes right after that row and before Campaign Milestones.
+  const fieldRows = COLONY_FIELDS.filter((f) => f.key !== 'name' && f.key !== 'campaignTurn').map((f) => colonyFieldHtml(doc, ui, fields, f)).join('');
+  const campaignTurnField = COLONY_FIELDS.find((f) => f.key === 'campaignTurn');
+  const campaignTurnRowHtml = `
+    <div class="colony-turn-row">
+      ${colonyFieldHtml(doc, ui, fields, campaignTurnField)}
+      ${colonyTurnStepWidgetHtml(currentStep)}
+    </div>
+    ${stepTextHtml}`;
 
   const crewRows = crew.map((row) => `
     <div class="colony-crew-row">
@@ -2799,7 +2810,7 @@ function colony(doc, ui = {}) {
     ${nameFieldHtml}
     ${partySectionHeaderHtml('colonyTurnSheet', 'Colony Turn Sheet', turnSheetCollapsed, helpToggle('colony-turn-sheet'))}
     ${helpBody('colony-turn-sheet', '5PFH Planetfall campaign-turn tracker.', ui)}
-    ${turnSheetCollapsed ? '' : `<div class="colony-fields">${fieldRows}</div>`}
+    ${turnSheetCollapsed ? '' : `<div class="colony-fields">${campaignTurnRowHtml}${fieldRows}</div>`}
     <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Crew Roster</h4><button class="chip" data-entity-picker-open="colony-crew">＋ Crew</button></div>
     <div class="colony-crew-list">
       ${crewRows || '<p class="ws-placeholder">No crew rows yet.</p>'}

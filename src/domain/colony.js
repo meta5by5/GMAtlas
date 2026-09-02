@@ -75,6 +75,78 @@ export function advanceCampaignTurn(campaign) {
   return setColonyField(campaign, 'campaignTurn', current + 1);
 }
 
+/** The 5PFH Planetfall Campaign Turn sequence's automatic per-turn
+ *  bookkeeping (assets/docs/5PFH Planetfall 1.2.pdf), applied when a new
+ *  Campaign Turn starts (direct follow-up request — "add any points/turn
+ *  calculations... as per the rulebook"):
+ *    - Step 14 (Research) / Step 15 (Building): each stat's own "/Turn"
+ *      rate is added onto its running total — Build Points += Build
+ *      Points/Turn, Research Points += Research Points/Turn.
+ *    - Step 11 (Colony Morale Adjustments): "your Colony Morale score
+ *      automatically drops 1 point during this step, regardless of any
+ *      actions taken" (p.67) — the rulebook's own wording for an
+ *      UNCONDITIONAL drop, distinct from the further -1/battle-casualty
+ *      it also describes, which this app has no casualty count to apply
+ *      automatically (no such field exists anywhere in this schema).
+ *  Story Points and every other COLONY_FIELDS stat (Roster Size, Colony
+ *  Integrity, Colony Defenses, Raw Materials, Calamity Points, Grunts,
+ *  Ancient Signs, Repair Capacity, Augmentation Points) are deliberately
+ *  left untouched — the rulebook ties each of those to a specific
+ *  mission/event/purchase (p.55-56), not a flat per-turn rate, so there is
+ *  nothing to compute automatically without inventing a rule this app has
+ *  no data source for.
+ *  Returns { campaign, turn, changes } (not just campaign, matching the
+ *  existing rollRandomInvestigationSite/{campaign,...} return shape this
+ *  codebase already uses when a caller needs to know what happened, not
+ *  just get the new document) — changes is [{key, label, from, to}] for
+ *  whichever stats actually changed, for the caller to build one combined
+ *  Journal entry from. */
+export function advanceCampaignTurnWithAccrual(campaign) {
+  const before = getColonyFields(campaign);
+  let next = advanceCampaignTurn(campaign);
+  const turn = Number(getColonyFields(next).campaignTurn) || 0;
+  const changes = [];
+
+  const buildRate = Number(before.buildPointsPerTurn) || 0;
+  if (buildRate) {
+    const from = Number(before.buildPoints) || 0;
+    const to = from + buildRate;
+    next = setColonyField(next, 'buildPoints', to);
+    changes.push({ key: 'buildPoints', label: 'Build Points', from, to });
+  }
+
+  const researchRate = Number(before.researchPointsPerTurn) || 0;
+  if (researchRate) {
+    const from = Number(before.researchPoints) || 0;
+    const to = from + researchRate;
+    next = setColonyField(next, 'researchPoints', to);
+    changes.push({ key: 'researchPoints', label: 'Research Points', from, to });
+  }
+
+  const moraleFrom = Number(before.colonyMorale) || 0;
+  const moraleTo = moraleFrom - 1;
+  next = setColonyField(next, 'colonyMorale', moraleTo);
+  changes.push({ key: 'colonyMorale', label: 'Colony Morale', from: moraleFrom, to: moraleTo });
+
+  return { campaign: next, turn, changes };
+}
+
+/** Plain-text Journal note for advanceCampaignTurnWithAccrual's result —
+ *  one combined entry covering the turn change and every stat it touched,
+ *  per the direct follow-up request ("Make a note of all changes as a
+ *  Journal entry"), plus a heads-up once Colony Morale reaches the
+ *  rulebook's own -10 "you must test for Colony Morale" threshold (p.67). */
+export function formatTurnAdvanceNote(turn, changes) {
+  const lines = [`Campaign Turn changed to ${turn}.`];
+  for (const c of changes) {
+    const delta = c.to - c.from;
+    lines.push(`${c.label}: ${c.from} → ${c.to} (${delta > 0 ? `+${delta}` : delta}).`);
+  }
+  const morale = changes.find((c) => c.key === 'colonyMorale');
+  if (morale && morale.to <= -10) lines.push('Colony Morale is at -10 or worse — test for Colony Morale (5PFH Planetfall p.89).');
+  return lines.join('\n');
+}
+
 export function incrementCampaignMilestones(campaign) {
   const current = Number(getColonyFields(campaign).campaignMilestones) || 0;
   return setColonyField(campaign, 'campaignMilestones', Math.min(7, current + 1));

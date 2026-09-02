@@ -52,7 +52,7 @@ import {
   sanitizeExternalLinkUrl, mergeRefOverrides, referencedBlobKeys,
 } from '../domain/documents.js';
 import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue, setGaugeTrackerValue, ensurePartyStarforgedTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity } from '../domain/party.js';
-import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, addColonyEncounter, updateColonyEncounter, removeColonyEncounter, listColonyEncounters, advanceCampaignTurn, incrementCampaignMilestones, decrementCampaignMilestones } from '../domain/colony.js';
+import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, addColonyEncounter, updateColonyEncounter, removeColonyEncounter, listColonyEncounters, advanceCampaignTurnWithAccrual, formatTurnAdvanceNote, incrementCampaignMilestones, decrementCampaignMilestones } from '../domain/colony.js';
 import {
   getSector, listTouchedSectors, revealSector, surveySector, harvestSectorResource,
   setSectorNotes, setSectorOverlayIcon, setSectorCornerLabel, removeSectorCornerLabel,
@@ -90,7 +90,7 @@ import { renderSearchPanel } from './searchPanel.js';
 import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
 import { isModuleVisible, setModuleEnabled, setStoryboardPosition, updateProfileRuleset, applyProfileDraft, resolvePositionContentId } from '../domain/rulesProfiles.js';
 import { DRAWER_META, drawerMeta } from './drawerMeta.js';
-import { moveTurnStepInGroup, updateTurnStepText, loadDefaultTurnSteps, getCurrentTurnStep, advanceTurnStep, retreatTurnStep } from '../domain/turnSteps.js';
+import { moveTurnStepInGroup, updateTurnStepText, loadDefaultTurnSteps, getCurrentTurnStep, advanceTurnStep, retreatTurnStep, startNextCampaignTurn } from '../domain/turnSteps.js';
 import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
 
 // DRAWERS/DRAWER_META/drawerMeta live in ./drawerMeta.js — shared with
@@ -223,22 +223,26 @@ function currentEditingProfileId() {
 
 // store.update()'s mutator receives the RAW campaign doc — unlike store.get(),
 // it does NOT run overlayProfile(), so campaign.turnSteps is never populated
-// there. advanceTurnStep/retreatTurnStep need it to resolve group order, so
-// this overlays it just for the call and strips it back off the result
-// before returning — turnSteps is profile content and must never actually
-// get persisted onto the campaign doc (design/adr/rules-profiles-multi-
-// campaign.md's "never persisted back" invariant for every overlaid field).
+// there. advanceTurnStep/retreatTurnStep/startNextCampaignTurn need it to
+// resolve group order, so this overlays it just for the call and strips it
+// back off the result before returning — turnSteps is profile content and
+// must never actually get persisted onto the campaign doc (design/adr/
+// rules-profiles-multi-campaign.md's "never persisted back" invariant for
+// every overlaid field). Split from applyTurnStepMutation below so a caller
+// that needs to chain something else (e.g. addNote) onto the result can
+// still get the overlay/strip treatment without a second store.update().
+function withTurnStepsOverlay(campaign, mutatorFn) {
+  const profile = store.getActiveProfile();
+  const withSteps = profile ? { ...campaign, turnSteps: profile.turnSteps } : campaign;
+  const next = mutatorFn(withSteps);
+  if (next && Object.prototype.hasOwnProperty.call(next, 'turnSteps')) {
+    const { turnSteps, ...clean } = next;
+    return clean;
+  }
+  return next;
+}
 function applyTurnStepMutation(mutatorFn) {
-  return store.update((d) => {
-    const profile = store.getActiveProfile();
-    const withSteps = profile ? { ...d, turnSteps: profile.turnSteps } : d;
-    const next = mutatorFn(withSteps);
-    if (next && Object.prototype.hasOwnProperty.call(next, 'turnSteps')) {
-      const { turnSteps, ...clean } = next;
-      return clean;
-    }
-    return next;
-  });
+  return store.update((d) => withTurnStepsOverlay(d, mutatorFn));
 }
 
 // Same fallback shape as store.js's own structuredCloneSafe — most runtimes
@@ -2001,7 +2005,7 @@ function onClick(ev) {
   const sectorReveal = hit('[data-sector-reveal]');
   if (sectorReveal) {
     const [sx, sy] = sectorReveal.dataset.sectorReveal.split(',').map(Number);
-    return store.update((d) => {
+    return updateAndOpenJournal((d) => {
       const next = revealSector(d, sx, sy);
       const s = getSector(next, sx, sy);
       return addNote(next, `Sector ${sx},${sy} revealed — resource ${s.resourceLevel}, hazard ${s.hazardLevel}.`, 'World Tracker');
@@ -2010,24 +2014,24 @@ function onClick(ev) {
   const sectorSurvey = hit('[data-sector-survey]');
   if (sectorSurvey) {
     const [sx, sy] = sectorSurvey.dataset.sectorSurvey.split(',').map(Number);
-    return store.update((d) => addNote(surveySector(d, sx, sy), `Sector ${sx},${sy} surveyed.`, 'World Tracker'));
+    return updateAndOpenJournal((d) => addNote(surveySector(d, sx, sy), `Sector ${sx},${sy} surveyed.`, 'World Tracker'));
   }
   const sectorHarvest = hit('[data-sector-harvest]');
   if (sectorHarvest) {
     const [sx, sy] = sectorHarvest.dataset.sectorHarvest.split(',').map(Number);
-    return store.update((d) => addNote(harvestSectorResource(d, sx, sy), `Sector ${sx},${sy}'s resource marked harvested.`, 'World Tracker'));
+    return updateAndOpenJournal((d) => addNote(harvestSectorResource(d, sx, sy), `Sector ${sx},${sy}'s resource marked harvested.`, 'World Tracker'));
   }
   const sectorAddFeature = hit('[data-sector-add-feature]');
   if (sectorAddFeature) {
     const [sx, sy] = sectorAddFeature.dataset.sectorAddFeature.split(',').map(Number);
     const kind = sectorAddFeature.dataset.featureKind;
-    return store.update((d) => addNote(addSectorFeature(d, sx, sy, kind), `${wtFeatureKindLabel(kind)} added to sector ${sx},${sy}.`, 'World Tracker'));
+    return updateAndOpenJournal((d) => addNote(addSectorFeature(d, sx, sy, kind), `${wtFeatureKindLabel(kind)} added to sector ${sx},${sy}.`, 'World Tracker'));
   }
   const featureDiscoverToggle = hit('[data-feature-discover-toggle]');
   if (featureDiscoverToggle) {
     const [sx, sy] = featureDiscoverToggle.dataset.sectorCoord.split(',').map(Number);
     const featureId = featureDiscoverToggle.dataset.featureDiscoverToggle;
-    return store.update((d) => {
+    return updateAndOpenJournal((d) => {
       const next = toggleSectorFeatureDiscovered(d, sx, sy, featureId);
       const f = getSector(next, sx, sy).features.find((ft) => ft.id === featureId);
       if (!f) return next;
@@ -2038,7 +2042,7 @@ function onClick(ev) {
   if (featureRemove) {
     const [sx, sy] = featureRemove.dataset.sectorCoord.split(',').map(Number);
     const featureId = featureRemove.dataset.featureRemove;
-    return store.update((d) => {
+    return updateAndOpenJournal((d) => {
       const f = getSector(d, sx, sy).features.find((ft) => ft.id === featureId);
       const next = removeSectorFeature(d, sx, sy, featureId);
       return f ? addNote(next, `${wtFeatureKindLabel(f.kind)} removed from sector ${sx},${sy}.`, 'World Tracker') : next;
@@ -2054,7 +2058,7 @@ function onClick(ev) {
   if (featureMigrateTo) {
     const { fromX, fromY, featureId, toX, toY } = featureMigrateTo.dataset;
     worldTrackerMigrateOpen.delete(featureId);
-    return store.update((d) => {
+    return updateAndOpenJournal((d) => {
       const f = getSector(d, Number(fromX), Number(fromY)).features.find((ft) => ft.id === featureId);
       const next = migrateFeature(d, Number(fromX), Number(fromY), featureId, Number(toX), Number(toY));
       return f ? addNote(next, `${wtFeatureKindLabel(f.kind)} migrated from ${fromX},${fromY} to ${toX},${toY}.`, 'World Tracker') : next;
@@ -2083,7 +2087,7 @@ function onClick(ev) {
   }
   if (hit('[data-sector-corner-labels-toggle]')) { worldTrackerCornerLabelsOpen = !worldTrackerCornerLabelsOpen; return renderDrawerBody(); }
   if (hit('[data-home-base-roll]')) {
-    store.update((d) => {
+    updateAndOpenJournal((d) => {
       const next = rollHomeBase(d);
       const hb = next.worldTracker.homeBaseSector;
       return addNote(next, `Home base rolled: sector ${hb.x},${hb.y}.`, 'World Tracker');
@@ -2093,12 +2097,12 @@ function onClick(ev) {
   const homeBaseSet = hit('[data-home-base-set]');
   if (homeBaseSet) {
     const [sx, sy] = homeBaseSet.dataset.homeBaseSet.split(',').map(Number);
-    return store.update((d) => addNote(setHomeBase(d, sx, sy), `Home base set to sector ${sx},${sy}.`, 'World Tracker'));
+    return updateAndOpenJournal((d) => addNote(setHomeBase(d, sx, sy), `Home base set to sector ${sx},${sy}.`, 'World Tracker'));
   }
   const investigationToggle = hit('[data-sector-investigation-toggle]');
   if (investigationToggle) {
     const [sx, sy] = investigationToggle.dataset.sectorInvestigationToggle.split(',').map(Number);
-    return store.update((d) => {
+    return updateAndOpenJournal((d) => {
       const next = toggleInvestigationSite(d, sx, sy);
       const marked = getSector(next, sx, sy).investigationSite;
       return addNote(next, `Sector ${sx},${sy} ${marked ? 'marked' : 'un-marked'} as an investigation site.`, 'World Tracker');
@@ -2110,7 +2114,8 @@ function onClick(ev) {
     // clone store.update() hands it, not store.get()'s profile-overlaid
     // view — see store.js's own comment on why) — rolledXY is a closure
     // capture, not a second roll, so the coordinate the GM sees selected
-    // afterward is exactly the one that was actually marked.
+    // afterward is exactly the one that was actually marked. Journal only
+    // opens when a site was actually rolled/logged, not on the at-cap no-op.
     let rolledXY = null;
     store.update((d) => {
       const rolled = rollRandomInvestigationSite(d);
@@ -2118,19 +2123,23 @@ function onClick(ev) {
       rolledXY = { x: rolled.x, y: rolled.y };
       return addNote(rolled.campaign, `Investigation site randomly rolled: sector ${rolled.x},${rolled.y}.`, 'World Tracker');
     });
-    if (rolledXY) worldTrackerSelectedSector = rolledXY;
+    if (rolledXY) { worldTrackerSelectedSector = rolledXY; openDrawerTab('journal'); render(); }
     else toast(`Investigation site limit reached (${MAX_INVESTIGATION_SITES} marked)`);
     return;
   }
   if (hit('[data-world-turn-advance]')) {
-    store.update((d) => advanceWorldTurn(advanceCampaignTurn(d)));
+    updateAndOpenJournal((d) => {
+      const { campaign, turn, changes } = advanceCampaignTurnWithAccrual(d);
+      const next = advanceWorldTurn(campaign);
+      return addNote(next, formatTurnAdvanceNote(turn, changes), 'World Tracker');
+    });
     return toast('Turn advanced');
   }
   if (hit('[data-world-milestone-inc]')) return store.update((d) => incrementCampaignMilestones(d));
   if (hit('[data-world-milestone-dec]')) return store.update((d) => decrementCampaignMilestones(d));
   if (hit('[data-world-tracker-reset]')) {
     if (!window.confirm('Reset the World Tracker? Every sector, the home base, and the world-level notes will be cleared. This cannot be undone.')) return;
-    store.update((d) => addNote(resetWorldTracker(d), 'World Tracker reset — every sector cleared, starting over.', 'World Tracker'));
+    updateAndOpenJournal((d) => addNote(resetWorldTracker(d), 'World Tracker reset — every sector cleared, starting over.', 'World Tracker'));
     worldTrackerSelectedSector = null;
     return toast('World Tracker reset');
   }
@@ -2148,7 +2157,7 @@ function onClick(ev) {
     // finishes the job), any feature kind -> mark that specific feature
     // discovered (its own hook won't reappear, but it stays trackable/
     // migratable in the Features tab).
-    store.update((d) => {
+    updateAndOpenJournal((d) => {
       let next = addNote(d, `Ran "${missionType}" at sector ${sx},${sy} — ${reason}.`, 'Mission');
       if (signal === 'unexplored') next = revealSector(next, sx, sy);
       else if (signal === 'explored') next = surveySector(next, sx, sy);
@@ -3353,11 +3362,43 @@ function onClick(ev) {
   // Colony's Turn Step ◂/▸ (direct follow-up request) — real per-campaign
   // play state, applies instantly like any other campaign data, no draft.
   if (hit('[data-turn-step-prev]')) return applyTurnStepMutation(retreatTurnStep);
-  if (hit('[data-turn-step-next]')) return applyTurnStepMutation(advanceTurnStep);
-  // "Start" — the step's own ruleset is a placeholder for other triggered
-  // actions TBD (direct quote); this just acknowledges the click honestly
-  // rather than inventing behavior.
-  if (hit('[data-turn-step-start]')) return toast('No ruleset wired up for this step yet — placeholder for future step actions.');
+  const turnStepNext = hit('[data-turn-step-next]');
+  if (turnStepNext) {
+    // Reaching the true end of the workflow (hasNext false — no branchTo,
+    // no more steps in the group, empty returnStack) offers to start the
+    // next Campaign Turn instead of the button just staying disabled
+    // (direct follow-up request). startNextCampaignTurn needs the same
+    // turnSteps overlay withTurnStepsOverlay gives every other turn-step
+    // call, but returns {campaign, turn, changes} rather than a
+    // campaign-shaped object — withTurnStepsOverlay's own turnSteps-strip
+    // check would silently no-op against that wrapper shape (it only ever
+    // looks for a top-level turnSteps key), so the overlay/strip is done
+    // by hand here instead of reusing that helper.
+    const current = getCurrentTurnStep(store.get());
+    if (current && !current.hasNext) {
+      if (!window.confirm('Do you want to start the next Campaign Turn?')) return;
+      return updateAndOpenJournal((d) => {
+        const profile = store.getActiveProfile();
+        const withSteps = profile ? { ...d, turnSteps: profile.turnSteps } : d;
+        const { campaign: resultCampaign, turn, changes } = startNextCampaignTurn(withSteps);
+        const { turnSteps, ...clean } = resultCampaign;
+        return addNote(clean, formatTurnAdvanceNote(turn, changes), 'World Tracker');
+      });
+    }
+    return applyTurnStepMutation(advanceTurnStep);
+  }
+  // "Start" — the step's own ruleset is still a placeholder for future
+  // triggered actions TBD (direct quote), but the default behavior (direct
+  // follow-up request) is a real one meanwhile: publish the current step's
+  // own description to the Journal (via addNote, same as any other note —
+  // its @[Label|Target] mentions render as real links there too), rather
+  // than only toasting an acknowledgment with nothing actually happening.
+  if (hit('[data-turn-step-start]')) {
+    const current = getCurrentTurnStep(store.get());
+    if (!current) return;
+    updateAndOpenJournal((d) => addNote(d, current.step.text, `Turn Step — ${current.group.label} ${current.index + 1}/${current.total}`));
+    return toast('Step logged to Journal');
+  }
   if (hit('[data-bind-file]')) return store.bindFile().then(() => toast('Save file bound')).catch(() => {});
   if (hit('[data-restore-backup]')) {
     if (!window.confirm('Restore the last backup? This replaces the current campaign with the previous save — export the current one first if you want to keep it.')) return;
@@ -4055,7 +4096,21 @@ function onChange(ev) {
 
   // --- colony ---
   const colonyField = t.closest('[data-colony-field]');
-  if (colonyField) return store.update((d) => setColonyField(d, colonyField.dataset.colonyField, t.value));
+  if (colonyField) {
+    const key = colonyField.dataset.colonyField;
+    // Campaign Turn (direct follow-up request) logs a Journal entry
+    // whenever it actually changes — including a direct edit of the number
+    // field itself, not just the dedicated advance buttons (End Turn ▸,
+    // and the Turn Step widget's own "start the next Campaign Turn"
+    // prompt) — but not on a blur that didn't change anything.
+    if (key === 'campaignTurn') {
+      const before = Number(getColonyFields(store.get()).campaignTurn) || 0;
+      const after = Number(t.value) || 0;
+      if (after === before) return store.update((d) => setColonyField(d, key, t.value));
+      return updateAndOpenJournal((d) => addNote(setColonyField(d, key, t.value), `Campaign Turn changed to ${after}.`, 'World Tracker'));
+    }
+    return store.update((d) => setColonyField(d, key, t.value));
+  }
   const crewField = t.closest('[data-colony-crew-field]');
   if (crewField) {
     const [id, field] = crewField.dataset.colonyCrewField.split('::');
@@ -4575,6 +4630,18 @@ function openDrawerTab(id) {
   // is idempotent, so a redundant call when both already exist is a no-op.
   if (id === 'party') store.update((d) => ensurePartyStarforgedTrackers(d));
   activeDrawer = id;
+}
+
+// Colony/World Tracker action buttons that add a Journal entry also open
+// the Journal drawer afterward (direct follow-up request), so the GM sees
+// the new entry land instead of it silently appearing in the background.
+// openDrawerTab runs FIRST (ephemeral UI state only) so the store.update()
+// call right after — which triggers the app's real render via its own
+// notify() subscription — already reflects the newly active drawer in that
+// same render pass, instead of needing a second one.
+function updateAndOpenJournal(mutator) {
+  openDrawerTab('journal');
+  return store.update(mutator);
 }
 
 function closeDrawerTab(id) {

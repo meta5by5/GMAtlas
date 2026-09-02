@@ -4502,7 +4502,7 @@ import {
   toggleInvestigationSite, rollRandomInvestigationSite, countInvestigationSites, MAX_INVESTIGATION_SITES, worldTrackerAttentionItems,
   setSectorResourceLevel, setSectorHazardLevel, resetWorldTracker,
 } from '../src/domain/worldTracker.js';
-import { advanceCampaignTurn, incrementCampaignMilestones, decrementCampaignMilestones } from '../src/domain/colony.js';
+import { advanceCampaignTurn, advanceCampaignTurnWithAccrual, formatTurnAdvanceNote, incrementCampaignMilestones, decrementCampaignMilestones } from '../src/domain/colony.js';
 
 test('a fresh campaign reads every coordinate as a synthesized default unexplored sector, with no real record stored', () => {
   const camp = defaultCampaign();
@@ -4895,6 +4895,53 @@ test('advanceCampaignTurn increments colony.fields.campaignTurn from whatever it
   assert.equal(getColonyFields(camp).campaignTurn, 1);
   camp = advanceCampaignTurn(camp);
   assert.equal(getColonyFields(camp).campaignTurn, 2);
+});
+
+test('advanceCampaignTurnWithAccrual applies the 5PFH Planetfall rulebook\'s automatic per-turn bookkeeping (assets/docs/5PFH Planetfall 1.2.pdf p.67-69): Build/Research Points += their own "/Turn" rate, Colony Morale always -1 regardless of any rate — and skips a rate that\'s 0/unset entirely rather than logging a no-op change', () => {
+  let camp = defaultCampaign();
+  camp = setColonyField(camp, 'buildPointsPerTurn', 3);
+  camp = setColonyField(camp, 'buildPoints', 10);
+  camp = setColonyField(camp, 'researchPointsPerTurn', 0); // unset/zero rate — must not appear in changes
+  camp = setColonyField(camp, 'researchPoints', 5);
+  camp = setColonyField(camp, 'colonyMorale', 2);
+
+  const { campaign: next, turn, changes } = advanceCampaignTurnWithAccrual(camp);
+  assert.equal(turn, 1);
+  assert.equal(getColonyFields(next).campaignTurn, 1);
+  assert.equal(getColonyFields(next).buildPoints, 13, '10 + 3/turn');
+  assert.equal(getColonyFields(next).researchPoints, 5, 'unchanged — 0/turn rate is a no-op, not a "5 -> 5" logged change');
+  assert.equal(getColonyFields(next).colonyMorale, 1, '2 - 1, unconditional per Step 11 ("regardless of any actions taken")');
+
+  assert.equal(changes.length, 2, 'only Build Points and Colony Morale actually changed — Research Points\' 0 rate is skipped');
+  const buildChange = changes.find((c) => c.key === 'buildPoints');
+  assert.deepEqual(buildChange, { key: 'buildPoints', label: 'Build Points', from: 10, to: 13 });
+  const moraleChange = changes.find((c) => c.key === 'colonyMorale');
+  assert.deepEqual(moraleChange, { key: 'colonyMorale', label: 'Colony Morale', from: 2, to: 1 });
+  assert.ok(!changes.some((c) => c.key === 'researchPoints'));
+});
+
+test('advanceCampaignTurnWithAccrual: Colony Morale drops every turn even with no other rates set, and can go arbitrarily negative (no floor) — the rulebook\'s own -10 "test for Colony Morale" threshold is a GM prompt, not a clamp', () => {
+  let camp = defaultCampaign();
+  camp = setColonyField(camp, 'colonyMorale', -9);
+  const { campaign: next, changes } = advanceCampaignTurnWithAccrual(camp);
+  assert.equal(getColonyFields(next).colonyMorale, -10);
+  assert.equal(changes.length, 1); // just Colony Morale — no Build/Research rate configured
+});
+
+test('formatTurnAdvanceNote renders the turn change plus one line per stat that actually changed, and appends the rulebook\'s -10 Colony Morale test prompt only once that threshold is reached', () => {
+  const changes = [
+    { key: 'buildPoints', label: 'Build Points', from: 10, to: 13 },
+    { key: 'colonyMorale', label: 'Colony Morale', from: 2, to: 1 },
+  ];
+  let note = formatTurnAdvanceNote(4, changes);
+  let lines = note.split('\n');
+  assert.equal(lines[0], 'Campaign Turn changed to 4.');
+  assert.equal(lines[1], 'Build Points: 10 → 13 (+3).');
+  assert.equal(lines[2], 'Colony Morale: 2 → 1 (-1).');
+  assert.equal(lines.length, 3, 'no test-prompt line — morale is nowhere near -10');
+
+  note = formatTurnAdvanceNote(5, [{ key: 'colonyMorale', label: 'Colony Morale', from: -9, to: -10 }]);
+  assert.match(note, /test for Colony Morale/);
 });
 
 test('incrementCampaignMilestones/decrementCampaignMilestones clamp to the fixed 0-7 win condition', () => {
@@ -7141,7 +7188,7 @@ test('applyProfileDraft commits only storyboardPositions/moduleEnabled/ruleset f
 // --- Turn Step workflow (design/adr/rules-profiles-multi-campaign.md,
 // converted from the Guide entry "5PFH Campaign Turn Sequence") ------------
 import {
-  moveTurnStepInGroup, updateTurnStepText, loadDefaultTurnSteps, getCurrentTurnStep, advanceTurnStep, retreatTurnStep,
+  moveTurnStepInGroup, updateTurnStepText, loadDefaultTurnSteps, getCurrentTurnStep, advanceTurnStep, retreatTurnStep, startNextCampaignTurn,
 } from '../src/domain/turnSteps.js';
 import { TURN_STEPS_5PFH } from '../src/data/turnStepsDefault5pfh.js';
 
@@ -7249,6 +7296,28 @@ test('retreatTurnStep mirrors advanceTurnStep — steps back within a group, and
   const atStart = campaign;
   campaign = retreatTurnStep(campaign); // already at the very start of the root — no-op
   assert.deepEqual(campaign.turnStepProgress, atStart.turnStepProgress);
+});
+
+test('startNextCampaignTurn ("Do you want to start the next Campaign Turn?") increments campaignTurn with the same rulebook accrual advanceCampaignTurnWithAccrual applies, and resets turnStepProgress to the very first step of the first group — regardless of where the workflow actually was', () => {
+  let campaign = {
+    turnSteps: { groups: fixtureGroups() },
+    turnStepProgress: { groupId: 'nested', stepIndex: 0, returnStack: [{ groupId: 'root', stepIndex: 1 }, { groupId: 'branch', stepIndex: 1 }] },
+    colony: { fields: { campaignTurn: 3, colonyMorale: 2, buildPointsPerTurn: 2, buildPoints: 5 }, crew: [], encounters: [] },
+  };
+  const { campaign: next, turn, changes } = startNextCampaignTurn(campaign);
+  assert.equal(turn, 4);
+  assert.equal(getColonyFields(next).campaignTurn, 4);
+  assert.equal(getColonyFields(next).buildPoints, 7, 'same accrual as advanceCampaignTurnWithAccrual — 5 + 2/turn');
+  assert.equal(getColonyFields(next).colonyMorale, 1, 'same unconditional -1');
+  assert.ok(changes.some((c) => c.key === 'buildPoints') && changes.some((c) => c.key === 'colonyMorale'));
+  assert.deepEqual(next.turnStepProgress, { groupId: 'root', stepIndex: 0, returnStack: [] }, 'restarts at the first step of the first group, discarding wherever it actually was (including a mid-branch returnStack)');
+});
+
+test('startNextCampaignTurn still advances the Campaign Turn (with accrual) even when the active profile has no turn steps configured at all — it just has nothing to reset turnStepProgress to', () => {
+  const campaign = { turnSteps: { groups: [] }, turnStepProgress: { groupId: null, stepIndex: 0, returnStack: [] }, colony: { fields: { campaignTurn: 1 }, crew: [], encounters: [] } };
+  const { campaign: next, turn } = startNextCampaignTurn(campaign);
+  assert.equal(turn, 2);
+  assert.deepEqual(next.turnStepProgress, { groupId: null, stepIndex: 0, returnStack: [] }, 'left exactly as it was — no group to reset to');
 });
 
 test('backfillDefaultTurnSteps only fills the 5PFH seed onto a profile named exactly "5PFH" with no steps of its own yet — never a differently-named profile, never a "5PFH" profile that already has ANY steps', () => {

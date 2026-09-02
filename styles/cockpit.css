@@ -2087,6 +2087,22 @@ input[type="number"] { -moz-appearance: textfield; }
    only occupying column 1 and pushing every field after it into the wrong
    column. */
 .colony-fields .turn-step-text-row { grid-column: 1 / -1; }
+/* Campaign Turn + Turn Step widget (direct follow-up request: "move the
+   Turn Step button more to the left, aligned to Campaign Turn") — a flex
+   row spanning both grid columns, packing the two fields together by their
+   actual content width, instead of each sitting in its own 1fr grid
+   column (which pinned Turn Step to the fixed 50% column line regardless
+   of how narrow Campaign Turn's own content was, leaving a big dead gap
+   between them). align-items:flex-end lines up the number-stepper and the
+   ◂/▸ nav on the same baseline the way the two columns used to. flex-wrap
+   is deliberately nowrap (direct follow-up request — it was dropping Turn
+   Step to its own row on a narrow panel): .turn-step-current already wraps
+   its OWN text internally past ~30 characters, so the row itself never
+   needs the extra width a wrap would have bought it — min-width:0 on the
+   Turn Step field-label lets it actually shrink that far instead of
+   refusing to go below its content's natural min-content width. */
+.colony-turn-row { grid-column: 1 / -1; display: flex; align-items: flex-end; gap: var(--sp-6); flex-wrap: nowrap; }
+.colony-turn-row > .field-label:last-child { min-width: 0; flex: 0 1 auto; }
 .colony-crew-list { display: flex; flex-direction: column; gap: var(--sp-2); }
 .colony-crew-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: var(--sp-2); align-items: center; }
 .colony-encounter-list { display: flex; flex-direction: column; gap: var(--sp-2); }
@@ -2095,8 +2111,24 @@ input[type="number"] { -moz-appearance: textfield; }
 
 /* Turn Step widget (Colony) + Step Text row (design/adr/rules-profiles-
    multi-campaign.md) */
-.turn-step-nav { display: inline-flex; align-items: center; gap: var(--sp-2); }
-.turn-step-current { white-space: nowrap; }
+/* width:100% + justify-content:flex-start (direct follow-up request) — the
+   .colony-fields grid column stretches this flex item to the full column
+   width (a bare inline-flex still gets stretched as a FLEX ITEM by its
+   parent's default align-items:stretch, even though inline-flex only
+   governs its OWN children's layout), so without an explicit left-justify
+   the ◂/name/▸ group read as centered in that column instead of flush with
+   the "Turn Step" label above it — this also gives a long group name room
+   to expand rightward instead of staying visually boxed to a short width. */
+.turn-step-nav { display: inline-flex; align-items: center; justify-content: flex-start; gap: var(--sp-2); width: 100%; }
+/* Wraps once the group label + position (e.g. "Settlement Event Steps
+   12/17") runs past ~40 characters, instead of forcing every label onto one
+   line regardless of length (direct follow-up request, tuned up from 14,
+   18, then 30) — 40ch approximates character count using the font's own
+   "0" glyph width. display: inline-block is load-bearing: max-width/
+   white-space:normal wrapping has no effect on a <b>'s default inline
+   display otherwise. text-align left (direct follow-up request) so a
+   wrapped second line stays flush with the first instead of centering. */
+.turn-step-current { display: inline-block; max-width: 40ch; white-space: normal; text-align: left; }
 .turn-step-text-row { display: flex; align-items: flex-start; gap: var(--sp-3); margin: 0 0 var(--sp-3); }
 .turn-step-text-body { flex: 1 1 auto; min-width: 0; }
 .turn-step-text-row .btn { flex: 0 0 auto; }

@@ -58,7 +58,7 @@ export const TURN_STEPS_5PFH = [
   },
   {
     id: 'post-battle-activities',
-    label: 'Post-battle Activities',
+    label: 'Post-battle Steps',
     steps: [
       { id: 'pb-a', text: 'a. Resolve Rival status (@[p.119|5PFH Five Parsecs From Home v3#121])', branchTo: null },
       { id: 'pb-b', text: 'b. Check for illegal Psionic usage (@[p.21|5PFH Five Parsecs From Home v3#23])', branchTo: null },

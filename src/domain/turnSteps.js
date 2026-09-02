@@ -20,6 +20,8 @@
 //
 // Pure functions only. No DOM, no localStorage.
 
+import { advanceCampaignTurnWithAccrual } from './colony.js';
+
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 
 function ensureTurnSteps(profile) {
@@ -175,4 +177,25 @@ export function retreatTurnStep(campaign) {
     return next;
   }
   return next; // already at the very first step of the root — no-op
+}
+
+/** "Do you want to start the next Campaign Turn?" — the shell.js Next-step
+ *  handler's confirm() prompt fires this once getCurrentTurnStep's hasNext
+ *  is false (the true end of the workflow: no branchTo, no more steps in
+ *  the current group, empty returnStack). Increments campaignTurn AND
+ *  applies the rulebook's automatic per-turn point/morale bookkeeping
+ *  (colony.js's own advanceCampaignTurnWithAccrual — see its own comment
+ *  for exactly what does and doesn't accrue automatically), then resets
+ *  turnStepProgress back to the first step of the first group —
+ *  deliberately NOT advanceWorldTurn's "clear every feature's moved-from
+ *  marker" housekeeping, which is a separate action tied to World
+ *  Tracker's own "End Turn ▸" button, not this one. Returns {campaign,
+ *  turn, changes}, same shape advanceCampaignTurnWithAccrual returns, so
+ *  the caller can build one Journal entry covering both the turn change
+ *  and everything the accrual touched. */
+export function startNextCampaignTurn(campaign) {
+  const groups = (campaign.turnSteps && campaign.turnSteps.groups) || [];
+  const { campaign: next, turn, changes } = advanceCampaignTurnWithAccrual(campaign);
+  if (groups.length) next.turnStepProgress = { groupId: groups[0].id, stepIndex: 0, returnStack: [] };
+  return { campaign: next, turn, changes };
 }
