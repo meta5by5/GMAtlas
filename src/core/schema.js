@@ -174,6 +174,17 @@ export function defaultCampaign(now = new Date().toISOString()) {
     // own end — see domain/turnSteps.js's advanceTurnStep/retreatTurnStep.
     turnStepProgress: { groupId: null, stepIndex: 0, returnStack: [] },
 
+    // Crew Tasks PLAY state (design/adr/rules-profiles-multi-campaign.md,
+    // direct follow-up request) — which party members have already
+    // performed a crew task THIS Campaign Turn (Colony's dl2 crew-task box
+    // filters them out of the eligible dropdown once logged). Reset to []
+    // whenever the Campaign Turn actually advances (colony.js's own
+    // advanceCampaignTurnWithAccrual), never by a manual Campaign Turn
+    // field edit. The task DEFINITIONS themselves live on the active Rules
+    // Profile (crewTasks.tasks, only ever read here via store.get()'s
+    // overlay, same as turnSteps above) — see domain/crewTasks.js.
+    crewTaskProgress: { doneMemberIds: [] },
+
     // A tree of freeform reference documents (docs/adr/0017-multi-doc-
     // guide-tree.md) — each a table of contents with @mentions/@[Doc]
     // pointers into the Cast and Document Library. `docs` is populated
@@ -308,6 +319,15 @@ export function defaultRulesProfile(name = 'Default', now = new Date().toISOStri
     // arbitrary profile. Shape: [{ id, label, steps: [{ id, text,
     // branchTo }] }] — see domain/turnSteps.js.
     turnSteps: { groups: [] },
+    // Crew Tasks (design/adr/rules-profiles-multi-campaign.md, direct
+    // follow-up request): a Rules Profile's own reorderable flat list of
+    // crew-job definitions Colony's dl2 crew-task box picks from. Empty by
+    // default, same "opt-in via Load Defaults" philosophy as turnSteps
+    // above — src/data/crewTasksDefault5pfh.js is the seed content a GM
+    // opts into via "Load 5PFH Default Crew Tasks," never auto-applied to
+    // an arbitrary profile. Shape: [{ id, label, text }] — see
+    // domain/crewTasks.js.
+    crewTasks: { tasks: [] },
   };
 }
 

@@ -56,6 +56,7 @@ import { GATEABLE_MODULES } from '../../core/schema.js';
 import { drawerMeta, POSITION_ASSIGNABLE_IDS } from '../drawerMeta.js';
 import { resolvePositionContentId } from '../../domain/rulesProfiles.js';
 import { getCurrentTurnStep } from '../../domain/turnSteps.js';
+import { listEligibleCrewMembers } from '../../domain/crewTasks.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -1714,6 +1715,7 @@ const SETTINGS_TABS = [
   { id: 'campaigns', label: 'Campaigns' },
   { id: 'ruleset-profile-editor', label: 'Ruleset Profile Editor' },
   { id: 'turn-steps', label: 'Turn Step' },
+  { id: 'crew-tasks', label: 'Crew Tasks' },
   { id: 'genre-rules', label: 'Genre & Rules' },
   { id: 'trade-economy', label: 'Trade & Economy' },
   { id: 'reference-tools', label: 'Reference Tools' },
@@ -1779,6 +1781,7 @@ function settings(doc, ui = {}) {
     campaigns: () => campaignsSection(doc, ui),
     'ruleset-profile-editor': () => rulesetProfileEditorSection(doc, ui),
     'turn-steps': () => turnStepsSettingsSection(doc, ui),
+    'crew-tasks': () => crewTasksSettingsSection(doc, ui),
     'genre-rules': () => `
       <p class="dim small">Genre Pack, Stat System, Rules Constitution, and Game System Activation moved to <b>Ruleset Profile Editor</b> — they're a Rules Profile's own settings now, shared across every campaign that uses it.</p>
       ${statblockTemplateEditor(doc)}
@@ -2069,6 +2072,45 @@ function turnStepsSettingsSection(doc, ui) {
       <button class="btn ghost" data-turn-steps-load-default>Load 5PFH Default Steps</button>
     </div>
     ${groups.length ? groupBlocks : '<div class="settings-group"><p class="dim small">No steps yet for this profile.</p></div>'}`;
+}
+
+// Crew Tasks tab (design/adr/rules-profiles-multi-campaign.md, direct
+// follow-up request) — structural copy of turnStepsSettingsSection just
+// above, minus the group-nesting layer: Crew Tasks is a flat list (jobs
+// picked independently each campaign turn, not stepped through in
+// sequence), so there's no group-toggle wrapper, just one flat reorderable
+// list of tasks. Same shared draft/Save/Discard flow (profileDraftSaveBar).
+function crewTasksSettingsSection(doc, ui) {
+  const profiles = ui.profiles || [];
+  const editingProfile = profiles.find((p) => p.id === ui.editingProfileId) || profiles[0];
+  const draft = ui.profileDraft;
+  if (!editingProfile || !draft) {
+    return `<div class="settings-group"><p class="dim small">Select a profile in Ruleset Profile Editor first.</p></div>`;
+  }
+  const dirty = !!ui.profileDraftDirty;
+  const tasks = (draft.crewTasks && draft.crewTasks.tasks) || [];
+
+  const taskRows = tasks.map((t, i) => `
+    <div class="turn-step-row">
+      <div class="turn-step-order">
+        <button type="button" class="icon-btn" data-crew-task-move="${i}::-1" title="Move up" ${i === 0 ? 'disabled' : ''}>▴</button>
+        <button type="button" class="icon-btn" data-crew-task-move="${i}::1" title="Move down" ${i === tasks.length - 1 ? 'disabled' : ''}>▾</button>
+      </div>
+      <div class="crew-task-settings-row-body">
+        <p class="dim small">${esc(t.label)}</p>
+        <textarea rows="2" data-crew-task-text="${esc(t.id)}">${esc(t.text)}</textarea>
+      </div>
+    </div>`).join('');
+
+  return `
+    ${profileDraftSaveBar(editingProfile, dirty)}
+    <div class="settings-group">
+      ${sectionHeadRow('h3', 'Crew Tasks', 'settings-crew-tasks')}
+      ${helpBody('settings-crew-tasks', "A Rules Profile's own reorderable list of crew jobs — Colony's Crew Tasks box (\"Daily Life\" step 2) picks from these. Empty by default; load the 5PFH jobs below, or type your own.", ui)}
+      <p class="dim small">Editing "${esc(editingProfile.name)}".</p>
+      <button class="btn ghost" data-crew-tasks-load-default>Load 5PFH Default Crew Tasks</button>
+    </div>
+    ${tasks.length ? `<div class="settings-group"><div class="turn-step-list">${taskRows}</div></div>` : '<div class="settings-group"><p class="dim small">No crew tasks yet for this profile.</p></div>'}`;
 }
 
 // Living Faction Engine Phase B: how many scenes pass before Co-Pilot
@@ -2725,6 +2767,43 @@ function colonyTurnStepWidgetHtml(currentStep) {
     </label>`;
 }
 
+// Crew Tasks box (design/adr/rules-profiles-multi-campaign.md, direct
+// follow-up request) — only rendered for Daily Life step 2 (dl2, "Assign/
+// resolve crew tasks"), see colony()'s own gate. Task buttons come from
+// the active Rules Profile's crewTasks.tasks (empty by default — a
+// profile with no crew-task concept shows just the "no tasks yet" message,
+// same posture the Turn Step widget already has for an empty profile).
+// The description box + Log button both stay hidden/disabled until BOTH a
+// task AND an eligible member are picked (direct quote: "when both a crew
+// task button is selected and a valid crew member is selected perform the
+// scripted action") — ui.crewTaskSelectedId/-MemberId are shell.js
+// ephemeral state, not campaign data (nothing is committed until Log).
+function crewTaskBoxHtml(doc, ui) {
+  const tasks = (doc.crewTasks && doc.crewTasks.tasks) || [];
+  const selectedId = ui.crewTaskSelectedId || null;
+  const selectedMemberId = ui.crewTaskSelectedMemberId || '';
+  const selectedTask = selectedId ? tasks.find((t) => t.id === selectedId) : null;
+  const eligible = listEligibleCrewMembers(doc);
+  const ready = !!(selectedTask && selectedMemberId);
+  const taskButtons = tasks.map((t) => `<button type="button" class="chip sm ${t.id === selectedId ? 'active' : ''}" data-crew-task-select="${esc(t.id)}">${esc(t.label)}</button>`).join('');
+  const memberOptions = eligible.map((m) => `<option value="${esc(m.id)}" ${m.id === selectedMemberId ? 'selected' : ''}>${esc(m.name) || 'Unnamed'}</option>`).join('');
+  return `
+    <div class="crew-task-box">
+      <h4>Crew Tasks</h4>
+      ${tasks.length ? `<div class="crew-task-buttons">${taskButtons}</div>` : '<p class="dim small">No crew tasks configured for this Rules Profile yet — add some in Settings → Crew Tasks.</p>'}
+      <label class="field-label sm">Party Member
+        <select data-crew-task-member>
+          <option value="">Select Party Member</option>
+          ${memberOptions}
+        </select>
+      </label>
+      ${ready ? `<div class="crew-task-description" data-crew-task-description>${buildMentionEditorHTML(doc, selectedTask.text)}</div>` : ''}
+      <div class="crew-task-foot">
+        <button type="button" class="icon-btn" data-crew-task-log title="Log this crew task to the Journal" ${ready ? '' : 'disabled'}>📝 Log</button>
+      </div>
+    </div>`;
+}
+
 function colony(doc, ui = {}) {
   const fields = getColonyFields(doc);
   const crew = listCrewRows(doc);
@@ -2750,6 +2829,12 @@ function colony(doc, ui = {}) {
       <div class="turn-step-text-body" data-turn-step-text-body>${buildMentionEditorHTML(doc, currentStep.step.text)}</div>
       <button type="button" class="btn ghost sm" data-turn-step-start title="Runs a ruleset for this step — placeholder, TBD">▶ Start</button>
     </div>` : '';
+  // Crew Tasks box (design/adr/rules-profiles-multi-campaign.md, direct
+  // follow-up request) — only for "Daily Life" step 2 (id dl2, "Assign/
+  // resolve crew tasks"), hardcoded to that one step's id on purpose: this
+  // isn't a generic "attach a mini-app to any step" system, just the one
+  // step the request named. Below Step Text, still inside .colony-fields.
+  const crewTaskBox = currentStep && currentStep.step.id === 'dl2' ? crewTaskBoxHtml(doc, ui) : '';
   // Campaign Turn leads the grid (direct follow-up request — it's the first
   // item once Name is pulled out above), with the Turn Step widget right
   // next to it — NOT in its own 1fr grid column (that pinned it to the
@@ -2767,7 +2852,8 @@ function colony(doc, ui = {}) {
       ${colonyFieldHtml(doc, ui, fields, campaignTurnField)}
       ${colonyTurnStepWidgetHtml(currentStep)}
     </div>
-    ${stepTextHtml}`;
+    ${stepTextHtml}
+    ${crewTaskBox}`;
 
   const crewRows = crew.map((row) => `
     <div class="colony-crew-row">

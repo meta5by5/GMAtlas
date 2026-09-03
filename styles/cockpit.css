@@ -2140,6 +2140,21 @@ input[type="number"] { -moz-appearance: textfield; }
 .turn-step-row textarea { flex: 1 1 auto; min-width: 0; }
 .turn-step-branch { flex: 0 0 auto; white-space: nowrap; padding-top: var(--sp-1); }
 
+/* Crew Tasks (design/adr/rules-profiles-multi-campaign.md, direct
+   follow-up request) — Settings tab reuses .turn-step-row/-order/-list
+   wholesale (a flat list, same reorder-row shape, just no .turn-step-branch
+   slot); .crew-task-settings-row-body stacks a task's label above its
+   editable text within that shared row instead. */
+.crew-task-settings-row-body { flex: 1 1 auto; min-width: 0; }
+.crew-task-settings-row-body p { margin: 0 0 0.2rem; }
+
+/* Colony's Crew Tasks box (Daily Life step 2) */
+.crew-task-box { margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--border); }
+.crew-task-box h4 { margin: 0 0 var(--sp-2); font-size: 0.85rem; color: var(--accent); }
+.crew-task-buttons { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: var(--sp-2); }
+.crew-task-description { margin-top: var(--sp-2); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset); }
+.crew-task-foot { display: flex; justify-content: flex-end; margin-top: var(--sp-2); }
+
 /* Trade (Merchant Rules Lens, ADR 0003/0004) */
 .trade-market-table { width: 100%; border-collapse: collapse; margin: var(--sp-2) 0 var(--sp-3); font-size: 0.85rem; }
 .trade-market-table th { text-align: left; font-size: 0.7rem; letter-spacing: 0.06em; color: var(--text-dim); text-transform: uppercase; padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--border); }

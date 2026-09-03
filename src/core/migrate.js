@@ -15,6 +15,7 @@ import {
   SCHEMA_VERSION, APP_NAME, defaultCampaign, defaultAppConfig, defaultRulesProfile, withDefaults, deepMerge, isObject,
 } from './schema.js';
 import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
+import { CREW_TASKS_5PFH } from '../data/crewTasksDefault5pfh.js';
 
 // Every legacy key the old app is known to write, plus the very old aliases.
 export const LEGACY_KEYS = [
@@ -227,6 +228,9 @@ export function wrapLegacyCampaignIntoAppConfig(legacyDoc, now = new Date().toIS
   // migrated install (this function won't run again) gets it via store.js's
   // narrow backfillDefaultTurnSteps instead — see that function's comment.
   fivePfhProfile.turnSteps = { groups: JSON.parse(JSON.stringify(TURN_STEPS_5PFH)) };
+  // Crew Tasks (direct follow-up request) — same first-install seeding /
+  // backfillDefaultCrewTasks split as Turn Step above.
+  fivePfhProfile.crewTasks = { tasks: JSON.parse(JSON.stringify(CREW_TASKS_5PFH)) };
 
   const campaignEntry = {
     id: doc.meta.id, title: doc.meta.title, profileId: defaultProfile.id, createdAt: now, updatedAt: now,

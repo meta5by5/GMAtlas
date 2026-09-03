@@ -37,8 +37,9 @@ import { defaultCampaign, defaultAppConfig } from './schema.js';
 import {
   importCampaign, migrateDocument, migrateFromLegacyKeys, readLegacyKeys, wrapLegacyCampaignIntoAppConfig, LEGACY_KEYS,
 } from './migrate.js';
-import { createCampaign, renameCampaignEntry, setActiveCampaign, createRulesProfile, reassignCampaignProfile, backfillDefaultTurnSteps } from '../domain/rulesProfiles.js';
+import { createCampaign, renameCampaignEntry, setActiveCampaign, createRulesProfile, reassignCampaignProfile, backfillDefaultTurnSteps, backfillDefaultCrewTasks } from '../domain/rulesProfiles.js';
 import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
+import { CREW_TASKS_5PFH } from '../data/crewTasksDefault5pfh.js';
 
 const STORAGE_KEY = 'sagaatlas.campaign'; // legacy localStorage key — read-only fallback for pre-IndexedDB campaigns, never written again
 const BACKUP_KEY = 'sagaatlas.campaign.backup'; // ditto
@@ -164,14 +165,15 @@ function createStore() {
 
   // The six ruleset fields (design/adr/rules-profiles-multi-campaign.md) shadow whatever is persisted in
   // the raw doc's own `settings` — see this file's header comment. The
-  // active profile's Turn Step definitions are spliced in the same way, as
-  // a top-level `turnSteps` (not campaign content — never persisted back,
-  // update()'s mutator still clones the RAW doc).
+  // active profile's Turn Step and Crew Tasks definitions are spliced in
+  // the same way, as top-level `turnSteps`/`crewTasks` (not campaign
+  // content — never persisted back, update()'s mutator still clones the
+  // RAW doc).
   function overlayProfile(rawDoc) {
     if (!rawDoc) return rawDoc;
     const profile = activeProfile();
     if (!profile) return rawDoc;
-    return { ...rawDoc, settings: { ...rawDoc.settings, ...profile.ruleset }, turnSteps: profile.turnSteps };
+    return { ...rawDoc, settings: { ...rawDoc.settings, ...profile.ruleset }, turnSteps: profile.turnSteps, crewTasks: profile.crewTasks };
   }
 
   async function refreshBackupMeta(campaignId) {
@@ -189,10 +191,12 @@ function createStore() {
       appConfig = savedAppConfig;
       // Narrow, idempotent, additive-only backfill for an install that
       // already has an appConfig (so wrapLegacyCampaignIntoAppConfig below
-      // won't run) — fills in the 5PFH Turn Step seed content only for a
-      // profile literally named "5PFH" with no steps of its own yet. See
-      // domain/rulesProfiles.js's own comment for why this is safe.
-      const backfilled = backfillDefaultTurnSteps(appConfig, TURN_STEPS_5PFH);
+      // won't run) — fills in the 5PFH Turn Step/Crew Tasks seed content
+      // only for a profile literally named "5PFH" with no steps/tasks of
+      // its own yet. See domain/rulesProfiles.js's own comment for why
+      // this is safe.
+      let backfilled = backfillDefaultTurnSteps(appConfig, TURN_STEPS_5PFH);
+      backfilled = backfillDefaultCrewTasks(backfilled, CREW_TASKS_5PFH);
       if (backfilled !== appConfig) {
         appConfig = backfilled;
         await idbPut(database, APP_CONFIG_KEY, appConfig);

@@ -119,10 +119,10 @@ export function reassignCampaignProfile(appConfig, campaignId, profileId) {
 }
 
 /** Commit a draft's edited slices (storyboardPositions/moduleEnabled/
- *  ruleset/turnSteps — the Ruleset Profile Editor's and Turn Step tab's
- *  shared "Save" action) onto whatever is currently stored for that
- *  profile id, preserving id/name/createdAt and stamping a fresh
- *  updatedAt. Never touches any campaign document. */
+ *  ruleset/turnSteps/crewTasks — the Ruleset Profile Editor's, Turn Step
+ *  tab's, and Crew Tasks tab's shared "Save" action) onto whatever is
+ *  currently stored for that profile id, preserving id/name/createdAt and
+ *  stamping a fresh updatedAt. Never touches any campaign document. */
 export function applyProfileDraft(profile, draft) {
   return {
     ...profile,
@@ -130,6 +130,7 @@ export function applyProfileDraft(profile, draft) {
     moduleEnabled: draft.moduleEnabled,
     ruleset: draft.ruleset,
     turnSteps: draft.turnSteps,
+    crewTasks: draft.crewTasks,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -155,6 +156,22 @@ export function backfillDefaultTurnSteps(appConfig, seedGroups) {
     profiles: appConfig.profiles.map((p) => {
       if (p.name !== '5PFH' || (p.turnSteps && p.turnSteps.groups && p.turnSteps.groups.length)) return p;
       return { ...p, turnSteps: { groups: JSON.parse(JSON.stringify(seedGroups)) } };
+    }),
+  };
+}
+
+/** Same shape/posture as backfillDefaultTurnSteps immediately above — fills
+ *  in the 5PFH Crew Tasks seed content ONLY for a profile named exactly
+ *  "5PFH" whose crewTasks.tasks is still empty. Called once from
+ *  store.js's load(), right alongside the Turn Step backfill. */
+export function backfillDefaultCrewTasks(appConfig, seedTasks) {
+  const needsBackfill = appConfig.profiles.some((p) => p.name === '5PFH' && (!p.crewTasks || !p.crewTasks.tasks || p.crewTasks.tasks.length === 0));
+  if (!needsBackfill) return appConfig;
+  return {
+    ...appConfig,
+    profiles: appConfig.profiles.map((p) => {
+      if (p.name !== '5PFH' || (p.crewTasks && p.crewTasks.tasks && p.crewTasks.tasks.length)) return p;
+      return { ...p, crewTasks: { tasks: JSON.parse(JSON.stringify(seedTasks)) } };
     }),
   };
 }

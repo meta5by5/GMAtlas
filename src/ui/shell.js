@@ -92,6 +92,8 @@ import { isModuleVisible, setModuleEnabled, setStoryboardPosition, updateProfile
 import { DRAWER_META, drawerMeta } from './drawerMeta.js';
 import { moveTurnStepInGroup, updateTurnStepText, loadDefaultTurnSteps, getCurrentTurnStep, advanceTurnStep, retreatTurnStep, startNextCampaignTurn } from '../domain/turnSteps.js';
 import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
+import { moveCrewTaskInList, updateCrewTaskText, loadDefaultCrewTasks, assignCrewTask } from '../domain/crewTasks.js';
+import { CREW_TASKS_5PFH } from '../data/crewTasksDefault5pfh.js';
 
 // DRAWERS/DRAWER_META/drawerMeta live in ./drawerMeta.js — shared with
 // drawers/index.js's Settings > Ruleset Profile Editor tab (design/adr/rules-profiles-multi-campaign.md),
@@ -277,7 +279,7 @@ function isProfileDraftDirty(profileId) {
   if (!draft) return false;
   const stored = store.listProfiles().find((p) => p.id === profileId);
   if (!stored) return false;
-  const shape = (p) => JSON.stringify({ storyboardPositions: p.storyboardPositions, moduleEnabled: p.moduleEnabled, ruleset: p.ruleset, turnSteps: p.turnSteps });
+  const shape = (p) => JSON.stringify({ storyboardPositions: p.storyboardPositions, moduleEnabled: p.moduleEnabled, ruleset: p.ruleset, turnSteps: p.turnSteps, crewTasks: p.crewTasks });
   return shape(draft) !== shape(stored);
 }
 function saveProfileDraft(profileId) {
@@ -351,6 +353,13 @@ let profileDrafts = new Map();
 // which step-group sections are expanded; collapsed by default (7 groups,
 // up to 17 steps each — too much to show open at once).
 let expandedTurnStepGroups = new Set();
+// Crew Tasks box (design/adr/rules-profiles-multi-campaign.md, direct
+// follow-up request) — which task + party member are picked in Colony's
+// dl2 crew-task box, purely ephemeral (nothing is committed to the
+// campaign until Log). Reset to null/'' on any Log, or on any Turn Step
+// ◂/▸ navigation (a fresh visit to dl2 always starts blank).
+let crewTaskSelectedId = null;
+let crewTaskSelectedMemberId = '';
 // Doc viewer's "right-two-section" position (direct follow-up request) —
 // set fresh on every [data-doc-open] click based on where the click came
 // from (Colony's Step Text vs. anywhere else), not tracked per tab; never
@@ -3359,11 +3368,33 @@ function onClick(ev) {
     if (draft) setProfileDraft(profileId, loadDefaultTurnSteps(draft, TURN_STEPS_5PFH));
     return render();
   }
+  // Crew Tasks Settings tab — same shared draft/Save/Cancel as Turn Step
+  // above, reorder/load-default operate on the SAME draft.
+  const crewTaskMove = hit('[data-crew-task-move]');
+  if (crewTaskMove) {
+    const [index, dir] = crewTaskMove.dataset.crewTaskMove.split('::');
+    const profileId = currentEditingProfileId();
+    const draft = getProfileDraft(profileId);
+    if (draft) setProfileDraft(profileId, moveCrewTaskInList(draft, Number(index), Number(dir)));
+    return render();
+  }
+  if (hit('[data-crew-tasks-load-default]')) {
+    const profileId = currentEditingProfileId();
+    const draft = getProfileDraft(profileId);
+    if (draft) setProfileDraft(profileId, loadDefaultCrewTasks(draft, CREW_TASKS_5PFH));
+    return render();
+  }
   // Colony's Turn Step ◂/▸ (direct follow-up request) — real per-campaign
   // play state, applies instantly like any other campaign data, no draft.
-  if (hit('[data-turn-step-prev]')) return applyTurnStepMutation(retreatTurnStep);
+  // Any navigation resets the Crew Tasks box's own ephemeral picks (direct
+  // follow-up request) — a fresh visit to dl2 always starts blank.
+  if (hit('[data-turn-step-prev]')) {
+    crewTaskSelectedId = null; crewTaskSelectedMemberId = '';
+    return applyTurnStepMutation(retreatTurnStep);
+  }
   const turnStepNext = hit('[data-turn-step-next]');
   if (turnStepNext) {
+    crewTaskSelectedId = null; crewTaskSelectedMemberId = '';
     // Reaching the true end of the workflow (hasNext false — no branchTo,
     // no more steps in the group, empty returnStack) offers to start the
     // next Campaign Turn instead of the button just staying disabled
@@ -3398,6 +3429,33 @@ function onClick(ev) {
     if (!current) return;
     updateAndOpenJournal((d) => addNote(d, current.step.text, `Turn Step — ${current.group.label} ${current.index + 1}/${current.total}`));
     return toast('Step logged to Journal');
+  }
+  // Crew Tasks box (Daily Life step 2, direct follow-up request) — picking
+  // a task button just records the pick (ephemeral, nothing committed yet);
+  // Log is the one action that actually performs it.
+  const crewTaskSelect = hit('[data-crew-task-select]');
+  if (crewTaskSelect) { crewTaskSelectedId = crewTaskSelect.dataset.crewTaskSelect; return renderDrawerBody(); }
+  const crewTaskLog = hit('[data-crew-task-log]');
+  if (crewTaskLog) {
+    const taskId = crewTaskSelectedId;
+    const memberId = crewTaskSelectedMemberId;
+    if (!taskId || !memberId) return;
+    const doc = store.get();
+    const task = ((doc.crewTasks && doc.crewTasks.tasks) || []).find((t) => t.id === taskId);
+    const member = getEntity(doc, memberId);
+    if (!task || !member) return;
+    // Logging IS "performing" the task (assignCrewTask marks the member
+    // done for this Campaign Turn) — the new entry opens straight into
+    // edit mode (journalEditOpen, same Set data-journal-edit-toggle uses)
+    // so the GM can add outcome details right away, per the direct
+    // request. store.update()'s own return value (via updateAndOpenJournal)
+    // is the fresh overlaid doc, so the just-created entry is its journal
+    // array's own last element — no second store.get() needed.
+    const updated = updateAndOpenJournal((d) => addNote(assignCrewTask(d, taskId, memberId), `${task.label} — ${member.name || 'Unnamed'}.`, 'Crew Task'));
+    const newEntry = updated.journal[updated.journal.length - 1];
+    if (newEntry) journalEditOpen.add(newEntry.id);
+    crewTaskSelectedId = null; crewTaskSelectedMemberId = '';
+    return render();
   }
   if (hit('[data-bind-file]')) return store.bindFile().then(() => toast('Save file bound')).catch(() => {});
   if (hit('[data-restore-backup]')) {
@@ -4230,6 +4288,17 @@ function onChange(ev) {
     if (draft) setProfileDraft(profileId, updateTurnStepText(draft, groupId, stepId, t.value));
     return render();
   }
+  const crewTaskTextArea = t.closest('[data-crew-task-text]');
+  if (crewTaskTextArea) {
+    const taskId = crewTaskTextArea.dataset.crewTaskText;
+    const profileId = currentEditingProfileId();
+    const draft = getProfileDraft(profileId);
+    if (draft) setProfileDraft(profileId, updateCrewTaskText(draft, taskId, t.value));
+    return render();
+  }
+  // Colony's Crew Tasks box — Party Member <select> (direct follow-up
+  // request), purely ephemeral until Log commits it.
+  if (t.closest('[data-crew-task-member]')) { crewTaskSelectedMemberId = t.value; return renderDrawerBody(); }
   if (t.closest('[data-settings-toolbar-default]')) return store.update((d) => { d.settings.toolbarCollapsedByDefault = t.checked; return d; });
   if (t.closest('[data-trade-economy-model-select]')) {
     const profileId = currentEditingProfileId();
@@ -6600,7 +6669,7 @@ function buildDrawerUi() {
     battlemapPlacingIcon, battlemapCamera,
     contentPackFlags, hostileLocationsImporting, exportIncludeAttachments, exportAttachmentsPreview,
     worldTrackerTab, worldTrackerSelectedSector, worldTrackerMigrateOpen, worldTrackerCornerLabelsOpen,
-    expandedTurnStepGroups,
+    expandedTurnStepGroups, crewTaskSelectedId, crewTaskSelectedMemberId,
     // Faction Events' own docked-in-WHERE state (see factionEventsDockedInWhere's
     // comment above) — workspace/index.js's WHERE view reads these to render
     // the same renderFactionEvents() body a second way when docked.

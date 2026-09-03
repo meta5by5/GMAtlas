@@ -128,6 +128,14 @@ export function advanceCampaignTurnWithAccrual(campaign) {
   next = setColonyField(next, 'colonyMorale', moraleTo);
   changes.push({ key: 'colonyMorale', label: 'Colony Morale', from: moraleFrom, to: moraleTo });
 
+  // Crew Tasks eligibility (design/adr/rules-profiles-multi-campaign.md,
+  // direct follow-up request) — "not yet performed a crew task this
+  // campaign turn" resets here, alongside every other per-turn bookkeeping
+  // this function already does, so both places that actually advance the
+  // Campaign Turn (World Tracker's End Turn ▸, and Turn Step's own "start
+  // the next Campaign Turn" confirm) clear it for free.
+  next.crewTaskProgress = { doneMemberIds: [] };
+
   return { campaign: next, turn, changes };
 }
 

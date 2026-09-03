@@ -16,7 +16,7 @@ import { parseStatsString } from '../src/domain/statblocks.js';
 import {
   createRulesProfile, renameProfile, updateProfileRuleset, setModuleEnabled, setStoryboardPosition, isModuleVisible, resolveOverlaySettings,
   createCampaign, renameCampaignEntry, setActiveCampaign, reassignCampaignProfile, applyProfileDraft, resolvePositionContentId,
-  backfillDefaultTurnSteps,
+  backfillDefaultTurnSteps, backfillDefaultCrewTasks,
 } from '../src/domain/rulesProfiles.js';
 
 // --- oracles --------------------------------------------------------------
@@ -7191,6 +7191,8 @@ import {
   moveTurnStepInGroup, updateTurnStepText, loadDefaultTurnSteps, getCurrentTurnStep, advanceTurnStep, retreatTurnStep, startNextCampaignTurn,
 } from '../src/domain/turnSteps.js';
 import { TURN_STEPS_5PFH } from '../src/data/turnStepsDefault5pfh.js';
+import { moveCrewTaskInList, updateCrewTaskText, loadDefaultCrewTasks, listEligibleCrewMembers, assignCrewTask } from '../src/domain/crewTasks.js';
+import { CREW_TASKS_5PFH } from '../src/data/crewTasksDefault5pfh.js';
 
 function profileWithTurnSteps(groups) {
   return { ...defaultRulesProfile('P'), turnSteps: { groups } };
@@ -7342,4 +7344,103 @@ test('backfillDefaultTurnSteps only fills the 5PFH seed onto a profile named exa
   withOneStep.profiles[0].turnSteps = { groups: [{ id: 'g', label: 'G', steps: [{ id: 's', text: 'manual', branchTo: null }] }] };
   const notBackfilled = backfillDefaultTurnSteps(withOneStep, TURN_STEPS_5PFH);
   assert.equal(notBackfilled, withOneStep);
+});
+
+test('backfillDefaultCrewTasks only fills the 5PFH seed onto a profile named exactly "5PFH" with no tasks of its own yet — never a differently-named profile, never a "5PFH" profile that already has ANY tasks', () => {
+  let cfg = defaultAppConfig();
+  cfg = createRulesProfile(cfg, { name: 'Default' });
+  cfg = createRulesProfile(cfg, { name: '5PFH' });
+  const fivePfhId = cfg.profiles[1].id;
+
+  const backfilled = backfillDefaultCrewTasks(cfg, CREW_TASKS_5PFH);
+  assert.notEqual(backfilled, cfg, 'a change was made');
+  const fivePfh = backfilled.profiles.find((p) => p.id === fivePfhId);
+  assert.equal(fivePfh.crewTasks.tasks.length, CREW_TASKS_5PFH.length);
+  assert.equal(backfilled.profiles[0].crewTasks.tasks.length, 0, 'the differently-named Default profile is untouched');
+
+  const secondPass = backfillDefaultCrewTasks(backfilled, CREW_TASKS_5PFH);
+  assert.equal(secondPass, backfilled, 'idempotent — running it again is a true no-op');
+
+  let withOneTask = defaultAppConfig();
+  withOneTask = createRulesProfile(withOneTask, { name: '5PFH' });
+  withOneTask.profiles[0].crewTasks = { tasks: [{ id: 't', label: 'Manual', text: 'manual' }] };
+  const notBackfilled = backfillDefaultCrewTasks(withOneTask, CREW_TASKS_5PFH);
+  assert.equal(notBackfilled, withOneTask);
+});
+
+// --- Crew Tasks (design/adr/rules-profiles-multi-campaign.md, direct
+// follow-up request — Daily Life step 2, "Assign/resolve crew tasks") -----
+function profileWithCrewTasks(tasks) {
+  return { ...defaultRulesProfile('P'), crewTasks: { tasks } };
+}
+function fixtureCrewTasks() {
+  return [
+    { id: 'find-a-patron', label: 'Find a Patron', text: 'find a patron text' },
+    { id: 'train', label: 'Train', text: 'train text' },
+    { id: 'decoy', label: 'Decoy', text: 'decoy text' },
+  ];
+}
+
+test('loadDefaultCrewTasks replaces crewTasks.tasks with a deep clone (mutating the result never touches the seed data)', () => {
+  const profile = defaultRulesProfile('P');
+  const loaded = loadDefaultCrewTasks(profile, CREW_TASKS_5PFH);
+  assert.equal(loaded.crewTasks.tasks.length, CREW_TASKS_5PFH.length);
+  assert.equal(loaded.crewTasks.tasks[0].id, 'find-a-patron');
+  loaded.crewTasks.tasks[0].text = 'mutated';
+  assert.notEqual(CREW_TASKS_5PFH[0].text, 'mutated', 'the seed data itself is untouched');
+});
+
+test('moveCrewTaskInList reorders the flat list, splice-based, bounds-checked no-op past either end', () => {
+  let profile = profileWithCrewTasks(fixtureCrewTasks());
+  profile = moveCrewTaskInList(profile, 0, 1); // find-a-patron swaps with train
+  assert.deepEqual(profile.crewTasks.tasks.map((t) => t.id), ['train', 'find-a-patron', 'decoy']);
+
+  const atStart = profile;
+  profile = moveCrewTaskInList(profile, 1, -1); // find-a-patron -> index 0
+  assert.deepEqual(profile.crewTasks.tasks.map((t) => t.id), ['find-a-patron', 'train', 'decoy']);
+
+  const noopUp = moveCrewTaskInList(profile, 0, -1); // already first
+  assert.deepEqual(noopUp.crewTasks.tasks.map((t) => t.id), ['find-a-patron', 'train', 'decoy']);
+  const noopDown = moveCrewTaskInList(profile, 2, 1); // already last
+  assert.deepEqual(noopDown.crewTasks.tasks.map((t) => t.id), ['find-a-patron', 'train', 'decoy']);
+});
+
+test('updateCrewTaskText edits just the one targeted task\'s text, no-op on an unknown task id', () => {
+  let profile = profileWithCrewTasks(fixtureCrewTasks());
+  profile = updateCrewTaskText(profile, 'train', 'new train text');
+  assert.equal(profile.crewTasks.tasks.find((t) => t.id === 'train').text, 'new train text');
+  assert.equal(profile.crewTasks.tasks.find((t) => t.id === 'decoy').text, 'decoy text', 'sibling untouched');
+
+  const unchanged = updateCrewTaskText(profile, 'unknown-id', 'nope');
+  assert.deepEqual(unchanged.crewTasks.tasks, profile.crewTasks.tasks);
+});
+
+test('listEligibleCrewMembers returns party members (party.js\'s listPartyMembers) not yet marked done this Campaign Turn, and assignCrewTask is idempotent', () => {
+  let camp = defaultCampaign();
+  let heroId, guardId;
+  ({ campaign: camp, id: heroId } = createEntity(camp, { type: 'npc', name: 'Hero' }));
+  camp = setEntityTags(camp, heroId, 'character');
+  ({ campaign: camp, id: guardId } = createEntity(camp, { type: 'npc', name: 'Guard' }));
+  camp = setEntityTags(camp, guardId, 'character');
+
+  let eligible = listEligibleCrewMembers(camp);
+  assert.equal(eligible.length, 2, 'both members eligible before any task is logged');
+
+  camp = assignCrewTask(camp, 'train', heroId);
+  eligible = listEligibleCrewMembers(camp);
+  assert.equal(eligible.length, 1);
+  assert.equal(eligible[0].id, guardId, 'Hero is no longer eligible; Guard still is');
+
+  // Idempotent — assigning the same member again doesn't duplicate the entry.
+  camp = assignCrewTask(camp, 'decoy', heroId);
+  assert.deepEqual(camp.crewTaskProgress.doneMemberIds, [heroId]);
+
+  camp = assignCrewTask(camp, 'find-a-patron', guardId);
+  assert.equal(listEligibleCrewMembers(camp).length, 0, 'both now done');
+});
+
+test('advanceCampaignTurnWithAccrual also resets crewTaskProgress.doneMemberIds (direct follow-up request) — Crew Tasks eligibility clears whenever the Campaign Turn actually advances', () => {
+  const camp = { colony: { fields: { campaignTurn: 1 }, crew: [], encounters: [] }, crewTaskProgress: { doneMemberIds: ['npc1', 'npc2'] } };
+  const { campaign: next } = advanceCampaignTurnWithAccrual(camp);
+  assert.deepEqual(next.crewTaskProgress, { doneMemberIds: [] });
 });
