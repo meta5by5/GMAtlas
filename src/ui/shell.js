@@ -2094,6 +2094,15 @@ function onClick(ev) {
     if (!window.confirm('Remove this crew row? This cannot be undone.')) return;
     return store.update((d) => removeCrewRow(d, crewDel.dataset.colonyCrewRemove));
   }
+  // Direct follow-up request: "replace the dropdown of character names to
+  // use a thumbnail just like displayed in the Protagonists section" — the
+  // filled-thumbnail's own small remove badge unassigns this ONE row's
+  // character (clearing characterId back to '', same as picking the old
+  // dropdown's blank "— Character —" option) without removing the row
+  // itself or touching its role — that's still data-colony-crew-remove
+  // above, a separate, confirmed action.
+  const crewUnassign = hit('[data-colony-crew-unassign]');
+  if (crewUnassign) return store.update((d) => updateCrewRow(d, crewUnassign.dataset.colonyCrewUnassign, { characterId: '' }));
   const encounterDetach = hit('[data-colony-encounter-detach]');
   if (encounterDetach) return store.update((d) => detachColonyEncounterEntity(d, encounterDetach.dataset.colonyEncounterDetach));
 
@@ -3288,6 +3297,8 @@ function onClick(ev) {
           ? { entityType: 'party-starship', mode: 'party-starship', scope: null, query: '' }
           : raw === 'colony-crew'
           ? { entityType: 'colony-crew', mode: 'colony-crew', scope: null, query: '' }
+          : raw.startsWith('colony-crew-assign::')
+            ? { entityType: 'colony-crew-assign', mode: 'colony-crew-assign', scope: raw.slice('colony-crew-assign::'.length), query: '' }
           : raw === 'what-conflict'
             ? { entityType: 'what-conflict', mode: 'what-conflict', scope: null, query: '' }
             : raw === 'location-current'
@@ -3357,6 +3368,13 @@ function onClick(ev) {
       // scene-scoped (a colony's crew persists across scenes), same
       // posture as party-vehicle above.
       return store.update((d) => addCrewRow(d, { characterId: id }));
+    }
+    if (picker.entityType === 'colony-crew-assign') {
+      // Crew Roster's own per-row thumbnail (direct follow-up request —
+      // replaces the old inline character <select>): assigns the picked
+      // NPC to THIS existing row (picker.scope, the row id) instead of
+      // creating a new one — the role dropdown next to it is untouched.
+      return store.update((d) => updateCrewRow(d, picker.scope, { characterId: id }));
     }
     if (picker.entityType === 'what-conflict') {
       // WHAT's "+" (direct follow-up request: "adds a Conflict entity as
@@ -4879,6 +4897,15 @@ function onInput(ev) {
   const t = ev.target;
   const sceneFieldInput = t.closest('[data-scene-field]');
   if (sceneFieldInput) { autoGrowSceneField(sceneFieldInput); return; }
+  // WHO's NPC scene-field popup (Disposition/Motivation/...) and WHERE's
+  // Location Details sensory fields — direct follow-up request: "if the
+  // text is too long to fit, expand the textbox at least 2-3 rows." Same
+  // generic scrollHeight-based grow as the Scene Summary field above, just
+  // keyed off a shared class instead of data-scene-field since these
+  // commit through editNpcSceneField/editLocationSensoryField, not
+  // updateSceneField.
+  const oracleFieldTextarea = t.closest('.oracle-field-textarea');
+  if (oracleFieldTextarea) { autoGrowSceneField(oracleFieldTextarea); return; }
   const num = t.closest('[data-ctx-num]');
   if (num) { const lbl = num.previousElementSibling || num.parentElement.querySelector('.metric'); if (lbl && lbl.classList.contains('metric')) lbl.textContent = `${t.value}/10`; return; }
 
@@ -6241,6 +6268,12 @@ function render() {
   // field that already holds a long value needs this one-time sizing pass
   // to open at its real height instead of waiting for the next keystroke.
   root.querySelectorAll('[data-scene-field]').forEach(autoGrowSceneField);
+  // Same one-time sizing pass for the NPC scene-field popup/Location
+  // Details sensory fields (direct follow-up request) — a freshly-rendered
+  // textarea starts at rows="1" regardless of how much text it already
+  // holds; only a live keystroke fires 'input', so a field loaded with a
+  // long value needs this to open at its real height too.
+  root.querySelectorAll('.oracle-field-textarea').forEach(autoGrowSceneField);
   // The Advisor aside always shows whatever content the active profile has
   // assigned to the 'advisor' Storyboard position — Co-Pilot by default,
   // but e.g. Party under the 5PFH profile (see renderPositionContent).
@@ -6630,9 +6663,14 @@ function renderEntityPickerOverlay() {
     // setPartyStarship itself, not by hiding candidates here).
     candidates = listEntities(doc, ['asset']).filter((a) => (a.tags || []).includes('vehicle'));
     emptyMessage = 'No #vehicle Asset entities yet — add one in Cast (type Asset, tag #vehicle) first.';
-  } else if (entityPicker.entityType === 'colony-crew') {
-    // Colony's Crew Roster "+Crew" — every NPC not already assigned to a
-    // crew row (direct follow-up request: "select from available NPCs").
+  } else if (entityPicker.entityType === 'colony-crew' || entityPicker.entityType === 'colony-crew-assign') {
+    // Colony's Crew Roster "+Crew" (adds a new row) AND its per-row
+    // thumbnail (direct follow-up request — assigns an existing row) share
+    // the same pool: every NPC not already assigned to SOME crew row. The
+    // row being assigned (colony-crew-assign's own scope) is only ever
+    // reachable while its own characterId is empty (the thumbnail only
+    // opens this picker in its unassigned "+" state), so it never
+    // contributes to assignedIds itself — no self-exclusion needed.
     const assignedIds = new Set(listCrewRows(doc).map((r) => r.characterId).filter(Boolean));
     candidates = listEntities(doc, ['npc']).filter((n) => !assignedIds.has(n.id));
     emptyMessage = 'No available NPCs — every NPC is already assigned, or add one in Cast first.';

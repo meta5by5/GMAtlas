@@ -3039,6 +3039,38 @@ function crewTaskBoxHtml(doc, ui) {
     </div>`;
 }
 
+// A Crew Roster row's character slot (direct follow-up request: "replace
+// the dropdowns of character names to use a thumbnail just like displayed
+// in the Protagonists section on the Composer" — the role dropdown right
+// next to it is untouched). Same .actor-thumb-wrap/-circle/-photo/-name/
+// -badge markup Composer's own actorThumb (workspace/index.js) uses —
+// duplicated here rather than imported, since drawers/index.js can't
+// import FROM workspace/index.js without a circular dependency (that
+// module already imports from this one). Unassigned shows a plain "+"
+// circle opening the same picker "+Crew" uses, scoped to just this row
+// (colony-crew-assign::<rowId>) instead of adding a new one; assigned
+// shows the real photo (click opens the entity editor, same as any other
+// Composer thumbnail) plus a small remove badge that unassigns just this
+// row's character — leaving the row and its role alone — distinct from
+// the row's own separate, confirmed "remove this row entirely" button.
+function crewCharacterThumb(doc, rowId, characterId) {
+  const entity = characterId ? getEntity(doc, characterId) : null;
+  if (!entity) {
+    return `<button type="button" class="actor-thumb actor-thumb-add" data-entity-picker-open="colony-crew-assign::${esc(rowId)}" title="Select a character">＋</button>`;
+  }
+  const img = entity.thumbnailId ? getGalleryImage(doc, entity.thumbnailId) : null;
+  const photo = img
+    ? `<img class="actor-thumb-photo" src="${esc(img.dataUrl)}" alt="">`
+    : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((entity.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
+  return `<div class="actor-thumb-wrap">
+    <div class="actor-thumb-circle">
+      <button type="button" class="actor-thumb" data-open-entity="${esc(entity.id)}" title="${esc(entity.name || 'Unnamed')}">${photo}</button>
+      <button type="button" class="actor-thumb-badge actor-thumb-badge-remove" data-colony-crew-unassign="${esc(rowId)}" title="Unassign">✕</button>
+    </div>
+    <span class="actor-thumb-name">${esc(entity.name || 'Unnamed')}</span>
+  </div>`;
+}
+
 // The Colony tab (direct follow-up request — "the Colony panel" renamed
 // "Campaign," gains a Colony/Starship tab pair; "all the current
 // functionality remains on the Colony tab"): everything this panel already
@@ -3050,7 +3082,6 @@ function crewTaskBoxHtml(doc, ui) {
 function colonyTabHtml(doc, ui = {}) {
   const fields = getColonyFields(doc);
   const crew = listCrewRows(doc);
-  const characters = listEntities(doc, ['npc']);
   const lifeforms = listLifeformEncounters(doc);
 
   // Colony Name is rendered separately, above the Turn Sheet header (direct
@@ -3107,10 +3138,7 @@ function colonyTabHtml(doc, ui = {}) {
 
   const crewRows = crew.map((row) => `
     <div class="colony-crew-row">
-      <select data-colony-crew-field="${esc(row.id)}::characterId">
-        <option value="">— Character —</option>
-        ${characters.map((c) => `<option value="${esc(c.id)}" ${c.id === row.characterId ? 'selected' : ''}>${esc(c.name) || 'Unnamed'}</option>`).join('')}
-      </select>
+      ${crewCharacterThumb(doc, row.id, row.characterId)}
       <select data-colony-crew-field="${esc(row.id)}::role">
         <option value="">— Role —</option>
         ${CREW_ROLES.map((r) => `<option value="${esc(r.id)}" ${r.id === row.role ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}

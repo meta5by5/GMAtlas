@@ -123,11 +123,18 @@ function whoSectionBody(doc, ui) {
 // for the popup window from the thumbnail arrow, e.g., Disposition") is a
 // click handler that blanks the field the same way typing it empty and
 // blurring would; only rendered once there's actually text to clear.
+// A <textarea> (direct follow-up request: "make the textboxes expandable
+// ... if the text is too long to fit, then expand the textbox at least
+// 2-3 rows") instead of a single-line <input> — starts at rows="1" like
+// the Scene Summary's own expandable field, and shares that same
+// scrollHeight-based auto-grow (see shell.js's autoGrowSceneField, wired
+// here via the .oracle-field-textarea class rather than data-scene-field,
+// since these commit through a different domain function per caller).
 function oracleFieldRow(label, value, rollAttr, fieldAttr, clearAttr) {
   return `<div class="oracle-field-row">
     <span class="field-label-static">${esc(label)}</span>
     <button type="button" class="icon-btn" ${rollAttr} title="Roll ${esc(label)}">🎲</button>
-    <input type="text" class="thread-name-input" ${fieldAttr} value="${esc(value)}" placeholder="—">
+    <textarea class="thread-name-input oracle-field-textarea" rows="1" ${fieldAttr} placeholder="—">${esc(value)}</textarea>
     ${value ? `<button type="button" class="icon-btn" ${clearAttr} title="Clear ${esc(label)}">✕</button>` : ''}
   </div>`;
 }

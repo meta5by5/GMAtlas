@@ -768,6 +768,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .npc-scene-card-body { margin-top: var(--sp-2); display: flex; flex-direction: column; gap: var(--sp-2); }
 .oracle-field-row { display: grid; grid-template-columns: auto 1.6rem 1fr auto; align-items: center; gap: var(--sp-2); }
 .oracle-field-row input { width: 100%; }
+/* Direct follow-up request: "make the textboxes expandable... if the text
+   is too long to fit, expand the textbox at least 2-3 rows" — a <textarea>
+   instead of a single-line <input>, grown by shell.js's autoGrowSceneField
+   (scrollHeight-based, same mechanism the Scene Summary field already
+   uses) rather than a fixed rows count, so it opens exactly as tall as
+   whatever text it already holds and keeps growing as the GM types.
+   overflow:hidden avoids a flash of the native scrollbar between the
+   'auto' reset and the real height being set; align-self:start keeps it
+   from being grid-stretched to the row's own tallest cell. */
+.oracle-field-textarea { width: 100%; resize: vertical; overflow: hidden; align-self: start; }
 /* Actor thumbnails (Composer WHO redesign) — a mention-style, read-only
    photo+name button for Protagonists/Antagonists/Bystanders, replacing the
    old always-visible chip rows. Sized well below .gallery-thumb-circle's
@@ -2226,7 +2236,21 @@ input[type="number"] { -moz-appearance: textfield; }
 .colony-turn-row { display: flex; align-items: flex-end; gap: var(--sp-6); flex-wrap: nowrap; }
 .colony-turn-row > .field-label:last-child { min-width: 0; flex: 0 1 auto; }
 .colony-crew-list { display: flex; flex-direction: column; gap: var(--sp-2); }
-.colony-crew-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: var(--sp-2); align-items: center; }
+/* Direct follow-up request: the character column is now a Composer-style
+   thumbnail (crewCharacterThumb, drawers/index.js) instead of a <select> —
+   content-sized (auto) rather than stretched to 1fr, so it doesn't leave a
+   wide empty gutter around the narrow thumb; the role <select> takes the
+   rest of the row unchanged. */
+.colony-crew-row { display: grid; grid-template-columns: auto 1fr auto; gap: var(--sp-2); align-items: center; }
+/* Unassigned crew slot — same circle footprint as a filled .actor-thumb-
+   photo (2.75rem) so the row's height/alignment doesn't jump once a
+   character is picked. */
+.actor-thumb-add {
+  width: 2.75rem; height: 2.75rem; border-radius: 50%;
+  border: 2px dashed var(--border); background: none; color: var(--text-dim);
+  font-size: 1.1rem; line-height: 1; cursor: pointer;
+}
+.actor-thumb-add:hover { border-color: var(--accent); color: var(--accent); }
 /* Direct follow-up request: a fixed 10-row grid (numbered index, no more
    add/remove-row controls) instead of a growable list; the note field is a
    plain expandable <textarea> (native resize:vertical drag handle — direct
