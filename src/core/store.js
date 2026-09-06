@@ -37,8 +37,10 @@ import { defaultCampaign, defaultAppConfig } from './schema.js';
 import {
   importCampaign, migrateDocument, migrateFromLegacyKeys, readLegacyKeys, wrapLegacyCampaignIntoAppConfig, LEGACY_KEYS,
 } from './migrate.js';
-import { createCampaign, renameCampaignEntry, setActiveCampaign, createRulesProfile, reassignCampaignProfile, backfillDefaultTurnSteps, backfillDefaultCrewTasks } from '../domain/rulesProfiles.js';
+import { createCampaign, renameCampaignEntry, setActiveCampaign, createRulesProfile, reassignCampaignProfile, backfillDefaultCrewTasks, grandfatherCampaignPanelActivation } from '../domain/rulesProfiles.js';
+import { createTurnStepList, hoistLegacyProfileTurnSteps, backfillTurnStepListInventory, fixPlanetfallBranching } from '../domain/turnStepLists.js';
 import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
+import { PLANETFALL_TURN_STEPS } from '../data/turnStepListPlanetfall.js';
 import { CREW_TASKS_5PFH } from '../data/crewTasksDefault5pfh.js';
 
 const STORAGE_KEY = 'sagaatlas.campaign'; // legacy localStorage key — read-only fallback for pre-IndexedDB campaigns, never written again
@@ -165,15 +167,44 @@ function createStore() {
 
   // The six ruleset fields (design/adr/rules-profiles-multi-campaign.md) shadow whatever is persisted in
   // the raw doc's own `settings` — see this file's header comment. The
-  // active profile's Turn Step and Crew Tasks definitions are spliced in
-  // the same way, as top-level `turnSteps`/`crewTasks` (not campaign
-  // content — never persisted back, update()'s mutator still clones the
-  // RAW doc).
+  // active profile's Crew Tasks definitions are spliced in the same way, as
+  // a top-level `crewTasks` (not campaign content — never persisted back,
+  // update()'s mutator still clones the RAW doc). Turn Step Lists (direct
+  // follow-up request: "create an inventory of Turn Step List profiles
+  // managed in Settings") are a DIFFERENT kind of overlay — appConfig-level
+  // shared content, not profile-scoped — so `turnStepLists` is spliced onto
+  // every doc unconditionally, even when no profile resolves at all
+  // (unlike settings/crewTasks below, which need an active profile to mean
+  // anything).
   function overlayProfile(rawDoc) {
     if (!rawDoc) return rawDoc;
+    const withLists = { ...rawDoc, turnStepLists: appConfig.turnStepLists || [] };
     const profile = activeProfile();
-    if (!profile) return rawDoc;
-    return { ...rawDoc, settings: { ...rawDoc.settings, ...profile.ruleset }, turnSteps: profile.turnSteps, crewTasks: profile.crewTasks };
+    if (!profile) return withLists;
+    return { ...withLists, settings: { ...rawDoc.settings, ...profile.ruleset }, crewTasks: profile.crewTasks };
+  }
+
+  // Real per-campaign state (which list backs which Campaign-panel tab) —
+  // backfilled defensively wherever a doc is loaded/created, defaulting to
+  // the "Planetfall"/"5PFH"-named lists (direct follow-up request:
+  // "reassign the Planetfall Turn Step list to the Colony tab" / "the
+  // Starship tab... is to play the base game 5PFH"). Requires appConfig.
+  // turnStepLists to already contain those two lists — see
+  // backfillTurnStepListInventory, called once in load() before this ever
+  // runs. A GM's own later reassignment (Settings) is left untouched — this
+  // only fills in a still-null slot, never overwrites an explicit choice.
+  function backfillCampaignTurnStepSlots(doc) {
+    if (!doc.turnStepSlotAssignments || typeof doc.turnStepSlotAssignments !== 'object') doc.turnStepSlotAssignments = { colony: null, starship: null };
+    const lists = appConfig.turnStepLists || [];
+    if (!doc.turnStepSlotAssignments.colony) {
+      const l = lists.find((x) => x.name === 'Planetfall');
+      if (l) doc.turnStepSlotAssignments.colony = l.id;
+    }
+    if (!doc.turnStepSlotAssignments.starship) {
+      const l = lists.find((x) => x.name === '5PFH');
+      if (l) doc.turnStepSlotAssignments.starship = l.id;
+    }
+    return doc;
   }
 
   async function refreshBackupMeta(campaignId) {
@@ -191,12 +222,20 @@ function createStore() {
       appConfig = savedAppConfig;
       // Narrow, idempotent, additive-only backfill for an install that
       // already has an appConfig (so wrapLegacyCampaignIntoAppConfig below
-      // won't run) — fills in the 5PFH Turn Step/Crew Tasks seed content
-      // only for a profile literally named "5PFH" with no steps/tasks of
-      // its own yet. See domain/rulesProfiles.js's own comment for why
-      // this is safe.
-      let backfilled = backfillDefaultTurnSteps(appConfig, TURN_STEPS_5PFH);
+      // won't run). Direct follow-up request ("create an inventory of Turn
+      // Step List profiles managed in Settings"): Turn Step content used to
+      // live on a profile literally named "5PFH" — hoistLegacyProfileTurnSteps
+      // moves any such pre-existing content into the new standalone
+      // appConfig.turnStepLists inventory (named after the profile it came
+      // from), then backfillTurnStepListInventory ensures the "5PFH"/
+      // "Planetfall" lists exist regardless (seeding from this app's own
+      // default content if either is still missing) — both idempotent, run
+      // every boot, cheap no-ops once already done.
+      let backfilled = hoistLegacyProfileTurnSteps(appConfig);
+      backfilled = backfillTurnStepListInventory(backfilled, TURN_STEPS_5PFH, PLANETFALL_TURN_STEPS);
+      backfilled = fixPlanetfallBranching(backfilled);
       backfilled = backfillDefaultCrewTasks(backfilled, CREW_TASKS_5PFH);
+      backfilled = grandfatherCampaignPanelActivation(backfilled);
       if (backfilled !== appConfig) {
         appConfig = backfilled;
         await idbPut(database, APP_CONFIG_KEY, appConfig);
@@ -204,6 +243,7 @@ function createStore() {
       const activeId = appConfig.activeCampaignId;
       let activeDoc = await idbGet(database, campaignDocKey(activeId));
       activeDoc = activeDoc ? migrateDocument(activeDoc) : defaultCampaign();
+      activeDoc = backfillCampaignTurnStepSlots(activeDoc);
       docs.set(activeId, activeDoc);
       await refreshBackupMeta(activeId);
       notify();
@@ -296,7 +336,7 @@ function createStore() {
   // campaign you want the import to land in first if that's the goal.
   async function importDocument(rawText) {
     const activeId = appConfig.activeCampaignId;
-    const imported = importCampaign(safeParse(rawText));
+    const imported = backfillCampaignTurnStepSlots(importCampaign(safeParse(rawText)));
     imported.meta.id = activeId;
     docs.set(activeId, imported);
     await persistCampaignDoc(activeId, imported, imported);
@@ -312,7 +352,7 @@ function createStore() {
     const chosenProfileId = profileId || (appConfig.profiles[0] && appConfig.profiles[0].id) || null;
     const created = createCampaign(appConfig, { title, profileId: chosenProfileId });
     appConfig = setActiveCampaign(created.appConfig, created.doc.meta.id);
-    docs.set(created.doc.meta.id, created.doc);
+    docs.set(created.doc.meta.id, backfillCampaignTurnStepSlots(created.doc));
     const database = await db();
     await idbPut(database, APP_CONFIG_KEY, appConfig);
     await idbPut(database, campaignDocKey(created.doc.meta.id), created.doc);
@@ -330,7 +370,7 @@ function createStore() {
     let target = docs.get(campaignId);
     if (!target) {
       const raw = await idbGet(database, campaignDocKey(campaignId));
-      target = migrateDocument(raw || defaultCampaign());
+      target = backfillCampaignTurnStepSlots(migrateDocument(raw || defaultCampaign()));
       docs.set(campaignId, target);
     }
     appConfig = setActiveCampaign(appConfig, campaignId);
@@ -406,6 +446,39 @@ function createStore() {
   // Sync-call-shape, same contract as updateProfile()/update() themselves.
   function renameProfile(profileId, name) {
     return updateProfile(profileId, (p) => ({ ...p, name }));
+  }
+
+  /** Create a new, empty Turn Step List — Settings' "+ New List" action
+   *  (direct follow-up request: "create an inventory of Turn Step List
+   *  profiles managed in Settings"). Mirrors createProfile's shape. */
+  async function addTurnStepList(name) {
+    const result = createTurnStepList(appConfig, name);
+    appConfig = result.appConfig;
+    await persistAppConfig();
+    notify();
+    return get();
+  }
+
+  /** Generic Turn Step List inventory mutator — same optimistic/persist/
+   *  rollback shape as updateProfile(), but scoped to the whole appConfig
+   *  (turnStepLists is a shared, appConfig-level inventory, not one
+   *  profile's content). Pass any pure mutator from domain/turnStepLists.js
+   *  (renameTurnStepList, deleteTurnStepList, moveTurnStepInList,
+   *  updateTurnStepText, setTurnStepShowCrewTasks,
+   *  loadDefaultIntoTurnStepList, ...), or a small inline one for
+   *  campaign.turnStepSlotAssignments-adjacent Settings controls. */
+  function updateAppConfig(mutator) {
+    const prevConfig = appConfig;
+    const nextConfig = mutator(structuredCloneSafe(appConfig)) || appConfig;
+    appConfig = nextConfig;
+    notify();
+    const thisConfig = appConfig;
+    persistAppConfig().catch((err) => {
+      console.warn('appConfig persist failed (IndexedDB)', err);
+      if (appConfig === thisConfig) { appConfig = prevConfig; notify(); }
+      notifyPersistError(err);
+    });
+    return get();
   }
 
   // --- storage visibility + recovery (ADR 0005 follow-up) ----------------
@@ -501,6 +574,7 @@ function createStore() {
     putDocBlob, getDocBlob, deleteDocBlob, listDocBlobKeys,
     listCampaigns, switchCampaign, renameCampaign, setCampaignProfile,
     listProfiles, getActiveProfile, createProfile, updateProfile, renameProfile,
+    addTurnStepList, updateAppConfig,
     STORAGE_KEY, BACKUP_KEY, LEGACY_KEYS,
   };
 }

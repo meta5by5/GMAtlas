@@ -12,10 +12,12 @@
 // Pure functions. No DOM, no localStorage. Runnable in the browser and Node.
 
 import {
-  SCHEMA_VERSION, APP_NAME, defaultCampaign, defaultAppConfig, defaultRulesProfile, withDefaults, deepMerge, isObject,
+  SCHEMA_VERSION, APP_NAME, defaultCampaign, defaultAppConfig, defaultRulesProfile, defaultTurnStepList, withDefaults, deepMerge, isObject,
 } from './schema.js';
 import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
+import { PLANETFALL_TURN_STEPS } from '../data/turnStepListPlanetfall.js';
 import { CREW_TASKS_5PFH } from '../data/crewTasksDefault5pfh.js';
+import { MAX_ENCOUNTERS } from '../domain/colony.js';
 
 // Every legacy key the old app is known to write, plus the very old aliases.
 export const LEGACY_KEYS = [
@@ -183,6 +185,47 @@ export function migrateDocument(doc, now = new Date().toISOString()) {
     }
   }
 
+  // Colony Encounters backfill (direct follow-up request — "default to 10
+  // rows"): schema.js's defaultCampaign() only seeds the full fixed-size
+  // grid for a BRAND NEW campaign — withDefaults' deepMerge (schema.js)
+  // replaces an existing array wholesale rather than padding it, so a
+  // campaign that already has colony.encounters (any length, including
+  // none, pre-dating this feature) needs its own explicit top-up here.
+  // Additive only — never drops or reorders a row already present.
+  if (!d.colony || typeof d.colony !== 'object') d.colony = { fields: {}, crew: [], encounters: [] };
+  if (!Array.isArray(d.colony.encounters)) d.colony.encounters = [];
+  while (d.colony.encounters.length < MAX_ENCOUNTERS) {
+    const n = d.colony.encounters.length;
+    d.colony.encounters.push({ id: `enc_${Date.now().toString(36)}_${n}_${Math.random().toString(36).slice(2, 6)}`, note: '', entityId: '' });
+  }
+
+  // Turn Step Lists (direct follow-up request: "create an inventory of Turn
+  // Step List profiles managed in Settings"): turnStepProgress used to be
+  // one flat { groupId, stepIndex, returnStack } — now it's slot-keyed
+  // ({ colony: {...}, starship: {...} }, domain/turnSteps.js), since the
+  // Campaign panel's two tabs each need an independent play position.
+  // withDefaults' deepMerge (schema.js) can't tell "replace" from "merge"
+  // for a plain object the way it does for arrays, so an old flat
+  // turnStepProgress would otherwise survive alongside the new nested
+  // shape as stray top-level groupId/stepIndex/returnStack keys sitting
+  // next to colony/starship — detect that exact old shape on the ORIGINAL
+  // incoming `doc` and fold it into turnStepProgress.starship (the old
+  // content was always the 5PFH sequence, now the Starship tab's own list),
+  // leaving colony's fresh nested default alone. Only fires once — a doc
+  // already shaped correctly (has `turnStepProgress.colony` or no
+  // `turnStepProgress.groupId` at all) is left untouched.
+  const legacyProgress = doc && doc.turnStepProgress;
+  if (legacyProgress && typeof legacyProgress === 'object' && legacyProgress.groupId !== undefined && !legacyProgress.colony) {
+    d.turnStepProgress = {
+      colony: { groupId: null, stepIndex: 0, returnStack: [] },
+      starship: {
+        groupId: legacyProgress.groupId || null,
+        stepIndex: legacyProgress.stepIndex || 0,
+        returnStack: Array.isArray(legacyProgress.returnStack) ? legacyProgress.returnStack : [],
+      },
+    };
+  }
+
   d.schemaVersion = SCHEMA_VERSION;
   d.app = APP_NAME;
   return d;
@@ -207,7 +250,13 @@ export function wrapLegacyCampaignIntoAppConfig(legacyDoc, now = new Date().toIS
     tradeEconomyModel: settings.tradeEconomyModel || 'hostile',
     statRuleset: settings.statRuleset || 'starforged',
     rulesProviderChoices: { ...(settings.rulesProviderChoices || {}) },
-    gameSystemActivations: { ...(settings.gameSystemActivations || { swn: false }) },
+    // fivepfh/planetfall default true even on a legacy campaign's own
+    // carried-over gameSystemActivations (which predates both keys) — same
+    // "Campaign panel tabs visible by default" posture as a brand-new
+    // profile (schema.js's defaultRulesProfile), just applied explicitly
+    // here since this whole ruleset object is hand-built rather than
+    // starting from that default.
+    gameSystemActivations: { swn: false, fivepfh: true, planetfall: true, ...(settings.gameSystemActivations || {}) },
     partyHeadlineFields: [...(settings.partyHeadlineFields || ['Health', 'Momentum'])],
   };
 
@@ -223,24 +272,36 @@ export function wrapLegacyCampaignIntoAppConfig(legacyDoc, now = new Date().toIS
     trade: false, battlemap: false, graph: false, 'faction-events': false,
   };
   fivePfhProfile.storyboardPositions = { composer: 'colony', navigator: 'world-tracker', advisor: 'party' };
-  // Turn Step workflow (direct follow-up request): a first-time install
-  // gets the 5PFH Campaign Turn Sequence out of the box; an already-
-  // migrated install (this function won't run again) gets it via store.js's
-  // narrow backfillDefaultTurnSteps instead — see that function's comment.
-  fivePfhProfile.turnSteps = { groups: JSON.parse(JSON.stringify(TURN_STEPS_5PFH)) };
-  // Crew Tasks (direct follow-up request) — same first-install seeding /
-  // backfillDefaultCrewTasks split as Turn Step above.
+  // Crew Tasks (direct follow-up request) — a first-time install gets the
+  // 5PFH Crew Tasks out of the box; an already-migrated install (this
+  // function won't run again) gets it via store.js's narrow
+  // backfillDefaultCrewTasks instead — see that function's comment.
   fivePfhProfile.crewTasks = { tasks: JSON.parse(JSON.stringify(CREW_TASKS_5PFH)) };
 
   const campaignEntry = {
     id: doc.meta.id, title: doc.meta.title, profileId: defaultProfile.id, createdAt: now, updatedAt: now,
   };
 
+  // Turn Step Lists (direct follow-up request: "create an inventory of Turn
+  // Step List profiles managed in Settings") are a standalone, shared
+  // appConfig-level inventory now, not profile content — a first-time
+  // install gets both the "5PFH" and "Planetfall" lists out of the box;
+  // an already-migrated install gets them via store.js's own
+  // backfillTurnStepListInventory instead (domain/turnStepLists.js).
+  const fivePfhList = { ...defaultTurnStepList('5PFH', now), groups: JSON.parse(JSON.stringify(TURN_STEPS_5PFH)) };
+  const planetfallList = { ...defaultTurnStepList('Planetfall', now), groups: JSON.parse(JSON.stringify(PLANETFALL_TURN_STEPS)) };
+  // The Campaign panel's Colony tab plays Planetfall, Starship plays base
+  // 5PFH (direct follow-up request) — real per-campaign state, defaulted
+  // here for a first-time install the same way store.js's own
+  // backfillCampaignTurnStepSlots does for an already-migrated one.
+  doc.turnStepSlotAssignments = { colony: planetfallList.id, starship: fivePfhList.id };
+
   const appConfig = {
     ...defaultAppConfig(),
     activeCampaignId: doc.meta.id,
     campaigns: [campaignEntry],
     profiles: [defaultProfile, fivePfhProfile],
+    turnStepLists: [fivePfhList, planetfallList],
   };
 
   return { appConfig, campaignDoc: doc };

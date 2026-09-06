@@ -38,6 +38,11 @@ export function defaultCampaign(now = new Date().toISOString()) {
       title: 'New Campaign',
       createdAt: now,
       updatedAt: now,
+      // Direct follow-up request ("each campaign has its own... assigned
+      // CSS style template from a list of templates") — see
+      // src/data/cssTemplates.js's own comment for why this is currently
+      // just a stored, inert choice (a stub ahead of real design work).
+      cssTemplate: 'default',
     },
 
     // The heart of the cockpit. `active` drives which workspace view renders.
@@ -158,21 +163,37 @@ export function defaultCampaign(now = new Date().toISOString()) {
     // A flat key/value turn sheet matching the 5PFH Planetfall campaign
     // turn tracker, plus a crew roster that references character/vehicle
     // entities by id rather than duplicating their stats, plus an
-    // Encounters log (up to 10 rows — matches the 5PFH Planetfall
-    // Encounters table) each with a free-text note and an optional
-    // reference to a Lifeform entity.
-    colony: { fields: {}, crew: [], encounters: [] },
+    // Encounters log — a fixed 10 rows (direct follow-up request: "default
+    // to 10 rows", matching the 5PFH Planetfall Encounters table exactly),
+    // each with a free-text note and an optional reference to a Lifeform
+    // entity. An existing campaign predating this gets backfilled up to 10
+    // by migrate.js rather than seeded here (this only runs for a
+    // brand-new campaign).
+    colony: { fields: {}, crew: [], encounters: Array.from({ length: 10 }, () => ({ id: uid('enc'), note: '', entityId: '' })) },
 
     // Turn Step workflow PLAY POSITION (design/adr/rules-profiles-multi-
     // campaign.md) — which step the GM is currently on, real per-campaign
-    // state (unlike the step DEFINITIONS themselves, which live on the
-    // active Rules Profile and are only ever read here via store.get()'s
-    // overlay, never persisted onto the campaign document). groupId/
-    // stepIndex null/0 until the GM clicks Next Step the first time.
-    // returnStack holds { groupId, stepIndex } entries to resume a parent
-    // list after a branch (Daily Life -> Mission Steps -> ...) reaches its
-    // own end — see domain/turnSteps.js's advanceTurnStep/retreatTurnStep.
-    turnStepProgress: { groupId: null, stepIndex: 0, returnStack: [] },
+    // state (unlike the step DEFINITIONS themselves, which live in the
+    // shared appConfig.turnStepLists inventory and are only ever read here
+    // via store.get()'s overlay, never persisted onto the campaign
+    // document — see domain/turnStepLists.js). Direct follow-up request
+    // (the Campaign panel's Colony and Starship tabs each walk through
+    // their OWN turn-step list independently): keyed by SLOT ('colony'/
+    // 'starship'), not a single flat position — each slot's groupId/
+    // stepIndex is null/0 until the GM clicks Next Step the first time
+    // for that tab. returnStack holds { groupId, stepIndex } entries to
+    // resume a parent list after a branch reaches its own end — see
+    // domain/turnSteps.js's advanceTurnStep/retreatTurnStep.
+    turnStepProgress: {
+      colony: { groupId: null, stepIndex: 0, returnStack: [] },
+      starship: { groupId: null, stepIndex: 0, returnStack: [] },
+    },
+    // Which Turn Step List (appConfig.turnStepLists, by id) backs each
+    // Campaign-panel tab — real per-campaign state (a GM's own choice),
+    // distinct from the shared list CONTENT itself. Defaulted by
+    // migrate.js to the "Planetfall"/"5PFH"-named lists; null until then
+    // (e.g. mid-migration) means that tab has no current step to show.
+    turnStepSlotAssignments: { colony: null, starship: null },
 
     // Crew Tasks PLAY state (design/adr/rules-profiles-multi-campaign.md,
     // direct follow-up request) — which party members have already
@@ -304,21 +325,21 @@ export function defaultRulesProfile(name = 'Default', now = new Date().toISOStri
       tradeEconomyModel: 'hostile',
       statRuleset: 'starforged',
       rulesProviderChoices: {},
-      gameSystemActivations: { swn: false },
+      // fivepfh/planetfall (direct follow-up request — the Campaign panel's
+      // Colony/Starship tabs are each independently hideable) default true:
+      // unlike swn (a genuinely optional bolt-on), these are core to what
+      // this app already plays, so a new profile shows both tabs by
+      // default; a GM can still switch either off here.
+      gameSystemActivations: { swn: false, fivepfh: true, planetfall: true },
       partyHeadlineFields: ['Health', 'Momentum'],
     },
-    // Turn Step workflow (design/adr/rules-profiles-multi-campaign.md,
-    // direct follow-up request — converted from the Guide entry "5PFH
-    // Campaign Turn Sequence"): a Rules Profile's own reorderable sequence
-    // of named step-lists (Colony's "Next Step"/"Previous Step" walk
-    // through these; Settings > Turn Step edits them). Empty by default —
-    // a profile with no campaign-turn concept (Starforged, a fresh
-    // "Default") shows nothing in Colony rather than an irrelevant 5PFH
-    // workflow. src/data/turnStepsDefault5pfh.js is the seed content a GM
-    // opts into via "Load 5PFH Default Steps," never auto-applied to an
-    // arbitrary profile. Shape: [{ id, label, steps: [{ id, text,
-    // branchTo }] }] — see domain/turnSteps.js.
-    turnSteps: { groups: [] },
+    // NOTE: Turn Step content used to live here (profile.turnSteps) but is
+    // now a standalone, shared appConfig.turnStepLists inventory (direct
+    // follow-up request — "create an inventory of Turn Step List profiles
+    // managed in Settings") — see domain/turnStepLists.js and
+    // appConfig.turnStepLists below, plus campaign.turnStepSlotAssignments
+    // (this file, defaultCampaign) for which list backs which Campaign-
+    // panel tab. A profile no longer owns turn-step content directly.
     // Crew Tasks (design/adr/rules-profiles-multi-campaign.md, direct
     // follow-up request): a Rules Profile's own reorderable flat list of
     // crew-job definitions Colony's dl2 crew-task box picks from. Empty by
@@ -337,7 +358,18 @@ export function defaultRulesProfile(name = 'Default', now = new Date().toISOStri
 // Separate from any one campaign document since a profile is shared across
 // campaigns and a campaign list obviously can't live inside one campaign.
 export function defaultAppConfig() {
-  return { activeCampaignId: null, campaigns: [], profiles: [] };
+  return { activeCampaignId: null, campaigns: [], profiles: [], turnStepLists: [] };
+}
+
+// A single named, reorderable Turn Step List — shared across every Rules
+// Profile/campaign (direct follow-up request: "create an inventory of Turn
+// Step List profiles managed in Settings," instead of one list trapped
+// inside a single Rules Profile). Shape: [{ id, label, steps: [{ id, text,
+// branchTo }] }] per group, same as the old profile-scoped shape — see
+// domain/turnStepLists.js (definition mutators) and domain/turnSteps.js
+// (play-position functions, now slot-parameterized).
+export function defaultTurnStepList(name = 'New List', now = new Date().toISOString()) {
+  return { id: uid('tsl'), name, createdAt: now, updatedAt: now, groups: [] };
 }
 
 /** Deep-merge a partial document onto defaults so old/partial docs stay valid. */

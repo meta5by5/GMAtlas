@@ -6,7 +6,7 @@
 // ISSUES/FINDINGS #1) — kept as two separate concerns here too, since a
 // tracker like "party credits" has no natural entity to live on.
 
-import { listEntities } from './entities.js';
+import { listEntities, getEntity } from './entities.js';
 import { hasCharacterTag } from './statblocks.js';
 import {
   findProgressDifficulty, STARFORGED_PROGRESS_TRACK_MAX,
@@ -21,6 +21,20 @@ function ensure(campaign) {
   if (campaign.party.sharedGear === undefined) campaign.party.sharedGear = '';
   if (!Array.isArray(campaign.party.sharedAssets)) campaign.party.sharedAssets = [];
   if (!Array.isArray(campaign.party.sharedAssetIds)) campaign.party.sharedAssetIds = [];
+  // Relationships (direct follow-up request: "add a Relationships section
+  // similar to how used on Entity Editor. This treats the Party as an
+  // entity for the mapping purposes") — one-directional, Party-side-only
+  // storage: {to, label, type, strength}, same shape a real entity's own
+  // `relationships` array uses (entities.js), but never mirrored onto the
+  // target entity's own list — "Party" has no real entity record to mirror
+  // onto. Starship (direct follow-up request): a single #vehicle-tagged
+  // entity reference, exclusively tagged #starship campaign-wide — see
+  // setPartyStarship/clearPartyStarship below. starshipCampaignTurn is the
+  // Campaign panel's Starship tab's own independent turn counter (no
+  // Planetfall accrual — direct follow-up request).
+  if (!Array.isArray(campaign.party.relationships)) campaign.party.relationships = [];
+  if (campaign.party.starshipEntityId === undefined) campaign.party.starshipEntityId = null;
+  if (campaign.party.starshipCampaignTurn === undefined) campaign.party.starshipCampaignTurn = 0;
   return campaign.party;
 }
 
@@ -262,5 +276,116 @@ export function removePartySharedAssetEntity(campaign, entityId) {
   const next = clone(campaign);
   const party = ensure(next);
   party.sharedAssetIds = party.sharedAssetIds.filter((id) => id !== entityId);
+  return next;
+}
+
+// --- Party Relationships (direct follow-up request: "add a Relationships
+// section similar to how used on Entity Editor. This treats the Party as
+// an entity for the mapping purposes") ---------------------------------
+// One-directional, Party-side-only: campaign.party.relationships holds
+// {to, label, type, strength}, the exact same shape a real entity's own
+// relationships array uses (entities.js), and the SAME RELATIONSHIP_TYPES/
+// RELATIONSHIP_TYPE_LABEL vocabulary (imported by the UI layer directly,
+// not duplicated here) — but never mirrored onto the target entity's own
+// list, since "Party" has no real entity record for entities.js's _link to
+// push a reverse edge onto.
+function clampStrength(n) {
+  const v = Math.round(Number(n));
+  return Number.isFinite(v) ? Math.max(0, Math.min(10, v)) : 0;
+}
+
+/** Adds (or, if one already exists to this target, REPLACES — same "at
+ *  most one edge to a given target" invariant a real entity's relationship
+ *  list already has) a Party relationship. */
+export function addPartyRelationship(campaign, targetId, label = 'linked', type = 'linked') {
+  const next = clone(campaign);
+  const party = ensure(next);
+  party.relationships = party.relationships.filter((r) => r.to !== targetId);
+  party.relationships.push({ to: targetId, label, type, strength: 0 });
+  return next;
+}
+
+export function removePartyRelationship(campaign, targetId) {
+  const next = clone(campaign);
+  const party = ensure(next);
+  party.relationships = party.relationships.filter((r) => r.to !== targetId);
+  return next;
+}
+
+export function updatePartyRelationshipLabel(campaign, targetId, label) {
+  const next = clone(campaign);
+  const party = ensure(next);
+  const r = party.relationships.find((rel) => rel.to === targetId);
+  if (r) r.label = label;
+  return next;
+}
+
+export function updatePartyRelationshipType(campaign, targetId, type) {
+  const next = clone(campaign);
+  const party = ensure(next);
+  const r = party.relationships.find((rel) => rel.to === targetId);
+  if (r) r.type = type;
+  return next;
+}
+
+export function updatePartyRelationshipStrength(campaign, targetId, strength) {
+  const next = clone(campaign);
+  const party = ensure(next);
+  const r = party.relationships.find((rel) => rel.to === targetId);
+  if (r) r.strength = clampStrength(strength);
+  return next;
+}
+
+// --- Party Starship (direct follow-up request) -------------------------
+// A single #vehicle-tagged entity, exclusively tagged #starship
+// campaign-wide (enforced here, not left to the UI): selecting one (a)
+// strips #starship from whoever currently holds it — anywhere in
+// campaign.entities.items, not just the previous party.starshipEntityId,
+// so a manually-mistagged duplicate can never coexist — (b) tags the new
+// entity #starship, (c) replaces any existing "Owns" Party relationship
+// pointing at the OLD starship with one pointing at the new entity (owns
+// already exists in entities.js's RELATIONSHIP_TYPES/expects target type
+// 'asset' — no new relationship type needed), (d) sets
+// party.starshipEntityId. clearPartyStarship reverses all three side
+// effects. Both are single atomic mutators (not a compose-in-the-UI
+// pattern) so the tag/relationship/field invariant can never drift apart.
+export function setPartyStarship(campaign, entityId) {
+  const next = clone(campaign);
+  const party = ensure(next);
+  const items = (next.entities && next.entities.items) || [];
+  for (const e of items) {
+    if (e.id !== entityId && Array.isArray(e.tags) && e.tags.some((t) => t.toLowerCase() === 'starship')) {
+      e.tags = e.tags.filter((t) => t.toLowerCase() !== 'starship');
+    }
+  }
+  const target = items.find((e) => e.id === entityId);
+  if (target) {
+    if (!Array.isArray(target.tags)) target.tags = [];
+    if (!target.tags.some((t) => t.toLowerCase() === 'starship')) target.tags.push('starship');
+  }
+  // Only the auto-managed "Owns" edge to the OLD starship is dropped — a
+  // manually-added, differently-typed Party relationship to that same
+  // entity (added via the generic Relationships section before it became
+  // the starship) is left alone.
+  party.relationships = party.relationships.filter((r) => !(r.type === 'owns' && r.to === party.starshipEntityId));
+  if (target) {
+    party.relationships = party.relationships.filter((r) => r.to !== entityId);
+    party.relationships.push({ to: entityId, label: 'Owns', type: 'owns', strength: 0 });
+  }
+  party.starshipEntityId = target ? entityId : null;
+  return next;
+}
+
+/** Detaches the current starship without picking a new one — untags the
+ *  entity, drops the Owns relationship, nulls the field. No-op if none is
+ *  currently set. */
+export function clearPartyStarship(campaign) {
+  const next = clone(campaign);
+  const party = ensure(next);
+  if (!party.starshipEntityId) return next;
+  const target = getEntity(next, party.starshipEntityId);
+  if (target && Array.isArray(target.tags)) target.tags = target.tags.filter((t) => t.toLowerCase() !== 'starship');
+  party.relationships = party.relationships.filter((r) => !(r.type === 'owns' && r.to === party.starshipEntityId));
+  party.starshipEntityId = null;
   return next;
 }

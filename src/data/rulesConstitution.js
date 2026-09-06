@@ -19,7 +19,11 @@
 // original content, no sourcebook — see its own note below).
 export const RULES_PROVIDERS = {
   starforged: { label: 'Starforged', status: 'integrated', note: 'Character sheets (Phase 4); its oracle philosophy and Progress Track model shaped domain/oracles.js and domain/threads.js.', rulesetId: 'starforged' },
-  fivepfh: { label: 'Five Parsecs From Home', status: 'integrated', note: 'Character sheets (Phase 4).', rulesetId: '5pfh' },
+  fivepfh: {
+    label: 'Five Parsecs From Home', status: 'integrated', note: 'Character sheets (Phase 4). Also gates the Campaign panel\'s Starship tab (direct follow-up request) — a different kind of gate than SWN\'s own below (a plain feature toggle, not a licensing confirmation), reusing the same mechanism rather than inventing a second one.', rulesetId: '5pfh',
+    requiresActivation: true,
+    activationText: 'Show the Campaign panel\'s Starship tab (base 5PFH game).',
+  },
   traveller: { label: 'Traveller', status: 'character ruleset authored (original content)', note: 'No sourcebook exists in assets/docs — confirmed by the 2026-07-03 ruleset library review. The character ruleset (data/rulesets.js) is original content inspired by classic Traveller\'s six characteristics and its 2d6-vs-8 task resolution (domain/dice.js\'s rollTraveller), not a transcription; still no Trade/Vehicle/NPC-generation content of its own beyond what Hostile/SWN already provide for those areas.', rulesetId: 'traveller' },
   hostile: { label: 'Hostile', status: 'default genre', note: 'campaign.settings.genre default; the oracle tables in data/tables.js are Hostile-flavored.' },
   swn: {
@@ -28,7 +32,11 @@ export const RULES_PROVIDERS = {
     activationText: 'Activate Stars Without Number faction content — I confirm I own a copy of Stars Without Number Revised (Deluxe Edition) and intend to use this transcribed content (data/swnFactionData.js) for my own personal GM reference, not for redistribution.',
   },
   gmatlascore: { label: 'GMAtlas Core', status: 'faction content authored (original, SWN-parallel mechanics)', note: 'A full parallel to the SWN Faction Turn Engine (docs/adr/0032-gmatlas-core-faction-provider.md, data/gmatlasFactionData.js): identical ratings/HP/cost/dice/difficulty formulas to SWN\'s own faction assets/tags/goals (mechanics and numbers aren\'t copyrightable expression) but every name and all flavor text is original writing. The ungated, safe-by-default provider — no Game System Activation needed.' },
-  planetfall: { label: 'Planetfall (5PFH)', status: 'integrated', note: 'Colony drawer (domain/colony.js).' },
+  planetfall: {
+    label: 'Planetfall (5PFH)', status: 'integrated', note: 'Colony drawer (domain/colony.js). Also gates the Campaign panel\'s Colony tab (direct follow-up request) — see fivepfh\'s own note above for why this reuses the Game System Activation mechanism as a plain feature toggle here.',
+    requiresActivation: true,
+    activationText: "Show the Campaign panel's Colony tab (Planetfall colony sim).",
+  },
   sagaatlas: { label: 'Saga Atlas itself', status: 'core', note: "Never delegated to a Rules Lens — campaign memory, continuity, rules switching, and recommendations are the platform's own job, not any single ruleset's." },
 };
 

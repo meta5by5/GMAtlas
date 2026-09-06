@@ -24,6 +24,7 @@ import {
 import {
   createEntity, updateEntity, addEntityTag, removeEntityTag, removeEntity, filterEntities, setActiveEntity, addRelationship, removeRelationship,
   getEntity, addEntityStatblockGroup, removeEntityStatblockGroup, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
+  addEntityStatblockWeapon, updateEntityStatblockWeapon, removeEntityStatblockWeapon, setEntityStatblockGear,
   setEntityStatblockTrackValue, setEntityStatblockAttributeValue, updateRelationshipLabel, updateRelationshipType, updateRelationshipStrength,
   listEntities, ENTITY_TYPES, TYPE_LABEL, setFactionStat, addFactionAsset, removeFactionAsset, createItemFromCatalog,
   addLocationTradeCode, removeLocationTradeCode, addLocationBase, removeLocationBase,
@@ -51,8 +52,8 @@ import {
   listReferenceDocuments, renameRefDocument, addRefDocumentTag, removeRefDocumentTag, hideRefDocument, listDocuments,
   sanitizeExternalLinkUrl, mergeRefOverrides, referencedBlobKeys,
 } from '../domain/documents.js';
-import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue, setGaugeTrackerValue, ensurePartyStarforgedTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity } from '../domain/party.js';
-import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, addColonyEncounter, updateColonyEncounter, removeColonyEncounter, listColonyEncounters, advanceCampaignTurnWithAccrual, formatTurnAdvanceNote, incrementCampaignMilestones, decrementCampaignMilestones } from '../domain/colony.js';
+import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue, setGaugeTrackerValue, ensurePartyStarforgedTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity, listPartyMembers, addPartyRelationship, removePartyRelationship, updatePartyRelationshipLabel, updatePartyRelationshipType, updatePartyRelationshipStrength, setPartyStarship, clearPartyStarship } from '../domain/party.js';
+import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, updateColonyEncounter, detachColonyEncounterEntity, listColonyEncounters, advanceCampaignTurnWithAccrual, formatTurnAdvanceNote, incrementCampaignMilestones, decrementCampaignMilestones, syncCrewRosterWithParty } from '../domain/colony.js';
 import {
   getSector, listTouchedSectors, revealSector, surveySector, harvestSectorResource,
   setSectorNotes, setSectorOverlayIcon, setSectorCornerLabel, removeSectorCornerLabel,
@@ -90,8 +91,10 @@ import { renderSearchPanel } from './searchPanel.js';
 import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
 import { isModuleVisible, setModuleEnabled, setStoryboardPosition, updateProfileRuleset, applyProfileDraft, resolvePositionContentId } from '../domain/rulesProfiles.js';
 import { DRAWER_META, drawerMeta } from './drawerMeta.js';
-import { moveTurnStepInGroup, updateTurnStepText, loadDefaultTurnSteps, getCurrentTurnStep, advanceTurnStep, retreatTurnStep, startNextCampaignTurn } from '../domain/turnSteps.js';
+import { moveTurnStepInList, updateTurnStepText, setTurnStepShowCrewTasks, loadDefaultIntoTurnStepList, renameTurnStepList, deleteTurnStepList, addTurnStepGroup, renameTurnStepGroup, addTurnStepToGroup, moveTurnStepToGroup, setTurnStepBranchTo } from '../domain/turnStepLists.js';
+import { getCurrentTurnStep, advanceTurnStep, retreatTurnStep, startNextColonyCampaignTurn, startNextStarshipCampaignTurn } from '../domain/turnSteps.js';
 import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
+import { PLANETFALL_TURN_STEPS } from '../data/turnStepListPlanetfall.js';
 import { moveCrewTaskInList, updateCrewTaskText, loadDefaultCrewTasks, assignCrewTask } from '../domain/crewTasks.js';
 import { CREW_TASKS_5PFH } from '../data/crewTasksDefault5pfh.js';
 
@@ -224,27 +227,27 @@ function currentEditingProfileId() {
 }
 
 // store.update()'s mutator receives the RAW campaign doc — unlike store.get(),
-// it does NOT run overlayProfile(), so campaign.turnSteps is never populated
-// there. advanceTurnStep/retreatTurnStep/startNextCampaignTurn need it to
-// resolve group order, so this overlays it just for the call and strips it
-// back off the result before returning — turnSteps is profile content and
-// must never actually get persisted onto the campaign doc (design/adr/
-// rules-profiles-multi-campaign.md's "never persisted back" invariant for
-// every overlaid field). Split from applyTurnStepMutation below so a caller
-// that needs to chain something else (e.g. addNote) onto the result can
-// still get the overlay/strip treatment without a second store.update().
-function withTurnStepsOverlay(campaign, mutatorFn) {
-  const profile = store.getActiveProfile();
-  const withSteps = profile ? { ...campaign, turnSteps: profile.turnSteps } : campaign;
-  const next = mutatorFn(withSteps);
-  if (next && Object.prototype.hasOwnProperty.call(next, 'turnSteps')) {
-    const { turnSteps, ...clean } = next;
+// it does NOT run overlayProfile(), so campaign.turnStepLists is never
+// populated there. advanceTurnStep/retreatTurnStep/startNext*CampaignTurn
+// need it to resolve which list backs a slot, so this overlays it just for
+// the call and strips it back off the result before returning —
+// turnStepLists is shared appConfig content and must never actually get
+// persisted onto the campaign doc (design/adr/rules-profiles-multi-
+// campaign.md's "never persisted back" invariant for every overlaid
+// field). Split from applyTurnStepMutation below so a caller that needs to
+// chain something else (e.g. addNote) onto the result can still get the
+// overlay/strip treatment without a second store.update().
+function withTurnStepListsOverlay(campaign, mutatorFn) {
+  const withLists = { ...campaign, turnStepLists: store.get().turnStepLists || [] };
+  const next = mutatorFn(withLists);
+  if (next && Object.prototype.hasOwnProperty.call(next, 'turnStepLists')) {
+    const { turnStepLists, ...clean } = next;
     return clean;
   }
   return next;
 }
-function applyTurnStepMutation(mutatorFn) {
-  return store.update((d) => withTurnStepsOverlay(d, mutatorFn));
+function applyTurnStepMutation(slot, mutatorFn) {
+  return store.update((d) => withTurnStepListsOverlay(d, (c) => mutatorFn(c, slot)));
 }
 
 // Same fallback shape as store.js's own structuredCloneSafe — most runtimes
@@ -279,7 +282,7 @@ function isProfileDraftDirty(profileId) {
   if (!draft) return false;
   const stored = store.listProfiles().find((p) => p.id === profileId);
   if (!stored) return false;
-  const shape = (p) => JSON.stringify({ storyboardPositions: p.storyboardPositions, moduleEnabled: p.moduleEnabled, ruleset: p.ruleset, turnSteps: p.turnSteps, crewTasks: p.crewTasks });
+  const shape = (p) => JSON.stringify({ storyboardPositions: p.storyboardPositions, moduleEnabled: p.moduleEnabled, ruleset: p.ruleset, crewTasks: p.crewTasks });
   return shape(draft) !== shape(stored);
 }
 function saveProfileDraft(profileId) {
@@ -327,6 +330,11 @@ let docFilter = '';
 let graphFilter = ''; // ephemeral — highlights/dims graph-svg nodes by name substring, never removes them
 let helpOpen = new Set(); // ephemeral — which collapsible "?" tip icons are currently expanded, keyed by a stable per-instance string
 let settingsMenuOpen = false; // ephemeral — the header gear's Settings/About dropdown (New Campaign lives only in the Settings drawer now, not this menu)
+// Campaign switcher (direct follow-up request): clicking the campaign
+// name in the top nav pops up a list of every campaign to switch between
+// (with a confirm prompt) plus a "start new campaign" shortcut into
+// Settings' own Campaigns tab.
+let campaignSwitcherOpen = false;
 let settingsTab = 'general'; // ephemeral — which of the 6 topical Settings tabs is active (UX batch)
 // Ruleset Profile Editor tab (design/adr/rules-profiles-multi-campaign.md) —
 // which profile the ruleset/module/position editor is currently showing;
@@ -338,21 +346,39 @@ let settingsSelectedProfileId = null;
 // CLAUDE.md this is its own inline form rather than window.prompt() or the
 // single-field openInlinePrompt.
 let newCampaignDraft = { title: '', profileId: '' };
-// Ruleset Profile Editor + Turn Step drafts (direct request: profile edits
-// apply "when the changes are saved," not instantly like the rest of
-// Settings) — one uncommitted draft per profile id touched this session,
-// so switching which profile you're editing never discards another
-// profile's in-progress edits. Only ever holds storyboardPositions/
-// moduleEnabled/ruleset/turnSteps — a profile's id/name/createdAt are
-// never drafted (rename is its own, separately-committed inline-prompt
-// action). Cleared for a given id on Save (re-seeds fresh from the store
-// next time that profile is opened) or Cancel (discards, reverting the
-// form to the stored value).
+// Ruleset Profile Editor drafts (direct request: profile edits apply "when
+// the changes are saved," not instantly like the rest of Settings) — one
+// uncommitted draft per profile id touched this session, so switching
+// which profile you're editing never discards another profile's
+// in-progress edits. Only ever holds storyboardPositions/moduleEnabled/
+// ruleset/crewTasks — a profile's id/name/createdAt are never drafted
+// (rename is its own, separately-committed inline-prompt action). Turn
+// Step Lists are no longer part of this draft (direct follow-up request —
+// they're a standalone appConfig.turnStepLists inventory now, edited
+// instantly via store.updateAppConfig, not through this draft flow — see
+// domain/turnStepLists.js). Cleared for a given id on Save (re-seeds fresh
+// from the store next time that profile is opened) or Cancel (discards,
+// reverting the form to the stored value).
 let profileDrafts = new Map();
-// Turn Step Settings tab (design/adr/rules-profiles-multi-campaign.md) —
-// which step-group sections are expanded; collapsed by default (7 groups,
-// up to 17 steps each — too much to show open at once).
+// Turn Step Lists Settings tab — which step-group sections are expanded;
+// collapsed by default (too much to show open at once).
 let expandedTurnStepGroups = new Set();
+// Which Turn Step List (appConfig.turnStepLists, by id) is currently being
+// edited in Settings — direct follow-up request ("create an inventory of
+// Turn Step List profiles managed in Settings"). Defaults to the first
+// list if unset/stale (see turnStepsSettingsSection's own fallback).
+let editingTurnStepListId = null;
+// Direct follow-up request: "Turn Step Lists" is its own collapsible
+// section in Settings' Turn Step tab (default open) — "Turn Step
+// Assignments" (Colony/Starship tab uses) moved out into its own, always-
+// visible section below it.
+let turnStepListsCollapsed = false;
+// Per-step "Move to"/"Branches to" icon toggles (direct follow-up request:
+// "right-aligned icons that open a dropdown on the next row if clicked
+// into edit mode") — each Set holds the full listId::groupId::stepId keys
+// whose own dropdown is currently revealed; independent of each other.
+let turnStepMoveEditOpen = new Set();
+let turnStepBranchEditOpen = new Set();
 // Crew Tasks box (design/adr/rules-profiles-multi-campaign.md, direct
 // follow-up request) — which task + party member are picked in Colony's
 // dl2 crew-task box, purely ephemeral (nothing is committed to the
@@ -403,6 +429,11 @@ let battlemapPan = null; // { world, startClientX, startClientY, startX, startY 
 let worldTrackerTab = 'sectors';
 let worldTrackerSelectedSector = null; // {x,y} | null
 let worldTrackerMigrateOpen = new Set();
+// Campaign panel's Colony/Starship tab strip (direct follow-up request:
+// "Rename the Colony panel to Campaign and add two right-aligned links/
+// buttons that enable separate tabs") — same plain-string ephemeral state
+// as worldTrackerTab above.
+let colonyPanelTab = 'colony';
 // A sector detail's Corner Labels sub-section (direct follow-up request —
 // collapsed by default, moved below Notes); only one sector's detail is
 // ever shown at a time, so a single flat boolean is enough.
@@ -529,6 +560,7 @@ let expandedWhatConflicts = new Set(); // ephemeral — Conflict entity ids whos
 let expandedPartyStatField = null; // ephemeral — the single "entityId::gi::fi" key (or null) whose Party Roster track pill shows its full tracker view below; a single value, not a Set, so picking a different track field REPLACES the open one instead of stacking a second (direct follow-up request)
 let journalActionsOpen = false; // ephemeral — the Journal drawer's Actions row (Add note, Generate Mission, ...), collapsed by default (direct follow-up request — was open by default)
 let collapsedOverview = new Set(); // ephemeral — entity ids whose Overview field has been explicitly collapsed (open by default, UX batch)
+let collapsedEntityTags = new Set(); // ephemeral — entity ids whose Tags chip list has been explicitly collapsed (open by default, direct follow-up request)
 let expandedContracts = new Set(); // ephemeral — contract (Thread) ids whose full row is expanded (collapsed to just the name by default, UX batch)
 let tradeLocationTagFilter = ''; // ephemeral — Trade tab's Location tag filter (UX batch), narrows the Location <select>'s options
 let expandedWorldProfile = new Set(); // ephemeral — entity ids whose World Profile (UWP) card is expanded (docs/adr/0026 follow-up, collapsed by default)
@@ -846,7 +878,10 @@ export function mountShell(el) {
         <div class="brand"><h1>GMAtlas</h1></div>
         <div class="header-actions">
           <button class="btn ghost sm" data-search-toggle title="Search everything (Cast, Journal, Oracle, Documents, Party, Colony) — Ctrl/Cmd+K"><span class="icon-mono">🔍</span> <span class="btn-label">Search</span></button>
-          <span class="campaign-title" title="Campaign name"></span>
+          <div class="campaign-switcher-wrap">
+            <button type="button" class="campaign-title" data-campaign-switcher-toggle title="Switch campaign"></button>
+            <div class="campaign-switcher-menu" data-campaign-switcher-menu hidden></div>
+          </div>
           <div class="header-drawer-tabs" data-header-drawer-tabs></div>
           <div class="settings-menu-wrap">
             <button class="btn ghost sm" data-settings-menu-toggle title="Menu" aria-label="Menu"><span class="glyph">⚙</span><b>Settings</b></button>
@@ -1080,6 +1115,26 @@ function onClick(ev) {
   const settingsTabBtn = hit('[data-settings-tab]');
   if (settingsTabBtn) { settingsTab = settingsTabBtn.dataset.settingsTab; return renderDrawerBody(); }
 
+  // Campaign switcher (direct follow-up request) — same "only an explicit
+  // toggle or picking an item closes it" posture as the Settings menu
+  // above, no click-outside handler.
+  if (hit('[data-campaign-switcher-toggle]')) { campaignSwitcherOpen = !campaignSwitcherOpen; return render(); }
+  const switcherSwitchBtn = hit('[data-campaign-switcher-menu] [data-campaign-switch]');
+  if (switcherSwitchBtn) {
+    const id = switcherSwitchBtn.dataset.campaignSwitch;
+    const target = store.listCampaigns().find((c) => c.id === id);
+    campaignSwitcherOpen = false;
+    if (!target || target.active) return render();
+    if (!window.confirm(`Switch to campaign "${target.title}"? Each campaign is fully independent — nothing in the current one is lost, you're just changing which one is active.`)) return render();
+    return store.switchCampaign(id).then(() => toast('Switched campaign'));
+  }
+  if (hit('[data-campaign-switcher-new]')) {
+    campaignSwitcherOpen = false;
+    settingsTab = 'campaigns';
+    openDrawerTab('settings');
+    return render();
+  }
+
   // --- Phase 9: Activity -> Rules Lens suggestion, apply as default ruleset
   // --- A one-click "use this" from the Advisor's own suggestion, not a
   // Ruleset Profile Editor form field — applies immediately (not staged as
@@ -1287,6 +1342,12 @@ function onClick(ev) {
     if (collapsedOverview.has(id)) collapsedOverview.delete(id); else collapsedOverview.add(id);
     return renderDrawerBody();
   }
+  const entityTagsToggle = hit('[data-entity-tags-toggle]');
+  if (entityTagsToggle) {
+    const id = entityTagsToggle.dataset.entityTagsToggle;
+    if (collapsedEntityTags.has(id)) collapsedEntityTags.delete(id); else collapsedEntityTags.add(id);
+    return renderDrawerBody();
+  }
   const typeFilterBtn = hit('[data-entity-type-filter]');
   if (typeFilterBtn) {
     entityTypeFilter = typeFilterBtn.dataset.entityTypeFilter;
@@ -1481,7 +1542,10 @@ function onClick(ev) {
     store.update((d) => {
       let next = removeEntity(d, deletedId);
       if (filteredNext && getEntity(next, filteredNext.id)) next = setActiveEntity(next, filteredNext.id);
-      return next;
+      // Direct follow-up request: deleting a Party member also removes
+      // their Crew Roster row — cheap/idempotent no-op for any entity
+      // that wasn't a party member anyway.
+      return syncCrewRosterWithParty(next);
     });
     return toast('Entity removed');
   }
@@ -1581,7 +1645,13 @@ function onClick(ev) {
     return render();
   }
   const entTagRemove = hit('[data-entity-tag-remove]');
-  if (entTagRemove) { const active = store.get().entities.activeId; return store.update((d) => removeEntityTag(d, active, entTagRemove.dataset.entityTagRemove)); }
+  if (entTagRemove) {
+    const active = store.get().entities.activeId;
+    // Direct follow-up request: removing an entity's #character tag (an
+    // established way to remove a Party member, per Party's own "tag an
+    // NPC #character" convention) also removes their Crew Roster row.
+    return store.update((d) => syncCrewRosterWithParty(removeEntityTag(d, active, entTagRemove.dataset.entityTagRemove)));
+  }
   // A tag on an entity's own tagEditor is clickable — jumps to Cast
   // filtered to just that tag (replacing whatever filter Cast already
   // had, not accumulating — "show me everything else tagged this," a
@@ -1651,6 +1721,21 @@ function onClick(ev) {
     const gi = Number(sbAddTrack.dataset.statblockAddTrackField);
     openInlinePrompt('statblock-add-track', { label: 'Track name', placeholder: 'e.g. Ammo', meta: { gi }, anchorRect: sbAddTrack.getBoundingClientRect() });
     return;
+  }
+  // 5PFH character sheet weapon table (direct follow-up request) — plain
+  // array-index addressing (weaponIndex), same convention statblock fields
+  // already use, not a generated id.
+  const sbWeaponAdd = hit('[data-statblock-weapon-add]');
+  if (sbWeaponAdd) {
+    const gi = Number(sbWeaponAdd.dataset.statblockWeaponAdd);
+    const active = store.get().entities.activeId;
+    return store.update((d) => addEntityStatblockWeapon(d, active, gi));
+  }
+  const sbWeaponRemove = hit('[data-statblock-weapon-remove]');
+  if (sbWeaponRemove) {
+    const [gi, wi] = sbWeaponRemove.dataset.statblockWeaponRemove.split('::').map(Number);
+    const active = store.get().entities.activeId;
+    return store.update((d) => removeEntityStatblockWeapon(d, active, gi, wi));
   }
   const trackSet = hit('[data-statblock-track-set]');
   if (trackSet) {
@@ -1978,13 +2063,30 @@ function onClick(ev) {
   // add-character below uses) — a blank NPC, tagged #character so it
   // immediately satisfies listPartyMembers' existing filter.
   if (hit('[data-party-add-character]')) {
-    store.update((d) => { const r = createEntity(d, { type: 'npc' }); return addEntityTag(r.campaign, r.id, 'character'); });
+    // Direct follow-up request: adding a Party member also adds a Crew
+    // Roster row for them automatically.
+    store.update((d) => { const r = createEntity(d, { type: 'npc' }); return syncCrewRosterWithParty(addEntityTag(r.campaign, r.id, 'character')); });
     return toast('NPC added to Party');
   }
   const sharedAssetDel = hit('[data-party-shared-asset-remove]');
   if (sharedAssetDel) return store.update((d) => removePartySharedAsset(d, Number(sharedAssetDel.dataset.partySharedAssetRemove)));
   const sharedAssetEntityDel = hit('[data-party-shared-asset-entity-remove]');
   if (sharedAssetEntityDel) return store.update((d) => removePartySharedAssetEntity(d, sharedAssetEntityDel.dataset.partySharedAssetEntityRemove));
+  // Party's own Starship section (direct follow-up request).
+  if (hit('[data-party-starship-remove]')) return store.update((d) => clearPartyStarship(d));
+  // Party's own Relationships section (direct follow-up request: "treats
+  // the Party as an entity for the mapping purposes") — same shape as the
+  // Entity Editor's data-entity-unlink/data-entity-link-add, retargeted to
+  // campaign.party.relationships.
+  const partyUnlink = hit('[data-party-unlink]');
+  if (partyUnlink) return store.update((d) => removePartyRelationship(d, partyUnlink.dataset.partyUnlink));
+  if (hit('[data-party-link-add]')) {
+    const target = root.querySelector('[data-party-link-target]');
+    const label = root.querySelector('[data-party-link-label]');
+    const type = root.querySelector('[data-party-link-type]');
+    if (target && target.value) { store.update((d) => addPartyRelationship(d, target.value, (label && label.value.trim()) || 'linked', type && type.value)); toast('Linked'); }
+    return;
+  }
 
   // --- colony ---
   const crewDel = hit('[data-colony-crew-remove]');
@@ -1992,10 +2094,8 @@ function onClick(ev) {
     if (!window.confirm('Remove this crew row? This cannot be undone.')) return;
     return store.update((d) => removeCrewRow(d, crewDel.dataset.colonyCrewRemove));
   }
-  const encounterAdd = hit('[data-colony-encounter-add]');
-  if (encounterAdd) return store.update((d) => addColonyEncounter(d));
-  const encounterDel = hit('[data-colony-encounter-remove]');
-  if (encounterDel) return store.update((d) => removeColonyEncounter(d, encounterDel.dataset.colonyEncounterRemove));
+  const encounterDetach = hit('[data-colony-encounter-detach]');
+  if (encounterDetach) return store.update((d) => detachColonyEncounterEntity(d, encounterDetach.dataset.colonyEncounterDetach));
 
   // --- world tracker (requirements/PLANETFALL_world_tracker.md) ---
   // Direct follow-up request: a Journal entry for every discrete GM action
@@ -2004,6 +2104,7 @@ function onClick(ev) {
   // edits (notes, corner labels) or numeric corrections (Resource/Hazard
   // Level), which aren't really "the world changing" as a narrative beat.
   if (hit('[data-world-tracker-tab]')) { worldTrackerTab = hit('[data-world-tracker-tab]').dataset.worldTrackerTab; return renderDrawerBody(); }
+  if (hit('[data-colony-panel-tab]')) { colonyPanelTab = hit('[data-colony-panel-tab]').dataset.colonyPanelTab; return renderDrawerBody(); }
   const sectorSelect = hit('[data-sector-select]');
   if (sectorSelect) {
     const [sx, sy] = sectorSelect.dataset.sectorSelect.split(',').map(Number);
@@ -3164,11 +3265,28 @@ function onClick(ev) {
   const entityPickerOpenBtn = hit('[data-entity-picker-open]');
   if (entityPickerOpenBtn) {
     const raw = entityPickerOpenBtn.dataset.entityPickerOpen;
+    // Direct follow-up request: "when the Crew Roster has no records and a
+    // '+Crew' is clicked, a one time prompt asks to load all Party
+    // members." Fires only while the roster is actually empty — successfully
+    // adding any row (via this bulk load, or the normal picker below) means
+    // it won't come back on a later click, which is what makes it "one
+    // time" without needing a separate persisted dismissal flag. Declining
+    // (or there being no Party members yet to offer) falls through to the
+    // normal "pick any NPC" picker unchanged.
+    if (raw === 'colony-crew' && listCrewRows(store.get()).length === 0) {
+      const members = listPartyMembers(store.get());
+      if (members.length && window.confirm(`Load all ${members.length} Party member${members.length === 1 ? '' : 's'} into the Crew Roster?`)) {
+        store.update((d) => syncCrewRosterWithParty(d));
+        return toast('Crew Roster loaded from Party');
+      }
+    }
     entityPicker = raw === 'asset'
       ? { entityType: 'asset', mode: 'asset', scope: null, query: '' }
       : raw === 'party-vehicle'
         ? { entityType: 'party-vehicle', mode: 'party-vehicle', scope: null, query: '' }
-        : raw === 'colony-crew'
+        : raw === 'party-starship'
+          ? { entityType: 'party-starship', mode: 'party-starship', scope: null, query: '' }
+          : raw === 'colony-crew'
           ? { entityType: 'colony-crew', mode: 'colony-crew', scope: null, query: '' }
           : raw === 'what-conflict'
             ? { entityType: 'what-conflict', mode: 'what-conflict', scope: null, query: '' }
@@ -3215,6 +3333,22 @@ function onClick(ev) {
       // scenes), so it must NOT go through the currentSceneId() early
       // return below.
       return store.update((d) => addPartySharedAssetEntity(d, id));
+    }
+    if (picker.entityType === 'party-starship') {
+      // Reached from BOTH Party's own "+ Select Starship" button AND the
+      // Campaign panel's Starship-tab empty-thumbnail click (direct
+      // follow-up request: "if a ship is not active... open a vehicle
+      // selection list to first select the entity record" — same trigger
+      // either way). "Have a prompt ask if this will be the Party's
+      // starship" — a plain non-destructive-reassignment confirm, same
+      // phrasing convention as the entity-type-change confirm above.
+      const target = getEntity(store.get(), id);
+      const prevId = store.get().party && store.get().party.starshipEntityId;
+      const prev = prevId ? getEntity(store.get(), prevId) : null;
+      const question = `Make "${target ? (target.name || 'Unnamed') : 'this entity'}" the Party's starship?${prev ? ` This replaces "${prev.name || 'Unnamed'}".` : ''}`;
+      if (!window.confirm(question)) return renderEntityPickerOverlay();
+      store.update((d) => setPartyStarship(d, id));
+      return toast('Starship set');
     }
     if (picker.entityType === 'colony-crew') {
       // Colony's Crew Roster "+Crew" (direct follow-up request — "select
@@ -3345,28 +3479,84 @@ function onClick(ev) {
   if (profileDraftSaveBtn) { saveProfileDraft(profileDraftSaveBtn.dataset.profileDraftSave); return; }
   const profileDraftCancelBtn = hit('[data-profile-draft-cancel]');
   if (profileDraftCancelBtn) { cancelProfileDraft(profileDraftCancelBtn.dataset.profileDraftCancel); return; }
-  // Turn Step Settings tab (design/adr/rules-profiles-multi-campaign.md) —
-  // reorder/load-default edit the SAME draft Ruleset Profile Editor uses;
-  // Save/Cancel above already cover these.
+  // Turn Step Lists Settings tab (direct follow-up request: "create an
+  // inventory of Turn Step List profiles managed in Settings") — a
+  // standalone, shared appConfig.turnStepLists inventory, edited INSTANTLY
+  // via store.updateAppConfig (no draft/Save/Cancel — that flow is Rules
+  // Profile-scoped content only, and these aren't that any more).
+  if (hit('[data-turnsteplists-section-toggle]')) { turnStepListsCollapsed = !turnStepListsCollapsed; return renderDrawerBody(); }
+  const turnStepMoveToggle = hit('[data-turn-step-move-toggle]');
+  if (turnStepMoveToggle) {
+    const key = turnStepMoveToggle.dataset.turnStepMoveToggle;
+    if (turnStepMoveEditOpen.has(key)) turnStepMoveEditOpen.delete(key); else turnStepMoveEditOpen.add(key);
+    return renderDrawerBody();
+  }
+  const turnStepBranchToggle = hit('[data-turn-step-branch-toggle]');
+  if (turnStepBranchToggle) {
+    const key = turnStepBranchToggle.dataset.turnStepBranchToggle;
+    if (turnStepBranchEditOpen.has(key)) turnStepBranchEditOpen.delete(key); else turnStepBranchEditOpen.add(key);
+    return renderDrawerBody();
+  }
   const turnStepGroupToggle = hit('[data-turn-step-group-toggle]');
   if (turnStepGroupToggle) {
     const id = turnStepGroupToggle.dataset.turnStepGroupToggle;
     if (expandedTurnStepGroups.has(id)) expandedTurnStepGroups.delete(id); else expandedTurnStepGroups.add(id);
     return renderDrawerBody();
   }
+  const turnStepListCreate = hit('[data-turnsteplist-create]');
+  if (turnStepListCreate) {
+    openInlinePrompt('turnsteplist-create', { label: 'New Turn Step List name', placeholder: 'e.g. My Ruleset', anchorRect: turnStepListCreate.getBoundingClientRect() });
+    return;
+  }
+  const turnStepListRename = hit('[data-turnsteplist-rename]');
+  if (turnStepListRename) {
+    const id = turnStepListRename.dataset.turnstepListRename;
+    const current = (store.get().turnStepLists || []).find((l) => l.id === id);
+    openInlinePrompt('turnsteplist-rename', { label: 'Rename Turn Step List', value: current ? current.name : '', meta: { id }, anchorRect: turnStepListRename.getBoundingClientRect() });
+    return;
+  }
+  const turnStepListDelete = hit('[data-turnsteplist-delete]');
+  if (turnStepListDelete) {
+    const id = turnStepListDelete.dataset.turnstepListDelete;
+    const list = (store.get().turnStepLists || []).find((l) => l.id === id);
+    if (!window.confirm(`Delete the Turn Step List "${list ? list.name : ''}"? This cannot be undone.`)) return;
+    if (editingTurnStepListId === id) editingTurnStepListId = null;
+    return store.updateAppConfig((cfg) => deleteTurnStepList(cfg, id));
+  }
   const turnStepMove = hit('[data-turn-step-move]');
   if (turnStepMove) {
-    const [groupId, index, dir] = turnStepMove.dataset.turnStepMove.split('::');
-    const profileId = currentEditingProfileId();
-    const draft = getProfileDraft(profileId);
-    if (draft) setProfileDraft(profileId, moveTurnStepInGroup(draft, groupId, Number(index), Number(dir)));
-    return render();
+    const [listId, groupId, index, dir] = turnStepMove.dataset.turnStepMove.split('::');
+    return store.updateAppConfig((cfg) => moveTurnStepInList(cfg, listId, groupId, Number(index), Number(dir)));
   }
-  if (hit('[data-turn-steps-load-default]')) {
-    const profileId = currentEditingProfileId();
-    const draft = getProfileDraft(profileId);
-    if (draft) setProfileDraft(profileId, loadDefaultTurnSteps(draft, TURN_STEPS_5PFH));
-    return render();
+  const turnStepListLoadDefault = hit('[data-turnsteplist-load-default]');
+  if (turnStepListLoadDefault) {
+    const [listId, which] = turnStepListLoadDefault.dataset.turnstepListLoadDefault.split('::');
+    const seed = which === 'planetfall' ? PLANETFALL_TURN_STEPS : TURN_STEPS_5PFH;
+    return store.updateAppConfig((cfg) => loadDefaultIntoTurnStepList(cfg, listId, seed));
+  }
+  // "+ Category"/"+ Step" (direct follow-up request: "insert new Turn
+  // Steps, assign them to categories... create new categories") — a new
+  // step starts blank (no prompt needed — its own textarea, right there in
+  // the now-expanded category, is the natural place to type it) but a new
+  // category gets a real name up front via the inline prompt, same as
+  // every other "name a new thing" action in this app.
+  const turnStepGroupAdd = hit('[data-turnstepgroup-add]');
+  if (turnStepGroupAdd) {
+    openInlinePrompt('turnstepgroup-create', { label: 'New category name', placeholder: 'e.g. Downtime Steps', meta: { listId: turnStepGroupAdd.dataset.turnstepgroupAdd }, anchorRect: turnStepGroupAdd.getBoundingClientRect() });
+    return;
+  }
+  const turnStepGroupRename = hit('[data-turnstepgroup-rename]');
+  if (turnStepGroupRename) {
+    const [listId, groupId] = turnStepGroupRename.dataset.turnstepgroupRename.split('::');
+    const group = ((store.get().turnStepLists || []).find((l) => l.id === listId) || {}).groups?.find((g) => g.id === groupId);
+    openInlinePrompt('turnstepgroup-rename', { label: 'Rename category', value: group ? group.label : '', meta: { listId, groupId }, anchorRect: turnStepGroupRename.getBoundingClientRect() });
+    return;
+  }
+  const turnStepAdd = hit('[data-turnstep-add]');
+  if (turnStepAdd) {
+    const [listId, groupId] = turnStepAdd.dataset.turnstepAdd.split('::');
+    expandedTurnStepGroups.add(groupId);
+    return store.updateAppConfig((cfg) => addTurnStepToGroup(cfg, listId, groupId, '').appConfig);
   }
   // Crew Tasks Settings tab — same shared draft/Save/Cancel as Turn Step
   // above, reorder/load-default operate on the SAME draft.
@@ -3390,7 +3580,7 @@ function onClick(ev) {
   // follow-up request) — a fresh visit to dl2 always starts blank.
   if (hit('[data-turn-step-prev]')) {
     crewTaskSelectedId = null; crewTaskSelectedMemberId = '';
-    return applyTurnStepMutation(retreatTurnStep);
+    return applyTurnStepMutation('colony', retreatTurnStep);
   }
   const turnStepNext = hit('[data-turn-step-next]');
   if (turnStepNext) {
@@ -3398,25 +3588,44 @@ function onClick(ev) {
     // Reaching the true end of the workflow (hasNext false — no branchTo,
     // no more steps in the group, empty returnStack) offers to start the
     // next Campaign Turn instead of the button just staying disabled
-    // (direct follow-up request). startNextCampaignTurn needs the same
-    // turnSteps overlay withTurnStepsOverlay gives every other turn-step
-    // call, but returns {campaign, turn, changes} rather than a
-    // campaign-shaped object — withTurnStepsOverlay's own turnSteps-strip
+    // (direct follow-up request). startNextColonyCampaignTurn needs the
+    // same turnStepLists overlay withTurnStepListsOverlay gives every
+    // other turn-step call, but returns {campaign, turn, changes} rather
+    // than a campaign-shaped object — withTurnStepListsOverlay's own strip
     // check would silently no-op against that wrapper shape (it only ever
-    // looks for a top-level turnSteps key), so the overlay/strip is done
-    // by hand here instead of reusing that helper.
-    const current = getCurrentTurnStep(store.get());
+    // looks for a top-level turnStepLists key), so the overlay/strip is
+    // done by hand here instead of reusing that helper.
+    const current = getCurrentTurnStep(store.get(), 'colony');
     if (current && !current.hasNext) {
       if (!window.confirm('Do you want to start the next Campaign Turn?')) return;
       return updateAndOpenJournal((d) => {
-        const profile = store.getActiveProfile();
-        const withSteps = profile ? { ...d, turnSteps: profile.turnSteps } : d;
-        const { campaign: resultCampaign, turn, changes } = startNextCampaignTurn(withSteps);
-        const { turnSteps, ...clean } = resultCampaign;
+        const withLists = { ...d, turnStepLists: store.get().turnStepLists || [] };
+        const { campaign: resultCampaign, turn, changes } = startNextColonyCampaignTurn(withLists);
+        const { turnStepLists, ...clean } = resultCampaign;
         return addNote(clean, formatTurnAdvanceNote(turn, changes), 'World Tracker');
       });
     }
-    return applyTurnStepMutation(advanceTurnStep);
+    return applyTurnStepMutation('colony', advanceTurnStep);
+  }
+  // Starship tab's own Campaign Turn/Turn Step (direct follow-up request:
+  // "add a Campaign Turn and Turn Step with 5PFH profile") — same shape as
+  // Colony's above, slot 'starship', but startNextStarshipCampaignTurn has
+  // no rulebook accrual to apply (a plain, separate counter — direct
+  // follow-up request).
+  if (hit('[data-starship-turn-step-prev]')) return applyTurnStepMutation('starship', retreatTurnStep);
+  const starshipTurnStepNext = hit('[data-starship-turn-step-next]');
+  if (starshipTurnStepNext) {
+    const current = getCurrentTurnStep(store.get(), 'starship');
+    if (current && !current.hasNext) {
+      if (!window.confirm('Do you want to start the next Campaign Turn?')) return;
+      return updateAndOpenJournal((d) => {
+        const withLists = { ...d, turnStepLists: store.get().turnStepLists || [] };
+        const { campaign: resultCampaign, turn } = startNextStarshipCampaignTurn(withLists);
+        const { turnStepLists, ...clean } = resultCampaign;
+        return addNote(clean, `Starship Campaign Turn advanced to ${turn}.`, 'Starship');
+      });
+    }
+    return applyTurnStepMutation('starship', advanceTurnStep);
   }
   // "Start" — the step's own ruleset is still a placeholder for future
   // triggered actions TBD (direct quote), but the default behavior (direct
@@ -3425,7 +3634,15 @@ function onClick(ev) {
   // its @[Label|Target] mentions render as real links there too), rather
   // than only toasting an acknowledgment with nothing actually happening.
   if (hit('[data-turn-step-start]')) {
-    const current = getCurrentTurnStep(store.get());
+    const current = getCurrentTurnStep(store.get(), 'colony');
+    if (!current) return;
+    updateAndOpenJournal((d) => addNote(d, current.step.text, `Turn Step — ${current.group.label} ${current.index + 1}/${current.total}`));
+    return toast('Step logged to Journal');
+  }
+  // Starship tab's own "Start" (direct follow-up request — its Step Text
+  // row mirrors Colony's exactly, slot 'starship').
+  if (hit('[data-starship-turn-step-start]')) {
+    const current = getCurrentTurnStep(store.get(), 'starship');
     if (!current) return;
     updateAndOpenJournal((d) => addNote(d, current.step.text, `Turn Step — ${current.group.label} ${current.index + 1}/${current.total}`));
     return toast('Step logged to Journal');
@@ -3802,7 +4019,10 @@ function onChange(ev) {
     const active = store.get().entities.activeId;
     const value = t.value.trim();
     t.value = '';
-    if (value) return store.update((d) => addEntityTag(d, active, value));
+    // Direct follow-up request: tagging an existing NPC #character here
+    // (Party's own documented way to add one you already made) also adds
+    // a Crew Roster row for them.
+    if (value) return store.update((d) => syncCrewRosterWithParty(addEntityTag(d, active, value)));
     return;
   }
 
@@ -3924,6 +4144,15 @@ function onChange(ev) {
 
   const relStrength = t.closest('[data-entity-rel-strength]');
   if (relStrength) { const active = store.get().entities.activeId; return store.update((d) => updateRelationshipStrength(d, active, relStrength.dataset.entityRelStrength, t.value)); }
+
+  // Party's own Relationships section (direct follow-up request) — same
+  // shape as the entity-rel-* handlers just above, retargeted.
+  const partyRelLabel = t.closest('[data-party-rel-label]');
+  if (partyRelLabel) return store.update((d) => updatePartyRelationshipLabel(d, partyRelLabel.dataset.partyRelLabel, t.value));
+  const partyRelType = t.closest('[data-party-rel-type]');
+  if (partyRelType) return store.update((d) => updatePartyRelationshipType(d, partyRelType.dataset.partyRelType, t.value));
+  const partyRelStrength = t.closest('[data-party-rel-strength]');
+  if (partyRelStrength) return store.update((d) => updatePartyRelationshipStrength(d, partyRelStrength.dataset.partyRelStrength, t.value));
 
   const factionStat = t.closest('[data-faction-stat]');
   if (factionStat) {
@@ -4136,6 +4365,18 @@ function onChange(ev) {
     const { entityId, gi, fi } = parseStatblockKey(sval.dataset.statblockVal);
     return store.update((d) => setEntityStatblockField(d, entityId, gi, fi, { value: t.value }));
   }
+  const sWeaponField = t.closest('[data-statblock-weapon-field]');
+  if (sWeaponField) {
+    const [gi, wi, key] = sWeaponField.dataset.statblockWeaponField.split('::');
+    const active = store.get().entities.activeId;
+    return store.update((d) => updateEntityStatblockWeapon(d, active, Number(gi), Number(wi), { [key]: t.value }));
+  }
+  const sGear = t.closest('[data-statblock-gear]');
+  if (sGear) {
+    const gi = Number(sGear.dataset.statblockGear);
+    const active = store.get().entities.activeId;
+    return store.update((d) => setEntityStatblockGear(d, active, gi, t.value));
+  }
   const sattr = t.closest('[data-statblock-attr-val]');
   if (sattr) {
     const { entityId, gi, fi } = parseStatblockKey(sattr.dataset.statblockAttrVal);
@@ -4178,6 +4419,17 @@ function onChange(ev) {
   if (encounterField) {
     const [id, field] = encounterField.dataset.colonyEncounterField.split('::');
     return store.update((d) => updateColonyEncounter(d, id, { [field]: t.value }));
+  }
+
+  // --- starship (Campaign panel's Starship tab, direct follow-up request) ---
+  if (t.closest('[data-starship-name-field]')) {
+    const active = store.get();
+    const entityId = active.party && active.party.starshipEntityId;
+    if (entityId) return store.update((d) => updateEntity(d, entityId, { name: t.value }));
+    return;
+  }
+  if (t.closest('[data-starship-campaign-turn]')) {
+    return store.update((d) => { d.party = d.party && typeof d.party === 'object' ? d.party : (d.party = {}); d.party.starshipCampaignTurn = Number(t.value) || 0; return d; });
   }
 
   // --- world tracker ---
@@ -4252,6 +4504,7 @@ function onChange(ev) {
   if (expDial) { const [threadId, field] = expDial.dataset.expeditionDial.split('::'); return store.update((d) => setExpeditionDial(d, threadId, field, Number(t.value))); }
 
   if (t.closest('[data-campaign-title-input]')) return store.update((d) => { d.meta.title = t.value; return d; });
+  if (t.closest('[data-campaign-css-template]')) return store.update((d) => { d.meta.cssTemplate = t.value; return d; });
   const guideTitleInput = t.closest('[data-guide-title-input]');
   if (guideTitleInput) { const id = getActiveGuideDoc(store.get()).id; if (t.value.trim()) return store.update((d) => renameGuideDoc(d, id, t.value.trim())); return; }
   if (t.closest('[data-genre-input]')) return store.update((d) => { d.settings.genre = t.value; return d; });
@@ -4280,13 +4533,43 @@ function onChange(ev) {
     if (draft) setProfileDraft(profileId, updateProfileRuleset(draft, { partyHeadlineFields: fields }));
     return render();
   }
+  const turnStepListSelect = t.closest('[data-turnsteplist-select]');
+  if (turnStepListSelect) { editingTurnStepListId = t.value; return render(); }
+  const turnStepSlotAssign = t.closest('[data-turnstep-slot-assign]');
+  if (turnStepSlotAssign) {
+    const slot = turnStepSlotAssign.dataset.turnstepSlotAssign;
+    const listId = t.value || null;
+    return store.update((d) => {
+      d.turnStepSlotAssignments = { ...(d.turnStepSlotAssignments || { colony: null, starship: null }), [slot]: listId };
+      return d;
+    });
+  }
   const turnStepTextArea = t.closest('[data-turn-step-text]');
   if (turnStepTextArea) {
-    const [groupId, stepId] = turnStepTextArea.dataset.turnStepText.split('::');
-    const profileId = currentEditingProfileId();
-    const draft = getProfileDraft(profileId);
-    if (draft) setProfileDraft(profileId, updateTurnStepText(draft, groupId, stepId, t.value));
-    return render();
+    const [listId, groupId, stepId] = turnStepTextArea.dataset.turnStepText.split('::');
+    return store.updateAppConfig((cfg) => updateTurnStepText(cfg, listId, groupId, stepId, t.value));
+  }
+  const turnStepCrewTasksToggle = t.closest('[data-turn-step-crew-tasks]');
+  if (turnStepCrewTasksToggle) {
+    const [listId, groupId, stepId] = turnStepCrewTasksToggle.dataset.turnStepCrewTasks.split('::');
+    return store.updateAppConfig((cfg) => setTurnStepShowCrewTasks(cfg, listId, groupId, stepId, t.checked));
+  }
+  // "Move to"/"Branches to" per-step pickers (direct follow-up request).
+  const turnStepMoveCategory = t.closest('[data-turn-step-move-category]');
+  if (turnStepMoveCategory) {
+    const key = turnStepMoveCategory.dataset.turnStepMoveCategory;
+    const [listId, groupId, stepId] = key.split('::');
+    turnStepMoveEditOpen.delete(key); // picking a target closes the icon's edit row again
+    if (!t.value) return renderDrawerBody(); // "— stay in <category> —" — no-op besides closing
+    expandedTurnStepGroups.add(t.value);
+    return store.updateAppConfig((cfg) => moveTurnStepToGroup(cfg, listId, groupId, stepId, t.value));
+  }
+  const turnStepBranchTo = t.closest('[data-turn-step-branch-to]');
+  if (turnStepBranchTo) {
+    const key = turnStepBranchTo.dataset.turnStepBranchTo;
+    const [listId, groupId, stepId] = key.split('::');
+    turnStepBranchEditOpen.delete(key);
+    return store.updateAppConfig((cfg) => setTurnStepBranchTo(cfg, listId, groupId, stepId, t.value || null));
   }
   const crewTaskTextArea = t.closest('[data-crew-task-text]');
   if (crewTaskTextArea) {
@@ -4685,6 +4968,7 @@ function openDrawerTab(id) {
     if (id === 'documents') { docFilter = ''; docTagFilters = new Set(); docTagEditorOpen = new Set(); refreshRefDocBlobKeys(); }
     if (id === 'graph') graphView = { scale: 1, x: 0, y: 0 };
     if (id === 'world-tracker') { worldTrackerTab = 'sectors'; worldTrackerSelectedSector = null; worldTrackerMigrateOpen = new Set(); }
+    if (id === 'colony') colonyPanelTab = 'colony';
     // Direct request: sections other than Party Roster start collapsed
     // "when opening the Party Tracker (not when switching focus to other
     // open tabs)" — resetting here (inside the "newly added to openDrawers"
@@ -5747,6 +6031,29 @@ function commitInlinePrompt() {
     if (value) store.renameCampaign(meta.id, value).then(() => toast('Campaign renamed'));
   } else if (kind === 'profile-rename') {
     if (value) { store.renameProfile(meta.id, value); toast('Profile renamed'); }
+  } else if (kind === 'turnsteplist-create') {
+    if (value) {
+      store.addTurnStepList(value).then((d) => {
+        // addTurnStepList() appends — the new one is always last.
+        const lists = d.turnStepLists || [];
+        editingTurnStepListId = lists.length ? lists[lists.length - 1].id : null;
+        toast('Turn Step List created');
+        render();
+      });
+    }
+  } else if (kind === 'turnsteplist-rename') {
+    if (value) { store.updateAppConfig((cfg) => renameTurnStepList(cfg, meta.id, value)); toast('Turn Step List renamed'); }
+  } else if (kind === 'turnstepgroup-create') {
+    if (value) {
+      store.updateAppConfig((cfg) => {
+        const created = addTurnStepGroup(cfg, meta.listId, value);
+        if (created.groupId) expandedTurnStepGroups.add(created.groupId);
+        return created.appConfig;
+      });
+      toast('Category created');
+    }
+  } else if (kind === 'turnstepgroup-rename') {
+    if (value) { store.updateAppConfig((cfg) => renameTurnStepGroup(cfg, meta.listId, meta.groupId, value)); toast('Category renamed'); }
   }
 }
 
@@ -5990,6 +6297,27 @@ function render() {
       if (!d) return '';
       return `<button class="btn ghost sm" data-drawer-open="${d.id}" aria-expanded="${activeDrawer === d.id}" title="${d.label}"><span class="glyph">${d.glyph}</span> <span class="btn-label">${d.label}</span></button>`;
     }).join('');
+  }
+
+  // Campaign switcher (direct follow-up request) — same "rebuilt fresh
+  // every render, shown/hidden via the hidden attribute" shape as the
+  // header tabs above; no position:fixed viewport-math needed (unlike
+  // .settings-menu below) since this button never relocates into .mc-edge.
+  const campaignSwitcherEl = root.querySelector('[data-campaign-switcher-menu]');
+  if (campaignSwitcherEl) {
+    campaignSwitcherEl.hidden = !campaignSwitcherOpen;
+    if (campaignSwitcherOpen) {
+      const campaigns = store.listCampaigns();
+      campaignSwitcherEl.innerHTML = `
+        <div class="campaign-switcher-list">
+          ${campaigns.map((c) => `
+            <div class="campaign-switcher-row${c.active ? ' active' : ''}">
+              <span class="campaign-switcher-row-title">${escapeHtml(c.title)}</span>
+              ${c.active ? '<span class="chip sm">Active</span>' : `<button type="button" class="btn ghost sm" data-campaign-switch="${escapeHtml(c.id)}">Switch</button>`}
+            </div>`).join('')}
+        </div>
+        <button type="button" class="btn ghost sm campaign-switcher-new" data-campaign-switcher-new>+ Start New Campaign</button>`;
+    }
   }
 
   const settingsMenuEl = root.querySelector('[data-settings-menu]');
@@ -6291,6 +6619,16 @@ function renderEntityPickerOverlay() {
     // already keys off), excluding ones already linked.
     const excludeIds = new Set((doc.party && doc.party.sharedAssetIds) || []);
     candidates = listEntities(doc, ['asset']).filter((a) => (a.tags || []).includes('vehicle') && !excludeIds.has(a.id));
+    emptyMessage = 'No #vehicle Asset entities yet — add one in Cast (type Asset, tag #vehicle) first.';
+  } else if (entityPicker.entityType === 'party-starship') {
+    // Party's Starship section, and the Campaign panel's Starship-tab
+    // empty-thumbnail (direct follow-up request — same trigger, same
+    // picker) — every #vehicle Asset entity; unlike party-vehicle above,
+    // NOT excluding the current starship (re-picking the same one, or
+    // moving it to a different vehicle, both go through this same list —
+    // only one entity may ever hold #starship, enforced by
+    // setPartyStarship itself, not by hiding candidates here).
+    candidates = listEntities(doc, ['asset']).filter((a) => (a.tags || []).includes('vehicle'));
     emptyMessage = 'No #vehicle Asset entities yet — add one in Cast (type Asset, tag #vehicle) first.';
   } else if (entityPicker.entityType === 'colony-crew') {
     // Colony's Crew Roster "+Crew" — every NPC not already assigned to a
@@ -6659,7 +6997,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, journalActionsOpen, collapsedOverview, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, expandedWhatConflicts,
+    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, journalActionsOpen, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, expandedWhatConflicts,
     advisorOracleResults, advisorDrafts, advisorConsequenceDraw, sceneSummaryOverride,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName, partyTrackersEditOpen, collapsedPartySections,
@@ -6669,7 +7007,7 @@ function buildDrawerUi() {
     battlemapPlacingIcon, battlemapCamera,
     contentPackFlags, hostileLocationsImporting, exportIncludeAttachments, exportAttachmentsPreview,
     worldTrackerTab, worldTrackerSelectedSector, worldTrackerMigrateOpen, worldTrackerCornerLabelsOpen,
-    expandedTurnStepGroups, crewTaskSelectedId, crewTaskSelectedMemberId,
+    expandedTurnStepGroups, editingTurnStepListId, turnStepListsCollapsed, turnStepMoveEditOpen, turnStepBranchEditOpen, crewTaskSelectedId, crewTaskSelectedMemberId, colonyPanelTab,
     // Faction Events' own docked-in-WHERE state (see factionEventsDockedInWhere's
     // comment above) — workspace/index.js's WHERE view reads these to render
     // the same renderFactionEvents() body a second way when docked.

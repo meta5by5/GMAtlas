@@ -9,10 +9,11 @@
 // and its own drawer section later, not a hardcoded branch in this one.
 
 import { listEntities } from './entities.js';
+import { listPartyMembers } from './party.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 
-const MAX_ENCOUNTERS = 10;
+export const MAX_ENCOUNTERS = 10;
 
 function ensure(campaign) {
   if (!campaign.colony || typeof campaign.colony !== 'object') campaign.colony = { fields: {}, crew: [], encounters: [] };
@@ -43,8 +44,8 @@ export const COLONY_FIELDS = [
   { key: 'rawMaterials', label: 'Raw Materials', type: 'number' },
   { key: 'calamityPoints', label: 'Calamity Points', type: 'number' },
   { key: 'grunts', label: 'Grunts', type: 'number' },
-  { key: 'enemyInformation', label: 'Enemy Information', type: 'textarea' },
-  { key: 'missionData', label: 'Mission Data', type: 'textarea' },
+  { key: 'enemyInformation', label: 'Enemy Information', type: 'number' },
+  { key: 'missionData', label: 'Mission Data', type: 'number' },
   { key: 'conditionNotes', label: 'Condition Notes', type: 'textarea' },
   { key: 'notes', label: 'Notes', type: 'textarea' },
 ];
@@ -202,6 +203,31 @@ export function removeCrewRow(campaign, id) {
   return next;
 }
 
+/** Keeps the Crew Roster's membership in sync with the Party (direct
+ *  follow-up request: "adding and removing from Party likewise updates
+ *  the Crew Roster") — additive/idempotent, safe to call after ANY entity
+ *  or tag change: pushes one blank-role crew row for each current party
+ *  member (party.js's listPartyMembers — an NPC tagged #character) not
+ *  already represented, and drops any crew row whose characterId no
+ *  longer belongs to a current party member. A crew row with no
+ *  characterId yet (added the old one-at-a-time way, no member picked
+ *  yet) is left alone either way — only rows actually pointing at a
+ *  member get pruned. Also IS the Crew Roster's empty-state "+ Crew"
+ *  bulk-load action (direct follow-up request) — "add every current
+ *  member" and "keep every current member in sync" are the same rule. */
+export function syncCrewRosterWithParty(campaign) {
+  const next = clone(campaign);
+  const colony = ensure(next);
+  const memberIds = new Set(listPartyMembers(next).map((m) => m.id));
+  colony.crew = colony.crew.filter((r) => !r.characterId || memberIds.has(r.characterId));
+  const present = new Set(colony.crew.map((r) => r.characterId).filter(Boolean));
+  for (const id of memberIds) {
+    if (present.has(id)) continue;
+    colony.crew.push({ id: `crew_${Date.now().toString(36)}_${id}`, characterId: id, assetId: '', role: '' });
+  }
+  return next;
+}
+
 /** Live filter over entities tagged #lifeform, OR (direct follow-up
  *  request — lifeform is now a peer entity type, entities.js's
  *  ENTITY_TYPES) typed 'lifeform' directly — encounters worth tracking
@@ -213,23 +239,20 @@ export function listLifeformEncounters(campaign) {
 }
 
 /** The Colony's own Encounters log (direct follow-up request — "follow the
- *  rules and workflow for Encounters in the 5PFH Planetfall rules"): up to
- *  MAX_ENCOUNTERS rows, each a free-text note plus an optional reference to
- *  a specific Lifeform entity once one's been identified in play. Distinct
- *  from listLifeformEncounters() above (an unbounded, automatic filter over
+ *  rules and workflow for Encounters in the 5PFH Planetfall rules"): a
+ *  fixed MAX_ENCOUNTERS rows (direct follow-up request — "default to 10
+ *  rows"), each a free-text note plus an optional reference to a specific
+ *  Lifeform entity once one's been identified in play. Distinct from
+ *  listLifeformEncounters() above (an unbounded, automatic filter over
  *  every Lifeform-typed/tagged Cast entity) — this is the GM's own
- *  per-campaign turn-sheet row list, capped to match the physical 10-row
- *  Encounters table. */
+ *  per-campaign turn-sheet row list, matching the physical 10-row
+ *  Encounters table exactly (a fixed grid, not a growable list). A brand
+ *  new campaign is seeded with the full 10 rows already (schema.js's
+ *  defaultCampaign); an existing campaign with fewer is padded up to 10 by
+ *  migrate.js (MAX_ENCOUNTERS, exported below, is that backfill's target
+ *  count too — kept in one place so the two can't silently drift apart). */
 export function listColonyEncounters(campaign) {
   return ((campaign.colony && campaign.colony.encounters) || []);
-}
-
-export function addColonyEncounter(campaign) {
-  const next = clone(campaign);
-  const colony = ensure(next);
-  if (colony.encounters.length >= MAX_ENCOUNTERS) return next;
-  colony.encounters.push({ id: 'enc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), note: '', entityId: '' });
-  return next;
 }
 
 export function updateColonyEncounter(campaign, id, patch) {
@@ -240,9 +263,9 @@ export function updateColonyEncounter(campaign, id, patch) {
   return next;
 }
 
-export function removeColonyEncounter(campaign, id) {
-  const next = clone(campaign);
-  const colony = ensure(next);
-  colony.encounters = colony.encounters.filter((r) => r.id !== id);
-  return next;
+/** Detaches a row's linked Lifeform entity without touching its note or
+ *  removing the row itself — rows are a fixed grid now, so there's no
+ *  "delete this row" action any more, just clearing what's on it. */
+export function detachColonyEncounterEntity(campaign, id) {
+  return updateColonyEncounter(campaign, id, { entityId: '' });
 }

@@ -12,9 +12,15 @@
 // Seven step-lists. "Daily Life" is the default/root; a step with a
 // `branchTo` sends "Next Step" into another list (src/domain/
 // turnSteps.js's advanceTurnStep, with a returnStack to resume where the
-// GM left off). This file is DATA, never mutated at runtime — a profile's
-// own `turnSteps.groups` starts as a clone of this (loadDefaultTurnSteps),
-// then the GM's reordering/text edits live only in that clone.
+// GM left off). A step's optional `showCrewTasks: true` (direct follow-up
+// request — "make the Crew Tasks a reusable functionality for other Turn
+// Steps to be added later") attaches Colony's Crew Tasks box to that step;
+// only dl2 has it here, but any step (existing or GM-typed later) can via
+// Settings > Turn Step's own checkbox — turnSteps.js's
+// setTurnStepShowCrewTasks. This file is DATA, never mutated at runtime —
+// a profile's own `turnSteps.groups` starts as a clone of this
+// (loadDefaultTurnSteps), then the GM's reordering/text/showCrewTasks
+// edits live only in that clone.
 
 export const TURN_STEPS_5PFH = [
   {
@@ -22,7 +28,7 @@ export const TURN_STEPS_5PFH = [
     label: 'Daily Life',
     steps: [
       { id: 'dl1', text: 'Update status (injuries, cargo, heat, rivals, favors, reputation).', branchTo: null },
-      { id: 'dl2', text: 'Assign/resolve crew tasks (@[Core p.77|5PFH Five Parsecs From Home v3#79]).', branchTo: null },
+      { id: 'dl2', text: 'Assign/resolve crew tasks (@[Core p.77|5PFH Five Parsecs From Home v3#79]).', branchTo: null, showCrewTasks: true },
       { id: 'dl3', text: 'Determine job offers (@[Core p.83|5PFH Five Parsecs From Home v3#85]).', branchTo: null },
       { id: 'dl4', text: 'Check for Rivals (@[Core p.85|5PFH Five Parsecs From Home v3#87]).', branchTo: null },
       { id: 'dl5', text: 'Select your Job (Patron, Rival, Quest, Salvage, etc.).', branchTo: null },

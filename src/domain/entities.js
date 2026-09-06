@@ -9,6 +9,7 @@
 import {
   ensureAutoStatblock, addStatblockGroup, removeStatblockGroup, setStatblockField, addStatblockField, removeStatblockField,
   toggleStatblockFieldTrack, setStatblockTrackValue, toggleStatblockFieldAttribute, setStatblockAttributeValue,
+  addStatblockWeapon, updateStatblockWeapon, removeStatblockWeapon, setStatblockGear,
 } from './statblocks.js';
 import { economyTypesForModel } from '../data/economyTypes.js';
 import { SWN_XP_TABLE } from '../data/swnFactionData.js';
@@ -1234,6 +1235,37 @@ export function removeEntityStatblockField(campaign, id, groupIndex, fieldIndex)
   const next = clone(campaign);
   const e = getEntity(next, id);
   if (e) removeStatblockField(e, groupIndex, fieldIndex);
+  return next;
+}
+
+// 5PFH character sheet weapon table + Gear (direct follow-up request) —
+// campaign-level wrappers, same clone-then-delegate shape every other
+// statblock mutator here already uses.
+export function addEntityStatblockWeapon(campaign, id, groupIndex) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (e) addStatblockWeapon(e, groupIndex);
+  return next;
+}
+
+export function updateEntityStatblockWeapon(campaign, id, groupIndex, weaponIndex, patch) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (e) updateStatblockWeapon(e, groupIndex, weaponIndex, patch);
+  return next;
+}
+
+export function removeEntityStatblockWeapon(campaign, id, groupIndex, weaponIndex) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (e) removeStatblockWeapon(e, groupIndex, weaponIndex);
+  return next;
+}
+
+export function setEntityStatblockGear(campaign, id, groupIndex, text) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (e) setStatblockGear(e, groupIndex, text);
   return next;
 }
 

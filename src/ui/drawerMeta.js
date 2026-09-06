@@ -24,7 +24,12 @@ export const DRAWERS = [
   { id: 'oracle', glyph: '🎲', label: 'Oracle' },
   { id: 'party', glyph: '👥', label: 'Party' },
   { id: 'cast', glyph: '☷', label: 'Cast' },
-  { id: 'colony', glyph: '🏛', label: 'Colony' },
+  // Direct follow-up request: renamed "Colony" -> "Campaign" (now a
+  // two-tab panel, Colony/Starship — see drawers/index.js's colony()
+  // function). The internal id stays 'colony' on purpose (no cascading
+  // rename of data-drawer-open="colony"/isModuleVisible/etc.) — only this
+  // one label changes, propagating everywhere via drawerMeta().
+  { id: 'colony', glyph: '🏛', label: 'Campaign' },
   { id: 'world-tracker', glyph: '🪐', label: 'World' },
   { id: 'faction-events', glyph: '⚔', label: 'Faction Events' },
   { id: 'trade', glyph: '💰', label: 'Trade' },

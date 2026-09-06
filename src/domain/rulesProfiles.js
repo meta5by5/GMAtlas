@@ -119,51 +119,44 @@ export function reassignCampaignProfile(appConfig, campaignId, profileId) {
 }
 
 /** Commit a draft's edited slices (storyboardPositions/moduleEnabled/
- *  ruleset/turnSteps/crewTasks — the Ruleset Profile Editor's, Turn Step
- *  tab's, and Crew Tasks tab's shared "Save" action) onto whatever is
- *  currently stored for that profile id, preserving id/name/createdAt and
- *  stamping a fresh updatedAt. Never touches any campaign document. */
+ *  ruleset/crewTasks — the Ruleset Profile Editor's and Crew Tasks tab's
+ *  shared "Save" action) onto whatever is currently stored for that
+ *  profile id, preserving id/name/createdAt and stamping a fresh
+ *  updatedAt. Never touches any campaign document. Turn Step Lists are no
+ *  longer part of this draft (direct follow-up request — they're a
+ *  standalone appConfig.turnStepLists inventory now, edited directly via
+ *  store.updateAppConfig, not through the profile draft/Save/Discard
+ *  flow — see domain/turnStepLists.js). */
 export function applyProfileDraft(profile, draft) {
   return {
     ...profile,
     storyboardPositions: draft.storyboardPositions,
     moduleEnabled: draft.moduleEnabled,
     ruleset: draft.ruleset,
-    turnSteps: draft.turnSteps,
     crewTasks: draft.crewTasks,
     updatedAt: new Date().toISOString(),
   };
 }
 
-// --- Turn Step default backfill (design/adr/rules-profiles-multi-
+// --- Crew Tasks default backfill (design/adr/rules-profiles-multi-
 // campaign.md, direct follow-up request) -----------------------------------
+// NOTE: the equivalent Turn Step backfill used to live here
+// (backfillDefaultTurnSteps) but Turn Step content is now a standalone,
+// shared appConfig.turnStepLists inventory, not profile content — see
+// domain/turnStepLists.js's backfillTurnStepListInventory instead (direct
+// follow-up request: "create an inventory of Turn Step List profiles
+// managed in Settings").
 
 /** One-time, narrowly-scoped upgrade for an install that already has an
  *  appConfig (so wrapLegacyCampaignIntoAppConfig, migrate.js's first-boot
- *  path, won't run again): fills in the 5PFH Turn Step seed content ONLY
- *  for a profile named exactly "5PFH" whose turnSteps.groups is still
- *  empty. Never touches a profile with ANY steps already on it, even a
+ *  path, won't run again): fills in the 5PFH Crew Tasks seed content ONLY
+ *  for a profile named exactly "5PFH" whose crewTasks.tasks is still
+ *  empty. Never touches a profile with ANY tasks already on it, even a
  *  single manually-added one, and never touches a profile with a
  *  different name — additive-default-only, same "never overwrites
  *  something already there" posture as every other lazily-defaulted field
  *  in this app (see schema.js's toolbarCollapsedByDefault comment). Called
  *  once from store.js's load(). */
-export function backfillDefaultTurnSteps(appConfig, seedGroups) {
-  const needsBackfill = appConfig.profiles.some((p) => p.name === '5PFH' && (!p.turnSteps || !p.turnSteps.groups || p.turnSteps.groups.length === 0));
-  if (!needsBackfill) return appConfig;
-  return {
-    ...appConfig,
-    profiles: appConfig.profiles.map((p) => {
-      if (p.name !== '5PFH' || (p.turnSteps && p.turnSteps.groups && p.turnSteps.groups.length)) return p;
-      return { ...p, turnSteps: { groups: JSON.parse(JSON.stringify(seedGroups)) } };
-    }),
-  };
-}
-
-/** Same shape/posture as backfillDefaultTurnSteps immediately above — fills
- *  in the 5PFH Crew Tasks seed content ONLY for a profile named exactly
- *  "5PFH" whose crewTasks.tasks is still empty. Called once from
- *  store.js's load(), right alongside the Turn Step backfill. */
 export function backfillDefaultCrewTasks(appConfig, seedTasks) {
   const needsBackfill = appConfig.profiles.some((p) => p.name === '5PFH' && (!p.crewTasks || !p.crewTasks.tasks || p.crewTasks.tasks.length === 0));
   if (!needsBackfill) return appConfig;
@@ -172,6 +165,45 @@ export function backfillDefaultCrewTasks(appConfig, seedTasks) {
     profiles: appConfig.profiles.map((p) => {
       if (p.name !== '5PFH' || (p.crewTasks && p.crewTasks.tasks && p.crewTasks.tasks.length)) return p;
       return { ...p, crewTasks: { tasks: JSON.parse(JSON.stringify(seedTasks)) } };
+    }),
+  };
+}
+
+/** Grandfather step for the Campaign panel's Colony/Starship tab gating
+ *  (direct follow-up request): fivepfh/planetfall Game System Activation
+ *  now defaults to true for a BRAND NEW profile (schema.js's
+ *  defaultRulesProfile), but an EXISTING profile predating this feature
+ *  has no explicit fivepfh/planetfall key in its gameSystemActivations at
+ *  all — left alone, both tabs would silently vanish for every campaign
+ *  already using Colony. Any profile that currently has Colony visible
+ *  (moduleEnabled.colony !== false) and no explicit value for either key
+ *  gets both grandfathered to true, same "check the ORIGINAL value, only
+ *  fires once" posture as migrate.js's own SWN grandfather step. Called
+ *  once from store.js's load(), alongside the Turn Step List/Crew Tasks
+ *  backfills. */
+export function grandfatherCampaignPanelActivation(appConfig) {
+  const needsGrandfathering = appConfig.profiles.some((p) => (
+    p.moduleEnabled.colony !== false
+    && (p.ruleset.gameSystemActivations.fivepfh === undefined || p.ruleset.gameSystemActivations.planetfall === undefined)
+  ));
+  if (!needsGrandfathering) return appConfig;
+  return {
+    ...appConfig,
+    profiles: appConfig.profiles.map((p) => {
+      if (p.moduleEnabled.colony === false) return p;
+      const activations = p.ruleset.gameSystemActivations || {};
+      if (activations.fivepfh !== undefined && activations.planetfall !== undefined) return p;
+      return {
+        ...p,
+        ruleset: {
+          ...p.ruleset,
+          gameSystemActivations: {
+            ...activations,
+            fivepfh: activations.fivepfh === undefined ? true : activations.fivepfh,
+            planetfall: activations.planetfall === undefined ? true : activations.planetfall,
+          },
+        },
+      };
     }),
   };
 }

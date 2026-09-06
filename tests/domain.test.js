@@ -16,7 +16,7 @@ import { parseStatsString } from '../src/domain/statblocks.js';
 import {
   createRulesProfile, renameProfile, updateProfileRuleset, setModuleEnabled, setStoryboardPosition, isModuleVisible, resolveOverlaySettings,
   createCampaign, renameCampaignEntry, setActiveCampaign, reassignCampaignProfile, applyProfileDraft, resolvePositionContentId,
-  backfillDefaultTurnSteps, backfillDefaultCrewTasks,
+  backfillDefaultCrewTasks,
 } from '../src/domain/rulesProfiles.js';
 
 // --- oracles --------------------------------------------------------------
@@ -1445,9 +1445,10 @@ test('empty graph yields empty layout; nodeColor covers all types', () => {
 });
 
 // --- statblocks (Phase 3C, multi-group array since the Phase 5 revision) ---
-import { makeStatblock, hasVehicleTag, ensureAutoStatblock, setStatblockField, addStatblockField, removeStatblockField } from '../src/domain/statblocks.js';
+import { makeStatblock, hasVehicleTag, ensureAutoStatblock, setStatblockField, addStatblockField, removeStatblockField, addStatblockWeapon, updateStatblockWeapon, removeStatblockWeapon, setStatblockGear } from '../src/domain/statblocks.js';
 import {
   addEntityStatblockGroup, removeEntityStatblockGroup, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
+  addEntityStatblockWeapon, updateEntityStatblockWeapon, removeEntityStatblockWeapon, setEntityStatblockGear,
   getEntity, setEntityTags,
 } from '../src/domain/entities.js';
 
@@ -1504,6 +1505,78 @@ test('statblock field CRUD (groupIndex + fieldIndex)', () => {
   const before = e.statblocks[0].fields.length;
   removeStatblockField(e, 0, 0);
   assert.equal(e.statblocks[0].fields.length, before - 1);
+});
+
+test('makeStatblock only adds a weapon table + Gear (direct follow-up request) to a 5PFH character-sheet group — no other ruleset\'s character sheet carries the concept at all', () => {
+  const fivePfh = makeStatblock('character', '5pfh');
+  assert.equal(fivePfh.kind, 'character');
+  assert.equal(fivePfh.ruleset, '5pfh');
+  assert.deepEqual(fivePfh.weapons, []);
+  assert.equal(fivePfh.gear, '');
+
+  const starforged = makeStatblock('character', 'starforged');
+  assert.ok(!('weapons' in starforged), 'Starforged sheet has no weapons key at all');
+  assert.ok(!('gear' in starforged), 'Starforged sheet has no gear key at all');
+
+  const traveller = makeStatblock('character', 'traveller');
+  assert.ok(!('weapons' in traveller));
+  assert.ok(!('gear' in traveller));
+});
+
+test('addStatblockWeapon/updateStatblockWeapon/removeStatblockWeapon manage the weapon table by plain array index (not a generated id), no-op on a missing group/weapon', () => {
+  const e = { statblocks: [makeStatblock('character', '5pfh')] };
+  addStatblockWeapon(e, 0);
+  assert.equal(e.statblocks[0].weapons.length, 1);
+  assert.deepEqual(e.statblocks[0].weapons[0], { name: '', range: '', shots: '', damage: '', traits: '' });
+
+  updateStatblockWeapon(e, 0, 0, { name: 'Blade', range: 'Melee', shots: '1', damage: '2', traits: 'Melee' });
+  assert.deepEqual(e.statblocks[0].weapons[0], { name: 'Blade', range: 'Melee', shots: '1', damage: '2', traits: 'Melee' });
+
+  addStatblockWeapon(e, 0);
+  updateStatblockWeapon(e, 0, 1, { name: 'Blast Pistol' });
+  assert.equal(e.statblocks[0].weapons.length, 2);
+  assert.equal(e.statblocks[0].weapons[0].name, 'Blade', 'updating the second weapon leaves the first untouched');
+
+  removeStatblockWeapon(e, 0, 0);
+  assert.equal(e.statblocks[0].weapons.length, 1);
+  assert.equal(e.statblocks[0].weapons[0].name, 'Blast Pistol', 'the remaining weapon is the one that was NOT removed');
+
+  // No-ops: missing group, missing weapon, entity/group with no weapons array at all.
+  const unaffected = e.statblocks[0].weapons.length;
+  updateStatblockWeapon(e, 5, 0, { name: 'nope' });
+  removeStatblockWeapon(e, 5, 0);
+  assert.equal(e.statblocks[0].weapons.length, unaffected);
+  const nonFivePfh = { statblocks: [makeStatblock('character', 'starforged')] };
+  updateStatblockWeapon(nonFivePfh, 0, 0, { name: 'nope' }); // no weapons array — must not throw
+  removeStatblockWeapon(nonFivePfh, 0, 0);
+});
+
+test('setStatblockGear sets one group\'s free-text Gear line, no-op on a missing group, coerces a nullish value to an empty string', () => {
+  const e = { statblocks: [makeStatblock('character', '5pfh')] };
+  setStatblockGear(e, 0, 'Laser Sight, Battle Visor');
+  assert.equal(e.statblocks[0].gear, 'Laser Sight, Battle Visor');
+  setStatblockGear(e, 0, null);
+  assert.equal(e.statblocks[0].gear, '');
+  const unchanged = setStatblockGear(e, 9, 'nope');
+  assert.equal(unchanged, e, 'unknown group index is a no-op, still returns the entity');
+});
+
+test('addEntityStatblockWeapon/updateEntityStatblockWeapon/removeEntityStatblockWeapon/setEntityStatblockGear are the campaign-level clone-then-delegate wrappers, same shape every other statblock mutator uses', () => {
+  let camp = defaultCampaign();
+  let id;
+  ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Doc' }));
+  camp = addEntityStatblockGroup(camp, id, 'character', '5pfh');
+  const gi = getEntity(camp, id).statblocks.findIndex((g) => g.ruleset === '5pfh');
+
+  camp = addEntityStatblockWeapon(camp, id, gi);
+  camp = updateEntityStatblockWeapon(camp, id, gi, 0, { name: 'Shotgun', range: '6"', shots: '1', damage: '3', traits: 'Heavy, Area' });
+  assert.deepEqual(getEntity(camp, id).statblocks[gi].weapons[0], { name: 'Shotgun', range: '6"', shots: '1', damage: '3', traits: 'Heavy, Area' });
+
+  camp = setEntityStatblockGear(camp, id, gi, 'Med-kit, Grapple line');
+  assert.equal(getEntity(camp, id).statblocks[gi].gear, 'Med-kit, Grapple line');
+
+  camp = removeEntityStatblockWeapon(camp, id, gi, 0);
+  assert.equal(getEntity(camp, id).statblocks[gi].weapons.length, 0);
 });
 
 test('createEntity auto-attaches a Bestiary statblock for a \'lifeform\' entity, same as \'npc\' (direct follow-up request — lifeform is a peer ENTITY_TYPES entry, structurally identical to npc for statblock purposes)', () => {
@@ -1857,7 +1930,7 @@ test('formatDicePoolRollText/formatDicePoolRollCopyText render each die\'s own r
 });
 
 // --- party (Party tab: #character roster + free trackers) ------------------
-import { listPartyMembers, addPartyTracker, updatePartyTracker, stepPartyTracker, setPartyTrackerValue, removePartyTracker, listPartyTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity, setGaugeTrackerValue, gaugeWindow, ensurePartyStarforgedTrackers, listPartyHeadlineTracks } from '../src/domain/party.js';
+import { listPartyMembers, addPartyTracker, updatePartyTracker, stepPartyTracker, setPartyTrackerValue, removePartyTracker, listPartyTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity, setGaugeTrackerValue, gaugeWindow, ensurePartyStarforgedTrackers, listPartyHeadlineTracks, addPartyRelationship, removePartyRelationship, updatePartyRelationshipLabel, updatePartyRelationshipType, updatePartyRelationshipStrength, setPartyStarship, clearPartyStarship } from '../src/domain/party.js';
 
 test('listPartyMembers returns only npc entities tagged #character', () => {
   let camp = defaultCampaign();
@@ -2062,8 +2135,71 @@ test('addPartySharedAssetEntity links a real Asset entity (deduped, distinct fro
   assert.deepEqual(camp.party.sharedAssetIds, []);
 });
 
+test('Party Relationships (direct follow-up request: "treats the Party as an entity for the mapping purposes") — add/remove/update round-trip, one-directional, at most one edge per target, NOT mirrored onto the target entity\'s own relationships', () => {
+  let camp = defaultCampaign();
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Reyes' }));
+
+  camp = addPartyRelationship(camp, npcId, 'Trusted contact', 'allied_with');
+  assert.deepEqual(camp.party.relationships, [{ to: npcId, label: 'Trusted contact', type: 'allied_with', strength: 0 }]);
+  assert.deepEqual(getEntity(camp, npcId).relationships, [], 'no mirrored edge on the target entity itself — Party-side-only');
+
+  // Adding again to the SAME target replaces, never duplicates.
+  camp = addPartyRelationship(camp, npcId, 'Rival now', 'rival_of');
+  assert.equal(camp.party.relationships.length, 1);
+  assert.equal(camp.party.relationships[0].type, 'rival_of');
+
+  camp = updatePartyRelationshipLabel(camp, npcId, 'Bitter rival');
+  assert.equal(camp.party.relationships[0].label, 'Bitter rival');
+  camp = updatePartyRelationshipType(camp, npcId, 'linked');
+  assert.equal(camp.party.relationships[0].type, 'linked');
+  camp = updatePartyRelationshipStrength(camp, npcId, 15);
+  assert.equal(camp.party.relationships[0].strength, 10, 'clamped 0-10 same as a real entity relationship');
+  camp = updatePartyRelationshipStrength(camp, npcId, -3);
+  assert.equal(camp.party.relationships[0].strength, 0);
+
+  camp = removePartyRelationship(camp, npcId);
+  assert.deepEqual(camp.party.relationships, []);
+  // No-ops on an unknown target.
+  const unchanged = updatePartyRelationshipLabel(camp, 'not-a-real-id', 'nope');
+  assert.deepEqual(unchanged.party.relationships, camp.party.relationships);
+});
+
+test('setPartyStarship tags the entity #starship, adds an "Owns" Party relationship, and enforces exclusivity by stripping #starship from any PREVIOUS holder anywhere in Cast (not just the last one set here); clearPartyStarship reverses all three effects', () => {
+  let camp = defaultCampaign();
+  let shipAId; ({ campaign: camp, id: shipAId } = createEntity(camp, { type: 'asset', name: 'The Wanderer' }));
+  camp = setEntityTags(camp, shipAId, 'vehicle');
+  let shipBId; ({ campaign: camp, id: shipBId } = createEntity(camp, { type: 'asset', name: 'The Drifter' }));
+  camp = setEntityTags(camp, shipBId, 'vehicle, starship'); // pre-existing mistagged duplicate
+
+  camp = setPartyStarship(camp, shipAId);
+  assert.equal(camp.party.starshipEntityId, shipAId);
+  assert.ok(getEntity(camp, shipAId).tags.includes('starship'));
+  assert.ok(!getEntity(camp, shipBId).tags.includes('starship'), 'exclusivity enforced — stripped from the OTHER entity that already had it, not just the previous party.starshipEntityId');
+  assert.deepEqual(camp.party.relationships, [{ to: shipAId, label: 'Owns', type: 'owns', strength: 0 }]);
+
+  // A manually-added, non-"owns" Party relationship to the same entity survives a re-point elsewhere...
+  camp = addPartyRelationship(camp, shipAId, 'Salvaged from', 'linked');
+  camp = setPartyStarship(camp, shipBId);
+  assert.equal(camp.party.starshipEntityId, shipBId);
+  assert.ok(getEntity(camp, shipBId).tags.includes('starship'));
+  assert.ok(!getEntity(camp, shipAId).tags.includes('starship'), 'untagged when replaced');
+  assert.ok(camp.party.relationships.some((r) => r.to === shipAId && r.type === 'linked'), 'the manual, non-Owns relationship to the old starship is left alone');
+  assert.ok(camp.party.relationships.some((r) => r.to === shipBId && r.type === 'owns'));
+  assert.ok(!camp.party.relationships.some((r) => r.to === shipAId && r.type === 'owns'), 'the old Owns edge itself is gone');
+
+  camp = clearPartyStarship(camp);
+  assert.equal(camp.party.starshipEntityId, null);
+  assert.ok(!getEntity(camp, shipBId).tags.includes('starship'));
+  assert.ok(!camp.party.relationships.some((r) => r.type === 'owns'));
+  assert.ok(camp.party.relationships.some((r) => r.to === shipAId && r.type === 'linked'), 'unrelated relationship still survives a clear');
+
+  // clearPartyStarship is a safe no-op when nothing is set.
+  const noopResult = clearPartyStarship(camp);
+  assert.equal(noopResult.party.starshipEntityId, null);
+});
+
 // --- colony (5PFH Planetfall turn sheet + crew + lifeform filter) ----------
-import { COLONY_FIELDS, setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, listLifeformEncounters, listColonyEncounters, addColonyEncounter, updateColonyEncounter, removeColonyEncounter } from '../src/domain/colony.js';
+import { COLONY_FIELDS, setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, listLifeformEncounters, listColonyEncounters, updateColonyEncounter, detachColonyEncounterEntity, MAX_ENCOUNTERS, syncCrewRosterWithParty } from '../src/domain/colony.js';
 
 test('setColonyField coerces number fields and leaves text/textarea fields as strings', () => {
   let camp = defaultCampaign();
@@ -2085,6 +2221,45 @@ test('colony crew rows reference entities by id and round-trip through add/updat
   assert.equal(listCrewRows(camp).length, 0);
 });
 
+test('syncCrewRosterWithParty adds a row per Party member, drops rows for members who left, leaves unassigned rows alone, and is idempotent', () => {
+  let camp = defaultCampaign();
+  let aId; ({ campaign: camp, id: aId } = createEntity(camp, { type: 'npc', name: 'Vex' }));
+  camp = setEntityTags(camp, aId, 'character');
+  let bId; ({ campaign: camp, id: bId } = createEntity(camp, { type: 'npc', name: 'Reyes' }));
+  camp = setEntityTags(camp, bId, 'character');
+
+  camp = syncCrewRosterWithParty(camp);
+  let rows = listCrewRows(camp);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map((r) => r.characterId).sort(), [aId, bId].sort());
+  assert.ok(rows.every((r) => r.role === ''), 'new rows start with a blank role');
+
+  // A manually-added, not-yet-assigned crew row (no characterId) survives.
+  camp = addCrewRow(camp, { role: 'trooper' });
+  camp = syncCrewRosterWithParty(camp);
+  rows = listCrewRows(camp);
+  assert.equal(rows.length, 3);
+  assert.ok(rows.some((r) => !r.characterId && r.role === 'trooper'), 'unassigned row untouched by sync');
+
+  // Assigning a role to one member's row is preserved through another sync.
+  const vexRow = rows.find((r) => r.characterId === aId);
+  camp = updateCrewRow(camp, vexRow.id, { role: 'scout' });
+  camp = syncCrewRosterWithParty(camp);
+  assert.equal(listCrewRows(camp).find((r) => r.characterId === aId).role, 'scout');
+
+  // Reyes leaves the party (untagged) — their crew row is dropped, Vex's stays.
+  camp = setEntityTags(camp, bId, '');
+  camp = syncCrewRosterWithParty(camp);
+  rows = listCrewRows(camp);
+  assert.equal(rows.length, 2, 'Reyes\' row is gone, Vex\'s row and the unassigned row remain');
+  assert.ok(!rows.some((r) => r.characterId === bId));
+  assert.equal(rows.find((r) => r.characterId === aId).role, 'scout');
+
+  // Idempotent — calling again with no membership change is a no-op.
+  const again = syncCrewRosterWithParty(camp);
+  assert.deepEqual(listCrewRows(again), listCrewRows(camp));
+});
+
 test('listLifeformEncounters filters entities tagged #lifeform, AND (direct follow-up request — lifeform is now a peer entities.js ENTITY_TYPES entry) any entity typed \'lifeform\' directly, even with no tag at all — both count, neither excludes the other', () => {
   let camp = defaultCampaign();
   let taggedId; ({ campaign: camp, id: taggedId } = createEntity(camp, { type: 'npc', name: 'Creeper' }));
@@ -2094,21 +2269,29 @@ test('listLifeformEncounters filters entities tagged #lifeform, AND (direct foll
   assert.deepEqual(found, [taggedId, typedId].sort());
 });
 
-test('colony encounter rows round-trip through add/update/remove and are capped at 10', () => {
+test('colony encounter rows default to a fixed 10-row grid, round-trip through update, and detach without removing the row', () => {
   let camp = defaultCampaign();
-  camp = addColonyEncounter(camp);
+  assert.equal(listColonyEncounters(camp).length, MAX_ENCOUNTERS);
   const row = listColonyEncounters(camp)[0];
   assert.equal(row.note, '');
   assert.equal(row.entityId, '');
+  // Every row has a real, distinct id from the start — no add step needed.
+  const ids = listColonyEncounters(camp).map((r) => r.id);
+  assert.equal(new Set(ids).size, MAX_ENCOUNTERS);
+
   let lifeformId; ({ campaign: camp, id: lifeformId } = createEntity(camp, { type: 'lifeform', name: 'Void Serpent' }));
   camp = updateColonyEncounter(camp, row.id, { note: 'Something moved in the ridge grass.', entityId: lifeformId });
   assert.equal(listColonyEncounters(camp)[0].note, 'Something moved in the ridge grass.');
   assert.equal(listColonyEncounters(camp)[0].entityId, lifeformId);
-  camp = removeColonyEncounter(camp, row.id);
-  assert.equal(listColonyEncounters(camp).length, 0);
 
-  for (let i = 0; i < 12; i++) camp = addColonyEncounter(camp);
-  assert.equal(listColonyEncounters(camp).length, 10);
+  camp = detachColonyEncounterEntity(camp, row.id);
+  assert.equal(listColonyEncounters(camp).length, MAX_ENCOUNTERS);
+  assert.equal(listColonyEncounters(camp)[0].entityId, '');
+  assert.equal(listColonyEncounters(camp)[0].note, 'Something moved in the ridge grass.');
+
+  // Unknown id is a safe no-op, same as updateColonyEncounter's own guard.
+  camp = detachColonyEncounterEntity(camp, 'nope');
+  assert.equal(listColonyEncounters(camp).length, MAX_ENCOUNTERS);
 });
 
 // --- guide (docs/adr/0017: multi-doc tree, was one freeform field) --------
@@ -7187,16 +7370,26 @@ test('applyProfileDraft commits only storyboardPositions/moduleEnabled/ruleset f
 
 // --- Turn Step workflow (design/adr/rules-profiles-multi-campaign.md,
 // converted from the Guide entry "5PFH Campaign Turn Sequence") ------------
+// Direct follow-up request ("create an inventory of Turn Step List
+// profiles managed in Settings"): Turn Step Lists are now a standalone,
+// shared appConfig.turnStepLists inventory (domain/turnStepLists.js) —
+// decoupled from Rules Profiles — referenced per campaign via
+// campaign.turnStepSlotAssignments[slot] ('colony'/'starship', one per
+// Campaign-panel tab). domain/turnSteps.js keeps just the "play position"
+// functions, now slot-parameterized.
 import {
-  moveTurnStepInGroup, updateTurnStepText, loadDefaultTurnSteps, getCurrentTurnStep, advanceTurnStep, retreatTurnStep, startNextCampaignTurn,
-} from '../src/domain/turnSteps.js';
+  listTurnStepLists, createTurnStepList, renameTurnStepList, deleteTurnStepList, moveTurnStepInList,
+  updateTurnStepText, setTurnStepShowCrewTasks, loadDefaultIntoTurnStepList,
+  hoistLegacyProfileTurnSteps, backfillTurnStepListInventory, fixPlanetfallBranching,
+  addTurnStepGroup, renameTurnStepGroup, addTurnStepToGroup, moveTurnStepToGroup, setTurnStepBranchTo,
+} from '../src/domain/turnStepLists.js';
+import { getCurrentTurnStep, advanceTurnStep, retreatTurnStep, startNextColonyCampaignTurn, startNextStarshipCampaignTurn } from '../src/domain/turnSteps.js';
 import { TURN_STEPS_5PFH } from '../src/data/turnStepsDefault5pfh.js';
+import { PLANETFALL_TURN_STEPS } from '../src/data/turnStepListPlanetfall.js';
+import { grandfatherCampaignPanelActivation } from '../src/domain/rulesProfiles.js';
 import { moveCrewTaskInList, updateCrewTaskText, loadDefaultCrewTasks, listEligibleCrewMembers, assignCrewTask } from '../src/domain/crewTasks.js';
 import { CREW_TASKS_5PFH } from '../src/data/crewTasksDefault5pfh.js';
 
-function profileWithTurnSteps(groups) {
-  return { ...defaultRulesProfile('P'), turnSteps: { groups } };
-}
 // A small 3-group fixture mirroring the real shape (root -> branch ->
 // nested branch) without the real content's size, so tests stay readable.
 function fixtureGroups() {
@@ -7215,135 +7408,330 @@ function fixtureGroups() {
     ] },
   ];
 }
+function fixtureAppConfigWithList(groups) {
+  const cfg = createTurnStepList(defaultAppConfig(), 'Fixture');
+  return { appConfig: loadDefaultIntoTurnStepList(cfg.appConfig, cfg.id, groups), listId: cfg.id };
+}
+// Builds a campaign shaped as store.get() would overlay it (turnStepLists
+// spliced on, turnStepSlotAssignments/turnStepProgress real campaign
+// state) — the fixture list is assigned to the 'colony' slot by default.
+function campaignWithTurnStepList(groups, { slot = 'colony', progress } = {}) {
+  const { appConfig, listId } = fixtureAppConfigWithList(groups);
+  return {
+    turnStepLists: appConfig.turnStepLists,
+    turnStepSlotAssignments: { colony: null, starship: null, [slot]: listId },
+    turnStepProgress: {
+      colony: { groupId: null, stepIndex: 0, returnStack: [] },
+      starship: { groupId: null, stepIndex: 0, returnStack: [] },
+      ...(progress ? { [slot]: progress } : {}),
+    },
+  };
+}
 
-test('loadDefaultTurnSteps replaces turnSteps.groups with a deep clone (mutating the result never touches the seed data)', () => {
-  const profile = defaultRulesProfile('P');
-  const loaded = loadDefaultTurnSteps(profile, TURN_STEPS_5PFH);
-  assert.equal(loaded.turnSteps.groups.length, TURN_STEPS_5PFH.length);
-  assert.equal(loaded.turnSteps.groups[0].id, 'daily-life');
-  loaded.turnSteps.groups[0].steps[0].text = 'mutated';
+test('loadDefaultIntoTurnStepList replaces a list\'s groups with a deep clone (mutating the result never touches the seed data), no-op on an unknown list', () => {
+  const created = createTurnStepList(defaultAppConfig(), 'P');
+  const loaded = loadDefaultIntoTurnStepList(created.appConfig, created.id, TURN_STEPS_5PFH);
+  const list = listTurnStepLists(loaded).find((l) => l.id === created.id);
+  assert.equal(list.groups.length, TURN_STEPS_5PFH.length);
+  assert.equal(list.groups[0].id, 'daily-life');
+  list.groups[0].steps[0].text = 'mutated';
   assert.notEqual(TURN_STEPS_5PFH[0].steps[0].text, 'mutated', 'the seed data itself is untouched');
+  const unchanged = loadDefaultIntoTurnStepList(loaded, 'not-a-real-list', TURN_STEPS_5PFH);
+  assert.deepEqual(listTurnStepLists(unchanged), listTurnStepLists(loaded), 'unknown list id is a no-op');
 });
 
-test('moveTurnStepInGroup reorders within one group only, splice-based, bounds-checked no-op', () => {
-  let profile = profileWithTurnSteps(fixtureGroups());
-  profile = moveTurnStepInGroup(profile, 'root', 0, 1); // r1 swaps with r2
-  assert.deepEqual(profile.turnSteps.groups.find((g) => g.id === 'root').steps.map((s) => s.id), ['r2', 'r1', 'r3']);
-  const beforeNoop = profile;
-  profile = moveTurnStepInGroup(profile, 'root', 0, -1); // already at the top — no-op
-  assert.deepEqual(profile.turnSteps.groups.find((g) => g.id === 'root').steps.map((s) => s.id), ['r2', 'r1', 'r3']);
-  assert.equal(profile.turnSteps.groups.find((g) => g.id === 'branch').steps.map((s) => s.id).join(','), 'b1,b2', 'the OTHER group is untouched');
-  profile = moveTurnStepInGroup(beforeNoop, 'not-a-real-group', 0, 1);
-  assert.ok(profile, 'unknown group id is a no-op, not a throw');
+test('createTurnStepList/renameTurnStepList/deleteTurnStepList round-trip the Turn Step List inventory', () => {
+  const created = createTurnStepList(defaultAppConfig(), 'My List');
+  assert.equal(listTurnStepLists(created.appConfig).length, 1);
+  assert.equal(listTurnStepLists(created.appConfig)[0].name, 'My List');
+
+  const renamed = renameTurnStepList(created.appConfig, created.id, 'Renamed');
+  assert.equal(listTurnStepLists(renamed)[0].name, 'Renamed');
+  const unchangedRename = renameTurnStepList(renamed, 'not-a-real-id', 'Nope');
+  assert.deepEqual(listTurnStepLists(unchangedRename), listTurnStepLists(renamed));
+
+  const deleted = deleteTurnStepList(renamed, created.id);
+  assert.equal(listTurnStepLists(deleted).length, 0);
 });
 
-test('updateTurnStepText edits just the one targeted step\'s text, no-op on an unknown group/step', () => {
-  let profile = profileWithTurnSteps(fixtureGroups());
-  profile = updateTurnStepText(profile, 'root', 'r1', 'edited text');
-  assert.equal(profile.turnSteps.groups[0].steps[0].text, 'edited text');
-  assert.equal(profile.turnSteps.groups[0].steps[1].text, 'branches out', 'sibling step untouched');
-  profile = updateTurnStepText(profile, 'root', 'not-a-real-step', 'nope');
-  assert.equal(profile.turnSteps.groups[0].steps.length, 3, 'unknown step id is a no-op');
+test('moveTurnStepInList reorders within one group of one list only, splice-based, bounds-checked no-op', () => {
+  const { appConfig, listId } = fixtureAppConfigWithList(fixtureGroups());
+  let cfg = moveTurnStepInList(appConfig, listId, 'root', 0, 1); // r1 swaps with r2
+  const groupsOf = (c) => listTurnStepLists(c).find((l) => l.id === listId).groups;
+  assert.deepEqual(groupsOf(cfg).find((g) => g.id === 'root').steps.map((s) => s.id), ['r2', 'r1', 'r3']);
+  const beforeNoop = cfg;
+  cfg = moveTurnStepInList(cfg, listId, 'root', 0, -1); // already at the top — no-op
+  assert.deepEqual(groupsOf(cfg).find((g) => g.id === 'root').steps.map((s) => s.id), ['r2', 'r1', 'r3']);
+  assert.equal(groupsOf(cfg).find((g) => g.id === 'branch').steps.map((s) => s.id).join(','), 'b1,b2', 'the OTHER group is untouched');
+  cfg = moveTurnStepInList(beforeNoop, listId, 'not-a-real-group', 0, 1);
+  assert.ok(cfg, 'unknown group id is a no-op, not a throw');
 });
 
-test('getCurrentTurnStep resolves the current position, or null when the active profile has no turn steps at all', () => {
-  const emptyCampaign = { turnSteps: { groups: [] }, turnStepProgress: { groupId: null, stepIndex: 0, returnStack: [] } };
-  assert.equal(getCurrentTurnStep(emptyCampaign), null);
+test('updateTurnStepText edits just the one targeted step\'s text, no-op on an unknown list/group/step', () => {
+  const { appConfig, listId } = fixtureAppConfigWithList(fixtureGroups());
+  const groupsOf = (c) => listTurnStepLists(c).find((l) => l.id === listId).groups;
+  let cfg = updateTurnStepText(appConfig, listId, 'root', 'r1', 'edited text');
+  assert.equal(groupsOf(cfg)[0].steps[0].text, 'edited text');
+  assert.equal(groupsOf(cfg)[0].steps[1].text, 'branches out', 'sibling step untouched');
+  cfg = updateTurnStepText(cfg, listId, 'root', 'not-a-real-step', 'nope');
+  assert.equal(groupsOf(cfg)[0].steps.length, 3, 'unknown step id is a no-op');
+});
 
-  const campaign = { turnSteps: { groups: fixtureGroups() }, turnStepProgress: { groupId: null, stepIndex: 0, returnStack: [] } };
-  const current = getCurrentTurnStep(campaign);
+test('setTurnStepShowCrewTasks toggles just the one targeted step\'s flag (direct follow-up request: "make the Crew Tasks a reusable functionality for other Turn Steps"), no-op on an unknown list/group/step, and coerces to a real boolean', () => {
+  const { appConfig, listId } = fixtureAppConfigWithList(fixtureGroups());
+  const groupsOf = (c) => listTurnStepLists(c).find((l) => l.id === listId).groups;
+  assert.ok(!groupsOf(appConfig)[0].steps[0].showCrewTasks, 'unset by default');
+
+  let cfg = setTurnStepShowCrewTasks(appConfig, listId, 'root', 'r1', true);
+  assert.equal(groupsOf(cfg)[0].steps[0].showCrewTasks, true);
+  assert.ok(!groupsOf(cfg)[0].steps[1].showCrewTasks, 'sibling step untouched');
+
+  // A second step can ALSO carry the flag at the same time — this is the
+  // whole point of the request: not exclusive to one hardcoded step.
+  cfg = setTurnStepShowCrewTasks(cfg, listId, 'branch', 'b1', true);
+  assert.equal(groupsOf(cfg)[0].steps[0].showCrewTasks, true, 'root/r1 still flagged');
+  assert.equal(groupsOf(cfg)[1].steps[0].showCrewTasks, true, 'branch/b1 also flagged');
+
+  cfg = setTurnStepShowCrewTasks(cfg, listId, 'root', 'r1', false);
+  assert.equal(groupsOf(cfg)[0].steps[0].showCrewTasks, false, 'can be un-flagged again');
+
+  cfg = setTurnStepShowCrewTasks(cfg, listId, 'root', 'r1', 'truthy-string');
+  assert.equal(groupsOf(cfg)[0].steps[0].showCrewTasks, true, 'coerced to a real boolean, not stored as the raw value');
+
+  const unchanged = setTurnStepShowCrewTasks(cfg, listId, 'root', 'not-a-real-step', true);
+  assert.deepEqual(groupsOf(unchanged), groupsOf(cfg));
+});
+
+test('addTurnStepGroup appends a new empty category, no-op on an unknown list; renameTurnStepGroup edits just its label', () => {
+  const { appConfig, listId } = fixtureAppConfigWithList(fixtureGroups());
+  const created = addTurnStepGroup(appConfig, listId, 'New Category');
+  assert.ok(created.groupId);
+  const groups = listTurnStepLists(created.appConfig).find((l) => l.id === listId).groups;
+  assert.equal(groups.length, 4, 'the 3 fixture groups plus the new one');
+  const newGroup = groups.find((g) => g.id === created.groupId);
+  assert.equal(newGroup.label, 'New Category');
+  assert.deepEqual(newGroup.steps, []);
+
+  const renamed = renameTurnStepGroup(created.appConfig, listId, created.groupId, 'Renamed Category');
+  assert.equal(listTurnStepLists(renamed).find((l) => l.id === listId).groups.find((g) => g.id === created.groupId).label, 'Renamed Category');
+
+  const noopCreate = addTurnStepGroup(appConfig, 'not-a-real-list', 'X');
+  assert.equal(noopCreate.groupId, null);
+});
+
+test('addTurnStepToGroup appends a new blank step (no branchTo) to one category, no-op on an unknown list/group', () => {
+  const { appConfig, listId } = fixtureAppConfigWithList(fixtureGroups());
+  const groupsOf = (c) => listTurnStepLists(c).find((l) => l.id === listId).groups;
+  const created = addTurnStepToGroup(appConfig, listId, 'root', 'A brand new step');
+  assert.ok(created.stepId);
+  const rootSteps = groupsOf(created.appConfig).find((g) => g.id === 'root').steps;
+  assert.equal(rootSteps.length, 4, 'the 3 fixture steps plus the new one');
+  const newStep = rootSteps.find((s) => s.id === created.stepId);
+  assert.equal(newStep.text, 'A brand new step');
+  assert.equal(newStep.branchTo, null);
+  assert.equal(groupsOf(created.appConfig).find((g) => g.id === 'branch').steps.length, 2, 'the OTHER group is untouched');
+
+  const noopGroup = addTurnStepToGroup(appConfig, listId, 'not-a-real-group', 'nope');
+  assert.equal(noopGroup.stepId, null);
+});
+
+test('moveTurnStepToGroup relocates a step OUT of its current category and appends it to a different one, preserving its own branchTo; no-op on an unknown list/group/step or when the two groups are the same', () => {
+  const { appConfig, listId } = fixtureAppConfigWithList(fixtureGroups());
+  const groupsOf = (c) => listTurnStepLists(c).find((l) => l.id === listId).groups;
+  let cfg = moveTurnStepToGroup(appConfig, listId, 'root', 'r2', 'branch');
+  assert.deepEqual(groupsOf(cfg).find((g) => g.id === 'root').steps.map((s) => s.id), ['r1', 'r3'], 'r2 removed from root');
+  const movedStep = groupsOf(cfg).find((g) => g.id === 'branch').steps.find((s) => s.id === 'r2');
+  assert.ok(movedStep, 'r2 appended to branch');
+  assert.equal(movedStep.branchTo, 'branch', 'its own branchTo travels with it unchanged');
+
+  const beforeNoop = cfg;
+  cfg = moveTurnStepToGroup(cfg, listId, 'root', 'not-a-real-step', 'branch');
+  assert.deepEqual(groupsOf(cfg), groupsOf(beforeNoop), 'unknown step id is a no-op');
+  cfg = moveTurnStepToGroup(cfg, listId, 'not-a-real-group', 'r1', 'branch');
+  assert.deepEqual(groupsOf(cfg), groupsOf(beforeNoop), 'unknown source group is a no-op');
+  cfg = moveTurnStepToGroup(cfg, listId, 'root', 'r1', 'root');
+  assert.deepEqual(groupsOf(cfg), groupsOf(beforeNoop), 'same source/destination group is a no-op');
+});
+
+test('setTurnStepBranchTo sets/clears a step\'s branchTo (direct follow-up request: "connect or move categories to sub categories") — the same field getCurrentTurnStep/advanceTurnStep already read, now GM-editable; no-op on an unknown list/group/step', () => {
+  const { appConfig, listId } = fixtureAppConfigWithList(fixtureGroups());
+  const groupsOf = (c) => listTurnStepLists(c).find((l) => l.id === listId).groups;
+  let cfg = setTurnStepBranchTo(appConfig, listId, 'root', 'r1', 'nested');
+  assert.equal(groupsOf(cfg).find((g) => g.id === 'root').steps.find((s) => s.id === 'r1').branchTo, 'nested');
+  cfg = setTurnStepBranchTo(cfg, listId, 'root', 'r1', null);
+  assert.equal(groupsOf(cfg).find((g) => g.id === 'root').steps.find((s) => s.id === 'r1').branchTo, null, 'clears back to null (falsy target)');
+  const unchanged = setTurnStepBranchTo(cfg, listId, 'root', 'not-a-real-step', 'nested');
+  assert.deepEqual(groupsOf(unchanged), groupsOf(cfg));
+});
+
+test('getCurrentTurnStep resolves the current position for the given slot, or null when that slot has no list assigned/no groups', () => {
+  const emptyCampaign = { turnStepLists: [], turnStepSlotAssignments: { colony: null, starship: null }, turnStepProgress: { colony: { groupId: null, stepIndex: 0, returnStack: [] }, starship: { groupId: null, stepIndex: 0, returnStack: [] } } };
+  assert.equal(getCurrentTurnStep(emptyCampaign, 'colony'), null);
+
+  const campaign = campaignWithTurnStepList(fixtureGroups());
+  const current = getCurrentTurnStep(campaign, 'colony');
   assert.equal(current.group.id, 'root');
   assert.equal(current.step.id, 'r1');
   assert.equal(current.index, 0);
   assert.equal(current.total, 3);
   assert.equal(current.hasPrev, false, 'nothing before the very first step');
   assert.equal(current.hasNext, true);
+  assert.equal(getCurrentTurnStep(campaign, 'starship'), null, 'a slot with no list assigned resolves to null independently');
 });
 
 test('advanceTurnStep auto-jumps into a branchTo, pushing a returnStack entry, and resumes the parent one step further once the branch itself is exhausted (confirmed: auto-jump on Next)', () => {
-  let campaign = { turnSteps: { groups: fixtureGroups() }, turnStepProgress: { groupId: 'root', stepIndex: 0, returnStack: [] } };
-  campaign = advanceTurnStep(campaign); // r1 -> r2
-  assert.deepEqual({ g: campaign.turnStepProgress.groupId, i: campaign.turnStepProgress.stepIndex }, { g: 'root', i: 1 });
-  campaign = advanceTurnStep(campaign); // r2 branches -> branch/b1, pushes {root,1}
-  assert.deepEqual({ g: campaign.turnStepProgress.groupId, i: campaign.turnStepProgress.stepIndex }, { g: 'branch', i: 0 });
-  assert.deepEqual(campaign.turnStepProgress.returnStack, [{ groupId: 'root', stepIndex: 1 }]);
-  campaign = advanceTurnStep(campaign); // b1 -> b2 (branches further -> nested/n1, pushes {branch,1})
-  assert.deepEqual({ g: campaign.turnStepProgress.groupId, i: campaign.turnStepProgress.stepIndex }, { g: 'branch', i: 1 });
-  campaign = advanceTurnStep(campaign);
-  assert.deepEqual({ g: campaign.turnStepProgress.groupId, i: campaign.turnStepProgress.stepIndex }, { g: 'nested', i: 0 });
-  assert.equal(campaign.turnStepProgress.returnStack.length, 2);
-  campaign = advanceTurnStep(campaign); // nested has only 1 step -> pop back to branch, resume at index 2 (past its end!) -> pop again to root, resume at index 2
-  assert.deepEqual({ g: campaign.turnStepProgress.groupId, i: campaign.turnStepProgress.stepIndex }, { g: 'root', i: 2 }, 'a branch that ends exactly where its own parent also ends keeps popping instead of landing out of range');
-  assert.deepEqual(campaign.turnStepProgress.returnStack, []);
+  let campaign = campaignWithTurnStepList(fixtureGroups(), { progress: { groupId: 'root', stepIndex: 0, returnStack: [] } });
+  campaign = advanceTurnStep(campaign, 'colony'); // r1 -> r2
+  assert.deepEqual({ g: campaign.turnStepProgress.colony.groupId, i: campaign.turnStepProgress.colony.stepIndex }, { g: 'root', i: 1 });
+  campaign = advanceTurnStep(campaign, 'colony'); // r2 branches -> branch/b1, pushes {root,1}
+  assert.deepEqual({ g: campaign.turnStepProgress.colony.groupId, i: campaign.turnStepProgress.colony.stepIndex }, { g: 'branch', i: 0 });
+  assert.deepEqual(campaign.turnStepProgress.colony.returnStack, [{ groupId: 'root', stepIndex: 1 }]);
+  campaign = advanceTurnStep(campaign, 'colony'); // b1 -> b2 (branches further -> nested/n1, pushes {branch,1})
+  assert.deepEqual({ g: campaign.turnStepProgress.colony.groupId, i: campaign.turnStepProgress.colony.stepIndex }, { g: 'branch', i: 1 });
+  campaign = advanceTurnStep(campaign, 'colony');
+  assert.deepEqual({ g: campaign.turnStepProgress.colony.groupId, i: campaign.turnStepProgress.colony.stepIndex }, { g: 'nested', i: 0 });
+  assert.equal(campaign.turnStepProgress.colony.returnStack.length, 2);
+  campaign = advanceTurnStep(campaign, 'colony'); // nested has only 1 step -> pop back to branch, resume at index 2 (past its end!) -> pop again to root, resume at index 2
+  assert.deepEqual({ g: campaign.turnStepProgress.colony.groupId, i: campaign.turnStepProgress.colony.stepIndex }, { g: 'root', i: 2 }, 'a branch that ends exactly where its own parent also ends keeps popping instead of landing out of range');
+  assert.deepEqual(campaign.turnStepProgress.colony.returnStack, []);
   const beforeEnd = campaign;
-  campaign = advanceTurnStep(campaign); // root's last step (r3), no branch, nothing on the stack -> true end, no-op
-  assert.deepEqual(campaign.turnStepProgress, beforeEnd.turnStepProgress, 'true end of the whole workflow is a no-op');
+  campaign = advanceTurnStep(campaign, 'colony'); // root's last step (r3), no branch, nothing on the stack -> true end, no-op
+  assert.deepEqual(campaign.turnStepProgress.colony, beforeEnd.turnStepProgress.colony, 'true end of the whole workflow is a no-op');
+  assert.deepEqual(campaign.turnStepProgress.starship, beforeEnd.turnStepProgress.starship, 'the OTHER slot is never touched by colony-slot advancement');
 });
 
-test('advanceTurnStep/retreatTurnStep are no-ops when the active profile has no turn steps configured', () => {
-  const campaign = { turnSteps: { groups: [] }, turnStepProgress: { groupId: null, stepIndex: 0, returnStack: [] } };
-  assert.equal(advanceTurnStep(campaign), campaign);
-  assert.equal(retreatTurnStep(campaign), campaign);
+test('advanceTurnStep/retreatTurnStep are no-ops when the given slot has no list assigned, and never touch the other slot', () => {
+  const campaign = campaignWithTurnStepList(fixtureGroups(), { slot: 'colony' });
+  assert.equal(advanceTurnStep(campaign, 'starship'), campaign);
+  assert.equal(retreatTurnStep(campaign, 'starship'), campaign);
 });
 
 test('retreatTurnStep mirrors advanceTurnStep — steps back within a group, and at index 0 of a branched-into group pops back to the parent\'s saved position WITHOUT advancing it', () => {
-  let campaign = { turnSteps: { groups: fixtureGroups() }, turnStepProgress: { groupId: 'root', stepIndex: 1, returnStack: [{ groupId: 'root', stepIndex: 0 }] } };
-  // Simulate having just branched in: currently at branch/b1 (index 0), with root's own position (0) saved on the stack.
-  campaign = { ...campaign, turnStepProgress: { groupId: 'branch', stepIndex: 0, returnStack: [{ groupId: 'root', stepIndex: 1 }] } };
-  campaign = retreatTurnStep(campaign);
-  assert.deepEqual({ g: campaign.turnStepProgress.groupId, i: campaign.turnStepProgress.stepIndex }, { g: 'root', i: 1 }, 'pops back to exactly where the branch was taken, not one further');
-  assert.deepEqual(campaign.turnStepProgress.returnStack, []);
-  campaign = retreatTurnStep(campaign); // root index 1 -> 0
-  assert.deepEqual({ g: campaign.turnStepProgress.groupId, i: campaign.turnStepProgress.stepIndex }, { g: 'root', i: 0 });
+  // Simulate having just branched in: currently at branch/b1 (index 0), with root's own position (1) saved on the stack.
+  let campaign = campaignWithTurnStepList(fixtureGroups(), { progress: { groupId: 'branch', stepIndex: 0, returnStack: [{ groupId: 'root', stepIndex: 1 }] } });
+  campaign = retreatTurnStep(campaign, 'colony');
+  assert.deepEqual({ g: campaign.turnStepProgress.colony.groupId, i: campaign.turnStepProgress.colony.stepIndex }, { g: 'root', i: 1 }, 'pops back to exactly where the branch was taken, not one further');
+  assert.deepEqual(campaign.turnStepProgress.colony.returnStack, []);
+  campaign = retreatTurnStep(campaign, 'colony'); // root index 1 -> 0
+  assert.deepEqual({ g: campaign.turnStepProgress.colony.groupId, i: campaign.turnStepProgress.colony.stepIndex }, { g: 'root', i: 0 });
   const atStart = campaign;
-  campaign = retreatTurnStep(campaign); // already at the very start of the root — no-op
-  assert.deepEqual(campaign.turnStepProgress, atStart.turnStepProgress);
+  campaign = retreatTurnStep(campaign, 'colony'); // already at the very start of the root — no-op
+  assert.deepEqual(campaign.turnStepProgress.colony, atStart.turnStepProgress.colony);
 });
 
-test('startNextCampaignTurn ("Do you want to start the next Campaign Turn?") increments campaignTurn with the same rulebook accrual advanceCampaignTurnWithAccrual applies, and resets turnStepProgress to the very first step of the first group — regardless of where the workflow actually was', () => {
-  let campaign = {
-    turnSteps: { groups: fixtureGroups() },
-    turnStepProgress: { groupId: 'nested', stepIndex: 0, returnStack: [{ groupId: 'root', stepIndex: 1 }, { groupId: 'branch', stepIndex: 1 }] },
-    colony: { fields: { campaignTurn: 3, colonyMorale: 2, buildPointsPerTurn: 2, buildPoints: 5 }, crew: [], encounters: [] },
-  };
-  const { campaign: next, turn, changes } = startNextCampaignTurn(campaign);
+test('startNextColonyCampaignTurn ("Do you want to start the next Campaign Turn?") increments campaignTurn with the same rulebook accrual advanceCampaignTurnWithAccrual applies, and resets turnStepProgress.colony to the very first step of the first group — regardless of where the workflow actually was', () => {
+  let campaign = campaignWithTurnStepList(fixtureGroups(), { progress: { groupId: 'nested', stepIndex: 0, returnStack: [{ groupId: 'root', stepIndex: 1 }, { groupId: 'branch', stepIndex: 1 }] } });
+  campaign = { ...campaign, colony: { fields: { campaignTurn: 3, colonyMorale: 2, buildPointsPerTurn: 2, buildPoints: 5 }, crew: [], encounters: [] } };
+  const { campaign: next, turn, changes } = startNextColonyCampaignTurn(campaign);
   assert.equal(turn, 4);
   assert.equal(getColonyFields(next).campaignTurn, 4);
   assert.equal(getColonyFields(next).buildPoints, 7, 'same accrual as advanceCampaignTurnWithAccrual — 5 + 2/turn');
   assert.equal(getColonyFields(next).colonyMorale, 1, 'same unconditional -1');
   assert.ok(changes.some((c) => c.key === 'buildPoints') && changes.some((c) => c.key === 'colonyMorale'));
-  assert.deepEqual(next.turnStepProgress, { groupId: 'root', stepIndex: 0, returnStack: [] }, 'restarts at the first step of the first group, discarding wherever it actually was (including a mid-branch returnStack)');
+  assert.deepEqual(next.turnStepProgress.colony, { groupId: 'root', stepIndex: 0, returnStack: [] }, 'restarts at the first step of the first group, discarding wherever it actually was (including a mid-branch returnStack)');
 });
 
-test('startNextCampaignTurn still advances the Campaign Turn (with accrual) even when the active profile has no turn steps configured at all — it just has nothing to reset turnStepProgress to', () => {
-  const campaign = { turnSteps: { groups: [] }, turnStepProgress: { groupId: null, stepIndex: 0, returnStack: [] }, colony: { fields: { campaignTurn: 1 }, crew: [], encounters: [] } };
-  const { campaign: next, turn } = startNextCampaignTurn(campaign);
+test('startNextColonyCampaignTurn still advances the Campaign Turn (with accrual) even when the colony slot has no list assigned at all — it just has nothing to reset turnStepProgress.colony to', () => {
+  const campaign = { turnStepLists: [], turnStepSlotAssignments: { colony: null, starship: null }, turnStepProgress: { colony: { groupId: null, stepIndex: 0, returnStack: [] }, starship: { groupId: null, stepIndex: 0, returnStack: [] } }, colony: { fields: { campaignTurn: 1 }, crew: [], encounters: [] } };
+  const { campaign: next, turn } = startNextColonyCampaignTurn(campaign);
   assert.equal(turn, 2);
-  assert.deepEqual(next.turnStepProgress, { groupId: null, stepIndex: 0, returnStack: [] }, 'left exactly as it was — no group to reset to');
+  assert.deepEqual(next.turnStepProgress.colony, { groupId: null, stepIndex: 0, returnStack: [] }, 'left exactly as it was — no group to reset to');
 });
 
-test('backfillDefaultTurnSteps only fills the 5PFH seed onto a profile named exactly "5PFH" with no steps of its own yet — never a differently-named profile, never a "5PFH" profile that already has ANY steps', () => {
+test('startNextStarshipCampaignTurn bumps party.starshipCampaignTurn independently, applies NO Planetfall accrual, and resets turnStepProgress.starship only (direct follow-up request: separate counter, no accrual)', () => {
+  let campaign = campaignWithTurnStepList(fixtureGroups(), { slot: 'starship', progress: { groupId: 'branch', stepIndex: 1, returnStack: [{ groupId: 'root', stepIndex: 0 }] } });
+  campaign = { ...campaign, party: { starshipCampaignTurn: 2 }, colony: { fields: { campaignTurn: 5, buildPoints: 9 }, crew: [], encounters: [] } };
+  const { campaign: next, turn } = startNextStarshipCampaignTurn(campaign);
+  assert.equal(turn, 3);
+  assert.equal(next.party.starshipCampaignTurn, 3);
+  assert.equal(getColonyFields(next).campaignTurn, 5, 'Colony\'s own Campaign Turn is completely untouched');
+  assert.equal(getColonyFields(next).buildPoints, 9, 'no Planetfall accrual math applied on the Starship tab');
+  assert.deepEqual(next.turnStepProgress.starship, { groupId: 'root', stepIndex: 0, returnStack: [] });
+});
+
+test('hoistLegacyProfileTurnSteps moves a pre-existing profile.turnSteps.groups into a new named appConfig.turnStepLists entry, is idempotent, and no-ops when no profile has legacy content', () => {
+  let cfg = createRulesProfile(defaultAppConfig(), { name: '5PFH' });
+  const profileId = cfg.profiles[0].id;
+  cfg.profiles[0].turnSteps = { groups: fixtureGroups() };
+
+  const hoisted = hoistLegacyProfileTurnSteps(cfg);
+  assert.notEqual(hoisted, cfg, 'a change was made');
+  assert.equal(listTurnStepLists(hoisted).length, 1);
+  assert.equal(listTurnStepLists(hoisted)[0].name, '5PFH');
+  assert.deepEqual(listTurnStepLists(hoisted)[0].groups, fixtureGroups());
+  const profileAfter = hoisted.profiles.find((p) => p.id === profileId);
+  assert.ok(!profileAfter.turnSteps, 'the source field is removed once hoisted — makes a second call idempotent');
+
+  const secondPass = hoistLegacyProfileTurnSteps(hoisted);
+  assert.equal(secondPass, hoisted, 'idempotent — nothing left to hoist');
+
+  const noLegacy = defaultAppConfig();
+  assert.equal(hoistLegacyProfileTurnSteps(noLegacy), noLegacy, 'no-op when no profile has legacy turnSteps content');
+});
+
+test('backfillTurnStepListInventory ensures the "5PFH" and "Planetfall" named lists both exist, seeding whichever is missing, idempotent once both exist', () => {
+  const cfg = defaultAppConfig();
+  const backfilled = backfillTurnStepListInventory(cfg, TURN_STEPS_5PFH, PLANETFALL_TURN_STEPS);
+  assert.notEqual(backfilled, cfg);
+  const names = listTurnStepLists(backfilled).map((l) => l.name).sort();
+  assert.deepEqual(names, ['5PFH', 'Planetfall']);
+  assert.equal(listTurnStepLists(backfilled).find((l) => l.name === '5PFH').groups.length, TURN_STEPS_5PFH.length);
+  assert.equal(listTurnStepLists(backfilled).find((l) => l.name === 'Planetfall').groups.length, PLANETFALL_TURN_STEPS.length);
+
+  const secondPass = backfillTurnStepListInventory(backfilled, TURN_STEPS_5PFH, PLANETFALL_TURN_STEPS);
+  assert.equal(secondPass, backfilled, 'idempotent once both already exist');
+
+  // Only the missing one is seeded when one already exists (e.g. a GM-created "5PFH").
+  let onlyFivePfh = defaultAppConfig();
+  onlyFivePfh = createTurnStepList(onlyFivePfh, '5PFH').appConfig;
+  const filled = backfillTurnStepListInventory(onlyFivePfh, TURN_STEPS_5PFH, PLANETFALL_TURN_STEPS);
+  assert.equal(listTurnStepLists(filled).find((l) => l.name === '5PFH').groups.length, 0, 'existing (empty) 5PFH list untouched, not reseeded');
+  assert.equal(listTurnStepLists(filled).find((l) => l.name === 'Planetfall').groups.length, PLANETFALL_TURN_STEPS.length);
+});
+
+test('fixPlanetfallBranching sets pf6/pf8\'s branchTo (Pre-Battle -> Battle -> Post-Battle, direct follow-up request) on a pre-existing "Planetfall" list only if not already correct, preserves any other edit, and no-ops when there\'s no such list or it\'s already fixed', () => {
+  let cfg = createTurnStepList(defaultAppConfig(), 'Planetfall').appConfig;
+  const listId = listTurnStepLists(cfg)[0].id;
+  // Simulate a campaign seeded before the branching fix: old-shape content
+  // (no branchTo) but with a GM's own edit to pf6's text preserved.
+  cfg = loadDefaultIntoTurnStepList(cfg, listId, PLANETFALL_TURN_STEPS.map((g) => ({ ...g, steps: g.steps.map((s) => ({ ...s, branchTo: null })) })));
+  cfg = updateTurnStepText(cfg, listId, 'pre-battle-steps', 'pf6', 'A GM\'s own custom wording for Mission Determination.');
+
+  const fixed = fixPlanetfallBranching(cfg);
+  assert.notEqual(fixed, cfg);
+  const groups = listTurnStepLists(fixed)[0].groups;
+  const pf6 = groups.flatMap((g) => g.steps).find((s) => s.id === 'pf6');
+  const pf8 = groups.flatMap((g) => g.steps).find((s) => s.id === 'pf8');
+  assert.equal(pf6.branchTo, 'battle-steps');
+  assert.equal(pf8.branchTo, 'post-battle-steps');
+  assert.equal(pf6.text, 'A GM\'s own custom wording for Mission Determination.', 'the GM\'s own text edit survives untouched');
+
+  const secondPass = fixPlanetfallBranching(fixed);
+  assert.equal(secondPass, fixed, 'idempotent once already correct');
+
+  const noList = defaultAppConfig();
+  assert.equal(fixPlanetfallBranching(noList), noList, 'no-op when there is no "Planetfall"-named list at all');
+});
+
+test('grandfatherCampaignPanelActivation sets fivepfh/planetfall true only for a profile with Colony visible and no explicit prior value, leaves an explicit choice or a Colony-hidden profile alone', () => {
   let cfg = defaultAppConfig();
-  cfg = createRulesProfile(cfg, { name: 'Default' });
-  cfg = createRulesProfile(cfg, { name: '5PFH' });
-  const fivePfhId = cfg.profiles[1].id;
+  cfg = createRulesProfile(cfg, { name: 'HasColony' });
+  cfg = createRulesProfile(cfg, { name: 'NoColony' });
+  cfg.profiles[0].ruleset.gameSystemActivations = { swn: false }; // predates fivepfh/planetfall keys
+  cfg.profiles[1].ruleset.gameSystemActivations = { swn: false };
+  cfg.profiles[1].moduleEnabled.colony = false;
 
-  const backfilled = backfillDefaultTurnSteps(cfg, TURN_STEPS_5PFH);
-  assert.notEqual(backfilled, cfg, 'a change was made');
-  const fivePfh = backfilled.profiles.find((p) => p.id === fivePfhId);
-  assert.equal(fivePfh.turnSteps.groups.length, TURN_STEPS_5PFH.length);
-  assert.equal(backfilled.profiles[0].turnSteps.groups.length, 0, 'the differently-named Default profile is untouched');
+  const grandfathered = grandfatherCampaignPanelActivation(cfg);
+  assert.equal(grandfathered.profiles[0].ruleset.gameSystemActivations.fivepfh, true);
+  assert.equal(grandfathered.profiles[0].ruleset.gameSystemActivations.planetfall, true);
+  assert.equal(grandfathered.profiles[1].ruleset.gameSystemActivations.fivepfh, undefined, 'Colony-hidden profile is left alone');
 
-  // Idempotent — running it again on the now-backfilled config is a true no-op.
-  const secondPass = backfillDefaultTurnSteps(backfilled, TURN_STEPS_5PFH);
-  assert.equal(secondPass, backfilled);
-
-  // A "5PFH" profile that already has even one manually-added step is never touched.
-  let withOneStep = defaultAppConfig();
-  withOneStep = createRulesProfile(withOneStep, { name: '5PFH' });
-  withOneStep.profiles[0].turnSteps = { groups: [{ id: 'g', label: 'G', steps: [{ id: 's', text: 'manual', branchTo: null }] }] };
-  const notBackfilled = backfillDefaultTurnSteps(withOneStep, TURN_STEPS_5PFH);
-  assert.equal(notBackfilled, withOneStep);
+  // An explicit prior choice (even false) is never overwritten.
+  let explicit = defaultAppConfig();
+  explicit = createRulesProfile(explicit, { name: 'Explicit' });
+  explicit.profiles[0].ruleset.gameSystemActivations = { swn: false, fivepfh: false, planetfall: true };
+  const unchanged = grandfatherCampaignPanelActivation(explicit);
+  assert.equal(unchanged, explicit, 'no-op — every profile already has explicit values');
 });
 
 test('backfillDefaultCrewTasks only fills the 5PFH seed onto a profile named exactly "5PFH" with no tasks of its own yet — never a differently-named profile, never a "5PFH" profile that already has ANY tasks', () => {

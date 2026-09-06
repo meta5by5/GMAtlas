@@ -15,6 +15,7 @@ import {
   importCampaign, migrateFromLegacyKeys, migrateDocument, readLegacyKeys, wrapLegacyCampaignIntoAppConfig, LEGACY_KEYS,
 } from '../src/core/migrate.js';
 import { SCHEMA_VERSION, defaultCampaign, GATEABLE_MODULES } from '../src/core/schema.js';
+import { MAX_ENCOUNTERS } from '../src/domain/colony.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const v053 = JSON.parse(readFileSync(join(here, 'fixtures', 'v053-export.json'), 'utf8'));
@@ -193,6 +194,17 @@ test('wrapLegacyCampaignIntoAppConfig: a pre-Rules-Profile single campaign becom
   assert.equal(fivePfhProfile.moduleEnabled.colony, true, 'Colony/World Tracker stay enabled in 5PFH');
   assert.equal(fivePfhProfile.moduleEnabled['world-tracker'], true);
   assert.deepEqual(fivePfhProfile.storyboardPositions, { composer: 'colony', navigator: 'world-tracker', advisor: 'party' });
+
+  // Direct follow-up request ("create an inventory of Turn Step List
+  // profiles managed in Settings"): a first-time install seeds both named
+  // lists in the standalone appConfig.turnStepLists inventory, and the
+  // Campaign panel's Colony/Starship tabs are pre-assigned to them.
+  assert.equal(appConfig.turnStepLists.length, 2);
+  const fivePfhList = appConfig.turnStepLists.find((l) => l.name === '5PFH');
+  const planetfallList = appConfig.turnStepLists.find((l) => l.name === 'Planetfall');
+  assert.ok(fivePfhList && fivePfhList.groups.length, '5PFH list seeded with real content');
+  assert.ok(planetfallList && planetfallList.groups.length, 'Planetfall list seeded with real content');
+  assert.deepEqual(campaignDoc.turnStepSlotAssignments, { colony: planetfallList.id, starship: fivePfhList.id }, 'Colony tab -> Planetfall, Starship tab -> 5PFH, per direct request');
 });
 
 test('wrapLegacyCampaignIntoAppConfig runs the campaign doc through the normal migrateDocument upgrade path (e.g. the SWN grandfather step still fires)', () => {
@@ -202,4 +214,58 @@ test('wrapLegacyCampaignIntoAppConfig runs the campaign doc through the normal m
   const { appConfig, campaignDoc } = wrapLegacyCampaignIntoAppConfig(legacy);
   assert.equal(campaignDoc.schemaVersion, SCHEMA_VERSION);
   assert.equal(appConfig.profiles[0].ruleset.gameSystemActivations.swn, true, 'Default profile inherits the grandfathered activation');
+});
+
+test('migrateDocument backfills colony.encounters up to MAX_ENCOUNTERS for a pre-existing campaign, additively and idempotently', () => {
+  // A campaign predating the "default to 10 rows" feature — 3 rows already
+  // added the old way, one with real GM data on it.
+  const legacy = defaultCampaign();
+  legacy.colony.encounters = [
+    { id: 'enc_a', note: 'Something in the ridge grass.', entityId: '' },
+    { id: 'enc_b', note: '', entityId: '' },
+    { id: 'enc_c', note: '', entityId: '' },
+  ];
+  const migrated = migrateDocument(legacy);
+  assert.equal(migrated.colony.encounters.length, MAX_ENCOUNTERS);
+  // The 3 real rows are preserved untouched, in order, not dropped/reordered.
+  assert.equal(migrated.colony.encounters[0].id, 'enc_a');
+  assert.equal(migrated.colony.encounters[0].note, 'Something in the ridge grass.');
+  assert.equal(migrated.colony.encounters[1].id, 'enc_b');
+  assert.equal(migrated.colony.encounters[2].id, 'enc_c');
+  // The 7 padding rows all have real, distinct ids.
+  const padIds = migrated.colony.encounters.slice(3).map((r) => r.id);
+  assert.equal(new Set(padIds).size, 7);
+
+  // A campaign already missing colony entirely (older than colony.js itself)
+  // still ends up with the full fixed grid.
+  const noColony = defaultCampaign();
+  delete noColony.colony;
+  const migratedNoColony = migrateDocument(noColony);
+  assert.equal(migratedNoColony.colony.encounters.length, MAX_ENCOUNTERS);
+
+  // A campaign already at MAX_ENCOUNTERS is left alone (idempotent).
+  const full = migrateDocument(defaultCampaign());
+  assert.equal(full.colony.encounters.length, MAX_ENCOUNTERS);
+  const reMigrated = migrateDocument(full);
+  assert.deepEqual(reMigrated.colony.encounters.map((r) => r.id), full.colony.encounters.map((r) => r.id));
+});
+
+test('migrateDocument converts a pre-existing FLAT turnStepProgress ({groupId,stepIndex,returnStack}) into the new slot-keyed shape, folding it into turnStepProgress.starship (the old content was always the 5PFH sequence), leaving turnStepProgress.colony fresh — a doc already in the new shape (or with no turnStepProgress at all) is untouched', () => {
+  const legacy = defaultCampaign();
+  legacy.turnStepProgress = { groupId: 'daily-life', stepIndex: 2, returnStack: [{ groupId: 'root', stepIndex: 0 }] };
+  const migrated = migrateDocument(legacy);
+  assert.deepEqual(migrated.turnStepProgress.starship, { groupId: 'daily-life', stepIndex: 2, returnStack: [{ groupId: 'root', stepIndex: 0 }] });
+  assert.deepEqual(migrated.turnStepProgress.colony, { groupId: null, stepIndex: 0, returnStack: [] }, 'colony slot starts fresh, unrelated to the old single-slot progress');
+
+  // Already-current shape is left alone.
+  const current = defaultCampaign();
+  current.turnStepProgress = { colony: { groupId: 'g1', stepIndex: 1, returnStack: [] }, starship: { groupId: null, stepIndex: 0, returnStack: [] } };
+  const reMigrated = migrateDocument(current);
+  assert.deepEqual(reMigrated.turnStepProgress, current.turnStepProgress);
+
+  // A doc with no turnStepProgress at all just gets the schema default.
+  const bare = defaultCampaign();
+  delete bare.turnStepProgress;
+  const migratedBare = migrateDocument(bare);
+  assert.deepEqual(migratedBare.turnStepProgress, defaultCampaign().turnStepProgress);
 });

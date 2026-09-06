@@ -1,22 +1,17 @@
-// turnSteps.js — the Turn Step workflow (design/adr/rules-profiles-multi-
-// campaign.md, direct follow-up request — converted from the Guide entry
-// "5PFH Campaign Turn Sequence"). Two kinds of function here, on purpose:
-//
-//   - "Definition" mutators (moveTurnStepInGroup, updateTurnStepText,
-//     loadDefaultTurnSteps) operate on a PROFILE — the step list, its
-//     order, and each step's text are Rules Profile content (like Genre
-//     Pack/Rules Constitution), edited via the Ruleset Profile Editor's
-//     draft/Save/Discard flow, shared by every campaign on that profile.
-//
-//   - "Play position" functions (getCurrentTurnStep, advanceTurnStep,
-//     retreatTurnStep) operate on a CAMPAIGN only, reading `campaign.
-//     turnSteps` (the active profile's definitions, spliced in by
-//     store.js's overlayProfile — never actually persisted on the
-//     campaign document) and mutating `campaign.turnStepProgress` (real,
-//     per-campaign play state). This keeps every function here
-//     single-argument, matching every other domain module's convention —
-//     no domain function anywhere else in this app takes both a campaign
-//     and a profile.
+// turnSteps.js — Turn Step workflow PLAY POSITION (design/adr/rules-
+// profiles-multi-campaign.md, direct follow-up request — converted from
+// the Guide entry "5PFH Campaign Turn Sequence"). Every function here
+// operates on a CAMPAIGN only, reading `campaign.turnStepLists` (the
+// shared appConfig inventory, spliced in by store.js's overlay — never
+// actually persisted on the campaign document) resolved through
+// `campaign.turnStepSlotAssignments[slot]`, and mutating
+// `campaign.turnStepProgress[slot]` (real, per-campaign play state, now
+// keyed by SLOT — direct follow-up request: the Campaign panel's Colony
+// and Starship tabs each walk through their OWN list independently). See
+// domain/turnStepLists.js for the "definition" mutators (moveTurnStepInList,
+// updateTurnStepText, loadDefaultIntoTurnStepList, ...), which operate on
+// appConfig instead — Settings' Turn Step tab edits the shared inventory
+// directly, not a campaign.
 //
 // Pure functions only. No DOM, no localStorage.
 
@@ -24,73 +19,38 @@ import { advanceCampaignTurnWithAccrual } from './colony.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 
-function ensureTurnSteps(profile) {
-  if (!profile.turnSteps || typeof profile.turnSteps !== 'object') profile.turnSteps = { groups: [] };
-  if (!Array.isArray(profile.turnSteps.groups)) profile.turnSteps.groups = [];
-  return profile.turnSteps;
-}
-
-function ensureProgress(campaign) {
-  if (!campaign.turnStepProgress || typeof campaign.turnStepProgress !== 'object') {
-    campaign.turnStepProgress = { groupId: null, stepIndex: 0, returnStack: [] };
-  }
-  if (!Array.isArray(campaign.turnStepProgress.returnStack)) campaign.turnStepProgress.returnStack = [];
-  return campaign.turnStepProgress;
-}
-
 function findGroup(groups, groupId) { return groups.find((g) => g.id === groupId) || null; }
 
-// --- Definitions (Rules Profile content, draft-edited) ---------------------
-
-/** Splice-based reorder within one group — same shape as
- *  statblockTemplates.js's moveTemplateField(campaign, systemId, index,
- *  dir). Bounds-checked no-op past either end; no-op on an unknown group. */
-export function moveTurnStepInGroup(profile, groupId, index, dir) {
-  const next = clone(profile);
-  const group = findGroup(ensureTurnSteps(next).groups, groupId);
-  if (!group) return next;
-  const target = index + dir;
-  if (target < 0 || target >= group.steps.length) return next;
-  const [step] = group.steps.splice(index, 1);
-  group.steps.splice(target, 0, step);
-  return next;
+/** Resolves which list backs a given slot ('colony'/'starship') and
+ *  returns its groups — [] if unassigned or the assigned list no longer
+ *  exists (deleted from the inventory), same "nothing configured" posture
+ *  every caller below already handles. */
+function resolveGroups(campaign, slot) {
+  const listId = campaign.turnStepSlotAssignments && campaign.turnStepSlotAssignments[slot];
+  if (!listId) return [];
+  const list = ((campaign.turnStepLists) || []).find((l) => l.id === listId);
+  return (list && list.groups) || [];
 }
 
-/** Plain-text edit — step text keeps the same `@[Label|Target]` document-
- *  mention syntax the seed content already uses (src/ui/mentionEditor.js),
- *  rendered clickable at display time via buildMentionEditorHTML; editing
- *  it here is a plain textarea, no rich-editor round trip needed. No-op on
- *  an unknown group/step. */
-export function updateTurnStepText(profile, groupId, stepId, text) {
-  const next = clone(profile);
-  const group = findGroup(ensureTurnSteps(next).groups, groupId);
-  const step = group && group.steps.find((s) => s.id === stepId);
-  if (step) step.text = String(text || '');
-  return next;
+function ensureProgress(campaign, slot) {
+  if (!campaign.turnStepProgress || typeof campaign.turnStepProgress !== 'object') campaign.turnStepProgress = {};
+  if (!campaign.turnStepProgress[slot] || typeof campaign.turnStepProgress[slot] !== 'object') {
+    campaign.turnStepProgress[slot] = { groupId: null, stepIndex: 0, returnStack: [] };
+  }
+  if (!Array.isArray(campaign.turnStepProgress[slot].returnStack)) campaign.turnStepProgress[slot].returnStack = [];
+  return campaign.turnStepProgress[slot];
 }
 
-/** Replaces this profile's ENTIRE turnSteps.groups with a deep clone of
- *  the given seed data (src/data/turnStepsDefault5pfh.js, or any future
- *  preset shaped the same way) — the explicit, visible "Load Default
- *  Steps" action; never applied silently to a profile the GM didn't ask
- *  for it on. */
-export function loadDefaultTurnSteps(profile, groupsData) {
-  const next = clone(profile);
-  ensureTurnSteps(next).groups = clone(groupsData || []);
-  return next;
-}
-
-// --- Play position (real campaign state) ------------------------------
-
-/** Read-only: resolves the campaign's current turnStepProgress against its
- *  (profile-overlaid) turnSteps.groups into everything the Colony widget
- *  needs to render. Returns null when the active profile has no turn
- *  steps configured, or once progress has advanced past the very last
- *  step of the root workflow with nothing left on the return stack. */
-export function getCurrentTurnStep(campaign) {
-  const groups = (campaign.turnSteps && campaign.turnSteps.groups) || [];
+/** Read-only: resolves the campaign's current turnStepProgress[slot]
+ *  against the list assigned to that slot into everything a Turn Step
+ *  widget needs to render. Returns null when that slot has no list
+ *  assigned (or the assigned list has no groups), or once progress has
+ *  advanced past the very last step of the root workflow with nothing left
+ *  on the return stack. */
+export function getCurrentTurnStep(campaign, slot) {
+  const groups = resolveGroups(campaign, slot);
   if (!groups.length) return null;
-  const progress = campaign.turnStepProgress || { groupId: null, stepIndex: 0, returnStack: [] };
+  const progress = (campaign.turnStepProgress && campaign.turnStepProgress[slot]) || { groupId: null, stepIndex: 0, returnStack: [] };
   const groupId = progress.groupId || groups[0].id;
   const group = findGroup(groups, groupId) || groups[0];
   const index = Math.max(0, Math.min(group.steps.length - 1, progress.stepIndex || 0));
@@ -111,13 +71,13 @@ export function getCurrentTurnStep(campaign) {
  *  advances within the current group; at the group's last step, pops
  *  returnStack to resume the parent one step further (returning from a
  *  branch), or no-ops at the true end of the whole workflow (root group,
- *  last step, nothing to return to). No-op if the active profile has no
- *  turn steps at all. */
-export function advanceTurnStep(campaign) {
-  const groups = (campaign.turnSteps && campaign.turnSteps.groups) || [];
+ *  last step, nothing to return to). No-op if this slot has no list
+ *  assigned. */
+export function advanceTurnStep(campaign, slot) {
+  const groups = resolveGroups(campaign, slot);
   if (!groups.length) return campaign;
   const next = clone(campaign);
-  const progress = ensureProgress(next);
+  const progress = ensureProgress(next, slot);
   const groupId = progress.groupId || groups[0].id;
   const group = findGroup(groups, groupId) || groups[0];
   progress.groupId = group.id;
@@ -155,13 +115,13 @@ export function advanceTurnStep(campaign) {
  *  current group; at index 0 of a group that was entered via a branch
  *  (returnStack non-empty), pops back to the parent's saved position
  *  WITHOUT advancing it (undoing the jump, not the parent's own progress).
- *  No-op at the very start of the root workflow, or if the active profile
- *  has no turn steps at all. */
-export function retreatTurnStep(campaign) {
-  const groups = (campaign.turnSteps && campaign.turnSteps.groups) || [];
+ *  No-op at the very start of the root workflow, or if this slot has no
+ *  list assigned. */
+export function retreatTurnStep(campaign, slot) {
+  const groups = resolveGroups(campaign, slot);
   if (!groups.length) return campaign;
   const next = clone(campaign);
-  const progress = ensureProgress(next);
+  const progress = ensureProgress(next, slot);
   const groupId = progress.groupId || groups[0].id;
   const group = findGroup(groups, groupId) || groups[0];
   progress.groupId = group.id;
@@ -179,23 +139,45 @@ export function retreatTurnStep(campaign) {
   return next; // already at the very first step of the root — no-op
 }
 
-/** "Do you want to start the next Campaign Turn?" — the shell.js Next-step
- *  handler's confirm() prompt fires this once getCurrentTurnStep's hasNext
- *  is false (the true end of the workflow: no branchTo, no more steps in
- *  the current group, empty returnStack). Increments campaignTurn AND
- *  applies the rulebook's automatic per-turn point/morale bookkeeping
- *  (colony.js's own advanceCampaignTurnWithAccrual — see its own comment
- *  for exactly what does and doesn't accrue automatically), then resets
- *  turnStepProgress back to the first step of the first group —
- *  deliberately NOT advanceWorldTurn's "clear every feature's moved-from
- *  marker" housekeeping, which is a separate action tied to World
- *  Tracker's own "End Turn ▸" button, not this one. Returns {campaign,
- *  turn, changes}, same shape advanceCampaignTurnWithAccrual returns, so
- *  the caller can build one Journal entry covering both the turn change
- *  and everything the accrual touched. */
-export function startNextCampaignTurn(campaign) {
-  const groups = (campaign.turnSteps && campaign.turnSteps.groups) || [];
+/** "Do you want to start the next Campaign Turn?" — the Colony tab's own
+ *  Next-step handler's confirm() prompt fires this once getCurrentTurnStep
+ *  (slot 'colony')'s hasNext is false. Increments colony.fields.campaignTurn
+ *  AND applies the Planetfall rulebook's automatic per-turn point/morale
+ *  bookkeeping (colony.js's own advanceCampaignTurnWithAccrual — see its
+ *  own comment for exactly what does and doesn't accrue automatically),
+ *  then resets turnStepProgress.colony back to the first step of the
+ *  Colony-assigned list's first group. Returns {campaign, turn, changes},
+ *  same shape advanceCampaignTurnWithAccrual returns, so the caller can
+ *  build one Journal entry covering both the turn change and everything
+ *  the accrual touched. See startNextStarshipCampaignTurn below for the
+ *  Starship tab's own, deliberately un-accrued equivalent (direct
+ *  follow-up request — Planetfall's Build/Research Points/Colony Morale
+ *  math has no bearing on the base 5PFH game the Starship tab plays). */
+export function startNextColonyCampaignTurn(campaign) {
+  const groups = resolveGroups(campaign, 'colony');
   const { campaign: next, turn, changes } = advanceCampaignTurnWithAccrual(campaign);
-  if (groups.length) next.turnStepProgress = { groupId: groups[0].id, stepIndex: 0, returnStack: [] };
+  if (groups.length) {
+    next.turnStepProgress = next.turnStepProgress || {};
+    next.turnStepProgress.colony = { groupId: groups[0].id, stepIndex: 0, returnStack: [] };
+  }
   return { campaign: next, turn, changes };
+}
+
+/** The Starship tab's own "start the next Campaign Turn" — a separate,
+ *  non-accruing counter (party.starshipCampaignTurn) independent of
+ *  Colony's own Campaign Turn (direct follow-up request). Resets
+ *  turnStepProgress.starship back to the first step of the Starship-
+ *  assigned list's first group. Returns { campaign, turn } (no `changes` —
+ *  there's no rulebook accrual to report). */
+export function startNextStarshipCampaignTurn(campaign) {
+  const next = clone(campaign);
+  const party = next.party && typeof next.party === 'object' ? next.party : (next.party = {});
+  const turn = (Number(party.starshipCampaignTurn) || 0) + 1;
+  party.starshipCampaignTurn = turn;
+  const groups = resolveGroups(next, 'starship');
+  if (groups.length) {
+    next.turnStepProgress = next.turnStepProgress || {};
+    next.turnStepProgress.starship = { groupId: groups[0].id, stepIndex: 0, returnStack: [] };
+  }
+  return { campaign: next, turn };
 }

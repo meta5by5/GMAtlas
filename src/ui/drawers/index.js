@@ -32,12 +32,13 @@ import { getEnhancements, strainUsed, strainCapacity, isOverStrained } from '../
 import { getMechanicsIndex } from '../../domain/mechanicsIndex.js';
 import { ENHANCEMENT_TYPES } from '../../data/enhancementTypes.js';
 import { buildGuideTree, getActiveGuideDoc } from '../../domain/guide.js';
-import { buildMentionEditorHTML, richToolbarHTML, toolbarCollapsed } from '../mentionEditor.js';
+import { buildMentionEditorHTML, richToolbarHTML, richToolbarToggleHTML, toolbarCollapsed } from '../mentionEditor.js';
 import { buildSessionRecap } from '../../domain/recap.js';
 import { RULESETS, findRuleset, STARFORGED_PROGRESS_DIFFICULTIES, findProgressDifficulty } from '../../data/rulesets.js';
 import { GEAR_TEMPLATE_SYSTEMS, findGearTemplate } from '../../data/gearTemplates.js';
 import { GEAR_CATALOG, findCatalogItem } from '../../data/gearCatalog.js';
 import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel, resolveProviderChoice, isGameSystemActivated } from '../../data/rulesConstitution.js';
+import { CSS_TEMPLATES } from '../../data/cssTemplates.js';
 import { SOURCEBOOK_INVENTORY } from '../../data/sourcebookInventory.js';
 import { listGalleryImages, listGalleryTagVocabulary, getGalleryImage } from '../../domain/gallery.js';
 import { listBattlemaps, getActiveBattlemap } from '../../domain/battlemaps.js';
@@ -285,8 +286,14 @@ function oracleLinkIcon(entityType, field) {
 // its own span with text-transform:none — .field-label's own uppercase
 // styling would otherwise shout a tag reference that's meant to read as
 // a literal, lowercase tag name (docs/adr/0026 follow-up).
-function fieldLabelRow(text, entityType, field, hint) {
-  return `<span class="field-label-row">${esc(text)}${hint ? ` <span class="field-label-hint">${esc(hint)}</span>` : ''}${oracleLinkIcon(entityType, field)}</span>`;
+// `extra` (direct follow-up request: "move the open/close arrow to the
+// editor icons to the right-aligned of the field label") is the rich-text
+// toolbar's own collapse toggle (richToolbarToggleHTML) for a caller whose
+// field is a rich-text editor — rendered last so it clumps with
+// oracleLinkIcon at the row's right edge (.field-label-row .icon-btn's own
+// margin-left:auto), instead of sitting on the editor box itself.
+function fieldLabelRow(text, entityType, field, hint, extra = '') {
+  return `<span class="field-label-row">${esc(text)}${hint ? ` <span class="field-label-hint">${esc(hint)}</span>` : ''}${oracleLinkIcon(entityType, field)}${extra}</span>`;
 }
 
 // Collapsible "?" tip icons ("USER CHANGES" QoL batch) — replaces an
@@ -368,23 +375,30 @@ function inspector(doc, e, ui) {
     <div class="inspector-photo-row">
       ${entityPhotoHtml(doc, e)}
       <div class="inspector-photo-fields">
-        <label class="field-label">Type
-          <select data-entity-field="type">${ENTITY_TYPES.map((t) => `<option value="${t}" ${t === e.type ? 'selected' : ''}>${TYPE_LABEL[t]}</option>`).join('')}</select>
-        </label>
-        ${tagEditor(doc, e)}
+        <div class="inspector-type-tags-row">
+          <label class="field-label inspector-type-field">Type
+            <select data-entity-field="type">${ENTITY_TYPES.map((t) => `<option value="${t}" ${t === e.type ? 'selected' : ''}>${TYPE_LABEL[t]}</option>`).join('')}</select>
+          </label>
+          <div class="tag-editor">${tagEditorHead(doc, e, ui)}</div>
+        </div>
+        ${tagEditorList(doc, e, ui)}
       </div>
     </div>
     <div class="field-label">
       <span class="field-label-row">
         <button type="button" class="section-toggle" data-overview-toggle="${esc(e.id)}">${overviewOpen ? '▾' : '▸'} Overview</button>
         ${oracleLinkIcon(e.type, 'overview')}
+        ${overviewOpen ? richToolbarToggleHTML(`entity:${e.id}:overview`, toolbarCollapsed(doc, ui, `entity:${e.id}:overview`)) : ''}
       </span>
       ${overviewOpen ? `
-      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:overview`, toolbarCollapsed(doc, ui, `entity:${e.id}:overview`))}<div class="mention-editor" contenteditable="true" data-entity-field="overview" data-placeholder="What the party knows.">${buildMentionEditorHTML(doc, e.overview)}</div></div>
+      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:overview`, toolbarCollapsed(doc, ui, `entity:${e.id}:overview`), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-entity-field="overview" data-placeholder="What the party knows.">${buildMentionEditorHTML(doc, e.overview)}</div></div>
       ${isPartyCharacter ? '' : `<div class="revealed-block">
-        <button class="section-toggle" data-reveal-toggle="${esc(e.id)}">${e.revealedOpen ? '▾' : '▸'} Revealed / hidden (GM)</button>
-        ${oracleLinkIcon(e.type, 'revealed')}
-        ${e.revealedOpen ? `<div class="rich-field">${richToolbarHTML(`entity:${e.id}:revealed`, toolbarCollapsed(doc, ui, `entity:${e.id}:revealed`))}<div class="mention-editor" contenteditable="true" data-entity-field="revealed" data-placeholder="Secrets, twists, true motives.">${buildMentionEditorHTML(doc, e.revealed)}</div></div>` : ''}
+        <span class="field-label-row">
+          <button class="section-toggle" data-reveal-toggle="${esc(e.id)}">${e.revealedOpen ? '▾' : '▸'} Revealed / hidden (GM)</button>
+          ${oracleLinkIcon(e.type, 'revealed')}
+          ${e.revealedOpen ? richToolbarToggleHTML(`entity:${e.id}:revealed`, toolbarCollapsed(doc, ui, `entity:${e.id}:revealed`)) : ''}
+        </span>
+        ${e.revealedOpen ? `<div class="rich-field">${richToolbarHTML(`entity:${e.id}:revealed`, toolbarCollapsed(doc, ui, `entity:${e.id}:revealed`), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-entity-field="revealed" data-placeholder="Secrets, twists, true motives.">${buildMentionEditorHTML(doc, e.revealed)}</div></div>` : ''}
       </div>`}` : ''}
     </div>
     ${npcSection(e)}
@@ -444,11 +458,11 @@ function factionSection(doc, e, ui) {
       <label class="field-label">${fieldLabelRow('Leadership', 'faction', 'leadership')}
         <input data-entity-field="leadership" value="${esc(e.leadership)}" placeholder="Who's in charge">
       </label>
-      <div class="field-label">${fieldLabelRow('Scenario seed', 'faction', 'scenarioSeed')}
-        <div class="rich-field">${richToolbarHTML(`entity:${e.id}:scenarioSeed`, toolbarCollapsed(doc, ui, `entity:${e.id}:scenarioSeed`))}<div class="mention-editor" contenteditable="true" data-entity-field="scenarioSeed" data-placeholder="A one-paragraph hook this faction can drop into a session.">${buildMentionEditorHTML(doc, e.scenarioSeed)}</div></div>
+      <div class="field-label">${fieldLabelRow('Scenario seed', 'faction', 'scenarioSeed', null, richToolbarToggleHTML(`entity:${e.id}:scenarioSeed`, toolbarCollapsed(doc, ui, `entity:${e.id}:scenarioSeed`)))}
+        <div class="rich-field">${richToolbarHTML(`entity:${e.id}:scenarioSeed`, toolbarCollapsed(doc, ui, `entity:${e.id}:scenarioSeed`), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-entity-field="scenarioSeed" data-placeholder="A one-paragraph hook this faction can drop into a session.">${buildMentionEditorHTML(doc, e.scenarioSeed)}</div></div>
       </div>
-      <div class="field-label">${fieldLabelRow('Agenda', 'faction', 'agenda')}
-        <div class="rich-field">${richToolbarHTML(`entity:${e.id}:agenda`, toolbarCollapsed(doc, ui, `entity:${e.id}:agenda`))}<div class="mention-editor" contenteditable="true" data-entity-field="agenda" data-placeholder="What is this faction actively pursuing right now?">${buildMentionEditorHTML(doc, e.agenda)}</div></div>
+      <div class="field-label">${fieldLabelRow('Agenda', 'faction', 'agenda', null, richToolbarToggleHTML(`entity:${e.id}:agenda`, toolbarCollapsed(doc, ui, `entity:${e.id}:agenda`)))}
+        <div class="rich-field">${richToolbarHTML(`entity:${e.id}:agenda`, toolbarCollapsed(doc, ui, `entity:${e.id}:agenda`), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-entity-field="agenda" data-placeholder="What is this faction actively pursuing right now?">${buildMentionEditorHTML(doc, e.agenda)}</div></div>
       </div>
       ${diplomacyFieldsHtml(e)}
       ${factionStatsHtml(e)}
@@ -575,14 +589,14 @@ function conflictDepthHtml(doc, e, ui, involvedFactions) {
       <button class="btn ghost sm" data-conflict-asymmetry-clear="${esc(e.id)}">Clear</button>`
     : `<button class="btn ghost sm" data-conflict-asymmetry-add="${esc(e.id)}">+ Add Information Asymmetry</button>`;
   return `
-    <div class="field-label">${fieldLabelRow('Deep root', 'conflict', 'deepRootSummary')}
-      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:deepRootSummary`, toolbarCollapsed(doc, ui, `entity:${e.id}:deepRootSummary`))}<div class="mention-editor" contenteditable="true" data-entity-field="deepRootSummary" data-placeholder="What started this, long before the party got involved.">${buildMentionEditorHTML(doc, e.deepRootSummary)}</div></div>
+    <div class="field-label">${fieldLabelRow('Deep root', 'conflict', 'deepRootSummary', null, richToolbarToggleHTML(`entity:${e.id}:deepRootSummary`, toolbarCollapsed(doc, ui, `entity:${e.id}:deepRootSummary`)))}
+      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:deepRootSummary`, toolbarCollapsed(doc, ui, `entity:${e.id}:deepRootSummary`), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-entity-field="deepRootSummary" data-placeholder="What started this, long before the party got involved.">${buildMentionEditorHTML(doc, e.deepRootSummary)}</div></div>
     </div>
-    <div class="field-label">${fieldLabelRow('Precipitating incident', 'conflict', 'precipitatingIncident')}
-      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:precipitatingIncident`, toolbarCollapsed(doc, ui, `entity:${e.id}:precipitatingIncident`))}<div class="mention-editor" contenteditable="true" data-entity-field="precipitatingIncident" data-placeholder="The recent, smaller thing that actually lit the fuse.">${buildMentionEditorHTML(doc, e.precipitatingIncident)}</div></div>
+    <div class="field-label">${fieldLabelRow('Precipitating incident', 'conflict', 'precipitatingIncident', null, richToolbarToggleHTML(`entity:${e.id}:precipitatingIncident`, toolbarCollapsed(doc, ui, `entity:${e.id}:precipitatingIncident`)))}
+      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:precipitatingIncident`, toolbarCollapsed(doc, ui, `entity:${e.id}:precipitatingIncident`), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-entity-field="precipitatingIncident" data-placeholder="The recent, smaller thing that actually lit the fuse.">${buildMentionEditorHTML(doc, e.precipitatingIncident)}</div></div>
     </div>
-    <div class="field-label">${fieldLabelRow('Last de-escalation attempt', 'conflict', 'lastDeescalationAttempt')}
-      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:lastDeescalationAttempt`, toolbarCollapsed(doc, ui, `entity:${e.id}:lastDeescalationAttempt`))}<div class="mention-editor" contenteditable="true" data-entity-field="lastDeescalationAttempt" data-placeholder="Who tried to fix this, why it failed, who got blamed.">${buildMentionEditorHTML(doc, e.lastDeescalationAttempt)}</div></div>
+    <div class="field-label">${fieldLabelRow('Last de-escalation attempt', 'conflict', 'lastDeescalationAttempt', null, richToolbarToggleHTML(`entity:${e.id}:lastDeescalationAttempt`, toolbarCollapsed(doc, ui, `entity:${e.id}:lastDeescalationAttempt`)))}
+      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:lastDeescalationAttempt`, toolbarCollapsed(doc, ui, `entity:${e.id}:lastDeescalationAttempt`), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-entity-field="lastDeescalationAttempt" data-placeholder="Who tried to fix this, why it failed, who got blamed.">${buildMentionEditorHTML(doc, e.lastDeescalationAttempt)}</div></div>
     </div>
     <div class="faction-assets"><span class="field-label-static">Irreversible facts</span></div>
     ${factRows || '<p class="dim small">None yet.</p>'}
@@ -597,8 +611,8 @@ function conflictDepthHtml(doc, e, ui, involvedFactions) {
     <label class="field-label">Party leverage
       <input data-entity-field="partyLeverage" value="${esc(e.partyLeverage)}" placeholder="Information, an asset, or an NPC neither faction controls">
     </label>
-    <div class="field-label">${fieldLabelRow('GM notes', 'conflict', 'gmNotes')}
-      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:gmNotes`, toolbarCollapsed(doc, ui, `entity:${e.id}:gmNotes`))}<div class="mention-editor" contenteditable="true" data-entity-field="gmNotes" data-placeholder="Anything else worth remembering.">${buildMentionEditorHTML(doc, e.gmNotes)}</div></div>
+    <div class="field-label">${fieldLabelRow('GM notes', 'conflict', 'gmNotes', null, richToolbarToggleHTML(`entity:${e.id}:gmNotes`, toolbarCollapsed(doc, ui, `entity:${e.id}:gmNotes`)))}
+      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:gmNotes`, toolbarCollapsed(doc, ui, `entity:${e.id}:gmNotes`), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-entity-field="gmNotes" data-placeholder="Anything else worth remembering.">${buildMentionEditorHTML(doc, e.gmNotes)}</div></div>
     </div>`;
 }
 
@@ -1161,23 +1175,35 @@ function entityPhotoHtml(doc, e) {
 // (listTagVocabulary reads it live off existing entities of that type, not
 // a separately-stored list) — a freeform tag typed for the first time joins
 // that vocabulary for next time.
-function tagEditor(doc, e) {
+// Direct follow-up request: Tags moved onto the SAME row as Type instead of
+// stacking below it (tagEditorHead, beside Type's own <select> — see
+// inspector()'s .inspector-type-tags-row), with the chosen-tags chip list
+// now a collapsible block on the row below (tagEditorList), toggled by
+// clicking the "Tags" label itself — split into two functions so the
+// caller can place the head inline with Type while the list still spans
+// the full .inspector-photo-fields width underneath. Defaults expanded
+// (ui.collapsedEntityTags tracks entities explicitly collapsed, inverse-
+// tracked the same way Overview's own collapse state already is).
+function tagEditorHead(doc, e, ui) {
+  const expanded = !((ui.collapsedEntityTags || new Set()).has(e.id));
+  const vocab = listTagVocabulary(doc, e.type, e.id);
+  return `
+    <div class="tag-editor-head">
+      <button type="button" class="field-label-static tag-editor-toggle" data-entity-tags-toggle="${esc(e.id)}" title="${expanded ? 'Hide' : 'Show'} tags">${expanded ? '▾' : '▸'} Tags</button>
+      <input class="doc-tag-input" data-entity-tag-input list="entity-tag-list" placeholder="add tag…">
+      <datalist id="entity-tag-list">${vocab.map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
+    </div>`;
+}
+function tagEditorList(doc, e, ui) {
+  const expanded = !((ui.collapsedEntityTags || new Set()).has(e.id));
+  if (!expanded) return '';
   const tags = e.tags || [];
   const chips = tags.map((t) => `
     <span class="tag-chip">
       <button type="button" class="tag-chip-jump" data-entity-tag-jump="${esc(t)}" title="Filter Cast by #${esc(t)}">${esc(t)}</button>
       <button class="icon-btn" data-entity-tag-remove="${esc(t)}" title="Remove tag">✕</button>
     </span>`).join('');
-  const vocab = listTagVocabulary(doc, e.type, e.id);
-  return `
-    <div class="tag-editor">
-      <div class="tag-editor-head">
-        <span class="field-label-static">Tags</span>
-        <input class="doc-tag-input" data-entity-tag-input list="entity-tag-list" placeholder="add tag…">
-      </div>
-      <datalist id="entity-tag-list">${vocab.map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
-      <div class="tag-chips">${chips || '<span class="dim small">None yet.</span>'}</div>
-    </div>`;
+  return `<div class="tag-chips">${chips || '<span class="dim small">None yet.</span>'}</div>`;
 }
 
 // An entity's statblocks are an ARRAY of groups (entity.statblocks) — several
@@ -1241,16 +1267,19 @@ function statblockGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
   // Direct follow-up request: "the 'LifeForm (NPC) · Starforged' statblock
   // should put the editable stat field pill on the top row like other
   // statblocks" — attribute-kind fields (a Bestiary template's rollable
-  // modifiers, e.g. Combat/Danger) now get the SAME compact top-row
-  // treatment characterSheetGroupBlock already gives a character sheet's
-  // stats, instead of sitting mixed into the same full-width vertical
-  // list as track/text fields. Split on f.attribute directly (not
+  // modifiers, e.g. Combat/Danger) get their own compact top row, same
+  // split characterSheetGroupBlock uses. Split on f.attribute directly (not
   // f.group === 'stat', characterSheetGroupBlock's own split key) since
   // that field-level marker is a character-sheet-template-only concept —
   // a Bestiary field never carries it — while f.attribute is universal
-  // (statblockFieldRow's own dispatch key). Still fully editable — opts
-  // .compact only changes CSS sizing (attrRow's own narrow pill styling),
-  // never removes the live input.
+  // (statblockFieldRow's own dispatch key). Direct follow-up request ("all
+  // statblocks should be viewable at one time within the panel"): every
+  // remaining field (track or plain text) is ALSO rendered compact now,
+  // wrapped in the same .character-sheet-resources flex-wrap row the stats
+  // row uses — content-sized pills (attrRow/trackRow/textRow's own compact
+  // CSS) packed side by side instead of one full-width row per field. Still
+  // fully editable either way — opts.compact only changes CSS sizing, never
+  // removes the live input.
   const indexed = group.fields.map((f, fi) => ({ f, fi }));
   const stats = indexed.filter(({ f }) => f.attribute);
   const rest = indexed.filter(({ f }) => !f.attribute);
@@ -1263,7 +1292,7 @@ function statblockGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
     ${collapsed ? '' : `
     ${attributeBadges(group.fields)}
     ${stats.length ? `<div class="character-sheet-stats">${stats.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}
-    ${rest.map(({ f, fi }) => statblockFieldRow(f, gi, fi, opts)).join('')}`}
+    ${rest.length ? `<div class="character-sheet-resources">${rest.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}`}
   </div>`;
 }
 
@@ -1308,11 +1337,14 @@ function statblockAddChoices(e, groups, doc) {
 }
 
 // A character sheet groups the same field engine every other statblock uses
-// into two sections — a compact row of core stats up top (single-number
-// +/- spinners, Starforged/5PFH-style) and full-width resource meters below
-// (Health, Spirit, Supply, ...) — purely a rendering split; stats are
-// attribute fields, resources are track fields, both rollable the same way
-// (double-click the value).
+// into two sections — core stats up top (single-number +/- spinners,
+// Starforged/5PFH-style) and resource meters below (Health, Spirit,
+// Supply, ...) — purely a rendering split; stats are attribute fields,
+// resources are track fields, both rollable the same way (double-click the
+// value). Both rows render every field compact (direct follow-up request —
+// "all statblocks should be viewable at one time within the panel"): a
+// content-sized pill per field, wrapped so the whole sheet packs into view
+// without a full-width row per field forcing a long scroll.
 function characterSheetGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
   const key = `${e.id}::${gi}`;
   const collapsed = !!(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
@@ -1328,8 +1360,42 @@ function characterSheetGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
     </div>
     ${collapsed ? '' : `
     ${stats.length ? `<div class="character-sheet-stats">${stats.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}
-    ${resources.length ? `<div class="character-sheet-resources">${resources.map(({ f, fi }) => statblockFieldRow(f, gi, fi, opts)).join('')}</div>` : ''}`}
+    ${resources.length ? `<div class="character-sheet-resources">${resources.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}
+    ${group.ruleset === '5pfh' ? characterSheetWeaponsAndGearHtml(group, gi) : ''}`}
   </div>`;
+}
+
+// Weapon table + Gear (design/adr/rules-profiles-multi-campaign.md, direct
+// follow-up request) — 5PFH character sheets only (ruleset gate in the
+// caller above), matching the Core rulebook's own character sheet layout
+// (Weapon/Range/Shots/Damage/Traits columns, a Gear line below). A real
+// <table> (same pattern Trade's .trade-market-table already uses for
+// editable tabular data — <input>s inside <td>s, not a flex/grid mimic),
+// addressed by plain array index (weaponIndex), not a generated id, same
+// convention statblock fields already use.
+function characterSheetWeaponsAndGearHtml(group, gi) {
+  const weapons = group.weapons || [];
+  const weaponRows = weapons.map((w, wi) => `
+    <tr>
+      <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::name" value="${esc(w.name)}" placeholder="Weapon"></td>
+      <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::range" value="${esc(w.range)}" placeholder="Range"></td>
+      <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::shots" value="${esc(w.shots)}" placeholder="Shots"></td>
+      <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::damage" value="${esc(w.damage)}" placeholder="Damage"></td>
+      <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::traits" value="${esc(w.traits)}" placeholder="Traits"></td>
+      <td class="statblock-weapon-remove-cell"><button type="button" class="icon-btn statblock-weapon-remove-btn" data-statblock-weapon-remove="${gi}::${wi}" title="Remove weapon">🗑</button></td>
+    </tr>`).join('');
+  return `
+    <div class="statblock-weapons">
+      <h4>Weapons</h4>
+      <table class="statblock-weapon-table">
+        <thead><tr><th class="statblock-weapon-col-name">Weapon</th><th>Range</th><th>Shots</th><th>Damage</th><th class="statblock-weapon-col-traits">Traits</th><th></th></tr></thead>
+        <tbody>${weaponRows}</tbody>
+      </table>
+      <button type="button" class="btn ghost sm" data-statblock-weapon-add="${gi}">＋ Weapon</button>
+    </div>
+    <label class="field-label statblock-gear-field">Gear
+      <textarea rows="2" data-statblock-gear="${gi}" placeholder="Gear…">${esc(group.gear || '')}</textarea>
+    </label>`;
 }
 
 // A field's kind decides which widget it gets: attribute (a rollable
@@ -1401,7 +1467,7 @@ function textRow(f, gi, fi, opts = {}) {
   // instead of the entity actually on screen (a real bug this fixes).
   const key = opts.entityId ? `${opts.entityId}::${gi}::${fi}` : `${gi}::${fi}`;
   return `
-    <div class="statblock-row">
+    <div class="statblock-row ${opts.compact ? 'text-row-compact' : ''}">
       <span class="statblock-key">${esc(f.key)}</span>
       <input class="statblock-val" data-statblock-val="${key}" value="${esc(f.value)}" placeholder="Value">
     </div>`;
@@ -1538,7 +1604,8 @@ function journal(doc, ui = {}) {
     <button class="btn ghost recap-toggle" data-recap-toggle>${recapOpen ? '▾' : '▸'} Previously on…</button>
     ${recapOpen ? recapPanel(doc) : ''}
     <div class="drawer-note">
-      <div class="rich-field">${richToolbarHTML('journal:new', toolbarCollapsed(doc, ui, 'journal:new'))}<div class="mention-editor" contenteditable="true" data-journal-input data-placeholder="Add a note, ruling, or clue… (drag an entity here, or type @, to mention it)"></div></div>
+      <span class="field-label-row">${richToolbarToggleHTML('journal:new', toolbarCollapsed(doc, ui, 'journal:new'))}</span>
+      <div class="rich-field">${richToolbarHTML('journal:new', toolbarCollapsed(doc, ui, 'journal:new'), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-journal-input data-placeholder="Add a note, ruling, or clue… (drag an entity here, or type @, to mention it)"></div></div>
       <div class="statblock-head" style="margin-top: var(--sp-3);">
         <button type="button" class="party-section-toggle" data-journal-actions-toggle>${actionsOpen ? '▾' : '▸'} Actions</button>
       </div>
@@ -1566,13 +1633,14 @@ function journal(doc, ui = {}) {
 function journalEntryRow(doc, e, ui) {
   const editing = (ui.journalEditOpen || new Set()).has(e.id);
   const body = editing
-    ? `<div class="rich-field">${richToolbarHTML(`journal:${e.id}`, toolbarCollapsed(doc, ui, `journal:${e.id}`))}<div class="mention-editor" contenteditable="true" data-journal-edit="${esc(e.id)}">${buildMentionEditorHTML(doc, e.text)}</div></div>`
+    ? `<div class="rich-field">${richToolbarHTML(`journal:${e.id}`, toolbarCollapsed(doc, ui, `journal:${e.id}`), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-journal-edit="${esc(e.id)}">${buildMentionEditorHTML(doc, e.text)}</div></div>`
     : `<div class="journal-text mention-text">${e.isHtml ? e.text : buildMentionEditorHTML(doc, e.text)}</div>`;
   return `
         <div class="journal-entry">
           <div class="journal-meta">
                 <span>${new Date(e.createdAt).toLocaleString()} · ${esc(e.source || 'Journal')}</span>
                 <span class="journal-meta-actions">
+                  ${editing ? richToolbarToggleHTML(`journal:${e.id}`, toolbarCollapsed(doc, ui, `journal:${e.id}`)) : ''}
                   <button class="icon-btn" data-journal-edit-toggle="${esc(e.id)}" title="${editing ? 'Done editing' : 'Edit'}" aria-label="Edit">${editing ? '✓' : '✎'}</button>
                   <button class="icon-btn" data-journal-del="${esc(e.id)}" title="Delete" aria-label="Delete">✕</button>
                 </span>
@@ -1733,6 +1801,9 @@ function settings(doc, ui = {}) {
         <h3>Campaign</h3>
         <label class="field-label">Title
           <input data-campaign-title-input value="${esc(doc.meta.title)}">
+        </label>
+        <label class="field-label">CSS Style Template
+          <select data-campaign-css-template>${CSS_TEMPLATES.map((t) => `<option value="${esc(t.id)}" ${t.id === (doc.meta.cssTemplate || 'default') ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select>
         </label>
         <label class="field-label">Setting
           <input data-genre-input value="${esc(doc.settings.genre || '')}" placeholder="Hostile, generic sci-fi, …">
@@ -2018,60 +2089,140 @@ function rulesConstitutionSection(doc, ui) {
     </div>`;
 }
 
-// Turn Step (design/adr/rules-profiles-multi-campaign.md, direct follow-up
-// request — converted from the Guide entry "5PFH Campaign Turn Sequence"):
-// a Rules Profile's own reorderable campaign-turn workflow, edited on the
-// SAME draft Ruleset Profile Editor uses (profileDraftSaveBar above covers
-// both tabs' edits with one Save/Discard action). Step text stays a plain
-// textarea (the same `@[Label|Target]` document-mention syntax the seed
-// content already uses) — display-side rendering in Colony is what turns
-// it into real clickable links (buildMentionEditorHTML), so no rich editor
-// is needed here. Groups collapse by default (7 groups, up to 17 steps
-// each) so the tab doesn't open to an overwhelming wall of fields; only
-// steps reorder within their own group — the groups themselves, and which
-// group a step belongs to, are fixed by the seed data (or however the GM
-// authored them), matching this feature's confirmed scope.
+// Turn Step Lists (direct follow-up request: "create an inventory of Turn
+// Step List profiles managed in Settings") — a standalone, shared
+// appConfig.turnStepLists inventory (domain/turnStepLists.js), decoupled
+// from Rules Profiles: this tab manages the inventory itself (pick/create/
+// rename/delete a named list) plus which list backs each Campaign-panel
+// tab (campaign.turnStepSlotAssignments), instead of editing "the current
+// profile's one list" the way it used to. Edits apply INSTANTLY (no
+// Save/Discard draft — turnStepLists aren't profile content any more, so
+// the Ruleset Profile Editor's shared draft doesn't apply here). Step text
+// stays a plain textarea (the same `@[Label|Target]` document-mention
+// syntax the seed content already uses) — display-side rendering in the
+// Campaign panel is what turns it into real clickable links
+// (buildMentionEditorHTML), so no rich editor is needed here. Groups
+// collapse by default so the tab doesn't open to an overwhelming wall of
+// fields; only steps reorder within their own group — the groups
+// themselves, and which group a step belongs to, are fixed by the seed
+// data (or however the GM authored them), matching this feature's
+// confirmed scope.
 function turnStepsSettingsSection(doc, ui) {
-  const profiles = ui.profiles || [];
-  const editingProfile = profiles.find((p) => p.id === ui.editingProfileId) || profiles[0];
-  const draft = ui.profileDraft;
-  if (!editingProfile || !draft) {
-    return `<div class="settings-group"><p class="dim small">Select a profile in Ruleset Profile Editor first.</p></div>`;
-  }
-  const dirty = !!ui.profileDraftDirty;
-  const groups = (draft.turnSteps && draft.turnSteps.groups) || [];
+  const lists = doc.turnStepLists || [];
+  const editingId = lists.some((l) => l.id === ui.editingTurnStepListId) ? ui.editingTurnStepListId : (lists[0] && lists[0].id);
+  const editingList = lists.find((l) => l.id === editingId) || null;
+  const groups = (editingList && editingList.groups) || [];
   const expanded = (ui && ui.expandedTurnStepGroups) || new Set();
+  const assignments = doc.turnStepSlotAssignments || { colony: null, starship: null };
+
+  const listOptions = lists.map((l) => `<option value="${esc(l.id)}" ${l.id === editingId ? 'selected' : ''}>${esc(l.name)}</option>`).join('');
+  const slotOptions = (slot) => `<option value="">— None —</option>${lists.map((l) => `<option value="${esc(l.id)}" ${assignments[slot] === l.id ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}`;
+
+  // "Move to"/"Branches to" pickers (direct follow-up request: "assign
+  // them to categories, move them between categories, connect or move
+  // categories to sub categories") both pick from the SAME list's other
+  // categories — branchTo is literally "this step, once reached, jumps
+  // Next into category X" (domain/turnSteps.js's advanceTurnStep), so
+  // "connect a category as a sub-category of another" is done by setting
+  // the LAST step of the parent category's branchTo to the sub-category,
+  // same mechanism the seed content itself uses (see
+  // turnStepListPlanetfall.js's own pf6/pf8).
+  const categoryOptions = (selected, excludeId) => groups.filter((g) => g.id !== excludeId)
+    .map((g) => `<option value="${esc(g.id)}" ${g.id === selected ? 'selected' : ''}>${esc(g.label)}</option>`).join('');
+
+  // "Move to"/"Branches to" (direct follow-up request: "revise... to be
+  // right-aligned icons that open a dropdown on the next row if clicked
+  // into edit mode. This keeps the icon button motif for making changes")
+  // — each is its own independently-toggleable icon (ui.turnStepMoveEditOpen/
+  // turnStepBranchEditOpen, keyed by the step's full listId::groupId::
+  // stepId), same "icon reveals its real control on the row below" shape
+  // this app already uses elsewhere (statblock's gear toggle, a category's
+  // own expand arrow).
+  const moveEditOpen = (ui && ui.turnStepMoveEditOpen) || new Set();
+  const branchEditOpen = (ui && ui.turnStepBranchEditOpen) || new Set();
 
   const groupBlocks = groups.map((g) => {
     const isOpen = expanded.has(g.id);
     const stepRows = g.steps.map((s, i) => {
+      const stepKey = `${editingId}::${g.id}::${esc(s.id)}`;
+      const moveOpen = moveEditOpen.has(stepKey);
+      const branchOpen = branchEditOpen.has(stepKey);
       const branchLabel = s.branchTo ? (groups.find((x) => x.id === s.branchTo) || {}).label : null;
       return `
       <div class="turn-step-row">
         <div class="turn-step-order">
-          <button type="button" class="icon-btn" data-turn-step-move="${g.id}::${i}::-1" title="Move up" ${i === 0 ? 'disabled' : ''}>▴</button>
-          <button type="button" class="icon-btn" data-turn-step-move="${g.id}::${i}::1" title="Move down" ${i === g.steps.length - 1 ? 'disabled' : ''}>▾</button>
+          <button type="button" class="icon-btn" data-turn-step-move="${editingId}::${g.id}::${i}::-1" title="Move up" ${i === 0 ? 'disabled' : ''}>▴</button>
+          <button type="button" class="icon-btn" data-turn-step-move="${editingId}::${g.id}::${i}::1" title="Move down" ${i === g.steps.length - 1 ? 'disabled' : ''}>▾</button>
         </div>
-        <textarea rows="2" data-turn-step-text="${g.id}::${esc(s.id)}">${esc(s.text)}</textarea>
-        ${branchLabel ? `<span class="dim small turn-step-branch">→ ${esc(branchLabel)}</span>` : ''}
+        <textarea rows="2" data-turn-step-text="${editingId}::${g.id}::${esc(s.id)}">${esc(s.text)}</textarea>
+        <label class="turn-step-crew-tasks-toggle dim small" title="Attach Colony's Crew Tasks box to this step (direct follow-up request — reusable for any step, not just Daily Life 2)">
+          <input type="checkbox" data-turn-step-crew-tasks="${editingId}::${g.id}::${esc(s.id)}" ${s.showCrewTasks ? 'checked' : ''}> Crew Tasks
+        </label>
+        <span class="turn-step-row-actions">
+          <button type="button" class="icon-btn ${moveOpen ? 'active' : ''}" data-turn-step-move-toggle="${stepKey}" title="Move to a different category">📂</button>
+          <button type="button" class="icon-btn ${branchOpen || branchLabel ? 'active' : ''}" data-turn-step-branch-toggle="${stepKey}" title="${branchLabel ? `Branches to ${branchLabel}` : 'Branches to…'}">🔀</button>
+        </span>
+        ${moveOpen ? `<label class="dim small turn-step-edit-row">Move to
+          <select data-turn-step-move-category="${editingId}::${g.id}::${esc(s.id)}">
+            <option value="">— stay in ${esc(g.label)} —</option>
+            ${categoryOptions(null, g.id)}
+          </select>
+        </label>` : ''}
+        ${branchOpen ? `<label class="dim small turn-step-edit-row">Branches to
+          <select data-turn-step-branch-to="${editingId}::${g.id}::${esc(s.id)}">
+            <option value="">— none —</option>
+            ${categoryOptions(s.branchTo, null)}
+          </select>
+        </label>` : ''}
       </div>`;
     }).join('');
     return `
       <div class="settings-group">
-        <h4 class="section-head-row"><button type="button" class="btn ghost sm" data-turn-step-group-toggle="${esc(g.id)}">${isOpen ? '▾' : '▸'} ${esc(g.label)} (${g.steps.length})</button></h4>
+        <h4 class="section-head-row">
+          <button type="button" class="btn ghost sm" data-turn-step-group-toggle="${esc(g.id)}">${isOpen ? '▾' : '▸'} ${esc(g.label)} (${g.steps.length})</button>
+          <span class="entity-chip-row">
+            <button type="button" class="icon-btn" data-turnstepgroup-rename="${editingId}::${esc(g.id)}" title="Rename this category">✎</button>
+            <button type="button" class="icon-btn" data-turnstep-add="${editingId}::${esc(g.id)}" title="Add a step to this category">＋ Step</button>
+          </span>
+        </h4>
         ${isOpen ? `<div class="turn-step-list">${stepRows}</div>` : ''}
       </div>`;
   }).join('');
 
+  // Direct follow-up request: "Turn Step Lists" is now its own collapsible
+  // section (default open); "Colony Tab Uses"/"Starship Tab Uses" moved out
+  // into a separate, always-visible "Turn Step Assignments" section below
+  // it, so picking which list backs which Campaign-panel tab doesn't
+  // require expanding the (potentially long) list-editing UI first.
+  const listsCollapsed = !!ui.turnStepListsCollapsed;
   return `
-    ${profileDraftSaveBar(editingProfile, dirty)}
     <div class="settings-group">
-      ${sectionHeadRow('h3', 'Turn Step', 'settings-turn-steps')}
-      ${helpBody('settings-turn-steps', "A Rules Profile's own reorderable campaign-turn workflow — Colony's ◂/▸ Turn Step buttons walk through these, following a step's branch into another list automatically. Empty by default; load the 5PFH sequence below, or type your own steps.", ui)}
-      <p class="dim small">Editing "${esc(editingProfile.name)}".</p>
-      <button class="btn ghost" data-turn-steps-load-default>Load 5PFH Default Steps</button>
+      <h3 class="section-head-row">
+        <button type="button" class="btn ghost sm" data-turnsteplists-section-toggle>${listsCollapsed ? '▸' : '▾'} Turn Step Lists</button>
+        <span class="entity-chip-row">
+          <button type="button" class="icon-btn" data-turnsteplist-create title="New Turn Step List">＋</button>
+          ${editingList ? `<button type="button" class="icon-btn" data-turnsteplist-rename="${esc(editingId)}" title="Rename this list">✎</button>
+          <button type="button" class="icon-btn" data-turnsteplist-delete="${esc(editingId)}" title="Delete this list">🗑</button>` : ''}
+          ${helpToggle('settings-turn-steps')}
+        </span>
+      </h3>
+      ${listsCollapsed ? '' : `
+      ${helpBody('settings-turn-steps', "A shared, named inventory of reorderable campaign-turn workflows (direct follow-up request) — not tied to one Rules Profile. The Campaign panel's Colony/Starship tabs each walk through whichever list is assigned to them (see Turn Step Assignments below), following a step's own \"Branches to\" pick into another category in the SAME list automatically once reached. Create as many lists/categories/steps as you like; edits here apply instantly.", ui)}
+      ${lists.length ? `<label class="field-label sm">Editing<select data-turnsteplist-select>${listOptions}</select></label>` : '<p class="dim small">No Turn Step Lists yet.</p>'}
+      ${editingList && editingList.name === '5PFH' ? `<button class="btn ghost" data-turnsteplist-load-default="${esc(editingId)}::5pfh">Reload 5PFH Default Steps</button>` : ''}
+      ${editingList && editingList.name === 'Planetfall' ? `<button class="btn ghost" data-turnsteplist-load-default="${esc(editingId)}::planetfall">Reload Planetfall Default Steps</button>` : ''}
+      ${editingList ? `<button class="btn ghost" data-turnstepgroup-add="${esc(editingId)}">＋ Category</button>` : ''}
+      `}
     </div>
-    ${groups.length ? groupBlocks : '<div class="settings-group"><p class="dim small">No steps yet for this profile.</p></div>'}`;
+    ${listsCollapsed ? '' : (groups.length ? groupBlocks : (editingList ? '<div class="settings-group"><p class="dim small">No categories yet — add one above.</p></div>' : ''))}
+    <div class="settings-group">
+      <h3>Turn Step Assignments</h3>
+      <p class="dim small">Which Turn Step List backs each Campaign-panel tab.</p>
+      <div class="field-row2">
+        <label class="field-label sm">Colony tab uses<select data-turnstep-slot-assign="colony">${slotOptions('colony')}</select></label>
+        <label class="field-label sm">Starship tab uses<select data-turnstep-slot-assign="starship">${slotOptions('starship')}</select></label>
+      </div>
+    </div>`;
 }
 
 // Crew Tasks tab (design/adr/rules-profiles-multi-campaign.md, direct
@@ -2452,7 +2603,14 @@ function partyStatPill(f, entityId, gi, fi, opts = {}) {
     : f.track ? esc(String(Number(f.value) || 0))
     : esc(f.value || '—');
   if (f.track) {
-    const cls = `party-stat-pill${opts.expanded ? ' party-stat-pill-expanded' : ''}`;
+    // Direct follow-up request: a tracker (Health/Spirit/Supply — longer
+    // names) reads as one row (label beside its value, wide as needed)
+    // instead of the narrow stacked-square block an attribute pill
+    // (Edge/Shadow — a single letter's worth of value) uses — "treat those
+    // statblocks as a different type," the SAME .party-stat-pill base
+    // (border/background/click behavior) but a distinct .party-stat-pill-
+    // track modifier for the row layout/width.
+    const cls = `party-stat-pill party-stat-pill-track${opts.expanded ? ' party-stat-pill-expanded' : ''}`;
     return `<button type="button" class="${cls}" data-party-stat-toggle="${key}" title="${esc(f.key)}: click to ${opts.expanded ? 'hide' : 'show'} the tracker">
       <span class="party-stat-pill-label">${esc(f.key)}</span>
       <span class="party-stat-pill-value">${value}</span>
@@ -2642,6 +2800,64 @@ function sharedAssetVehicleThumb(doc, entityId) {
   </div>`;
 }
 
+// Party's Starship section (direct follow-up request) — a single-entity
+// reference, #vehicle-filtered, exclusively tagged #starship (enforced by
+// domain/party.js's setPartyStarship/clearPartyStarship, not just this UI).
+// Rendered directly under Party Roster. Direct follow-up request ("format
+// the Starship entity record on Party to use the same formatting as the
+// Characters under the Party Roster to show the statblocks") — reuses
+// partyMemberCard(entity, doc, ui) verbatim (it's already entity-type-
+// agnostic: thumb/name-toggle/headline counters/open-entity button, plus
+// its statblocks when expanded via partyMemberStatblocks — nothing in it
+// assumes 'npc'), instead of the earlier bespoke read-only thumbnail-only
+// row this section used before statblocks were ever shown here.
+function partyStarshipSectionHtml(doc, ui) {
+  const entityId = doc.party && doc.party.starshipEntityId;
+  const entity = entityId ? getEntity(doc, entityId) : null;
+  const collapsed = isPartySectionCollapsed(ui, 'starship', true);
+  const headerExtra = entity
+    ? '<button type="button" class="icon-btn" data-party-starship-remove title="Remove starship">🗑</button>'
+    : '<button class="chip" data-entity-picker-open="party-starship">＋ Select Starship</button>';
+  return `
+    ${partySectionHeaderHtml('starship', 'Starship', collapsed, headerExtra)}
+    ${collapsed ? '' : (entity ? partyMemberCard(entity, doc, ui) : '<p class="ws-placeholder">No starship yet — pick a #vehicle Asset entity above.</p>')}`;
+}
+
+// Party's Relationships section (direct follow-up request: "add a
+// Relationships section similar to how used on Entity Editor. This treats
+// the Party as an entity for the mapping purposes") — same .rel-chip/
+// .rel-add markup/RELATIONSHIP_TYPES vocabulary the Entity Editor's own
+// Relationships block uses, retargeted to campaign.party.relationships
+// (domain/party.js) instead of one entity's own array; no strength/bond/
+// flagged-mismatch nuance here (Party has no "type" for those checks to
+// key off), just the core add/edit/remove/find flow.
+function partyRelationshipsSectionHtml(doc, ui) {
+  const relTypeOptions = (selected) => RELATIONSHIP_TYPES.map((t) => `<option value="${t}" ${t === selected ? 'selected' : ''}>${RELATIONSHIP_TYPE_LABEL[t]}</option>`).join('');
+  const others = listEntities(doc);
+  const rels = ((doc.party && doc.party.relationships) || []).map((r) => {
+    const other = getEntity(doc, r.to);
+    if (!other) return '';
+    return `<span class="rel-chip">
+      <select class="rel-type-select" data-party-rel-type="${esc(r.to)}" title="Relationship type">${relTypeOptions(r.type)}</select>
+      <button type="button" class="rel-chip-name" data-open-entity="${esc(other.id)}" title="Open ${esc(other.name) || 'Unnamed'}">${esc(other.name) || 'Unnamed'}</button>
+      <input class="rel-label-input" data-party-rel-label="${esc(r.to)}" value="${esc(r.label)}" placeholder="note (ally, rival…)" title="Edit this relationship's note">
+      ${numStepper(`<input type="number" class="rel-strength-input" data-party-rel-strength="${esc(r.to)}" min="0" max="10" value="${Number(r.strength) || 0}" title="Strength/weight 0-10">`)}
+      <button class="icon-btn" data-party-unlink="${esc(r.to)}" title="Remove link" aria-label="Remove link">✕</button></span>`;
+  }).join('');
+  const collapsed = isPartySectionCollapsed(ui, 'relationships', true);
+  return `
+    ${partySectionHeaderHtml('relationships', 'Relationships', collapsed)}
+    ${collapsed ? '' : `
+    <p class="dim small">The Party's own relationships to other Cast entities (direct follow-up request — the Party treated as an entity for mapping purposes). Pick one below to link.</p>
+    <div class="rel-chips">${rels || '<span class="dim small">None yet.</span>'}</div>
+    ${others.length ? `<div class="rel-add">
+      <select data-party-link-type>${relTypeOptions('linked')}</select>
+      <select data-party-link-target>${others.map((o) => `<option value="${esc(o.id)}">${esc(o.name) || 'Unnamed'}</option>`).join('')}</select>
+      <input data-party-link-label placeholder="label (ally, rival…)">
+      <button class="btn sm" data-party-link-add title="Link" aria-label="Link">🔗 Link</button>
+    </div>` : '<p class="dim small">Add an entity in Cast first.</p>'}`}`;
+}
+
 function partyMemberCard(e, doc, ui) {
   const open = (ui.expandedPartyMembers || new Set()).has(e.id);
   return `
@@ -2702,6 +2918,7 @@ function party(doc, ui = {}) {
   const rosterCollapsed = isPartySectionCollapsed(ui, 'roster', false);
   const trackersCollapsed = isPartySectionCollapsed(ui, 'trackers', true);
   const sharedAssetsCollapsed = isPartySectionCollapsed(ui, 'sharedAssets', true);
+  const sharedGearCollapsed = isPartySectionCollapsed(ui, 'sharedGear', true);
 
   return `
     ${partySectionHeaderHtml('roster', 'Party Roster', rosterCollapsed, '<button class="chip" data-party-add-character>＋ Add NPC</button>')}
@@ -2710,19 +2927,21 @@ function party(doc, ui = {}) {
     <div class="party-member-list">
       ${memberCards || '<p class="ws-placeholder">No party members yet. Add one above, or tag an existing NPC #character in Cast.</p>'}
     </div>`}
+    ${partyStarshipSectionHtml(doc, ui)}
     ${partySectionHeaderHtml('trackers', 'Party Trackers', trackersCollapsed, `${ui.partyTrackerAddOpen ? '' : '<button class="icon-btn" data-party-tracker-add-toggle title="Add tracker">＋</button>'}<button class="icon-btn" data-party-trackers-edit-toggle title="${trackersEditOpen ? 'Done editing' : 'Edit trackers (rename, remove)'}">${trackersEditOpen ? '💾' : '✎'}</button>`)}
     ${trackersCollapsed ? '' : `
     ${ui.partyTrackerAddOpen ? partyTrackerAddForm(ui, isStarforged) : ''}
     <div class="party-tracker-list">
       ${trackerRows || '<p class="ws-placeholder">No trackers yet — add one for credits, supply, or any shared resource.</p>'}
     </div>`}
-    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Shared Gear</h4></div>
-    <div class="rich-field">${richToolbarHTML(sharedGearKey, toolbarCollapsed(doc, ui, sharedGearKey))}<div class="mention-editor" contenteditable="true" data-party-field="sharedGear" data-placeholder="A shared toolkit, the ship's medkit, anything not tied to one character…">${buildMentionEditorHTML(doc, party_.sharedGear)}</div></div>
+    ${partySectionHeaderHtml('sharedGear', 'Shared Gear', sharedGearCollapsed, richToolbarToggleHTML(sharedGearKey, toolbarCollapsed(doc, ui, sharedGearKey)))}
+    ${sharedGearCollapsed ? '' : `<div class="rich-field">${richToolbarHTML(sharedGearKey, toolbarCollapsed(doc, ui, sharedGearKey), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-party-field="sharedGear" data-placeholder="A shared toolkit, the ship's medkit, anything not tied to one character…">${buildMentionEditorHTML(doc, party_.sharedGear)}</div></div>`}
     ${partySectionHeaderHtml('sharedAssets', 'Shared Assets', sharedAssetsCollapsed, '<button class="chip" data-entity-picker-open="party-vehicle">＋ Vehicle</button>')}
     ${sharedAssetsCollapsed ? '' : `
     ${sharedAssetVehicleThumbs ? `<div class="actor-thumb-row">${sharedAssetVehicleThumbs}</div>` : ''}
     <div class="entity-chips">${sharedAssetChips || (sharedAssetVehicleThumbs ? '' : '<span class="dim small">None yet.</span>')}</div>
     <div class="entity-add-row"><input class="doc-tag-input" data-party-shared-asset-input placeholder="Add a shared asset…"></div>`}
+    ${partyRelationshipsSectionHtml(doc, ui)}
     ${cargoManifestSection(doc, ui, { collapsible: true })}
     ${contractsSection(doc, ui, { collapsible: true })}`;
 }
@@ -2732,14 +2951,27 @@ function colonyFieldHtml(doc, ui, fields, f) {
   const v = fields[f.key];
   if (f.type === 'textarea') {
     const toolbarKey = `colony:${f.key}`;
-    // Direct request: Colony's rich-text fields (four of them, back to
-    // back) start with their formatting toolbar collapsed regardless of
-    // the app-wide "Formatting toolbars start collapsed" setting — force
-    // the default to true here (reusing toolbarCollapsed's own session-
-    // override XOR logic unchanged) rather than touching that global
-    // setting, which every OTHER rich field in the app still respects.
+    // Direct request: Colony's rich-text fields (Condition Notes/Notes —
+    // Enemy Information/Mission Data were converted to number fields per a
+    // later direct follow-up request, "like Grunts") start with their
+    // formatting toolbar collapsed regardless of the app-wide "Formatting
+    // toolbars start collapsed" setting — force the default to true here
+    // (reusing toolbarCollapsed's own session-override XOR logic unchanged)
+    // rather than touching that global setting, which every OTHER rich
+    // field in the app still respects.
     const collapsed = toolbarCollapsed({ ...doc, settings: { ...doc.settings, toolbarCollapsedByDefault: true } }, ui, toolbarKey);
-    return `<label class="field-label">${esc(f.label)}<div class="rich-field">${richToolbarHTML(toolbarKey, collapsed)}<div class="mention-editor" contenteditable="true" data-colony-field="${f.key}">${buildMentionEditorHTML(doc, v)}</div></div></label>`;
+    // Real bug, direct report: a <label> wrapping a <button> (the toggle)
+    // makes the browser treat that button as the label's implicitly-
+    // associated control — clicking ANYWHERE in the label (including
+    // directly on the contenteditable .mention-editor below) also
+    // synthesizes a click on the toggle, which explains "clicking the
+    // textbox... activates the texteditor menu to open and close but
+    // doesn't allow selecting and adding text" (the toggle's own click
+    // handler triggers a full render(), tearing down the very node the
+    // click just tried to focus). Plain <div> instead — every other
+    // corner-toggle-converted field already uses <div>/<span>, this was
+    // the one holdout still using <label> with no CSS depending on the tag.
+    return `<div class="field-label"><span class="field-label-row">${esc(f.label)}${richToolbarToggleHTML(toolbarKey, collapsed)}</span><div class="rich-field">${richToolbarHTML(toolbarKey, collapsed, { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-colony-field="${f.key}">${buildMentionEditorHTML(doc, v)}</div></div></div>`;
   }
   if (f.type === 'number') {
     return `<label class="field-label">${esc(f.label)}${numStepper(`<input type="number" data-colony-field="${f.key}" value="${esc(v == null ? '' : v)}">`)}</label>`;
@@ -2749,20 +2981,23 @@ function colonyFieldHtml(doc, ui, fields, f) {
 
 // Turn Step widget (design/adr/rules-profiles-multi-campaign.md, direct
 // follow-up request): ◂/▸ walks getCurrentTurnStep's live position for the
-// ACTIVE profile — quietly shows "—" with both arrows disabled when that
-// profile has no turn steps configured (Starforged, a fresh "Default"),
-// rather than erroring or showing an irrelevant 5PFH-shaped control. Next
-// stays enabled even once hasNext goes false (the true end of the
-// workflow) — direct follow-up request: shell.js's click handler catches
-// that case and asks "Do you want to start the next Campaign Turn?"
-// instead of just no-op'ing a disabled button.
-function colonyTurnStepWidgetHtml(currentStep) {
+// given SLOT ('colony'/'starship' — direct follow-up request: the Campaign
+// panel's two tabs each walk their own assigned Turn Step List
+// independently) — quietly shows "—" with both arrows disabled when that
+// slot has no list assigned, rather than erroring or showing an irrelevant
+// control. Next stays enabled even once hasNext goes false (the true end
+// of the workflow) — direct follow-up request: shell.js's click handler
+// catches that case and asks "Do you want to start the next Campaign
+// Turn?" instead of just no-op'ing a disabled button.
+function colonyTurnStepWidgetHtml(currentStep, slot = 'colony') {
+  const prevAttr = slot === 'starship' ? 'data-starship-turn-step-prev' : 'data-turn-step-prev';
+  const nextAttr = slot === 'starship' ? 'data-starship-turn-step-next' : 'data-turn-step-next';
   return `
     <label class="field-label">Turn Step
       <span class="turn-step-nav">
-        <button type="button" class="icon-btn" data-turn-step-prev title="Previous Step" ${currentStep && currentStep.hasPrev ? '' : 'disabled'}>◂</button>
+        <button type="button" class="icon-btn" ${prevAttr} title="Previous Step" ${currentStep && currentStep.hasPrev ? '' : 'disabled'}>◂</button>
         <b class="turn-step-current">${currentStep ? `${esc(currentStep.group.label)} ${currentStep.index + 1}/${currentStep.total}` : '—'}</b>
-        <button type="button" class="icon-btn" data-turn-step-next title="${currentStep && !currentStep.hasNext ? 'Start the next Campaign Turn' : 'Next Step'}" ${currentStep ? '' : 'disabled'}>▸</button>
+        <button type="button" class="icon-btn" ${nextAttr} title="${currentStep && !currentStep.hasNext ? 'Start the next Campaign Turn' : 'Next Step'}" ${currentStep ? '' : 'disabled'}>▸</button>
       </span>
     </label>`;
 }
@@ -2804,7 +3039,15 @@ function crewTaskBoxHtml(doc, ui) {
     </div>`;
 }
 
-function colony(doc, ui = {}) {
+// The Colony tab (direct follow-up request — "the Colony panel" renamed
+// "Campaign," gains a Colony/Starship tab pair; "all the current
+// functionality remains on the Colony tab"): everything this panel already
+// did — Colony Name, Campaign Turn/Turn Step (now explicitly slot
+// 'colony', driven by whichever Turn Step List is assigned to it), Colony
+// Turn Sheet, Crew Roster, Lifeform Encounters — unchanged, just extracted
+// out of the old colony() into its own function so colony() (below) can
+// dispatch between this and starshipTabHtml.
+function colonyTabHtml(doc, ui = {}) {
   const fields = getColonyFields(doc);
   const crew = listCrewRows(doc);
   const characters = listEntities(doc, ['npc']);
@@ -2816,7 +3059,7 @@ function colony(doc, ui = {}) {
   const nameField = COLONY_FIELDS.find((f) => f.key === 'name');
   const nameFieldHtml = nameField ? colonyFieldHtml(doc, ui, fields, nameField) : '';
 
-  const currentStep = getCurrentTurnStep(doc);
+  const currentStep = getCurrentTurnStep(doc, 'colony');
   // Step Text — rendered through the exact same mention-link machinery
   // Journal/Guide/Colony's own rich fields already use, so a doc link in
   // it is a real clickable [data-doc-open] span; data-turn-step-text-body on
@@ -2830,21 +3073,28 @@ function colony(doc, ui = {}) {
       <button type="button" class="btn ghost sm" data-turn-step-start title="Runs a ruleset for this step — placeholder, TBD">▶ Start</button>
     </div>` : '';
   // Crew Tasks box (design/adr/rules-profiles-multi-campaign.md, direct
-  // follow-up request) — only for "Daily Life" step 2 (id dl2, "Assign/
-  // resolve crew tasks"), hardcoded to that one step's id on purpose: this
-  // isn't a generic "attach a mini-app to any step" system, just the one
-  // step the request named. Below Step Text, still inside .colony-fields.
-  const crewTaskBox = currentStep && currentStep.step.id === 'dl2' ? crewTaskBoxHtml(doc, ui) : '';
-  // Campaign Turn leads the grid (direct follow-up request — it's the first
-  // item once Name is pulled out above), with the Turn Step widget right
-  // next to it — NOT in its own 1fr grid column (that pinned it to the
-  // 50% column line regardless of how narrow Campaign Turn's own content
-  // was, leaving a big dead gap between them — direct follow-up request:
-  // "move the Turn Step button more to the left, aligned to Campaign
-  // Turn") — both sit inside one spanning flex row (.colony-turn-row) that
-  // packs them close together by actual content width instead. Step Text
-  // (still spans both grid columns, .turn-step-text-row's own grid-column
-  // rule) comes right after that row and before Campaign Milestones.
+  // follow-up request: "make the Crew Tasks a reusable functionality for
+  // other Turn Steps to be added later") — attached via a step's own
+  // showCrewTasks flag (turnSteps.js's setTurnStepShowCrewTasks, toggled
+  // per step in Settings > Turn Step) rather than a hardcoded step id, so
+  // any step — existing or GM-typed later — can carry the box, not just
+  // dl2. Below Step Text, still inside .colony-fields (spans full width,
+  // .colony-fields .crew-task-box's own grid-column rule).
+  const crewTaskBox = currentStep && currentStep.step.showCrewTasks ? crewTaskBoxHtml(doc, ui) : '';
+  // Campaign Turn + the Turn Step widget sit right next to each other in
+  // one spanning flex row (.colony-turn-row) that packs them close together
+  // by actual content width, not a 1fr grid column each (that pinned Turn
+  // Step to the 50% column line regardless of how narrow Campaign Turn's
+  // own content was, leaving a big dead gap between them — direct
+  // follow-up request: "move the Turn Step button more to the left, aligned
+  // to Campaign Turn"), followed by Step Text. Direct follow-up request
+  // ("move Campaign Turn, Turn Step and the... turn step description above
+  // the Colony Turn Sheet section header"): this whole cluster (below,
+  // campaignTurnRowHtml) now renders BEFORE the collapsible "Colony Turn
+  // Sheet" header instead of inside its .colony-fields grid — so the
+  // current turn/step/description stays visible even with that section
+  // collapsed. fieldRows (Campaign Milestones onward) is what's left inside
+  // the collapsible grid.
   const fieldRows = COLONY_FIELDS.filter((f) => f.key !== 'name' && f.key !== 'campaignTurn').map((f) => colonyFieldHtml(doc, ui, fields, f)).join('');
   const campaignTurnField = COLONY_FIELDS.find((f) => f.key === 'campaignTurn');
   const campaignTurnRowHtml = `
@@ -2872,46 +3122,133 @@ function colony(doc, ui = {}) {
     <button class="entity-chip" data-open-entity="${esc(e.id)}">${esc(e.name) || 'Unnamed'}</button>`).join('');
 
   // Encounters log (direct follow-up request — "follow the rules and
-  // workflow for Encounters in the 5PFH Planetfall rules"): up to 10
-  // GM-authored rows, each a free-text note plus an optional chip linking
-  // a specific Lifeform entity once identified in play. Distinct from the
-  // always-on #lifeform/type filter below (listLifeformEncounters), which
-  // stays untouched as a separate "everything tagged/typed Lifeform" view.
+  // workflow for Encounters in the 5PFH Planetfall rules"): a fixed 10
+  // GM-authored rows (direct follow-up request: "default to 10 rows",
+  // matching the physical rulebook table — no more add/remove-row controls,
+  // just a permanent numbered grid backfilled by migrate.js/seeded by
+  // schema.js), each a numbered, expandable plain-text note plus an
+  // optional chip linking a specific Lifeform entity once identified in
+  // play (a small ✕ on the chip itself detaches it without touching the
+  // note or the row). Distinct from the always-on #lifeform/type filter
+  // below (listLifeformEncounters), which stays untouched as a separate
+  // "everything tagged/typed Lifeform" view.
   const encounters = listColonyEncounters(doc);
-  const encounterRows = encounters.map((row) => {
+  const encounterRows = encounters.map((row, i) => {
     const linked = row.entityId ? getEntity(doc, row.entityId) : null;
     const chip = linked
-      ? `<button type="button" class="entity-chip" data-open-entity="${esc(linked.id)}">${esc(linked.name) || 'Unnamed'}</button>`
+      ? `<span class="entity-chip-wrap"><button type="button" class="entity-chip" data-open-entity="${esc(linked.id)}">${esc(linked.name) || 'Unnamed'}</button><button type="button" class="icon-btn" data-colony-encounter-detach="${esc(row.id)}" title="Detach entity">✕</button></span>`
       : '';
     return `<div class="colony-encounter-row">
-      <input type="text" data-colony-encounter-field="${esc(row.id)}::note" value="${esc(row.note)}" placeholder="Encounter…">
+      <span class="colony-encounter-index">${i + 1}.</span>
+      <textarea rows="1" data-colony-encounter-field="${esc(row.id)}::note" placeholder="Encounter…">${esc(row.note)}</textarea>
       ${chip}
       <button type="button" class="icon-btn" data-entity-picker-open="colony-encounter::${esc(row.id)}" title="Attach a Lifeform entity">＋</button>
-      <button type="button" class="icon-btn" data-colony-encounter-remove="${esc(row.id)}" title="Remove row">✕</button>
     </div>`;
   }).join('');
 
   const turnSheetCollapsed = isPartySectionCollapsed(ui, 'colonyTurnSheet', false);
+  const campaignGuideCollapsed = isPartySectionCollapsed(ui, 'campaignGuide', false);
+  const crewRosterCollapsed = isPartySectionCollapsed(ui, 'crewRoster', false);
+  const lifeformEncountersCollapsed = isPartySectionCollapsed(ui, 'lifeformEncounters', false);
   return `
     ${nameFieldHtml}
+    ${partySectionHeaderHtml('campaignGuide', 'Campaign Guide', campaignGuideCollapsed)}
+    ${campaignGuideCollapsed ? '' : campaignTurnRowHtml}
     ${partySectionHeaderHtml('colonyTurnSheet', 'Colony Turn Sheet', turnSheetCollapsed, helpToggle('colony-turn-sheet'))}
     ${helpBody('colony-turn-sheet', '5PFH Planetfall campaign-turn tracker.', ui)}
-    ${turnSheetCollapsed ? '' : `<div class="colony-fields">${campaignTurnRowHtml}${fieldRows}</div>`}
-    <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Crew Roster</h4><button class="chip" data-entity-picker-open="colony-crew">＋ Crew</button></div>
-    <div class="colony-crew-list">
-      ${crewRows || '<p class="ws-placeholder">No crew rows yet.</p>'}
-    </div>
-    <div class="statblock-head" style="margin-top: var(--sp-4);">
-      <h4>Lifeform Encounters</h4>
-      ${encounters.length < 10 ? '<button type="button" class="icon-btn" data-colony-encounter-add title="Add an encounter row (up to 10)">＋</button>' : ''}
-    </div>
+    ${turnSheetCollapsed ? '' : `<div class="colony-fields">${fieldRows}</div>`}
+    ${partySectionHeaderHtml('crewRoster', 'Crew Roster', crewRosterCollapsed, '<button class="chip" data-entity-picker-open="colony-crew">＋ Crew</button>')}
+    ${crewRosterCollapsed ? '' : `<div class="colony-crew-list">${crewRows || '<p class="ws-placeholder">No crew rows yet.</p>'}</div>`}
+    ${partySectionHeaderHtml('lifeformEncounters', 'Lifeform Encounters', lifeformEncountersCollapsed)}
+    ${lifeformEncountersCollapsed ? '' : `
     <div class="colony-encounter-list">
-      ${encounterRows || '<p class="ws-placeholder">No encounters logged yet.</p>'}
+      ${encounterRows}
     </div>
     <p class="dim small">All Lifeform entities in Cast:</p>
     <div class="entity-chips">
       ${lifeformRows || '<p class="ws-placeholder">No lifeform encounters tracked yet — tag a Cast entity #lifeform.</p>'}
+    </div>`}`;
+}
+
+// The Starship tab (direct follow-up request — plays the base 5PFH game,
+// distinct from Colony's own Planetfall content): a thumbnail+name row for
+// the single #starship-tagged entity (Party's own Starship section, below,
+// is the canonical place that ASSIGNS it — see partyStarshipSectionHtml —
+// this tab just displays/edits whatever's currently assigned, same
+// "reference by id" shape Colony's own Crew Roster already uses for
+// entities), plus its own independent Campaign Turn (party.
+// starshipCampaignTurn — direct follow-up request: a separate counter, no
+// Planetfall accrual) and Turn Step widget (slot 'starship').
+function starshipThumbnailRowHtml(doc) {
+  const entityId = doc.party && doc.party.starshipEntityId;
+  const entity = entityId ? getEntity(doc, entityId) : null;
+  const photoHtml = entity
+    ? (() => {
+        const img = entity.thumbnailId ? getGalleryImage(doc, entity.thumbnailId) : null;
+        const inner = img
+          ? `<img class="gallery-thumb-circle" src="${esc(img.dataUrl)}" alt="">`
+          : `<span class="gallery-thumb-circle gallery-thumb-circle-empty" aria-hidden="true">${esc((entity.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
+        return `<div class="inspector-photo"><button type="button" class="gallery-thumb-circle-btn" data-open-entity="${esc(entity.id)}" title="Open ${esc(entity.name || 'Unnamed')}">${inner}</button></div>`;
+      })()
+    : `<div class="inspector-photo"><button type="button" class="inspector-photo-empty" data-entity-picker-open="party-starship" title="Select a starship">＋ Select Starship</button></div>`;
+  return `
+    <div class="inspector-photo-row">
+      ${photoHtml}
+      <div class="inspector-photo-fields">
+        <label class="field-label">Starship Name
+          <input type="text" data-starship-name-field value="${esc(entity ? entity.name : '')}" placeholder="${entity ? 'Unnamed' : 'No starship selected'}" ${entity ? '' : 'disabled'}>
+        </label>
+      </div>
     </div>`;
+}
+function starshipTabHtml(doc, ui = {}) {
+  const currentStep = getCurrentTurnStep(doc, 'starship');
+  const turn = (doc.party && doc.party.starshipCampaignTurn) || 0;
+  // Step Text (direct follow-up request: "add the Turn Step description
+  // field under the Campaign Turn row on Starship tab") — same
+  // mention-linked rendering/markup Colony's own stepTextHtml uses
+  // (data-turn-step-text-body on the wrapper is how shell.js opens a doc
+  // link from it in the right-two-section position), just its own
+  // data-starship-turn-step-start attribute so its "Start" click doesn't
+  // collide with Colony's.
+  const stepTextHtml = currentStep ? `
+    <div class="turn-step-text-row">
+      <div class="turn-step-text-body" data-turn-step-text-body>${buildMentionEditorHTML(doc, currentStep.step.text)}</div>
+      <button type="button" class="btn ghost sm" data-starship-turn-step-start title="Runs a ruleset for this step — placeholder, TBD">▶ Start</button>
+    </div>` : '';
+  return `
+    ${starshipThumbnailRowHtml(doc)}
+    <div class="colony-turn-row">
+      <label class="field-label">Campaign Turn
+        ${numStepper(`<input type="number" data-starship-campaign-turn value="${turn}">`)}
+      </label>
+      ${colonyTurnStepWidgetHtml(currentStep, 'starship')}
+    </div>
+    ${stepTextHtml}`;
+}
+
+// The Campaign panel (direct follow-up request: "Rename the Colony panel
+// to Campaign and add two right-aligned links/buttons that enable separate
+// tabs of content... Colony and Starship") — same click-based internal
+// tab-strip pattern World Tracker/Settings already use, right-aligned per
+// the request (a modifier on the shared .settings-tab-bar class). Colony
+// tab hidden when Planetfall is deactivated, Starship tab hidden when
+// 5PFH is deactivated (direct follow-up request) — both via the same
+// Game System Activation gate every other gated system already goes
+// through (isGameSystemActivated), not a new mechanism. If the currently-
+// selected tab becomes hidden this way, falls back to whichever tab is
+// still visible.
+const COLONY_PANEL_TABS = [
+  { id: 'colony', label: 'Colony', system: 'planetfall' },
+  { id: 'starship', label: 'Starship', system: 'fivepfh' },
+];
+function colony(doc, ui = {}) {
+  const visibleTabs = COLONY_PANEL_TABS.filter((t) => isGameSystemActivated(doc, t.system));
+  if (!visibleTabs.length) return '<p class="ws-placeholder">Both Colony and Starship are currently deactivated — enable Planetfall and/or 5PFH under Settings → Ruleset Profile Editor → Game System Activation.</p>';
+  const activeTab = visibleTabs.some((t) => t.id === ui.colonyPanelTab) ? ui.colonyPanelTab : visibleTabs[0].id;
+  const tabBar = visibleTabs.length > 1 ? `<div class="settings-tab-bar align-right">${visibleTabs.map((t) => `
+    <button class="btn ghost sm ${t.id === activeTab ? 'active' : ''}" data-colony-panel-tab="${t.id}" aria-selected="${t.id === activeTab}">${esc(t.label)}</button>`).join('')}</div>` : '';
+  return `${tabBar}${activeTab === 'starship' ? starshipTabHtml(doc, ui) : colonyTabHtml(doc, ui)}`;
 }
 
 // --- Trade: Merchant Rules Lens (ADR 0003/0004) -----------------------------
@@ -3120,8 +3457,8 @@ function guide(doc, ui = {}) {
     : `<input class="guide-title-input" data-guide-title-input value="${esc(active.title)}" placeholder="Untitled">`;
   return `
     ${helpBody('guide-intro', 'A table of contents for the campaign — <code>@Name</code> links a Cast entity, <code>@[Doc Name]</code> references a document (<code>@[Doc Name#12]</code> or <code>@[Doc Name p.12]</code> jumps to a page). Click a mention to open it; arrow-key the cursor into it to edit its label. Saves automatically. Drag a document below to reorganize the tree.', ui)}
-    <div class="guide-doc-head">${titleEl}</div>
-    <div class="rich-field">${richToolbarHTML(`guide:${active.id}`, toolbarCollapsed(doc, ui, `guide:${active.id}`))}<div class="mention-editor guide-editor" contenteditable="true" data-guide-input data-guide-active="${esc(active.id)}" data-placeholder="Colony Builder — see @[5PFH Planetfall p.12] for the turn sheet.&#10;Meet @Captain Reyes in Docking Bay 3.">${buildMentionEditorHTML(doc, active.text)}</div></div>
+    <div class="guide-doc-head">${titleEl}${richToolbarToggleHTML(`guide:${active.id}`, toolbarCollapsed(doc, ui, `guide:${active.id}`))}</div>
+    <div class="rich-field">${richToolbarHTML(`guide:${active.id}`, toolbarCollapsed(doc, ui, `guide:${active.id}`), { includeToggle: false })}<div class="mention-editor guide-editor" contenteditable="true" data-guide-input data-guide-active="${esc(active.id)}" data-placeholder="Colony Builder — see @[5PFH Planetfall p.12] for the turn sheet.&#10;Meet @Captain Reyes in Docking Bay 3.">${buildMentionEditorHTML(doc, active.text)}</div></div>
     ${mechanicsIndexList(doc)}
     <div class="guide-tree-section">
       <div class="guide-tree-head">
@@ -3329,12 +3666,13 @@ function documents(doc, ui = {}) {
       <div class="doc-card-head">
         <span class="doc-card-title-group">${titleEl}</span>
         <div class="doc-card-actions">
+          ${richToolbarToggleHTML(`doc:${d.id}`, toolbarCollapsed(doc, ui, `doc:${d.id}`))}
           <button class="icon-btn" data-doc-tag-toggle="${esc(d.id)}" title="Tags">🏷</button>
           <button class="icon-btn" data-doc-rename="${esc(d.id)}" title="${renameOpen.has(d.id) ? 'Save' : 'Rename entry'}">${renameOpen.has(d.id) ? '💾' : '✎'}</button>
           <button class="icon-btn" data-doc-delete="${esc(d.id)}" title="Delete document">✕</button>
         </div>
       </div>
-      <div class="rich-field">${richToolbarHTML(`doc:${d.id}`, toolbarCollapsed(doc, ui, `doc:${d.id}`))}<div class="mention-editor doc-content-input" contenteditable="true" data-doc-content="${esc(d.id)}" data-placeholder="Store notes, references, or handout text here…">${buildMentionEditorHTML(doc, d.content)}</div></div>
+      <div class="rich-field">${richToolbarHTML(`doc:${d.id}`, toolbarCollapsed(doc, ui, `doc:${d.id}`), { includeToggle: false })}<div class="mention-editor doc-content-input" contenteditable="true" data-doc-content="${esc(d.id)}" data-placeholder="Store notes, references, or handout text here…">${buildMentionEditorHTML(doc, d.content)}</div></div>
       <div class="drawer-note-actions"><button class="btn sm" data-doc-save="${esc(d.id)}">Save</button></div>
       ${tagEditorOpen.has(d.id) ? docTagEditor(d) : ''}
     </div>`;

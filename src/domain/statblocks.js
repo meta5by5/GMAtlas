@@ -144,7 +144,18 @@ export function makeStatblock(kind, rulesetId, templateId, settings) {
       }),
       ...tpl.tracks.map((t) => ({ key: t.key, value: t.value, max: t.max, track: true, group: 'resource' })),
     ];
-    return { kind: 'character', ruleset: ruleset.id, fields };
+    const group = { kind: 'character', ruleset: ruleset.id, fields };
+    // Weapon table + Gear (direct follow-up request) — 5PFH-specific: the
+    // Core rulebook's own character sheet template has a Weapon/Range/
+    // Shots/Damage/Traits table plus a Gear line (assets/docs/5PFH-Five-
+    // Parsecs-From-Home-v3.pdf, the character sheet layout). Only a 5PFH
+    // character-sheet group carries these fields at all — a Starforged or
+    // Traveller sheet has no such concept, so nothing is added for those,
+    // matching the app's "sandbox for one ruleset at a time, no hint of
+    // unrelated features" philosophy. See addStatblockWeapon/
+    // updateStatblockWeapon/removeStatblockWeapon/setStatblockGear below.
+    if (ruleset.id === '5pfh') { group.weapons = []; group.gear = ''; }
+    return group;
   }
   const resolvedKind = kind === 'vehicle' ? 'vehicle' : 'npc';
   const templates = getStatblockTemplates(settings);
@@ -273,6 +284,47 @@ export function addStatblockField(entity, groupIndex, keyOrOpts = 'New field', v
 export function removeStatblockField(entity, groupIndex, fieldIndex) {
   const g = entity && entity.statblocks && entity.statblocks[groupIndex];
   if (g) g.fields.splice(fieldIndex, 1);
+  return entity;
+}
+
+// --- 5PFH character sheet: weapon table + Gear (direct follow-up request)
+// -----------------------------------------------------------------------
+// group.weapons is an array of {name, range, shots, damage, traits} rows,
+// addressed by plain array index (weaponIndex) — same convention every
+// other statblock mutator in this file already uses (fieldIndex above),
+// not a generated id; group.gear is one free-text line. Both are lazily
+// initialized here (Array.isArray/String fallback) rather than assumed
+// present, since an entity's 5PFH character group may have been created
+// before this feature existed and never retroactively migrated (this
+// app's "migration never drops data" rule doesn't require backfilling a
+// brand new optional field either — the first edit just creates it).
+// No ruleset check here — the UI only ever renders/wires these controls
+// for a 5PFH group in the first place (characterSheetGroupBlock), so
+// there's nothing to gate a second time at the mutator level.
+export function addStatblockWeapon(entity, groupIndex) {
+  const g = entity && entity.statblocks && entity.statblocks[groupIndex];
+  if (!g) return entity;
+  if (!Array.isArray(g.weapons)) g.weapons = [];
+  g.weapons.push({ name: '', range: '', shots: '', damage: '', traits: '' });
+  return entity;
+}
+
+export function updateStatblockWeapon(entity, groupIndex, weaponIndex, patch) {
+  const g = entity && entity.statblocks && entity.statblocks[groupIndex];
+  const w = g && Array.isArray(g.weapons) && g.weapons[weaponIndex];
+  if (w) Object.assign(w, patch);
+  return entity;
+}
+
+export function removeStatblockWeapon(entity, groupIndex, weaponIndex) {
+  const g = entity && entity.statblocks && entity.statblocks[groupIndex];
+  if (g && Array.isArray(g.weapons)) g.weapons.splice(weaponIndex, 1);
+  return entity;
+}
+
+export function setStatblockGear(entity, groupIndex, text) {
+  const g = entity && entity.statblocks && entity.statblocks[groupIndex];
+  if (g) g.gear = String(text || '');
   return entity;
 }
 

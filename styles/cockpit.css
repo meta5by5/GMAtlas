@@ -49,6 +49,24 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .mc-header .tagline { font-size: 0.72rem; color: var(--text-dim); }
 .mc-header .campaign-title { font-size: 0.85rem; color: var(--accent); }
 
+/* Campaign switcher (direct follow-up request) — .campaign-title reverts
+   to being a real clickable control (it used to open Settings directly,
+   pre-header-gear-menu; now it's a <button> opening this new dropdown
+   instead), so it needs a bare-button reset the old plain <span> never did. */
+.campaign-switcher-wrap { position: relative; }
+.mc-header .campaign-title { background: none; border: none; font: inherit; padding: 0; }
+.campaign-switcher-menu {
+  position: absolute; top: 100%; left: 0; margin-top: 0.3rem; z-index: 20;
+  min-width: 14rem; max-width: 20rem; background: var(--tier2-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); box-shadow: 0 4px 16px rgba(0,0,0,0.35); padding: var(--sp-2);
+}
+.campaign-switcher-menu[hidden] { display: none; }
+.campaign-switcher-list { display: flex; flex-direction: column; gap: var(--sp-1); margin-bottom: var(--sp-2); }
+.campaign-switcher-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: 0.3rem 0.4rem; border-radius: var(--radius-sm); }
+.campaign-switcher-row.active { background: var(--bg-inset); }
+.campaign-switcher-row-title { font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.campaign-switcher-new { width: 100%; }
+
 /* Header gear menu (New Campaign / Settings / About — replaces the old
    click-the-campaign-title-to-open-Settings convention). */
 .settings-menu-wrap { position: relative; }
@@ -913,25 +931,28 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 /* Lightweight rich-text toolbar (ADR 0018) — one small row of buttons above
    a .mention-editor that insert plain markup characters (see shell.js's
    data-rich-cmd mousedown handler), not live execCommand formatting. */
-.rich-toolbar { display: flex; flex-wrap: wrap; gap: 0.15rem; margin-bottom: 0.25rem; position: relative; padding-right: 1.6rem; }
+.rich-toolbar { display: flex; flex-wrap: wrap; gap: 0.15rem; margin-bottom: 0.25rem; }
 .rich-toolbar .icon-btn { border: 1px solid var(--border); border-radius: var(--radius-sm); min-width: 1.6rem; text-align: center; }
 .rich-toolbar .icon-btn:hover { color: var(--text); border-color: var(--accent); }
-/* Direct follow-up request: the collapse toggle moved off the icon row and
-   onto the textbox's own top-right corner — same corner convention
-   .mention-editor's native resize handle already uses in the bottom-right.
-   .rich-field (every call site's shared wrapper around richToolbarHTML's
-   output + the .mention-editor box) is the positioning context, not
-   .rich-toolbar itself, so this correctly overlays the textbox even when
-   the icon row above it is collapsed to nothing. .rich-toolbar's own
-   padding-right (above) reserves room so the row's last button never sits
-   underneath this when both are visible at once. */
-.rich-field { position: relative; }
+/* Direct report/fix: the collapse toggle used to sit as a position:absolute
+   overlay pinned to the textbox's own top-right corner — while collapsed
+   (this app's default), that put it directly on top of the editor's own
+   top-right corner with nothing else in flow above it, so it silently ate
+   clicks/keystrokes meant for the text underneath. Now a normal flex
+   sibling instead: .rich-field is a flex-wrap row: the icon row (.rich-
+   toolbar, when expanded) claims a full-width first line via flex-basis:
+   100%, then the editor and the toggle button share the next line side by
+   side — the toggle never overlaps the editable area in either state.
+   .rich-field > .mention-editor is scoped narrowly (.mention-editor is
+   used bare in a couple of read-only contexts outside this wrapper too). */
+.rich-field { display: flex; flex-wrap: wrap; align-items: flex-start; column-gap: 0.3rem; }
+.rich-field > .rich-toolbar { flex: 1 0 100%; order: 1; }
+.rich-field > .mention-editor { flex: 1 1 auto; min-width: 0; order: 2; }
 .rich-toolbar-corner-toggle {
-  position: absolute; top: 0.3rem; right: 0.3rem; z-index: 1;
-  background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  width: 1.4rem; height: 1.4rem; line-height: 1; font-size: 0.75rem;
+  order: 3; align-self: flex-start; flex: 0 0 auto;
+  background: none; border: none; padding: 0; line-height: 1; font-size: 0.8rem;
 }
-.rich-toolbar-corner-toggle:hover { color: var(--accent); border-color: var(--accent); }
+.rich-toolbar-corner-toggle:hover { color: var(--accent); }
 /* Visually hidden but still a real, clickable input (display:none blocks
    the native color picker from opening in most engines) — triggered via
    .click() from the 🎨 button, never shown/clicked directly itself. */
@@ -1067,6 +1088,10 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    whichever tab's sections are currently rendered. */
 .settings-tab-bar { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: var(--sp-4); padding-bottom: var(--sp-3); border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--tier2-bg, inherit); z-index: 1; }
 .settings-tab-bar .btn.active { color: var(--accent); border-color: var(--accent); }
+/* Campaign panel's Colony/Starship tabs (direct follow-up request: "two
+   right-aligned links/buttons") — same strip, just right-aligned instead
+   of the default left/wrap. */
+.settings-tab-bar.align-right { justify-content: flex-end; }
 
 /* Collapsible "?" tip icons ("USER CHANGES" QoL batch) — a section title
    plus its toggle, right-aligned on the same line; the h3/h4 keeps its own
@@ -1335,6 +1360,17 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    doesn't jump once a photo is added. */
 .inspector-photo { flex: 0 0 40%; max-width: 40%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); }
 .inspector-photo-fields { flex: 1 1 auto; min-width: 0; }
+/* Direct follow-up request: Type and Tags share one row instead of
+   stacking, so the combined pair still fits the same overall width Type
+   alone used to take (.inspector-photo-fields' width — the thumbnail's own
+   40% column, above, is untouched by this). Type keeps its natural
+   (shrink-to-fit) width; Tags' head row takes the rest. align-items:
+   flex-end lines up Type's <select> (below its own label text) with Tags'
+   single-line label+input row on their shared bottom edge. The chosen-tags
+   chip list (tagEditorList) now renders as its own full-width row below
+   this one, collapsible via the Tags label — see .tag-editor-toggle. */
+.inspector-type-tags-row { display: flex; align-items: flex-end; gap: var(--sp-3); }
+.inspector-type-field { flex: 0 0 auto; min-width: 0; }
 /* Entity Type dropdown — matched to .rel-label-input's font size (direct
    request), same reasoning as .rel-add select above. */
 .inspector-photo-fields select[data-entity-field="type"] { font-size: 0.72rem; }
@@ -1348,8 +1384,18 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
   display: flex; align-items: center; justify-content: center; width: 100%;
   aspect-ratio: 1 / 1; border: 1px dashed var(--border); border-radius: var(--radius-sm);
   color: var(--text-dim); font-size: 0.8rem; cursor: pointer; text-align: center; padding: var(--sp-2); box-sizing: border-box;
+  /* Bare-button reset (direct follow-up request's Starship "+ Select
+     Starship" placeholder is a real <button>, not the upload <label> this
+     class was originally written for) so neither picks up default button
+     chrome. */
+  background: none; font: inherit;
 }
 .inspector-photo-empty:hover { border-color: var(--accent); color: var(--accent); }
+/* Starship tab's thumbnail (direct follow-up request) reuses .gallery-
+   thumb-circle for the assigned entity's real photo; this modifier is the
+   initial-letter fallback when that entity has no thumbnailId yet — same
+   recipe .actor-thumb-photo-empty already uses for the same purpose. */
+.gallery-thumb-circle-empty { display: flex; align-items: center; justify-content: center; font-weight: 600; color: var(--text-dim); }
 .field-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
 .rel-block { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-3); }
 .rel-block h4 { margin: 0 0 var(--sp-2); font-size: 0.8rem; color: var(--accent); }
@@ -1440,12 +1486,17 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 /* Tag editor (Phase 7, unified 2026-07-04 with the Documents drawer's tag
    UX): removable chips + a single auto-committing input, same pill/chip
    language as .rel-chip above. */
-.tag-editor { margin-top: var(--sp-3); }
+.tag-editor { flex: 1 1 auto; min-width: 0; }
 /* Label + add-tag input share one row (right-aligned input) to save the
    vertical space a separate label-then-input stack used to cost. */
 .tag-editor-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); margin-bottom: 0.35rem; }
 .field-label-static { font-size: 0.7rem; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; }
-.tag-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+/* The "Tags" label is now also the expand/collapse toggle for the chosen-
+   tags list below it (direct follow-up request) — reset to plain button
+   chrome so it keeps reading as the same static-looking label as before. */
+.tag-editor-toggle { background: none; border: none; padding: 0; cursor: pointer; font: inherit; white-space: nowrap; }
+.tag-editor-toggle:hover { color: var(--accent); }
+.tag-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); margin-bottom: var(--sp-2); }
 .tag-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--tier2-bg); border: 1px solid var(--border); border-radius: 999px; padding: 0.15rem 0.45rem; font-size: 0.68rem; }
 /* The tag's own text is a button (jumps to Cast filtered by this tag) —
    reset to read as plain chip text, not a nested button. */
@@ -1496,8 +1547,24 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .statblock-add-toggle-row { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); padding-top: var(--sp-2); border-top: 1px solid var(--border); }
 .statblock-add-toggle-row .icon-btn { font-size: 1rem; }
 /* Label + value only — a field's name/shape/kind is Settings' job (the
-   Bestiary/character templates), not something edited per-instance here. */
-.statblock-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); margin-bottom: 4px; align-items: center; }
+   Bestiary/character templates), not something edited per-instance here.
+   width:60% (direct follow-up request: "the statblock fields for entity
+   editor are too wide... the 60% is in relation to the statblock field's
+   current width... needs to be narrower for all statblock field") — no
+   earlier narrower version was found anywhere in this file's git history
+   (every desktop .statblock-row revision on record fills 100% of
+   .statblock-block, its plain block container), so this is the requested
+   fallback instead: the WHOLE field row (label+value together, not just
+   the value input alone — narrowing only the input left the row itself
+   still full-width with dead space stranded after a narrow box) now caps
+   at 60% of that. Its grid columns (1fr 1fr) split that 60% proportionally,
+   so both the label and the value input end up narrower together — no
+   separate width needed on .statblock-val itself. .statblock-row.track-row
+   (no width override of its own) inherits this too, matching "all
+   statblock field"; .attr-row's own width:fit-content below is already a
+   compact self-sized pill, not a full-width row, so it's correctly
+   unaffected. */
+.statblock-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); margin-bottom: 4px; align-items: center; width: 60%; }
 .statblock-key { font-size: 0.8rem; color: var(--text-dim); }
 .statblock-val { font-size: 0.85rem; }
 
@@ -1583,37 +1650,75 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 }
 .attr-row .attr-val-input:focus { outline: none; }
 
-/* Character sheet (ruleset-driven stats + resource meters). Narrow +
-   nowrap-with-scroll (not wrap) so a ruleset's whole stat row (5 stats for
-   both Starforged and 5PFH today — see data/rulesets.js) reads as one
-   scannable line in the ~388px drawer content width instead of spilling to
-   a second row; overflow-x is the escape valve if a custom ruleset/added
-   field ever pushes past that. inline-flex/width:fit-content (direct
-   follow-up request — "the statblock field... must look like the narrow
-   margin version") so this row hugs its actual stat pills instead of
-   always stretching into one full-width bar, most visible with just one
-   or two stats present; max-width keeps it from overflowing the drawer
-   once enough stats are present for overflow-x to take over. */
+/* Character sheet (ruleset-driven stats + resource meters). Direct
+   follow-up request ("statblock fields should be only the width of the
+   text in the first row of the box... all statblocks should be viewable
+   at one time within the panel"): wraps instead of the old nowrap+
+   overflow-x scroll, so a ruleset's whole stat row lands fully in view by
+   flowing onto more lines rather than requiring horizontal scrolling.
+   inline-flex/width:fit-content so this row hugs its actual stat pills
+   instead of always stretching into one full-width bar; max-width keeps
+   it from overflowing the drawer. */
 .character-sheet-stats {
-  display: inline-flex; flex-wrap: nowrap; overflow-x: auto; gap: var(--sp-1);
+  display: inline-flex; flex-wrap: wrap; gap: var(--sp-1);
   width: fit-content; max-width: 100%;
   padding: var(--sp-2); margin-bottom: var(--sp-3);
   background: var(--tier2-bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
-/* Widened from 4.4rem/0.6rem (direct request — tracker/meter names need to
-   actually be readable) — .character-sheet-stats' own overflow-x:auto is
-   the escape valve if a ruleset's full stat row now runs past the visible
-   width, same as before, just scrolling a little sooner. */
+/* Same wrap-to-fit posture as .character-sheet-stats above, for every
+   remaining (track/text) field in a statblock — direct follow-up request. */
+.character-sheet-resources { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+/* Content-sized instead of a fixed 5.2rem (direct follow-up request — "the
+   width of the text in the first row of the box"): the label's own
+   white-space:nowrap below sets the pill's natural width via fit-content;
+   .track-boxes keeps its own fixed 4.2rem (a dot-grid isn't text, and needs
+   a stable area regardless of the label), so a short label still gets a
+   pill wide enough for its box-grid, while a long label widens the pill to
+   fit itself. */
 .track-row-compact {
   display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 0 auto;
-  width: 5.2rem; margin-bottom: 0; padding: 0.25rem 0.3rem;
+  width: fit-content; max-width: 100%; margin-bottom: 0; padding: 0.25rem 0.5rem;
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset);
 }
-.track-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.68rem; white-space: normal; line-height: 1.2; }
+.track-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.68rem; white-space: nowrap; line-height: 1.2; }
 .track-row-compact .track-widget { flex-direction: column-reverse; align-items: center; }
 .track-row-compact .track-boxes { flex-wrap: wrap; justify-content: center; width: 4.2rem; }
 .track-row-compact .track-box { width: 18px; height: 18px; font-size: 0.62rem; }
-.character-sheet-resources .statblock-row.track-row { margin-bottom: var(--sp-2); }
+/* Plain text/value field's own compact pill (direct follow-up request —
+   textRow had no compact variant before; every statblock field now gets
+   one). Same family as track-row-compact/attr-row-compact: content-sized
+   via the label's nowrap width; the value input uses the width:0/
+   min-width:100% trick so its own default intrinsic size never inflates
+   the pill past what the label actually needs — it only stretches to match
+   the label's width once that's been resolved. */
+.text-row-compact {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 0 auto;
+  width: fit-content; min-width: 3rem; max-width: 100%; margin-bottom: 0; padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset);
+}
+.text-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.68rem; white-space: nowrap; line-height: 1.2; color: var(--text-dim); }
+.text-row-compact .statblock-val { width: 0; min-width: 100%; box-sizing: border-box; text-align: center; padding: 2px 4px; font-size: 0.82rem; }
+
+/* 5PFH character sheet weapon table + Gear (direct follow-up request) —
+   real <table>, same recipe .trade-market-table already uses for editable
+   tabular data (inputs inside <td>s, not a flex/grid mimic), full width
+   (not .statblock-row's own 60% field-row cap — a table of several columns
+   needs the room, unlike a single label+value field). */
+.statblock-weapons { margin-top: var(--sp-3); }
+.statblock-weapons h4 { margin: 0 0 var(--sp-2); font-size: 0.8rem; color: var(--accent); }
+.statblock-weapon-table { width: 100%; table-layout: fixed; border-collapse: collapse; margin-bottom: var(--sp-2); font-size: 0.85rem; }
+.statblock-weapon-table th { text-align: left; font-size: 0.68rem; letter-spacing: 0.06em; color: var(--text-dim); text-transform: uppercase; padding: 0.3rem 0.3rem; border-bottom: 1px solid var(--border); }
+.statblock-weapon-table td { padding: 0.25rem 0.3rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.statblock-weapon-table input[type="text"] { width: 100%; padding: 0.3rem 0.4rem; font-size: 0.82rem; }
+/* Direct follow-up request: Weapon/Traits get the most room (25% each),
+   Range/Shots/Damage are short values and stay narrow, the remove-icon
+   column is just wide enough for the button itself. */
+.statblock-weapon-col-name, .statblock-weapon-col-traits { width: 30%; }
+.statblock-weapon-table th:nth-child(2), .statblock-weapon-table th:nth-child(3), .statblock-weapon-table th:nth-child(4) { width: 12%; }
+.statblock-weapon-remove-cell { width: 1.8rem; padding-left: 0.1rem; padding-right: 0.1rem; text-align: center; }
+.statblock-weapon-remove-btn { padding-left: 0.15rem; padding-right: 0.15rem; }
+.statblock-gear-field { margin-top: var(--sp-3); }
+.statblock-gear-field textarea { width: 100%; }
 
 /* Compact attribute pill (Edge/Heart/... stat row atop a character sheet) —
    same bordered-pill language as .track-row-compact, single-number spinner
@@ -1621,20 +1726,21 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    .attr-row-compact together (attrRow()'s opts.compact just appends the
    modifier class); .statblock-row.attr-row's own two-class selector
    outranks this one-class selector on every property they both set
-   (width/padding/gap/display), so the fixed 5.2rem compact width would
-   otherwise silently lose to the base pill's width:fit-content. The
-   .statblock-row.attr-row.attr-row-compact override right below settles
-   that regardless of source order. */
+   (padding/gap/margin-right/display), so the override right below is
+   still needed for those — but width now matches the base pill's own
+   width:fit-content (direct follow-up request — "the width of the text in
+   the first row of the box"), just content-sized via the label's
+   white-space:nowrap instead of the old fixed 5.2rem. */
 .attr-row-compact {
   display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 0 auto;
-  width: 5.2rem; margin-bottom: 0; padding: 0.25rem 0.3rem;
+  width: fit-content; max-width: 100%; margin-bottom: 0; padding: 0.25rem 0.5rem;
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset);
 }
 .statblock-row.attr-row.attr-row-compact {
-  display: flex; width: 5.2rem; min-width: 5.2rem; padding: 0.25rem 0.3rem; margin-right: 0; gap: 4px;
+  display: flex; width: fit-content; max-width: 100%; padding: 0.25rem 0.5rem; margin-right: 0; gap: 4px;
 }
-.attr-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.68rem; white-space: normal; line-height: 1.2; }
-.attr-row-compact .attr-val-input { width: 100%; padding: 0; font-size: 0.85rem; }
+.attr-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.68rem; white-space: nowrap; line-height: 1.2; }
+.attr-row-compact .attr-val-input { width: 0; min-width: 100%; box-sizing: border-box; padding: 0; font-size: 0.85rem; }
 
 /* Drag-and-drop (entity ↔ entity, entity → text) */
 [data-drag-entity] { cursor: grab; }
@@ -2000,6 +2106,15 @@ button.party-stat-pill:hover { border-color: var(--accent); }
    pill's tracker is the one showing below. */
 .party-stat-pill-expanded { border-color: var(--accent-strong); background: rgba(56,189,248,0.1); }
 .party-stat-pill-static { opacity: 0.85; }
+/* Direct follow-up request: "revise the tracking meters to have the same
+   width as before where the tracking numbers are on one row instead of a
+   small block of two rows... the narrow statblock is just for the number
+   stats like Edge and Shadow" — a tracker's own name (Health/Spirit/
+   Supply) doesn't fit a tiny stacked square the way a one-letter attribute
+   modifier does, so it gets its own wider, single-row layout instead of
+   .party-stat-pill's default narrow stacked square. */
+.party-stat-pill-track { flex-direction: row; width: auto; min-height: 0; padding: 0.3rem 0.55rem; gap: 0.4rem; }
+.party-stat-pill-track .party-stat-pill-label { white-space: nowrap; text-align: left; }
 .party-stat-pill-label { font-size: 0.56rem; letter-spacing: 0.03em; color: var(--text-dim); text-transform: uppercase; text-align: center; line-height: 1.1; white-space: normal; }
 .party-stat-pill-value { font-size: 0.85rem; font-weight: 700; color: var(--accent); }
 /* A toggled-open track pill's full box-row view (partyStatTrackExpansion,
@@ -2080,34 +2195,48 @@ input[type="number"] { -moz-appearance: textfield; }
 /* Colony */
 .colony-fields { display: grid; grid-template-columns: 1fr 1fr; row-gap: var(--sp-2); column-gap: var(--sp-3); margin: var(--sp-2) 0 var(--sp-3); }
 .colony-fields .field-label { margin-top: 0; }
-.colony-fields .field-label:has(textarea) { grid-column: 1 / -1; }
-/* Step Text (direct follow-up request: relocated between the Campaign Turn
-   and Campaign Milestones rows, so it now lives INSIDE .colony-fields'
-   grid) spans both columns like a textarea field does above, instead of
-   only occupying column 1 and pushing every field after it into the wrong
-   column. */
-.colony-fields .turn-step-text-row { grid-column: 1 / -1; }
-/* Campaign Turn + Turn Step widget (direct follow-up request: "move the
-   Turn Step button more to the left, aligned to Campaign Turn") — a flex
-   row spanning both grid columns, packing the two fields together by their
-   actual content width, instead of each sitting in its own 1fr grid
-   column (which pinned Turn Step to the fixed 50% column line regardless
-   of how narrow Campaign Turn's own content was, leaving a big dead gap
-   between them). align-items:flex-end lines up the number-stepper and the
-   ◂/▸ nav on the same baseline the way the two columns used to. flex-wrap
-   is deliberately nowrap (direct follow-up request — it was dropping Turn
-   Step to its own row on a narrow panel): .turn-step-current already wraps
-   its OWN text internally past ~30 characters, so the row itself never
-   needs the extra width a wrap would have bought it — min-width:0 on the
-   Turn Step field-label lets it actually shrink that far instead of
-   refusing to go below its content's natural min-content width. */
-.colony-turn-row { grid-column: 1 / -1; display: flex; align-items: flex-end; gap: var(--sp-6); flex-wrap: nowrap; }
+/* :has(textarea) alone never matched — Colony's own textarea-type fields
+   (Condition Notes, Notes) render as a contenteditable .rich-field div, not
+   a real <textarea>, so both sat side by side in the 2-col grid instead of
+   each getting its own full-width row (direct report: "make Condition
+   Notes and Notes separate rows"). */
+.colony-fields .field-label:has(textarea), .colony-fields .field-label:has(.rich-field) { grid-column: 1 / -1; }
+/* Campaign Turn + Turn Step widget, plus Step Text right below (direct
+   follow-up request: "move Campaign Turn, Turn Step and the... turn step
+   description above the Colony Turn Sheet section header") — this cluster
+   now renders BEFORE that collapsible section instead of inside its
+   .colony-fields grid, so it stays visible even with that section
+   collapsed; neither needs a grid-column span any more since they're not
+   grid children at all now, just plain block-level siblings above it.
+   Campaign Turn + Turn Step (direct follow-up request: "move the Turn Step
+   button more to the left, aligned to Campaign Turn") are a flex row
+   packing the two fields together by their actual content width, instead
+   of each sitting in its own 1fr grid column (which used to pin Turn Step
+   to the fixed 50% column line regardless of how narrow Campaign Turn's
+   own content was, leaving a big dead gap between them). align-items:
+   flex-end lines up the number-stepper and the ◂/▸ nav on the same
+   baseline the way the two grid columns used to. flex-wrap is deliberately
+   nowrap (direct follow-up request — it was dropping Turn Step to its own
+   row on a narrow panel): .turn-step-current already wraps its OWN text
+   internally past ~30 characters, so the row itself never needs the extra
+   width a wrap would have bought it — min-width:0 on the Turn Step
+   field-label lets it actually shrink that far instead of refusing to go
+   below its content's natural min-content width. */
+.colony-turn-row { display: flex; align-items: flex-end; gap: var(--sp-6); flex-wrap: nowrap; }
 .colony-turn-row > .field-label:last-child { min-width: 0; flex: 0 1 auto; }
 .colony-crew-list { display: flex; flex-direction: column; gap: var(--sp-2); }
 .colony-crew-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: var(--sp-2); align-items: center; }
+/* Direct follow-up request: a fixed 10-row grid (numbered index, no more
+   add/remove-row controls) instead of a growable list; the note field is a
+   plain expandable <textarea> (native resize:vertical drag handle — direct
+   follow-up request: "expandable... but just text and not a texteditor
+   formatting field", so no .mention-editor/toolbar here at all), starting
+   at a single line and growing only as far as the GM drags it. */
 .colony-encounter-list { display: flex; flex-direction: column; gap: var(--sp-2); }
-.colony-encounter-row { display: flex; align-items: center; gap: var(--sp-2); }
-.colony-encounter-row input[type="text"] { flex: 1 1 auto; min-width: 0; }
+.colony-encounter-row { display: flex; align-items: flex-start; gap: var(--sp-2); }
+.colony-encounter-index { flex: 0 0 auto; padding-top: 0.4rem; font-size: 0.75rem; color: var(--text-dim); min-width: 1.4rem; text-align: right; }
+.colony-encounter-row textarea { flex: 1 1 auto; min-width: 0; resize: vertical; overflow-y: auto; }
+.entity-chip-wrap { display: inline-flex; align-items: center; gap: 2px; }
 
 /* Turn Step widget (Colony) + Step Text row (design/adr/rules-profiles-
    multi-campaign.md) */
@@ -2133,12 +2262,33 @@ input[type="number"] { -moz-appearance: textfield; }
 .turn-step-text-body { flex: 1 1 auto; min-width: 0; }
 .turn-step-text-row .btn { flex: 0 0 auto; }
 
-/* Turn Step Settings tab — each group's reorderable step list. */
+/* Turn Step Settings tab — each group's reorderable step list. flex-wrap
+   (direct follow-up request: "revise the 'Move To' and 'Branches to'
+   dropdowns to be right-aligned icons that open a dropdown on the next
+   row if clicked into edit mode") is what lets .turn-step-edit-row below
+   force itself onto a fresh line without a separate grid/absolute layout —
+   same flex-basis:100%-forces-a-wrap technique this app already uses for
+   the rich-text toolbar's own reflow. */
 .turn-step-list { display: flex; flex-direction: column; gap: var(--sp-2); }
-.turn-step-row { display: flex; align-items: flex-start; gap: var(--sp-2); }
+.turn-step-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-2); }
 .turn-step-order { display: flex; flex-direction: column; flex: 0 0 auto; }
 .turn-step-row textarea { flex: 1 1 auto; min-width: 0; }
-.turn-step-branch { flex: 0 0 auto; white-space: nowrap; padding-top: var(--sp-1); }
+/* Per-step "attach Crew Tasks" checkbox (direct follow-up request: "make
+   the Crew Tasks a reusable functionality for other Turn Steps to be
+   added later") — a plain inline checkbox+label. */
+.turn-step-crew-tasks-toggle { flex: 0 0 auto; display: flex; align-items: center; gap: 0.3rem; white-space: nowrap; padding-top: var(--sp-1); cursor: pointer; }
+/* Right-aligned "Move to"/"Branches to" icon pair (direct follow-up
+   request, replacing the old always-visible inline dropdowns) — margin-
+   left:auto pushes this to the row's right edge, same "icon button motif"
+   every other make-a-change trigger in this app already uses. .active
+   (a step that already has a branchTo set, or whichever icon's own editor
+   is currently open) gets the same accent-border treatment other active
+   toggles use. */
+.turn-step-row-actions { flex: 0 0 auto; display: flex; gap: 0.2rem; margin-left: auto; align-self: flex-start; }
+.turn-step-row-actions .icon-btn.active { border-color: var(--accent-strong); color: var(--accent-strong); }
+/* The revealed dropdown itself — forced onto its own full-width row below
+   the main one via flex-basis:100% (see .turn-step-row's flex-wrap above). */
+.turn-step-edit-row { flex: 1 1 100%; margin-top: var(--sp-1); }
 
 /* Crew Tasks (design/adr/rules-profiles-multi-campaign.md, direct
    follow-up request) — Settings tab reuses .turn-step-row/-order/-list
@@ -2148,7 +2298,10 @@ input[type="number"] { -moz-appearance: textfield; }
 .crew-task-settings-row-body { flex: 1 1 auto; min-width: 0; }
 .crew-task-settings-row-body p { margin: 0 0 0.2rem; }
 
-/* Colony's Crew Tasks box (Daily Life step 2) */
+/* Colony's Crew Tasks box (attached per-step via showCrewTasks, direct
+   follow-up request) — sits directly below Step Text, both now rendered
+   above .colony-fields entirely (see the .colony-turn-row comment above),
+   so neither needs a grid-column span any more. */
 .crew-task-box { margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--border); }
 .crew-task-box h4 { margin: 0 0 var(--sp-2); font-size: 0.85rem; color: var(--accent); }
 .crew-task-buttons { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: var(--sp-2); }
@@ -2179,9 +2332,12 @@ input[type="number"] { -moz-appearance: textfield; }
 .trade-contract-payout { margin-left: auto; color: var(--accent-strong); font-weight: 700; }
 .trade-contract-route { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--sp-2); }
 
-/* Guide (docs/adr/0017: multi-doc tree, was one freeform field) */
-.guide-doc-head { margin-top: var(--sp-3); }
-.guide-title-input { width: 100%; box-sizing: border-box; font-size: 1rem; font-weight: 600; padding: 0.35rem 0.5rem; background: var(--bg-inset); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+/* Guide (docs/adr/0017: multi-doc tree, was one freeform field). Direct
+   follow-up request ("move the open/close arrow to the editor icons to the
+   right-aligned of the field label"): the title input and the rich-text
+   toolbar's collapse toggle now share this row, toggle right-aligned. */
+.guide-doc-head { margin-top: var(--sp-3); display: flex; align-items: center; gap: var(--sp-2); }
+.guide-title-input { flex: 1 1 auto; min-width: 0; box-sizing: border-box; font-size: 1rem; font-weight: 600; padding: 0.35rem 0.5rem; background: var(--bg-inset); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); }
 /* resize:vertical/overflow-y:auto now come from the base .mention-editor
    rule (every rich field gained a resize handle, direct follow-up
    request) — this just keeps Guide's own taller starting height. */

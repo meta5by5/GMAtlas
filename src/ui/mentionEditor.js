@@ -279,18 +279,20 @@ export function richToolbarToggleHTML(key, collapsed) {
   if (!key) return '';
   return `<button type="button" class="icon-btn rich-toolbar-toggle" data-rich-toolbar-toggle="${escAttr(key)}" title="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}" aria-label="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}">${collapsed ? '◂' : '▾'}</button>`;
 }
-// Direct follow-up request: the toggle no longer sits INSIDE the icon row
-// above the textbox — it's now a small overlay button pinned to the
-// textbox's own top-right corner (.rich-toolbar-corner-toggle, CSS
-// position:absolute against .rich-field, the shared wrapper every call
-// site already puts richToolbarHTML's output and the .mention-editor box
-// in together), the same corner convention .mention-editor's own native
-// resize handle already uses in the OPPOSITE corner. Rendered as a SIBLING
-// of .rich-toolbar (not a child of it) precisely so it anchors to
-// .rich-field as a whole rather than to the icon row's own (collapsible,
-// variable-height) box. Glyphs unified with richToolbarToggleHTML above
-// (direct follow-up request: "left arrow when collapsed, down arrow when
-// displayed") — was ▾/▴ (down when collapsed, up when expanded).
+// Rendered as a SIBLING of .rich-toolbar (not a child of it, .rich-toolbar-
+// corner-toggle) so CSS can lay it out independently of the icon row's own
+// (collapsible, variable-height) box — .rich-field (the shared wrapper
+// every call site puts richToolbarHTML's output and the .mention-editor box
+// in together) is a flex-wrap row that puts the icon row on its own full-
+// width line when expanded, then this toggle beside the editor on the next
+// line either way. Direct report/fix: it used to be a position:absolute
+// overlay pinned to the textbox's own top-right corner, which (while
+// collapsed, this app's default) sat directly on top of the editor's own
+// corner with nothing else in flow above it — silently eating clicks/
+// keystrokes meant for the text underneath. Glyphs unified with
+// richToolbarToggleHTML above (direct follow-up request: "left arrow when
+// collapsed, down arrow when displayed") — was ▾/▴ (down when collapsed, up
+// when expanded).
 function cornerToggleHTML(key, collapsed) {
   return key
     ? `<button type="button" class="icon-btn rich-toolbar-corner-toggle" data-rich-toolbar-toggle="${escAttr(key)}" title="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}" aria-label="${collapsed ? 'Show formatting buttons' : 'Hide formatting buttons'}">${collapsed ? '◂' : '▾'}</button>`
