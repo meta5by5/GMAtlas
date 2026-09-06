@@ -1668,22 +1668,23 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 /* Same wrap-to-fit posture as .character-sheet-stats above, for every
    remaining (track/text) field in a statblock — direct follow-up request. */
 .character-sheet-resources { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
-/* Content-sized instead of a fixed 5.2rem (direct follow-up request — "the
-   width of the text in the first row of the box"): the label's own
-   white-space:nowrap below sets the pill's natural width via fit-content;
-   .track-boxes keeps its own fixed 4.2rem (a dot-grid isn't text, and needs
-   a stable area regardless of the label), so a short label still gets a
-   pill wide enough for its box-grid, while a long label widens the pill to
-   fit itself. */
+/* Direct follow-up request: "keep all the buttons in the tracker on the
+   same line as the title... the appearance used several builds ago" — the
+   label sits beside the box row on one line (same recipe
+   .party-stat-track-expansion already uses: label + a never-wrapping
+   .track-boxes row, min-width:0 on the flex parent so overflow-x can
+   actually engage) instead of the label centered on its own line above a
+   box grid that wrapped onto a second line for any track past ~4-5
+   points. */
 .track-row-compact {
-  display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 0 auto;
-  width: fit-content; max-width: 100%; margin-bottom: 0; padding: 0.25rem 0.5rem;
+  display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); flex: 0 0 auto;
+  width: fit-content; max-width: 100%; min-width: 0; margin-bottom: 0; padding: 0.25rem 0.5rem;
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset);
 }
-.track-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.68rem; white-space: nowrap; line-height: 1.2; }
-.track-row-compact .track-widget { flex-direction: column-reverse; align-items: center; }
-.track-row-compact .track-boxes { flex-wrap: wrap; justify-content: center; width: 4.2rem; }
-.track-row-compact .track-box { width: 18px; height: 18px; font-size: 0.62rem; }
+.track-row-compact .statblock-key { font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.68rem; white-space: nowrap; line-height: 1.2; }
+.track-row-compact .track-widget { flex-wrap: nowrap; min-width: 0; }
+.track-row-compact .track-boxes { flex-wrap: nowrap; overflow-x: auto; }
+.track-row-compact .track-box { width: 18px; height: 18px; font-size: 0.62rem; flex: 0 0 auto; }
 /* Plain text/value field's own compact pill (direct follow-up request —
    textRow had no compact variant before; every statblock field now gets
    one). Same family as track-row-compact/attr-row-compact: content-sized
