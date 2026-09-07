@@ -2259,9 +2259,21 @@ input[type="number"] { -moz-appearance: textfield; }
    at a single line and growing only as far as the GM drags it. */
 .colony-encounter-list { display: flex; flex-direction: column; gap: var(--sp-2); }
 .colony-encounter-row { display: flex; align-items: flex-start; gap: var(--sp-2); }
+/* Direct follow-up request: reproduces the rulebook's own "Campaign
+   Lifeform Encounters table" three-column shape (% range / no. / entry) —
+   this new range column, plus the existing index column, both sit at
+   their own fixed width so they read as a stable table rather than
+   shifting per row; padding-top on both aligns them with the taller
+   thumbnail's own top edge instead of its vertically-centered name label. */
+.colony-encounter-range { flex: 0 0 auto; padding-top: 0.4rem; font-size: 0.75rem; color: var(--text-dim); min-width: 2.6rem; text-align: right; }
 .colony-encounter-index { flex: 0 0 auto; padding-top: 0.4rem; font-size: 0.75rem; color: var(--text-dim); min-width: 1.4rem; text-align: right; }
 .colony-encounter-row textarea { flex: 1 1 auto; min-width: 0; resize: vertical; overflow-y: auto; }
 .entity-chip-wrap { display: inline-flex; align-items: center; gap: 2px; }
+/* The Lifeform Encounters picker's own "Create New Lifeform" row (direct
+   follow-up request) — visually distinguished from a plain existing-entity
+   candidate below it, so rolling up a brand new creature never reads as
+   picking one already named that. */
+.entity-picker-row-create { color: var(--accent-strong); font-weight: 600; border-bottom: 1px solid var(--border); margin-bottom: 0.2rem; padding-bottom: 0.6rem; }
 
 /* Turn Step widget (Colony) + Step Text row (design/adr/rules-profiles-
    multi-campaign.md) */

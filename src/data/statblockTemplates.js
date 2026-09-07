@@ -73,6 +73,24 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
       { key: 'Notable Gear', kind: 'text' },
     ]),
   },
+  // Direct follow-up request ("fulfill the ruleset for encountering a new
+  // lifeform using the Generating Lifeforms rules on p.146 of Planetfall")
+  // — a Lifeform generated via the Colony tab's Lifeform Encounters picker
+  // (domain/colony.js's createGeneratedLifeform) gets this template's
+  // fields pre-filled from domain/lifeforms.js's rollLifeformProfile;
+  // editable in Settings like every other template here.
+  'planetfall-lifeform': {
+    label: 'Planetfall Lifeform',
+    fields: withDefaults([
+      { key: 'Speed', kind: 'attribute', rollMethod: 'none', format: 'inches' },
+      { key: 'Combat', kind: 'attribute', rollMethod: 'flat', target: 6 },
+      { key: 'Melee Damage', kind: 'text' },
+      { key: 'Toughness', kind: 'track', rollMethod: 'none', max: 5 },
+      { key: 'Armor / Notes', kind: 'text' },
+      { key: 'Special', kind: 'text' },
+      { key: 'KP', kind: 'attribute', rollMethod: 'none', format: 'plain' },
+    ]),
+  },
   vehicle: {
     label: 'Vehicle',
     fields: withDefaults([

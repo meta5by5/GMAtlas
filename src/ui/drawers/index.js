@@ -21,6 +21,7 @@ import { BUILD } from '../../core/buildInfo.js';
 import { getDocument, listDocuments, listDocumentMentions, allDocumentTags, filterDocuments, listReferenceDocuments } from '../../domain/documents.js';
 import { listPartyMembers, listPartyTrackers, gaugeWindow, listPartyHeadlineTracks } from '../../domain/party.js';
 import { COLONY_FIELDS, getColonyFields, listCrewRows, listLifeformEncounters, CREW_ROLES, listColonyEncounters } from '../../domain/colony.js';
+import { lifeformEncounterRangeLabel } from '../../domain/lifeforms.js';
 import { getMarket, priceAt, listCargoManifest, listContracts } from '../../domain/trade.js';
 import { COMMODITIES, findCommodity } from '../../data/commodities.js';
 import { THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
@@ -38,6 +39,7 @@ import { RULESETS, findRuleset, STARFORGED_PROGRESS_DIFFICULTIES, findProgressDi
 import { GEAR_TEMPLATE_SYSTEMS, findGearTemplate } from '../../data/gearTemplates.js';
 import { GEAR_CATALOG, findCatalogItem } from '../../data/gearCatalog.js';
 import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel, resolveProviderChoice, isGameSystemActivated } from '../../data/rulesConstitution.js';
+import { CONTENT_PACKS_MANIFEST } from '../../data/contentPacksManifest.js';
 import { CSS_TEMPLATES } from '../../data/cssTemplates.js';
 import { SOURCEBOOK_INVENTORY } from '../../data/sourcebookInventory.js';
 import { listGalleryImages, listGalleryTagVocabulary, getGalleryImage } from '../../domain/gallery.js';
@@ -1787,6 +1789,7 @@ const SETTINGS_TABS = [
   { id: 'genre-rules', label: 'Genre & Rules' },
   { id: 'trade-economy', label: 'Trade & Economy' },
   { id: 'reference-tools', label: 'Reference Tools' },
+  { id: 'licenses', label: 'Licenses' },
 ];
 
 function settings(doc, ui = {}) {
@@ -1863,6 +1866,7 @@ function settings(doc, ui = {}) {
     'reference-tools': () => `
       ${mechanicsIndexSection(doc, ui)}
       ${tocSection(doc, ui)}`,
+    licenses: () => licensesSection(ui),
   };
 
   return `${tabBar}${sections[activeTab]()}`;
@@ -2315,6 +2319,21 @@ function gameSystemActivationSection(doc) {
 // file at all," not "export an empty list."
 function contentPackSection(ui) {
   const flags = ui.contentPackFlags || { entities: false, guide: false, journal: false };
+  const importingIds = ui.contentPackImporting || new Set();
+  // Direct follow-up request: "include a list of available packs from the
+  // content-packs folder" — pre-built packs shipped with the app (data/
+  // contentPacksManifest.js), distinct from the manual export/import above
+  // (a GM's own ad-hoc file). Scoped to kind:'content-pack' only — the
+  // manifest's data-pack entries (HOSTILE's own canon-location zone files)
+  // keep their existing, separate import button elsewhere in Settings.
+  const availablePacks = CONTENT_PACKS_MANIFEST.filter((p) => p.kind === 'content-pack');
+  const packRows = availablePacks.map((p) => {
+    const importing = importingIds.has(p.id);
+    return `<li>
+      <b>${esc(p.title)}</b> — <span class="dim small">${esc(p.description)}</span>
+      <button type="button" class="btn ghost sm" data-content-pack-import="${esc(p.id)}" ${importing ? 'disabled' : ''}>${importing ? 'Importing…' : 'Import'}</button>
+    </li>`;
+  }).join('');
   return `
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Content Packs', 'settings-content-packs')}
@@ -2328,6 +2347,9 @@ function contentPackSection(ui) {
         <button class="btn" data-export-content-pack>Export Content Pack</button>
         <label class="btn ghost file-btn">Import Content Pack<input type="file" accept=".json,application/json" data-import-content-pack hidden></label>
       </div>
+      <h4 style="margin-top: var(--sp-3);">Available Packs</h4>
+      <p class="dim small">Same additive import as above, no dedup — re-importing a pack you already have creates a second copy of everything in it. Needs the app served over http(s) (<code>npm run serve</code>) — plain file:// can't fetch these.</p>
+      ${availablePacks.length ? `<ul class="rules-provider-legend">${packRows}</ul>` : '<p class="dim small">None yet.</p>'}
     </div>`;
 }
 
@@ -2351,6 +2373,41 @@ function sourcebookInventorySection(ui) {
       ${helpBody('settings-sourcebook-inventory', 'Every real PDF in the Reference Library (assets/docs/), and what\'s actually been authored from it so far — a sourcebook can sit in the library a long time before becoming in-app content, or ever. Per the copyright posture behind every ruleset addition here, "integrated"/"authored" content is always an original re-implementation of well-known concepts, never a transcription of a book\'s actual text or tables.', ui)}
       <ul class="rules-provider-legend">${rows}</ul>
     </div>`;
+}
+
+// Licenses tab (direct request): a read-only view of every real, installable
+// pack under /assets/ (data/contentPacksManifest.js — content packs AND
+// HOSTILE's own data-pack zone files), grouped by which ruleset it belongs
+// to (RULES_PROVIDERS' own id/label — not a duplicated registry). A
+// DIFFERENT, forward-looking concept from Sourcebook Inventory above (that
+// one tracks in-app-authored content's copyright posture; this one tracks
+// installable packs' availability) — "just a readonly list for now, but
+// will be used to verify what content is available to the user for
+// installation from the web server" (direct quote): licenseStatus exists
+// so a future server-verified entitlement check has somewhere real to
+// write its answer, not enforced here today.
+function licensesSection(ui) {
+  const byRuleset = new Map();
+  for (const p of CONTENT_PACKS_MANIFEST) {
+    if (!byRuleset.has(p.ruleset)) byRuleset.set(p.ruleset, []);
+    byRuleset.get(p.ruleset).push(p);
+  }
+  const groups = [...byRuleset.entries()].map(([rulesetId, packs]) => {
+    const label = (RULES_PROVIDERS[rulesetId] && RULES_PROVIDERS[rulesetId].label) || rulesetId;
+    const rows = packs.map((p) => `
+      <li><b>${esc(p.title)}</b> <span class="dim small">(${esc(p.kind)}, ${esc(p.licenseStatus)})</span> — <span class="dim small">${esc(p.description)}</span></li>`).join('');
+    return `
+      <div class="settings-group">
+        <h4>${esc(label)}</h4>
+        <ul class="rules-provider-legend">${rows}</ul>
+      </div>`;
+  }).join('');
+  return `
+    <div class="settings-group">
+      ${sectionHeadRow('h3', 'Licenses', 'settings-licenses')}
+      ${helpBody('settings-licenses', 'Every content pack and data pack shipped under /assets/, grouped by the ruleset it belongs to. Read-only for now — a future update will check this against your actual license before allowing a pack to install from the web server.', ui)}
+    </div>
+    ${groups}`;
 }
 
 // Trade Economy Model (docs/adr/0013-trade-economy-types.md): a Location's
@@ -3071,6 +3128,34 @@ function crewCharacterThumb(doc, rowId, characterId) {
   </div>`;
 }
 
+// A Lifeform Encounters row's thumbnail (direct follow-up request: "add a
+// #lifeform thumbnail... between the index number and the text field. This
+// replaces the '+' and its functionality at the end of the row") — same
+// crewCharacterThumb shape immediately above: unassigned shows a dashed
+// "+" circle opening the existing colony-encounter::<rowId> entity picker
+// (shell.js's renderEntityPickerOverlay prepends a "Create New Lifeform"
+// option there — the Generating Lifeforms, p.146, roll path); assigned
+// shows the real photo (click opens the entity editor) plus a remove badge
+// reusing the already-wired data-colony-encounter-detach handler (clears
+// just this row's entityId, leaving its note and the row itself alone).
+function lifeformEncounterThumb(doc, rowId, entityId) {
+  const entity = entityId ? getEntity(doc, entityId) : null;
+  if (!entity) {
+    return `<button type="button" class="actor-thumb actor-thumb-add" data-entity-picker-open="colony-encounter::${esc(rowId)}" title="Select or generate a Lifeform">＋</button>`;
+  }
+  const img = entity.thumbnailId ? getGalleryImage(doc, entity.thumbnailId) : null;
+  const photo = img
+    ? `<img class="actor-thumb-photo" src="${esc(img.dataUrl)}" alt="">`
+    : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((entity.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
+  return `<div class="actor-thumb-wrap">
+    <div class="actor-thumb-circle">
+      <button type="button" class="actor-thumb" data-open-entity="${esc(entity.id)}" title="${esc(entity.name || 'Unnamed')}">${photo}</button>
+      <button type="button" class="actor-thumb-badge actor-thumb-badge-remove" data-colony-encounter-detach="${esc(rowId)}" title="Detach entity">✕</button>
+    </div>
+    <span class="actor-thumb-name">${esc(entity.name || 'Unnamed')}</span>
+  </div>`;
+}
+
 // The Colony tab (direct follow-up request — "the Colony panel" renamed
 // "Campaign," gains a Colony/Starship tab pair; "all the current
 // functionality remains on the Colony tab"): everything this panel already
@@ -3154,25 +3239,23 @@ function colonyTabHtml(doc, ui = {}) {
   // GM-authored rows (direct follow-up request: "default to 10 rows",
   // matching the physical rulebook table — no more add/remove-row controls,
   // just a permanent numbered grid backfilled by migrate.js/seeded by
-  // schema.js), each a numbered, expandable plain-text note plus an
-  // optional chip linking a specific Lifeform entity once identified in
-  // play (a small ✕ on the chip itself detaches it without touching the
-  // note or the row). Distinct from the always-on #lifeform/type filter
-  // below (listLifeformEncounters), which stays untouched as a separate
+  // schema.js), each row now reproducing the rulebook's own three-column
+  // "Campaign Lifeform Encounters table" shape (direct follow-up request):
+  // a fixed % range (lifeformEncounterRangeLabel, domain/lifeforms.js —
+  // the SAME ranges the header's own 🎲 roller resolves against), the 1-10
+  // index, a Composer-style thumbnail (lifeformEncounterThumb, below —
+  // replaces the old trailing "+"/entity-chip pair) and the free-text
+  // note. Distinct from the always-on #lifeform/type filter below
+  // (listLifeformEncounters), which stays untouched as a separate
   // "everything tagged/typed Lifeform" view.
   const encounters = listColonyEncounters(doc);
-  const encounterRows = encounters.map((row, i) => {
-    const linked = row.entityId ? getEntity(doc, row.entityId) : null;
-    const chip = linked
-      ? `<span class="entity-chip-wrap"><button type="button" class="entity-chip" data-open-entity="${esc(linked.id)}">${esc(linked.name) || 'Unnamed'}</button><button type="button" class="icon-btn" data-colony-encounter-detach="${esc(row.id)}" title="Detach entity">✕</button></span>`
-      : '';
-    return `<div class="colony-encounter-row">
+  const encounterRows = encounters.map((row, i) => `
+    <div class="colony-encounter-row">
+      <span class="colony-encounter-range">${esc(lifeformEncounterRangeLabel(i))}</span>
       <span class="colony-encounter-index">${i + 1}.</span>
+      ${lifeformEncounterThumb(doc, row.id, row.entityId)}
       <textarea rows="1" data-colony-encounter-field="${esc(row.id)}::note" placeholder="Encounter…">${esc(row.note)}</textarea>
-      ${chip}
-      <button type="button" class="icon-btn" data-entity-picker-open="colony-encounter::${esc(row.id)}" title="Attach a Lifeform entity">＋</button>
-    </div>`;
-  }).join('');
+    </div>`).join('');
 
   const turnSheetCollapsed = isPartySectionCollapsed(ui, 'colonyTurnSheet', false);
   const campaignGuideCollapsed = isPartySectionCollapsed(ui, 'campaignGuide', false);
@@ -3187,7 +3270,7 @@ function colonyTabHtml(doc, ui = {}) {
     ${turnSheetCollapsed ? '' : `<div class="colony-fields">${fieldRows}</div>`}
     ${partySectionHeaderHtml('crewRoster', 'Crew Roster', crewRosterCollapsed, '<button class="chip" data-entity-picker-open="colony-crew">＋ Crew</button>')}
     ${crewRosterCollapsed ? '' : `<div class="colony-crew-list">${crewRows || '<p class="ws-placeholder">No crew rows yet.</p>'}</div>`}
-    ${partySectionHeaderHtml('lifeformEncounters', 'Lifeform Encounters', lifeformEncountersCollapsed)}
+    ${partySectionHeaderHtml('lifeformEncounters', 'Lifeform Encounters', lifeformEncountersCollapsed, '<button type="button" class="icon-btn" data-lifeform-encounter-roll title="Roll D100 on the Campaign Lifeform Encounters table (Planetfall p.146)">🎲</button>')}
     ${lifeformEncountersCollapsed ? '' : `
     <div class="colony-encounter-list">
       ${encounterRows}

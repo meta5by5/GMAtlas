@@ -8,8 +8,9 @@
 // genre-locked" means a different colony-sim ruleset gets its own module
 // and its own drawer section later, not a hardcoded branch in this one.
 
-import { listEntities } from './entities.js';
+import { listEntities, createEntity, getEntity, addEntityStatblockGroup, removeEntityStatblockGroup } from './entities.js';
 import { listPartyMembers } from './party.js';
+import { rollLifeformProfile, formatLifeformProfile } from './lifeforms.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 
@@ -268,4 +269,32 @@ export function updateColonyEncounter(campaign, id, patch) {
  *  "delete this row" action any more, just clearing what's on it. */
 export function detachColonyEncounterEntity(campaign, id) {
   return updateColonyEncounter(campaign, id, { entityId: '' });
+}
+
+/** Direct follow-up request — "fulfill the ruleset for encountering a new
+ *  lifeform using the Generating Lifeforms rules on p.146 of Planetfall":
+ *  creates a new `lifeform` entity, rolls its full profile
+ *  (domain/lifeforms.js), replaces the auto-attached generic Bestiary
+ *  group with one populated `'planetfall-lifeform'` group (same "create
+ *  entity, then fill a group's fields by key" shape entities.js's own
+ *  createItemFromCatalog already uses), and links it to the target
+ *  encounter row — its `note` gets the same one-line summary the
+ *  rulebook's own example table entries use, so the row reads correctly
+ *  even without opening the entity. */
+export function createGeneratedLifeform(campaign, rowId, name, rng = Math.random) {
+  const { campaign: withEntity, id } = createEntity(campaign, { type: 'lifeform', name });
+  const profile = rollLifeformProfile(rng);
+  let next = removeEntityStatblockGroup(withEntity, id, 0);
+  next = addEntityStatblockGroup(next, id, 'npc', 'planetfall-lifeform');
+  const entity = getEntity(next, id);
+  const group = entity.statblocks[entity.statblocks.length - 1];
+  const setField = (key, value) => { const f = group.fields.find((fl) => fl.key === key); if (f) f.value = value; };
+  setField('Speed', profile.speed);
+  setField('Combat', profile.combat);
+  setField('Melee Damage', `+${profile.meleeDamage}`);
+  setField('Toughness', profile.toughness);
+  setField('Armor / Notes', profile.toughnessNote);
+  setField('Special', [...profile.specialAttacks, ...(profile.uniqueAbility ? [profile.uniqueAbility] : [])].join(', '));
+  setField('KP', profile.kp);
+  return updateColonyEncounter(next, rowId, { entityId: id, note: formatLifeformProfile(name, profile) });
 }

@@ -2199,7 +2199,8 @@ test('setPartyStarship tags the entity #starship, adds an "Owns" Party relations
 });
 
 // --- colony (5PFH Planetfall turn sheet + crew + lifeform filter) ----------
-import { COLONY_FIELDS, setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, listLifeformEncounters, listColonyEncounters, updateColonyEncounter, detachColonyEncounterEntity, MAX_ENCOUNTERS, syncCrewRosterWithParty } from '../src/domain/colony.js';
+import { COLONY_FIELDS, setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, listLifeformEncounters, listColonyEncounters, updateColonyEncounter, detachColonyEncounterEntity, MAX_ENCOUNTERS, syncCrewRosterWithParty, createGeneratedLifeform } from '../src/domain/colony.js';
+import { rollLifeformProfile, formatLifeformProfile, lifeformEncounterRangeLabel, resolveLifeformEncounterSlot } from '../src/domain/lifeforms.js';
 
 test('setColonyField coerces number fields and leaves text/textarea fields as strings', () => {
   let camp = defaultCampaign();
@@ -2292,6 +2293,102 @@ test('colony encounter rows default to a fixed 10-row grid, round-trip through u
   // Unknown id is a safe no-op, same as updateColonyEncounter's own guard.
   camp = detachColonyEncounterEntity(camp, 'nope');
   assert.equal(listColonyEncounters(camp).length, MAX_ENCOUNTERS);
+});
+
+// --- lifeforms (Planetfall "Generating Lifeforms," p.146) -----------------
+
+function rngFor(rolls) {
+  const vals = rolls.map((n) => (n - 1) / 100 + 0.005);
+  let i = 0;
+  return () => vals[i++];
+}
+
+test('rollLifeformProfile: no special attacks when neither Combat Skill nor Strike Power ends in 0/5', () => {
+  // rolls in order: mobility, combat, strike, toughness, unique (no
+  // special-attack rolls consumed since neither combat=51 nor strike=52
+  // ends in 0/5)
+  const profile = rollLifeformProfile(rngFor([52, 51, 52, 10, 10]));
+  assert.equal(profile.speed, 6);
+  assert.equal(profile.partiallyAirborne, false);
+  assert.equal(profile.combat, 1);
+  assert.equal(profile.meleeDamage, 1);
+  assert.equal(profile.toughness, 4);
+  assert.equal(profile.toughnessNote, '');
+  assert.equal(profile.kp, 0);
+  assert.deepEqual(profile.specialAttacks, []);
+  assert.equal(profile.uniqueAbility, null);
+});
+
+test('rollLifeformProfile: both Combat Skill and Strike Power ending in 0/5 rolls Special Attacks twice, deduping an identical result to one', () => {
+  // combat=30 (ends 0), strike=85 (ends 5) -> 2 special-attack rolls, both
+  // landing on 10 (Razor Claws, 01-15) -> deduped to a single entry
+  const profile = rollLifeformProfile(rngFor([52, 30, 85, 10, 10, 100, 35]));
+  assert.equal(profile.combat, 1);
+  assert.equal(profile.meleeDamage, 1);
+  assert.deepEqual(profile.specialAttacks, ['Razor Claws']);
+  assert.equal(profile.toughness, 5);
+  assert.equal(profile.kp, 1);
+  assert.equal(profile.uniqueAbility, 'Pull');
+});
+
+test('rollLifeformProfile: a mobility roll ending in 0/5 grants Partially Airborne', () => {
+  const profile = rollLifeformProfile(rngFor([25, 1, 1, 26, 91]));
+  assert.equal(profile.speed, 5);
+  assert.equal(profile.partiallyAirborne, true);
+  assert.equal(profile.combat, 0);
+  assert.equal(profile.meleeDamage, 0);
+  assert.equal(profile.toughness, 4);
+  assert.equal(profile.toughnessNote, 'Armor Saving Throw 5+');
+  assert.equal(profile.uniqueAbility, 'Knock Down');
+});
+
+test('formatLifeformProfile matches the rulebook\'s own example entries verbatim', () => {
+  const turbostone = {
+    speed: 7, partiallyAirborne: false, combat: 1, meleeDamage: 1,
+    toughness: 5, toughnessNote: '', kp: 0, specialAttacks: [], uniqueAbility: null,
+  };
+  assert.equal(formatLifeformProfile('Turbostone', turbostone),
+    `Nickname 'Turbostone': Speed 7", Combat +1, Melee +1 Damage, Toughness 5`);
+
+  const vaportrail = {
+    speed: 7, partiallyAirborne: false, combat: 1, meleeDamage: 1,
+    toughness: 4, toughnessNote: '', kp: 1, specialAttacks: ['Overpower'], uniqueAbility: 'Hinder',
+  };
+  assert.equal(formatLifeformProfile('Vaportrail', vaportrail),
+    `Nickname 'Vaportrail': Speed 7", Combat +1, Melee +1 Damage, Toughness 4, 1 KP, Special: Overpower, Hinder`);
+});
+
+test('lifeformEncounterRangeLabel/resolveLifeformEncounterSlot match the rulebook\'s fixed % breakdown', () => {
+  assert.equal(lifeformEncounterRangeLabel(0), '01-18');
+  assert.equal(lifeformEncounterRangeLabel(1), '19-32');
+  assert.equal(lifeformEncounterRangeLabel(9), '96-00');
+  assert.equal(resolveLifeformEncounterSlot(1), 1);
+  assert.equal(resolveLifeformEncounterSlot(18), 1);
+  assert.equal(resolveLifeformEncounterSlot(19), 2);
+  assert.equal(resolveLifeformEncounterSlot(44), 3);
+  assert.equal(resolveLifeformEncounterSlot(96), 10);
+  assert.equal(resolveLifeformEncounterSlot(100), 10);
+});
+
+test('createGeneratedLifeform creates a lifeform entity with one populated planetfall-lifeform statblock and links it to the target row', () => {
+  let camp = defaultCampaign();
+  const rowId = listColonyEncounters(camp)[3].id;
+  camp = createGeneratedLifeform(camp, rowId, 'Test Beast', makeRng(7));
+
+  const row = listColonyEncounters(camp).find((r) => r.id === rowId);
+  assert.ok(row.entityId);
+  assert.match(row.note, /^Nickname 'Test Beast': Speed \d"/);
+
+  const entity = getEntity(camp, row.entityId);
+  assert.equal(entity.type, 'lifeform');
+  assert.equal(entity.name, 'Test Beast');
+  assert.equal(entity.statblocks.length, 1);
+  assert.equal(entity.statblocks[0].templateId, 'planetfall-lifeform');
+  const fields = entity.statblocks[0].fields;
+  assert.ok([5, 6, 7].includes(fields.find((f) => f.key === 'Speed').value));
+  assert.ok([0, 1, 2].includes(fields.find((f) => f.key === 'Combat').value));
+  assert.ok([3, 4, 5].includes(fields.find((f) => f.key === 'Toughness').value));
+  assert.match(fields.find((f) => f.key === 'Melee Damage').value, /^\+[0-2]$/);
 });
 
 // --- guide (docs/adr/0017: multi-doc tree, was one freeform field) --------

@@ -1,0 +1,243 @@
+{
+  "app": "GMAtlas",
+  "kind": "content-pack",
+  "schemaVersion": 1,
+  "entities": [
+    {
+      "id": "ent_mtqhglw34k7g",
+      "type": "lifeform",
+      "name": "Turbostone",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T00:09:06.771Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "planetfall-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 7,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Melee Damage",
+              "value": "+1"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor / Notes",
+              "value": ""
+            },
+            {
+              "key": "Special",
+              "value": ""
+            },
+            {
+              "key": "KP",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqhglw3hcp0",
+      "type": "lifeform",
+      "name": "Vaportrail",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T00:09:06.771Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "planetfall-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 7,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Melee Damage",
+              "value": "+1"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor / Notes",
+              "value": ""
+            },
+            {
+              "key": "Special",
+              "value": "Overpower, Hinder"
+            },
+            {
+              "key": "KP",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqhglw4ldo1",
+      "type": "lifeform",
+      "name": "Sirenspine",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T00:09:06.772Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "planetfall-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Melee Damage",
+              "value": "+0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor / Notes",
+              "value": "Armor Saving Throw 5+"
+            },
+            {
+              "key": "Special",
+              "value": "Shoot, Pull"
+            },
+            {
+              "key": "KP",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqhglw5q3tz",
+      "type": "lifeform",
+      "name": "Golem",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T00:09:06.773Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "planetfall-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Melee Damage",
+              "value": "+0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor / Notes",
+              "value": "Armor Saving Throw 5+"
+            },
+            {
+              "key": "Special",
+              "value": "Terror"
+            },
+            {
+              "key": "KP",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

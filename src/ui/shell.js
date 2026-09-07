@@ -53,7 +53,8 @@ import {
   sanitizeExternalLinkUrl, mergeRefOverrides, referencedBlobKeys,
 } from '../domain/documents.js';
 import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue, setGaugeTrackerValue, ensurePartyStarforgedTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity, listPartyMembers, addPartyRelationship, removePartyRelationship, updatePartyRelationshipLabel, updatePartyRelationshipType, updatePartyRelationshipStrength, setPartyStarship, clearPartyStarship } from '../domain/party.js';
-import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, updateColonyEncounter, detachColonyEncounterEntity, listColonyEncounters, advanceCampaignTurnWithAccrual, formatTurnAdvanceNote, incrementCampaignMilestones, decrementCampaignMilestones, syncCrewRosterWithParty } from '../domain/colony.js';
+import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, updateColonyEncounter, detachColonyEncounterEntity, listColonyEncounters, advanceCampaignTurnWithAccrual, formatTurnAdvanceNote, incrementCampaignMilestones, decrementCampaignMilestones, syncCrewRosterWithParty, createGeneratedLifeform, listLifeformEncounters } from '../domain/colony.js';
+import { resolveLifeformEncounterSlot } from '../domain/lifeforms.js';
 import {
   getSector, listTouchedSectors, revealSector, surveySector, harvestSectorResource,
   setSectorNotes, setSectorOverlayIcon, setSectorCornerLabel, removeSectorCornerLabel,
@@ -74,6 +75,8 @@ import { generateConflictSeed } from '../domain/factionConflicts.js';
 import { importHostileLocations } from '../domain/hostileLocations.js';
 import { fetchHostileLocationsPack } from './hostileLocationsFetch.js';
 import { exportContentPack, importContentPack } from '../domain/contentPack.js';
+import { fetchJsonPack } from './contentPacksFetch.js';
+import { CONTENT_PACKS_MANIFEST } from '../data/contentPacksManifest.js';
 import { generateMission, formatMission, addMission, updateMissionStatus, removeMission } from '../domain/missions.js';
 import {
   getActiveGuideDoc, setGuideDocText, setActiveGuideId, createGuideDoc, renameGuideDoc,
@@ -449,6 +452,11 @@ function wtFeatureKindLabel(kind) { return WT_FEATURE_KIND_LABELS[kind] || kind;
 // campaign data itself (domain/contentPack.js's exportContentPack takes
 // this exact shape as its second argument).
 let contentPackFlags = { entities: false, guide: false, journal: false };
+// Direct follow-up request: "Available Packs" list (Settings > General) —
+// which manifest pack ids currently have a fetch in flight, mirroring
+// hostileLocationsImporting's own in-flight-guard role but keyed by id
+// since more than one pack can exist.
+let contentPackImporting = new Set();
 // Export Campaign JSON's opt-in "Include attached files" checkbox (off by
 // default — a GM transferring devices ticks it on deliberately, everyone
 // else keeps the small plain export). The size preview is computed async
@@ -2105,6 +2113,27 @@ function onClick(ev) {
   if (crewUnassign) return store.update((d) => updateCrewRow(d, crewUnassign.dataset.colonyCrewUnassign, { characterId: '' }));
   const encounterDetach = hit('[data-colony-encounter-detach]');
   if (encounterDetach) return store.update((d) => detachColonyEncounterEntity(d, encounterDetach.dataset.colonyEncounterDetach));
+  // Lifeform Encounters header's 🎲 (direct follow-up request): "roll D100
+  // on the Campaign Lifeform Encounters table... If the entry is filled,
+  // you encounter that Lifeform. If the entry is blank, proceed to
+  // generate a new Lifeform" (Planetfall p.146) — a real (unseeded) roll,
+  // resolved against the SAME fixed ranges the row's own % column shows.
+  // A filled row is just announced (no navigation — a plain toast, not
+  // forcing the GM off whatever they're doing); a blank row opens the
+  // exact same picker its own thumbnail's "+" does, scoped to that row.
+  const lifeformEncounterRoll = hit('[data-lifeform-encounter-roll]');
+  if (lifeformEncounterRoll) {
+    const d100 = Math.floor(Math.random() * 100) + 1;
+    const slot = resolveLifeformEncounterSlot(d100);
+    const row = listColonyEncounters(store.get())[slot - 1];
+    if (!row) return;
+    const entity = row.entityId ? getEntity(store.get(), row.entityId) : null;
+    if (entity) { toast(`Rolled ${d100} → #${slot}: ${entity.name || 'Unnamed'}`); return; }
+    toast(`Rolled ${d100} → #${slot} is blank — pick or generate a Lifeform`);
+    entityPicker = { entityType: 'colony-encounter', mode: 'colony-encounter', scope: row.id, query: '' };
+    renderEntityPickerOverlay();
+    return;
+  }
 
   // --- world tracker (requirements/PLANETFALL_world_tracker.md) ---
   // Direct follow-up request: a Journal entry for every discrete GM action
@@ -2926,6 +2955,37 @@ function onClick(ev) {
     conflictEscalationSuggestions = conflictEscalationSuggestions.filter((s) => !(s.conflictId === conflictId && s.eventId === eventId));
     return render();
   }
+  // Settings > General's "Available Packs" (direct follow-up request) —
+  // a manifest-listed content pack, fetched then handed straight to
+  // domain/contentPack.js's own importContentPack (no dedup, same
+  // always-additive posture the manual file-picker import already has).
+  const contentPackImportBtn = hit('[data-content-pack-import]');
+  if (contentPackImportBtn) {
+    const packId = contentPackImportBtn.dataset.contentPackImport;
+    const entry = CONTENT_PACKS_MANIFEST.find((p) => p.id === packId);
+    if (!entry || contentPackImporting.has(packId)) return;
+    contentPackImporting = new Set(contentPackImporting).add(packId);
+    renderDrawerBody();
+    fetchJsonPack(entry.file)
+      .then((pack) => {
+        let importedCount = 0;
+        store.update((d) => {
+          const before = (d.entities?.items || []).length;
+          const next = importContentPack(d, pack);
+          importedCount = (next.entities?.items || []).length - before;
+          return next;
+        });
+        contentPackImporting = new Set(contentPackImporting); contentPackImporting.delete(packId);
+        renderDrawerBody();
+        toast(importedCount ? `${importedCount} entit${importedCount === 1 ? 'y' : 'ies'} imported` : 'Nothing to import');
+      })
+      .catch((err) => {
+        contentPackImporting = new Set(contentPackImporting); contentPackImporting.delete(packId);
+        renderDrawerBody();
+        toast(`Import failed — ${err.message}`);
+      });
+    return;
+  }
   if (hit('[data-hostile-locations-import]')) {
     if (hostileLocationsImporting) return;
     hostileLocationsImporting = true;
@@ -3317,6 +3377,22 @@ function onClick(ev) {
   }
   const entityPickerCloseBtn = hit('[data-entity-picker-close]');
   if (entityPickerCloseBtn) { entityPicker = null; return renderEntityPickerOverlay(); }
+  // Lifeform Encounters picker's own "Create New Lifeform" row (direct
+  // follow-up request) — closes the picker and opens the same "type a
+  // name, commit" inline prompt thread-add/expedition-add/battlemap-add
+  // already use; commitInlinePrompt's own 'colony-encounter-lifeform-create'
+  // case is what actually runs the Generating Lifeforms (p.146) roll.
+  const lifeformGenerateBtn = hit('[data-lifeform-generate]');
+  if (lifeformGenerateBtn) {
+    const rowId = lifeformGenerateBtn.dataset.lifeformGenerate;
+    entityPicker = null;
+    renderEntityPickerOverlay();
+    openInlinePrompt('colony-encounter-lifeform-create', {
+      label: 'Lifeform name', placeholder: "e.g. Turbostone", meta: { rowId },
+      anchorRect: lifeformGenerateBtn.getBoundingClientRect(),
+    });
+    return;
+  }
   const entityPickerSelectBtn = hit('[data-entity-picker-select]');
   if (entityPickerSelectBtn) {
     const id = entityPickerSelectBtn.dataset.entityPickerSelect;
@@ -6018,6 +6094,12 @@ function commitInlinePrompt() {
     if (value) { store.update((d) => addThread(d, value)); toast('Thread added'); }
   } else if (kind === 'expedition-add') {
     if (value) { store.update((d) => createExpedition(d, value)); toast('Expedition added'); }
+  } else if (kind === 'colony-encounter-lifeform-create') {
+    // Lifeform Encounters row's "Create New Lifeform" (direct follow-up
+    // request) — runs the actual Generating Lifeforms procedure (Planetfall
+    // p.146, domain/colony.js's createGeneratedLifeform), real (unseeded)
+    // randomness, same as every other in-play roll this app makes.
+    if (value) { store.update((d) => createGeneratedLifeform(d, meta.rowId, value)); toast('Lifeform generated (Planetfall p.146 tables)'); }
   } else if (kind === 'foreshadowing-add') {
     if (values.text) { store.update((d) => addForeshadowing(d, values.text, values.payoffNote)); toast('Planted'); }
   } else if (kind === 'foreshadowing-paidoff') {
@@ -6681,11 +6763,16 @@ function renderEntityPickerOverlay() {
     candidates = listEntities(doc, ['conflict']).filter((c) => !attachedIds.has(c.id));
     emptyMessage = 'No available Conflicts — add one in Cast first.';
   } else if (entityPicker.entityType === 'colony-encounter') {
-    // Colony's Lifeform Encounters row "+" — every Lifeform entity, direct
-    // follow-up request (no exclusion of already-linked ones: the same
-    // Lifeform can plausibly show up in more than one logged encounter).
-    candidates = listEntities(doc, ['lifeform']);
-    emptyMessage = 'No Lifeform entities yet — add one in Cast first.';
+    // Colony's Lifeform Encounters row thumbnail/header dice roller (direct
+    // follow-up request) — every #lifeform entity (listLifeformEncounters
+    // also catches legacy #lifeform-TAGGED entities, not just type:
+    // 'lifeform') not already assigned to some OTHER encounter row, same
+    // exclusivity convention colony-crew-assign already uses. The "Create
+    // New Lifeform" option (renderEntityPickerOverlay, below) is prepended
+    // only for this entityType.
+    const assignedIds = new Set(listColonyEncounters(doc).map((r) => r.entityId).filter(Boolean));
+    candidates = listLifeformEncounters(doc).filter((l) => !assignedIds.has(l.id));
+    emptyMessage = 'No available Lifeform entities — every one is already assigned, or add one in Cast first.';
   } else if (entityPicker.entityType === 'location-current') {
     const scenes = doc.scenes || [];
     const scene = scenes[scenes.length - 1];
@@ -6737,9 +6824,18 @@ function renderEntityPickerOverlay() {
   candidates = candidates
     .filter((n) => !query || (n.name || '').toLowerCase().includes(query))
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-  resultsEl.innerHTML = candidates.length
+  // Direct follow-up request: "clicking an unpopulated thumbnail should
+  // allow selection from #lifeforms with additional option to create a new
+  // lifeform" — prepended above the plain candidate list, only for the
+  // Lifeform Encounters picker; data-lifeform-generate's own click handler
+  // opens the name prompt that actually runs the Generating Lifeforms
+  // (Planetfall p.146) roll, via createGeneratedLifeform.
+  const createLifeformBtn = entityPicker.entityType === 'colony-encounter'
+    ? `<button type="button" class="entity-picker-row entity-picker-row-create" data-lifeform-generate="${escapeHtml(entityPicker.scope)}">✨ Create New Lifeform (roll stats — Planetfall p.146)</button>`
+    : '';
+  resultsEl.innerHTML = createLifeformBtn + (candidates.length
     ? candidates.map((n) => `<button type="button" class="entity-picker-row" data-entity-picker-select="${escapeHtml(n.id)}">${escapeHtml(n.name || 'Unnamed')}</button>`).join('')
-    : `<p class="dim small">${escapeHtml(emptyMessage)}</p>`;
+    : `<p class="dim small">${escapeHtml(emptyMessage)}</p>`);
 }
 
 
@@ -7043,7 +7139,7 @@ function buildDrawerUi() {
     journalEditOpen, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
-    contentPackFlags, hostileLocationsImporting, exportIncludeAttachments, exportAttachmentsPreview,
+    contentPackFlags, contentPackImporting, hostileLocationsImporting, exportIncludeAttachments, exportAttachmentsPreview,
     worldTrackerTab, worldTrackerSelectedSector, worldTrackerMigrateOpen, worldTrackerCornerLabelsOpen,
     expandedTurnStepGroups, editingTurnStepListId, turnStepListsCollapsed, turnStepMoveEditOpen, turnStepBranchEditOpen, crewTaskSelectedId, crewTaskSelectedMemberId, colonyPanelTab,
     // Faction Events' own docked-in-WHERE state (see factionEventsDockedInWhere's
