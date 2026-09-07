@@ -199,6 +199,16 @@ export function migrateDocument(doc, now = new Date().toISOString()) {
     d.colony.encounters.push({ id: `enc_${Date.now().toString(36)}_${n}_${Math.random().toString(36).slice(2, 6)}`, note: '', entityId: '' });
   }
 
+  // Combat Initiative Tracker (direct request) — additive backfill for any
+  // campaign predating this feature, same posture as Colony Encounters
+  // just above. activeEntryId (direct follow-up request — the "active
+  // combatant" highlight) backfilled separately since a campaign could
+  // already have real entries from before that follow-up landed.
+  if (!d.combatTracker || typeof d.combatTracker !== 'object' || !Array.isArray(d.combatTracker.entries)) {
+    d.combatTracker = { entries: [], activeEntryId: null };
+  }
+  if (!('activeEntryId' in d.combatTracker)) d.combatTracker.activeEntryId = null;
+
   // Turn Step Lists (direct follow-up request: "create an inventory of Turn
   // Step List profiles managed in Settings"): turnStepProgress used to be
   // one flat { groupId, stepIndex, returnStack } — now it's slot-keyed

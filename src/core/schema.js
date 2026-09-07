@@ -171,6 +171,17 @@ export function defaultCampaign(now = new Date().toISOString()) {
     // brand-new campaign).
     colony: { fields: {}, crew: [], encounters: Array.from({ length: 10 }, () => ({ id: uid('enc'), note: '', entityId: '' })) },
 
+    // Combat Initiative Tracker (direct request) — an ordered list of
+    // {id, entityId} rows, own stable row id distinct from the referenced
+    // entity (same shape Colony's Crew Roster/Encounters rows already
+    // use). Real per-campaign state, survives reload; the panel's own
+    // open/closed visibility is ephemeral UI state (shell.js), not stored
+    // here. activeEntryId (direct follow-up request: "click-to-highlight
+    // ... 'active combatant'") is which row's own id is the current turn
+    // pointer, or null if none is marked — also real, persisted state, so
+    // a GM reloading mid-fight doesn't lose track of whose turn it was.
+    combatTracker: { entries: [], activeEntryId: null },
+
     // Turn Step workflow PLAY POSITION (design/adr/rules-profiles-multi-
     // campaign.md) — which step the GM is currently on, real per-campaign
     // state (unlike the step DEFINITIONS themselves, which live in the

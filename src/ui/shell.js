@@ -88,7 +88,8 @@ import { addTemplateSystem, addTemplateField, updateTemplateField, removeTemplat
 import { universalSearch } from '../domain/search.js';
 import { positionCardHtml, composerBodyHtml, navigatorBodyHtml } from './workspace/index.js';
 import { renderCopilot } from './copilotPanel.js';
-import { renderDrawer, formatBytes, helpToggle } from './drawers/index.js';
+import { renderDrawer, formatBytes, helpToggle, partyMemberCard } from './drawers/index.js';
+import { listCombatTrackerEntries, addCombatTrackerEntity, removeCombatTrackerEntry, moveCombatTrackerEntry, clearCombatTracker, getCombatTrackerActiveEntryId, setCombatTrackerActiveEntry } from '../domain/combatTracker.js';
 import { renderFactionEvents } from './drawers/factionEvents.js';
 import { renderSearchPanel } from './searchPanel.js';
 import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
@@ -318,6 +319,14 @@ const SHIFT_PROMPT_PLACEHOLDERS = {
 // side-by-side panels competing with the Co-Pilot/doc-viewer regions.
 let openDrawers = [];
 let activeDrawer = null;
+// Direct follow-up request: "remember the scroll position of drawers in
+// the tab menu for easier navigation when toggling back and forth" —
+// .mc-drawer's own scrollTop (the actual scrolling element; .mc-drawer-
+// body itself has no overflow of its own) keyed by drawer id, restored on
+// switching back to a previously-visited tab instead of always resetting
+// to the top. Ephemeral, not persisted campaign data.
+let drawerScrollPositions = new Map();
+let lastRenderedDrawerId = null;
 // Hides the main drawer panel entirely (a floating ☰ icon appears in its
 // place) WITHOUT closing anything in openDrawers — "let me see the
 // workspace behind this for a second" without losing tabs/scroll/filter
@@ -873,6 +882,11 @@ let diceRollerPool = [];
 let diceRollerPoolSelected = null;
 let diceRollerCustomMode = false;
 let diceRollerCustomText = '';
+// Combat Initiative Tracker (direct request) — panel visibility is
+// ephemeral UI state, same posture as diceRollerOpen right above; the
+// actual entity list/order lives in campaign.combatTracker (real,
+// persisted data, domain/combatTracker.js).
+let combatTrackerOpen = false;
 let focusInspectorNameNextRender = false; // ephemeral — set by clicking any data-open-entity link/chip, so Entity Detail's name field is focused+selected the moment it renders
 let focusInspectorRelationshipNextRender = false; // ephemeral — set by Current Location's "🔗" link (data-location-edit-relationships), so Entity Detail's "add relationship" type field is focused once it renders
 let entityDetailFocusEventId = ''; // ephemeral — set when a data-open-entity link also carries data-open-entity-event (a Faction Events turn's faction-name link); factionTurnSectionHtml highlights/expands that one Turn History entry
@@ -950,6 +964,7 @@ export function mountShell(el) {
         <img src="assets/d20-thm.png" alt="" width="32" height="32">
       </button>
       <div class="dice-roller-panel" data-dice-roller-panel hidden></div>
+      <div class="combat-tracker-panel" data-combat-tracker-panel data-drop-combat-tracker hidden></div>
       <div class="image-lightbox-overlay" data-image-lightbox-overlay hidden aria-label="Full-size image">
         <button type="button" class="icon-btn image-lightbox-close" data-image-lightbox-close aria-label="Close">✕</button>
         <img class="image-lightbox-img" data-image-lightbox-img src="" alt="">
@@ -1180,6 +1195,13 @@ function onClick(ev) {
   // notation tool, unrelated to the pool.
   if (hit('[data-dice-roller-toggle]')) { return diceRollerOpen ? closeDiceRoller() : openDiceRoller(); }
   if (hit('[data-dice-roller-close]')) return closeDiceRoller();
+  // Combat Initiative Tracker (direct follow-up request: no dedicated
+  // toggle icon — dragging an entity onto the dice roller icon, below, is
+  // the only way to open it; the panel's own ✕ is the only way to close).
+  if (hit('[data-combat-tracker-close]')) return closeCombatTracker();
+  if (hit('[data-combat-tracker-clear]')) return store.update((d) => clearCombatTracker(d));
+  const combatTrackerRemove = hit('[data-combat-tracker-remove]');
+  if (combatTrackerRemove) return store.update((d) => removeCombatTrackerEntry(d, combatTrackerRemove.dataset.combatTrackerRemove));
   const sidesBtn = hit('[data-dice-roller-sides]');
   if (sidesBtn) { diceRollerPool.push({ sides: Number(sidesBtn.dataset.diceRollerSides), modifier: 0 }); return renderDiceRollerPanel(); }
   // Clicking a pool chip SELECTS/highlights it (single-select, toggle off on
@@ -2065,8 +2087,24 @@ function onClick(ev) {
   if (partyMemberToggle) {
     const id = partyMemberToggle.dataset.partyMemberToggle;
     if (expandedPartyMembers.has(id)) expandedPartyMembers.delete(id); else expandedPartyMembers.add(id);
+    // partyMemberCard is ALSO reused verbatim by the Combat Initiative
+    // Tracker's own floating panel (a completely separate DOM subtree from
+    // the drawer body) — same "keep every positioned copy in sync"
+    // reasoning renderDrawerBody's own doc comment already documents for
+    // Composer/Navigator/Advisor.
+    renderCombatTrackerPanel();
     return renderDrawerBody();
   }
+  // Combat Initiative Tracker's own "active combatant" highlight (direct
+  // follow-up request: "click-to-highlight a record") — checked AFTER
+  // every more specific control a row can contain (open-entity, the name-
+  // toggle's own expand, the remove ✕ above) so this only ever fires for a
+  // click on the row's own background, never stealing one of theirs.
+  // Clicking the already-active row clears the highlight; clicking a
+  // different one moves it there instead (setCombatTrackerActiveEntry's
+  // own toggle logic) — only ever one active combatant at a time.
+  const combatTrackerRowToggle = hit('[data-combat-tracker-row-toggle]');
+  if (combatTrackerRowToggle) return store.update((d) => setCombatTrackerActiveEntry(d, combatTrackerRowToggle.dataset.combatTrackerRowToggle));
   // "+ Add NPC" (UX batch, same quick-create+tag shape Colony's own
   // add-character below uses) — a blank NPC, tagged #character so it
   // immediately satisfies listPartyMembers' existing filter.
@@ -3240,6 +3278,25 @@ function onClick(ev) {
     const sceneId = currentSceneId();
     if (!sceneId) return;
     return store.update((d) => rollNpcSceneField(d, sceneId, npcId, field));
+  }
+  // Composer's NPC scene-field popup "roll all" (direct follow-up
+  // request): a double-dice button, right-aligned just left of the
+  // collapse arrow, populates every one of the 5 oracle-seedable fields in
+  // one click instead of five individual 🎲 clicks — same
+  // rollNpcSceneField each field's own button already calls, just looped
+  // over all five keys inside one store.update so it's a single undo step.
+  const sceneNpcRollAll = hit('[data-scene-npc-roll-all]');
+  if (sceneNpcRollAll) {
+    const npcId = sceneNpcRollAll.dataset.sceneNpcRollAll;
+    const sceneId = currentSceneId();
+    if (!sceneId) return;
+    return store.update((d) => {
+      let next = d;
+      for (const field of ['disposition', 'motivation', 'threatRank', 'challenges', 'opportunities']) {
+        next = rollNpcSceneField(next, sceneId, npcId, field);
+      }
+      return next;
+    });
   }
   // "✕" on an NPC scene-detail oracle field (Disposition/Motivation/...,
   // direct follow-up request) — blanks it the same way clearing the input
@@ -5418,6 +5475,10 @@ const BATTLEMAP_ICON_DRAG_TYPE = 'application/x-gmatlas-battlemap-icon';
 // from; the destination list comes from whichever [data-drop-actor-group]
 // the drop landed on.
 const ACTOR_DRAG_TYPE = 'application/x-gmatlas-actor';
+// Combat Initiative Tracker's own row reorder (direct request) — carries
+// just the row's own stable entry id (domain/combatTracker.js), dragged
+// from its left-aligned handle onto another row's own drop target.
+const COMBAT_TRACKER_ENTRY_DRAG_TYPE = 'application/x-gmatlas-combat-tracker-entry';
 
 function onDragStart(ev) {
   const guideSrc = ev.target.closest('[data-drag-guide-node]');
@@ -5437,6 +5498,13 @@ function onDragStart(ev) {
   const actorSrc = ev.target.closest('[data-drag-actor]');
   if (actorSrc) {
     ev.dataTransfer.setData(ACTOR_DRAG_TYPE, actorSrc.dataset.dragActor);
+    ev.dataTransfer.effectAllowed = 'move';
+    return;
+  }
+
+  const combatTrackerEntrySrc = ev.target.closest('[data-drag-combat-tracker-entry]');
+  if (combatTrackerEntrySrc) {
+    ev.dataTransfer.setData(COMBAT_TRACKER_ENTRY_DRAG_TYPE, combatTrackerEntrySrc.dataset.dragCombatTrackerEntry);
     ev.dataTransfer.effectAllowed = 'move';
     return;
   }
@@ -5461,6 +5529,21 @@ function onDragOver(ev) {
     const target = ev.target.closest('[data-drop-guide-node]');
     if (target) { ev.preventDefault(); target.classList.add('drop-hover'); }
     return;
+  }
+  // Combat Initiative Tracker (direct request, no separate toggle icon —
+  // direct follow-up request: "just open the combat tracker window when a
+  // thumbnail is dragged and dropped onto the dice roller icon"): dragging
+  // any entity thumbnail onto the EXISTING dice-roller-toggle button opens
+  // the tracker and adds it; "or just drop into the open initiative
+  // tracker, when open" is the panel's own body (data-drop-combat-tracker).
+  if (types.includes(COMBAT_TRACKER_ENTRY_DRAG_TYPE)) {
+    const reorderTarget = ev.target.closest('[data-drop-combat-tracker-entry]');
+    if (reorderTarget) { ev.preventDefault(); reorderTarget.classList.add('drop-hover'); }
+    return;
+  }
+  if (types.includes(ACTOR_DRAG_TYPE) || types.includes(ENTITY_DRAG_TYPE)) {
+    const trackerTarget = ev.target.closest('[data-dice-roller-toggle], [data-drop-combat-tracker]');
+    if (trackerTarget) { ev.preventDefault(); trackerTarget.classList.add('drop-hover'); return; }
   }
   if (types.includes(BATTLEMAP_ICON_DRAG_TYPE) || types.includes(ENTITY_DRAG_TYPE)) {
     const bmTarget = ev.target.closest('[data-drop-battlemap]');
@@ -5500,6 +5583,41 @@ function onDrop(ev) {
     const target = ev.target.closest('[data-drop-guide-node]');
     if (target) { ev.preventDefault(); target.classList.remove('drop-hover'); completeGuideNodeDrop(target, guideNodeId); }
     return;
+  }
+  // Combat Initiative Tracker's own row reorder — checked before anything
+  // else drag-related below, same early-and-return shape guideNodeId above
+  // uses.
+  const combatTrackerEntryRef = ev.dataTransfer.getData(COMBAT_TRACKER_ENTRY_DRAG_TYPE);
+  if (combatTrackerEntryRef) {
+    const reorderTarget = ev.target.closest('[data-drop-combat-tracker-entry]');
+    if (reorderTarget) {
+      ev.preventDefault();
+      reorderTarget.classList.remove('drop-hover');
+      completeCombatTrackerReorder(reorderTarget.dataset.dropCombatTrackerEntry, combatTrackerEntryRef);
+    }
+    return;
+  }
+  // Combat Initiative Tracker's own "add an entity" (direct request: "drag
+  // any entity thumbnail onto the dice icon to open and start populating
+  // the initiative tracker or just drop into the open initiative tracker,
+  // when open") — checked before the WHO/WHERE actor-group handling below
+  // so a drop landing specifically on the icon/panel doesn't also fall
+  // through into that unrelated logic. ACTOR_DRAG_TYPE's payload is
+  // "kind::npcId" (same shape completeActorDrop already parses); an entity
+  // already in the tracker is a safe no-op (addCombatTrackerEntity's own
+  // dedup-by-entityId).
+  const combatTrackerDropTarget = ev.target.closest('[data-dice-roller-toggle], [data-drop-combat-tracker]');
+  if (combatTrackerDropTarget) {
+    const actorRefForTracker = ev.dataTransfer.getData(ACTOR_DRAG_TYPE);
+    const entityIdForTracker = ev.dataTransfer.getData(ENTITY_DRAG_TYPE);
+    const idToAdd = actorRefForTracker ? actorRefForTracker.split('::')[1] : entityIdForTracker;
+    if (idToAdd) {
+      ev.preventDefault();
+      combatTrackerDropTarget.classList.remove('drop-hover');
+      openCombatTracker();
+      store.update((d) => addCombatTrackerEntity(d, idToAdd));
+      return;
+    }
   }
   const actorRef = ev.dataTransfer.getData(ACTOR_DRAG_TYPE);
   if (actorRef) {
@@ -5547,6 +5665,17 @@ function onDrop(ev) {
 // (the "+" picker's filtering, and Introduce NPC's own routing) — once an
 // Actor is in the scene, the GM can drag it anywhere, including a
 // #character NPC into Bystanders (explicitly asked for).
+// Combat Initiative Tracker's own left-aligned drag handle (direct
+// request) — repositions the dragged row to wherever the drop landed,
+// resolved to that row's CURRENT index (moveCombatTrackerEntry's own
+// splice-remove-then-insert already handles the shift correctly).
+function completeCombatTrackerReorder(targetEntryId, draggedEntryId) {
+  if (!targetEntryId || !draggedEntryId || targetEntryId === draggedEntryId) return;
+  const toIndex = listCombatTrackerEntries(store.get()).findIndex((e) => e.id === targetEntryId);
+  if (toIndex === -1) return;
+  store.update((d) => moveCombatTrackerEntry(d, draggedEntryId, toIndex));
+}
+
 function completeActorDrop(toKind, actorRef) {
   const [fromKind, npcId] = actorRef.split('::');
   if (!fromKind || !npcId || !toKind || fromKind === toKind) return;
@@ -6365,6 +6494,12 @@ function render() {
   const copilotTitleEl = root.querySelector('[data-copilot-title]');
   if (copilotTitleEl) copilotTitleEl.textContent = advisorMeta.label;
   root.querySelector('[data-copilot]').dataset.open = String(copilotOpen);
+  // Combat Initiative Tracker (direct request) — a completely separate,
+  // independently-positioned DOM subtree from the drawer body/Composer/
+  // Advisor, so it needs its own explicit refresh on every full render
+  // too, not just its own local open/close/remove handlers, or an entity
+  // edited elsewhere while it floats open would go stale.
+  renderCombatTrackerPanel();
 
   const edge = root.querySelector('[data-edge]');
   // The header's Settings gear (.settings-menu-wrap) physically relocates
@@ -6943,6 +7078,62 @@ function closeDiceRoller() {
   diceRollerOpen = false;
   renderDiceRollerPanel();
 }
+
+// Combat Initiative Tracker (direct request; no dedicated toggle icon of
+// its own — direct follow-up request: "just open the combat tracker
+// window when a thumbnail is dragged and dropped onto the dice roller
+// icon" — see onDragOver/onDrop's own [data-dice-roller-toggle] handling).
+// Same fixed-floating-panel shape renderDiceRollerPanel establishes, just
+// with no matching toggle button of its own to keep an aria-expanded
+// attribute on. Each row reuses partyMemberCard verbatim (drawers/index.js
+// — entity-type-agnostic already, no changes needed for an enemy vs. a
+// party member) wrapped in a left-aligned drag handle (the row's own
+// reorder trigger) and a remove ✕ (removes just this row, never the
+// entity itself). Called both from local-only handlers (close/expand) AND
+// unconditionally from the bottom of render() (see its own call site) so
+// an entity edited elsewhere while this panel floats open never goes
+// stale — same reasoning renderDrawerBody's own doc comment already gives
+// for keeping an independently-positioned copy in sync.
+function renderCombatTrackerPanel() {
+  const panel = root && root.querySelector('[data-combat-tracker-panel]');
+  if (!panel) return;
+  panel.hidden = !combatTrackerOpen;
+  if (!combatTrackerOpen) { panel.innerHTML = ''; return; }
+  const doc = store.get();
+  const ui = buildDrawerUi();
+  const entries = listCombatTrackerEntries(doc);
+  const activeEntryId = getCombatTrackerActiveEntryId(doc);
+  const rows = entries.map((entry) => {
+    const entity = getEntity(doc, entry.entityId);
+    if (!entity) return '';
+    const isActive = entry.id === activeEntryId;
+    return `
+      <div class="combat-tracker-row ${isActive ? 'active' : ''}" data-drop-combat-tracker-entry="${escapeHtml(entry.id)}" data-combat-tracker-row-toggle="${escapeHtml(entry.id)}" title="${isActive ? 'Click to clear the active combatant' : 'Click to mark as the active combatant'}">
+        <span class="combat-tracker-handle" draggable="true" data-drag-combat-tracker-entry="${escapeHtml(entry.id)}" title="Drag to reorder">⠿</span>
+        <div class="combat-tracker-card-wrap">${partyMemberCard(entity, doc, ui)}</div>
+        <button type="button" class="icon-btn" data-combat-tracker-remove="${escapeHtml(entry.id)}" title="Remove from tracker">✕</button>
+      </div>`;
+  }).join('');
+  panel.innerHTML = `
+    <div class="combat-tracker-head">
+      <h3>Combat Tracker</h3>
+      <span class="entity-chip-row">
+        <button type="button" class="btn ghost sm" data-combat-tracker-clear ${entries.length ? '' : 'disabled'}>Clear</button>
+        <button type="button" class="icon-btn" data-combat-tracker-close aria-label="Close">✕</button>
+      </span>
+    </div>
+    <div class="combat-tracker-list">
+      ${rows || '<p class="dim small">Drag an entity thumbnail here, or onto the dice icon, to add it.</p>'}
+    </div>`;
+}
+function openCombatTracker() {
+  combatTrackerOpen = true;
+  renderCombatTrackerPanel();
+}
+function closeCombatTracker() {
+  combatTrackerOpen = false;
+  renderCombatTrackerPanel();
+}
 function rollFromDiceRoller() {
   if (diceRollerCustomMode) {
     const parsed = parseDiceNotation(diceRollerCustomText);
@@ -7249,7 +7440,21 @@ function hasPendingAdvisorDecision(doc) {
 function renderDrawerBody() {
   const doc = store.get();
   const body = root && root.querySelector('[data-drawer-body]');
+  const drawerEl = root && root.querySelector('[data-drawer]');
+  // Direct follow-up request: remember each drawer's own scroll position
+  // across a tab switch — captured/restored here since every drawer-body
+  // update (this function's own two call sites: the full render() and any
+  // local-toggle-only re-render) funnels through it. Saves the OUTGOING
+  // drawer's scrollTop (still accurate — the body hasn't been replaced
+  // yet) only when the active drawer identity actually changed since the
+  // last time this ran, not on every incidental re-render of the SAME
+  // drawer (which already keeps its own scroll position for free, since
+  // replacing a child's innerHTML doesn't reset an ancestor's scrollTop).
+  const switchedDrawer = !!drawerEl && activeDrawer !== lastRenderedDrawerId;
+  if (switchedDrawer && lastRenderedDrawerId) drawerScrollPositions.set(lastRenderedDrawerId, drawerEl.scrollTop);
   if (body) replaceBodyPreservingScroll(body, renderActiveDrawerHtml(doc));
+  if (switchedDrawer && drawerEl) drawerEl.scrollTop = drawerScrollPositions.get(activeDrawer) || 0;
+  lastRenderedDrawerId = activeDrawer;
   // Rules Profile Storyboard positions (design/adr/rules-profiles-multi-
   // campaign.md): a module's own local UI state (a tab, a toggle, a
   // collapsed section — World Tracker's Sectors tab, Party's member

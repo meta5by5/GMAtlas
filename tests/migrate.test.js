@@ -250,6 +250,27 @@ test('migrateDocument backfills colony.encounters up to MAX_ENCOUNTERS for a pre
   assert.deepEqual(reMigrated.colony.encounters.map((r) => r.id), full.colony.encounters.map((r) => r.id));
 });
 
+test('migrateDocument backfills combatTracker for a campaign predating the Combat Initiative Tracker, additively and idempotently', () => {
+  const legacy = defaultCampaign();
+  delete legacy.combatTracker;
+  const migrated = migrateDocument(legacy);
+  assert.deepEqual(migrated.combatTracker, { entries: [], activeEntryId: null });
+
+  // A campaign with real entries already on it is left untouched.
+  const withEntries = defaultCampaign();
+  withEntries.combatTracker = { entries: [{ id: 'ctr_a', entityId: 'ent_1' }], activeEntryId: null };
+  const migratedWithEntries = migrateDocument(withEntries);
+  assert.deepEqual(migratedWithEntries.combatTracker, { entries: [{ id: 'ctr_a', entityId: 'ent_1' }], activeEntryId: null });
+
+  // A campaign predating just the "active combatant" follow-up (real
+  // entries, no activeEntryId key yet) gets it backfilled without
+  // disturbing the entries already there.
+  const noActiveKey = defaultCampaign();
+  noActiveKey.combatTracker = { entries: [{ id: 'ctr_b', entityId: 'ent_2' }] };
+  const migratedNoActiveKey = migrateDocument(noActiveKey);
+  assert.deepEqual(migratedNoActiveKey.combatTracker, { entries: [{ id: 'ctr_b', entityId: 'ent_2' }], activeEntryId: null });
+});
+
 test('migrateDocument converts a pre-existing FLAT turnStepProgress ({groupId,stepIndex,returnStack}) into the new slot-keyed shape, folding it into turnStepProgress.starship (the old content was always the 5PFH sequence), leaving turnStepProgress.colony fresh — a doc already in the new shape (or with no turnStepProgress at all) is untouched', () => {
   const legacy = defaultCampaign();
   legacy.turnStepProgress = { groupId: 'daily-life', stepIndex: 2, returnStack: [{ groupId: 'root', stepIndex: 0 }] };

@@ -84,11 +84,36 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
     fields: withDefaults([
       { key: 'Speed', kind: 'attribute', rollMethod: 'none', format: 'inches' },
       { key: 'Combat', kind: 'attribute', rollMethod: 'flat', target: 6 },
-      { key: 'Melee Damage', kind: 'text' },
+      // Direct follow-up request: "move Melee Damage into the main box of
+      // other stats (Speed, Combat, KP)" — attribute kind (not text) is
+      // what actually routes a field into that box (statblockGroupBlock,
+      // drawers/index.js, splits on f.attribute); 'sign' format matches
+      // the book's own "+1"/"+0" display, not directly rollable on its own
+      // (it's a damage bonus applied on a successful Combat roll, not a
+      // roll of its own).
+      { key: 'Melee Damage', kind: 'attribute', rollMethod: 'none', format: 'sign' },
       { key: 'Toughness', kind: 'track', rollMethod: 'none', max: 5 },
       { key: 'Armor / Notes', kind: 'text' },
       { key: 'Special', kind: 'text' },
       { key: 'KP', kind: 'attribute', rollMethod: 'none', format: 'plain' },
+    ]),
+  },
+  // Direct follow-up request: content packs of named enemy/creature types
+  // from base Five Parsecs From Home's own "Roving Threats" table (core
+  // rulebook p.101) and the 5PFH Compendium's own Bug Hunt monster table
+  // (p.194-195) — a different printed column shape than Planetfall's own
+  // (no KP/Armor-Notes; adds AI type + a named Weapon) so it's its own
+  // template rather than reusing 'planetfall-lifeform' under the wrong
+  // name for non-Planetfall content.
+  '5pfh-lifeform': {
+    label: '5PFH Lifeform / Enemy',
+    fields: withDefaults([
+      { key: 'Speed', kind: 'attribute', rollMethod: 'none', format: 'inches' },
+      { key: 'Combat', kind: 'attribute', rollMethod: 'flat', target: 6 },
+      { key: 'Toughness', kind: 'track', rollMethod: 'none', max: 5 },
+      { key: 'AI', kind: 'text' },
+      { key: 'Weapon', kind: 'text' },
+      { key: 'Special', kind: 'text' },
     ]),
   },
   vehicle: {

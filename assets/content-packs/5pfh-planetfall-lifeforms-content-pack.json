@@ -4,14 +4,14 @@
   "schemaVersion": 1,
   "entities": [
     {
-      "id": "ent_mtqhglw34k7g",
+      "id": "ent_mtqoxk6z7lpm",
       "type": "lifeform",
       "name": "Turbostone",
       "tags": [],
       "overview": "",
       "revealed": "",
       "relationships": [],
-      "createdAt": "2026-09-07T00:09:06.771Z",
+      "createdAt": "2026-09-07T03:38:15.035Z",
       "statblocks": [
         {
           "kind": "npc",
@@ -34,7 +34,10 @@
             },
             {
               "key": "Melee Damage",
-              "value": "+1"
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "sign"
             },
             {
               "key": "Toughness",
@@ -63,14 +66,14 @@
       ]
     },
     {
-      "id": "ent_mtqhglw3hcp0",
+      "id": "ent_mtqoxk70kk01",
       "type": "lifeform",
       "name": "Vaportrail",
       "tags": [],
       "overview": "",
       "revealed": "",
       "relationships": [],
-      "createdAt": "2026-09-07T00:09:06.771Z",
+      "createdAt": "2026-09-07T03:38:15.036Z",
       "statblocks": [
         {
           "kind": "npc",
@@ -93,7 +96,10 @@
             },
             {
               "key": "Melee Damage",
-              "value": "+1"
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "sign"
             },
             {
               "key": "Toughness",
@@ -122,14 +128,14 @@
       ]
     },
     {
-      "id": "ent_mtqhglw4ldo1",
+      "id": "ent_mtqoxk71gfaw",
       "type": "lifeform",
       "name": "Sirenspine",
       "tags": [],
       "overview": "",
       "revealed": "",
       "relationships": [],
-      "createdAt": "2026-09-07T00:09:06.772Z",
+      "createdAt": "2026-09-07T03:38:15.037Z",
       "statblocks": [
         {
           "kind": "npc",
@@ -152,7 +158,10 @@
             },
             {
               "key": "Melee Damage",
-              "value": "+0"
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "sign"
             },
             {
               "key": "Toughness",
@@ -181,14 +190,14 @@
       ]
     },
     {
-      "id": "ent_mtqhglw5q3tz",
+      "id": "ent_mtqoxk71wqha",
       "type": "lifeform",
       "name": "Golem",
       "tags": [],
       "overview": "",
       "revealed": "",
       "relationships": [],
-      "createdAt": "2026-09-07T00:09:06.773Z",
+      "createdAt": "2026-09-07T03:38:15.037Z",
       "statblocks": [
         {
           "kind": "npc",
@@ -211,7 +220,10 @@
             },
             {
               "key": "Melee Damage",
-              "value": "+0"
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "sign"
             },
             {
               "key": "Toughness",

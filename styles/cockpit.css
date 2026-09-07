@@ -426,6 +426,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .drawer-tabs {
   display: flex; align-items: stretch; margin: calc(var(--sp-4) * -1) calc(var(--sp-4) * -1) var(--sp-3);
   background: var(--tier1-bg); border-bottom: 1px solid var(--tier1-border);
+  /* Direct follow-up request: "do not scroll the tab menu to keep it
+     visible when the content is scrolling" — .mc-drawer itself is the
+     scrolling element (overflow:auto on the whole aside, not just the
+     body), so a plain sticky top:0 on this child keeps it pinned to the
+     top of that scroll regardless of how far the content below scrolls. */
+  position: sticky; top: 0; z-index: 2;
 }
 .drawer-tabs[hidden] { display: none; }
 .drawer-tabs-scroll { display: flex; gap: 2px; overflow-x: auto; flex: 1 1 auto; min-width: 0; padding: 0 var(--sp-2); }
@@ -1342,27 +1348,28 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .entity-type-tag { font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--border); border-radius: 999px; padding: 0.05rem 0.4rem; }
 .entity-list-name { flex: 1; font-size: 0.85rem; }
 .entity-inspector { border-top: 1px solid var(--border); padding-top: var(--sp-3); }
-/* Entity Editor "freeze pane" (direct request): the name/type header
-   stays visible while the rest of the (often long) entity form scrolls
-   underneath it, inside .mc-drawer (the scroll container). Negative
-   margin pulls the header out to .mc-drawer's own padding edge (through
-   .entity-inspector's border-top/padding-top too) and re-pads by the same
-   amount, so it looks identical unscrolled but sticks flush — without
-   this, position:sticky's `top` offset is measured from the scroll
-   container's padding edge, not this element's own ancestor spacing, so
-   a plain `top: 0` alone would leave a visible gap collapse oddly on stick. */
+/* Entity Editor's own name/type header — direct follow-up request: "the
+   tab bar still scrolls while the entity name field is sticky. It should
+   be the other way around. Only the tab bar should be held in view while
+   the rest can scroll" — this used to be its own "freeze pane" (position:
+   sticky, same top:0 as .drawer-tabs above it), which meant the two
+   competed for the same stuck position once a second drawer tab was
+   pinned open: this element's higher z-index/opaque background painted
+   over .drawer-tabs, hiding the actual tab strip rather than the drawer-
+   tabs staying visibly on top as intended. No longer sticky — a plain
+   flow header, just like the rest of the entity's own content, so
+   .drawer-tabs is the only thing that stays put while scrolling. */
 .inspector-head {
   display: flex; align-items: center; gap: var(--sp-2);
-  position: sticky; top: 0; z-index: 5;
-  background: var(--tier3-bg);
-  margin: calc(-1 * (var(--sp-4) + var(--sp-3) + 1px)) calc(-1 * var(--sp-4)) 0;
-  padding: calc(var(--sp-4) + var(--sp-3) + 1px) var(--sp-4) var(--sp-2);
+  margin-bottom: var(--sp-3); padding-bottom: var(--sp-2);
   border-bottom: 1px solid var(--border);
 }
 .inspector-name { flex: 1; font-size: 1rem; font-weight: 600; }
 
 /* Entity thumbnail (Phase 11, docs/adr/0021-gallery.md) — left-aligned
-   beside Type/Tags, per the request. */
+   beside Overview (direct follow-up request: "move overview to the same
+   row as thumbnail" — Type/Tags moved out to their own row further down,
+   below the field-divider). */
 .inspector-photo-row { display: flex; gap: var(--sp-3); align-items: flex-start; margin-top: var(--sp-3); }
 /* 40% of the row's width whether or not a photo is assigned yet — an
    unassigned entity still reserves the same space (via
@@ -1370,20 +1377,18 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    doesn't jump once a photo is added. */
 .inspector-photo { flex: 0 0 40%; max-width: 40%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); }
 .inspector-photo-fields { flex: 1 1 auto; min-width: 0; }
-/* Direct follow-up request: Type and Tags share one row instead of
-   stacking, so the combined pair still fits the same overall width Type
-   alone used to take (.inspector-photo-fields' width — the thumbnail's own
-   40% column, above, is untouched by this). Type keeps its natural
-   (shrink-to-fit) width; Tags' head row takes the rest. align-items:
-   flex-end lines up Type's <select> (below its own label text) with Tags'
-   single-line label+input row on their shared bottom edge. The chosen-tags
-   chip list (tagEditorList) now renders as its own full-width row below
-   this one, collapsible via the Tags label — see .tag-editor-toggle. */
+/* Type and Tags share one row instead of stacking (direct follow-up
+   request), now its own standalone row below the photo/Overview row and
+   the field-divider — not confined to .inspector-photo-fields' own width
+   any more, so it spans the Entity Editor's full width. Type keeps its
+   natural (shrink-to-fit) width; Tags' head row takes the rest.
+   align-items: flex-end lines up Type's <select> (below its own label
+   text) with Tags' single-line label+input row on their shared bottom
+   edge. The chosen-tags chip list (tagEditorList) still renders as its
+   own full-width row below this one, collapsible via the Tags label — see
+   .tag-editor-toggle. */
 .inspector-type-tags-row { display: flex; align-items: flex-end; gap: var(--sp-3); }
 .inspector-type-field { flex: 0 0 auto; min-width: 0; }
-/* Entity Type dropdown — matched to .rel-label-input's font size (direct
-   request), same reasoning as .rel-add select above. */
-.inspector-photo-fields select[data-entity-field="type"] { font-size: 0.72rem; }
 .inspector-photo .gallery-thumb-circle { width: 4.5rem; height: 4.5rem; }
 /* Direct follow-up request: clicking the thumbnail shows the full-size
    image (see image-lightbox-overlay below). Bare-button reset so the
@@ -1678,6 +1683,12 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 /* Same wrap-to-fit posture as .character-sheet-stats above, for every
    remaining (track/text) field in a statblock — direct follow-up request. */
 .character-sheet-resources { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+/* Direct follow-up request: "make Armor/Notes and Special fields share the
+   width of the row 50/50" — reuses .text-row-compact's own pill markup
+   (label on top, value below) unchanged, just stretched to exactly half
+   this row's width instead of its own content-sized default. */
+.statblock-half-row { display: flex; gap: var(--sp-2); margin-top: var(--sp-1); }
+.statblock-half-row .text-row-compact { flex: 1 1 50%; width: auto; min-width: 0; }
 /* Direct follow-up request: "keep all the buttons in the tracker on the
    same line as the title... the appearance used several builds ago" — the
    label sits beside the box row on one line (same recipe
@@ -1961,6 +1972,11 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
   box-shadow: var(--shadow); cursor: pointer;
 }
 .dice-roller-toggle:hover { border-color: var(--accent); }
+/* Combat Initiative Tracker's own drop target (direct follow-up request —
+   see the .combat-tracker-panel comment below): visible feedback while
+   dragging an entity thumbnail over the dice icon, same accent-border cue
+   every other drop target in this app already uses. */
+.dice-roller-toggle.drop-hover { border-color: var(--accent-strong); box-shadow: 0 0 0 2px var(--accent-strong); }
 /* d20-thm.png has a lot of built-in white margin around the die graphic
    itself (matches this button's own white background, so it's invisible as
    padding rather than as a visible border) — scaled up so the die shape,
@@ -1989,6 +2005,38 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .dice-roller-modifier-field input[type="number"] { width: 3.2rem; }
 .dice-roller-error { color: var(--danger); margin-top: 0.25rem; }
 .dice-roller-foot { display: flex; align-items: center; justify-content: space-between; margin-top: var(--sp-3); padding-top: var(--sp-2); border-top: 1px solid var(--border); }
+
+/* Combat Initiative Tracker (direct request; no dedicated toggle icon of
+   its own — direct follow-up request: "do not display a combat tracker
+   icon next to the dice roller... just open the combat tracker window
+   when a thumbnail is dragged and dropped onto the dice roller icon") —
+   opens directly below the EXISTING .dice-roller-toggle, same position
+   .dice-roller-panel itself uses (the two are never open at once in
+   practice — one's a click target, the other a drag target). Also a drop
+   target itself (data-drop-combat-tracker) for "drop into the open
+   tracker" once it's already showing. */
+.combat-tracker-panel {
+  position: fixed; top: calc(var(--sp-3) + 2rem + var(--sp-2)); right: var(--sp-3); z-index: 60;
+  width: min(22rem, 92vw); max-height: 70vh; overflow-y: auto;
+  background: var(--tier3-bg); border: 1px solid var(--border-strong); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: var(--sp-3);
+}
+.combat-tracker-panel.drop-hover { outline: 2px dashed var(--accent-strong); outline-offset: -2px; }
+.combat-tracker-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-2); }
+.combat-tracker-head h3 { margin: 0; font-size: 0.9rem; }
+.combat-tracker-list { display: flex; flex-direction: column; gap: var(--sp-2); }
+.combat-tracker-row { display: flex; align-items: flex-start; gap: var(--sp-2); padding: 0.2rem; border-radius: var(--radius-sm); cursor: pointer; }
+.combat-tracker-row.drop-hover { outline: 2px dashed var(--accent-strong); outline-offset: 2px; border-radius: var(--radius-sm); }
+/* The "active combatant" highlight (direct follow-up request: "click-to-
+   highlight a record") — only one row at a time; click the row's own
+   background (not one of its buttons/the card itself) to set or clear it. */
+.combat-tracker-row.active { background: var(--tier2-bg); outline: 2px solid var(--accent-strong); }
+/* Left-aligned drag handle (direct request) — only THIS element carries
+   draggable, not the whole row, so expanding/opening the card underneath
+   still works as a plain click. */
+.combat-tracker-handle { flex: 0 0 auto; padding-top: 0.5rem; cursor: grab; color: var(--text-dim); user-select: none; }
+.combat-tracker-handle:active { cursor: grabbing; }
+.combat-tracker-card-wrap { flex: 1 1 auto; min-width: 0; }
 
 /* Full-size image lightbox (direct follow-up request) — a centered,
    backdrop-dimmed modal (same visual language as .mc-search-overlay)

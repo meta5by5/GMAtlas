@@ -291,7 +291,7 @@ export function createGeneratedLifeform(campaign, rowId, name, rng = Math.random
   const setField = (key, value) => { const f = group.fields.find((fl) => fl.key === key); if (f) f.value = value; };
   setField('Speed', profile.speed);
   setField('Combat', profile.combat);
-  setField('Melee Damage', `+${profile.meleeDamage}`);
+  setField('Melee Damage', profile.meleeDamage);
   setField('Toughness', profile.toughness);
   setField('Armor / Notes', profile.toughnessNote);
   setField('Special', [...profile.specialAttacks, ...(profile.uniqueAbility ? [profile.uniqueAbility] : [])].join(', '));

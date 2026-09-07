@@ -14,7 +14,7 @@ import {
   RELATIONSHIP_TYPES, RELATIONSHIP_TYPE_LABEL, isRelationshipFlagged, computeFactionMaxHp,
   getSystemForLocation, getStarForLocation, getHexZoneForLocation,
 } from '../../domain/entities.js';
-import { parseStatsString, sortStatblockGroups, getStatblockTemplates } from '../../domain/statblocks.js';
+import { sortStatblockGroups, getStatblockTemplates } from '../../domain/statblocks.js';
 import { listTemplates } from '../../domain/statblockTemplates.js';
 import { buildGraph, computeLayout, nodeColor } from '../../domain/graph.js';
 import { BUILD } from '../../core/buildInfo.js';
@@ -377,32 +377,32 @@ function inspector(doc, e, ui) {
     <div class="inspector-photo-row">
       ${entityPhotoHtml(doc, e)}
       <div class="inspector-photo-fields">
-        <div class="inspector-type-tags-row">
-          <label class="field-label inspector-type-field">Type
-            <select data-entity-field="type">${ENTITY_TYPES.map((t) => `<option value="${t}" ${t === e.type ? 'selected' : ''}>${TYPE_LABEL[t]}</option>`).join('')}</select>
-          </label>
-          <div class="tag-editor">${tagEditorHead(doc, e, ui)}</div>
+        <div class="field-label">
+          <span class="field-label-row">
+            <button type="button" class="section-toggle" data-overview-toggle="${esc(e.id)}">${overviewOpen ? '▾' : '▸'} Overview</button>
+            ${oracleLinkIcon(e.type, 'overview')}
+            ${overviewOpen ? richToolbarToggleHTML(`entity:${e.id}:overview`, toolbarCollapsed(doc, ui, `entity:${e.id}:overview`)) : ''}
+          </span>
+          ${overviewOpen ? `<div class="rich-field">${richToolbarHTML(`entity:${e.id}:overview`, toolbarCollapsed(doc, ui, `entity:${e.id}:overview`), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-entity-field="overview" data-placeholder="What the party knows.">${buildMentionEditorHTML(doc, e.overview)}</div></div>` : ''}
         </div>
-        ${tagEditorList(doc, e, ui)}
       </div>
     </div>
-    <div class="field-label">
+    ${isPartyCharacter ? '' : `<div class="revealed-block">
       <span class="field-label-row">
-        <button type="button" class="section-toggle" data-overview-toggle="${esc(e.id)}">${overviewOpen ? '▾' : '▸'} Overview</button>
-        ${oracleLinkIcon(e.type, 'overview')}
-        ${overviewOpen ? richToolbarToggleHTML(`entity:${e.id}:overview`, toolbarCollapsed(doc, ui, `entity:${e.id}:overview`)) : ''}
+        <button class="section-toggle" data-reveal-toggle="${esc(e.id)}">${e.revealedOpen ? '▾' : '▸'} Revealed / hidden (GM)</button>
+        ${oracleLinkIcon(e.type, 'revealed')}
+        ${e.revealedOpen ? richToolbarToggleHTML(`entity:${e.id}:revealed`, toolbarCollapsed(doc, ui, `entity:${e.id}:revealed`)) : ''}
       </span>
-      ${overviewOpen ? `
-      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:overview`, toolbarCollapsed(doc, ui, `entity:${e.id}:overview`), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-entity-field="overview" data-placeholder="What the party knows.">${buildMentionEditorHTML(doc, e.overview)}</div></div>
-      ${isPartyCharacter ? '' : `<div class="revealed-block">
-        <span class="field-label-row">
-          <button class="section-toggle" data-reveal-toggle="${esc(e.id)}">${e.revealedOpen ? '▾' : '▸'} Revealed / hidden (GM)</button>
-          ${oracleLinkIcon(e.type, 'revealed')}
-          ${e.revealedOpen ? richToolbarToggleHTML(`entity:${e.id}:revealed`, toolbarCollapsed(doc, ui, `entity:${e.id}:revealed`)) : ''}
-        </span>
-        ${e.revealedOpen ? `<div class="rich-field">${richToolbarHTML(`entity:${e.id}:revealed`, toolbarCollapsed(doc, ui, `entity:${e.id}:revealed`), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-entity-field="revealed" data-placeholder="Secrets, twists, true motives.">${buildMentionEditorHTML(doc, e.revealed)}</div></div>` : ''}
-      </div>`}` : ''}
+      ${e.revealedOpen ? `<div class="rich-field">${richToolbarHTML(`entity:${e.id}:revealed`, toolbarCollapsed(doc, ui, `entity:${e.id}:revealed`), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-entity-field="revealed" data-placeholder="Secrets, twists, true motives.">${buildMentionEditorHTML(doc, e.revealed)}</div></div>` : ''}
+    </div>`}
+    <hr class="field-divider">
+    <div class="inspector-type-tags-row">
+      <label class="field-label inspector-type-field">Type
+        <select data-entity-field="type">${ENTITY_TYPES.map((t) => `<option value="${t}" ${t === e.type ? 'selected' : ''}>${TYPE_LABEL[t]}</option>`).join('')}</select>
+      </label>
+      <div class="tag-editor">${tagEditorHead(doc, e, ui)}</div>
     </div>
+    ${tagEditorList(doc, e, ui)}
     ${npcSection(e)}
     ${factionSection(doc, e, ui)}
     ${conflictSection(doc, e, ui)}
@@ -1284,7 +1284,18 @@ function statblockGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
   // removes the live input.
   const indexed = group.fields.map((f, fi) => ({ f, fi }));
   const stats = indexed.filter(({ f }) => f.attribute);
-  const rest = indexed.filter(({ f }) => !f.attribute);
+  // Direct follow-up request: "make Armor/Notes and Special fields share
+  // the width of the row 50/50" — the Planetfall Lifeform template's own
+  // two free-text fields (statblockTemplates.js) get a dedicated half-and-
+  // half row instead of flowing as auto-width pills alongside Toughness in
+  // the general .character-sheet-resources wrap; only when BOTH are
+  // actually present (a GM who's removed one via Settings' template
+  // editor falls back to the normal flow rather than a single lonely
+  // half-width box).
+  const HALF_ROW_KEYS = ['Armor / Notes', 'Special'];
+  const halfRowFields = indexed.filter(({ f }) => !f.attribute && HALF_ROW_KEYS.includes(f.key));
+  const usesHalfRow = halfRowFields.length === HALF_ROW_KEYS.length;
+  const rest = indexed.filter(({ f }) => !f.attribute && !(usesHalfRow && HALF_ROW_KEYS.includes(f.key)));
   return `<div class="statblock-block">
     <div class="statblock-head">
       <button class="icon-btn statblock-collapse-toggle" data-statblock-group-toggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button>
@@ -1292,9 +1303,9 @@ function statblockGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
       <button class="icon-btn" data-statblock-remove-group="${gi}" title="Remove this statblock">🗑</button>
     </div>
     ${collapsed ? '' : `
-    ${attributeBadges(group.fields)}
     ${stats.length ? `<div class="character-sheet-stats">${stats.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}
-    ${rest.length ? `<div class="character-sheet-resources">${rest.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}`}
+    ${rest.length ? `<div class="character-sheet-resources">${rest.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}
+    ${usesHalfRow ? `<div class="statblock-half-row">${halfRowFields.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}`}
   </div>`;
 }
 
@@ -1423,37 +1434,6 @@ function formatAttrValue(v, format = 'sign') {
   return (n >= 0 ? '+' : '') + n;
 }
 
-// Takes one statblock group's fields — the inspector and the Party roster
-// (see partyMemberStatblocks) both render one badge row per group, never
-// flattened across groups, so a two-ruleset character still reads as two
-// distinguishable rows instead of one undifferentiated mass of numbers.
-function attributeBadges(fields) {
-  fields = fields || [];
-  // If there's a Stats row, parse and render it in the requested order.
-  const statsField = fields.find((f) => f && String(f.key || '').toLowerCase().startsWith('stats'));
-  if (statsField && statsField.value) {
-    try {
-      const parsed = parseStatsString(statsField.value);
-      if (parsed.ordered && parsed.ordered.length) {
-        const html = parsed.ordered.map((s) => `
-          <div class="attr-badge">
-            <div class="attr-key">${esc(String(s.key || '').toUpperCase())}</div>
-            <div class="attr-val">${esc(formatAttrValue(s.value))}</div>
-          </div>`).join('');
-        return `<div class="attribute-badges">${html}</div>`;
-      }
-    } catch (e) { /* fallthrough */ }
-  }
-
-  const attrs = fields.filter((f) => f && f.attribute);
-  if (!attrs.length) return '';
-  const html = attrs.map((f) => `
-    <div class="attr-badge">
-      <div class="attr-key">${esc(String(f.key || '').toUpperCase())}</div>
-      <div class="attr-val">${esc(formatAttrValue(f.value, f.format))}</div>
-    </div>`).join('');
-  return `<div class="attribute-badges">${html}</div>`;
-}
 
 // A field's name, kind (track/attribute/text), and existence are template-
 // driven (set in Settings — see statblockTemplateEditor) — the entity view
@@ -1827,6 +1807,7 @@ function settings(doc, ui = {}) {
         </div>
         <p class="dim small storage-usage">Campaign size: ${formatBytes(info.campaignBytes)}${info.hasBackup ? ` · backup: ${formatBytes(info.backupBytes)}` : ' · no backup saved yet'}</p>
         ${info.hasBackup ? `<button class="btn ghost" data-restore-backup title="Replaces the current campaign with the last save that persisted before this one">↺ Restore last backup</button>` : ''}
+        ${dataPacksListHtml()}
         <p class="dim small" style="margin-top: var(--sp-3);">Reference Library docs imported via "Import File(s)" (Documents drawer) live in this browser's own storage, separate from the campaign file — bundle them as a zip to carry to another browser:</p>
         <div class="btn-col">
           <button class="btn ghost" data-ref-library-export title="Download every imported Reference Library doc, plus your title/tag edits, as one zip">⬇ Export Library</button>
@@ -2309,6 +2290,27 @@ function gameSystemActivationSection(doc) {
     </div>`;
 }
 
+// Direct follow-up request: "similar to content-packs, display the
+// data-packs listed on the /assets/data-packs/ folder under the 'Restore
+// Last Backup' button" — a plain read-only list (data/contentPacksManifest.js's
+// own kind:'data-pack' entries — the real HOSTILE zone files, not the
+// gmatlas-2026-07-*.json campaign-export dumps also in that folder, which
+// were deliberately excluded from the manifest). No per-pack Import button
+// here — unlike Content Packs' own generic importContentPack, a data-pack
+// goes through HOSTILE's own bespoke, already-existing importHostileLocations
+// flow (hostileCanonLocationsSection, Trade & Economy tab), which imports
+// every zone file together in one combined action rather than one file at
+// a time — this is purely informational, so a GM knows what that button
+// actually brings in.
+function dataPacksListHtml() {
+  const dataPacks = CONTENT_PACKS_MANIFEST.filter((p) => p.kind === 'data-pack');
+  if (!dataPacks.length) return '';
+  const rows = dataPacks.map((p) => `<li><b>${esc(p.title)}</b> — <span class="dim small">${esc(p.description)}</span></li>`).join('');
+  return `
+    <p class="dim small" style="margin-top: var(--sp-3);" title="Imported together via the Trade &amp; Economy tab's own 'Import HOSTILE Canon Locations' button, not individually from here.">Data packs available (Trade &amp; Economy → Import HOSTILE Canon Locations):</p>
+    <ul class="rules-provider-legend">${rows}</ul>`;
+}
+
 // Content Packs (domain/contentPack.js): export/import just Entities/Guide
 // docs/Journal entries as a portable, additive file — distinct from the
 // whole-campaign JSON export/import right above it (which REPLACES the
@@ -2327,17 +2329,21 @@ function contentPackSection(ui) {
   // manifest's data-pack entries (HOSTILE's own canon-location zone files)
   // keep their existing, separate import button elsewhere in Settings.
   const availablePacks = CONTENT_PACKS_MANIFEST.filter((p) => p.kind === 'content-pack');
+  // Direct follow-up request: the per-pack description text and the
+  // "additive import" disclaimer are both gone as visible copy — the
+  // disclaimer now lives as a title tooltip on the section heading instead
+  // of a permanent paragraph.
   const packRows = availablePacks.map((p) => {
     const importing = importingIds.has(p.id);
     return `<li>
-      <b>${esc(p.title)}</b> — <span class="dim small">${esc(p.description)}</span>
+      <b>${esc(p.title)}</b>
       <button type="button" class="btn ghost sm" data-content-pack-import="${esc(p.id)}" ${importing ? 'disabled' : ''}>${importing ? 'Importing…' : 'Import'}</button>
     </li>`;
   }).join('');
   return `
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Content Packs', 'settings-content-packs')}
-      ${helpBody('settings-content-packs', 'Export just Entities, Guide docs, and/or Journal entries as a portable file, then import it into another campaign — always additive (new ids, never dedups or replaces), unlike the whole-campaign export above.', ui)}
+      ${helpBody('settings-content-packs', 'Export just Entities, Guide docs, and/or Journal entries as a portable file, then import it into another campaign — additive, unlike the whole-campaign export above. Entities skip anything that already exists by name (safe to import the same pack twice, or several overlapping packs); Guide docs and Journal entries always import fresh, no dedup.', ui)}
       <div class="content-pack-checks">
         <label class="chip sm"><input type="checkbox" data-content-pack-flag="entities" ${flags.entities ? 'checked' : ''}> Entities</label>
         <label class="chip sm"><input type="checkbox" data-content-pack-flag="guide" ${flags.guide ? 'checked' : ''}> Guide docs</label>
@@ -2347,8 +2353,7 @@ function contentPackSection(ui) {
         <button class="btn" data-export-content-pack>Export Content Pack</button>
         <label class="btn ghost file-btn">Import Content Pack<input type="file" accept=".json,application/json" data-import-content-pack hidden></label>
       </div>
-      <h4 style="margin-top: var(--sp-3);">Available Packs</h4>
-      <p class="dim small">Same additive import as above, no dedup — re-importing a pack you already have creates a second copy of everything in it. Needs the app served over http(s) (<code>npm run serve</code>) — plain file:// can't fetch these.</p>
+      <h4 style="margin-top: var(--sp-3);" title="Safe to import more than one pack, or re-import the same one — entities that already exist by name are skipped, never duplicated. Needs the app served over http(s) (npm run serve) — plain file:// can't fetch these.">Available Packs</h4>
       ${availablePacks.length ? `<ul class="rules-provider-legend">${packRows}</ul>` : '<p class="dim small">None yet.</p>'}
     </div>`;
 }
@@ -2833,7 +2838,11 @@ function partyMemberThumb(doc, e) {
   const inner = img
     ? `<img class="actor-thumb-photo" src="${esc(img.dataUrl)}" alt="">`
     : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((e.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
-  return `<button type="button" class="actor-thumb party-member-thumb-btn" data-open-entity="${esc(e.id)}" title="Open in entity editor">${inner}</button>`;
+  // draggable/data-drag-entity (direct follow-up request — "just like the
+  // Party Roster"): the SAME ENTITY_DRAG_TYPE Cast's own entity list rows
+  // already carry, so a Party member can be dragged straight into the
+  // Combat Initiative Tracker (shell.js).
+  return `<button type="button" class="actor-thumb party-member-thumb-btn" draggable="true" data-drag-entity="${esc(e.id)}" data-open-entity="${esc(e.id)}" title="Open in entity editor">${inner}</button>`;
 }
 
 // Shared Assets' entity-linked vehicles (direct follow-up request: "needs
@@ -2915,7 +2924,7 @@ function partyRelationshipsSectionHtml(doc, ui) {
     </div>` : '<p class="dim small">Add an entity in Cast first.</p>'}`}`;
 }
 
-function partyMemberCard(e, doc, ui) {
+export function partyMemberCard(e, doc, ui) {
   const open = (ui.expandedPartyMembers || new Set()).has(e.id);
   return `
     <div class="party-member-card">
@@ -3109,7 +3118,10 @@ function crewTaskBoxHtml(doc, ui) {
 // shows the real photo (click opens the entity editor, same as any other
 // Composer thumbnail) plus a small remove badge that unassigns just this
 // row's character — leaving the row and its role alone — distinct from
-// the row's own separate, confirmed "remove this row entirely" button.
+// the row's own separate, confirmed "remove this row entirely" button. A
+// filled thumb is also draggable (direct follow-up request — "needs to
+// also work from the Crew Roster" for the Combat Initiative Tracker),
+// same ENTITY_DRAG_TYPE Cast/Party Roster's own thumbnails already carry.
 function crewCharacterThumb(doc, rowId, characterId) {
   const entity = characterId ? getEntity(doc, characterId) : null;
   if (!entity) {
@@ -3121,7 +3133,7 @@ function crewCharacterThumb(doc, rowId, characterId) {
     : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((entity.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
   return `<div class="actor-thumb-wrap">
     <div class="actor-thumb-circle">
-      <button type="button" class="actor-thumb" data-open-entity="${esc(entity.id)}" title="${esc(entity.name || 'Unnamed')}">${photo}</button>
+      <button type="button" class="actor-thumb" draggable="true" data-drag-entity="${esc(entity.id)}" data-open-entity="${esc(entity.id)}" title="${esc(entity.name || 'Unnamed')}">${photo}</button>
       <button type="button" class="actor-thumb-badge actor-thumb-badge-remove" data-colony-crew-unassign="${esc(rowId)}" title="Unassign">✕</button>
     </div>
     <span class="actor-thumb-name">${esc(entity.name || 'Unnamed')}</span>
@@ -3137,7 +3149,10 @@ function crewCharacterThumb(doc, rowId, characterId) {
 // option there — the Generating Lifeforms, p.146, roll path); assigned
 // shows the real photo (click opens the entity editor) plus a remove badge
 // reusing the already-wired data-colony-encounter-detach handler (clears
-// just this row's entityId, leaving its note and the row itself alone).
+// just this row's entityId, leaving its note and the row itself alone). A
+// filled thumb is also draggable (direct follow-up request — "should also
+// drag-drop onto the combat tracker or the dice roller"), same
+// ENTITY_DRAG_TYPE Cast/Party Roster/Crew Roster's own thumbnails carry.
 function lifeformEncounterThumb(doc, rowId, entityId) {
   const entity = entityId ? getEntity(doc, entityId) : null;
   if (!entity) {
@@ -3149,7 +3164,7 @@ function lifeformEncounterThumb(doc, rowId, entityId) {
     : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((entity.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
   return `<div class="actor-thumb-wrap">
     <div class="actor-thumb-circle">
-      <button type="button" class="actor-thumb" data-open-entity="${esc(entity.id)}" title="${esc(entity.name || 'Unnamed')}">${photo}</button>
+      <button type="button" class="actor-thumb" draggable="true" data-drag-entity="${esc(entity.id)}" data-open-entity="${esc(entity.id)}" title="${esc(entity.name || 'Unnamed')}">${photo}</button>
       <button type="button" class="actor-thumb-badge actor-thumb-badge-remove" data-colony-encounter-detach="${esc(rowId)}" title="Detach entity">✕</button>
     </div>
     <span class="actor-thumb-name">${esc(entity.name || 'Unnamed')}</span>

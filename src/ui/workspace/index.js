@@ -262,7 +262,10 @@ function npcSceneDetailBody(doc, ui, scene, npc) {
   return `<div class="npc-scene-card npc-scene-card-detail">
     <div class="section-head-row">
       <button type="button" class="entity-chip" data-open-entity="${esc(npc.id)}">${esc(npc.name || 'Unnamed')}</button>
-      <button type="button" class="icon-btn" data-scene-npc-toggle="${esc(npc.id)}" title="Collapse">▾</button>
+      <span class="entity-chip-row">
+        <button type="button" class="icon-btn" data-scene-npc-roll-all="${esc(npc.id)}" title="Roll all fields (Disposition, Motivation, Threat Rank, Challenges, Opportunities)">🎲🎲</button>
+        <button type="button" class="icon-btn" data-scene-npc-toggle="${esc(npc.id)}" title="Collapse">▾</button>
+      </span>
     </div>
     <div class="npc-scene-card-body">
       <label class="field-label sm">Current goal

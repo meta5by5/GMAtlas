@@ -2388,7 +2388,7 @@ test('createGeneratedLifeform creates a lifeform entity with one populated plane
   assert.ok([5, 6, 7].includes(fields.find((f) => f.key === 'Speed').value));
   assert.ok([0, 1, 2].includes(fields.find((f) => f.key === 'Combat').value));
   assert.ok([3, 4, 5].includes(fields.find((f) => f.key === 'Toughness').value));
-  assert.match(fields.find((f) => f.key === 'Melee Damage').value, /^\+[0-2]$/);
+  assert.ok([0, 1, 2].includes(fields.find((f) => f.key === 'Melee Damage').value));
 });
 
 // --- guide (docs/adr/0017: multi-doc tree, was one freeform field) --------
@@ -5281,6 +5281,42 @@ test('importContentPack assigns fresh ids, remaps entity relationships, and drop
   assert.equal(importedA.relationships[0].to, importedB.id, 'the surviving relationship is remapped to the NEW id');
 });
 
+test('importContentPack dedups entities by exact name (case-insensitive), direct follow-up request — "allow all content packs to be uploaded into one campaign without overwrite... re-import will just skip those entities"', () => {
+  let source = defaultCampaign();
+  let aId, bId;
+  ({ campaign: source, id: aId } = createEntity(source, { type: 'lifeform', name: 'Turbostone' }));
+  ({ campaign: source, id: bId } = createEntity(source, { type: 'lifeform', name: 'Golem' }));
+  source = addRelationship(source, aId, bId, 'linked', 'linked');
+  const pack = exportContentPack(source, { entities: true });
+
+  let dest = defaultCampaign();
+  dest = importContentPack(dest, pack);
+  assert.equal(dest.entities.items.length, 2);
+
+  // Re-importing the SAME pack is a no-op — both entities already exist by name.
+  dest = importContentPack(dest, pack);
+  assert.equal(dest.entities.items.length, 2, 'a repeat import of the same pack skips both duplicates, not appended twice');
+
+  // A different-cased/whitespace-padded name still counts as the same entity.
+  const dupPack = exportContentPack(source, { entities: true });
+  dupPack.entities[0].name = '  turbostone  ';
+  dest = importContentPack(dest, dupPack);
+  assert.equal(dest.entities.items.length, 2, 'case/whitespace differences still dedup to the same entity');
+
+  // A genuinely new-named entity in the SAME pack still imports normally,
+  // and its relationship to the already-existing (skipped) entity still
+  // resolves to that entity's real id rather than being dropped.
+  let source2 = source;
+  let cId; ({ campaign: source2, id: cId } = createEntity(source2, { type: 'lifeform', name: 'Vaportrail' }));
+  source2 = addRelationship(source2, cId, aId, 'linked', 'linked');
+  const mixedPack = exportContentPack(source2, { entities: true });
+  dest = importContentPack(dest, mixedPack);
+  assert.equal(dest.entities.items.length, 3, 'only the genuinely new entity is added');
+  const vaportrail = dest.entities.items.find((e) => e.name === 'Vaportrail');
+  const turbostone = dest.entities.items.find((e) => e.name.trim().toLowerCase() === 'turbostone');
+  assert.equal(vaportrail.relationships[0].to, turbostone.id, "a new entity's relationship to an already-existing (deduped) entity resolves to its real id");
+});
+
 test('importContentPack remaps guide doc ids and re-parents an orphaned child to root', () => {
   let source = defaultCampaign();
   let parentId, childId;
@@ -7928,4 +7964,110 @@ test('advanceCampaignTurnWithAccrual also resets crewTaskProgress.doneMemberIds 
   const camp = { colony: { fields: { campaignTurn: 1 }, crew: [], encounters: [] }, crewTaskProgress: { doneMemberIds: ['npc1', 'npc2'] } };
   const { campaign: next } = advanceCampaignTurnWithAccrual(camp);
   assert.deepEqual(next.crewTaskProgress, { doneMemberIds: [] });
+});
+
+// --- combat tracker (direct request) ---------------------------------------
+import { listCombatTrackerEntries, addCombatTrackerEntity, removeCombatTrackerEntry, moveCombatTrackerEntry, clearCombatTracker, getCombatTrackerActiveEntryId, setCombatTrackerActiveEntry } from '../src/domain/combatTracker.js';
+
+test('addCombatTrackerEntity appends a new row and dedups by entityId', () => {
+  let camp = defaultCampaign();
+  camp = addCombatTrackerEntity(camp, 'ent_a');
+  camp = addCombatTrackerEntity(camp, 'ent_b');
+  assert.equal(listCombatTrackerEntries(camp).length, 2);
+  assert.deepEqual(listCombatTrackerEntries(camp).map((e) => e.entityId), ['ent_a', 'ent_b']);
+
+  // Adding the same entity again is a no-op — a creature doesn't need two initiative slots.
+  const before = camp;
+  camp = addCombatTrackerEntity(camp, 'ent_a');
+  assert.equal(camp, before, 'unchanged campaign reference — a real no-op, not just an equivalent copy');
+  assert.equal(listCombatTrackerEntries(camp).length, 2);
+});
+
+test('removeCombatTrackerEntry removes just the targeted row, no-op on an unknown id', () => {
+  let camp = defaultCampaign();
+  camp = addCombatTrackerEntity(camp, 'ent_a');
+  camp = addCombatTrackerEntity(camp, 'ent_b');
+  const rowId = listCombatTrackerEntries(camp)[0].id;
+  camp = removeCombatTrackerEntry(camp, rowId);
+  assert.deepEqual(listCombatTrackerEntries(camp).map((e) => e.entityId), ['ent_b']);
+
+  const unchanged = removeCombatTrackerEntry(camp, 'nope');
+  assert.deepEqual(listCombatTrackerEntries(unchanged).map((e) => e.entityId), ['ent_b']);
+});
+
+test('moveCombatTrackerEntry repositions a row to another row\'s current index, splice-based, bounds-checked', () => {
+  let camp = defaultCampaign();
+  camp = addCombatTrackerEntity(camp, 'ent_a');
+  camp = addCombatTrackerEntity(camp, 'ent_b');
+  camp = addCombatTrackerEntity(camp, 'ent_c');
+  const [a, b, c] = listCombatTrackerEntries(camp);
+
+  // Move A (index 0) to C's current index (2).
+  camp = moveCombatTrackerEntry(camp, a.id, 2);
+  assert.deepEqual(listCombatTrackerEntries(camp).map((e) => e.entityId), ['ent_b', 'ent_c', 'ent_a']);
+
+  // Out-of-range index clamps to the last valid slot instead of throwing.
+  camp = moveCombatTrackerEntry(camp, b.id, 99);
+  assert.deepEqual(listCombatTrackerEntries(camp).map((e) => e.entityId), ['ent_c', 'ent_a', 'ent_b']);
+
+  // Unknown entry id is a safe no-op.
+  const unchanged = moveCombatTrackerEntry(camp, 'nope', 0);
+  assert.deepEqual(listCombatTrackerEntries(unchanged).map((e) => e.entityId), ['ent_c', 'ent_a', 'ent_b']);
+});
+
+test('clearCombatTracker empties the list in one action', () => {
+  let camp = defaultCampaign();
+  camp = addCombatTrackerEntity(camp, 'ent_a');
+  camp = addCombatTrackerEntity(camp, 'ent_b');
+  camp = clearCombatTracker(camp);
+  assert.deepEqual(listCombatTrackerEntries(camp), []);
+});
+
+test('setCombatTrackerActiveEntry marks a row active, clicking the same one again toggles it off, only one active at a time', () => {
+  let camp = defaultCampaign();
+  camp = addCombatTrackerEntity(camp, 'ent_a');
+  camp = addCombatTrackerEntity(camp, 'ent_b');
+  const [a, b] = listCombatTrackerEntries(camp);
+  assert.equal(getCombatTrackerActiveEntryId(camp), null);
+
+  camp = setCombatTrackerActiveEntry(camp, a.id);
+  assert.equal(getCombatTrackerActiveEntryId(camp), a.id);
+
+  // Marking a different row moves the highlight there instead.
+  camp = setCombatTrackerActiveEntry(camp, b.id);
+  assert.equal(getCombatTrackerActiveEntryId(camp), b.id);
+
+  // Clicking the already-active row clears it.
+  camp = setCombatTrackerActiveEntry(camp, b.id);
+  assert.equal(getCombatTrackerActiveEntryId(camp), null);
+
+  // An unknown entry id is a safe no-op.
+  camp = setCombatTrackerActiveEntry(camp, a.id);
+  const unchanged = setCombatTrackerActiveEntry(camp, 'nope');
+  assert.equal(getCombatTrackerActiveEntryId(unchanged), a.id);
+});
+
+test('removeCombatTrackerEntry clears a dangling activeEntryId pointer when the active row itself is removed', () => {
+  let camp = defaultCampaign();
+  camp = addCombatTrackerEntity(camp, 'ent_a');
+  camp = addCombatTrackerEntity(camp, 'ent_b');
+  const [a, b] = listCombatTrackerEntries(camp);
+  camp = setCombatTrackerActiveEntry(camp, a.id);
+  camp = removeCombatTrackerEntry(camp, a.id);
+  assert.equal(getCombatTrackerActiveEntryId(camp), null);
+
+  // Removing a DIFFERENT (non-active) row leaves the active pointer alone.
+  camp = addCombatTrackerEntity(camp, 'ent_c');
+  camp = setCombatTrackerActiveEntry(camp, b.id);
+  const [, c] = listCombatTrackerEntries(camp);
+  camp = removeCombatTrackerEntry(camp, c.id);
+  assert.equal(getCombatTrackerActiveEntryId(camp), b.id);
+});
+
+test('clearCombatTracker also resets activeEntryId', () => {
+  let camp = defaultCampaign();
+  camp = addCombatTrackerEntity(camp, 'ent_a');
+  camp = setCombatTrackerActiveEntry(camp, listCombatTrackerEntries(camp)[0].id);
+  camp = clearCombatTracker(camp);
+  assert.equal(getCombatTrackerActiveEntryId(camp), null);
 });
