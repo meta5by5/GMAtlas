@@ -105,7 +105,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
    Same technique .inline-prompt (openInlinePrompt, shell.js) already uses
    for exactly this reason. */
 .settings-menu {
-  position: fixed; z-index: 25;
+  /* Direct follow-up request: "the settings menu hides behind the combat
+     tracker but should be on top regardless of any menus, panels, or
+     windows" — highest z-index of any IN-APP menu/panel on purpose (the
+     dice roller/combat tracker panels top out at 60), so it's never
+     covered by anything else that can be open at the same time. Only
+     .startup-screen (90) sits above this — that's a full-screen takeover
+     shown before the cockpit is even reachable, not a competing panel. */
+  position: fixed; z-index: 70;
   display: flex; flex-direction: column; min-width: 9rem;
   background: var(--tier3-bg); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
   box-shadow: var(--shadow); overflow: hidden;
@@ -139,6 +146,28 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .mc-about-card .icon-btn { position: absolute; top: var(--sp-2); right: var(--sp-2); }
 .mc-about-card h2 { margin: 0 0 0.2rem; }
+
+/* Startup landing page (direct request) — a full-screen takeover, not a
+   dim modal over the cockpit like .mc-about-overlay above (this replaces
+   the whole screen rather than sitting over visible app content), so its
+   background is the requested solid color, not a translucent one. Highest
+   z-index in the app on purpose — it's the very first/only thing
+   reachable on launch, above even .settings-menu's own 70. */
+.startup-screen {
+  position: fixed; inset: 0; z-index: 90;
+  background: #4D4D4D;
+  display: flex; align-items: center; justify-content: center;
+}
+.startup-screen[hidden] { display: none; }
+.startup-card {
+  display: flex; flex-direction: column; align-items: center; gap: var(--sp-3);
+  width: min(22rem, 92vw); text-align: center;
+}
+.startup-logo { width: 6rem; height: 6rem; object-fit: contain; }
+.startup-card h1 { margin: 0; font-size: 1.4rem; }
+.startup-campaigns { display: flex; flex-direction: column; gap: var(--sp-2); width: 100%; }
+.startup-campaign-btn { width: 100%; }
+.startup-version { margin-top: var(--sp-4); }
 
 /* --- Breadcrumbs (secondary tier, above Co-Pilot) ------------------- */
 .mc-breadcrumb {
@@ -377,7 +406,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
      LEFT of the edge nav there, not overlapping it), but at compact widths
      .mc-drawer spans left:0 up to the edge nav (see the <=1023px rule
      below), so the Settings gear's dropdown (relocated into .mc-edge on
-     phone, .settings-menu's own z-index:25) — which pops open wider than
+     phone, .settings-menu's own z-index — which pops open wider than
      the narrow edge column and so visually overlaps the drawer's area —
      was rendering BEHIND the open drawer's background instead of over it,
      regardless of its own z-index (a child's z-index only ever competes
@@ -698,6 +727,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* Visual separator between an entity card's field groups (World
    Demographics: Starport/Bases vs. Tech Level onward, docs/adr/0026). */
 .field-divider { border: none; border-top: 1px solid var(--border); margin: var(--sp-3) 0; }
+/* Direct follow-up request: NPC/Asset/Lifeform's Type/Tags row sits at the
+   top of the statblock area, separated from the character sheet content
+   below it by a HALF-width line (not the full-width .field-divider used
+   everywhere else) — a lighter visual break for two things that are still
+   part of the same general "entity classification" area. */
+.field-divider-half { border: none; border-top: 1px solid var(--border); margin: var(--sp-3) 0; width: 50%; }
 /* WHAT tab's tracker rows (Intent/Threat/Mystery, Resources/Reputation/
    Stress) — auto-fit instead of a fixed 3-column grid, so they reflow to
    2 or 1 per row as the window narrows instead of jumping straight from
@@ -1274,6 +1309,16 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .wt-corner-row > span:first-child { min-width: 6rem; text-transform: capitalize; }
 .wt-migrate-picker { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; margin-top: var(--sp-2); }
 .wt-feature-card .doc-card-head { align-items: center; }
+/* Direct follow-up request: a Feature's own label opens/closes its
+   Description textarea (worldTrackerFeatureRow, drawers/index.js) — reset
+   button chrome so it reads as plain text with just a pointer cursor,
+   inheriting whatever font/color .doc-card-head already gives it rather
+   than picking up a button's own default styling. */
+.wt-feature-label-toggle {
+  background: none; border: none; padding: 0; margin: 0; cursor: pointer; text-align: left;
+  font: inherit; color: inherit;
+}
+.wt-feature-label-toggle:hover { color: var(--accent); }
 /* Sector detail's Features "+" add buttons, two per row (direct follow-up
    request — was one per row in a plain .btn-col). */
 .wt-feature-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-2); }
@@ -1918,23 +1963,81 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .search-result-label { font-size: 0.9rem; }
 .search-result-sub { font-size: 0.75rem; }
 
+/* Direct follow-up request: "the combat tracker should dock to the bottom
+   of the dice roller... when dice roller, combat tracker and the dice roll
+   results are all open, they should not overlap each other on mobile...
+   they should all dock to each other when abutting" — the dice-roller
+   toggle, its own panel, the Combat Tracker panel, and the dice-roll
+   results card (previously four independently `position: fixed` elements
+   that could only avoid overlapping each other by never actually being
+   open at the same time — no longer true once the Combat Tracker gained
+   its own manual open button INSIDE the dice roller panel) now share one
+   real flex column, so an open one always pushes the next down instead of
+   sitting on top of it. Anchored where .dice-roller-toggle always was;
+   scrolls internally (rather than running off-screen) if every panel is
+   open at once on a short phone viewport. */
+.floating-tools-stack {
+  position: fixed; top: var(--sp-3); right: var(--sp-3); z-index: 55;
+  display: flex; flex-direction: column; align-items: flex-end; gap: var(--sp-2);
+  max-height: calc(100vh - 2 * var(--sp-3)); overflow-y: auto; overflow-x: visible;
+}
+
 /* Dice roll window (performFieldRoll's replacement for a plain toast) — a
    graphical breakdown of a statblock roll: the die(s) + field value added
    up on one row, whatever it's measured against on another, and a big
-   color-coded outcome banner. Docked at the bottom-right corner like a
-   toast (not a centered, backdrop-dimmed modal) so it doesn't block
-   working elsewhere in the app while it's up — no backdrop to click
-   through either, since there isn't one; ✕ or Escape closes it. Positioned
-   clear of the edge tabs (--edge-w) and the bottom-center .toast. */
+   color-coded outcome banner. No backdrop to click through, since there
+   isn't one; ✕ or Escape closes it. Docks below the dice roller/Combat
+   Tracker panels (see .floating-tools-stack above) rather than a fixed
+   bottom-right corner, so it can never overlap either of them. */
 .dice-roll-overlay {
-  position: fixed; right: calc(var(--edge-w) + var(--sp-4)); bottom: var(--sp-4); z-index: 35;
-  transform: translateY(1.5rem); transition: transform 0.2s ease;
-  visibility: hidden; pointer-events: none; /* closed window must not intercept clicks in that corner */
+  flex: 0 0 auto; width: min(26rem, 92vw);
+  max-height: 0; overflow: hidden;
+  transform: translateY(1rem); transition: transform 0.2s ease, max-height 0.2s ease;
+  pointer-events: none; /* closed window must not intercept clicks */
 }
-.dice-roll-overlay[data-open="true"] { transform: translateY(0); visibility: visible; pointer-events: auto; }
+.dice-roll-overlay[data-open="true"] { max-height: 40rem; transform: translateY(0); pointer-events: auto; }
+
+/* The 3D dice module's own render target (src/ui/diceBox3d.js) — a single
+   fixed, viewport-sized, transparent overlay dice-box's WebGL canvas fills
+   completely; created once and reused for every roll (never rebuilt per
+   roll). Sits below the existing 2D `.dice-roll-card` (z-index 60) so the
+   outcome banner it renders once the animation settles is always the
+   topmost thing on screen, and below `.settings-menu` (70, deliberately
+   the app's highest) for the same "always reachable" reason that one is
+   pinned there. Invisible/non-interactive at rest — `.active` (added only
+   for the ~1s the dice are actually tumbling) is what makes it show and
+   catch no clicks either, so nothing GM-facing is ever blocked by an idle
+   canvas sitting over the whole page. */
+.dice-box-3d-container {
+  position: fixed; inset: 0; z-index: 58;
+  opacity: 0; pointer-events: none; transition: opacity 0.15s ease;
+}
+.dice-box-3d-container.active { opacity: 1; }
+/* Real bug, direct report ("the dice roller does not roll the 3d dice
+   animation"): dice-box's own vendored style.css only sets opacity/
+   transition on its <canvas> — it never sizes it, so left unstyled it
+   rendered at the browser's default 300x150px canvas size instead of
+   filling this container, making the whole animation tiny/effectively
+   invisible. dice-box always appends exactly one <canvas> as this
+   container's only child, so a plain child selector is enough. */
+.dice-box-3d-container canvas { width: 100%; height: 100%; display: block; }
+
+/* Dice settings tab's quick-pick color swatches (direct follow-up request:
+   "add dice color options including maroon, pink and dark green",
+   DICE_3D_COLOR_PRESETS in data/dice3dThemes.js) — small clickable circles
+   showing the actual preset color, sitting above the native <input
+   type="color"> as a faster shortcut to it, not a replacement. */
+.dice3d-color-swatches { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-1) 0 var(--sp-2); }
+.dice3d-color-swatch {
+  width: 1.6rem; height: 1.6rem; border-radius: 50%; padding: 0;
+  border: 2px solid var(--border-strong); cursor: pointer;
+}
+.dice3d-color-swatch:hover { border-color: var(--accent); }
+.dice3d-color-swatch.active { border-color: var(--accent-strong); box-shadow: 0 0 0 2px var(--accent-strong); }
+.dice3d-color-swatch:disabled { cursor: not-allowed; opacity: 0.4; }
 .dice-roll-card {
   width: min(26rem, 92vw);
-  background: var(--tier3-bg); border: 1px solid var(--border-strong); border-radius: var(--radius);
+  background: var(--tool-panel-bg); border: 1px solid var(--border-strong); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: var(--sp-4);
 }
 .dice-roll-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-4); }
@@ -1963,9 +2066,11 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    browser window rather than living inside .mc-header (unlike every other
    header control, this one shouldn't disappear behind a drawer's own head
    row on a narrow screen). Its result reuses .dice-roll-overlay/-card above
-   (a new method:'custom' case) rather than a second result display. */
+   (a new method:'custom' case) rather than a second result display. Sits as
+   the first flex child of .floating-tools-stack (see above) rather than its
+   own `position: fixed` anchor. */
 .dice-roller-toggle {
-  position: fixed; top: var(--sp-3); right: var(--sp-3); z-index: 55;
+  flex: 0 0 auto;
   width: 2rem; height: 2rem; border-radius: 50%; padding: 0; /* same badge size as .mc-edge's own glyphs (1.1rem) plus their usual padding, direct follow-up request */
   background: #fff; border: 1px solid var(--border-strong); /* white — the d20-thm.png icon's own background, not the app's dark tier2-bg, so it doesn't show a mismatched edge */
   display: flex; align-items: center; justify-content: center; overflow: hidden;
@@ -1984,9 +2089,9 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    request), cropped by this button's own overflow:hidden. */
 .dice-roller-toggle img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
 .dice-roller-panel {
-  position: fixed; top: calc(var(--sp-3) + 2rem + var(--sp-2)); right: var(--sp-3); z-index: 60;
+  flex: 0 0 auto;
   width: min(19rem, 92vw);
-  background: var(--tier3-bg); border: 1px solid var(--border-strong); border-radius: var(--radius);
+  background: var(--tool-panel-bg); border: 1px solid var(--border-strong); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: var(--sp-3);
 }
 .dice-roller-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-2); }
@@ -2010,15 +2115,17 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    its own — direct follow-up request: "do not display a combat tracker
    icon next to the dice roller... just open the combat tracker window
    when a thumbnail is dragged and dropped onto the dice roller icon") —
-   opens directly below the EXISTING .dice-roller-toggle, same position
-   .dice-roller-panel itself uses (the two are never open at once in
-   practice — one's a click target, the other a drag target). Also a drop
-   target itself (data-drop-combat-tracker) for "drop into the open
-   tracker" once it's already showing. */
+   docks below the dice roller panel as the next flex child of
+   .floating-tools-stack (direct follow-up request: "the combat tracker
+   should dock to the bottom of the dice roller" — both CAN be open
+   together now, via the dice roller panel's own manual open button, so
+   they need real flow, not two identical `position: fixed` coordinates).
+   Also a drop target itself (data-drop-combat-tracker) for "drop into the
+   open tracker" once it's already showing. */
 .combat-tracker-panel {
-  position: fixed; top: calc(var(--sp-3) + 2rem + var(--sp-2)); right: var(--sp-3); z-index: 60;
+  flex: 0 0 auto;
   width: min(22rem, 92vw); max-height: 70vh; overflow-y: auto;
-  background: var(--tier3-bg); border: 1px solid var(--border-strong); border-radius: var(--radius);
+  background: var(--tool-panel-bg); border: 1px solid var(--border-strong); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: var(--sp-3);
 }
 .combat-tracker-panel.drop-hover { outline: 2px dashed var(--accent-strong); outline-offset: -2px; }

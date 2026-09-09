@@ -32,6 +32,7 @@ import { factionProviderFor } from '../../data/factionRulesProviders.js';
 import { getEnhancements, strainUsed, strainCapacity, isOverStrained } from '../../domain/enhancements.js';
 import { getMechanicsIndex } from '../../domain/mechanicsIndex.js';
 import { ENHANCEMENT_TYPES } from '../../data/enhancementTypes.js';
+import { DICE_3D_THEMES, findDice3dTheme, DICE_3D_COLOR_PRESETS } from '../../data/dice3dThemes.js';
 import { buildGuideTree, getActiveGuideDoc } from '../../domain/guide.js';
 import { buildMentionEditorHTML, richToolbarHTML, richToolbarToggleHTML, toolbarCollapsed } from '../mentionEditor.js';
 import { buildSessionRecap } from '../../domain/recap.js';
@@ -368,6 +369,25 @@ function inspector(doc, e, ui) {
   // Set here tracks which entities have been explicitly COLLAPSED
   // (inverse of the usual "tracks expanded" convention).
   const overviewOpen = !((ui.collapsedOverview || new Set()).has(e.id));
+  const relKey = `entityRelationships:${e.id}`;
+  const relCollapsed = isPartySectionCollapsed(ui, relKey, false);
+  const relAddHtml = others.length
+    ? `<div class="rel-add">
+        <select data-entity-link-type>${relTypeOptions('linked')}</select>
+        <select data-entity-link-target>${others.map((o) => `<option value="${esc(o.id)}">${esc(o.name) || 'Unnamed'}</option>`).join('')}</select>
+        <input data-entity-link-label placeholder="label (ally, rival…)">
+        <button class="btn sm" data-entity-link-add title="Link" aria-label="Link">🔗 Link</button>
+        <button class="btn ghost sm" data-rel-picker-open title="Search Cast for an entity to link"><span class="icon-mono">🔍</span> Find entity to link</button>
+      </div>${relPickerBlock(doc, e, ui)}`
+    : '<p class="dim small">Add another entity to create relationships.</p>';
+  const relBodyHtml = `
+      <p class="dim small">Drag another entity's ⠿ handle onto this one (or vice versa), pick one below, or find one to link.</p>
+      <div class="rel-chips">${rels || '<span class="dim small">None yet.</span>'}</div>
+      ${relAddHtml}`;
+  const relBlockHtml = `<div class="rel-block">
+      ${partySectionHeaderHtml(relKey, 'Relationships', relCollapsed)}
+      ${relCollapsed ? '' : relBodyHtml}
+    </div>`;
   return `
     <div class="inspector-head">
       <input class="inspector-name" data-entity-field="name" value="${esc(e.name)}" placeholder="Name">
@@ -396,31 +416,53 @@ function inspector(doc, e, ui) {
       ${e.revealedOpen ? `<div class="rich-field">${richToolbarHTML(`entity:${e.id}:revealed`, toolbarCollapsed(doc, ui, `entity:${e.id}:revealed`), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-entity-field="revealed" data-placeholder="Secrets, twists, true motives.">${buildMentionEditorHTML(doc, e.revealed)}</div></div>` : ''}
     </div>`}
     <hr class="field-divider">
+    ${entityTypeTagsBlockHtml(doc, e, ui)}
+    ${npcSection(e)}
+    ${factionSection(doc, e, ui)}
+    ${conflictSection(doc, e, ui)}
+    ${worldProfileSection(doc, e, ui)}
+    ${worldDemographicsSection(doc, e, ui)}
+    ${TOP_OF_STATBLOCK_TYPE_TAGS_TYPES.includes(e.type) ? `${entityTypeTagsRowHtml(doc, e, ui)}<hr class="field-divider-half">` : ''}
+    ${statblockSection(e, doc, ui)}
+    ${relBlockHtml}`;
+}
+
+// Direct follow-up request: "Move the entity type and tags and tag list
+// rows for NPC, Asset and Lifeform entities to the top of the 'Add a
+// Statblock or Attribute' section... For Faction, Conflict, Lore and
+// Location entities, move those rows under a section header 'tags' that is
+// collapsed by default." Item (and any future type not in either list)
+// keeps the original always-visible, in-place behavior as its default.
+const TOP_OF_STATBLOCK_TYPE_TAGS_TYPES = ['npc', 'asset', 'lifeform'];
+const COLLAPSIBLE_TAGS_HEADER_TYPES = ['faction', 'conflict', 'lore', 'location'];
+
+// The Type <select> + tag editor + tag chip list — extracted so it can be
+// rendered in either of two different spots (entityTypeTagsBlockHtml,
+// right below) without duplicating the markup.
+function entityTypeTagsRowHtml(doc, e, ui) {
+  return `
     <div class="inspector-type-tags-row">
       <label class="field-label inspector-type-field">Type
         <select data-entity-field="type">${ENTITY_TYPES.map((t) => `<option value="${t}" ${t === e.type ? 'selected' : ''}>${TYPE_LABEL[t]}</option>`).join('')}</select>
       </label>
       <div class="tag-editor">${tagEditorHead(doc, e, ui)}</div>
     </div>
-    ${tagEditorList(doc, e, ui)}
-    ${npcSection(e)}
-    ${factionSection(doc, e, ui)}
-    ${conflictSection(doc, e, ui)}
-    ${worldProfileSection(doc, e, ui)}
-    ${worldDemographicsSection(doc, e, ui)}
-    ${statblockSection(e, doc, ui)}
-    <div class="rel-block">
-      <h4>Relationships</h4>
-      <p class="dim small">Drag another entity's ⠿ handle onto this one (or vice versa), pick one below, or find one to link.</p>
-      <div class="rel-chips">${rels || '<span class="dim small">None yet.</span>'}</div>
-      ${others.length ? `<div class="rel-add">
-        <select data-entity-link-type>${relTypeOptions('linked')}</select>
-        <select data-entity-link-target>${others.map((o) => `<option value="${esc(o.id)}">${esc(o.name) || 'Unnamed'}</option>`).join('')}</select>
-        <input data-entity-link-label placeholder="label (ally, rival…)">
-        <button class="btn sm" data-entity-link-add title="Link" aria-label="Link">🔗 Link</button>
-        <button class="btn ghost sm" data-rel-picker-open title="Search Cast for an entity to link"><span class="icon-mono">🔍</span> Find entity to link</button>
-      </div>${relPickerBlock(doc, e, ui)}` : '<p class="dim small">Add another entity to create relationships.</p>'}
-    </div>`;
+    ${tagEditorList(doc, e, ui)}`;
+}
+
+// Decides WHERE the Type/Tags row renders for this entity's type — right
+// here (item, or under a collapsed-by-default "Tags" header for Faction/
+// Conflict/Lore/Location), or not at all (NPC/Asset/Lifeform, which render
+// it at the top of the statblock section instead — see TOP_OF_STATBLOCK_
+// TYPE_TAGS_TYPES's own call site above).
+function entityTypeTagsBlockHtml(doc, e, ui) {
+  if (TOP_OF_STATBLOCK_TYPE_TAGS_TYPES.includes(e.type)) return '';
+  if (COLLAPSIBLE_TAGS_HEADER_TYPES.includes(e.type)) {
+    const tagsKey = `entityTags:${e.id}`;
+    const tagsCollapsed = isPartySectionCollapsed(ui, tagsKey, true);
+    return `${partySectionHeaderHtml(tagsKey, 'Tags', tagsCollapsed)}${tagsCollapsed ? '' : entityTypeTagsRowHtml(doc, e, ui)}`;
+  }
+  return entityTypeTagsRowHtml(doc, e, ui);
 }
 
 // NPC "current goal" (docs/design/scene-story-integration-plan.md) — one
@@ -451,9 +493,15 @@ function npcSection(e) {
 function factionSection(doc, e, ui) {
   if (e.type !== 'faction') return '';
   const track = getPressureTrack(doc, e.id);
-  return `
-    <div class="faction-card">
-      <h4>Faction card</h4>
+  // Direct follow-up request: "make the section headers such as 'Conflict'
+  // and 'Relationships'... use the same collapseable format used on the
+  // Campaign panel" — same partySectionHeaderHtml/isPartySectionCollapsed
+  // mechanism as the new Relationships/Tags headers above, default OPEN
+  // (this is an entity's own core identifying content, same reasoning
+  // Overview's own default-open comment already gives).
+  const cardKey = `entityFactionCard:${e.id}`;
+  const cardCollapsed = isPartySectionCollapsed(ui, cardKey, false);
+  const cardBodyHtml = `
       <label class="field-label">${fieldLabelRow('HQ', 'faction', 'hq')}
         <input data-entity-field="hq" value="${esc(e.hq)}" placeholder="Where they operate from">
       </label>
@@ -468,7 +516,11 @@ function factionSection(doc, e, ui) {
       </div>
       ${diplomacyFieldsHtml(e)}
       ${factionStatsHtml(e)}
-      ${factionPressureHtml(e, track)}
+      ${factionPressureHtml(e, track)}`;
+  return `
+    <div class="faction-card">
+      ${partySectionHeaderHtml(cardKey, 'Faction card', cardCollapsed)}
+      ${cardCollapsed ? '' : cardBodyHtml}
     </div>
     ${factionTurnSectionHtml(doc, e, ui)}`;
 }
@@ -522,9 +574,13 @@ function conflictSection(doc, e, ui) {
   const localFactions = e.locationId ? factionsPresentAt(doc, e.locationId) : listEntities(doc, 'faction');
   const involvedIds = new Set(involvedFactions.map((f) => f.id));
   const linkableFactions = localFactions.filter((f) => !involvedIds.has(f.id));
-  return `
-    <div class="faction-card">
-      <h4>Conflict</h4>
+  // Direct follow-up request: "make the section headers such as 'Conflict'
+  // and 'Relationships'... use the same collapseable format used on the
+  // Campaign panel" — default OPEN, same reasoning factionSection's own
+  // "Faction card" header above already uses.
+  const conflictKey = `entityConflict:${e.id}`;
+  const conflictCollapsed = isPartySectionCollapsed(ui, conflictKey, false);
+  const conflictBodyHtml = `
       <label class="field-label">Status
         <select data-entity-field="status">${CONFLICT_STATUS_OPTIONS.map(([v, l]) => `<option value="${v}" ${e.status === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
       </label>
@@ -561,7 +617,11 @@ function conflictSection(doc, e, ui) {
         <button class="btn ghost sm" data-conflict-hook-add="${esc(e.id)}">+ Add</button>
       </div>
       <button class="section-toggle" data-conflict-depth-toggle="${esc(e.id)}">${depthOpen ? '▾' : '▸'} Add depth</button>
-      ${depthOpen ? conflictDepthHtml(doc, e, ui, involvedFactions) : ''}
+      ${depthOpen ? conflictDepthHtml(doc, e, ui, involvedFactions) : ''}`;
+  return `
+    <div class="faction-card">
+      ${partySectionHeaderHtml(conflictKey, 'Conflict', conflictCollapsed)}
+      ${conflictCollapsed ? '' : conflictBodyHtml}
     </div>`;
 }
 
@@ -874,7 +934,13 @@ function worldProfileSection(doc, e, ui = {}) {
   const isSystemTagged = (e.tags || []).includes('system');
   const hasAny = e.hex || e.zone || e.worldSize || e.atmosphere || e.biome || e.hydrographics || e.gasGiant || isStarTagged || isSystemTagged;
   if (!hasAny && doc.settings.genrePack !== 'hostile') return '';
-  const open = (ui.expandedWorldProfile || new Set()).has(e.id);
+  // Direct follow-up request: "use the same collapseable format used on
+  // the Campaign panel" — converted from its own bespoke ui.expandedWorldProfile
+  // Set to the shared mechanism; `open` is kept as the same derived boolean
+  // so the rest of this function (built around ${open ? ... : ''}) needs no
+  // other changes. Same default-collapsed behavior as before.
+  const worldProfileKey = `entityWorldProfile:${e.id}`;
+  const open = !isPartySectionCollapsed(ui, worldProfileKey, true);
   const codeSelect = (field, label, table, value) => `
     <label class="field-label">${fieldLabelRow(label, 'location', field)}
       <select data-entity-field="${field}">
@@ -889,7 +955,7 @@ function worldProfileSection(doc, e, ui = {}) {
   const overriddenBy = hexZone && hexZone.overriddenBy;
   return `
     <div class="faction-card">
-      <h4><button class="section-toggle" data-world-profile-toggle="${esc(e.id)}">${open ? '▾' : '▸'} World Profile (UWP)</button></h4>
+      ${partySectionHeaderHtml(worldProfileKey, 'World Profile (UWP)', !open)}
       ${open ? `
       <p class="dim small">HOSTILE's own Universal World Profile format — reference only, doesn't affect Trade pricing. See Settings → Trade Economy Model for the full digit-meaning legend.</p>
       ${(system && system.id !== e.id) || (star && star.id !== e.id) ? `<div class="location-summary">
@@ -943,7 +1009,12 @@ function worldDemographicsSection(doc, e, ui = {}) {
   const hasAny = e.starport || (e.bases && e.bases.length) || e.techLevel || e.lawLevel ||
     (e.tradeCodes && e.tradeCodes.length) || e.developmentLevel || e.population || e.government;
   if (!hasAny && doc.settings.genrePack !== 'hostile') return '';
-  const open = (ui.expandedWorldDemographics || new Set()).has(e.id);
+  // Direct follow-up request: "use the same collapseable format used on
+  // the Campaign panel" — same conversion worldProfileSection's own
+  // comment above already explains; `open`/default-collapsed behavior
+  // unchanged.
+  const worldDemoKey = `entityWorldDemographics:${e.id}`;
+  const open = !isPartySectionCollapsed(ui, worldDemoKey, true);
   const codeSelect = (field, label, table, value) => `
     <label class="field-label">${fieldLabelRow(label, 'location', field)}
       <select data-entity-field="${field}">
@@ -959,7 +1030,7 @@ function worldDemographicsSection(doc, e, ui = {}) {
     <span class="chip sm">${esc(b)} <button type="button" class="icon-btn" data-entity-base-remove="${esc(e.id)}::${esc(b)}" title="Remove">✕</button></span>`).join('');
   return `
     <div class="faction-card">
-      <h4><button class="section-toggle" data-world-demographics-toggle="${esc(e.id)}">${open ? '▾' : '▸'} World Demographics</button></h4>
+      ${partySectionHeaderHtml(worldDemoKey, 'World Demographics', !open)}
       ${open ? `
       ${codeSelect('starport', 'Starport', STARPORT_CLASSES, e.starport)}
       <div class="faction-assets">
@@ -1762,6 +1833,7 @@ function oracleGroupRow(doc, node, forceOpen, expanded, editorOpen, tagEditorOpe
 // cost of rendering the other three.
 const SETTINGS_TABS = [
   { id: 'general', label: 'General' },
+  { id: 'dice', label: 'Dice' },
   { id: 'campaigns', label: 'Campaigns' },
   { id: 'ruleset-profile-editor', label: 'Ruleset Profile Editor' },
   { id: 'turn-steps', label: 'Turn Step' },
@@ -1833,6 +1905,7 @@ function settings(doc, ui = {}) {
         <h3>Build</h3>
         <p class="dim small">Phase ${esc(BUILD.phase)} · v${esc(BUILD.version)} — ${esc(BUILD.label)}</p>
       </div>`,
+    dice: () => dice3dSettingsSection(doc, ui),
     campaigns: () => campaignsSection(doc, ui),
     'ruleset-profile-editor': () => rulesetProfileEditorSection(doc, ui),
     'turn-steps': () => turnStepsSettingsSection(doc, ui),
@@ -1892,6 +1965,43 @@ const FIELD_FORMATS = [
 // them run completely unmodified.
 function profileAsSettingsDoc(doc, profile) {
   return { ...doc, settings: { ...doc.settings, ...profile.ruleset } };
+}
+
+// The Dice settings tab (direct follow-up request: "add a settings tab for
+// selecting dice type and color options that can be configurable") — the
+// 3D-animation on/off toggle (moved out of General's own catch-all group,
+// see its own comment history there) plus a theme <select>, a row of
+// quick-pick color swatches (direct follow-up request: "add dice color
+// options including maroon, pink and dark green" — DICE_3D_COLOR_PRESETS,
+// data/dice3dThemes.js), and a native color picker for anything else.
+// Theme options come straight from data/dice3dThemes.js (each a real
+// vendored dice-box theme folder — adding a theme means one entry there,
+// never a change here); dice3dColor stays '' (this theme's own built-in
+// default color) until a GM actually picks one, and the native picker's
+// value falls back to a sane visible default (#2e8555, dice-box's own
+// stock default) rather than showing a browser's default black when
+// nothing's been chosen yet.
+function dice3dSettingsSection(doc, ui) {
+  const currentTheme = findDice3dTheme(doc.settings.dice3dTheme);
+  const currentColor = (doc.settings.dice3dColor || '').toLowerCase();
+  return `
+    <div class="settings-group">
+      ${sectionHeadRow('h3', '3D Dice', 'settings-dice3d')}
+      <label class="chip sm"><input type="checkbox" data-settings-dice3d ${doc.settings.dice3dEnabled ? 'checked' : ''}> Roll animated 3D dice</label>
+      ${helpBody('settings-dice3d', "The same physics-based 3D dice module Iron Fellowship/Crew-Link uses, for statblock rolls, the floating dice roller, single-table Oracle draws, and Colony's Lifeform Encounters roll. Only works when this app is served over http(s) (npm run serve) — a file:// double-click always falls back to the instant 2D result, same as this app's PDF-scanning features. Turn this off if the ~1s animation slows down rapid-fire rolling; the outcome is identical either way.", ui)}
+      <label class="field-label">Dice type
+        <select data-settings-dice3d-theme>${DICE_3D_THEMES.map((t) => `<option value="${esc(t.id)}" ${t.id === currentTheme.id ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select>
+      </label>
+      <label class="field-label">Dice color
+        <div class="dice3d-color-swatches">
+          ${DICE_3D_COLOR_PRESETS.map((c) => `<button type="button" class="dice3d-color-swatch ${c.hex.toLowerCase() === currentColor ? 'active' : ''}" style="background:${esc(c.hex)}" data-dice3d-color-preset="${esc(c.hex)}" title="${esc(c.label)}" ${currentTheme.supportsColor ? '' : 'disabled'} aria-label="${esc(c.label)}"></button>`).join('')}
+        </div>
+        <input type="color" data-settings-dice3d-color value="${esc(doc.settings.dice3dColor || '#2e8555')}" ${currentTheme.supportsColor ? '' : 'disabled'}>
+      </label>
+      ${currentTheme.supportsColor
+        ? '<p class="dim small">Applies to the currently selected dice type.</p>'
+        : `<p class="dim small">${esc(currentTheme.label)} uses its own fixed printed look and ignores color — pick Default, Smooth, Gemstone, or Rust to use this.</p>`}
+    </div>`;
 }
 
 function campaignsSection(doc, ui) {
@@ -2978,10 +3088,12 @@ function party(doc, ui = {}) {
   // entity thumbnails") and open the Entity Editor.
   const sharedAssetVehicleThumbs = (party_.sharedAssetIds || []).map((id) => sharedAssetVehicleThumb(doc, id)).join('');
 
-  // Direct follow-up request: Party Roster starts open; the other four
-  // sections here start collapsed — see isPartySectionCollapsed's own
-  // comment for the fresh-open-vs-tab-refocus distinction.
-  const rosterCollapsed = isPartySectionCollapsed(ui, 'roster', false);
+  // Direct follow-up request: "by default, the section headers for [Campaign
+  // and Party] should all be collapsed" — Party Roster previously started
+  // open on its own; now every Party section shares the same collapsed-by-
+  // default baseline (still per-section toggleable, and the panel title's
+  // own collapse-all/expand-all still works the same way).
+  const rosterCollapsed = isPartySectionCollapsed(ui, 'roster', true);
   const trackersCollapsed = isPartySectionCollapsed(ui, 'trackers', true);
   const sharedAssetsCollapsed = isPartySectionCollapsed(ui, 'sharedAssets', true);
   const sharedGearCollapsed = isPartySectionCollapsed(ui, 'sharedGear', true);
@@ -3233,6 +3345,7 @@ function colonyTabHtml(doc, ui = {}) {
       ${colonyFieldHtml(doc, ui, fields, campaignTurnField)}
       ${colonyTurnStepWidgetHtml(currentStep)}
     </div>
+    <hr class="field-divider">
     ${stepTextHtml}
     ${crewTaskBox}`;
 
@@ -3272,10 +3385,16 @@ function colonyTabHtml(doc, ui = {}) {
       <textarea rows="1" data-colony-encounter-field="${esc(row.id)}::note" placeholder="Encounter…">${esc(row.note)}</textarea>
     </div>`).join('');
 
-  const turnSheetCollapsed = isPartySectionCollapsed(ui, 'colonyTurnSheet', false);
-  const campaignGuideCollapsed = isPartySectionCollapsed(ui, 'campaignGuide', false);
-  const crewRosterCollapsed = isPartySectionCollapsed(ui, 'crewRoster', false);
-  const lifeformEncountersCollapsed = isPartySectionCollapsed(ui, 'lifeformEncounters', false);
+  // Direct follow-up request: "by default, the section headers for [Campaign
+  // and Party] should all be collapsed" — every Colony-tab section now
+  // shares that same collapsed-by-default baseline (previously all four
+  // defaulted open; the panel already force-collapsed them on every open/
+  // tab-switch regardless, so this just makes that the real resting state
+  // too, not just a forced one).
+  const turnSheetCollapsed = isPartySectionCollapsed(ui, 'colonyTurnSheet', true);
+  const campaignGuideCollapsed = isPartySectionCollapsed(ui, 'campaignGuide', true);
+  const crewRosterCollapsed = isPartySectionCollapsed(ui, 'crewRoster', true);
+  const lifeformEncountersCollapsed = isPartySectionCollapsed(ui, 'lifeformEncounters', true);
   return `
     ${nameFieldHtml}
     ${partySectionHeaderHtml('campaignGuide', 'Campaign Guide', campaignGuideCollapsed)}
@@ -3342,15 +3461,27 @@ function starshipTabHtml(doc, ui = {}) {
       <div class="turn-step-text-body" data-turn-step-text-body>${buildMentionEditorHTML(doc, currentStep.step.text)}</div>
       <button type="button" class="btn ghost sm" data-starship-turn-step-start title="Runs a ruleset for this step — placeholder, TBD">▶ Start</button>
     </div>` : '';
+  // Direct follow-up request: "Put the Campaign Turn row and Turn Step
+  // description row under a 'Campaign Header' section header on the
+  // Starship tab like on the Colony tab" — same partySectionHeaderHtml
+  // wrapper Colony's own campaignTurnRowHtml uses, under its own
+  // 'starshipCampaignGuide' key so the two tabs' collapsed states stay
+  // independent (each tab already keeps its own turn/step state separate —
+  // starshipCampaignTurn vs colony's campaignTurn — this follows the same
+  // "same label, separate state" pattern).
+  const campaignGuideCollapsed = isPartySectionCollapsed(ui, 'starshipCampaignGuide', true);
   return `
     ${starshipThumbnailRowHtml(doc)}
+    ${partySectionHeaderHtml('starshipCampaignGuide', 'Campaign Guide', campaignGuideCollapsed)}
+    ${campaignGuideCollapsed ? '' : `
     <div class="colony-turn-row">
       <label class="field-label">Campaign Turn
         ${numStepper(`<input type="number" data-starship-campaign-turn value="${turn}">`)}
       </label>
       ${colonyTurnStepWidgetHtml(currentStep, 'starship')}
     </div>
-    ${stepTextHtml}`;
+    <hr class="field-divider">
+    ${stepTextHtml}`}`;
 }
 
 // The Campaign panel (direct follow-up request: "Rename the Colony panel
@@ -4171,21 +4302,40 @@ function worldTrackerMigratePicker(doc, ui, x, y, feature) {
 // A traditional "hidden/not visible" icon — eye outline crossed by a
 // diagonal slash — replacing the 🙈 "see-no-evil monkey" emoji that used to
 // mark a feature "Mark undiscovered" (direct follow-up request: it read as
-// a joke/animal glyph, not "hidden"). The reverse action ("Mark discovered")
-// keeps the plain 👁 emoji — only the confusing one needed replacing.
+// a joke/animal glyph, not "hidden"). Direct follow-up request ("use these
+// icons for viewed and unviewed for the discovered/undiscovered states")
+// paired it with a matching plain-eye SVG (same viewBox/stroke, just the
+// outline plus a pupil, no slash) — icon now reflects the feature's CURRENT
+// state (open eye = discovered/viewed, slashed eye = undiscovered/
+// unviewed), not the action a click performs; the button's own title still
+// names that action either way.
 const EYE_SLASH_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2.5 12S6 6 12 6c1.6 0 3 .4 4.3 1M21.5 12s-1.2 2.1-3.2 3.8M9.8 9.9a3 3 0 0 0 4.3 4.3"/><path d="M2.5 2.5l19 19"/></svg>';
+const EYE_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 6 12 6s9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="3"/></svg>';
 
+// Direct follow-up request: "add a two-row, expandable Description
+// textbox with editor that can be accessed by clicking on the feature
+// listed from Features tab" — the feature's own label is now a toggle
+// (reusing the shared partySectionHeaderHtml-style Set, isPartySectionCollapsed,
+// under a per-feature key so each feature's Description opens/closes
+// independently) rather than plain text; collapsed by default, matching
+// "accessed by clicking" (not shown up front). The textarea itself reuses
+// .oracle-field-textarea's existing scrollHeight-based auto-grow (shell.js's
+// onInput) starting at 2 rows, and commits via the same data-sector-coord +
+// change-event pattern the sibling Sector Notes field already uses.
 function worldTrackerFeatureRow(doc, ui, sx, sy, f, { withSector = false } = {}) {
+  const descKey = `wtFeatureDesc:${f.id}`;
+  const descOpen = !isPartySectionCollapsed(ui, descKey, true);
   return `
     <div class="doc-card wt-feature-card">
       <div class="doc-card-head">
-        <span>${withSector ? `Sector ${sx},${sy} — ` : ''}${esc(wtFeatureLabel(f.kind))}${f.discovered ? '' : ' <span class="dim small">(undiscovered)</span>'}${f.movedFrom ? ` <span class="dim small">(moved from ${f.movedFrom.x},${f.movedFrom.y})</span>` : ''}</span>
+        <button type="button" class="wt-feature-label-toggle" data-party-section-toggle="${esc(descKey)}" title="${descOpen ? 'Hide' : 'Show'} Description">${withSector ? `Sector ${sx},${sy} — ` : ''}${esc(wtFeatureLabel(f.kind))}${f.discovered ? '' : ' <span class="dim small">(undiscovered)</span>'}${f.movedFrom ? ` <span class="dim small">(moved from ${f.movedFrom.x},${f.movedFrom.y})</span>` : ''}</button>
         <div class="doc-card-actions">
-          <button class="icon-btn" data-feature-discover-toggle="${esc(f.id)}" data-sector-coord="${sx},${sy}" title="${f.discovered ? 'Mark undiscovered' : 'Mark discovered'}">${f.discovered ? EYE_SLASH_ICON : '👁'}</button>
+          <button class="icon-btn" data-feature-discover-toggle="${esc(f.id)}" data-sector-coord="${sx},${sy}" title="${f.discovered ? 'Mark undiscovered' : 'Mark discovered'}">${f.discovered ? EYE_ICON : EYE_SLASH_ICON}</button>
           ${f.mobile ? `<button class="icon-btn" data-feature-migrate-toggle="${esc(f.id)}" title="Migrate to an adjacent sector">➤</button>` : ''}
           <button class="icon-btn" data-feature-remove="${esc(f.id)}" data-sector-coord="${sx},${sy}" title="Remove">✕</button>
         </div>
       </div>
+      ${descOpen ? `<textarea rows="2" class="oracle-field-textarea" data-sector-feature-notes="${esc(f.id)}" data-sector-coord="${sx},${sy}" placeholder="Description…">${esc(f.notes || '')}</textarea>` : ''}
       ${f.mobile ? worldTrackerMigratePicker(doc, ui, sx, sy, f) : ''}
     </div>`;
 }
@@ -4208,7 +4358,18 @@ function worldTrackerSectorDetail(doc, ui, x, y) {
 
   const investigationCount = countInvestigationSites(doc);
   const atInvestigationCap = investigationCount >= MAX_INVESTIGATION_SITES;
-  const cornerLabelsOpen = !!ui.worldTrackerCornerLabelsOpen;
+  // Direct follow-up request: "make 'Corner Labels', Notes, Features,
+  // Overlay Icon titles... section headers using the same collapsing
+  // format as Campaign panel" — same partySectionHeaderHtml/
+  // isPartySectionCollapsed pattern Campaign/Party's own sections already
+  // use (one shared toggle Set despite its collapsedPartySections name).
+  // One GM-wide preference per section (not per-sector — matches Corner
+  // Labels' own prior single ui.worldTrackerCornerLabelsOpen behavior,
+  // now folded into this same mechanism instead of a bespoke flag).
+  const overlayIconOpen = !isPartySectionCollapsed(ui, 'wtSectorOverlayIcon', false);
+  const featuresOpen = !isPartySectionCollapsed(ui, 'wtSectorFeatures', false);
+  const notesOpen = !isPartySectionCollapsed(ui, 'wtSectorNotes', false);
+  const cornerLabelsOpen = !isPartySectionCollapsed(ui, 'wtSectorCornerLabels', true);
   return `
     <div class="settings-group wt-sector-detail">
       <h3>Sector ${x},${y}${isHome ? ' 🏠' : ''}</h3>
@@ -4230,21 +4391,23 @@ function worldTrackerSectorDetail(doc, ui, x, y) {
           <label class="field-label">Hazard level${numStepper(`<input type="number" min="0" data-sector-hazard-level="${x},${y}" value="${sector.hazardLevel == null ? '' : sector.hazardLevel}">`)}</label>
         </div>
         ${sector.resourceHarvested ? '<p class="dim small">(harvested)</p>' : `<button class="btn ghost sm" data-sector-harvest="${x},${y}">Mark Harvested</button>`}` : ''}
-      <h4>Overlay Icon</h4>
+      ${partySectionHeaderHtml('wtSectorOverlayIcon', 'Overlay Icon', !overlayIconOpen)}
+      ${overlayIconOpen ? `
       <label class="field-label">Manual override (blank = automatic)
         <select data-sector-overlay-icon data-sector-coord="${x},${y}">
           <option value="">— Automatic —</option>
           ${iconOptions}
         </select>
-      </label>
-      <h4>Features</h4>
+      </label>` : ''}
+      ${partySectionHeaderHtml('wtSectorFeatures', 'Features', !featuresOpen)}
+      ${featuresOpen ? `
       <div class="wt-feature-buttons">
         ${WT_FEATURE_KINDS.map((f) => `<button class="btn ghost sm" data-sector-add-feature="${x},${y}" data-feature-kind="${f.kind}">+ ${esc(f.label)}</button>`).join('')}
       </div>
-      ${featureRows || '<p class="dim small">No features yet.</p>'}
-      <h4>Notes</h4>
-      <textarea rows="3" data-sector-notes="${x},${y}" placeholder="Sector notes…">${esc(sector.notes)}</textarea>
-      <h4 class="section-head-row"><button type="button" class="btn ghost sm" data-sector-corner-labels-toggle>${cornerLabelsOpen ? '▾' : '▸'} Corner Labels</button></h4>
+      ${featureRows || '<p class="dim small">No features yet.</p>'}` : ''}
+      ${partySectionHeaderHtml('wtSectorNotes', 'Notes', !notesOpen)}
+      ${notesOpen ? `<textarea rows="3" data-sector-notes="${x},${y}" placeholder="Sector notes…">${esc(sector.notes)}</textarea>` : ''}
+      ${partySectionHeaderHtml('wtSectorCornerLabels', 'Corner Labels', !cornerLabelsOpen)}
       ${cornerLabelsOpen ? cornerRows : ''}
     </div>`;
 }

@@ -43,7 +43,12 @@ export const RULESETS = [
       stats: [
         { key: 'Reaction', value: 1 },
         { key: 'Speed', value: 1, format: 'inches', rollMethod: 'none' },
-        { key: 'Combat', value: 0 },
+        // Direct follow-up request: "change the target number from 6 to 4
+        // for 5PFH 'combat' dice rolls" — a per-stat target overrides the
+        // ruleset-wide attributeTarget (6, unchanged for Reaction/Savvy/
+        // Tough), same override mechanism Speed's own rollMethod/format
+        // already use above (domain/statblocks.js's makeStatblock).
+        { key: 'Combat', value: 0, target: 4 },
         { key: 'Savvy', value: 1 },
         { key: 'Tough', value: 3 },
       ],

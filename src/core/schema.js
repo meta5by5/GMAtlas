@@ -292,6 +292,26 @@ export function defaultCampaign(now = new Date().toISOString()) {
       // two named in the request; a GM on a ruleset with differently-named
       // resources (5PFH's Luck/XP) edits this list in Settings.
       partyHeadlineFields: ['Health', 'Momentum'],
+      // 3D dice (src/ui/diceBox3d.js, direct request — the same @3d-dice/
+      // dice-box module Iron Fellowship/Crew-Link uses): whether a roll
+      // plays the animated 3D dice before showing the usual outcome card.
+      // Defaults on; a GM toggles it off in Settings if the ~1s animation
+      // slows down rapid-fire rolling. Has no effect at all over file://
+      // (dice-box's assets can't load there regardless — see diceBox3d.js)
+      // or on a device where it fails to load — both fall back to the
+      // instant 2D card exactly as if this were false, silently.
+      dice3dEnabled: true,
+      // Direct follow-up request: "add a settings tab for selecting dice
+      // type and color options" — dice3dTheme is one of DICE_3D_THEMES'
+      // own ids (data/dice3dThemes.js), each a real vendored dice-box theme
+      // (assets/vendor/dice-box/assets/themes/<id>/); dice3dColor is an
+      // optional hex override ('' = use the theme's own built-in default
+      // color, e.g. Rust's #aa4f4a) — only visibly affects a theme whose
+      // own material type is 'color' (Default/Smooth/Gemstone/Rust); Dice
+      // of Rolling/Wooden are fixed-texture ('standard') and ignore it,
+      // same as the real theme's own printed-dice look would.
+      dice3dTheme: 'default',
+      dice3dColor: '',
       form: {},          // legacy Story Director form fields, preserved verbatim
       ui: { activeCenterTab: 'journal', activeLeftTab: 'entityList', oracleFilter: '', entityFilter: '', docFilter: '', docTagFilter: [] },
     },

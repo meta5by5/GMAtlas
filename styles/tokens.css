@@ -27,6 +27,15 @@
   --tier3-bg:     rgba(9, 14, 26, 0.92);
   --tier3-border: var(--border);
 
+  /* Direct follow-up request: "the 70% gray background should be opaque
+     but meant to be a '70% gray' like a dark gray" — a print-style "70%
+     gray" (70% black ink coverage, i.e. 30% white) rather than 70% alpha:
+     fully opaque so it doesn't blend with whatever sits behind it, and
+     deliberately neutral (not the app's usual blue-tinted tier surfaces),
+     one shared token so all three floating tool panels read as one
+     visual family. */
+  --tool-panel-bg: rgb(77, 77, 77);
+
   /* Spacing / shape / type */
   --sp-1: 0.25rem; --sp-2: 0.5rem; --sp-3: 0.75rem; --sp-4: 1rem; --sp-6: 1.5rem;
   --radius: 0.7rem; --radius-sm: 0.45rem;

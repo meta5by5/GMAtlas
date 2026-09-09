@@ -9,7 +9,7 @@ import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { continueStory, restartStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField, rollWhereDetailField, addContextEntity, removeContextEntity } from '../domain/session.js';
 import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, addSceneAsset, removeSceneAsset, addSceneLocation, removeSceneLocation, setSceneSystem, addSceneDismissedFaction, removeSceneDismissedFaction, moveSceneActor } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
-import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag } from '../domain/oracles.js';
+import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag, tablesWithOverrides, getTable } from '../domain/oracles.js';
 import { oracleLinkTagsFor } from '../data/entityFieldOracleLinks.js';
 import { addThread, advanceThread, removeThread, setThreadStatus, setThreadPriority } from '../domain/threads.js';
 import { createExpedition, setExpeditionDial } from '../domain/expeditions.js';
@@ -19,7 +19,7 @@ import {
   rollAction, formatRollText, formatRollCopyText, rollFlat, formatFlatRollText, formatFlatRollCopyText,
   rollTraveller, formatTravellerRollText, formatTravellerRollCopyText,
   rollCustomDice, parseDiceNotation, formatCustomDiceRollText, formatCustomDiceRollCopyText,
-  rollDicePool, formatDicePoolRollText, formatDicePoolRollCopyText,
+  rollDicePool, formatDicePoolRollText, formatDicePoolRollCopyText, rollD100,
 } from '../domain/dice.js';
 import {
   createEntity, updateEntity, addEntityTag, removeEntityTag, removeEntity, filterEntities, setActiveEntity, addRelationship, removeRelationship,
@@ -58,7 +58,7 @@ import { resolveLifeformEncounterSlot } from '../domain/lifeforms.js';
 import {
   getSector, listTouchedSectors, revealSector, surveySector, harvestSectorResource,
   setSectorNotes, setSectorOverlayIcon, setSectorCornerLabel, removeSectorCornerLabel,
-  addSectorFeature, discoverSectorFeature, toggleSectorFeatureDiscovered, removeSectorFeature, adjacentSectors,
+  addSectorFeature, discoverSectorFeature, toggleSectorFeatureDiscovered, updateSectorFeatureNotes, removeSectorFeature, adjacentSectors,
   migrateFeature, setHomeBase, rollHomeBase, advanceWorldTurn, generateMissionHooks, setWorldTrackerNotes, gridSizeOf,
   toggleInvestigationSite, rollRandomInvestigationSite, setSectorResourceLevel, setSectorHazardLevel, resetWorldTracker,
   MAX_INVESTIGATION_SITES,
@@ -89,8 +89,10 @@ import { universalSearch } from '../domain/search.js';
 import { positionCardHtml, composerBodyHtml, navigatorBodyHtml } from './workspace/index.js';
 import { renderCopilot } from './copilotPanel.js';
 import { renderDrawer, formatBytes, helpToggle, partyMemberCard } from './drawers/index.js';
-import { listCombatTrackerEntries, addCombatTrackerEntity, removeCombatTrackerEntry, moveCombatTrackerEntry, clearCombatTracker, getCombatTrackerActiveEntryId, setCombatTrackerActiveEntry } from '../domain/combatTracker.js';
+import { listCombatTrackerEntries, addCombatTrackerEntity, removeCombatTrackerEntry, moveCombatTrackerEntry, clearCombatTracker, getCombatTrackerActiveEntryId, setCombatTrackerActiveEntry, addAllPartyMembersToCombatTracker } from '../domain/combatTracker.js';
+import { hasCharacterTag } from '../domain/statblocks.js';
 import { renderFactionEvents } from './drawers/factionEvents.js';
+import { roll3d } from './diceBox3d.js';
 import { renderSearchPanel } from './searchPanel.js';
 import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
 import { isModuleVisible, setModuleEnabled, setStoryboardPosition, updateProfileRuleset, applyProfileDraft, resolvePositionContentId } from '../domain/rulesProfiles.js';
@@ -347,6 +349,13 @@ let settingsMenuOpen = false; // ephemeral — the header gear's Settings/About 
 // (with a confirm prompt) plus a "start new campaign" shortcut into
 // Settings' own Campaigns tab.
 let campaignSwitcherOpen = false;
+// Direct request: "a startup page on initial app startup that displays the
+// available campaigns and an option to open settings" — a full-screen
+// landing page shown on every launch (confirmed via AskUserQuestion, not
+// just a first-ever-use onboarding step), dismissed by picking a campaign
+// or opening Settings. Ephemeral — never persisted, so it's back on the
+// next real page load exactly as requested.
+let startupScreenOpen = true;
 let settingsTab = 'general'; // ephemeral — which of the 6 topical Settings tabs is active (UX batch)
 // Ruleset Profile Editor tab (design/adr/rules-profiles-multi-campaign.md) —
 // which profile the ruleset/module/position editor is currently showing;
@@ -446,10 +455,6 @@ let worldTrackerMigrateOpen = new Set();
 // buttons that enable separate tabs") — same plain-string ephemeral state
 // as worldTrackerTab above.
 let colonyPanelTab = 'colony';
-// A sector detail's Corner Labels sub-section (direct follow-up request —
-// collapsed by default, moved below Notes); only one sector's detail is
-// ever shown at a time, so a single flat boolean is enough.
-let worldTrackerCornerLabelsOpen = false;
 // Feature-kind labels for World Tracker Journal entries (direct follow-up
 // request) — drawers/index.js's own WT_FEATURE_KINDS/wtFeatureLabel are
 // private to that file; this is the same handful of labels, just where
@@ -569,7 +574,6 @@ let entityTagListOpen = false; // ephemeral — collapses the tag sub-filter chi
 let catalogPickerOpen = false; // ephemeral — the Cast drawer's "+ Item from catalog" (ADR 0012) inline picker, open or not
 let enhancementDraft = {}; // ephemeral — entityId -> name text rolled into the Enhancements add-form's name field, overwritten by each 🎲 roll until "Install" commits it (docs/adr/next-request.md, 2026-07-06)
 let expandedEnhancements = new Set(); // ephemeral — entity ids whose Enhancements section is expanded (collapsed by default)
-let expandedWorldDemographics = new Set(); // ephemeral — entity ids whose World Demographics card is expanded (docs/adr/0026 follow-up, collapsed by default)
 let expandedSceneFields = new Set(); // ephemeral — "sceneId::field" keys whose Scene Details field is expanded (UX batch, collapsed by default; click the label to expand)
 let collapsedToolbars = new Set(); // ephemeral — rich-text toolbar keys OVERRIDDEN away from campaign.settings.toolbarCollapsedByDefault (mentionEditor.js's toolbarCollapsed() XORs this against the default; see UX batch)
 let expandedPartyMembers = new Set(); // ephemeral — entity ids whose Party member card shows its statblocks (collapsed by default; click the name to expand, UX batch)
@@ -580,7 +584,6 @@ let collapsedOverview = new Set(); // ephemeral — entity ids whose Overview fi
 let collapsedEntityTags = new Set(); // ephemeral — entity ids whose Tags chip list has been explicitly collapsed (open by default, direct follow-up request)
 let expandedContracts = new Set(); // ephemeral — contract (Thread) ids whose full row is expanded (collapsed to just the name by default, UX batch)
 let tradeLocationTagFilter = ''; // ephemeral — Trade tab's Location tag filter (UX batch), narrows the Location <select>'s options
-let expandedWorldProfile = new Set(); // ephemeral — entity ids whose World Profile (UWP) card is expanded (docs/adr/0026 follow-up, collapsed by default)
 let basesOfInfluenceToggled = new Set(); // ephemeral — faction ids whose Bases of Influence section has been explicitly flipped away from its DATA-driven default (open if empty, collapsed if any bases exist — direct request)
 let expandedConflictDepth = new Set(); // ephemeral — conflict entity ids whose "Add depth" section is expanded (Faction Conflict, collapsed by default per the validated hero-path/depth split)
 let conflictEscalationSuggestions = []; // ephemeral — computed right after a Faction Turn commit (suggestedConflictEscalations); a dismissible one-click "did this affect a tracked conflict?" prompt, never applied automatically (Article II)
@@ -671,6 +674,64 @@ let partyTrackersEditOpen = false; // ephemeral — one shared edit-mode toggle 
 // open tab — "collapsed by default when opening the Party Tracker (not
 // when switching focus to other open tabs)," direct quote.
 let collapsedPartySections = new Set();
+// Campaign panel's own section keys (drawers/index.js's colonyTabHtml/
+// starshipTabHtml) and Party's own (partyMemberCard/party()) — direct
+// follow-up requests: (1) "show the [Campaign] panel with all headers
+// collapsed whenever opening or changing tabs to the Campaign panel", (2)
+// "make the Campaign and Party headers... toggle the section headers to
+// open or close" (isSectionsAllCollapsed/setSectionsCollapsed below, and
+// the [data-drawer-title] click handler), and (3) "by default, the section
+// headers for [Campaign and Party] should all be collapsed" — every entry
+// below now defaults collapsed:true (Party Roster used to default open;
+// no longer). Each defaultCollapsed value here must match the matching
+// isPartySectionCollapsed(ui, key, ...) call's own hardcoded default in
+// drawers/index.js — the two are deliberately duplicated (see that
+// function's own comment) rather than shared, since collapsedPartySections
+// itself is shell.js-owned ephemeral state read/written directly here,
+// not through a per-render UI snapshot drawers/index.js could import.
+const CAMPAIGN_SECTION_KEYS = [
+  { key: 'campaignGuide', defaultCollapsed: true },
+  { key: 'colonyTurnSheet', defaultCollapsed: true },
+  { key: 'crewRoster', defaultCollapsed: true },
+  { key: 'lifeformEncounters', defaultCollapsed: true },
+  // Starship sub-tab's own mirror of campaignGuide (direct follow-up
+  // request: "the Campaign Turn row and Turn Step description row under a
+  // ... section header on the Starship tab like on the Colony tab") — kept
+  // in this same list so the drawer title's collapse-all/expand-all and
+  // the force-collapse-on-tab-open both cover the Starship sub-tab too,
+  // not just whichever sub-tab happens to be active at the time.
+  { key: 'starshipCampaignGuide', defaultCollapsed: true },
+];
+const PARTY_SECTION_KEYS = [
+  { key: 'roster', defaultCollapsed: true },
+  { key: 'starship', defaultCollapsed: true },
+  { key: 'relationships', defaultCollapsed: true },
+  { key: 'trackers', defaultCollapsed: true },
+  { key: 'sharedGear', defaultCollapsed: true },
+  { key: 'sharedAssets', defaultCollapsed: true },
+  { key: 'cargoManifest', defaultCollapsed: true },
+  { key: 'contracts', defaultCollapsed: true },
+];
+// Same XOR-against-a-default read drawers/index.js's own
+// isPartySectionCollapsed uses, duplicated here (not imported — shell.js
+// owns collapsedPartySections itself, and this is a two-line check) rather
+// than routing through a UI snapshot.
+function isSectionCollapsed(key, defaultCollapsed) {
+  const toggled = collapsedPartySections.has(key);
+  return defaultCollapsed ? !toggled : toggled;
+}
+function areAllSectionsCollapsed(sections) {
+  return sections.every(({ key, defaultCollapsed }) => isSectionCollapsed(key, defaultCollapsed));
+}
+// Forces every section in the list to the SAME collapsed/open state
+// regardless of its own individual default, by adding/removing it from
+// collapsedPartySections as needed to produce that result.
+function setSectionsCollapsed(sections, collapsed) {
+  for (const { key, defaultCollapsed } of sections) {
+    const shouldBeToggled = defaultCollapsed ? !collapsed : collapsed;
+    if (shouldBeToggled) collapsedPartySections.add(key); else collapsedPartySections.delete(key);
+  }
+}
 let partyTrackerDraftKind = 'meter'; // ephemeral — the creation form's in-progress type pick, so its size/difficulty sub-field can react before the tracker actually exists
 let partyTrackerDraftName = ''; // ephemeral — mirrors the creation form's name input so a kind-change re-render (which rebuilds that input from scratch) doesn't wipe out whatever the GM already typed
 let tradeLocationId = ''; // ephemeral — which Location's market the Trade drawer currently shows
@@ -896,6 +957,15 @@ export function mountShell(el) {
   root = el;
   el.innerHTML = `
     <div class="cockpit">
+      <div class="startup-screen" data-startup-screen aria-label="GMAtlas">
+        <div class="startup-card">
+          <img src="assets/globe.png" alt="" class="startup-logo">
+          <h1>GMAtlas</h1>
+          <div class="startup-campaigns" data-startup-campaigns></div>
+          <button type="button" class="btn ghost" data-startup-open-settings>⚙ Settings</button>
+          <p class="dim small startup-version" data-startup-version></p>
+        </div>
+      </div>
       <header class="mc-header">
         <div class="brand"><h1>GMAtlas</h1></div>
         <div class="header-actions">
@@ -957,14 +1027,16 @@ export function mountShell(el) {
           <button type="button" class="icon-btn" data-inline-prompt-cancel aria-label="Cancel">✕</button>
         </div>
       </div>
-      <div class="dice-roll-overlay" data-dice-roll-overlay data-open="false" aria-label="Dice roll result">
-        <div class="dice-roll-card" data-dice-roll-card></div>
+      <div class="floating-tools-stack" data-floating-tools-stack>
+        <button type="button" class="dice-roller-toggle" data-dice-roller-toggle title="Roll dice" aria-label="Roll dice" aria-expanded="false">
+          <img src="assets/d20-thm.png" alt="" width="32" height="32">
+        </button>
+        <div class="dice-roller-panel" data-dice-roller-panel hidden></div>
+        <div class="combat-tracker-panel" data-combat-tracker-panel data-drop-combat-tracker hidden></div>
+        <div class="dice-roll-overlay" data-dice-roll-overlay data-open="false" aria-label="Dice roll result">
+          <div class="dice-roll-card" data-dice-roll-card></div>
+        </div>
       </div>
-      <button type="button" class="dice-roller-toggle" data-dice-roller-toggle title="Roll dice" aria-label="Roll dice" aria-expanded="false">
-        <img src="assets/d20-thm.png" alt="" width="32" height="32">
-      </button>
-      <div class="dice-roller-panel" data-dice-roller-panel hidden></div>
-      <div class="combat-tracker-panel" data-combat-tracker-panel data-drop-combat-tracker hidden></div>
       <div class="image-lightbox-overlay" data-image-lightbox-overlay hidden aria-label="Full-size image">
         <button type="button" class="icon-btn image-lightbox-close" data-image-lightbox-close aria-label="Close">✕</button>
         <img class="image-lightbox-img" data-image-lightbox-img src="" alt="">
@@ -1103,6 +1175,18 @@ function onClick(ev) {
   if (drawerTabClose) return closeDrawerTab(drawerTabClose.dataset.drawerTabClose);
   const drawerTab = hit('[data-drawer-tab]');
   if (drawerTab) { activeDrawer = drawerTab.dataset.drawerTab; return render(); }
+  // Direct follow-up request: "make the Campaign and Party headers...
+  // toggle the section headers to open or close" — a "smart" toggle (not
+  // a blind alternating flip): if every section is currently collapsed,
+  // this opens all of them; otherwise (anything at all open) it collapses
+  // all of them. Only wired for these two — see the title's own
+  // .drawer-title-toggle class, set only for 'colony'/'party' above.
+  const drawerTitleToggle = hit('[data-drawer-title].drawer-title-toggle');
+  if (drawerTitleToggle) {
+    const sections = activeDrawer === 'colony' ? CAMPAIGN_SECTION_KEYS : activeDrawer === 'party' ? PARTY_SECTION_KEYS : null;
+    if (sections) setSectionsCollapsed(sections, !areAllSectionsCollapsed(sections));
+    return render();
+  }
   if (hit('[data-close-all-drawers]')) return closeAllDrawerTabs();
   if (hit('[data-drawer-collapse]')) { drawerCollapsed = true; return render(); }
   if (hit('[data-drawer-restore]')) { drawerCollapsed = false; return render(); }
@@ -1135,8 +1219,33 @@ function onClick(ev) {
   if (hit('[data-menu-open-settings]')) { settingsMenuOpen = false; toggleDrawer('settings'); return render(); }
   if (hit('[data-menu-open-about]')) { settingsMenuOpen = false; aboutOpen = true; return render(); }
   if (hit('[data-about-close]')) { aboutOpen = false; return render(); }
+
+  // Startup landing page (direct request) — picking a campaign switches to
+  // it (if not already active — no confirm prompt here, unlike the header's
+  // own campaign switcher menu, since this is the FIRST thing a GM sees on
+  // launch, not a mid-session "are you sure" moment) and dismisses the
+  // page; opening Settings dismisses it too and goes straight to Settings.
+  const startupCampaignBtn = hit('[data-startup-campaign-select]');
+  if (startupCampaignBtn) {
+    const id = startupCampaignBtn.dataset.startupCampaignSelect;
+    const target = store.listCampaigns().find((c) => c.id === id);
+    startupScreenOpen = false;
+    if (target && !target.active) return store.switchCampaign(id).then(() => render());
+    return render();
+  }
+  if (hit('[data-startup-open-settings]')) {
+    startupScreenOpen = false;
+    openDrawerTab('settings');
+    return render();
+  }
   const settingsTabBtn = hit('[data-settings-tab]');
   if (settingsTabBtn) { settingsTab = settingsTabBtn.dataset.settingsTab; return renderDrawerBody(); }
+  // Dice settings tab's quick-pick color swatches (direct follow-up
+  // request: "add dice color options including maroon, pink and dark
+  // green") — same dice3dColor field the native color input next to them
+  // writes, just a one-click shortcut to a curated list.
+  const dice3dColorPreset = hit('[data-dice3d-color-preset]');
+  if (dice3dColorPreset) return store.update((d) => { d.settings.dice3dColor = dice3dColorPreset.dataset.dice3dColorPreset; return d; });
 
   // Campaign switcher (direct follow-up request) — same "only an explicit
   // toggle or picking an item closes it" posture as the Settings menu
@@ -1195,9 +1304,13 @@ function onClick(ev) {
   // notation tool, unrelated to the pool.
   if (hit('[data-dice-roller-toggle]')) { return diceRollerOpen ? closeDiceRoller() : openDiceRoller(); }
   if (hit('[data-dice-roller-close]')) return closeDiceRoller();
-  // Combat Initiative Tracker (direct follow-up request: no dedicated
-  // toggle icon — dragging an entity onto the dice roller icon, below, is
-  // the only way to open it; the panel's own ✕ is the only way to close).
+  // Combat Initiative Tracker — dragging an entity onto the dice roller
+  // icon (or the panel once open) also opens it as a side effect; this
+  // button (direct follow-up request: "add a combat icon button between
+  // 'Custom…' and 'Roll'") is the manual way in with nothing dragged yet,
+  // e.g. to review/reorder/clear an already-populated tracker. The panel's
+  // own ✕ is still the only way to close it.
+  if (hit('[data-combat-tracker-open-btn]')) return openCombatTracker();
   if (hit('[data-combat-tracker-close]')) return closeCombatTracker();
   if (hit('[data-combat-tracker-clear]')) return store.update((d) => clearCombatTracker(d));
   const combatTrackerRemove = hit('[data-combat-tracker-remove]');
@@ -1344,9 +1457,13 @@ function onClick(ev) {
   const roll = hit('[data-roll]');
   if (roll) {
     const path = roll.dataset.roll.split('>');
-    let text = '';
-    store.update((d) => { const r = rollOracle(d, path); text = r.text; return r.campaign; });
-    return toast('🎲 ' + text.split('\n').slice(-1)[0]);
+    (async () => {
+      const forced = await resolveOracleDiceIndex(path);
+      let text = '';
+      store.update((d) => { const r = rollOracle(d, path, forced); text = r.text; return r.campaign; });
+      toast('🎲 ' + text.split('\n').slice(-1)[0]);
+    })();
+    return;
   }
 
   if (hit('[data-journal-add]')) {
@@ -1820,18 +1937,6 @@ function onClick(ev) {
     if (expandedEnhancements.has(id)) expandedEnhancements.delete(id); else expandedEnhancements.add(id);
     return renderDrawerBody();
   }
-  const worldDemoToggle = hit('[data-world-demographics-toggle]');
-  if (worldDemoToggle) {
-    const id = worldDemoToggle.dataset.worldDemographicsToggle;
-    if (expandedWorldDemographics.has(id)) expandedWorldDemographics.delete(id); else expandedWorldDemographics.add(id);
-    return renderDrawerBody();
-  }
-  const worldProfileToggle = hit('[data-world-profile-toggle]');
-  if (worldProfileToggle) {
-    const id = worldProfileToggle.dataset.worldProfileToggle;
-    if (expandedWorldProfile.has(id)) expandedWorldProfile.delete(id); else expandedWorldProfile.add(id);
-    return renderDrawerBody();
-  }
   const basesToggle = hit('[data-bases-toggle]');
   if (basesToggle) {
     const id = basesToggle.dataset.basesToggle;
@@ -2161,15 +2266,22 @@ function onClick(ev) {
   // exact same picker its own thumbnail's "+" does, scoped to that row.
   const lifeformEncounterRoll = hit('[data-lifeform-encounter-roll]');
   if (lifeformEncounterRoll) {
-    const d100 = Math.floor(Math.random() * 100) + 1;
-    const slot = resolveLifeformEncounterSlot(d100);
-    const row = listColonyEncounters(store.get())[slot - 1];
-    if (!row) return;
-    const entity = row.entityId ? getEntity(store.get(), row.entityId) : null;
-    if (entity) { toast(`Rolled ${d100} → #${slot}: ${entity.name || 'Unnamed'}`); return; }
-    toast(`Rolled ${d100} → #${slot} is blank — pick or generate a Lifeform`);
-    entityPicker = { entityType: 'colony-encounter', mode: 'colony-encounter', scope: row.id, query: '' };
-    renderEntityPickerOverlay();
+    (async () => {
+      let dice;
+      if (dice3dPreferred()) {
+        const rolled = await roll3d(['1d100'], dice3dThemeOpts());
+        if (rolled) dice = { value: rolled[0][0] };
+      }
+      const { value: d100 } = rollD100({ dice });
+      const slot = resolveLifeformEncounterSlot(d100);
+      const row = listColonyEncounters(store.get())[slot - 1];
+      if (!row) return;
+      const entity = row.entityId ? getEntity(store.get(), row.entityId) : null;
+      if (entity) { toast(`Rolled ${d100} → #${slot}: ${entity.name || 'Unnamed'}`); return; }
+      toast(`Rolled ${d100} → #${slot} is blank — pick or generate a Lifeform`);
+      entityPicker = { entityType: 'colony-encounter', mode: 'colony-encounter', scope: row.id, query: '' };
+      renderEntityPickerOverlay();
+    })();
     return;
   }
 
@@ -2271,7 +2383,6 @@ function onClick(ev) {
     const [sx, sy, corner] = cornerLabelRemove.dataset.cornerLabelRemove.split(/[,:]/);
     return store.update((d) => removeSectorCornerLabel(d, Number(sx), Number(sy), corner));
   }
-  if (hit('[data-sector-corner-labels-toggle]')) { worldTrackerCornerLabelsOpen = !worldTrackerCornerLabelsOpen; return renderDrawerBody(); }
   if (hit('[data-home-base-roll]')) {
     updateAndOpenJournal((d) => {
       const next = rollHomeBase(d);
@@ -3124,9 +3235,13 @@ function onClick(ev) {
     const path = storyOptionRoll.dataset.storyOptionRoll.split('>');
     const optionId = storyOptionRoll.dataset.storyOptionId;
     if (optionId) dismissedStoryOptionIds.add(optionId);
-    let text = '';
-    store.update((d) => { const r = rollOracle(d, path); text = r.text; return r.campaign; });
-    return toast(text || 'Rolled');
+    (async () => {
+      const forced = await resolveOracleDiceIndex(path);
+      let text = '';
+      store.update((d) => { const r = rollOracle(d, path, forced); text = r.text; return r.campaign; });
+      toast(text || 'Rolled');
+    })();
+    return;
   }
   const storyOptionDismiss = hit('[data-story-option-dismiss]');
   if (storyOptionDismiss) {
@@ -3414,6 +3529,8 @@ function onClick(ev) {
           ? { entityType: 'party-starship', mode: 'party-starship', scope: null, query: '' }
           : raw === 'colony-crew'
           ? { entityType: 'colony-crew', mode: 'colony-crew', scope: null, query: '' }
+          : raw === 'combat-tracker'
+            ? { entityType: 'combat-tracker', mode: 'combat-tracker', scope: null, query: '' }
           : raw.startsWith('colony-crew-assign::')
             ? { entityType: 'colony-crew-assign', mode: 'colony-crew-assign', scope: raw.slice('colony-crew-assign::'.length), query: '' }
           : raw === 'what-conflict'
@@ -3501,6 +3618,14 @@ function onClick(ev) {
       // scene-scoped (a colony's crew persists across scenes), same
       // posture as party-vehicle above.
       return store.update((d) => addCrewRow(d, { characterId: id }));
+    }
+    if (picker.entityType === 'combat-tracker') {
+      // Combat Initiative Tracker's own "+" — same completeCombatTrackerAdd
+      // the drag paths use (its own empty-tracker/#character bulk-load
+      // confirm applies here too, for consistency regardless of how a
+      // party member got added).
+      completeCombatTrackerAdd(null, id);
+      return;
     }
     if (picker.entityType === 'colony-crew-assign') {
       // Crew Roster's own per-row thumbnail (direct follow-up request —
@@ -3885,22 +4010,82 @@ function parseStatblockKey(raw) {
 // roll, so both entry points resolve identically. A field with
 // rollMethod:'none' is silently a no-op (callers already gate on rollability
 // via their own UI, this is just the last-line guard).
-function performFieldRoll(f, label) {
+// True when the GM hasn't turned off the 3D animation — the actual
+// availability check (http(s), WebGL, the module loading successfully at
+// all) happens inside diceBox3d.js's own roll3d(), which resolves null on
+// any failure; this is just the "should we even try" preference check.
+function dice3dPreferred() {
+  const s = store.get().settings;
+  return !!(s && s.dice3dEnabled);
+}
+
+// The GM's current dice type/color picks (Settings → Dice, direct follow-up
+// request) — diceBox3d.js stays schema-agnostic, so every roll3d() call
+// site passes this in rather than roll3d() reaching into the store itself.
+function dice3dThemeOpts() {
+  const s = store.get().settings;
+  return { theme: (s && s.dice3dTheme) || 'default', themeColor: (s && s.dice3dColor) || undefined };
+}
+
+// Oracle table draws (rollOracle, domain/session.js) run synchronously
+// inside store.update, so a 3D roll — inherently async — has to happen
+// BEFORE that update, resolving a forced `index` rollOracle then just
+// replays deterministically. Only a SINGLE-table roll (not a group roll —
+// data-roll-group, unchanged/out of scope) whose table's length matches a
+// standard die dice-box actually models (4/6/8/10/12/20 — most of this
+// app's own oracle tables are one of these, but plenty aren't) gets the
+// animation; anything else (3D disabled/unavailable, a non-standard table
+// size) resolves {} and rollOracle rolls via Math.random exactly as before.
+const STANDARD_ORACLE_DICE_SIZES = [4, 6, 8, 10, 12, 20];
+async function resolveOracleDiceIndex(path) {
+  if (!dice3dPreferred()) return {};
+  const doc = store.get();
+  const tables = tablesWithOverrides(doc.oracles && doc.oracles.overrides, doc.settings && doc.settings.genrePack);
+  const values = getTable(tables, ...path);
+  if (!Array.isArray(values) || !STANDARD_ORACLE_DICE_SIZES.includes(values.length)) return {};
+  const rolled = await roll3d([`1d${values.length}`], dice3dThemeOpts());
+  return rolled ? { index: rolled[0][0] - 1 } : {};
+}
+
+// Statblock/entity-field roller (double-click or the field's own roll
+// button). Now async: when 3D dice are preferred, dice-box rolls FIRST
+// (it has no way to be told what to land on, only read back afterward —
+// diceBox3d.js's own comment) and its real per-die values are fed into
+// dice.js's outcome functions via their `dice` override, so the animation
+// and the outcome card always agree; when disabled/unavailable, `dice`
+// stays undefined and every function rolls via Math.random exactly as
+// before this feature existed — same code path, zero behavior change.
+async function performFieldRoll(f, label) {
   const method = f.rollMethod || 'none';
   if (method === 'none') return;
   if (method === 'flat') {
-    const r = rollFlat(Number(f.value) || 0, { target: f.target || 6 });
+    let dice;
+    if (dice3dPreferred()) {
+      const rolled = await roll3d(['1d6'], dice3dThemeOpts());
+      if (rolled) dice = { die: rolled[0][0] };
+    }
+    const r = rollFlat(Number(f.value) || 0, { target: f.target || 6, dice });
     store.update((d) => logRoll(d, formatFlatRollText(label, r)));
     diceRollResult = { label, method, r };
     return renderDiceRollOverlay();
   }
   if (method === 'traveller') {
-    const r = rollTraveller(Number(f.value) || 0, { target: f.target || 8 });
+    let dice;
+    if (dice3dPreferred()) {
+      const rolled = await roll3d(['2d6'], dice3dThemeOpts());
+      if (rolled) dice = { die1: rolled[0][0], die2: rolled[0][1] };
+    }
+    const r = rollTraveller(Number(f.value) || 0, { target: f.target || 8, dice });
     store.update((d) => logRoll(d, formatTravellerRollText(label, r)));
     diceRollResult = { label, method, r };
     return renderDiceRollOverlay();
   }
-  const r = rollAction(Number(f.value) || 0);
+  let dice;
+  if (dice3dPreferred()) {
+    const rolled = await roll3d(['1d6', '2d10'], dice3dThemeOpts());
+    if (rolled) dice = { actionDie: rolled[0][0], challenge1: rolled[1][0], challenge2: rolled[1][1] };
+  }
+  const r = rollAction(Number(f.value) || 0, { dice });
   store.update((d) => logRoll(d, formatRollText(label, r)));
   diceRollResult = { label, method, r };
   renderDiceRollOverlay();
@@ -4589,6 +4774,16 @@ function onChange(ev) {
     const [sx, sy] = sectorNotes.dataset.sectorNotes.split(',').map(Number);
     return store.update((d) => setSectorNotes(d, sx, sy, t.value));
   }
+  // A Feature's own Description (direct follow-up request: "a two-row,
+  // expandable Description textbox... accessed by clicking on the feature
+  // listed from Features tab"), same commit-on-change shape as the sector
+  // Notes field right above.
+  const featureNotes = t.closest('[data-sector-feature-notes]');
+  if (featureNotes) {
+    const [sx, sy] = featureNotes.dataset.sectorCoord.split(',').map(Number);
+    const featureId = featureNotes.dataset.sectorFeatureNotes;
+    return store.update((d) => updateSectorFeatureNotes(d, sx, sy, featureId, t.value));
+  }
   if (t.closest('[data-worldtracker-notes]')) return store.update((d) => setWorldTrackerNotes(d, t.value));
   const overlayIconPick = t.closest('[data-sector-overlay-icon]');
   if (overlayIconPick) {
@@ -4734,6 +4929,9 @@ function onChange(ev) {
   // request), purely ephemeral until Log commits it.
   if (t.closest('[data-crew-task-member]')) { crewTaskSelectedMemberId = t.value; return renderDrawerBody(); }
   if (t.closest('[data-settings-toolbar-default]')) return store.update((d) => { d.settings.toolbarCollapsedByDefault = t.checked; return d; });
+  if (t.closest('[data-settings-dice3d]')) return store.update((d) => { d.settings.dice3dEnabled = t.checked; return d; });
+  if (t.closest('[data-settings-dice3d-theme]')) return store.update((d) => { d.settings.dice3dTheme = t.value; return d; });
+  if (t.closest('[data-settings-dice3d-color]')) return store.update((d) => { d.settings.dice3dColor = t.value; return d; });
   if (t.closest('[data-trade-economy-model-select]')) {
     const profileId = currentEditingProfileId();
     const draft = getProfileDraft(profileId);
@@ -5129,11 +5327,12 @@ function openDrawerTab(id) {
     if (id === 'graph') graphView = { scale: 1, x: 0, y: 0 };
     if (id === 'world-tracker') { worldTrackerTab = 'sectors'; worldTrackerSelectedSector = null; worldTrackerMigrateOpen = new Set(); }
     if (id === 'colony') colonyPanelTab = 'colony';
-    // Direct request: sections other than Party Roster start collapsed
-    // "when opening the Party Tracker (not when switching focus to other
-    // open tabs)" — resetting here (inside the "newly added to openDrawers"
-    // guard) is exactly that: a genuine fresh open, not a mere re-focus of
-    // an already-pinned tab.
+    // Direct request: every Party section (Roster included, per the later
+    // follow-up "by default, the section headers... should all be
+    // collapsed") starts collapsed "when opening the Party Tracker (not
+    // when switching focus to other open tabs)" — resetting here (inside
+    // the "newly added to openDrawers" guard) is exactly that: a genuine
+    // fresh open, not a mere re-focus of an already-pinned tab.
     if (id === 'party') collapsedPartySections = new Set();
   }
   // Auto-populate Momentum/Supply on every Party open, not just the first
@@ -5610,12 +5809,10 @@ function onDrop(ev) {
   if (combatTrackerDropTarget) {
     const actorRefForTracker = ev.dataTransfer.getData(ACTOR_DRAG_TYPE);
     const entityIdForTracker = ev.dataTransfer.getData(ENTITY_DRAG_TYPE);
-    const idToAdd = actorRefForTracker ? actorRefForTracker.split('::')[1] : entityIdForTracker;
-    if (idToAdd) {
+    if (actorRefForTracker || entityIdForTracker) {
       ev.preventDefault();
       combatTrackerDropTarget.classList.remove('drop-hover');
-      openCombatTracker();
-      store.update((d) => addCombatTrackerEntity(d, idToAdd));
+      completeCombatTrackerAdd(actorRefForTracker, entityIdForTracker);
       return;
     }
   }
@@ -5674,6 +5871,38 @@ function completeCombatTrackerReorder(targetEntryId, draggedEntryId) {
   const toIndex = listCombatTrackerEntries(store.get()).findIndex((e) => e.id === targetEntryId);
   if (toIndex === -1) return;
   store.update((d) => moveCombatTrackerEntry(d, draggedEntryId, toIndex));
+}
+
+// Shared by the mouse (onDrop) and touch (onTouchEnd) drop paths — direct
+// follow-up request: "the drag feature... does not work for mobile
+// phones," since HTML5 dragstart/dragover/drop never fire for touch
+// gestures at all (the same gap onTouchStart/onTouchMove/onTouchEnd's own
+// header comment already documents for entity/document/actor drags).
+// actorRef's payload is "kind::npcId" (same shape completeActorDrop
+// already parses); an entity already in the tracker is a safe no-op
+// (addCombatTrackerEntity's own dedup-by-entityId).
+function completeCombatTrackerAdd(actorRef, entityId) {
+  const idToAdd = actorRef ? actorRef.split('::')[1] : entityId;
+  if (!idToAdd) return;
+  openCombatTracker();
+  // Direct follow-up request: "ask to add all the party members when
+  // adding a #character to an empty combat tracker" — mirrors Colony's
+  // own Crew Roster "load all Party members" shortcut (colonyPanelTab's
+  // own data-entity-picker-open handler, above): only offered while the
+  // tracker is genuinely empty, and only for a #character-tagged NPC (a
+  // real party member, not just any NPC/Lifeform); declining — or there
+  // being no other party members to add — falls through to adding just
+  // the one dragged/picked entity, unchanged.
+  const doc = store.get();
+  const entity = getEntity(doc, idToAdd);
+  if (listCombatTrackerEntries(doc).length === 0 && entity && entity.type === 'npc' && hasCharacterTag(entity)) {
+    const members = listPartyMembers(doc);
+    if (members.length > 1 && window.confirm(`Load all ${members.length} Party members into the Combat Tracker?`)) {
+      store.update((d) => addAllPartyMembersToCombatTracker(d));
+      return;
+    }
+  }
+  store.update((d) => addCombatTrackerEntity(d, idToAdd));
 }
 
 function completeActorDrop(toKind, actorRef) {
@@ -5872,13 +6101,20 @@ function onTouchStart(ev) {
   const t = ev.target;
   const guideSrc = t.closest('[data-drag-guide-node]');
   const actorSrc = !guideSrc && t.closest('[data-drag-actor]');
-  const entitySrc = !guideSrc && !actorSrc && t.closest('[data-drag-entity]');
-  const docSrc = !guideSrc && !actorSrc && !entitySrc && t.closest('[data-drag-document]');
-  if (!guideSrc && !actorSrc && !entitySrc && !docSrc) return;
+  // Combat Initiative Tracker's own row-reorder handle (direct follow-up
+  // report: "the reorder handle does not work on mobile") — checked before
+  // the generic entitySrc/docSrc sources, same priority the handle's own
+  // narrower [data-drag-combat-tracker-entry] attribute gets over the wider
+  // [data-drag-entity]/[data-drag-document] in onDragStart above.
+  const combatTrackerEntrySrc = !guideSrc && !actorSrc && t.closest('[data-drag-combat-tracker-entry]');
+  const entitySrc = !guideSrc && !actorSrc && !combatTrackerEntrySrc && t.closest('[data-drag-entity]');
+  const docSrc = !guideSrc && !actorSrc && !combatTrackerEntrySrc && !entitySrc && t.closest('[data-drag-document]');
+  if (!guideSrc && !actorSrc && !combatTrackerEntrySrc && !entitySrc && !docSrc) return;
   const touch = ev.touches[0];
   touchDrag = {
     guideNodeId: guideSrc ? guideSrc.dataset.dragGuideNode : null,
     actorRef: actorSrc ? actorSrc.dataset.dragActor : null,
+    combatTrackerEntryId: combatTrackerEntrySrc ? combatTrackerEntrySrc.dataset.dragCombatTrackerEntry : null,
     entityId: entitySrc ? entitySrc.dataset.dragEntity : null,
     documentId: docSrc ? docSrc.dataset.dragDocument : null,
     startX: touch.clientX, startY: touch.clientY,
@@ -5926,7 +6162,20 @@ function onTouchMove(ev) {
   if (touchDrag.ghostEl) { touchDrag.ghostEl.style.left = touch.clientX + 'px'; touchDrag.ghostEl.style.top = touch.clientY + 'px'; }
   const under = document.elementFromPoint(touch.clientX, touch.clientY);
   updateTouchDragHover(under);
-  const dropSelector = touchDrag.guideNodeId ? '[data-drop-guide-node]' : touchDrag.actorRef ? '[data-drop-actor-group]' : DROP_TARGET_SELECTOR;
+  // Combat Initiative Tracker (direct follow-up request: "the drag feature
+  // ... does not work for mobile phones") — an actor or entity drag also
+  // accepts the dice-roller icon/panel as a valid touch-drop target, same
+  // as the mouse path's own onDragOver; a document drag never does (the
+  // tracker only ever holds entities).
+  const dropSelector = touchDrag.guideNodeId
+    ? '[data-drop-guide-node]'
+    : touchDrag.combatTrackerEntryId
+      ? '[data-drop-combat-tracker-entry]'
+      : touchDrag.actorRef
+        ? '[data-drop-actor-group], [data-dice-roller-toggle], [data-drop-combat-tracker]'
+        : touchDrag.entityId
+          ? `${DROP_TARGET_SELECTOR}, [data-dice-roller-toggle], [data-drop-combat-tracker]`
+          : DROP_TARGET_SELECTOR;
   const dropTarget = under && under.closest(dropSelector);
   if (dropTarget !== touchDrag.lastTarget) {
     if (touchDrag.lastTarget) touchDrag.lastTarget.classList.remove('drop-hover');
@@ -5946,6 +6195,23 @@ function onTouchEnd() {
   if (drag.lastTarget) drag.lastTarget.classList.remove('drop-hover');
   if (!drag.engaged || !drag.lastTarget) return; // a tap, or released off any valid target
   if (drag.guideNodeId) { completeGuideNodeDrop(drag.lastTarget, drag.guideNodeId); return; }
+  // Combat Initiative Tracker's own row reorder (direct follow-up report:
+  // "the reorder handle does not work on mobile") — checked first, same
+  // priority the mouse path's own onDrop gives COMBAT_TRACKER_ENTRY_DRAG_TYPE
+  // over its "add an entity" drop.
+  if (drag.combatTrackerEntryId) {
+    const reorderTarget = drag.lastTarget.closest('[data-drop-combat-tracker-entry]');
+    if (reorderTarget) completeCombatTrackerReorder(reorderTarget.dataset.dropCombatTrackerEntry, drag.combatTrackerEntryId);
+    return;
+  }
+  // Combat Initiative Tracker — checked before the WHO actor-group/generic
+  // entity-drop completion below, same priority the mouse path's own
+  // onDrop already gives it, since drag.lastTarget here carries neither
+  // data-drop-actor-group nor data-drop-entity for it to fall through to.
+  if (drag.lastTarget.closest('[data-dice-roller-toggle], [data-drop-combat-tracker]')) {
+    completeCombatTrackerAdd(drag.actorRef, drag.entityId);
+    return;
+  }
   if (drag.actorRef) { completeActorDrop(drag.lastTarget.dataset.dropActorGroup, drag.actorRef); return; }
   completeDrop(drag.lastTarget, drag, drag.lastX, drag.lastY);
 }
@@ -5953,11 +6219,17 @@ function onTouchEnd() {
 function makeTouchDragGhost(drag) {
   const label = drag.guideNodeId
     ? (((store.get().guide && store.get().guide.docs) || []).find((d) => d.id === drag.guideNodeId) || {}).title
+    : drag.combatTrackerEntryId
+      ? (() => {
+          const doc = store.get();
+          const entry = listCombatTrackerEntries(doc).find((en) => en.id === drag.combatTrackerEntryId);
+          return entry ? (getEntity(doc, entry.entityId) || {}).name : null;
+        })()
     : drag.actorRef ? (getEntity(store.get(), drag.actorRef.split('::')[1]) || {}).name
     : drag.entityId ? (getEntity(store.get(), drag.entityId) || {}).name : (resolveDocumentTab(store.get(), drag.documentId) || {}).title;
   const el = document.createElement('div');
   el.className = 'touch-drag-ghost';
-  el.textContent = label || (drag.guideNodeId ? 'Document' : drag.actorRef ? 'NPC' : drag.entityId ? 'Entity' : 'Document');
+  el.textContent = label || (drag.guideNodeId ? 'Document' : drag.combatTrackerEntryId ? 'Combatant' : drag.actorRef ? 'NPC' : drag.entityId ? 'Entity' : 'Document');
   document.body.appendChild(el);
   return el;
 }
@@ -6430,6 +6702,27 @@ function caretRangeAtPoint(clientX, clientY) {
   return null;
 }
 
+// Startup landing page (direct request) — a full-screen overlay shown on
+// every launch, hidden once the GM picks a campaign or opens Settings.
+// Re-rendered on every render() call (cheap — a handful of campaign rows)
+// so a campaign created/renamed via Settings' own Campaigns tab is
+// reflected if the GM somehow gets back here (e.g. a future re-launch),
+// same "keep an independent panel in sync" reasoning renderDrawerBody's
+// own doc comment already documents elsewhere.
+function renderStartupScreen() {
+  const el = root && root.querySelector('[data-startup-screen]');
+  if (!el) return;
+  el.hidden = !startupScreenOpen;
+  if (!startupScreenOpen) return;
+  const campaigns = store.listCampaigns();
+  const listEl = el.querySelector('[data-startup-campaigns]');
+  listEl.innerHTML = campaigns.length
+    ? campaigns.map((c) => `<button type="button" class="btn ${c.active ? '' : 'ghost'} startup-campaign-btn" data-startup-campaign-select="${escapeHtml(c.id)}">${escapeHtml(c.title || 'Untitled campaign')}${c.active ? ' <span class="dim small">(current)</span>' : ''}</button>`).join('')
+    : '<p class="dim small">No campaigns yet — open Settings to create one.</p>';
+  const versionEl = el.querySelector('[data-startup-version]');
+  versionEl.textContent = `Phase ${BUILD.phase} · v${BUILD.version}`;
+}
+
 // ---- rendering ----------------------------------------------------------
 function render() {
   const doc = store.get();
@@ -6445,6 +6738,8 @@ function render() {
   // scrolls the page as a whole.
   const scrollX = window.scrollX;
   const scrollY = window.scrollY;
+
+  renderStartupScreen();
 
   root.querySelector('.campaign-title').textContent = doc.meta.title;
 
@@ -6642,8 +6937,15 @@ function render() {
   root.querySelector('.cockpit').classList.toggle('has-open-drawer', openDrawers.length > 0);
   const titleEl = drawer.querySelector('[data-drawer-title]');
   titleEl.textContent = titleForDrawer(doc, activeDrawer, profile);
-  titleEl.classList.remove('drawer-title-toggle'); // Cast's own collapse-via-title is gone — Cast isn't a drawer tab anymore
-  titleEl.title = '';
+  // Direct follow-up request: "make the Campaign and Party headers of
+  // those respective panels toggle the section headers to open or close
+  // on their respective panels" — revives the title-as-toggle affordance
+  // (Cast's own version of this is long gone, per the comment this
+  // replaced) scoped to just these two, where CAMPAIGN_SECTION_KEYS/
+  // PARTY_SECTION_KEYS give the click handler something real to toggle.
+  const toggleSections = activeDrawer === 'colony' ? CAMPAIGN_SECTION_KEYS : activeDrawer === 'party' ? PARTY_SECTION_KEYS : null;
+  titleEl.classList.toggle('drawer-title-toggle', !!toggleSections);
+  titleEl.title = toggleSections ? (areAllSectionsCollapsed(toggleSections) ? 'Expand all sections' : 'Collapse all sections') : '';
   // Direct follow-up request: every drawer, and the Advisor panel/grid
   // column, are the SAME width as Cast, for UX consistency (and so their
   // left edges align exactly, a real reported misalignment) — one shared
@@ -6891,6 +7193,17 @@ function renderEntityPickerOverlay() {
     const assignedIds = new Set(listCrewRows(doc).map((r) => r.characterId).filter(Boolean));
     candidates = listEntities(doc, ['npc']).filter((n) => !assignedIds.has(n.id));
     emptyMessage = 'No available NPCs — every NPC is already assigned, or add one in Cast first.';
+  } else if (entityPicker.entityType === 'combat-tracker') {
+    // Combat Initiative Tracker's own "+" (direct follow-up request: "a
+    // filtered list of #characters, #NPC, and #lifeform entities") —
+    // #character is always a tagged subset of type 'npc' in this app
+    // (hasCharacterTag, statblocks.js), so "type npc or type lifeform"
+    // already covers all three named categories; excludes entities
+    // already in the tracker, same exclusivity convention every other
+    // picker here already uses.
+    const trackedIds = new Set(listCombatTrackerEntries(doc).map((e) => e.entityId));
+    candidates = listEntities(doc).filter((n) => (n.type === 'npc' || n.type === 'lifeform') && !trackedIds.has(n.id));
+    emptyMessage = 'No available Characters, NPCs, or Lifeforms — everyone is already in the tracker, or add one in Cast first.';
   } else if (entityPicker.entityType === 'what-conflict') {
     // WHAT's "+" — every Conflict entity not already attached, direct
     // follow-up request.
@@ -6898,16 +7211,18 @@ function renderEntityPickerOverlay() {
     candidates = listEntities(doc, ['conflict']).filter((c) => !attachedIds.has(c.id));
     emptyMessage = 'No available Conflicts — add one in Cast first.';
   } else if (entityPicker.entityType === 'colony-encounter') {
-    // Colony's Lifeform Encounters row thumbnail/header dice roller (direct
-    // follow-up request) — every #lifeform entity (listLifeformEncounters
-    // also catches legacy #lifeform-TAGGED entities, not just type:
-    // 'lifeform') not already assigned to some OTHER encounter row, same
-    // exclusivity convention colony-crew-assign already uses. The "Create
-    // New Lifeform" option (renderEntityPickerOverlay, below) is prepended
-    // only for this entityType.
-    const assignedIds = new Set(listColonyEncounters(doc).map((r) => r.entityId).filter(Boolean));
-    candidates = listLifeformEncounters(doc).filter((l) => !assignedIds.has(l.id));
-    emptyMessage = 'No available Lifeform entities — every one is already assigned, or add one in Cast first.';
+    // Colony's Lifeform Encounters row thumbnail/header dice roller — every
+    // #lifeform entity (listLifeformEncounters also catches legacy
+    // #lifeform-TAGGED entities, not just type: 'lifeform'), INCLUDING one
+    // already assigned to another row (direct follow-up request: "allow
+    // reuse of lifeform entities on the Lifeform Encounters" — the real
+    // rulebook table itself repeats the same creature across multiple %
+    // ranges, e.g. several "Razor Lizards" rows, so a Lifeform isn't a
+    // one-slot-only resource the way a Crew Roster character is). The
+    // "Create New Lifeform" option (renderEntityPickerOverlay, below) is
+    // prepended only for this entityType.
+    candidates = listLifeformEncounters(doc);
+    emptyMessage = 'No Lifeform entities yet — add one in Cast first.';
   } else if (entityPicker.entityType === 'location-current') {
     const scenes = doc.scenes || [];
     const scene = scenes[scenes.length - 1];
@@ -7059,6 +7374,7 @@ function renderDiceRollerPanel() {
     </div>
     <div class="dice-roller-foot">
       <button type="button" class="btn ghost sm" data-dice-roller-mode-toggle>${diceRollerCustomMode ? 'Use Builder' : 'Custom…'}</button>
+      <button type="button" class="icon-btn" data-combat-tracker-open-btn title="Open the Combat Initiative Tracker" aria-label="Open the Combat Initiative Tracker">⚔</button>
       <button type="button" class="btn sm" data-dice-roller-roll ${canRoll ? '' : 'disabled'}>🎲 Roll</button>
     </div>`;
   if (diceRollerCustomMode) {
@@ -7118,6 +7434,7 @@ function renderCombatTrackerPanel() {
     <div class="combat-tracker-head">
       <h3>Combat Tracker</h3>
       <span class="entity-chip-row">
+        <button type="button" class="icon-btn" data-entity-picker-open="combat-tracker" title="Add a Character, NPC, or Lifeform">＋</button>
         <button type="button" class="btn ghost sm" data-combat-tracker-clear ${entries.length ? '' : 'disabled'}>Clear</button>
         <button type="button" class="icon-btn" data-combat-tracker-close aria-label="Close">✕</button>
       </span>
@@ -7134,22 +7451,40 @@ function closeCombatTracker() {
   combatTrackerOpen = false;
   renderCombatTrackerPanel();
 }
-function rollFromDiceRoller() {
+// Same dice-box-authoritative pattern as performFieldRoll above. Closes the
+// roller panel FIRST, before any 3D animation plays — the panel sits at a
+// higher z-index than the 3D overlay (see cockpit.css) and would otherwise
+// visually cover the very dice it just triggered.
+async function rollFromDiceRoller() {
   if (diceRollerCustomMode) {
     const parsed = parseDiceNotation(diceRollerCustomText);
     if (!parsed) return;
     const notation = diceRollerCustomText.trim();
-    const r = rollCustomDice(parsed.count, parsed.sides, parsed.modifier);
+    const want3d = dice3dPreferred();
+    closeDiceRoller();
+    let dice;
+    if (want3d) {
+      const rolled = await roll3d([`${parsed.count}d${parsed.sides}`], dice3dThemeOpts());
+      if (rolled) dice = { dieValues: rolled[0] };
+    }
+    const r = rollCustomDice(parsed.count, parsed.sides, parsed.modifier, { dice });
     store.update((d) => logRoll(d, formatCustomDiceRollText(notation, r)));
     diceRollResult = { label: notation, method: 'custom', r };
   } else {
     if (!diceRollerPool.length) return;
     const label = diceRollerPoolLabel(diceRollerPool);
-    const r = rollDicePool(diceRollerPool);
+    const want3d = dice3dPreferred();
+    closeDiceRoller();
+    let dice;
+    if (want3d) {
+      const notations = diceRollerPool.map((p) => `1d${p.sides}`);
+      const rolled = await roll3d(notations, dice3dThemeOpts());
+      if (rolled) dice = { values: rolled.map((g) => g[0]) };
+    }
+    const r = rollDicePool(diceRollerPool, { dice });
     store.update((d) => logRoll(d, formatDicePoolRollText(label, r)));
     diceRollResult = { label, method: 'pool', r };
   }
-  closeDiceRoller();
   renderDiceRollOverlay();
 }
 
@@ -7322,7 +7657,7 @@ function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, expandedWorldDemographics, expandedWorldProfile, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, journalActionsOpen, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, expandedWhatConflicts,
+    enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, journalActionsOpen, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, expandedWhatConflicts,
     advisorOracleResults, advisorDrafts, advisorConsequenceDraw, sceneSummaryOverride,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName, partyTrackersEditOpen, collapsedPartySections,
@@ -7331,7 +7666,7 @@ function buildDrawerUi() {
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
     contentPackFlags, contentPackImporting, hostileLocationsImporting, exportIncludeAttachments, exportAttachmentsPreview,
-    worldTrackerTab, worldTrackerSelectedSector, worldTrackerMigrateOpen, worldTrackerCornerLabelsOpen,
+    worldTrackerTab, worldTrackerSelectedSector, worldTrackerMigrateOpen,
     expandedTurnStepGroups, editingTurnStepListId, turnStepListsCollapsed, turnStepMoveEditOpen, turnStepBranchEditOpen, crewTaskSelectedId, crewTaskSelectedMemberId, colonyPanelTab,
     // Faction Events' own docked-in-WHERE state (see factionEventsDockedInWhere's
     // comment above) — workspace/index.js's WHERE view reads these to render
@@ -7451,6 +7786,14 @@ function renderDrawerBody() {
   // drawer (which already keeps its own scroll position for free, since
   // replacing a child's innerHTML doesn't reset an ancestor's scrollTop).
   const switchedDrawer = !!drawerEl && activeDrawer !== lastRenderedDrawerId;
+  // Direct follow-up request: "show the panel with all headers collapsed
+  // whenever opening or changing tabs to the Campaign panel" — every time
+  // (not just a genuine fresh open, unlike Party's own "only when opening
+  // the Party Tracker" rule above) the active drawer BECOMES 'colony',
+  // collapse every one of its own sections. Placed here (not
+  // openDrawerTab's own "genuinely new" guard) so switching straight from
+  // an already-pinned tab, not just opening it fresh, also resets it.
+  if (switchedDrawer && activeDrawer === 'colony') setSectionsCollapsed(CAMPAIGN_SECTION_KEYS, true);
   if (switchedDrawer && lastRenderedDrawerId) drawerScrollPositions.set(lastRenderedDrawerId, drawerEl.scrollTop);
   if (body) replaceBodyPreservingScroll(body, renderActiveDrawerHtml(doc));
   if (switchedDrawer && drawerEl) drawerEl.scrollTop = drawerScrollPositions.get(activeDrawer) || 0;

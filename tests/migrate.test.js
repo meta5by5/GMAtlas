@@ -271,6 +271,34 @@ test('migrateDocument backfills combatTracker for a campaign predating the Comba
   assert.deepEqual(migratedNoActiveKey.combatTracker, { entries: [{ id: 'ctr_b', entityId: 'ent_2' }], activeEntryId: null });
 });
 
+test('migrateDocument backfills settings.dice3dEnabled (3D dice, diceBox3d.js) to true for a campaign predating it, additively — an existing explicit false is left alone, never flipped back on', () => {
+  const legacy = defaultCampaign();
+  delete legacy.settings.dice3dEnabled;
+  const migrated = migrateDocument(legacy);
+  assert.equal(migrated.settings.dice3dEnabled, true);
+
+  const disabled = defaultCampaign();
+  disabled.settings.dice3dEnabled = false;
+  const migratedDisabled = migrateDocument(disabled);
+  assert.equal(migratedDisabled.settings.dice3dEnabled, false);
+});
+
+test('migrateDocument backfills settings.dice3dTheme/dice3dColor (Dice settings tab, direct follow-up request) for a campaign predating them, additively — an existing explicit choice is left alone', () => {
+  const legacy = defaultCampaign();
+  delete legacy.settings.dice3dTheme;
+  delete legacy.settings.dice3dColor;
+  const migrated = migrateDocument(legacy);
+  assert.equal(migrated.settings.dice3dTheme, 'default');
+  assert.equal(migrated.settings.dice3dColor, '');
+
+  const customized = defaultCampaign();
+  customized.settings.dice3dTheme = 'rust';
+  customized.settings.dice3dColor = '#aa4f4a';
+  const migratedCustomized = migrateDocument(customized);
+  assert.equal(migratedCustomized.settings.dice3dTheme, 'rust');
+  assert.equal(migratedCustomized.settings.dice3dColor, '#aa4f4a');
+});
+
 test('migrateDocument converts a pre-existing FLAT turnStepProgress ({groupId,stepIndex,returnStack}) into the new slot-keyed shape, folding it into turnStepProgress.starship (the old content was always the 5PFH sequence), leaving turnStepProgress.colony fresh — a doc already in the new shape (or with no turnStepProgress at all) is untouched', () => {
   const legacy = defaultCampaign();
   legacy.turnStepProgress = { groupId: 'daily-life', stepIndex: 2, returnStack: [{ groupId: 'root', stepIndex: 0 }] };

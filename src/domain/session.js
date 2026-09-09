@@ -319,11 +319,16 @@ export function applyStoryShift(campaign, shiftName, payload, { rng = Math.rando
   return next;
 }
 
-/** Roll an oracle table (path array) and append the result to the journal. */
-export function rollOracle(campaign, path, { group = false, toJournal = true } = {}) {
+/** Roll an oracle table (path array) and append the result to the journal.
+ *  `index`/`indexes` optionally force the pick (see rollTable/rollGroup's
+ *  own comments) — src/ui/shell.js's 3D dice integration resolves a real
+ *  die roll BEFORE calling this (rollOracle itself runs synchronously
+ *  inside store.update, so it can't await dice-box directly) and passes
+ *  the result in here; omitted, rolls against Math.random as always. */
+export function rollOracle(campaign, path, { group = false, toJournal = true, index, indexes } = {}) {
   const next = clone(campaign);
   const tables = tablesWithOverrides(next.oracles?.overrides, next.settings?.genrePack);
-  const roll = group ? rollGroup(tables, path) : rollTable(tables, path);
+  const roll = group ? rollGroup(tables, path, Math.random, { indexes }) : rollTable(tables, path, Math.random, { index });
   const text = formatRoll(roll);
 
   // Track usage (drives Co-Pilot suggestions later).

@@ -8,6 +8,14 @@
 // Outcome: 2 challenge dice beaten = Strong Hit, 1 = Weak Hit, 0 = Miss.
 // A "match" (both challenge dice equal) is flagged separately — traditionally
 // an extra strong twist either way — and left for the GM to interpret.
+//
+// Every roll function below also accepts an optional `dice` override object
+// (one field per die, e.g. {actionDie, challenge1, challenge2}) so a real
+// pre-rolled value can stand in for an internal rollDie(n, rng) call —
+// src/ui/diceBox3d.js's 3D animation reads back dice-box's own actual
+// physics result and feeds it in here, since dice-box has no way to be told
+// what to land on beforehand, only read back afterward. Omitting `dice`
+// (every pre-existing call site) rolls with `rng` exactly as before.
 
 function rollDie(sides, rng) {
   return Math.floor(rng() * sides) + 1;
@@ -18,11 +26,18 @@ function rollDie(sides, rng) {
  *   value — the statblock field's current numeric value (0..max).
  *   adds  — optional situational bonus, defaults to 0.
  *   rng   — () => number in [0,1); defaults to Math.random.
+ *   dice  — optional {actionDie, challenge1, challenge2} override, one or
+ *           all three — the 3D dice module's own real physics roll is
+ *           authoritative when present (dice-box has no way to be TOLD what
+ *           to land on, only read back afterward — see diceBox3d.js), so
+ *           this lets its actual result stand in for `rollDie(n, rng)` per
+ *           die instead of a second, independent Math.random roll. Omitted
+ *           (every pre-existing call site) behaves exactly as before.
  */
-export function rollAction(value = 0, { adds = 0, rng = Math.random } = {}) {
-  const actionDie = rollDie(6, rng);
-  const challenge1 = rollDie(10, rng);
-  const challenge2 = rollDie(10, rng);
+export function rollAction(value = 0, { adds = 0, rng = Math.random, dice = {} } = {}) {
+  const actionDie = dice.actionDie ?? rollDie(6, rng);
+  const challenge1 = dice.challenge1 ?? rollDie(10, rng);
+  const challenge2 = dice.challenge2 ?? rollDie(10, rng);
   const v = Number(value) || 0;
   const a = Number(adds) || 0;
   const total = actionDie + v + a;
@@ -59,8 +74,8 @@ export function formatRollCopyText(r) {
  * "d6+attribute" field type — meet or beat the target to succeed). Same
  * RNG-injectable posture as rollAction, just a different table's mechanic.
  */
-export function rollFlat(value = 0, { target = 6, adds = 0, rng = Math.random } = {}) {
-  const die = rollDie(6, rng);
+export function rollFlat(value = 0, { target = 6, adds = 0, rng = Math.random, dice = {} } = {}) {
+  const die = dice.die ?? rollDie(6, rng);
   const v = Number(value) || 0;
   const a = Number(adds) || 0;
   const total = die + v + a;
@@ -86,9 +101,9 @@ export function formatFlatRollCopyText(r) {
  * Traveller task resolution defaults to an 8+). Same RNG-injectable posture
  * as rollAction/rollFlat, just a different table's dice and default target.
  */
-export function rollTraveller(value = 0, { target = 8, adds = 0, rng = Math.random } = {}) {
-  const die1 = rollDie(6, rng);
-  const die2 = rollDie(6, rng);
+export function rollTraveller(value = 0, { target = 8, adds = 0, rng = Math.random, dice = {} } = {}) {
+  const die1 = dice.die1 ?? rollDie(6, rng);
+  const die2 = dice.die2 ?? rollDie(6, rng);
   const v = Number(value) || 0;
   const a = Number(adds) || 0;
   const total = die1 + die2 + v + a;
@@ -104,11 +119,13 @@ export function rollTraveller(value = 0, { target = 8, adds = 0, rng = Math.rand
  * rollAction/rollFlat/rollTraveller this isn't tied to any stat or move, so
  * there's nothing to succeed or fail against, just a total.
  */
-export function rollCustomDice(count = 1, sides = 6, modifier = 0, { rng = Math.random } = {}) {
+export function rollCustomDice(count = 1, sides = 6, modifier = 0, { rng = Math.random, dice = {} } = {}) {
   const n = Math.max(1, Math.min(100, Math.round(Number(count)) || 1));
   const s = Math.max(2, Number.isFinite(Number(sides)) ? Math.round(Number(sides)) : 6);
   const m = Math.round(Number(modifier)) || 0;
-  const dieValues = Array.from({ length: n }, () => rollDie(s, rng));
+  const dieValues = Array.isArray(dice.dieValues) && dice.dieValues.length === n
+    ? dice.dieValues.slice()
+    : Array.from({ length: n }, () => rollDie(s, rng));
   const total = dieValues.reduce((sum, v) => sum + v, 0) + m;
   return { count: n, sides: s, modifier: m, dieValues, total };
 }
@@ -151,15 +168,29 @@ export function formatCustomDiceRollCopyText(notation, r) {
  * request), applied only to that one die's own result, never combined
  * across dice the way rollCustomDice's single modifier sums into one total.
  */
-export function rollDicePool(pool, { rng = Math.random } = {}) {
+export function rollDicePool(pool, { rng = Math.random, dice = {} } = {}) {
   const list = Array.isArray(pool) ? pool.slice(0, 50) : [];
-  const rolls = list.map(({ sides, modifier }) => {
+  const overrides = Array.isArray(dice.values) ? dice.values : [];
+  const rolls = list.map(({ sides, modifier }, i) => {
     const s = Math.max(2, Number.isFinite(Number(sides)) ? Math.round(Number(sides)) : 6);
     const m = Math.round(Number(modifier)) || 0;
-    const value = rollDie(s, rng);
+    const value = overrides[i] ?? rollDie(s, rng);
     return { sides: s, modifier: m, value, total: value + m };
   });
   return { rolls };
+}
+
+/**
+ * Roll a flat d100 (1-100) — no value/target/outcome, just the raw roll.
+ * Used by Colony's Lifeform Encounters header roll (5PFH Planetfall
+ * p.146, resolveLifeformEncounterSlot maps the result to a table row) —
+ * previously a bespoke inline `Math.floor(Math.random()*100)+1` bypassing
+ * this module entirely; routed through here instead so it shares the same
+ * `dice` override posture as every other roll (the 3D dice module's own
+ * real result standing in for rollDie(100, rng)).
+ */
+export function rollD100({ rng = Math.random, dice = {} } = {}) {
+  return { value: dice.value ?? rollDie(100, rng) };
 }
 
 /** Render a dice-pool roll result as one journal/toast-friendly line. */

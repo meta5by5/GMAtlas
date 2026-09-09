@@ -25,6 +25,17 @@ export function pick(arr, rng = Math.random) {
   return arr[Math.floor(rng() * arr.length)];
 }
 
+/** Same pick, but also returns which index was chosen — rollTable/rollGroup
+ *  use this instead of plain pick() so a 3D dice animation (diceBox3d.js)
+ *  has a real array index to show for a table whose length matches a die
+ *  it actually models (100/66/20/12/10/8/6/4); `forcedIndex` lets that same
+ *  animation's own real result (0-based) stand in for the rng() pick,
+ *  mirroring dice.js's own `dice` override — omitted, behaves like pick(). */
+function pickIndexed(arr, rng, forcedIndex) {
+  const index = forcedIndex != null ? forcedIndex : Math.floor(rng() * arr.length);
+  return { result: arr[index], index, size: arr.length };
+}
+
 /** Resolve a table by path, e.g. getTable(tables, "Core Oracles", "Action"). */
 export function getTable(tables, ...path) {
   return path.reduce((acc, key) => (acc && acc[key] != null ? acc[key] : undefined), tables);
@@ -40,24 +51,30 @@ export function flattenKeys(obj, path = []) {
   return rows;
 }
 
-/** Roll a single table (array leaf) at a path. Returns a structured result. */
-export function rollTable(tables, path, rng = Math.random) {
+/** Roll a single table (array leaf) at a path. Returns a structured result.
+ *  `index` optionally forces which entry is picked (0-based) — see
+ *  pickIndexed's own comment; omitted, rolls against `rng` as always. */
+export function rollTable(tables, path, rng = Math.random, { index } = {}) {
   const values = getTable(tables, ...path);
   if (!Array.isArray(values)) return { path, result: null, error: 'not a table' };
-  return { path, result: pick(values, rng) };
+  return { path, ...pickIndexed(values, rng, index) };
 }
 
-/** Roll every leaf table within a group, returning one line per leaf. */
-export function rollGroup(tables, path, rng = Math.random) {
+/** Roll every leaf table within a group, returning one line per leaf.
+ *  `indexes` optionally forces each leaf's own pick, keyed by the same
+ *  label rollGroup computes for that leaf — omitted (or missing a given
+ *  leaf's key), that leaf rolls against `rng` as always. */
+export function rollGroup(tables, path, rng = Math.random, { indexes } = {}) {
   const group = getTable(tables, ...path);
   if (!group || typeof group !== 'object') return { path, lines: [] };
   const leaves = flattenKeys(group, path);
   const prefix = commonPathPrefix(leaves.map((l) => l.path));
   const base = prefix.length ? prefix : path;
-  const lines = leaves.map((l) => ({
-    label: l.path.slice(base.length).join(' > ') || l.key,
-    result: pick(l.values, rng),
-  }));
+  const lines = leaves.map((l) => {
+    const label = l.path.slice(base.length).join(' > ') || l.key;
+    const forced = indexes && Object.prototype.hasOwnProperty.call(indexes, label) ? indexes[label] : null;
+    return { label, ...pickIndexed(l.values, rng, forced) };
+  });
   return { path: base, lines };
 }
 

@@ -5,6 +5,8 @@
 // Pure, DOM-free, same clone-once-then-mutate shape every other domain
 // mutator in this app uses.
 
+import { listPartyMembers } from './party.js';
+
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 function freshId() { return 'ctr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
@@ -71,6 +73,21 @@ export function moveCombatTrackerEntry(campaign, entryId, toIndex) {
   if (clampedTo === fromIndex) return next;
   const [row] = tracker.entries.splice(fromIndex, 1);
   tracker.entries.splice(clampedTo, 0, row);
+  return next;
+}
+
+/** Adds every current Party member (party.js's listPartyMembers — an NPC
+ *  tagged #character) not already in the tracker — direct follow-up
+ *  request: "add all the party members when adding a #character to an
+ *  empty combat tracker" (mirrors Colony's own Crew Roster "load all
+ *  Party members" shortcut, syncCrewRosterWithParty/colony.js, for the
+ *  same empty-list bulk-populate moment). Additive/idempotent — each
+ *  member still goes through addCombatTrackerEntity's own dedup, so
+ *  calling this more than once, or on a tracker that already has some
+ *  members, never duplicates a row. */
+export function addAllPartyMembersToCombatTracker(campaign) {
+  let next = campaign;
+  for (const member of listPartyMembers(next)) next = addCombatTrackerEntity(next, member.id);
   return next;
 }
 

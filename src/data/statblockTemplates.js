@@ -68,7 +68,11 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
     fields: withDefaults([
       { key: 'Threat Type', kind: 'text' },
       { key: 'Toughness', kind: 'track', rollMethod: 'none', max: 5 },
-      { key: 'Combat', kind: 'attribute', rollMethod: 'flat', target: 6 },
+      // Direct follow-up request: "change the target number from 6 to 4
+      // for 5PFH 'combat' dice rolls" — an explicit override; every other
+      // field here keeps withDefaults' own target: 6 default (unused by any
+      // of them, since none are rollMethod: 'flat' except Combat).
+      { key: 'Combat', kind: 'attribute', rollMethod: 'flat', target: 4 },
       { key: 'Speed', kind: 'attribute', rollMethod: 'none', format: 'inches' },
       { key: 'Notable Gear', kind: 'text' },
     ]),
@@ -83,7 +87,11 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
     label: 'Planetfall Lifeform',
     fields: withDefaults([
       { key: 'Speed', kind: 'attribute', rollMethod: 'none', format: 'inches' },
-      { key: 'Combat', kind: 'attribute', rollMethod: 'flat', target: 6 },
+      // Direct follow-up request: "change the target number from 6 to 4
+      // for 5PFH 'combat' dice rolls" — an explicit override; every other
+      // field here keeps withDefaults' own target: 6 default (unused by any
+      // of them, since none are rollMethod: 'flat' except Combat).
+      { key: 'Combat', kind: 'attribute', rollMethod: 'flat', target: 4 },
       // Direct follow-up request: "move Melee Damage into the main box of
       // other stats (Speed, Combat, KP)" — attribute kind (not text) is
       // what actually routes a field into that box (statblockGroupBlock,
@@ -109,7 +117,11 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
     label: '5PFH Lifeform / Enemy',
     fields: withDefaults([
       { key: 'Speed', kind: 'attribute', rollMethod: 'none', format: 'inches' },
-      { key: 'Combat', kind: 'attribute', rollMethod: 'flat', target: 6 },
+      // Direct follow-up request: "change the target number from 6 to 4
+      // for 5PFH 'combat' dice rolls" — an explicit override; every other
+      // field here keeps withDefaults' own target: 6 default (unused by any
+      // of them, since none are rollMethod: 'flat' except Combat).
+      { key: 'Combat', kind: 'attribute', rollMethod: 'flat', target: 4 },
       { key: 'Toughness', kind: 'track', rollMethod: 'none', max: 5 },
       { key: 'AI', kind: 'text' },
       { key: 'Weapon', kind: 'text' },

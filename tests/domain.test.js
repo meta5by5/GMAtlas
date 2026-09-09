@@ -38,6 +38,29 @@ test('rollGroup returns one line per leaf table', () => {
   for (const l of g.lines) assert.equal(typeof l.result, 'string');
 });
 
+test('rollTable also exposes which index/table-size it picked, so a 3D dice animation (diceBox3d.js) has a real die to show for standard-sized tables', () => {
+  const values = getTable(SCENE_TABLES, 'Core Oracles', 'Action');
+  const r = rollTable(SCENE_TABLES, ['Core Oracles', 'Action'], makeRng(42));
+  assert.equal(r.size, values.length);
+  assert.equal(values[r.index], r.result);
+});
+
+test('rollTable: an explicit `index` override stands in for rng() (3D dice module\'s own real result is authoritative) — omitted, rolls against rng as always', () => {
+  const boom = () => { throw new Error('rng should not be called when index is forced'); };
+  const r = rollTable(SCENE_TABLES, ['Core Oracles', 'Action'], boom, { index: 0 });
+  const values = getTable(SCENE_TABLES, 'Core Oracles', 'Action');
+  assert.equal(r.index, 0);
+  assert.equal(r.result, values[0]);
+});
+
+test('rollGroup: an `indexes` map (keyed by each leaf\'s own computed label) forces just that leaf\'s pick; every leaf still carries index/size regardless of whether it was forced', () => {
+  const g = rollGroup(SCENE_TABLES, ['Core Oracles'], makeRng(7));
+  const firstLabel = g.lines[0].label;
+  const forced = rollGroup(SCENE_TABLES, ['Core Oracles'], makeRng(7), { indexes: { [firstLabel]: 0 } });
+  assert.equal(forced.lines[0].index, 0);
+  for (const l of forced.lines) { assert.equal(typeof l.index, 'number'); assert.equal(typeof l.size, 'number'); }
+});
+
 test('flattenKeys finds leaf arrays', () => {
   const leaves = flattenKeys(SCENE_TABLES['Core Oracles'], ['Core Oracles']);
   assert.ok(leaves.length >= 1);
@@ -411,6 +434,15 @@ test('rollOracle records usage and journals the result', () => {
   assert.ok(campaign.oracles.usage['Core Oracles'] >= 1);
   assert.equal(campaign.journal[0].source, 'Oracle');
   assert.ok(text.includes('Core Oracles'));
+});
+
+test('rollOracle: an `index` override forces the pick (3D dice module\'s own real result is authoritative) — passed through to rollTable verbatim', () => {
+  const camp = defaultCampaign();
+  const values = getTable(tablesWithOverrides(camp.oracles.overrides, camp.settings.genrePack), 'Core Oracles', 'Action');
+  const { campaign, roll, text } = rollOracle(camp, ['Core Oracles', 'Action'], { index: 0 });
+  assert.equal(roll.result, values[0]);
+  assert.ok(text.includes(values[0]));
+  assert.ok(campaign.oracles.usage['Core Oracles'] >= 1); // usage tracking still fires
 });
 
 test('patchContext merges fields for a question', () => {
@@ -1274,9 +1306,14 @@ test('addEntityStatblockGroup builds a 5PFH character sheet with that ruleset\'s
   const byKey = Object.fromEntries(group.fields.map((f) => [f.key, f]));
   // 5PFH stats roll flat (d6 + value vs target) except Speed, which is
   // inches-formatted and not rollable (the concrete example the format
-  // option was built for).
+  // option was built for). Combat's own target is 4, not the ruleset's
+  // shared attributeTarget of 6 (direct follow-up request: "change the
+  // target number from 6 to 4 for 5PFH 'combat' dice rolls") — Savvy/Tough
+  // (also 'flat') still use the ruleset-wide default.
   assert.equal(byKey.Combat.rollMethod, 'flat');
-  assert.equal(byKey.Combat.target, 6);
+  assert.equal(byKey.Combat.target, 4);
+  assert.equal(byKey.Savvy.target, 6);
+  assert.equal(byKey.Tough.target, 6);
   assert.equal(byKey.Speed.rollMethod, 'none');
   assert.equal(byKey.Speed.format, 'inches');
 });
@@ -1760,6 +1797,24 @@ test('rollAction: a guaranteed miss (rng always returns 0) still resolves cleanl
   assert.equal(r.outcome, 'miss');
 });
 
+test('rollAction: a `dice` override stands in for rng() per die (3D dice module\'s own real result is authoritative) — omitted fields still roll normally', () => {
+  // never called: an rng that throws proves rollDie() is skipped entirely
+  // for any die a `dice` override actually supplies.
+  const boom = () => { throw new Error('rng should not be called for an overridden die'); };
+  const r = rollAction(2, { rng: boom, dice: { actionDie: 4, challenge1: 3, challenge2: 9 } });
+  assert.equal(r.actionDie, 4);
+  assert.equal(r.challenge1, 3);
+  assert.equal(r.challenge2, 9);
+  assert.equal(r.total, 6); // 4 + 2
+  assert.equal(r.hits, 1); // beats challenge1 (3), not challenge2 (9)
+  assert.equal(r.outcome, 'weak-hit');
+
+  // a PARTIAL override still rolls the remaining die(s) via rng
+  const r2 = rollAction(0, { rng: makeRng(1), dice: { actionDie: 6 } });
+  assert.equal(r2.actionDie, 6);
+  assert.ok(r2.challenge1 >= 1 && r2.challenge1 <= 10);
+});
+
 test('formatRollText includes the formula and outcome label', () => {
   const r = rollAction(3, { rng: makeRng(7) });
   const text = formatRollText('Marshal — Health', r);
@@ -1798,6 +1853,14 @@ test('rollFlat succeeds/fails against a target and is deterministic under a seed
   assert.equal(a.success, a.outcome === 'success');
 });
 
+test('rollFlat: a `dice.die` override stands in for rng() (3D dice module\'s own result is authoritative)', () => {
+  const boom = () => { throw new Error('rng should not be called'); };
+  const r = rollFlat(3, { target: 6, rng: boom, dice: { die: 5 } });
+  assert.equal(r.die, 5);
+  assert.equal(r.total, 8);
+  assert.equal(r.success, true);
+});
+
 test('formatFlatRollText includes the formula and target', () => {
   const r = rollFlat(2, { target: 6, rng: makeRng(3) });
   const text = formatFlatRollText('Grunt — Combat', r);
@@ -1814,7 +1877,7 @@ test('formatFlatRollCopyText matches the dice roll window\'s layout for a flat c
 });
 
 // --- Traveller roll (2d6 + value vs target) --------------------------------
-import { rollTraveller, formatTravellerRollText, formatTravellerRollCopyText, rollCustomDice, parseDiceNotation, formatCustomDiceRollText, formatCustomDiceRollCopyText, rollDicePool, formatDicePoolRollText, formatDicePoolRollCopyText } from '../src/domain/dice.js';
+import { rollTraveller, formatTravellerRollText, formatTravellerRollCopyText, rollCustomDice, parseDiceNotation, formatCustomDiceRollText, formatCustomDiceRollCopyText, rollDicePool, formatDicePoolRollText, formatDicePoolRollCopyText, rollD100 } from '../src/domain/dice.js';
 
 test('rollTraveller succeeds/fails against a target (default 8) and is deterministic under a seeded rng', () => {
   const a = rollTraveller(1, { rng: makeRng(5) });
@@ -1825,6 +1888,15 @@ test('rollTraveller succeeds/fails against a target (default 8) and is determini
   assert.equal(a.success, a.total >= 8);
   assert.equal(a.success, a.outcome === 'success');
   assert.ok(a.die1 >= 1 && a.die1 <= 6 && a.die2 >= 1 && a.die2 <= 6);
+});
+
+test('rollTraveller: a `dice` override stands in for rng() per die', () => {
+  const boom = () => { throw new Error('rng should not be called'); };
+  const r = rollTraveller(1, { target: 8, rng: boom, dice: { die1: 6, die2: 6 } });
+  assert.equal(r.die1, 6);
+  assert.equal(r.die2, 6);
+  assert.equal(r.total, 13);
+  assert.equal(r.success, true);
 });
 
 test('formatTravellerRollText includes both dice, the formula, and the target', () => {
@@ -1862,6 +1934,17 @@ test('rollCustomDice rolls `count` dice of `sides` plus a flat modifier, is dete
   assert.equal(negative.modifier, -3);
 });
 
+test('rollCustomDice: a `dice.dieValues` override (matching `count`) stands in for rng() entirely; a mismatched-length override is ignored', () => {
+  const boom = () => { throw new Error('rng should not be called'); };
+  const r = rollCustomDice(3, 6, 1, { rng: boom, dice: { dieValues: [6, 5, 4] } });
+  assert.deepEqual(r.dieValues, [6, 5, 4]);
+  assert.equal(r.total, 16); // 6+5+4+1
+
+  // a wrong-length override doesn't match `count` -> falls back to rng()
+  const r2 = rollCustomDice(2, 6, 0, { rng: makeRng(1), dice: { dieValues: [1] } });
+  assert.equal(r2.dieValues.length, 2);
+});
+
 test('parseDiceNotation accepts "NdX", "dX" (implicit count 1), and a trailing +/- modifier; rejects anything else', () => {
   assert.deepEqual(parseDiceNotation('2d6+3'), { count: 2, sides: 6, modifier: 3 });
   assert.deepEqual(parseDiceNotation('d20'), { count: 1, sides: 20, modifier: 0 });
@@ -1885,6 +1968,17 @@ test('formatCustomDiceRollText/formatCustomDiceRollCopyText render the notation,
   assert.equal(lines[1], `\tTotal: ${r.total}`);
 });
 
+test('rollD100 rolls 1-100, deterministic under a seeded rng, and a `dice.value` override stands in for rng() (used by Colony\'s Lifeform Encounters header roll instead of the old bespoke inline Math.random)', () => {
+  const a = rollD100({ rng: makeRng(5) });
+  const b = rollD100({ rng: makeRng(5) });
+  assert.equal(a.value, b.value);
+  assert.ok(a.value >= 1 && a.value <= 100);
+
+  const boom = () => { throw new Error('rng should not be called'); };
+  const forced = rollD100({ rng: boom, dice: { value: 42 } });
+  assert.equal(forced.value, 42);
+});
+
 test('rollDicePool rolls each die in the list SEPARATELY (no pool-wide sum/total) — preserves order/duplicates, is deterministic under a seeded rng, clamps a bogus side-count up to 2, and caps an oversized pool at 50 dice', () => {
   const pool = [{ sides: 20, modifier: 0 }, { sides: 20, modifier: 0 }, { sides: 6, modifier: 0 }];
   const a = rollDicePool(pool, { rng: makeRng(5) });
@@ -1904,6 +1998,18 @@ test('rollDicePool rolls each die in the list SEPARATELY (no pool-wide sum/total
 
   assert.deepEqual(rollDicePool([], { rng: makeRng(1) }).rolls, []);
   assert.deepEqual(rollDicePool(null, { rng: makeRng(1) }).rolls, []);
+});
+
+test('rollDicePool: a `dice.values` override stands in for rng() per die, by position; a missing/short entry still rolls its own die via rng()', () => {
+  const boom = () => { throw new Error('rng should not be called for an overridden die'); };
+  const pool = [{ sides: 20, modifier: 0 }, { sides: 6, modifier: 0 }];
+  const r = rollDicePool(pool, { rng: boom, dice: { values: [17, 3] } });
+  assert.deepEqual(r.rolls.map((x) => x.value), [17, 3]);
+
+  // a short values array leaves the remaining die to rng()
+  const r2 = rollDicePool(pool, { rng: makeRng(1), dice: { values: [17] } });
+  assert.equal(r2.rolls[0].value, 17);
+  assert.ok(r2.rolls[1].value >= 1 && r2.rolls[1].value <= 6);
 });
 
 test('rollDicePool applies each die\'s OWN modifier independently (direct follow-up request) — a die\'s own total is value+modifier, never combined with another die\'s value or modifier', () => {
@@ -4776,7 +4882,7 @@ test('multiple named maps coexist independently — icons/background/grid on one
 import {
   getSector, listTouchedSectors, revealSector, surveySector, harvestSectorResource,
   setSectorNotes, setSectorOverlayIcon, setSectorCornerLabel, removeSectorCornerLabel,
-  addSectorFeature, discoverSectorFeature, toggleSectorFeatureDiscovered, removeSectorFeature, adjacentSectors,
+  addSectorFeature, discoverSectorFeature, toggleSectorFeatureDiscovered, updateSectorFeatureNotes, removeSectorFeature, adjacentSectors,
   migrateFeature, setHomeBase, rollHomeBase, advanceWorldTurn, deriveSectorIcon,
   generateMissionHooks, setWorldTrackerNotes, gridSizeOf,
   toggleInvestigationSite, rollRandomInvestigationSite, countInvestigationSites, MAX_INVESTIGATION_SITES, worldTrackerAttentionItems,
@@ -5057,6 +5163,17 @@ test('toggleSectorFeatureDiscovered flips discovered back and forth (unlike disc
   assert.equal(getSector(camp, 6, 6).features[0].discovered, false, 'rolls back to undiscovered');
   camp = toggleSectorFeatureDiscovered(camp, 6, 6, 'not-a-real-id'); // no-op, no throw
   assert.equal(getSector(camp, 6, 6).features[0].discovered, false);
+});
+
+test('addSectorFeature seeds an empty notes string; updateSectorFeatureNotes edits just the targeted feature (direct follow-up request: "a two-row, expandable Description textbox... accessed by clicking on the feature")', () => {
+  let camp = defaultCampaign();
+  camp = addSectorFeature(camp, 6, 6, 'milestone_site');
+  const id = getSector(camp, 6, 6).features[0].id;
+  assert.equal(getSector(camp, 6, 6).features[0].notes, '');
+  camp = updateSectorFeatureNotes(camp, 6, 6, id, 'A crashed survey beacon, half-buried in the regolith.');
+  assert.equal(getSector(camp, 6, 6).features[0].notes, 'A crashed survey beacon, half-buried in the regolith.');
+  camp = updateSectorFeatureNotes(camp, 6, 6, 'not-a-real-id', 'ignored'); // no-op, no throw
+  assert.equal(getSector(camp, 6, 6).features[0].notes, 'A crashed survey beacon, half-buried in the regolith.');
 });
 
 test('setSectorResourceLevel/setSectorHazardLevel are directly editable (direct follow-up request — same number-field format as Colony) and keep the auto-managed R#/H# corner label in sync, but never touch a corner the GM has since overwritten by hand', () => {
@@ -7967,7 +8084,7 @@ test('advanceCampaignTurnWithAccrual also resets crewTaskProgress.doneMemberIds 
 });
 
 // --- combat tracker (direct request) ---------------------------------------
-import { listCombatTrackerEntries, addCombatTrackerEntity, removeCombatTrackerEntry, moveCombatTrackerEntry, clearCombatTracker, getCombatTrackerActiveEntryId, setCombatTrackerActiveEntry } from '../src/domain/combatTracker.js';
+import { listCombatTrackerEntries, addCombatTrackerEntity, removeCombatTrackerEntry, moveCombatTrackerEntry, clearCombatTracker, getCombatTrackerActiveEntryId, setCombatTrackerActiveEntry, addAllPartyMembersToCombatTracker } from '../src/domain/combatTracker.js';
 
 test('addCombatTrackerEntity appends a new row and dedups by entityId', () => {
   let camp = defaultCampaign();
@@ -8070,4 +8187,26 @@ test('clearCombatTracker also resets activeEntryId', () => {
   camp = setCombatTrackerActiveEntry(camp, listCombatTrackerEntries(camp)[0].id);
   camp = clearCombatTracker(camp);
   assert.equal(getCombatTrackerActiveEntryId(camp), null);
+});
+
+test('addAllPartyMembersToCombatTracker adds every current Party member, additively and idempotently — direct follow-up request ("add all the party members when adding a #character to an empty combat tracker")', () => {
+  let camp = defaultCampaign();
+  let hero, guard;
+  ({ campaign: camp, id: hero } = createEntity(camp, { type: 'npc', name: 'Hero' }));
+  camp = addEntityTag(camp, hero, 'character');
+  ({ campaign: camp, id: guard } = createEntity(camp, { type: 'npc', name: 'Guard' }));
+  camp = addEntityTag(camp, guard, 'character');
+  // A non-party NPC in the mix should NOT be swept in.
+  let bystander; ({ campaign: camp, id: bystander } = createEntity(camp, { type: 'npc', name: 'Bystander' }));
+
+  camp = addAllPartyMembersToCombatTracker(camp);
+  const entityIds = listCombatTrackerEntries(camp).map((e) => e.entityId);
+  assert.equal(entityIds.length, 2);
+  assert.ok(entityIds.includes(hero) && entityIds.includes(guard));
+  assert.ok(!entityIds.includes(bystander));
+
+  // Idempotent — a second call, or one on a tracker that already has some
+  // members, never duplicates a row (addCombatTrackerEntity's own dedup).
+  camp = addAllPartyMembersToCombatTracker(camp);
+  assert.equal(listCombatTrackerEntries(camp).length, 2);
 });

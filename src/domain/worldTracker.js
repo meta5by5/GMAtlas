@@ -301,7 +301,7 @@ export function addSectorFeature(campaign, x, y, kind) {
   const next = clone(campaign);
   const wt = ensure(next);
   const sector = getOrCreateSectorRecord(wt, clampCoord(x, wt.gridSize), clampCoord(y, wt.gridSize));
-  sector.features.push({ id: newId('wtf'), kind, mobile: kind === 'enemy_camp', discovered: false, linkedMissionType: null, movedFrom: null });
+  sector.features.push({ id: newId('wtf'), kind, mobile: kind === 'enemy_camp', discovered: false, linkedMissionType: null, movedFrom: null, notes: '' });
   return next;
 }
 
@@ -325,6 +325,20 @@ export function toggleSectorFeatureDiscovered(campaign, x, y, featureId) {
   const sector = wt.sectors[key(clampCoord(x, wt.gridSize), clampCoord(y, wt.gridSize))];
   const feature = sector && sector.features.find((f) => f.id === featureId);
   if (feature) feature.discovered = !feature.discovered;
+  return next;
+}
+
+/** Direct follow-up request: "add a two-row, expandable Description
+ *  textbox... accessed by clicking on the feature listed from Features tab
+ *  on World panel" — a feature predating this change simply has no `notes`
+ *  key yet; the UI reads it as '' (esc(f.notes || '')), so no migration
+ *  backfill is needed for a plain optional string field like this one. */
+export function updateSectorFeatureNotes(campaign, x, y, featureId, notes) {
+  const next = clone(campaign);
+  const wt = ensure(next);
+  const sector = wt.sectors[key(clampCoord(x, wt.gridSize), clampCoord(y, wt.gridSize))];
+  const feature = sector && sector.features.find((f) => f.id === featureId);
+  if (feature) feature.notes = String(notes || '');
   return next;
 }
 
