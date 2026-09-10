@@ -6720,7 +6720,7 @@ function renderStartupScreen() {
     ? campaigns.map((c) => `<button type="button" class="btn ${c.active ? '' : 'ghost'} startup-campaign-btn" data-startup-campaign-select="${escapeHtml(c.id)}">${escapeHtml(c.title || 'Untitled campaign')}${c.active ? ' <span class="dim small">(current)</span>' : ''}</button>`).join('')
     : '<p class="dim small">No campaigns yet — open Settings to create one.</p>';
   const versionEl = el.querySelector('[data-startup-version]');
-  versionEl.textContent = `Phase ${BUILD.phase} · v${BUILD.version}`;
+  versionEl.textContent = `v${BUILD.version}`;
 }
 
 // ---- rendering ----------------------------------------------------------
@@ -6899,7 +6899,7 @@ function render() {
     aboutEl.hidden = !aboutOpen;
     if (aboutOpen) {
       const buildEl = aboutEl.querySelector('[data-about-build]');
-      if (buildEl) buildEl.textContent = `Phase ${BUILD.phase} · v${BUILD.version} — ${BUILD.label}`;
+      if (buildEl) buildEl.textContent = `v${BUILD.version} — ${BUILD.label}`;
     }
   }
 

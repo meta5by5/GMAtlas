@@ -1980,7 +1980,23 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
   position: fixed; top: var(--sp-3); right: var(--sp-3); z-index: 55;
   display: flex; flex-direction: column; align-items: flex-end; gap: var(--sp-2);
   max-height: calc(100vh - 2 * var(--sp-3)); overflow-y: auto; overflow-x: visible;
+  /* Real bug, direct report ("party/campaign/world/journal/settings don't
+     respond to click, but Search and the campaign switcher do"): .dice-
+     roll-overlay below keeps its full width: min(26rem, 92vw) even while
+     CLOSED (only its height collapses to 0) -- its own pointer-events:none
+     stops IT from intercepting clicks, but this parent container's own
+     layout box is still exactly as wide as that child, and a plain <div>
+     captures clicks across its whole box regardless of what's actually
+     painted there. That invisible ~26rem-wide box, anchored top-right,
+     sat directly over the header's own right-aligned buttons (which are
+     further right than Search/the campaign switcher, both unaffected).
+     pointer-events:none here makes the empty slack space click-through;
+     every real control below opts back in with its own pointer-events:auto,
+     the same "parent none, children auto" pattern .dice-roll-overlay[data-
+     open="true"] already uses for itself. */
+  pointer-events: none;
 }
+.floating-tools-stack > * { pointer-events: auto; }
 
 /* Dice roll window (performFieldRoll's replacement for a plain toast) — a
    graphical breakdown of a statblock roll: the die(s) + field value added

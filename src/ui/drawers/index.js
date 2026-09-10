@@ -1903,7 +1903,7 @@ function settings(doc, ui = {}) {
       </div>
       <div class="settings-group">
         <h3>Build</h3>
-        <p class="dim small">Phase ${esc(BUILD.phase)} · v${esc(BUILD.version)} — ${esc(BUILD.label)}</p>
+        <p class="dim small">v${esc(BUILD.version)} — ${esc(BUILD.label)}</p>
       </div>`,
     dice: () => dice3dSettingsSection(doc, ui),
     campaigns: () => campaignsSection(doc, ui),
