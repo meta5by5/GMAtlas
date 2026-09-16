@@ -20,11 +20,13 @@ import {
   rollTraveller, formatTravellerRollText, formatTravellerRollCopyText,
   rollCustomDice, parseDiceNotation, formatCustomDiceRollText, formatCustomDiceRollCopyText,
   rollDicePool, formatDicePoolRollText, formatDicePoolRollCopyText, rollD100,
+  rollD20, formatD20RollText, formatD20RollCopyText, rollD20Score, formatD20ScoreRollText, formatD20ScoreRollCopyText,
 } from '../domain/dice.js';
 import {
   createEntity, updateEntity, addEntityTag, removeEntityTag, removeEntity, filterEntities, setActiveEntity, addRelationship, removeRelationship,
   getEntity, addEntityStatblockGroup, removeEntityStatblockGroup, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
   addEntityStatblockWeapon, updateEntityStatblockWeapon, removeEntityStatblockWeapon, setEntityStatblockGear,
+  addEntityStatblockAttack, updateEntityStatblockAttack, removeEntityStatblockAttack, applyDnd5ePdfImport,
   setEntityStatblockTrackValue, setEntityStatblockAttributeValue, updateRelationshipLabel, updateRelationshipType, updateRelationshipStrength,
   listEntities, ENTITY_TYPES, TYPE_LABEL, setFactionStat, addFactionAsset, removeFactionAsset, createItemFromCatalog,
   addLocationTradeCode, removeLocationTradeCode, addLocationBase, removeLocationBase,
@@ -37,6 +39,7 @@ import { installEnhancement, removeEnhancement } from '../domain/enhancements.js
 import { getMechanicsIndex } from '../domain/mechanicsIndex.js';
 import { scanMechanicsIndex } from './mechanicsScan.js';
 import { scanAndGenerateToc } from './tocScan.js';
+import { parseDnd5eCharacterSheetPdf } from './dnd5ePdfImport.js';
 import { buildZip, readZip } from './zip.js';
 import { loadAndMaybeResize } from './imageResize.js';
 import { addGalleryImages, removeGalleryImage, addGalleryTag, removeGalleryTag } from '../domain/gallery.js';
@@ -914,6 +917,14 @@ function loadDocViewerFrame(frame, nextSrc) {
 // click. Shape: { label, method, r } where method picks which fields of r
 // (rollAction/rollFlat/rollTraveller's return shape) the window renders.
 let diceRollResult = null;
+// D&D 5e PDF character-sheet import's review step (direct request, phase
+// 4 of this work) — set once parseDnd5eCharacterSheetPdf() resolves,
+// holding { entityId, groupIndex, mapped } (mapped is domain/dnd5eImport.js's
+// own result shape); cleared on Confirm/Cancel/Escape. Nothing from a
+// parsed PDF is ever written to the campaign before the GM confirms it
+// here — PDF field extraction is inherently fuzzy, unlike every other
+// statblock edit in this app which commits immediately.
+let dnd5ePdfImportReview = null;
 // The floating top-right dice roller (direct request, modeled on the Iron
 // Fellowship/Crew-Link Ironsworn companion app's dice roller button, then
 // reworked per direct follow-ups: rather than one die type + a quantity
@@ -992,6 +1003,9 @@ export function mountShell(el) {
           <p class="dim small" data-about-build></p>
           <p class="dim small">A campaign operating system for solo and GM-run sci-fi tabletop play — local-first, installable as a PWA.</p>
         </div>
+      </div>
+      <div class="mc-about-overlay" data-dnd5e-import-overlay hidden aria-label="Review PDF Import">
+        <div class="mc-about-card dnd5e-import-card" data-dnd5e-import-card></div>
       </div>
       <div class="mc-breadcrumb" data-breadcrumb></div>
       <main class="mc-workspace" data-workspace aria-live="polite"></main>
@@ -1219,6 +1233,19 @@ function onClick(ev) {
   if (hit('[data-menu-open-settings]')) { settingsMenuOpen = false; toggleDrawer('settings'); return render(); }
   if (hit('[data-menu-open-about]')) { settingsMenuOpen = false; aboutOpen = true; return render(); }
   if (hit('[data-about-close]')) { aboutOpen = false; return render(); }
+  // D&D 5e PDF import's review step (direct request, phase 4) — Confirm
+  // is the only path that ever writes a parsed PDF's values to the
+  // campaign; Cancel (or the ✕, same attribute) just discards the review
+  // state, no partial/undo-able write ever happens.
+  if (hit('[data-dnd5e-import-cancel]')) { dnd5ePdfImportReview = null; return renderDnd5eImportReviewOverlay(); }
+  if (hit('[data-dnd5e-import-confirm]')) {
+    const review = dnd5ePdfImportReview;
+    dnd5ePdfImportReview = null;
+    if (review) store.update((d) => applyDnd5ePdfImport(d, review.entityId, review.groupIndex, review.mapped));
+    renderDnd5eImportReviewOverlay();
+    toast('Character sheet imported');
+    return;
+  }
 
   // Startup landing page (direct request) — picking a campaign switches to
   // it (if not already active — no confirm prompt here, unlike the header's
@@ -1883,6 +1910,20 @@ function onClick(ev) {
     const [gi, wi] = sbWeaponRemove.dataset.statblockWeaponRemove.split('::').map(Number);
     const active = store.get().entities.activeId;
     return store.update((d) => removeEntityStatblockWeapon(d, active, gi, wi));
+  }
+  // D&D 5e character sheet Attacks table (direct request) — same plain
+  // array-index addressing as 5PFH's weapon table just above.
+  const sbAttackAdd = hit('[data-statblock-attack-add]');
+  if (sbAttackAdd) {
+    const gi = Number(sbAttackAdd.dataset.statblockAttackAdd);
+    const active = store.get().entities.activeId;
+    return store.update((d) => addEntityStatblockAttack(d, active, gi));
+  }
+  const sbAttackRemove = hit('[data-statblock-attack-remove]');
+  if (sbAttackRemove) {
+    const [gi, ai] = sbAttackRemove.dataset.statblockAttackRemove.split('::').map(Number);
+    const active = store.get().entities.activeId;
+    return store.update((d) => removeEntityStatblockAttack(d, active, gi, ai));
   }
   const trackSet = hit('[data-statblock-track-set]');
   if (trackSet) {
@@ -4080,6 +4121,36 @@ async function performFieldRoll(f, label) {
     diceRollResult = { label, method, r };
     return renderDiceRollOverlay();
   }
+  // D&D 5e (direct request): a plain d20 check reads the field's already-
+  // final stored bonus (a saving throw/skill/initiative value straight off
+  // the sheet) — no target/outcome, since a 5e check succeeds or fails
+  // against a DC/AC the GM judges in the moment, not something fixed on
+  // the sheet itself.
+  if (method === 'd20') {
+    let dice;
+    if (dice3dPreferred()) {
+      const rolled = await roll3d(['1d20'], dice3dThemeOpts());
+      if (rolled) dice = { die: rolled[0][0] };
+    }
+    const r = rollD20(Number(f.value) || 0, { dice });
+    store.update((d) => logRoll(d, formatD20RollText(label, r)));
+    diceRollResult = { label, method, r };
+    return renderDiceRollOverlay();
+  }
+  // D&D 5e's Ability Scores section stores the raw 1-30 score (the way a GM
+  // reads it off a character sheet, e.g. "14") rather than a derived
+  // modifier — rollD20Score computes floor((score-10)/2) at roll time.
+  if (method === 'd20-score') {
+    let dice;
+    if (dice3dPreferred()) {
+      const rolled = await roll3d(['1d20'], dice3dThemeOpts());
+      if (rolled) dice = { die: rolled[0][0] };
+    }
+    const r = rollD20Score(Number(f.value) || 10, { dice });
+    store.update((d) => logRoll(d, formatD20ScoreRollText(label, r)));
+    diceRollResult = { label, method, r };
+    return renderDiceRollOverlay();
+  }
   let dice;
   if (dice3dPreferred()) {
     const rolled = await roll3d(['1d6', '2d10'], dice3dThemeOpts());
@@ -4707,6 +4778,12 @@ function onChange(ev) {
     const active = store.get().entities.activeId;
     return store.update((d) => updateEntityStatblockWeapon(d, active, Number(gi), Number(wi), { [key]: t.value }));
   }
+  const sAttackField = t.closest('[data-statblock-attack-field]');
+  if (sAttackField) {
+    const [gi, ai, key] = sAttackField.dataset.statblockAttackField.split('::');
+    const active = store.get().entities.activeId;
+    return store.update((d) => updateEntityStatblockAttack(d, active, Number(gi), Number(ai), { [key]: t.value }));
+  }
   const sGear = t.closest('[data-statblock-gear]');
   if (sGear) {
     const gi = Number(sGear.dataset.statblockGear);
@@ -5032,6 +5109,25 @@ function onChange(ev) {
       toast('Content pack imported');
     };
     reader.readAsText(file);
+    return;
+  }
+
+  // D&D 5e PDF character-sheet import (direct request, phase 4) — parses
+  // in the background, then opens the review overlay; nothing is written
+  // to the campaign until the GM confirms it there (data-dnd5e-import-
+  // confirm/-cancel, onClick below).
+  const dnd5ePdfInput = t.closest('[data-dnd5e-import-pdf]');
+  if (dnd5ePdfInput) {
+    const groupIndex = Number(dnd5ePdfInput.dataset.dnd5eImportPdf);
+    const file = t.files && t.files[0];
+    if (!file) return;
+    const entityId = store.get().entities.activeId;
+    parseDnd5eCharacterSheetPdf(file)
+      .then((mapped) => {
+        dnd5ePdfImportReview = { entityId, groupIndex, mapped };
+        renderDnd5eImportReviewOverlay();
+      })
+      .catch((err) => toast(`PDF import failed — ${err.message}`));
     return;
   }
 
@@ -6903,6 +6999,13 @@ function render() {
     }
   }
 
+  // D&D 5e PDF import's own review step (direct request, phase 4) — PDF
+  // field extraction is inherently fuzzy, so nothing from a parsed PDF
+  // ever gets written to the campaign until the GM confirms it here; see
+  // renderDnd5eImportReviewOverlay below and the data-dnd5e-import-confirm/
+  // -cancel click handlers.
+  renderDnd5eImportReviewOverlay();
+
   // The doc viewer (below) and the main drawer are mutually exclusive
   // (docs/adr/0032: "just tab groups," never two panels sharing the
   // viewport at once) — a document open takes over the full panel width;
@@ -7309,6 +7412,38 @@ function renderDiceRollOverlay() {
   card.innerHTML = diceRollResult ? diceRollCardHtml(diceRollResult.label, diceRollResult.method, diceRollResult.r) : '';
 }
 
+// D&D 5e PDF import's review step (direct request, phase 4) — a readable
+// summary of what was parsed, not every single field (the full detail is
+// already visible on the character sheet itself right after confirming);
+// Cancel discards the parse entirely, nothing is written until Confirm.
+function renderDnd5eImportReviewOverlay() {
+  const overlay = root && root.querySelector('[data-dnd5e-import-overlay]');
+  if (!overlay) return;
+  overlay.hidden = !dnd5ePdfImportReview;
+  const card = overlay.querySelector('[data-dnd5e-import-card]');
+  if (!card) return;
+  card.innerHTML = dnd5ePdfImportReview ? dnd5eImportReviewHtml(dnd5ePdfImportReview.mapped) : '';
+}
+
+function dnd5eImportReviewHtml(mapped) {
+  const abilities = Object.entries(mapped.sections.abilityScores).map(([k, v]) => `${k.slice(0, 3).toUpperCase()} ${v}`).join(', ');
+  const combat = mapped.sections.combat;
+  const counts = mapped.counts;
+  return `
+    <button class="icon-btn" data-dnd5e-import-cancel aria-label="Cancel">✕</button>
+    <h2>Import from PDF</h2>
+    <p class="tagline">Review before saving</p>
+    <p><b>${escapeHtml(mapped.name || 'Unnamed')}</b><br><span class="dim small">${escapeHtml(mapped.overview || '')}</span></p>
+    <p class="dim small">${escapeHtml(abilities)}</p>
+    <p class="dim small">AC ${escapeHtml(combat['Armor Class'] || '—')} · HP ${combat['Hit Points'].value}/${combat['Hit Points'].max} · Speed ${escapeHtml(combat.Speed || '—')}</p>
+    <p class="dim small">${counts.skillsWithBonus} skills with a bonus, ${counts.spells} spells, ${counts.equipment} equipment lines, ${counts.attacks} attacks found.</p>
+    <p class="dim small">Confirming overwrites this entity's name, overview, and every matching field on its D&D 5e Character Sheet — review the values above before saving.</p>
+    <div class="btn-col">
+      <button class="btn" data-dnd5e-import-confirm>Save to Character Sheet</button>
+      <button class="btn ghost" data-dnd5e-import-cancel>Cancel</button>
+    </div>`;
+}
+
 const DICE_ROLLER_SIDES_OPTIONS = [4, 6, 8, 10, 12, 20, 100];
 
 // The floating top-right dice roller's popover — always-closed by default
@@ -7539,6 +7674,8 @@ function diceRollCopyText({ label, method, r }) {
   if (method === 'traveller') return formatTravellerRollCopyText(r);
   if (method === 'custom') return formatCustomDiceRollCopyText(label, r);
   if (method === 'pool') return formatDicePoolRollCopyText(label, r);
+  if (method === 'd20') return formatD20RollCopyText(r);
+  if (method === 'd20-score') return formatD20ScoreRollCopyText(r);
   return formatRollCopyText(r);
 }
 
@@ -7572,6 +7709,16 @@ function diceRollCardHtml(label, method, r) {
     rows = [{ icon: DICE_DIAMOND_ICON, label: 'Roll', text: `${r.dieValues.join(', ')}${modifierPart}` }];
     outcomeLabel = `Total: ${r.total}`;
     outcomeClass = 'neutral'; // no success/fail — a free-form roll has nothing to succeed or fail against
+  } else if (method === 'd20' || method === 'd20-score') {
+    // D&D 5e (direct request) — a single d20 + modifier, no success/fail
+    // banner (same reasoning 'custom' above gives: nothing fixed on the
+    // sheet to succeed or fail against, the GM judges the DC/AC live).
+    const modifier = method === 'd20-score' ? r.modifier : r.value;
+    const modPart = modifier >= 0 ? `+${modifier}` : `${modifier}`;
+    const scorePart = method === 'd20-score' ? ` (score ${r.score})` : '';
+    rows = [{ icon: DICE_DIAMOND_ICON, label: 'Roll', text: `${r.die} ${modPart}${scorePart} = ${r.total}` }];
+    outcomeLabel = `Total: ${r.total}`;
+    outcomeClass = 'neutral';
   } else if (method === 'pool') {
     // One row per die, each result standing on its own — deliberately no
     // outcome banner at all (outcomeLabel stays null), since a mixed pool

@@ -1434,19 +1434,75 @@ function characterSheetGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
   const collapsed = !!(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
   const ruleset = findRuleset(group.ruleset);
   const indexed = group.fields.map((f, fi) => ({ f, fi }));
-  const stats = indexed.filter(({ f }) => f.group === 'stat');
-  const resources = indexed.filter(({ f }) => f.group !== 'stat');
+  // D&D 5e-style (direct request) — group.sections (set by makeStatblock
+  // when the ruleset's own characterTemplate declares `sections`, see
+  // data/rulesets.js) renders each as its own labeled, collapsible block
+  // via the same partySectionHeaderHtml/isPartySectionCollapsed mechanism
+  // the Campaign/Party panels and entity-editor sections already use —
+  // real named groupings (Ability Scores/Saves/Skills/Combat/...) instead
+  // of the old binary stat/resource split below, which every OTHER
+  // ruleset (Starforged/5PFH/Traveller — no `sections` on their own
+  // templates) still uses completely unchanged.
+  const bodyHtml = Array.isArray(group.sections)
+    ? group.sections.map((sec) => {
+        const fields = indexed.filter(({ f }) => f.section === sec.id);
+        if (!fields.length) return '';
+        const sectionKey = `entityStatblockSection:${e.id}:${gi}:${sec.id}`;
+        const sectionCollapsed = isPartySectionCollapsed(ui, sectionKey, false);
+        return `
+          ${partySectionHeaderHtml(sectionKey, sec.label, sectionCollapsed)}
+          ${sectionCollapsed ? '' : `<div class="character-sheet-resources">${fields.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>`}`;
+      }).join('') + (group.ruleset === 'dnd5e' ? characterSheetAttacksHtml(group, gi) : '')
+    : (() => {
+        const stats = indexed.filter(({ f }) => f.group === 'stat');
+        const resources = indexed.filter(({ f }) => f.group !== 'stat');
+        return `
+          ${stats.length ? `<div class="character-sheet-stats">${stats.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}
+          ${resources.length ? `<div class="character-sheet-resources">${resources.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}
+          ${group.ruleset === '5pfh' ? characterSheetWeaponsAndGearHtml(group, gi) : ''}`;
+      })();
+  // D&D 5e PDF character-sheet import (direct request, phase 4) — only
+  // offered on a dnd5e Character Sheet group; a real file input hidden
+  // behind a plain button label, same "label wraps a hidden file input"
+  // pattern every other file-upload control in this app already uses
+  // (e.g. Settings' own "Import Campaign JSON").
+  const pdfImportBtn = group.ruleset === 'dnd5e'
+    ? `<label class="btn ghost sm file-btn" title="Import a D&D Beyond character sheet PDF export">Import from PDF<input type="file" accept=".pdf,application/pdf" data-dnd5e-import-pdf="${gi}" hidden></label>`
+    : '';
   return `<div class="statblock-block character-sheet" data-statblock-group="${gi}">
     <div class="statblock-head">
       <button class="icon-btn statblock-collapse-toggle" data-statblock-group-toggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button>
       <h4>Character Sheet · ${esc(ruleset.label)}</h4>
+      ${pdfImportBtn}
       <button class="icon-btn" data-statblock-remove-group="${gi}" title="Remove this statblock">🗑</button>
     </div>
-    ${collapsed ? '' : `
-    ${stats.length ? `<div class="character-sheet-stats">${stats.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}
-    ${resources.length ? `<div class="character-sheet-resources">${resources.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}
-    ${group.ruleset === '5pfh' ? characterSheetWeaponsAndGearHtml(group, gi) : ''}`}
+    ${collapsed ? '' : bodyHtml}
   </div>`;
+}
+
+// D&D 5e's own Attacks table (direct request) — same real-<table> pattern
+// as 5PFH's characterSheetWeaponsAndGearHtml just above, addressed by
+// plain array index (attackIndex), just its own column set (Name/Hit/
+// Damage/Notes rather than Weapon/Range/Shots/Damage/Traits).
+function characterSheetAttacksHtml(group, gi) {
+  const attacks = group.attacks || [];
+  const attackRows = attacks.map((a, ai) => `
+    <tr>
+      <td><input type="text" data-statblock-attack-field="${gi}::${ai}::name" value="${esc(a.name)}" placeholder="Attack"></td>
+      <td><input type="text" data-statblock-attack-field="${gi}::${ai}::hit" value="${esc(a.hit)}" placeholder="+5"></td>
+      <td><input type="text" data-statblock-attack-field="${gi}::${ai}::damage" value="${esc(a.damage)}" placeholder="1d8+3 Slashing"></td>
+      <td><input type="text" data-statblock-attack-field="${gi}::${ai}::notes" value="${esc(a.notes)}" placeholder="Notes"></td>
+      <td class="statblock-weapon-remove-cell"><button type="button" class="icon-btn statblock-weapon-remove-btn" data-statblock-attack-remove="${gi}::${ai}" title="Remove attack">🗑</button></td>
+    </tr>`).join('');
+  return `
+    <div class="statblock-weapons">
+      <h4>Attacks</h4>
+      <table class="statblock-weapon-table">
+        <thead><tr><th class="statblock-weapon-col-name">Attack</th><th>Hit</th><th>Damage/Type</th><th class="statblock-weapon-col-traits">Notes</th><th></th></tr></thead>
+        <tbody>${attackRows}</tbody>
+      </table>
+      <button type="button" class="btn ghost sm" data-statblock-attack-add="${gi}">＋ Attack</button>
+    </div>`;
 }
 
 // Weapon table + Gear (design/adr/rules-profiles-multi-campaign.md, direct
@@ -1934,6 +1990,8 @@ const ROLL_METHODS = [
   { id: 'action', label: 'Starforged (d6 + value vs 2d10)' },
   { id: 'flat', label: '5PFH (d6 + value vs target)' },
   { id: 'traveller', label: 'Traveller (2d6 + value vs target)' },
+  { id: 'd20', label: 'D&D 5e (d20 + value, no fixed target)' },
+  { id: 'd20-score', label: 'D&D 5e Ability Score (d20 + score modifier)' },
   // Add more models here (and in domain/dice.js) as other planned systems —
   // 5PFH Planetfall, Stars Without Number — get authored roll mechanics.
 ];

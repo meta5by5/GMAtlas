@@ -99,6 +99,114 @@ export const RULESETS = [
       ],
     },
   },
+  {
+    // Direct request: a ruleset "dedicated to D&D 5e" whose character sheet
+    // "captures all the data from a d&dbeyond charactersheet" — the flat
+    // stats/tracks shape every other ruleset above uses can't express that
+    // (a real sheet has Ability Scores/Saves/Skills/Combat/Spellcasting/
+    // Features/Equipment as distinct labeled groupings, not one undivided
+    // list). `characterTemplate.sections` is the one new, backward-
+    // compatible extension point this ruleset introduces: an array of
+    // {id, label, fields} instead of the plain stats/tracks pair —
+    // domain/statblocks.js's makeStatblock() branches on whichever shape is
+    // present, so Starforged/5PFH/Traveller above are completely untouched.
+    // Each field here is the same {key, kind, rollMethod, format, value}
+    // shape Bestiary templates already use (data/statblockTemplates.js),
+    // reusing templateFieldToStatblockField rather than a parallel mapper.
+    // Two new roll methods power this (domain/dice.js): 'd20' (a plain
+    // d20 + the field's own already-final bonus — a save/skill/initiative
+    // value read straight off the sheet) and 'd20-score' (Ability Scores
+    // store the raw 1-30 score, the way a GM reads it off a real sheet;
+    // the modifier is derived at roll time, not stored). No sourcebook
+    // link — the SRD 5.2.1 PDF this app's D&D content is sourced from is
+    // Creative Commons (CC-BY-4.0), a different licensing situation than
+    // the purchased-rulebook PDFs every other `doc` here points at, so it's
+    // referenced by its own attribution note (see the SRD lifeform content
+    // pack) rather than linked here as if it were an ordinary sourcebook.
+    id: 'dnd5e',
+    label: 'D&D 5e',
+    doc: null,
+    characterTemplate: {
+      sections: [
+        { id: 'abilityScores', label: 'Ability Scores', fields: [
+          { key: 'Strength', kind: 'attribute', rollMethod: 'd20-score', format: 'plain', value: 10 },
+          { key: 'Dexterity', kind: 'attribute', rollMethod: 'd20-score', format: 'plain', value: 10 },
+          { key: 'Constitution', kind: 'attribute', rollMethod: 'd20-score', format: 'plain', value: 10 },
+          { key: 'Intelligence', kind: 'attribute', rollMethod: 'd20-score', format: 'plain', value: 10 },
+          { key: 'Wisdom', kind: 'attribute', rollMethod: 'd20-score', format: 'plain', value: 10 },
+          { key: 'Charisma', kind: 'attribute', rollMethod: 'd20-score', format: 'plain', value: 10 },
+        ]},
+        { id: 'savingThrows', label: 'Saving Throws', fields: [
+          { key: 'Strength Save', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Dexterity Save', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Constitution Save', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Intelligence Save', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Wisdom Save', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Charisma Save', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+        ]},
+        { id: 'skills', label: 'Skills', fields: [
+          { key: 'Acrobatics', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Animal Handling', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Arcana', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Athletics', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Deception', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'History', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Insight', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Intimidation', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Investigation', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Medicine', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Nature', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Perception', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Performance', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Persuasion', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Religion', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Sleight of Hand', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Stealth', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Survival', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+        ]},
+        { id: 'combat', label: 'Combat', fields: [
+          { key: 'Armor Class', kind: 'text', value: '' },
+          { key: 'Initiative', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Speed', kind: 'text', value: '' },
+          { key: 'Proficiency Bonus', kind: 'text', value: '' },
+          { key: 'Hit Points', kind: 'track', value: 0, max: 0 },
+          { key: 'Temp HP', kind: 'text', value: '' },
+          { key: 'Hit Dice', kind: 'text', value: '' },
+        ]},
+        // Spells/Equipment are deliberately free-text (direct scope trim,
+        // not an oversight) — a fully structured, per-row editable table
+        // for every PDF column (Prep/Name/Source/Save/Time/Range/Comp/
+        // Duration/Page for spells) is its own feature. The Attacks table
+        // is the one exception: group.attacks (see makeStatblock/
+        // addStatblockAttack below) mirrors 5PFH's existing weapons-table
+        // mechanism instead of a new generalized "table field kind".
+        { id: 'spellcasting', label: 'Spellcasting', fields: [
+          { key: 'Spellcasting Ability', kind: 'text', value: '' },
+          { key: 'Spell Save DC', kind: 'text', value: '' },
+          { key: 'Spell Attack Bonus', kind: 'attribute', rollMethod: 'd20', format: 'sign', value: 0 },
+          { key: 'Spells', kind: 'text', value: '' },
+        ]},
+        { id: 'featuresAndTraits', label: 'Features & Traits', fields: [
+          { key: 'Features & Traits', kind: 'text', value: '' },
+        ]},
+        { id: 'equipment', label: 'Equipment', fields: [
+          { key: 'Equipment', kind: 'text', value: '' },
+          { key: 'Currency (CP/SP/EP/GP/PP)', kind: 'text', value: '' },
+          { key: 'Weight Carried', kind: 'text', value: '' },
+        ]},
+        { id: 'characterInfo', label: 'Character Info', fields: [
+          { key: 'Species', kind: 'text', value: '' },
+          { key: 'Background', kind: 'text', value: '' },
+          { key: 'Alignment', kind: 'text', value: '' },
+          { key: 'Personality Traits', kind: 'text', value: '' },
+          { key: 'Ideals', kind: 'text', value: '' },
+          { key: 'Bonds', kind: 'text', value: '' },
+          { key: 'Flaws', kind: 'text', value: '' },
+          { key: 'Backstory', kind: 'text', value: '' },
+        ]},
+      ],
+    },
+  },
 ];
 
 export function findRuleset(id) {

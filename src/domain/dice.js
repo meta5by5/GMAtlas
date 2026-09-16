@@ -112,6 +112,65 @@ export function rollTraveller(value = 0, { target = 8, adds = 0, rng = Math.rand
 }
 
 /**
+ * Roll a plain d20 check: 1d20 + the field's stored value (already a final
+ * signed bonus, e.g. a D&D 5e saving throw or skill modifier read straight
+ * off a character sheet) — no target/outcome, since a 5e check succeeds or
+ * fails against a DC/AC decided in the moment by the GM, not something
+ * fixed on the sheet itself. Same RNG-injectable/`dice`-override posture as
+ * every other roll here.
+ */
+export function rollD20(value = 0, { adds = 0, rng = Math.random, dice = {} } = {}) {
+  const die = dice.die ?? rollDie(20, rng);
+  const v = Number(value) || 0;
+  const a = Number(adds) || 0;
+  const total = die + v + a;
+  return { die, value: v, adds: a, total };
+}
+
+/** Render a d20-check result as one journal/toast-friendly line. */
+export function formatD20RollText(label, r) {
+  const addsPart = r.adds ? ` + ${r.adds}` : '';
+  return `🎲 ${label}: ${r.die} + ${r.value}${addsPart} = ${r.total}`;
+}
+
+/** Multi-line copy text for the dice roll window, same shape as
+ *  formatRollCopyText but for a plain d20 check (no target/outcome line). */
+export function formatD20RollCopyText(r) {
+  const addsPart = r.adds ? ` + ${r.adds}` : '';
+  return `\tRoll: ${r.die} + ${r.value}${addsPart} = ${r.total}`;
+}
+
+/**
+ * Roll a d20 check derived from a raw 1-30 ability SCORE rather than an
+ * already-final bonus (D&D 5e's own Ability Scores section stores the raw
+ * score, e.g. "14", the way a GM reads it straight off a character sheet —
+ * the modifier is derived, not stored): modifier = floor((score - 10) / 2).
+ */
+export function rollD20Score(score = 10, { adds = 0, rng = Math.random, dice = {} } = {}) {
+  const die = dice.die ?? rollDie(20, rng);
+  const s = Number(score) || 10;
+  const modifier = Math.floor((s - 10) / 2);
+  const a = Number(adds) || 0;
+  const total = die + modifier + a;
+  return { die, score: s, modifier, adds: a, total };
+}
+
+/** Render a score-derived d20-check result as one journal/toast-friendly line. */
+export function formatD20ScoreRollText(label, r) {
+  const modPart = r.modifier >= 0 ? `+${r.modifier}` : `${r.modifier}`;
+  const addsPart = r.adds ? ` + ${r.adds}` : '';
+  return `🎲 ${label}: ${r.die} ${modPart} (score ${r.score})${addsPart} = ${r.total}`;
+}
+
+/** Multi-line copy text for the dice roll window, same shape as
+ *  formatD20RollCopyText but for a score-derived d20 check. */
+export function formatD20ScoreRollCopyText(r) {
+  const modPart = r.modifier >= 0 ? `+${r.modifier}` : `${r.modifier}`;
+  const addsPart = r.adds ? ` + ${r.adds}` : '';
+  return `\tRoll: ${r.die} ${modPart} (score ${r.score})${addsPart} = ${r.total}`;
+}
+
+/**
  * Roll a generic NdX+modifier expression — the free-form dice roller (direct
  * request, modeled on the Iron Fellowship/Crew-Link Ironsworn companion
  * app's "Custom Dice Roll" button): count dice of the given number of sides,

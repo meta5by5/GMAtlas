@@ -18,6 +18,7 @@ import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
 import { PLANETFALL_TURN_STEPS } from '../data/turnStepListPlanetfall.js';
 import { CREW_TASKS_5PFH } from '../data/crewTasksDefault5pfh.js';
 import { MAX_ENCOUNTERS } from '../domain/colony.js';
+import { dnd5eStoryboardProfile } from '../domain/rulesProfiles.js';
 
 // Every legacy key the old app is known to write, plus the very old aliases.
 export const LEGACY_KEYS = [
@@ -306,11 +307,19 @@ export function wrapLegacyCampaignIntoAppConfig(legacyDoc, now = new Date().toIS
   // backfillCampaignTurnStepSlots does for an already-migrated one.
   doc.turnStepSlotAssignments = { colony: planetfallList.id, starship: fivePfhList.id };
 
+  // D&D 5e (Storyboard) campaign template (direct request) — seeded here
+  // for a first-time install; an already-migrated install gets the exact
+  // same profile shape via store.js's own backfillDnd5eStoryboardProfile
+  // instead (dnd5eStoryboardProfile is the one shared builder both paths
+  // call, so they can't drift apart into two different-shaped profiles
+  // with the same name).
+  const dnd5eProfile = dnd5eStoryboardProfile(now);
+
   const appConfig = {
     ...defaultAppConfig(),
     activeCampaignId: doc.meta.id,
     campaigns: [campaignEntry],
-    profiles: [defaultProfile, fivePfhProfile],
+    profiles: [defaultProfile, fivePfhProfile, dnd5eProfile],
     turnStepLists: [fivePfhList, planetfallList],
   };
 

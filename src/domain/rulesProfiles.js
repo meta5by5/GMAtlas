@@ -207,3 +207,42 @@ export function grandfatherCampaignPanelActivation(appConfig) {
     }),
   };
 }
+
+/** Seeds the "D&D 5e (Storyboard)" campaign template (direct request,
+ *  phase 2 of the D&D 5e work) for an install that already has an
+ *  appConfig — a brand-new install gets it directly from
+ *  migrate.js's wrapLegacyCampaignIntoAppConfig instead, same split every
+ *  other seeded profile/list here already uses. Checked by exact NAME,
+ *  same fragile-but-consistent convention backfillDefaultCrewTasks/
+ *  backfillTurnStepListInventory already use for their own seeded
+ *  content — a no-op once a profile with this name exists, so a GM who's
+ *  since renamed or customized it never gets a duplicate. Called once
+ *  from store.js's load(). */
+export function backfillDnd5eStoryboardProfile(appConfig, now = new Date().toISOString()) {
+  if (appConfig.profiles.some((p) => p.name === 'D&D 5e (Storyboard)')) return appConfig;
+  return { ...appConfig, profiles: [...appConfig.profiles, dnd5eStoryboardProfile(now)] };
+}
+
+/** The actual "D&D 5e (Storyboard)" profile shape — every other module
+ *  (Colony, World Tracker, Trade, Battlemap, Graph, Faction Events) off,
+ *  Composer/Navigator/Advisor left at their untouched Storyboard defaults
+ *  (dashboard/narrative/copilot) — shared between the backfill above and
+ *  migrate.js's own first-install seeding so the two paths can never
+ *  drift apart into two different-shaped profiles with the same name. */
+export function dnd5eStoryboardProfile(now = new Date().toISOString()) {
+  const profile = defaultRulesProfile('D&D 5e (Storyboard)', now);
+  profile.moduleEnabled = GATEABLE_MODULES.reduce((acc, id) => { acc[id] = false; return acc; }, {});
+  profile.ruleset = {
+    ...profile.ruleset,
+    // Direct request: "associating all of this to the 'Fantasy (D&D-style)'
+    // genre pack... everything including the oracles must be independent
+    // or a copy allocated to this version" — 'dnd5e' is its own genre pack
+    // (data/genrePacks.js), forked from 'fantasy' at data/tables-dnd5e.js,
+    // not a shared reference to the original.
+    genrePack: 'dnd5e',
+    statRuleset: 'dnd5e',
+    gameSystemActivations: { swn: false, fivepfh: false, planetfall: false },
+    partyHeadlineFields: ['Hit Points'],
+  };
+  return profile;
+}

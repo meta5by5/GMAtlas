@@ -10,6 +10,7 @@ import {
   ensureAutoStatblock, addStatblockGroup, removeStatblockGroup, setStatblockField, addStatblockField, removeStatblockField,
   toggleStatblockFieldTrack, setStatblockTrackValue, toggleStatblockFieldAttribute, setStatblockAttributeValue,
   addStatblockWeapon, updateStatblockWeapon, removeStatblockWeapon, setStatblockGear,
+  addStatblockAttack, updateStatblockAttack, removeStatblockAttack,
 } from './statblocks.js';
 import { economyTypesForModel } from '../data/economyTypes.js';
 import { SWN_XP_TABLE } from '../data/swnFactionData.js';
@@ -1266,6 +1267,68 @@ export function setEntityStatblockGear(campaign, id, groupIndex, text) {
   const next = clone(campaign);
   const e = getEntity(next, id);
   if (e) setStatblockGear(e, groupIndex, text);
+  return next;
+}
+
+// D&D 5e character sheet Attacks table (direct request) — campaign-level
+// wrappers, same clone-then-delegate shape as the 5PFH weapon table's own
+// wrappers just above.
+export function addEntityStatblockAttack(campaign, id, groupIndex) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (e) addStatblockAttack(e, groupIndex);
+  return next;
+}
+
+export function updateEntityStatblockAttack(campaign, id, groupIndex, attackIndex, patch) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (e) updateStatblockAttack(e, groupIndex, attackIndex, patch);
+  return next;
+}
+
+export function removeEntityStatblockAttack(campaign, id, groupIndex, attackIndex) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (e) removeStatblockAttack(e, groupIndex, attackIndex);
+  return next;
+}
+
+/** D&D 5e PDF character-sheet import (direct request, phase 4 of this
+ *  work) — writes a domain/dnd5eImport.js `mapDnd5ePdfFieldsToCharacterSheet`
+ *  result onto a real entity: name/overview, then every section's fields
+ *  by matching `key` against the group's own field list (generic — the
+ *  mapper's section keys are already this app's own dnd5e template field
+ *  names, so no per-field special-casing is needed here beyond Hit
+ *  Points' own {value, max} shape, a track field rather than a plain
+ *  scalar), then the Attacks table wholesale from the PDF's weapon rows.
+ *  No-op if the entity, or a dnd5e character group at that index, doesn't
+ *  exist — the caller (the review-step UI) only ever calls this after
+ *  confirming both are real, but this stays defensive rather than assumed. */
+export function applyDnd5ePdfImport(campaign, id, groupIndex, mapped) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (!e || !mapped) return next;
+  if (mapped.name) e.name = mapped.name;
+  if (mapped.overview) e.overview = mapped.overview;
+  const group = e.statblocks && e.statblocks[groupIndex];
+  if (group && group.ruleset === 'dnd5e') {
+    for (const sectionFields of Object.values(mapped.sections || {})) {
+      for (const [key, value] of Object.entries(sectionFields)) {
+        const field = group.fields.find((f) => f.key === key);
+        if (!field) continue;
+        if (field.track && value && typeof value === 'object') {
+          field.value = value.value;
+          field.max = value.max;
+        } else {
+          field.value = value;
+        }
+      }
+    }
+    if (Array.isArray(mapped.attacks) && mapped.attacks.length) {
+      group.attacks = mapped.attacks.map((a) => ({ name: a.name || '', hit: a.hit || '', damage: a.damage || '', notes: a.notes || '' }));
+    }
+  }
   return next;
 }
 

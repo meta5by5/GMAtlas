@@ -37,7 +37,7 @@ import { defaultCampaign, defaultAppConfig } from './schema.js';
 import {
   importCampaign, migrateDocument, migrateFromLegacyKeys, readLegacyKeys, wrapLegacyCampaignIntoAppConfig, LEGACY_KEYS,
 } from './migrate.js';
-import { createCampaign, renameCampaignEntry, setActiveCampaign, createRulesProfile, reassignCampaignProfile, backfillDefaultCrewTasks, grandfatherCampaignPanelActivation } from '../domain/rulesProfiles.js';
+import { createCampaign, renameCampaignEntry, setActiveCampaign, createRulesProfile, reassignCampaignProfile, backfillDefaultCrewTasks, grandfatherCampaignPanelActivation, backfillDnd5eStoryboardProfile } from '../domain/rulesProfiles.js';
 import { createTurnStepList, hoistLegacyProfileTurnSteps, backfillTurnStepListInventory, fixPlanetfallBranching } from '../domain/turnStepLists.js';
 import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
 import { PLANETFALL_TURN_STEPS } from '../data/turnStepListPlanetfall.js';
@@ -236,6 +236,7 @@ function createStore() {
       backfilled = fixPlanetfallBranching(backfilled);
       backfilled = backfillDefaultCrewTasks(backfilled, CREW_TASKS_5PFH);
       backfilled = grandfatherCampaignPanelActivation(backfilled);
+      backfilled = backfillDnd5eStoryboardProfile(backfilled);
       if (backfilled !== appConfig) {
         appConfig = backfilled;
         await idbPut(database, APP_CONFIG_KEY, appConfig);

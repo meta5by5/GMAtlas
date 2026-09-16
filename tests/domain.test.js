@@ -4,6 +4,11 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 import { SCENE_TABLES, makeRng, rollTable, rollGroup, flattenKeys, getTable, tablesWithOverrides } from '../src/domain/oracles.js';
 import { ORACLE_TABLE_SOURCES } from '../src/data/oracleGroups.js';
@@ -1271,6 +1276,8 @@ test('listTagVocabulary lists tags used by other entities of the same type, excl
 });
 
 import { findRuleset } from '../src/data/rulesets.js';
+import { mapDnd5ePdfFieldsToCharacterSheet } from '../src/domain/dnd5eImport.js';
+import { applyDnd5ePdfImport } from '../src/domain/entities.js';
 
 test('default campaign uses the Starforged stat ruleset', () => {
   const camp = defaultCampaign();
@@ -1335,6 +1342,187 @@ test('addEntityStatblockGroup builds a Traveller character sheet (original conte
   // findRuleset has no sourcebook PDF for this one — deliberately absent,
   // not a broken/guessed path.
   assert.equal(findRuleset('traveller').doc, null);
+});
+
+test('addEntityStatblockGroup builds a D&D 5e character sheet from characterTemplate.sections — real labeled sections, not the flat stats/tracks shape every other ruleset uses', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Riffken' }));
+  camp = addEntityStatblockGroup(camp, id, 'character', 'dnd5e');
+  const e = findByName(camp, 'Riffken');
+  const group = e.statblocks.find((g) => g.kind === 'character');
+  assert.equal(group.ruleset, 'dnd5e');
+  // group.sections carries the label metadata (order + display name) so the
+  // renderer doesn't need to re-import rulesets.js itself.
+  assert.deepEqual(group.sections.map((s) => s.id), [
+    'abilityScores', 'savingThrows', 'skills', 'combat', 'spellcasting', 'featuresAndTraits', 'equipment', 'characterInfo',
+  ]);
+  assert.equal(group.sections.find((s) => s.id === 'abilityScores').label, 'Ability Scores');
+  // Every field is tagged with its own section's id (not the old binary
+  // group:'stat'/'resource' split every other ruleset's fields still use).
+  const byKey = Object.fromEntries(group.fields.map((f) => [f.key, f]));
+  assert.equal(byKey.Strength.section, 'abilityScores');
+  assert.equal(byKey.Strength.rollMethod, 'd20-score');
+  assert.equal(byKey.Strength.attribute, true);
+  assert.equal(byKey.Strength.value, 10);
+  assert.equal(byKey['Strength Save'].section, 'savingThrows');
+  assert.equal(byKey['Strength Save'].rollMethod, 'd20');
+  assert.equal(byKey.Acrobatics.section, 'skills');
+  assert.equal(byKey['Hit Points'].section, 'combat');
+  assert.equal(byKey['Hit Points'].track, true);
+  assert.equal(byKey.Spells.section, 'spellcasting');
+  assert.equal(byKey.Spells.value, '');
+  // Attacks table (direct request) — same mechanism as 5PFH's weapons
+  // table, only present for the ruleset that declares it.
+  assert.deepEqual(group.attacks, []);
+  // Sanity: existing rulesets' fields still use the OLD group:'stat'/
+  // 'resource' key, no `section` at all, and no group.sections array —
+  // this new shape is additive, not a breaking change to any of them.
+  let camp2 = defaultCampaign();
+  let id2; ({ campaign: camp2, id: id2 } = createEntity(camp2, { type: 'npc', name: 'Scout2' }));
+  camp2 = addEntityStatblockGroup(camp2, id2, 'character', 'starforged');
+  const sfGroup = findByName(camp2, 'Scout2').statblocks.find((g) => g.kind === 'character');
+  assert.equal(sfGroup.sections, undefined);
+  assert.equal(sfGroup.fields[0].section, undefined);
+  assert.equal(sfGroup.fields[0].group, 'stat');
+});
+
+// --- D&D 5e work, phase 4: PDF character-sheet import ----------------------
+// A realistic subset of a real D&D Beyond export's own AcroForm field
+// values (Shamus RedMane, the attached example) — trimmed to what's needed
+// to exercise every mapping rule, not the full ~900-field real export.
+const SAMPLE_PDF_FIELDS = {
+  CharacterName: 'Shamus RedMane',
+  'CLASS  LEVEL': 'Cleric 5 / Fighter 2',
+  RACE: 'Dwarf',
+  BACKGROUND: 'Acolyte',
+  STR: '14', STRmod: '+2', DEX: '12', 'DEXmod ': '+1', CON: '11', CONmod: '+0',
+  INT: '9', INTmod: '-1', WIS: '16', WISmod: '+3', CHA: '14', CHamod: '+2',
+  'ST Strength': '+2', 'ST Dexterity': '+1', 'ST Constitution': '+0',
+  'ST Intelligence': '-1', 'ST Wisdom': '+6', 'ST Charisma': '+5',
+  Acrobatics: '+1', Animal: '+3', Arcana: '-1', Athletics: '+2', Deception: '+2',
+  History: '-1', Insight: '+6', Intimidation: '+2', Investigation: '-1',
+  Medicine: '+6', Nature: '-1', Perception: '+3', Performance: '+2',
+  Persuasion: '+5', Religion: '+2', SleightofHand: '+1', 'Stealth ': '+1', Survival: '+3',
+  Init: '+1', AC: '20', ProfBonus: '+3', Speed: '20 ft. (Walking)',
+  MaxHP: '47', CurrentHP: '', TempHP: '--', Total: '5d8 + 2d10', HD: '',
+  spellCastingAbility0: 'WIS', spellSaveDC0: '14', spellAtkBonus0: '+6',
+  spellHeader0: '=== CANTRIPS ===', spellSlotHeader0: '(At Will)',
+  spellPrepared0: 'O', spellName0: 'Spare the Dying', spellSource0: 'Cleric',
+  spellCastingTime0: '1A', spellRange0: '15 ft.', spellDuration0: 'Instantaneous',
+  spellHeader1: '=== 1st LEVEL ===', spellSlotHeader1: '4 Slots OOOO',
+  spellPrepared6: 'O', spellName6: 'Guiding Bolt', spellSource6: 'Cleric',
+  spellCastingTime6: '1A', spellRange6: '120 ft.', spellDuration6: '1 round',
+  spellPrepared11: 'P', spellName11: 'Bless', spellSource11: 'Cleric (Always Prepared)',
+  spellCastingTime11: '1A', spellRange11: '30 ft.', spellDuration11: 'Concentration, up to 1 minute',
+  FeaturesTraits1: '=== CLERIC FEATURES ===\n\n* Core Cleric Traits',
+  FeaturesTraits2: '* Ability Score Improvement',
+  'Eq Name0': 'Potion of Climbing', 'Eq Qty0': '1', 'Eq Weight0': '--',
+  'Eq Name1': 'Greataxe, +1', 'Eq Qty1': '1', 'Eq Weight1': '7 lb.',
+  'Eq Name2': '', 'Eq Qty2': '', 'Eq Weight2': '',
+  'Attuned Name1': '', CP: '0', SP: '5', EP: '0', GP: '4', PP: '0',
+  'Weight Carried': '130 lb.',
+  ALIGNMENT: 'Neutral Good', SIZE: 'Medium',
+  'PersonalityTraits ': '', Ideals: '', Bonds: '', Flaws: '', Backstory: '', Appearance: '',
+  'Wpn Name': 'Crossbow, Heavy', 'Wpn1 AtkBonus': '+4', 'Wpn1 Damage': '1d10+1 Piercing',
+  'Wpn Notes 1': 'Martial, Ammunition, Heavy, Loading, Range, Two-Handed, Push, Range (100/400)',
+  'Wpn Name 2': 'Greataxe, +1', 'Wpn2 AtkBonus ': '+6', 'Wpn2 Damage ': '1d12+3 Slashing',
+  'Wpn Notes 2': 'Martial, Heavy, Two-Handed, Cleave',
+};
+
+test('mapDnd5ePdfFieldsToCharacterSheet maps a real D&D Beyond export\'s own AcroForm field names onto this app\'s dnd5e template field keys', () => {
+  const mapped = mapDnd5ePdfFieldsToCharacterSheet(SAMPLE_PDF_FIELDS);
+  assert.equal(mapped.name, 'Shamus RedMane');
+  assert.equal(mapped.overview, 'Cleric 5 / Fighter 2 — Dwarf — Acolyte');
+
+  assert.deepEqual(mapped.sections.abilityScores, { Strength: 14, Dexterity: 12, Constitution: 11, Intelligence: 9, Wisdom: 16, Charisma: 14 });
+  assert.deepEqual(mapped.sections.savingThrows, {
+    'Strength Save': 2, 'Dexterity Save': 1, 'Constitution Save': 0, 'Intelligence Save': -1, 'Wisdom Save': 6, 'Charisma Save': 5,
+  });
+  assert.equal(mapped.sections.skills.Insight, 6);
+  assert.equal(mapped.sections.skills['Sleight of Hand'], 1, 'PDF field SleightofHand (no space) maps to this app\'s own "Sleight of Hand" key');
+  assert.equal(mapped.sections.skills.Stealth, 1, 'a trailing-space PDF field name ("Stealth ") is still found');
+
+  assert.equal(mapped.sections.combat['Armor Class'], '20');
+  assert.equal(mapped.sections.combat.Initiative, 1);
+  assert.deepEqual(mapped.sections.combat['Hit Points'], { value: 47, max: 47 }, 'a blank CurrentHP falls back to MaxHP (full health)');
+  assert.equal(mapped.sections.combat['Hit Dice'], '5d8 + 2d10', 'the real hit-dice formula lives in the "Total" field, not the blank "HD" one');
+
+  assert.equal(mapped.sections.spellcasting['Spellcasting Ability'], 'WIS');
+  assert.equal(mapped.sections.spellcasting['Spell Attack Bonus'], 6);
+  assert.match(mapped.sections.spellcasting.Spells, /=== CANTRIPS === — \(At Will\)/);
+  assert.match(mapped.sections.spellcasting.Spells, /Spare the Dying \(Cleric\)/);
+  assert.match(mapped.sections.spellcasting.Spells, /=== 1st LEVEL === — 4 Slots OOOO/);
+  assert.match(mapped.sections.spellcasting.Spells, /\[Prepared\] Bless \(Cleric \(Always Prepared\)\)/);
+  // Cantrips header appears BEFORE the 1st-level header/spells, matching
+  // real page order, not sorted by the two counters' own numeric values.
+  assert.ok(mapped.sections.spellcasting.Spells.indexOf('CANTRIPS') < mapped.sections.spellcasting.Spells.indexOf('1st LEVEL'));
+
+  assert.match(mapped.sections.featuresAndTraits['Features & Traits'], /CLERIC FEATURES/);
+  assert.match(mapped.sections.featuresAndTraits['Features & Traits'], /Ability Score Improvement/);
+
+  assert.match(mapped.sections.equipment.Equipment, /Potion of Climbing/);
+  assert.match(mapped.sections.equipment.Equipment, /Greataxe, \+1 \(7 lb\.\)/);
+  assert.equal(mapped.sections.equipment['Currency (CP/SP/EP/GP/PP)'], '0 CP, 5 SP, 0 EP, 4 GP, 0 PP');
+
+  assert.equal(mapped.sections.characterInfo.Species, 'Dwarf');
+  assert.equal(mapped.sections.characterInfo.Alignment, 'Neutral Good');
+  assert.match(mapped.sections.characterInfo.Backstory, /Size: Medium/, 'bio fields with no dedicated template slot fold into Backstory rather than being dropped');
+
+  assert.deepEqual(mapped.attacks, [
+    { name: 'Crossbow, Heavy', hit: '+4', damage: '1d10+1 Piercing', notes: 'Martial, Ammunition, Heavy, Loading, Range, Two-Handed, Push, Range (100/400)' },
+    { name: 'Greataxe, +1', hit: '+6', damage: '1d12+3 Slashing', notes: 'Martial, Heavy, Two-Handed, Cleave' },
+  ]);
+
+  // Summary counts for the review-step UI — real counts, not re-derived
+  // by regex-parsing the composed free text back apart.
+  assert.equal(mapped.counts.spells, 3, 'Spare the Dying + Guiding Bolt + Bless');
+  assert.equal(mapped.counts.equipment, 2, 'Potion of Climbing + Greataxe (the blank Eq Name2 row is skipped)');
+  assert.equal(mapped.counts.attacks, 2);
+  assert.ok(mapped.counts.skillsWithBonus > 0);
+});
+
+test('applyDnd5ePdfImport writes a mapped result onto a real entity\'s name/overview, its dnd5e statblock fields by key, and the Attacks table — no-op for a missing entity or a non-dnd5e group', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Placeholder' }));
+  camp = addEntityStatblockGroup(camp, id, 'character', 'dnd5e');
+  // createEntity/ensureAutoStatblock auto-attaches a generic Bestiary group
+  // for an npc-type entity FIRST — the dnd5e character group just added
+  // lands at whatever index comes after it, not necessarily 0.
+  const dnd5eGroupIndex = getEntity(camp, id).statblocks.findIndex((g) => g.ruleset === 'dnd5e');
+  assert.ok(dnd5eGroupIndex >= 0);
+  const mapped = mapDnd5ePdfFieldsToCharacterSheet(SAMPLE_PDF_FIELDS);
+
+  camp = applyDnd5ePdfImport(camp, id, dnd5eGroupIndex, mapped);
+  const e = getEntity(camp, id);
+  assert.equal(e.name, 'Shamus RedMane');
+  assert.equal(e.overview, 'Cleric 5 / Fighter 2 — Dwarf — Acolyte');
+  const byKey = Object.fromEntries(e.statblocks[dnd5eGroupIndex].fields.map((f) => [f.key, f]));
+  assert.equal(byKey.Strength.value, 14);
+  assert.equal(byKey['Strength Save'].value, 2);
+  assert.equal(byKey.Insight.value, 6);
+  assert.equal(byKey['Hit Points'].value, 47);
+  assert.equal(byKey['Hit Points'].max, 47);
+  assert.equal(byKey['Hit Points'].track, true, 'still a track field, not silently converted to plain text');
+  assert.equal(byKey['Armor Class'].value, '20');
+  assert.equal(e.statblocks[dnd5eGroupIndex].attacks.length, 2);
+  assert.equal(e.statblocks[dnd5eGroupIndex].attacks[0].name, 'Crossbow, Heavy');
+
+  // No-op: a missing entity id.
+  const before = JSON.stringify(camp);
+  const unaffected = applyDnd5ePdfImport(camp, 'nope', dnd5eGroupIndex, mapped);
+  assert.equal(JSON.stringify(unaffected), before);
+
+  // No-op on the statblock side for a non-dnd5e group (name/overview still
+  // apply — those are entity-level, not ruleset-gated).
+  let camp2 = defaultCampaign();
+  let id2; ({ campaign: camp2, id: id2 } = createEntity(camp2, { type: 'npc', name: 'Other' }));
+  camp2 = addEntityStatblockGroup(camp2, id2, 'character', 'starforged');
+  const sfGroupIndex = getEntity(camp2, id2).statblocks.findIndex((g) => g.ruleset === 'starforged');
+  camp2 = applyDnd5ePdfImport(camp2, id2, sfGroupIndex, mapped);
+  const e2 = getEntity(camp2, id2);
+  assert.equal(e2.name, 'Shamus RedMane', 'name still applies');
+  assert.equal(e2.statblocks[sfGroupIndex].ruleset, 'starforged', 'the starforged group itself is untouched');
+  assert.equal(e2.statblocks[sfGroupIndex].fields.find((f) => f.key === 'Edge').value, 1, 'a Starforged field never gets a dnd5e-shaped value written into it');
 });
 
 test('addEntityStatblockGroup defaults the character ruleset to the campaign Settings choice', () => {
@@ -1482,7 +1670,7 @@ test('empty graph yields empty layout; nodeColor covers all types', () => {
 });
 
 // --- statblocks (Phase 3C, multi-group array since the Phase 5 revision) ---
-import { makeStatblock, hasVehicleTag, ensureAutoStatblock, setStatblockField, addStatblockField, removeStatblockField, addStatblockWeapon, updateStatblockWeapon, removeStatblockWeapon, setStatblockGear } from '../src/domain/statblocks.js';
+import { makeStatblock, hasVehicleTag, ensureAutoStatblock, setStatblockField, addStatblockField, removeStatblockField, addStatblockWeapon, updateStatblockWeapon, removeStatblockWeapon, setStatblockGear, addStatblockAttack, updateStatblockAttack, removeStatblockAttack } from '../src/domain/statblocks.js';
 import {
   addEntityStatblockGroup, removeEntityStatblockGroup, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
   addEntityStatblockWeapon, updateEntityStatblockWeapon, removeEntityStatblockWeapon, setEntityStatblockGear,
@@ -1586,6 +1774,34 @@ test('addStatblockWeapon/updateStatblockWeapon/removeStatblockWeapon manage the 
   const nonFivePfh = { statblocks: [makeStatblock('character', 'starforged')] };
   updateStatblockWeapon(nonFivePfh, 0, 0, { name: 'nope' }); // no weapons array — must not throw
   removeStatblockWeapon(nonFivePfh, 0, 0);
+});
+
+test('addStatblockAttack/updateStatblockAttack/removeStatblockAttack manage D&D 5e\'s Attacks table by plain array index, same mechanism as 5PFH\'s weapon table, no-op on a missing group/attack', () => {
+  const e = { statblocks: [makeStatblock('character', 'dnd5e')] };
+  addStatblockAttack(e, 0);
+  assert.equal(e.statblocks[0].attacks.length, 1);
+  assert.deepEqual(e.statblocks[0].attacks[0], { name: '', hit: '', damage: '', notes: '' });
+
+  updateStatblockAttack(e, 0, 0, { name: 'Greataxe, +1', hit: '+6', damage: '1d12+3 Slashing', notes: 'Martial, Heavy, Two-Handed, Cleave' });
+  assert.deepEqual(e.statblocks[0].attacks[0], { name: 'Greataxe, +1', hit: '+6', damage: '1d12+3 Slashing', notes: 'Martial, Heavy, Two-Handed, Cleave' });
+
+  addStatblockAttack(e, 0);
+  updateStatblockAttack(e, 0, 1, { name: 'Handaxe' });
+  assert.equal(e.statblocks[0].attacks.length, 2);
+  assert.equal(e.statblocks[0].attacks[0].name, 'Greataxe, +1', 'updating the second attack leaves the first untouched');
+
+  removeStatblockAttack(e, 0, 0);
+  assert.equal(e.statblocks[0].attacks.length, 1);
+  assert.equal(e.statblocks[0].attacks[0].name, 'Handaxe', 'the remaining attack is the one that was NOT removed');
+
+  // No-ops: missing group, missing attack, entity/group with no attacks array at all.
+  const unaffected = e.statblocks[0].attacks.length;
+  updateStatblockAttack(e, 5, 0, { name: 'nope' });
+  removeStatblockAttack(e, 5, 0);
+  assert.equal(e.statblocks[0].attacks.length, unaffected);
+  const nonDnd5e = { statblocks: [makeStatblock('character', 'starforged')] };
+  updateStatblockAttack(nonDnd5e, 0, 0, { name: 'nope' }); // no attacks array — must not throw
+  removeStatblockAttack(nonDnd5e, 0, 0);
 });
 
 test('setStatblockGear sets one group\'s free-text Gear line, no-op on a missing group, coerces a nullish value to an empty string', () => {
@@ -1913,6 +2129,67 @@ test('formatTravellerRollCopyText matches the dice roll window\'s layout for a T
   assert.equal(lines[0], `\tRoll: ${r.die1} + ${r.die2} = ${r.total}`);
   assert.equal(lines[1], '\tTarget: 8');
   assert.equal(lines[2], r.outcomeLabel.toUpperCase());
+});
+
+// --- D&D 5e rolls (plain d20 + value, and score-derived d20) ---------------
+import { rollD20, formatD20RollText, formatD20RollCopyText, rollD20Score, formatD20ScoreRollText, formatD20ScoreRollCopyText } from '../src/domain/dice.js';
+
+test('rollD20 rolls 1d20 + the field\'s already-final value, no target/outcome (a 5e check succeeds/fails against a DC the GM judges live, not something fixed on the sheet)', () => {
+  const a = rollD20(5, { rng: makeRng(5) });
+  const b = rollD20(5, { rng: makeRng(5) });
+  assert.deepEqual(a, b);
+  assert.ok(a.die >= 1 && a.die <= 20);
+  assert.equal(a.total, a.die + 5);
+  assert.equal(a.outcome, undefined);
+  assert.equal(a.target, undefined);
+});
+
+test('rollD20: a `dice.die` override stands in for rng()', () => {
+  const boom = () => { throw new Error('rng should not be called'); };
+  const r = rollD20(3, { rng: boom, dice: { die: 15 } });
+  assert.equal(r.die, 15);
+  assert.equal(r.total, 18);
+});
+
+test('formatD20RollText/formatD20RollCopyText render the roll with no target/outcome line', () => {
+  const r = rollD20(3, { rng: makeRng(7) });
+  const text = formatD20RollText('Riffken — Wisdom Save', r);
+  assert.match(text, /Riffken — Wisdom Save/);
+  assert.match(text, new RegExp(`${r.die} \\+ 3 = ${r.total}`));
+  const lines = formatD20RollCopyText(r).split('\n');
+  assert.equal(lines.length, 1);
+  assert.equal(lines[0], `\tRoll: ${r.die} + 3 = ${r.total}`);
+});
+
+test('rollD20Score derives the modifier from a raw 1-30 ability score (floor((score-10)/2)) rather than using the score directly', () => {
+  const a = rollD20Score(14, { rng: makeRng(5) });
+  assert.equal(a.score, 14);
+  assert.equal(a.modifier, 2); // floor((14-10)/2) = 2
+  assert.equal(a.total, a.die + 2);
+
+  const odd = rollD20Score(15, { rng: makeRng(5) }); // odd scores round the modifier down
+  assert.equal(odd.modifier, 2);
+
+  const low = rollD20Score(8, { rng: makeRng(5) });
+  assert.equal(low.modifier, -1); // floor((8-10)/2) = -1, a negative modifier
+});
+
+test('rollD20Score: a `dice.die` override stands in for rng()', () => {
+  const boom = () => { throw new Error('rng should not be called'); };
+  const r = rollD20Score(16, { rng: boom, dice: { die: 12 } });
+  assert.equal(r.die, 12);
+  assert.equal(r.modifier, 3);
+  assert.equal(r.total, 15);
+});
+
+test('formatD20ScoreRollText/formatD20ScoreRollCopyText show the score alongside the derived modifier', () => {
+  const r = rollD20Score(14, { rng: makeRng(5) });
+  const text = formatD20ScoreRollText('Riffken — Strength', r);
+  assert.match(text, /Riffken — Strength/);
+  assert.match(text, /\+2 \(score 14\)/);
+  const lines = formatD20ScoreRollCopyText(r).split('\n');
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /\+2 \(score 14\)/);
 });
 
 test('rollCustomDice rolls `count` dice of `sides` plus a flat modifier, is deterministic under a seeded rng, and clamps count/sides to sane bounds', () => {
@@ -5353,6 +5630,7 @@ test('incrementCampaignMilestones/decrementCampaignMilestones clamp to the fixed
 
 // --- Content Packs (ad-hoc Entities/Guide/Journal transfer between campaigns) --
 import { exportContentPack, importContentPack } from '../src/domain/contentPack.js';
+import { CONTENT_PACKS_MANIFEST } from '../src/data/contentPacksManifest.js';
 
 test('exportContentPack only includes sections whose flag is true, strips thumbnailId from entities', () => {
   let camp = defaultCampaign();
@@ -5480,6 +5758,67 @@ test('importContentPack is a no-op for a missing/malformed pack', () => {
   const before = JSON.stringify(camp);
   const after = importContentPack(camp, null);
   assert.equal(JSON.stringify(after), before);
+});
+
+// --- D&D 5e work, phase 3: the SRD "Monsters A-Z" content pack -------------
+test('the generated D&D 5e SRD Monsters content pack has the expected shape (330 unique-named #lifeform NPCs with a populated dnd5e-lifeform statblock) and imports cleanly, deduping on a second import', () => {
+  const packPath = path.join(__dirname, '..', 'assets', 'content-packs', 'dnd5e-srd-monsters-content-pack.json');
+  const pack = JSON.parse(fs.readFileSync(packPath, 'utf8'));
+
+  assert.equal(pack.app, 'GMAtlas');
+  assert.equal(pack.kind, 'content-pack');
+  assert.equal(pack.entities.length, 330);
+
+  const names = new Set();
+  for (const e of pack.entities) {
+    assert.equal(e.type, 'npc', `${e.name}: type is 'npc'`);
+    assert.deepEqual(e.tags, ['lifeform'], `${e.name}: tagged #lifeform`);
+    assert.ok(e.name && e.name.trim(), 'has a non-empty name');
+    assert.equal(names.has(e.name), false, `no duplicate name: ${e.name}`);
+    names.add(e.name);
+
+    assert.equal(e.statblocks.length, 1);
+    const group = e.statblocks[0];
+    assert.equal(group.kind, 'npc');
+    assert.equal(group.templateId, 'dnd5e-lifeform');
+    const byKey = Object.fromEntries(group.fields.map((f) => [f.key, f]));
+    const ac = Number(byKey['Armor Class'].value);
+    assert.ok(ac >= 5 && ac <= 30, `${e.name}: sane AC (${ac})`);
+    assert.ok(byKey['Hit Points'].value >= 1, `${e.name}: has HP`);
+    assert.ok(byKey['Hit Points'].track, `${e.name}: HP is a track field`);
+    assert.ok(byKey['Challenge Rating'].value, `${e.name}: has a Challenge Rating`);
+    for (const key of ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma']) {
+      assert.ok(byKey[key].attribute, `${e.name}: ${key} is a rollable attribute`);
+      assert.equal(byKey[key].rollMethod, 'd20-score');
+      assert.ok(byKey[key].value >= 1 && byKey[key].value <= 30, `${e.name}: ${key} is a sane 1-30 score`);
+    }
+  }
+
+  // A real import, into a fresh campaign, using the actual importContentPack
+  // path every other pack already goes through — not a bespoke check.
+  let camp = defaultCampaign();
+  camp = importContentPack(camp, pack);
+  const lifeforms = camp.entities.items.filter((e) => e.type === 'npc' && (e.tags || []).includes('lifeform'));
+  assert.equal(lifeforms.length, 330);
+  const aboleth = lifeforms.find((e) => e.name === 'Aboleth');
+  assert.ok(aboleth);
+  assert.equal(aboleth.statblocks[0].templateId, 'dnd5e-lifeform');
+
+  // Re-importing the same pack dedups by name (importContentPack's own
+  // existing convention, same as every other pack) — no duplicates created.
+  camp = importContentPack(camp, pack);
+  const lifeformsAfterReimport = camp.entities.items.filter((e) => e.type === 'npc' && (e.tags || []).includes('lifeform'));
+  assert.equal(lifeformsAfterReimport.length, 330, 're-importing the same pack is a no-op, not a duplicate set');
+});
+
+test('the D&D 5e SRD Monsters content pack is registered in the manifest with a working file path and the required SRD 5.2.1 CC-BY-4.0 attribution text', () => {
+  const entry = CONTENT_PACKS_MANIFEST.find((p) => p.id === 'dnd5e-srd-monsters');
+  assert.ok(entry, 'manifest entry exists');
+  assert.equal(entry.kind, 'content-pack');
+  assert.equal(entry.ruleset, 'dnd5e');
+  assert.ok(fs.existsSync(path.join(__dirname, '..', entry.file)), `${entry.file} exists on disk`);
+  assert.match(entry.description, /Creative Commons Attribution 4\.0 International License/);
+  assert.match(entry.description, /System Reference Document 5\.2\.1/);
 });
 
 // --- docs/adr/0031: SWN Faction Turn Engine --------------------------------
@@ -7636,7 +7975,7 @@ import {
 import { getCurrentTurnStep, advanceTurnStep, retreatTurnStep, startNextColonyCampaignTurn, startNextStarshipCampaignTurn } from '../src/domain/turnSteps.js';
 import { TURN_STEPS_5PFH } from '../src/data/turnStepsDefault5pfh.js';
 import { PLANETFALL_TURN_STEPS } from '../src/data/turnStepListPlanetfall.js';
-import { grandfatherCampaignPanelActivation } from '../src/domain/rulesProfiles.js';
+import { grandfatherCampaignPanelActivation, backfillDnd5eStoryboardProfile } from '../src/domain/rulesProfiles.js';
 import { moveCrewTaskInList, updateCrewTaskText, loadDefaultCrewTasks, listEligibleCrewMembers, assignCrewTask } from '../src/domain/crewTasks.js';
 import { CREW_TASKS_5PFH } from '../src/data/crewTasksDefault5pfh.js';
 
@@ -8004,6 +8343,32 @@ test('backfillDefaultCrewTasks only fills the 5PFH seed onto a profile named exa
   withOneTask.profiles[0].crewTasks = { tasks: [{ id: 't', label: 'Manual', text: 'manual' }] };
   const notBackfilled = backfillDefaultCrewTasks(withOneTask, CREW_TASKS_5PFH);
   assert.equal(notBackfilled, withOneTask);
+});
+
+test('backfillDnd5eStoryboardProfile seeds the "D&D 5e (Storyboard)" template for an already-migrated appConfig, idempotently, and never duplicates one a GM already has (even a renamed/customized one keeping the same name)', () => {
+  let cfg = defaultAppConfig();
+  cfg = createRulesProfile(cfg, { name: 'Default' });
+
+  const backfilled = backfillDnd5eStoryboardProfile(cfg);
+  assert.notEqual(backfilled, cfg, 'a change was made');
+  assert.equal(backfilled.profiles.length, 2);
+  const dnd5e = backfilled.profiles.find((p) => p.name === 'D&D 5e (Storyboard)');
+  assert.ok(dnd5e);
+  assert.equal(dnd5e.ruleset.statRuleset, 'dnd5e');
+  assert.equal(dnd5e.ruleset.genrePack, 'dnd5e');
+  for (const id of GATEABLE_MODULES) assert.equal(dnd5e.moduleEnabled[id], false, `${id} is off`);
+  assert.deepEqual(dnd5e.storyboardPositions, { composer: 'dashboard', navigator: 'narrative', advisor: 'copilot' });
+
+  const secondPass = backfillDnd5eStoryboardProfile(backfilled);
+  assert.equal(secondPass, backfilled, 'idempotent — running it again is a true no-op');
+
+  // A profile already named exactly "D&D 5e (Storyboard)" (even one a GM
+  // has since customized away from the seeded shape) is never duplicated.
+  let alreadyHasOne = defaultAppConfig();
+  alreadyHasOne = createRulesProfile(alreadyHasOne, { name: 'D&D 5e (Storyboard)' });
+  alreadyHasOne.profiles[0].moduleEnabled.colony = true; // GM turned Colony back on
+  const notBackfilled = backfillDnd5eStoryboardProfile(alreadyHasOne);
+  assert.equal(notBackfilled, alreadyHasOne);
 });
 
 // --- Crew Tasks (design/adr/rules-profiles-multi-campaign.md, direct

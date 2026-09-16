@@ -124,27 +124,44 @@ export function makeStatblock(kind, rulesetId, templateId, settings) {
   if (kind === 'character') {
     const ruleset = findRuleset(rulesetId || CHARACTER_DEFAULT_RULESET);
     const tpl = ruleset.characterTemplate;
-    const fields = [
-      // Stats (Edge/Heart/... , Reaction/Speed/...) are rollable modifiers,
-      // not depleting resources — `attribute: true` routes them to the
-      // editable-number row (attrRow) rather than the 1-5 click-to-set track
-      // boxes, matching how Starforged/5PFH sheets actually present them.
-      // Dice model/format default to the ruleset's own (attributeRollMethod/
-      // attributeFormat) but a stat can override either (5PFH's Speed is
-      // inches-formatted and not rollable, unlike its other stats).
-      ...tpl.stats.map((s) => {
-        const rollMethod = s.rollMethod || tpl.attributeRollMethod || 'action';
-        const field = {
-          key: s.key, value: s.value, attribute: true, group: 'stat',
-          rollMethod, format: s.format || tpl.attributeFormat || 'sign',
-        };
-        if (rollMethod === 'flat') field.target = s.target || tpl.attributeTarget || 6;
-        if (rollMethod === 'traveller') field.target = s.target || tpl.attributeTarget || 8;
-        return field;
-      }),
-      ...tpl.tracks.map((t) => ({ key: t.key, value: t.value, max: t.max, track: true, group: 'resource' })),
-    ];
-    const group = { kind: 'character', ruleset: ruleset.id, fields };
+    let fields, group;
+    if (Array.isArray(tpl.sections)) {
+      // D&D 5e-style (direct request: "captures all the data... formatted
+      // into similar groups and sections") — a template-declared list of
+      // labeled sections (Ability Scores/Saving Throws/Skills/Combat/...),
+      // each a flat field list in the SAME {kind, rollMethod, format, ...}
+      // shape Bestiary templates already use, reusing
+      // templateFieldToStatblockField verbatim rather than a parallel
+      // mapper. Every field is tagged with its own section's id so the
+      // renderer (characterSheetGroupBlock) can loop over real labeled
+      // sections instead of the old binary stat/resource split below —
+      // group.sections carries the label metadata (order + display name)
+      // so the renderer doesn't need to re-import rulesets.js itself.
+      fields = tpl.sections.flatMap((sec) => sec.fields.map((f) => ({ ...templateFieldToStatblockField(f), section: sec.id })));
+      group = { kind: 'character', ruleset: ruleset.id, fields, sections: tpl.sections.map((sec) => ({ id: sec.id, label: sec.label })) };
+    } else {
+      fields = [
+        // Stats (Edge/Heart/... , Reaction/Speed/...) are rollable modifiers,
+        // not depleting resources — `attribute: true` routes them to the
+        // editable-number row (attrRow) rather than the 1-5 click-to-set track
+        // boxes, matching how Starforged/5PFH sheets actually present them.
+        // Dice model/format default to the ruleset's own (attributeRollMethod/
+        // attributeFormat) but a stat can override either (5PFH's Speed is
+        // inches-formatted and not rollable, unlike its other stats).
+        ...tpl.stats.map((s) => {
+          const rollMethod = s.rollMethod || tpl.attributeRollMethod || 'action';
+          const field = {
+            key: s.key, value: s.value, attribute: true, group: 'stat',
+            rollMethod, format: s.format || tpl.attributeFormat || 'sign',
+          };
+          if (rollMethod === 'flat') field.target = s.target || tpl.attributeTarget || 6;
+          if (rollMethod === 'traveller') field.target = s.target || tpl.attributeTarget || 8;
+          return field;
+        }),
+        ...tpl.tracks.map((t) => ({ key: t.key, value: t.value, max: t.max, track: true, group: 'resource' })),
+      ];
+      group = { kind: 'character', ruleset: ruleset.id, fields };
+    }
     // Weapon table + Gear (direct follow-up request) — 5PFH-specific: the
     // Core rulebook's own character sheet template has a Weapon/Range/
     // Shots/Damage/Traits table plus a Gear line (assets/docs/5PFH-Five-
@@ -155,6 +172,12 @@ export function makeStatblock(kind, rulesetId, templateId, settings) {
     // unrelated features" philosophy. See addStatblockWeapon/
     // updateStatblockWeapon/removeStatblockWeapon/setStatblockGear below.
     if (ruleset.id === '5pfh') { group.weapons = []; group.gear = ''; }
+    // D&D 5e's own Attacks table (direct request) — same shape/mechanism as
+    // 5PFH's weapons table above, just its own ruleset-gated field
+    // (name/hit/damageType/notes instead of name/range/shots/damage/
+    // traits) rather than a new generalized "table field kind" every other
+    // ruleset would need to opt into.
+    if (ruleset.id === 'dnd5e') { group.attacks = []; }
     return group;
   }
   const resolvedKind = kind === 'vehicle' ? 'vehicle' : 'npc';
@@ -325,6 +348,32 @@ export function removeStatblockWeapon(entity, groupIndex, weaponIndex) {
 export function setStatblockGear(entity, groupIndex, text) {
   const g = entity && entity.statblocks && entity.statblocks[groupIndex];
   if (g) g.gear = String(text || '');
+  return entity;
+}
+
+// --- D&D 5e character sheet: Attacks table (direct request) ---------------
+// group.attacks is an array of {name, hit, damage, notes} rows, same
+// plain-array-index addressing (attackIndex) and lazy-init posture as
+// 5PFH's weapon table above — mirrors that exact mechanism rather than a
+// new generalized "table field kind" every ruleset would need to adopt.
+export function addStatblockAttack(entity, groupIndex) {
+  const g = entity && entity.statblocks && entity.statblocks[groupIndex];
+  if (!g) return entity;
+  if (!Array.isArray(g.attacks)) g.attacks = [];
+  g.attacks.push({ name: '', hit: '', damage: '', notes: '' });
+  return entity;
+}
+
+export function updateStatblockAttack(entity, groupIndex, attackIndex, patch) {
+  const g = entity && entity.statblocks && entity.statblocks[groupIndex];
+  const a = g && Array.isArray(g.attacks) && g.attacks[attackIndex];
+  if (a) Object.assign(a, patch);
+  return entity;
+}
+
+export function removeStatblockAttack(entity, groupIndex, attackIndex) {
+  const g = entity && entity.statblocks && entity.statblocks[groupIndex];
+  if (g && Array.isArray(g.attacks)) g.attacks.splice(attackIndex, 1);
   return entity;
 }
 

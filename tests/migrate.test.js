@@ -176,8 +176,8 @@ test('wrapLegacyCampaignIntoAppConfig: a pre-Rules-Profile single campaign becom
   assert.equal(appConfig.campaigns[0].title, 'My Old Campaign');
   assert.equal(appConfig.activeCampaignId, campaignDoc.meta.id);
 
-  assert.equal(appConfig.profiles.length, 2);
-  const [defaultProfile, fivePfhProfile] = appConfig.profiles;
+  assert.equal(appConfig.profiles.length, 3);
+  const [defaultProfile, fivePfhProfile, dnd5eProfile] = appConfig.profiles;
   assert.equal(defaultProfile.name, 'Default');
   assert.equal(appConfig.campaigns[0].profileId, defaultProfile.id);
   assert.equal(defaultProfile.ruleset.statRuleset, 'traveller', 'carries over the legacy doc\'s own ruleset choice');
@@ -194,6 +194,16 @@ test('wrapLegacyCampaignIntoAppConfig: a pre-Rules-Profile single campaign becom
   assert.equal(fivePfhProfile.moduleEnabled.colony, true, 'Colony/World Tracker stay enabled in 5PFH');
   assert.equal(fivePfhProfile.moduleEnabled['world-tracker'], true);
   assert.deepEqual(fivePfhProfile.storyboardPositions, { composer: 'colony', navigator: 'world-tracker', advisor: 'party' });
+
+  // Direct request (D&D 5e work, phase 2): a third seeded template, entirely
+  // independent of the legacy doc's own ruleset choice — every other
+  // module off, Storyboard positions left at their untouched default, its
+  // own genre pack (not the legacy doc's 'cyberpunk').
+  assert.equal(dnd5eProfile.name, 'D&D 5e (Storyboard)');
+  assert.equal(dnd5eProfile.ruleset.statRuleset, 'dnd5e');
+  assert.equal(dnd5eProfile.ruleset.genrePack, 'dnd5e');
+  for (const id of GATEABLE_MODULES) assert.equal(dnd5eProfile.moduleEnabled[id], false, `D&D 5e profile: ${id} is off`);
+  assert.deepEqual(dnd5eProfile.storyboardPositions, { composer: 'dashboard', navigator: 'narrative', advisor: 'copilot' });
 
   // Direct follow-up request ("create an inventory of Turn Step List
   // profiles managed in Settings"): a first-time install seeds both named

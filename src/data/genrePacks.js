@@ -11,11 +11,20 @@
 import { SCENE_TABLES } from './tables.js';
 import { CYBERPUNK_TABLES } from './tables-cyberpunk.js';
 import { FANTASY_TABLES } from './tables-fantasy.js';
+import { DND5E_TABLES } from './tables-dnd5e.js';
 
 export const GENRE_PACKS = [
   { id: 'hostile', label: 'Hostile (sci-fi, default)', tables: SCENE_TABLES },
   { id: 'cyberpunk', label: 'Cyberpunk / Shadowrun', tables: CYBERPUNK_TABLES },
   { id: 'fantasy', label: 'Fantasy (D&D-style)', tables: FANTASY_TABLES },
+  // Direct request: "associating all of this to the 'Fantasy (D&D-style)'
+  // genre pack... everything including the oracles must be independent or
+  // a copy allocated to this version so it can be customized to D&D game
+  // system" — forked from FANTASY_TABLES as its starting content
+  // (tables-dnd5e.js), its own file/export/id from this point on so
+  // customizing it (directly, or per-campaign via oracles.overrides) never
+  // touches the original 'fantasy' pack or anything else using it.
+  { id: 'dnd5e', label: 'D&D 5e', tables: DND5E_TABLES },
 ];
 
 /** Falls back to the default ('hostile') pack for an unset or unknown id —
@@ -31,7 +40,7 @@ export function findGenrePack(id) {
 // mechanism (data/statblockTemplates.js's NPC field manifests) is unchanged
 // either way — this only ever swaps the label a GM reads in the UI, driven
 // by the same settings.genrePack Phase 9 already introduced.
-const BESTIARY_TERM = { hostile: 'LifeForm', cyberpunk: 'LifeForm', fantasy: 'Bestiary' };
+const BESTIARY_TERM = { hostile: 'LifeForm', cyberpunk: 'LifeForm', fantasy: 'Bestiary', dnd5e: 'Bestiary' };
 export function bestiaryTerm(genrePackId) {
   return BESTIARY_TERM[genrePackId] || 'Bestiary';
 }

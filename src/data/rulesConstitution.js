@@ -38,6 +38,18 @@ export const RULES_PROVIDERS = {
     activationText: "Show the Campaign panel's Colony tab (Planetfall colony sim).",
   },
   sagaatlas: { label: 'Saga Atlas itself', status: 'core', note: "Never delegated to a Rules Lens — campaign memory, continuity, rules switching, and recommendations are the platform's own job, not any single ruleset's." },
+  // Direct request (D&D 5e work): unlike swn (copyrighted, personal-use-
+  // only, requiresActivation) the SRD 5.2.1 is Creative Commons
+  // (CC-BY-4.0) — genuinely free to reuse with attribution, so this is
+  // ungated like gmatlascore above, no ownership confirmation needed. The
+  // license's own required attribution statement lives on the SRD
+  // Monsters content pack itself (data/contentPacksManifest.js), not
+  // duplicated here.
+  dnd5e: {
+    label: 'D&D 5e (SRD 5.2.1)', status: 'ruleset + content pack authored (CC-BY-4.0 SRD material)',
+    note: 'Character sheets (data/rulesets.js\'s dnd5e characterTemplate, phase 1 of this work) are original content in this app\'s own format, not a transcription. The "D&D 5e SRD Monsters A-Z" content pack (330 creatures) DOES transcribe real SRD 5.2.1 stat-block text and numbers, which the license explicitly permits — see that pack\'s own listing under Settings → Content Packs/Licenses for the required attribution statement.',
+    rulesetId: 'dnd5e',
+  },
 };
 
 /** Whether `systemId` (a RULES_PROVIDERS key) is usable right now. A

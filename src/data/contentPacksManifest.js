@@ -55,6 +55,27 @@ export const CONTENT_PACKS_MANIFEST = [
     licenseStatus: 'included',
   },
   {
+    // Direct request (D&D 5e work, phase 3): the SRD 5.2.1's own "Monsters
+    // A-Z" section (364-page PDF, assets/docs/dnd5e/SRD_CC_v5.2.1.pdf) —
+    // all 330 stat blocks, each imported as a #lifeform-tagged NPC entity
+    // (type: 'npc', tags: ['lifeform'] per the user's explicit wording —
+    // a deliberate departure from every OTHER pack here, which sets
+    // type: 'lifeform' directly instead) with a populated D&D 5e Lifeform
+    // statblock (data/statblockTemplates.js's 'dnd5e-lifeform'). The SRD
+    // 5.2.1 is Creative Commons (CC-BY-4.0), not a purchased sourcebook —
+    // the required attribution statement is included verbatim below per
+    // the license's own terms; nothing here reproduces any other WotC IP
+    // (no Monster Manual art/flavor text/proper-noun lore beyond what the
+    // SRD itself already grants for open reuse).
+    id: 'dnd5e-srd-monsters',
+    file: 'assets/content-packs/dnd5e-srd-monsters-content-pack.json',
+    title: 'D&D 5e SRD Monsters A-Z',
+    description: "All 330 creatures from the SRD 5.2.1's own \"Monsters A-Z\" section (Aboleth through Wolf, every dragon age category, every animal), each as a #lifeform-tagged NPC with a full D&D 5e Lifeform statblock (AC/Initiative/HP/Speed, all six ability scores, Saving Throws, Skills, Resistances/Immunities/Vulnerabilities, Senses, Languages, Challenge Rating, and free-text Traits/Actions/Bonus Actions/Reactions/Legendary Actions). This work includes material from the System Reference Document 5.2.1 (“SRD 5.2.1”) by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    ruleset: 'dnd5e',
+    kind: 'content-pack',
+    licenseStatus: 'included',
+  },
+  {
     id: 'hostile-near-earth-zone',
     file: 'assets/data-packs/hostile-near-earth-zone.json',
     title: 'HOSTILE — Near Earth Zone',

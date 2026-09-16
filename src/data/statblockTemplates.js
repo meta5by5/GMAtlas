@@ -128,6 +128,44 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
       { key: 'Special', kind: 'text' },
     ]),
   },
+  // Direct request (D&D 5e work, phase 3): the SRD Monsters A-Z content
+  // pack's own Bestiary shape — one flat field list covering everything a
+  // GM needs mid-combat (AC/Initiative/HP/Speed, the six ability scores as
+  // rollable attributes, plus free-text summaries for the rest) rather
+  // than 30+ individually-rollable fields for every save/skill; Saving
+  // Throws/Skills are deliberately free text (a real scope trim, matching
+  // Phase 1's own Spells/Equipment trim on the player character sheet,
+  // not an oversight) since a Bestiary card's whole point is a fast glance
+  // during combat, not a fully mechanized every-modifier sheet.
+  'dnd5e-lifeform': {
+    label: 'D&D 5e Lifeform',
+    fields: withDefaults([
+      { key: 'Armor Class', kind: 'text' },
+      { key: 'Initiative', kind: 'attribute', rollMethod: 'd20', format: 'sign' },
+      { key: 'Hit Points', kind: 'track', rollMethod: 'none', max: 10 },
+      { key: 'Hit Dice', kind: 'text' },
+      { key: 'Speed', kind: 'text' },
+      { key: 'Strength', kind: 'attribute', rollMethod: 'd20-score', format: 'plain', value: 10 },
+      { key: 'Dexterity', kind: 'attribute', rollMethod: 'd20-score', format: 'plain', value: 10 },
+      { key: 'Constitution', kind: 'attribute', rollMethod: 'd20-score', format: 'plain', value: 10 },
+      { key: 'Intelligence', kind: 'attribute', rollMethod: 'd20-score', format: 'plain', value: 10 },
+      { key: 'Wisdom', kind: 'attribute', rollMethod: 'd20-score', format: 'plain', value: 10 },
+      { key: 'Charisma', kind: 'attribute', rollMethod: 'd20-score', format: 'plain', value: 10 },
+      { key: 'Saving Throws', kind: 'text' },
+      { key: 'Skills', kind: 'text' },
+      { key: 'Resistances', kind: 'text' },
+      { key: 'Immunities', kind: 'text' },
+      { key: 'Vulnerabilities', kind: 'text' },
+      { key: 'Senses', kind: 'text' },
+      { key: 'Languages', kind: 'text' },
+      { key: 'Challenge Rating', kind: 'text' },
+      { key: 'Traits', kind: 'text' },
+      { key: 'Actions', kind: 'text' },
+      { key: 'Bonus Actions', kind: 'text' },
+      { key: 'Reactions', kind: 'text' },
+      { key: 'Legendary Actions', kind: 'text' },
+    ]),
+  },
   vehicle: {
     label: 'Vehicle',
     fields: withDefaults([
