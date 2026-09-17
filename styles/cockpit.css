@@ -1214,6 +1214,10 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .gallery-thumb-circle { width: 5rem; height: 5rem; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); background: var(--bg-inset); }
 .gallery-original-img { width: 100%; max-height: 8rem; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); }
 .tag-chip-locked { opacity: 0.85; }
+/* Phase B entitlement stub — a gated Game System an install isn't entitled
+   to (domain/entitlements.js's canAccessGameSystem) renders visibly locked
+   rather than being silently absent. */
+.game-system-locked { cursor: not-allowed; }
 
 /* Planetfall Grid Battlemap (Phase 11, docs/adr/0023) */
 .battlemap-tabs { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-2); }

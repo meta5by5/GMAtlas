@@ -39,7 +39,7 @@ import { buildSessionRecap } from '../../domain/recap.js';
 import { RULESETS, findRuleset, STARFORGED_PROGRESS_DIFFICULTIES, findProgressDifficulty } from '../../data/rulesets.js';
 import { GEAR_TEMPLATE_SYSTEMS, findGearTemplate } from '../../data/gearTemplates.js';
 import { GEAR_CATALOG, findCatalogItem } from '../../data/gearCatalog.js';
-import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel, resolveProviderChoice, isGameSystemActivated } from '../../data/rulesConstitution.js';
+import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel, resolveProviderChoice, resolveActiveProviderChoice, isGameSystemActivated } from '../../data/rulesConstitution.js';
 import { CONTENT_PACKS_MANIFEST } from '../../data/contentPacksManifest.js';
 import { CSS_TEMPLATES } from '../../data/cssTemplates.js';
 import { SOURCEBOOK_INVENTORY } from '../../data/sourcebookInventory.js';
@@ -61,9 +61,27 @@ import { drawerMeta, POSITION_ASSIGNABLE_IDS } from '../drawerMeta.js';
 import { resolvePositionContentId } from '../../domain/rulesProfiles.js';
 import { getCurrentTurnStep } from '../../domain/turnSteps.js';
 import { listEligibleCrewMembers } from '../../domain/crewTasks.js';
+import { canAccessGameSystem } from '../../domain/entitlements.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// Phase A audit: BIOMES (data/biomes.js) is still tagged by the OLD
+// per-Game-System ids ('hostile'/'cyberpunk'/'fantasy'), not the newer
+// umbrella Genre Pack ids — 'hostile' biomes are genuinely Hostile-book-
+// specific terrain, not generic-sci-fi. Now that a sci-fi campaign's own
+// settings.genrePack is the shared 'sci-fi-generic' pack rather than
+// 'hostile' directly, biomesForGenrePack(doc.settings.genrePack) alone
+// would return nothing for every sci-fi campaign — resolved through the
+// Rules Constitution's own 'frontier-setting' choice instead when the
+// broader pack is the sci-fi one (defaults to 'hostile', matching exactly
+// what every existing campaign already saw before this restructuring);
+// any other genre pack (cyberpunk/fantasy/dnd5e) passes through unchanged.
+function resolveBiomeGenrePackId(doc) {
+  const genrePack = doc.settings.genrePack || 'sci-fi-generic';
+  if (genrePack === 'sci-fi-generic') return resolveActiveProviderChoice(doc, 'frontier-setting') || 'hostile';
+  return genrePack;
+}
 
 // "a Faction" / "an NPC" / "an Asset" — for the relationship-flag tooltip below.
 const withArticle = (word) => (/^[aeiou]/i.test(word) ? `an ${word}` : `a ${word}`);
@@ -933,7 +951,15 @@ function worldProfileSection(doc, e, ui = {}) {
   const isStarTagged = (e.tags || []).includes('star');
   const isSystemTagged = (e.tags || []).includes('system');
   const hasAny = e.hex || e.zone || e.worldSize || e.atmosphere || e.biome || e.hydrographics || e.gasGiant || isStarTagged || isSystemTagged;
-  if (!hasAny && doc.settings.genrePack !== 'hostile') return '';
+  // Phase A audit: this used to check genrePack === 'hostile' directly,
+  // back when Hostile WAS the genre pack. Now that Hostile is a Game
+  // System inside the shared 'sci-fi-generic' pack (data/genrePacks.js),
+  // genrePack alone can no longer tell "is Hostile specifically this
+  // campaign's chosen frontier setting" from "any other sci-fi system" —
+  // repointed to the Rules Constitution's own 'frontier-setting' row
+  // (GAMEPLAY_AREAS already lists Hostile as its sole provider), the
+  // first real behavioral use of that row beyond Factions.
+  if (!hasAny && resolveActiveProviderChoice(doc, 'frontier-setting') !== 'hostile') return '';
   // Direct follow-up request: "use the same collapseable format used on
   // the Campaign panel" — converted from its own bespoke ui.expandedWorldProfile
   // Set to the shared mechanism; `open` is kept as the same derived boolean
@@ -948,7 +974,7 @@ function worldProfileSection(doc, e, ui = {}) {
         ${table.map((t) => `<option value="${esc(t.code)}" ${value === t.code ? 'selected' : ''}>${esc(t.code)} — ${esc(t.label)}</option>`).join('')}
       </select>
     </label>`;
-  const biomes = biomesForGenrePack(doc.settings.genrePack || 'hostile');
+  const biomes = biomesForGenrePack(resolveBiomeGenrePackId(doc));
   const system = getSystemForLocation(doc, e.id);
   const star = getStarForLocation(doc, e.id);
   const hexZone = (isSystemTagged || isStarTagged) ? getHexZoneForLocation(doc, e.id) : null;
@@ -1008,7 +1034,8 @@ function worldDemographicsSection(doc, e, ui = {}) {
   if ((e.tags || []).includes('system') || (e.tags || []).includes('star')) return '';
   const hasAny = e.starport || (e.bases && e.bases.length) || e.techLevel || e.lawLevel ||
     (e.tradeCodes && e.tradeCodes.length) || e.developmentLevel || e.population || e.government;
-  if (!hasAny && doc.settings.genrePack !== 'hostile') return '';
+  // Phase A audit: same repoint as worldProfileSection's own identical gate.
+  if (!hasAny && resolveActiveProviderChoice(doc, 'frontier-setting') !== 'hostile') return '';
   // Direct follow-up request: "use the same collapseable format used on
   // the Campaign panel" — same conversion worldProfileSection's own
   // comment above already explains; `open`/default-collapsed behavior
@@ -2007,7 +2034,7 @@ const FIELD_FORMATS = [
 ];
 
 // Rules Constitution (docs/adr/0002, docs/adr/0032): which external
-// ruleset (or Saga Atlas itself) is the GM's chosen content provider per
+// ruleset (or GMAtlas Core) is the GM's chosen content provider per
 // gameplay area. Every row now renders a real `<select>` — but only the
 // Factions row's choice actually changes app behavior right now
 // (data/factionRulesProviders.js reads the exact same settings key); every
@@ -2184,7 +2211,7 @@ function rulesetProfileEditorSection(doc, ui) {
       ${helpBody('settings-genre-pack', 'Which oracle table set the whole campaign rolls against (Continue Story, Oracle drawer, Generate NPC, Universal Search) — genre-aware, not genre-locked, so this is a data swap, not a different engine.', ui)}
       <label class="field-label">Genre Pack
         <select data-genre-pack-select>
-          ${GENRE_PACKS.map((p) => `<option value="${p.id}" ${p.id === (draft.ruleset.genrePack || 'hostile') ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}
+          ${GENRE_PACKS.map((p) => `<option value="${p.id}" ${p.id === (draft.ruleset.genrePack || 'sci-fi-generic') ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}
         </select>
       </label>
     </div>
@@ -2213,11 +2240,28 @@ function rulesetProfileEditorSection(doc, ui) {
   return `${profilePicker}${saveBar}${positionsGroup}${modulesGroup}${rulesetGroup}`;
 }
 
+// Phase B (Settings navigation + entitlement stub): both the Rules
+// Constitution dropdowns below and gameSystemActivationSection default to
+// showing only the active profile's own Genre Pack's Game Systems (the
+// literal "defaults to the same Genre Pack but offer to access All Genre
+// Packs" behavior), sharing this ONE "Show all Genre Packs" state
+// (ui.showAllGenrePacksInRpe, shell.js) rather than each section carrying
+// its own toggle that could disagree. A provider already CHOSEN for an
+// area is always kept visible in that area's own dropdown even when
+// scoping would otherwise hide it (a stale choice from a since-switched
+// Genre Pack, or an old campaign) — collapsing the scope should never
+// silently disappear the GM's actual current selection.
+function activeGenrePackId(doc) { return doc.settings.genrePack || 'sci-fi-generic'; }
+
 function rulesConstitutionSection(doc, ui) {
+  const showAll = !!(ui && ui.showAllGenrePacksInRpe);
+  const packId = activeGenrePackId(doc);
+  const inActivePack = (p) => { const gs = RULES_PROVIDERS[p]; return !gs || gs.genrePackId === packId; };
   const rows = GAMEPLAY_AREAS.map((area) => {
     const chosen = resolveProviderChoice(doc.settings, area.id);
     const options = area.providers
       .filter((p) => isGameSystemActivated(doc, p))
+      .filter((p) => showAll || p === chosen || inActivePack(p))
       .map((p) => `<option value="${esc(p)}" ${chosen === p ? 'selected' : ''}>${esc(providerLabel(p))}</option>`).join('');
     return `
     <tr>
@@ -2227,10 +2271,13 @@ function rulesConstitutionSection(doc, ui) {
   }).join('');
   const legend = Object.entries(RULES_PROVIDERS).map(([id, p]) => `
     <li><b>${esc(p.label)}</b> — <span class="dim small">${esc(p.status)}.</span></li>`).join('');
+  const activePackLabel = (GENRE_PACKS.find((p) => p.id === packId) || {}).label || packId;
   return `
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Rules Constitution', 'settings-rules-constitution')}
       ${helpBody('settings-rules-constitution', 'Every ruleset is a content provider, not the application — Saga Atlas owns the campaign; each system contributes only what it does best for a given gameplay area. Only the Factions row changes real app behavior today — every other row records your intended provider for a future Rules Lens recommender (Phase 9).', ui)}
+      <label class="chip sm"><input type="checkbox" data-rpe-show-all-genre-packs ${showAll ? 'checked' : ''}> Show all Genre Packs</label>
+      <p class="dim small">Providers and Game Systems below default to <b>${esc(activePackLabel)}</b> — check the box to see every Genre Pack's own.</p>
       <div class="tablewrap-narrow">
         <table class="rules-constitution-table">
           <thead><tr><th>Gameplay area</th><th>Provider</th></tr></thead>
@@ -2238,7 +2285,7 @@ function rulesConstitutionSection(doc, ui) {
         </table>
       </div>
       <ul class="rules-provider-legend">${legend}</ul>
-      ${gameSystemActivationSection(doc)}
+      ${gameSystemActivationSection(doc, ui)}
     </div>`;
 }
 
@@ -2445,12 +2492,30 @@ function factionPacingSection(doc) {
 // gate rather than a per-area preference. `isGameSystemActivated` (data/
 // rulesConstitution.js) is the seam a real licensing check would replace
 // this boolean read with later.
-function gameSystemActivationSection(doc) {
-  const gated = Object.entries(RULES_PROVIDERS).filter(([, p]) => p.requiresActivation);
+function gameSystemActivationSection(doc, ui) {
+  const showAll = !!(ui && ui.showAllGenrePacksInRpe);
+  const packId = activeGenrePackId(doc);
+  const allGated = Object.entries(RULES_PROVIDERS).filter(([, p]) => p.requiresActivation);
+  if (!allGated.length) return '';
+  const gated = showAll ? allGated : allGated.filter(([, p]) => p.genrePackId === packId);
   if (!gated.length) return '';
-  const rows = gated.map(([id, p]) => `
+  // Phase B entitlement stub (domain/entitlements.js): a Game System this
+  // install isn't entitled to still shows here — visibly LOCKED, not
+  // silently absent, so a GM can see it exists and know why it's gated —
+  // rather than being able to activate it. entitlements defaults fully
+  // open (canAccessGameSystem returns true with no explicit appConfig.
+  // entitlements entry), so this renders identically to before for every
+  // install until something actually sets one.
+  const rows = gated.map(([id, p]) => {
+    if (!canAccessGameSystem({ entitlements: (ui && ui.entitlements) || {} }, id)) {
+      return `
+      <p class="dim small game-system-locked"><input type="checkbox" disabled>
+        🔒 <b>${esc(p.label)}</b> — not available on this install.</p>`;
+    }
+    return `
     <p><label><input type="checkbox" data-game-system-activate="${esc(id)}" ${isGameSystemActivated(doc, id) ? 'checked' : ''}>
-      <span class="dim small">${esc(p.activationText || `Activate ${p.label} content.`)}</span></label></p>`).join('');
+      <span class="dim small">${esc(p.activationText || `Activate ${p.label} content.`)}</span></label></p>`;
+  }).join('');
   return `
     <div class="settings-group">
       <h4>Game System Activation</h4>
@@ -2615,7 +2680,7 @@ function tradeEconomyModelSection(doc, ui) {
   const types = economyTypesForModel(active);
   const rows = types.map((t) => `
     <li><b>${esc(t.label)}</b> — <span class="dim small">scarcity ${t.scarcity}/10, manufacturing ${t.manufacturing}/10.</span> ${esc(t.description)}</li>`).join('');
-  const biomes = biomesForGenrePack(doc.settings.genrePack || 'hostile');
+  const biomes = biomesForGenrePack(resolveBiomeGenrePackId(doc));
   const biomeRows = biomes.map((b) => `
     <li><b>${esc(b.label)}</b> — <span class="dim small">water ${b.resourceScarcity.water}, fuel ${b.resourceScarcity.fuel}, food ${b.resourceScarcity.food}, ore ${b.resourceScarcity.ore}, tech ${b.resourceScarcity.tech}, luxury ${b.resourceScarcity.luxury} (/10).</span> ${esc(b.description)}</li>`).join('');
   return `
@@ -2624,7 +2689,7 @@ function tradeEconomyModelSection(doc, ui) {
       ${helpBody('settings-trade-economy', 'Set a Location\'s Development Level (on its Location card) to one of these to bias its market prices beyond the manual supply/demand dials — unset Locations are unaffected. Only one model is active at a time, but a Location already tagged the old way (a matching tag instead of the field) keeps working if you switch.', ui)}
       ${modelSelect}
       <ul class="rules-provider-legend">${rows}</ul>
-      <h4>Biomes (${esc((GENRE_PACKS.find((p) => p.id === (doc.settings.genrePack || 'hostile')) || {}).label || 'active pack')})</h4>
+      <h4>Biomes (${esc((GENRE_PACKS.find((p) => p.id === (doc.settings.genrePack || 'sci-fi-generic')) || {}).label || 'active pack')})</h4>
       <p class="dim small">Set a Location's Biome (on its Location card) to one of these to bias prices by resource type, independent of and compounding with Development Level. Dials are 0-10, 0 = locally abundant/cheap, 10 = scarce/expensive.</p>
       <ul class="rules-provider-legend">${biomeRows}</ul>
     </div>`;
@@ -2643,7 +2708,11 @@ function tradeEconomyModelSection(doc, ui) {
 // shipped as JS, so this legend text doesn't need a network round-trip
 // just to describe what importing will do.
 function hostileCanonLocationsSection(doc, ui = {}) {
-  if ((doc.settings.genrePack || 'hostile') !== 'hostile') return '';
+  // Phase A audit: same repoint as worldProfileSection above — Hostile is
+  // now a Game System, not the genre pack itself, so "is this campaign
+  // running Hostile specifically" is the Rules Constitution's own
+  // 'frontier-setting' choice, not genrePack.
+  if (resolveActiveProviderChoice(doc, 'frontier-setting') !== 'hostile') return '';
   const starportRows = STARPORT_CLASSES.map((s) => `
     <li><b>${esc(s.code)} — ${esc(s.label)}</b> <span class="dim small">${esc(s.description)}</span></li>`).join('');
   const baseRows = BASES.map((b) => `

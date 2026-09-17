@@ -246,3 +246,28 @@ export function dnd5eStoryboardProfile(now = new Date().toISOString()) {
   };
   return profile;
 }
+
+/** Phase A audit (A4): "hostile" stopped being a Genre Pack id — it's now
+ *  a Game System inside the "sci-fi-generic" pack (data/genrePacks.js).
+ *  migrate.js's own migrateDocument backfill rewrites a raw campaign
+ *  document's (mostly inert, post-Rules-Profiles) settings.genrePack
+ *  field; this is the matching backfill for the field that actually
+ *  matters day to day — every EXISTING Rules Profile's own
+ *  ruleset.genrePack, which store.get() overlays onto every campaign
+ *  using that profile. Same idempotent, additive-only shape as this
+ *  file's other backfills; genrePacks.js's own findGenrePack() alias is
+ *  the belt-and-suspenders safety net if this somehow doesn't run before
+ *  something reads a profile's genrePack. Called once from store.js's
+ *  load(). */
+export function backfillGenrePackRename(appConfig) {
+  const needsBackfill = appConfig.profiles.some((p) => p.ruleset && p.ruleset.genrePack === 'hostile');
+  if (!needsBackfill) return appConfig;
+  return {
+    ...appConfig,
+    profiles: appConfig.profiles.map((p) => (
+      p.ruleset && p.ruleset.genrePack === 'hostile'
+        ? { ...p, ruleset: { ...p.ruleset, genrePack: 'sci-fi-generic' } }
+        : p
+    )),
+  };
+}

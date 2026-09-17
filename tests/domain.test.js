@@ -23,6 +23,7 @@ import {
   createCampaign, renameCampaignEntry, setActiveCampaign, reassignCampaignProfile, applyProfileDraft, resolvePositionContentId,
   backfillDefaultCrewTasks,
 } from '../src/domain/rulesProfiles.js';
+import { canAccessGameSystem, setEntitlement } from '../src/domain/entitlements.js';
 
 // --- oracles --------------------------------------------------------------
 test('oracle tables loaded as a module', () => {
@@ -3971,7 +3972,7 @@ test('formatSessionRecap renders a readable plain-text block', () => {
 });
 
 // --- Rules Constitution (data reference, requirements/initial design inputs/gameplay-goals.md) ---
-import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel, resolveProviderChoice, isGameSystemActivated } from '../src/data/rulesConstitution.js';
+import { RULES_PROVIDERS, GAME_SYSTEMS, GAMEPLAY_AREAS, providerLabel, resolveProviderChoice, resolveActiveProviderChoice, isGameSystemActivated } from '../src/data/rulesConstitution.js';
 
 test('every provider referenced in GAMEPLAY_AREAS is a registered RULES_PROVIDERS entry', () => {
   const ids = new Set(Object.keys(RULES_PROVIDERS));
@@ -4006,6 +4007,53 @@ test('isGameSystemActivated: a provider with no requiresActivation flag is alway
   assert.equal(isGameSystemActivated({ settings: {} }, 'swn'), false, 'swn is gated, unset reads as not activated');
   assert.equal(isGameSystemActivated({ settings: { gameSystemActivations: { swn: true } } }, 'swn'), true);
   assert.equal(isGameSystemActivated({ settings: { gameSystemActivations: { swn: false } } }, 'swn'), false);
+});
+
+// --- Phase A audit (A2/A3): Game System registry + gameplay-area resolution
+test('GAME_SYSTEMS is the same registry object as RULES_PROVIDERS (a canonical name, not a second copy that could drift)', () => {
+  assert.equal(GAME_SYSTEMS, RULES_PROVIDERS);
+});
+
+test('every Game System carries a genrePackId, and a dedicatedRulesetId (its own GSR, or null if it has no character ruleset built)', () => {
+  for (const [id, system] of Object.entries(RULES_PROVIDERS)) {
+    assert.ok(system.genrePackId, `${id}: missing genrePackId`);
+    assert.ok('dedicatedRulesetId' in system, `${id}: missing dedicatedRulesetId`);
+  }
+  // Systems with an actual character ruleset built (data/rulesets.js) —
+  // their dedicatedRulesetId is that SAME ruleset id, not a separate value
+  // that could drift from it.
+  assert.equal(RULES_PROVIDERS.starforged.dedicatedRulesetId, 'starforged');
+  assert.equal(RULES_PROVIDERS.fivepfh.dedicatedRulesetId, '5pfh');
+  assert.equal(RULES_PROVIDERS.traveller.dedicatedRulesetId, 'traveller');
+  assert.equal(RULES_PROVIDERS.dnd5e.dedicatedRulesetId, 'dnd5e');
+  // Systems with no character ruleset built — null, not undefined/missing.
+  for (const id of ['hostile', 'swn', 'planetfall', 'gmatlascore', 'sagaatlas']) {
+    assert.equal(RULES_PROVIDERS[id].dedicatedRulesetId, null, `${id}: should have no GSR`);
+  }
+});
+
+test('resolveActiveProviderChoice resolves the GM\'s chosen provider when it\'s activated, falls back to whichever GMAtlas Core id (gmatlascore or sagaatlas) covers that area when the chosen one is disabled, and to null when GMAtlas Core has no coverage there', () => {
+  // fivepfh (tactical-combat's only provider) requires activation — unset,
+  // no GMAtlas Core listed for that area at all -> null, not a crash.
+  assert.equal(resolveActiveProviderChoice({ settings: {} }, 'tactical-combat'), null);
+  assert.equal(
+    resolveActiveProviderChoice({ settings: { gameSystemActivations: { fivepfh: true } } }, 'tactical-combat'),
+    'fivepfh',
+  );
+  // Factions: swn (gated, unset) falls back to gmatlascore, which IS listed
+  // for this area and is itself ungated.
+  assert.equal(resolveActiveProviderChoice({ settings: {} }, 'factions'), 'gmatlascore');
+  assert.equal(
+    resolveActiveProviderChoice({ settings: { gameSystemActivations: { swn: true } } }, 'factions'),
+    'swn',
+    'once activated, the GM\'s actual choice resolves again — re-enabling restores it with no other change needed',
+  );
+  // long-term-campaign-memory: sagaatlas is both the only provider AND
+  // ungated, so it always resolves directly, never needing the fallback
+  // path at all.
+  assert.equal(resolveActiveProviderChoice({ settings: {} }, 'long-term-campaign-memory'), 'sagaatlas');
+  // An unknown area resolves to null, same as resolveProviderChoice.
+  assert.equal(resolveActiveProviderChoice({ settings: {} }, 'not-a-real-area'), null);
 });
 
 // --- Sourcebook Inventory (Settings' "what third-party content is actually
@@ -4125,11 +4173,17 @@ test('every genre pack carries the load-bearing categories copilot.js/generateNp
   }
 });
 
-test('findGenrePack resolves a known id and falls back to hostile (the default) for an unset/unknown one', () => {
+test('findGenrePack resolves a known id and falls back to sci-fi-generic (the default) for an unset/unknown one', () => {
   assert.equal(findGenrePack('cyberpunk').id, 'cyberpunk');
   assert.equal(findGenrePack('fantasy').id, 'fantasy');
-  assert.equal(findGenrePack('nonexistent').id, 'hostile');
-  assert.equal(findGenrePack(undefined).id, 'hostile');
+  assert.equal(findGenrePack('nonexistent').id, 'sci-fi-generic');
+  assert.equal(findGenrePack(undefined).id, 'sci-fi-generic');
+});
+
+test('findGenrePack permanently aliases the old "hostile" pack id to "sci-fi-generic" (Phase A audit, A4 — Hostile is now a Game System, not its own Genre Pack, but any already-stored/exported "hostile" genrePack value must keep resolving to exactly the same oracle content forever)', () => {
+  const aliased = findGenrePack('hostile');
+  assert.equal(aliased.id, 'sci-fi-generic');
+  assert.equal(aliased, findGenrePack('sci-fi-generic'), 'the exact same pack object, not a separate equivalent one');
 });
 
 test('tablesWithOverrides selects the requested genre pack, and defaults to hostile when unset', () => {
@@ -4164,8 +4218,46 @@ test('generateNpc rolls a coherent NPC from a non-default genre pack', () => {
 });
 
 test('a fresh campaign defaults settings.genrePack to hostile', () => {
+  // NOTE: this is defaultCampaign()'s own INERT settings.genrePack (schema.js
+  // documents it as "preserved but inert" once a Rules Profile exists —
+  // store.get() overlays the ACTIVE PROFILE's own genrePack on top of this
+  // on every real read) — deliberately left at its original value rather
+  // than updated to 'sci-fi-generic' for the Phase A audit's Hostile-
+  // becomes-a-Game-System restructuring, since nothing reads it directly
+  // and changing it would serve no functional purpose. The value that
+  // actually matters day to day is defaultRulesProfile()'s own genrePack,
+  // covered by the "a fresh Rules Profile defaults genrePack to sci-fi-
+  // generic" test below.
   const camp = defaultCampaign();
   assert.equal(camp.settings.genrePack, 'hostile');
+});
+
+test('a fresh Rules Profile defaults ruleset.genrePack to sci-fi-generic (Phase A audit, A4 — the field campaign.settings.genrePack overlays from, and thus the one that actually matters)', () => {
+  const profile = defaultRulesProfile('Test', new Date().toISOString());
+  assert.equal(profile.ruleset.genrePack, 'sci-fi-generic');
+});
+
+test('every Genre Pack carries a gameSystemIds list (Phase A audit, A2/A4); sci-fi-generic contains every current sci-fi Game System (confirmed against the full RULES_PROVIDERS list, not assumed to be just Hostile/Starforged/Traveller), dnd5e contains only itself, cyberpunk/fantasy have none yet', () => {
+  const sciFi = GENRE_PACKS.find((p) => p.id === 'sci-fi-generic');
+  assert.ok(sciFi, 'sci-fi-generic pack exists (replacing the old standalone "hostile" pack)');
+  assert.deepEqual(
+    [...sciFi.gameSystemIds].sort(),
+    ['fivepfh', 'gmatlascore', 'hostile', 'planetfall', 'sagaatlas', 'starforged', 'swn', 'traveller'].sort(),
+  );
+  assert.deepEqual(GENRE_PACKS.find((p) => p.id === 'dnd5e').gameSystemIds, ['dnd5e']);
+  assert.deepEqual(GENRE_PACKS.find((p) => p.id === 'cyberpunk').gameSystemIds, []);
+  assert.deepEqual(GENRE_PACKS.find((p) => p.id === 'fantasy').gameSystemIds, []);
+  // No standalone 'hostile' Genre Pack exists any more — it's a member of
+  // sci-fi-generic (a Game System), not a pack in its own right.
+  assert.equal(GENRE_PACKS.some((p) => p.id === 'hostile'), false);
+  // Every Game System's own genrePackId points back at a pack that
+  // actually lists it — the relationship is real in both directions, not
+  // just declared on one side.
+  for (const [systemId, system] of Object.entries(RULES_PROVIDERS)) {
+    const pack = GENRE_PACKS.find((p) => p.id === system.genrePackId);
+    assert.ok(pack, `${systemId}: genrePackId ${system.genrePackId} doesn't match any real pack`);
+    assert.ok(pack.gameSystemIds.includes(systemId), `${systemId}: its own genre pack (${pack.id}) doesn't list it back`);
+  }
 });
 
 // --- Phase 10: Merchant Rules Lens (ADR 0003/0004) --------------------------
@@ -7975,7 +8067,7 @@ import {
 import { getCurrentTurnStep, advanceTurnStep, retreatTurnStep, startNextColonyCampaignTurn, startNextStarshipCampaignTurn } from '../src/domain/turnSteps.js';
 import { TURN_STEPS_5PFH } from '../src/data/turnStepsDefault5pfh.js';
 import { PLANETFALL_TURN_STEPS } from '../src/data/turnStepListPlanetfall.js';
-import { grandfatherCampaignPanelActivation, backfillDnd5eStoryboardProfile } from '../src/domain/rulesProfiles.js';
+import { grandfatherCampaignPanelActivation, backfillDnd5eStoryboardProfile, backfillGenrePackRename } from '../src/domain/rulesProfiles.js';
 import { moveCrewTaskInList, updateCrewTaskText, loadDefaultCrewTasks, listEligibleCrewMembers, assignCrewTask } from '../src/domain/crewTasks.js';
 import { CREW_TASKS_5PFH } from '../src/data/crewTasksDefault5pfh.js';
 
@@ -8371,6 +8463,25 @@ test('backfillDnd5eStoryboardProfile seeds the "D&D 5e (Storyboard)" template fo
   assert.equal(notBackfilled, alreadyHasOne);
 });
 
+test('backfillGenrePackRename rewrites every already-existing Rules Profile\'s ruleset.genrePack "hostile" to "sci-fi-generic" (Phase A audit, A4), idempotently, and leaves a profile already on a different genre pack (or already on sci-fi-generic) alone', () => {
+  let cfg = defaultAppConfig();
+  cfg = createRulesProfile(cfg, { name: 'Default' });
+  cfg.profiles[0].ruleset.genrePack = 'hostile'; // a pre-existing profile predating this rename
+
+  const backfilled = backfillGenrePackRename(cfg);
+  assert.notEqual(backfilled, cfg, 'a change was made');
+  assert.equal(backfilled.profiles[0].ruleset.genrePack, 'sci-fi-generic');
+
+  const secondPass = backfillGenrePackRename(backfilled);
+  assert.equal(secondPass, backfilled, 'idempotent — running it again is a true no-op');
+
+  // A profile on a different genre pack, or already renamed, is untouched.
+  let unaffected = defaultAppConfig();
+  unaffected = createRulesProfile(unaffected, { name: 'Fantasy Table' });
+  unaffected.profiles[0].ruleset.genrePack = 'fantasy';
+  assert.equal(backfillGenrePackRename(unaffected), unaffected);
+});
+
 // --- Crew Tasks (design/adr/rules-profiles-multi-campaign.md, direct
 // follow-up request — Daily Life step 2, "Assign/resolve crew tasks") -----
 function profileWithCrewTasks(tasks) {
@@ -8574,4 +8685,27 @@ test('addAllPartyMembersToCombatTracker adds every current Party member, additiv
   // members, never duplicates a row (addCombatTrackerEntity's own dedup).
   camp = addAllPartyMembersToCombatTracker(camp);
   assert.equal(listCombatTrackerEntries(camp).length, 2);
+});
+
+test('canAccessGameSystem defaults to fully-permissive — an appConfig with no entitlements object at all, or with no explicit entry for a given systemId, is allowed — and only an explicit false ever restricts one', () => {
+  assert.equal(canAccessGameSystem(defaultAppConfig(), 'swn'), true, 'a brand-new appConfig has no entitlements object at all');
+  assert.equal(canAccessGameSystem({ entitlements: {} }, 'swn'), true, 'an empty entitlements map still allows everything');
+  assert.equal(canAccessGameSystem({ entitlements: { swn: false } }, 'swn'), false);
+  assert.equal(canAccessGameSystem({ entitlements: { swn: false } }, 'planetfall'), true, 'a restriction on one systemId never affects another');
+  assert.equal(canAccessGameSystem({ entitlements: { swn: true } }, 'swn'), true, 'an explicit true is also honored, not just treated as unset');
+});
+
+test('setEntitlement writes just the one targeted systemId into appConfig.entitlements, additively (never clobbering an existing sibling entry), and returns a NEW appConfig rather than mutating the input', () => {
+  const original = defaultAppConfig();
+  const withSwnLocked = setEntitlement(original, 'swn', false);
+  assert.notEqual(withSwnLocked, original, 'a new object is returned');
+  assert.equal(original.entitlements, undefined, 'the input is never mutated');
+  assert.equal(canAccessGameSystem(withSwnLocked, 'swn'), false);
+
+  const withPlanetfallToo = setEntitlement(withSwnLocked, 'planetfall', true);
+  assert.equal(canAccessGameSystem(withPlanetfallToo, 'swn'), false, 'the earlier entry survives a later, different-systemId write');
+  assert.equal(canAccessGameSystem(withPlanetfallToo, 'planetfall'), true);
+
+  const reopened = setEntitlement(withPlanetfallToo, 'swn', true);
+  assert.equal(canAccessGameSystem(reopened, 'swn'), true, 're-entitling (true) after a false is honored, not stuck once denied');
 });

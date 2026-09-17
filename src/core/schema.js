@@ -352,7 +352,12 @@ export function defaultRulesProfile(name = 'Default', now = new Date().toISOStri
     storyboardPositions: { composer: 'dashboard', navigator: 'narrative', advisor: 'copilot' },
     moduleEnabled: GATEABLE_MODULES.reduce((acc, id) => { acc[id] = true; return acc; }, {}),
     ruleset: {
-      genrePack: 'hostile',
+      // Phase A audit (A4): 'hostile' is no longer a Genre Pack id (it's
+      // now a Game System inside the 'sci-fi-generic' pack — see
+      // data/genrePacks.js) — a brand-new profile's default Genre Pack is
+      // that umbrella pack, unchanged in actual oracle content (same
+      // SCENE_TABLES) from what 'hostile' used to point at directly.
+      genrePack: 'sci-fi-generic',
       tradeEconomyModel: 'hostile',
       statRuleset: 'starforged',
       rulesProviderChoices: {},

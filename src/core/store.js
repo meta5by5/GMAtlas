@@ -37,7 +37,7 @@ import { defaultCampaign, defaultAppConfig } from './schema.js';
 import {
   importCampaign, migrateDocument, migrateFromLegacyKeys, readLegacyKeys, wrapLegacyCampaignIntoAppConfig, LEGACY_KEYS,
 } from './migrate.js';
-import { createCampaign, renameCampaignEntry, setActiveCampaign, createRulesProfile, reassignCampaignProfile, backfillDefaultCrewTasks, grandfatherCampaignPanelActivation, backfillDnd5eStoryboardProfile } from '../domain/rulesProfiles.js';
+import { createCampaign, renameCampaignEntry, setActiveCampaign, createRulesProfile, reassignCampaignProfile, backfillDefaultCrewTasks, grandfatherCampaignPanelActivation, backfillDnd5eStoryboardProfile, backfillGenrePackRename } from '../domain/rulesProfiles.js';
 import { createTurnStepList, hoistLegacyProfileTurnSteps, backfillTurnStepListInventory, fixPlanetfallBranching } from '../domain/turnStepLists.js';
 import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
 import { PLANETFALL_TURN_STEPS } from '../data/turnStepListPlanetfall.js';
@@ -237,6 +237,7 @@ function createStore() {
       backfilled = backfillDefaultCrewTasks(backfilled, CREW_TASKS_5PFH);
       backfilled = grandfatherCampaignPanelActivation(backfilled);
       backfilled = backfillDnd5eStoryboardProfile(backfilled);
+      backfilled = backfillGenrePackRename(backfilled);
       if (backfilled !== appConfig) {
         appConfig = backfilled;
         await idbPut(database, APP_CONFIG_KEY, appConfig);
@@ -414,6 +415,12 @@ function createStore() {
 
   function listProfiles() { return appConfig.profiles; }
   function getActiveProfile() { return activeProfile(); }
+  /** Read-only access to the whole appConfig record — same live-reference
+   *  convention as listCampaigns()/listProfiles() above. Entitlements
+   *  (domain/entitlements.js) is the one current reader; a future caller
+   *  needing something else out of appConfig should use this too rather
+   *  than adding another single-purpose getter. */
+  function getAppConfig() { return appConfig; }
 
   /** Create a new Rules Profile, optionally cloning an existing one's
    *  ruleset/moduleEnabled/storyboardPositions. */
@@ -574,7 +581,7 @@ function createStore() {
     storageInfo, restoreBackup,
     putDocBlob, getDocBlob, deleteDocBlob, listDocBlobKeys,
     listCampaigns, switchCampaign, renameCampaign, setCampaignProfile,
-    listProfiles, getActiveProfile, createProfile, updateProfile, renameProfile,
+    listProfiles, getActiveProfile, getAppConfig, createProfile, updateProfile, renameProfile,
     addTurnStepList, updateAppConfig,
     STORAGE_KEY, BACKUP_KEY, LEGACY_KEYS,
   };

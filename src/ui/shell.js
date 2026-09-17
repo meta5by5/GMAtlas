@@ -397,6 +397,14 @@ let editingTurnStepListId = null;
 // Assignments" (Colony/Starship tab uses) moved out into its own, always-
 // visible section below it.
 let turnStepListsCollapsed = false;
+// Phase B (Settings navigation): the Ruleset Profile Editor's Rules
+// Constitution table and Game System Activation list both default to
+// showing only the active profile's own Genre Pack's Game Systems, with
+// this one shared "Show all Genre Packs" expand control covering both
+// (direct request — one toggle, not two that could disagree). Ephemeral,
+// not persisted to the profile itself: nothing suggested a GM would want
+// this remembered across sessions, so it starts simple.
+let showAllGenrePacksInRpe = false;
 // Per-step "Move to"/"Branches to" icon toggles (direct follow-up request:
 // "right-aligned icons that open a dropdown on the next row if clicked
 // into edit mode") — each Set holds the full listId::groupId::stepId keys
@@ -4714,6 +4722,10 @@ function onChange(ev) {
     if (draft) setProfileDraft(profileId, updateProfileRuleset(draft, { gameSystemActivations: { ...draft.ruleset.gameSystemActivations, [systemId]: t.checked } }));
     return render();
   }
+  if (t.closest('[data-rpe-show-all-genre-packs]')) {
+    showAllGenrePacksInRpe = t.checked;
+    return render();
+  }
   if (t.closest('[data-faction-pacing-scenes-per-round]')) {
     const n = Math.max(0, Number(t.value) || 0);
     return store.update((d) => { d.settings.factionPacing = { ...(d.settings.factionPacing || {}), scenesPerRound: n }; return d; });
@@ -7831,6 +7843,14 @@ function buildDrawerUi() {
     newCampaignDraft,
     profileDraft: getProfileDraft(currentEditingProfileId()),
     profileDraftDirty: isProfileDraftDirty(currentEditingProfileId()),
+    showAllGenrePacksInRpe,
+    // Phase B (entitlement layer, domain/entitlements.js): just the raw
+    // map, not the whole appConfig — mirrors passing activeProfileId
+    // rather than the whole profile registry object elsewhere in this bag.
+    // canAccessGameSystem(appConfig, id) is still the one function that
+    // reads it; drawers/index.js calls it as
+    // canAccessGameSystem({ entitlements: ui.entitlements }, id).
+    entitlements: store.getAppConfig().entitlements || {},
   };
 }
 

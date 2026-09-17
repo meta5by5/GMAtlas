@@ -309,6 +309,22 @@ test('migrateDocument backfills settings.dice3dTheme/dice3dColor (Dice settings 
   assert.equal(migratedCustomized.settings.dice3dColor, '#aa4f4a');
 });
 
+test('migrateDocument rewrites settings.genrePack "hostile" to "sci-fi-generic" (Phase A audit, A4 — Hostile stopped being a Genre Pack id and became a Game System instead, same underlying oracle content either way), idempotently, and leaves any other genrePack value alone', () => {
+  const legacy = defaultCampaign();
+  legacy.settings.genrePack = 'hostile';
+  const migrated = migrateDocument(legacy);
+  assert.equal(migrated.settings.genrePack, 'sci-fi-generic');
+
+  // Idempotent — running it again on the already-migrated value is a no-op.
+  const migratedTwice = migrateDocument(migrated);
+  assert.equal(migratedTwice.settings.genrePack, 'sci-fi-generic');
+
+  // A campaign already on a different genre pack is untouched.
+  const cyberpunk = defaultCampaign();
+  cyberpunk.settings.genrePack = 'cyberpunk';
+  assert.equal(migrateDocument(cyberpunk).settings.genrePack, 'cyberpunk');
+});
+
 test('migrateDocument converts a pre-existing FLAT turnStepProgress ({groupId,stepIndex,returnStack}) into the new slot-keyed shape, folding it into turnStepProgress.starship (the old content was always the 5PFH sequence), leaving turnStepProgress.colony fresh — a doc already in the new shape (or with no turnStepProgress at all) is untouched', () => {
   const legacy = defaultCampaign();
   legacy.turnStepProgress = { groupId: 'daily-life', stepIndex: 2, returnStack: [{ groupId: 'root', stepIndex: 0 }] };

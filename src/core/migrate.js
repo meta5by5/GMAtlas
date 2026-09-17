@@ -237,6 +237,17 @@ export function migrateDocument(doc, now = new Date().toISOString()) {
     };
   }
 
+  // Phase A audit (A4): "hostile" stopped being a Genre Pack id — it's now
+  // a Game System inside the "sci-fi-generic" pack (data/genrePacks.js),
+  // same underlying oracle content either way. Rewritten here for data
+  // cleanliness on the RAW campaign document's own (mostly inert, post-
+  // Rules-Profiles) settings.genrePack field — genrePacks.js's own
+  // findGenrePack() also permanently aliases the old id as a second,
+  // belt-and-suspenders safety net, so a value that somehow reaches
+  // runtime unmigrated (an old export re-imported later) still resolves
+  // correctly rather than silently losing its oracle flavor.
+  if (d.settings && d.settings.genrePack === 'hostile') d.settings.genrePack = 'sci-fi-generic';
+
   d.schemaVersion = SCHEMA_VERSION;
   d.app = APP_NAME;
   return d;
@@ -257,7 +268,7 @@ export function wrapLegacyCampaignIntoAppConfig(legacyDoc, now = new Date().toIS
 
   const defaultProfile = defaultRulesProfile('Default', now);
   defaultProfile.ruleset = {
-    genrePack: settings.genrePack || 'hostile',
+    genrePack: settings.genrePack || 'sci-fi-generic',
     tradeEconomyModel: settings.tradeEconomyModel || 'hostile',
     statRuleset: settings.statRuleset || 'starforged',
     rulesProviderChoices: { ...(settings.rulesProviderChoices || {}) },
