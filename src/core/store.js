@@ -37,10 +37,11 @@ import { defaultCampaign, defaultAppConfig } from './schema.js';
 import {
   importCampaign, migrateDocument, migrateFromLegacyKeys, readLegacyKeys, wrapLegacyCampaignIntoAppConfig, LEGACY_KEYS,
 } from './migrate.js';
-import { createCampaign, renameCampaignEntry, setActiveCampaign, createRulesProfile, reassignCampaignProfile, backfillDefaultCrewTasks, grandfatherCampaignPanelActivation, backfillDnd5eStoryboardProfile, backfillGenrePackRename } from '../domain/rulesProfiles.js';
+import { createCampaign, renameCampaignEntry, setActiveCampaign, createRulesProfile, reassignCampaignProfile, backfillDefaultCrewTasks, grandfatherCampaignPanelActivation, backfillDnd5eStoryboardProfile, backfillFiveLeaguesStoryboardProfile, backfillGenrePackRename } from '../domain/rulesProfiles.js';
 import { createTurnStepList, hoistLegacyProfileTurnSteps, backfillTurnStepListInventory, fixPlanetfallBranching } from '../domain/turnStepLists.js';
 import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
 import { PLANETFALL_TURN_STEPS } from '../data/turnStepListPlanetfall.js';
+import { TURN_STEPS_FIVE_LEAGUES } from '../data/turnStepListFiveLeagues.js';
 import { CREW_TASKS_5PFH } from '../data/crewTasksDefault5pfh.js';
 
 const STORAGE_KEY = 'sagaatlas.campaign'; // legacy localStorage key — read-only fallback for pre-IndexedDB campaigns, never written again
@@ -194,7 +195,7 @@ function createStore() {
   // runs. A GM's own later reassignment (Settings) is left untouched — this
   // only fills in a still-null slot, never overwrites an explicit choice.
   function backfillCampaignTurnStepSlots(doc) {
-    if (!doc.turnStepSlotAssignments || typeof doc.turnStepSlotAssignments !== 'object') doc.turnStepSlotAssignments = { colony: null, starship: null };
+    if (!doc.turnStepSlotAssignments || typeof doc.turnStepSlotAssignments !== 'object') doc.turnStepSlotAssignments = { colony: null, starship: null, warband: null };
     const lists = appConfig.turnStepLists || [];
     if (!doc.turnStepSlotAssignments.colony) {
       const l = lists.find((x) => x.name === 'Planetfall');
@@ -203,6 +204,10 @@ function createStore() {
     if (!doc.turnStepSlotAssignments.starship) {
       const l = lists.find((x) => x.name === '5PFH');
       if (l) doc.turnStepSlotAssignments.starship = l.id;
+    }
+    if (!doc.turnStepSlotAssignments.warband) {
+      const l = lists.find((x) => x.name === 'Five Leagues');
+      if (l) doc.turnStepSlotAssignments.warband = l.id;
     }
     return doc;
   }
@@ -232,11 +237,12 @@ function createStore() {
       // default content if either is still missing) — both idempotent, run
       // every boot, cheap no-ops once already done.
       let backfilled = hoistLegacyProfileTurnSteps(appConfig);
-      backfilled = backfillTurnStepListInventory(backfilled, TURN_STEPS_5PFH, PLANETFALL_TURN_STEPS);
+      backfilled = backfillTurnStepListInventory(backfilled, TURN_STEPS_5PFH, PLANETFALL_TURN_STEPS, TURN_STEPS_FIVE_LEAGUES);
       backfilled = fixPlanetfallBranching(backfilled);
       backfilled = backfillDefaultCrewTasks(backfilled, CREW_TASKS_5PFH);
       backfilled = grandfatherCampaignPanelActivation(backfilled);
       backfilled = backfillDnd5eStoryboardProfile(backfilled);
+      backfilled = backfillFiveLeaguesStoryboardProfile(backfilled);
       backfilled = backfillGenrePackRename(backfilled);
       if (backfilled !== appConfig) {
         appConfig = backfilled;

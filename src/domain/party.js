@@ -35,6 +35,12 @@ function ensure(campaign) {
   if (!Array.isArray(campaign.party.relationships)) campaign.party.relationships = [];
   if (campaign.party.starshipEntityId === undefined) campaign.party.starshipEntityId = null;
   if (campaign.party.starshipCampaignTurn === undefined) campaign.party.starshipCampaignTurn = 0;
+  // The Campaign panel's Warband tab (Five Leagues from the Borderlands) —
+  // its own independent turn counter, same shape as starshipCampaignTurn
+  // above. No warbandEntityId: a warband is the whole roster (already
+  // visible via Cast/Party), not one reference-by-id entity like the
+  // Starship tab's single-ship picker.
+  if (campaign.party.warbandCampaignTurn === undefined) campaign.party.warbandCampaignTurn = 0;
   return campaign.party;
 }
 

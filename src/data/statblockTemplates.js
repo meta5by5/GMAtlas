@@ -166,6 +166,26 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
       { key: 'Legendary Actions', kind: 'text' },
     ]),
   },
+  // Five Leagues from the Borderlands (assets/docs/5LFB): mapped directly
+  // off the core rulebook's own Enemy Profile column headings (p.152) —
+  // Enemy / Num. / Speed / Combat / Damage / Tough. / Armor / Ranged, plus
+  // free-text Traits covering both the Universal Enemy Traits list (p.152-
+  // 153) and any creature-specific special rules, matching the same
+  // "flat field list, not a fully mechanized every-rule sheet" scope-trim
+  // posture as '5pfh-lifeform'/'dnd5e-lifeform' above.
+  'fiveleagues-lifeform': {
+    label: 'Five Leagues Enemy',
+    fields: withDefaults([
+      { key: 'Num.', kind: 'text' },
+      { key: 'Speed', kind: 'attribute', rollMethod: 'none', format: 'inches' },
+      { key: 'Combat Skill', kind: 'attribute', rollMethod: 'flat', target: 6 },
+      { key: 'Damage', kind: 'text' },
+      { key: 'Toughness', kind: 'track', rollMethod: 'none', max: 5 },
+      { key: 'Armor', kind: 'attribute', rollMethod: 'none', format: 'plain' },
+      { key: 'Ranged', kind: 'text' },
+      { key: 'Traits', kind: 'text' },
+    ]),
+  },
   vehicle: {
     label: 'Vehicle',
     fields: withDefaults([

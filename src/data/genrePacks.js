@@ -36,7 +36,16 @@ export const GENRE_PACKS = [
     gameSystemIds: ['hostile', 'starforged', 'fivepfh', 'traveller', 'swn', 'planetfall', 'gmatlascore', 'sagaatlas'],
   },
   { id: 'cyberpunk', label: 'Cyberpunk / Shadowrun', tables: CYBERPUNK_TABLES, gameSystemIds: [] },
-  { id: 'fantasy', label: 'Fantasy (D&D-style)', tables: FANTASY_TABLES, gameSystemIds: [] },
+  // Relabeled from "Fantasy (D&D-style)" (direct request: a Five Leagues
+  // from the Borderlands Game System "in the 'Fantasy (generic)' genre") —
+  // this pack's own tables (FANTASY_TABLES) were always generic fantasy
+  // content, not D&D-specific; D&D 5e's OWN flavor got its own dedicated
+  // fork (tables-dnd5e.js, the 'dnd5e' pack below) specifically so it
+  // could diverge from this one, which is why this pack was free to become
+  // Five Leagues' own umbrella pack the same way 'sci-fi-generic' is
+  // Hostile's (Phase A audit) — a real Game System living inside a shared
+  // generic pack, not a new pack/oracle-table fork of its own.
+  { id: 'fantasy', label: 'Fantasy (generic)', tables: FANTASY_TABLES, gameSystemIds: ['fiveleagues'] },
   // Direct request: "associating all of this to the 'Fantasy (D&D-style)'
   // genre pack... everything including the oracles must be independent or
   // a copy allocated to this version so it can be customized to D&D game

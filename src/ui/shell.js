@@ -48,6 +48,11 @@ import {
   setActiveBattlemap, setBattlemapBackground, setBattlemapGrid, addBattlemapIcon, moveBattlemapIcon,
   updateBattlemapIcon, removeBattlemapIcon,
 } from '../domain/battlemaps.js';
+import {
+  getHexMap, getActiveHexMap, getHex, createHexMap, renameHexMap, deleteHexMap, setActiveHexMap,
+  setHexGeography, setHexLocation, clearHexLocation, setHexThreat, clearHexThreat, setHexNotes,
+  axialToPixel, pixelToAxial, HEX_SIZE,
+} from '../domain/hexcrawls.js';
 import { generateCreatureConcept, formatCreatureConcept, generateSiteConcept, formatSiteConcept, generateAdventureSeed, formatAdventureSeed } from '../domain/worldbuilding.js';
 import {
   addDocument, updateDocument, removeDocument, getDocument, addDocumentTag, removeDocumentTag, renameDocument,
@@ -101,7 +106,7 @@ import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
 import { isModuleVisible, setModuleEnabled, setStoryboardPosition, updateProfileRuleset, applyProfileDraft, resolvePositionContentId } from '../domain/rulesProfiles.js';
 import { DRAWER_META, drawerMeta } from './drawerMeta.js';
 import { moveTurnStepInList, updateTurnStepText, setTurnStepShowCrewTasks, loadDefaultIntoTurnStepList, renameTurnStepList, deleteTurnStepList, addTurnStepGroup, renameTurnStepGroup, addTurnStepToGroup, moveTurnStepToGroup, setTurnStepBranchTo } from '../domain/turnStepLists.js';
-import { getCurrentTurnStep, advanceTurnStep, retreatTurnStep, startNextColonyCampaignTurn, startNextStarshipCampaignTurn } from '../domain/turnSteps.js';
+import { getCurrentTurnStep, advanceTurnStep, retreatTurnStep, startNextColonyCampaignTurn, startNextStarshipCampaignTurn, startNextWarbandCampaignTurn } from '../domain/turnSteps.js';
 import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
 import { PLANETFALL_TURN_STEPS } from '../data/turnStepListPlanetfall.js';
 import { moveCrewTaskInList, updateCrewTaskText, loadDefaultCrewTasks, assignCrewTask } from '../domain/crewTasks.js';
@@ -142,7 +147,7 @@ function isPhoneWidth() { return window.innerWidth <= PHONE_BREAKPOINT; }
 // avoid) meaning "toggle the .mc-copilot aside open/closed"; its button's
 // own glyph/label follow whatever content the Advisor position currently
 // holds (see computeVisibleEdgeOrder's render loop).
-const EDGE_ORDER = ['guide', 'oracle', 'cast', 'faction-events', 'trade', 'documents', 'gallery', 'battlemap', 'graph', 'advisor-toggle'];
+const EDGE_ORDER = ['guide', 'oracle', 'cast', 'faction-events', 'trade', 'documents', 'gallery', 'battlemap', 'hexcrawl', 'graph', 'advisor-toggle'];
 // The header's own small drawer-tab group, right-aligned in .header-actions
 // — same data-drawer-open routing as the edge nav (onClick's [data-drawer-
 // open] branch has no idea which container a button lives in), rendered by
@@ -452,6 +457,24 @@ let battlemapPlacingIcon = null;
 // layer is translated by (see updateBattlemapWorldTransform below).
 let battlemapCamera = { scale: 1, x: 0, y: 0 };
 let battlemapPan = null; // { world, startClientX, startClientY, startX, startY } while a drag-pan is in progress
+// Hexcrawl — same ephemeral camera/pan/armed-icon shape as Battlemap's own
+// above, generalized to a real-pixel (not 0-1-fraction) unbounded plane.
+// hexcrawlPlacingIcon is { layer: 'geography'|'threat', key } or null.
+let hexcrawlPlacingIcon = null;
+let hexcrawlCamera = { scale: 1, x: 0, y: 0 };
+let hexcrawlPan = null;
+// Which hex's own detail panel is currently shown below the canvas (null
+// = none) — same "click a cell, see/edit it below" shape as World
+// Tracker's own worldTrackerSelectedSector.
+let hexcrawlSelectedHex = null;
+// The axial (q,r) window of hexes actually rendered into the DOM right
+// now — starts at a generous default and only ever GROWS (never shrinks,
+// so a hex a GM already painted never disappears mid-session), extended
+// by ensureHexcrawlRangeCoversViewport() once a pan/zoom gesture settles
+// and the camera has moved near its current edge. This is what makes the
+// hex space "unbounded" in practice without ever rendering more hexes
+// than are actually near the viewport.
+let hexcrawlRange = { qMin: -8, qMax: 8, rMin: -8, rMax: 8 };
 // World Tracker (requirements/PLANETFALL_world_tracker.md) — ephemeral UI
 // only, same click-based internal-tab-strip shape as Settings' own
 // settingsTab/SETTINGS_TABS below. worldTrackerSelectedSector is which
@@ -712,6 +735,10 @@ const CAMPAIGN_SECTION_KEYS = [
   // the force-collapse-on-tab-open both cover the Starship sub-tab too,
   // not just whichever sub-tab happens to be active at the time.
   { key: 'starshipCampaignGuide', defaultCollapsed: true },
+  // Warband sub-tab's own mirror of campaignGuide/starshipCampaignGuide
+  // (Five Leagues from the Borderlands) — same reasoning as
+  // starshipCampaignGuide above.
+  { key: 'warbandCampaignGuide', defaultCollapsed: true },
 ];
 const PARTY_SECTION_KEYS = [
   { key: 'roster', defaultCollapsed: true },
@@ -1655,6 +1682,131 @@ function onClick(ev) {
   const bmRemove = hit('[data-battlemap-remove]');
   if (bmRemove) {
     if (window.confirm('Delete this map? This cannot be undone.')) store.update((d) => removeBattlemap(d, bmRemove.dataset.battlemapRemove));
+    return;
+  }
+
+  // --- Hexcrawl — mirrors the Battlemap block just above closely ----------
+  // Checked most-specific-first, same "a descendant control's own handler
+  // must run before an ancestor's more general one" ordering the Battlemap
+  // icon-remove/open-entity pairing already established.
+  const hexDetailThreatClear = hit('[data-hex-detail-threat-clear]');
+  if (hexDetailThreatClear) {
+    const [mapId, q, r, i] = hexDetailThreatClear.dataset.hexDetailThreatClear.split('::');
+    return store.update((d) => clearHexThreat(d, mapId, Number(q), Number(r), Number(i)));
+  }
+  const hexDetailLocationClear = hit('[data-hex-detail-location-clear]');
+  if (hexDetailLocationClear) {
+    const [mapId, q, r] = hexDetailLocationClear.dataset.hexDetailLocationClear.split('::');
+    return store.update((d) => clearHexLocation(d, mapId, Number(q), Number(r)));
+  }
+  const hexDetailLocationPick = hit('[data-hex-detail-location-pick]');
+  if (hexDetailLocationPick) {
+    const [mapId, q, r] = hexDetailLocationPick.dataset.hexDetailLocationPick.split('::');
+    entityPicker = { entityType: 'hexcrawl-location', mode: 'hexcrawl-location', scope: { mapId, q: Number(q), r: Number(r) }, query: '' };
+    renderEntityPickerOverlay();
+    const inp = root.querySelector('[data-entity-picker-query]');
+    if (inp) { inp.value = ''; inp.focus(); }
+    return;
+  }
+  if (hit('[data-hex-detail-close]')) { hexcrawlSelectedHex = null; return renderDrawerBody(); }
+
+  // A hex's 6 corner dots: an armed Threat icon places/replaces itself
+  // there and disarms; with nothing (threat-layer) armed, a click on an
+  // already-filled dot clears it; an empty dot with nothing armed is a
+  // no-op (armed Geography deliberately does NOT act here — see
+  // data-hex-select below, geography paints the WHOLE hex).
+  const hexVertexEl = hit('[data-hex-vertex]');
+  if (hexVertexEl) {
+    const [mapId, q, r, i] = hexVertexEl.dataset.hexVertex.split('::');
+    const qn = Number(q); const rn = Number(r); const vi = Number(i);
+    if (hexcrawlPlacingIcon && hexcrawlPlacingIcon.layer === 'threat') {
+      const armedKey = hexcrawlPlacingIcon.key;
+      hexcrawlPlacingIcon = null;
+      return store.update((d) => setHexThreat(d, mapId, qn, rn, vi, armedKey));
+    }
+    if (!hexcrawlPlacingIcon) {
+      const hex = getHex(store.get(), mapId, qn, rn);
+      if (hex.threats[vi]) return store.update((d) => clearHexThreat(d, mapId, qn, rn, vi));
+    }
+    return;
+  }
+  // A hex's own center: an armed Geography icon paints the whole hex (same
+  // as clicking anywhere else on it — center is just another point inside
+  // the cell while painting); otherwise it either opens the linked
+  // Location entity or, if none is linked yet, opens the entity picker
+  // scoped to Locations.
+  const hexCenterEl = hit('[data-hex-center]');
+  if (hexCenterEl) {
+    const [mapId, q, r] = hexCenterEl.dataset.hexCenter.split('::');
+    const qn = Number(q); const rn = Number(r);
+    if (hexcrawlPlacingIcon && hexcrawlPlacingIcon.layer === 'geography') {
+      const armedKey = hexcrawlPlacingIcon.key;
+      hexcrawlPlacingIcon = null;
+      return store.update((d) => setHexGeography(d, mapId, qn, rn, armedKey));
+    }
+    const hex = getHex(store.get(), mapId, qn, rn);
+    if (hex.locationEntityId) {
+      openDrawerTab('entity-detail');
+      return store.update((d) => setActiveEntity(d, hex.locationEntityId));
+    }
+    entityPicker = { entityType: 'hexcrawl-location', mode: 'hexcrawl-location', scope: { mapId, q: qn, r: rn }, query: '' };
+    renderEntityPickerOverlay();
+    const inp = root.querySelector('[data-entity-picker-query]');
+    if (inp) { inp.value = ''; inp.focus(); }
+    return;
+  }
+  // The hex cell itself (checked after the more specific center/vertex
+  // targets above) — an armed Geography icon paints it; otherwise a plain
+  // click opens/updates the Hex Detail panel below the canvas.
+  const hexSelectEl = hit('[data-hex-select]');
+  if (hexSelectEl) {
+    const [mapId, q, r] = hexSelectEl.dataset.hexSelect.split('::');
+    const qn = Number(q); const rn = Number(r);
+    if (hexcrawlPlacingIcon && hexcrawlPlacingIcon.layer === 'geography') {
+      const armedKey = hexcrawlPlacingIcon.key;
+      hexcrawlPlacingIcon = null;
+      return store.update((d) => setHexGeography(d, mapId, qn, rn, armedKey));
+    }
+    hexcrawlSelectedHex = { q: qn, r: rn };
+    return renderDrawerBody();
+  }
+  const hexArmGeo = hit('[data-hexcrawl-arm-geography]');
+  if (hexArmGeo) {
+    const key = hexArmGeo.dataset.hexcrawlArmGeography;
+    hexcrawlPlacingIcon = (hexcrawlPlacingIcon && hexcrawlPlacingIcon.layer === 'geography' && hexcrawlPlacingIcon.key === key) ? null : { layer: 'geography', key };
+    return renderDrawerBody();
+  }
+  const hexArmThreat = hit('[data-hexcrawl-arm-threat]');
+  if (hexArmThreat) {
+    const key = hexArmThreat.dataset.hexcrawlArmThreat;
+    hexcrawlPlacingIcon = (hexcrawlPlacingIcon && hexcrawlPlacingIcon.layer === 'threat' && hexcrawlPlacingIcon.key === key) ? null : { layer: 'threat', key };
+    return renderDrawerBody();
+  }
+  const hexSelect = hit('[data-hexcrawl-select]');
+  if (hexSelect) {
+    hexcrawlCamera = { scale: 1, x: 0, y: 0 }; hexcrawlSelectedHex = null; hexcrawlPlacingIcon = null;
+    return store.update((d) => setActiveHexMap(d, hexSelect.dataset.hexcrawlSelect));
+  }
+  const hexCameraReset = hit('[data-hexcrawl-camera-reset]');
+  if (hexCameraReset) { hexcrawlCamera = { scale: 1, x: 0, y: 0 }; updateHexcrawlWorldTransform(); scheduleHexcrawlRangeCheck(); return; }
+  const hexCameraZoom = hit('[data-hexcrawl-camera-zoom]');
+  if (hexCameraZoom) {
+    const viewport = root.querySelector('.hexcrawl-viewport');
+    if (viewport) {
+      const rect = viewport.getBoundingClientRect();
+      zoomHexcrawlCamera(rect.width / 2, rect.height / 2, hexCameraZoom.dataset.hexcrawlCameraZoom === 'in' ? 1.3 : 1 / 1.3);
+      scheduleHexcrawlRangeCheck();
+    }
+    return;
+  }
+  const hexAdd = hit('[data-hexcrawl-add]');
+  if (hexAdd) {
+    openInlinePrompt('hexcrawl-add', { label: 'Map name', placeholder: 'e.g. The Borderlands', anchorRect: hexAdd.getBoundingClientRect() });
+    return;
+  }
+  const hexRemove = hit('[data-hexcrawl-remove]');
+  if (hexRemove) {
+    if (window.confirm('Delete this hex map? This cannot be undone.')) store.update((d) => deleteHexMap(d, hexRemove.dataset.hexcrawlRemove));
     return;
   }
 
@@ -3637,6 +3789,10 @@ function onClick(ev) {
         return next;
       });
     }
+    if (picker.entityType === 'hexcrawl-location') {
+      const { mapId, q, r } = picker.scope || {};
+      return store.update((d) => setHexLocation(d, mapId, q, r, id));
+    }
     if (picker.entityType === 'party-vehicle') {
       // Party's Shared Assets — unlike WHO's own 'asset' mode above, this
       // isn't scene-scoped (a Party Tracker's Shared Assets persist across
@@ -3952,6 +4108,23 @@ function onClick(ev) {
     }
     return applyTurnStepMutation('starship', advanceTurnStep);
   }
+  // Warband tab's own Campaign Turn/Turn Step (Five Leagues from the
+  // Borderlands) — same shape as Starship's above, slot 'warband'.
+  if (hit('[data-warband-turn-step-prev]')) return applyTurnStepMutation('warband', retreatTurnStep);
+  const warbandTurnStepNext = hit('[data-warband-turn-step-next]');
+  if (warbandTurnStepNext) {
+    const current = getCurrentTurnStep(store.get(), 'warband');
+    if (current && !current.hasNext) {
+      if (!window.confirm('Do you want to start the next Campaign Turn?')) return;
+      return updateAndOpenJournal((d) => {
+        const withLists = { ...d, turnStepLists: store.get().turnStepLists || [] };
+        const { campaign: resultCampaign, turn } = startNextWarbandCampaignTurn(withLists);
+        const { turnStepLists, ...clean } = resultCampaign;
+        return addNote(clean, `Warband Campaign Turn advanced to ${turn}.`, 'Warband');
+      });
+    }
+    return applyTurnStepMutation('warband', advanceTurnStep);
+  }
   // "Start" — the step's own ruleset is still a placeholder for future
   // triggered actions TBD (direct quote), but the default behavior (direct
   // follow-up request) is a real one meanwhile: publish the current step's
@@ -3968,6 +4141,14 @@ function onClick(ev) {
   // row mirrors Colony's exactly, slot 'starship').
   if (hit('[data-starship-turn-step-start]')) {
     const current = getCurrentTurnStep(store.get(), 'starship');
+    if (!current) return;
+    updateAndOpenJournal((d) => addNote(d, current.step.text, `Turn Step — ${current.group.label} ${current.index + 1}/${current.total}`));
+    return toast('Step logged to Journal');
+  }
+  // Warband tab's own "Start" (Five Leagues from the Borderlands — its
+  // Step Text row mirrors Colony's/Starship's exactly, slot 'warband').
+  if (hit('[data-warband-turn-step-start]')) {
+    const current = getCurrentTurnStep(store.get(), 'warband');
     if (!current) return;
     updateAndOpenJournal((d) => addNote(d, current.step.text, `Turn Step — ${current.group.label} ${current.index + 1}/${current.total}`));
     return toast('Step logged to Journal');
@@ -4366,6 +4547,20 @@ function onChange(ev) {
       })
       .catch((err) => toast(`Couldn't add background — ${err.message}`));
     return;
+  }
+
+  // --- Hexcrawl ---------------------------------------------------------
+  const hexRename = t.closest('[data-hexcrawl-rename]');
+  if (hexRename) return store.update((d) => renameHexMap(d, hexRename.dataset.hexcrawlRename, t.value));
+  const hexDetailGeo = t.closest('[data-hex-detail-geography]');
+  if (hexDetailGeo) {
+    const [mapId, q, r] = hexDetailGeo.dataset.hexDetailGeography.split('::');
+    return store.update((d) => setHexGeography(d, mapId, Number(q), Number(r), t.value || null));
+  }
+  const hexDetailNotes = t.closest('[data-hex-detail-notes]');
+  if (hexDetailNotes) {
+    const [mapId, q, r] = hexDetailNotes.dataset.hexDetailNotes.split('::');
+    return store.update((d) => setHexNotes(d, mapId, Number(q), Number(r), t.value));
   }
   // Scene Details fields that feed "Suggest oracles" (direct follow-up
   // request: re-draw "every time... the [Scene Details] changes") push a
@@ -4855,6 +5050,9 @@ function onChange(ev) {
   }
   if (t.closest('[data-starship-campaign-turn]')) {
     return store.update((d) => { d.party = d.party && typeof d.party === 'object' ? d.party : (d.party = {}); d.party.starshipCampaignTurn = Number(t.value) || 0; return d; });
+  }
+  if (t.closest('[data-warband-campaign-turn]')) {
+    return store.update((d) => { d.party = d.party && typeof d.party === 'object' ? d.party : (d.party = {}); d.party.warbandCampaignTurn = Number(t.value) || 0; return d; });
   }
 
   // --- world tracker ---
@@ -5522,6 +5720,16 @@ function onWheel(ev) {
     const rect = viewport.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     zoomBattlemapCamera(ev.clientX - rect.left, ev.clientY - rect.top, ev.deltaY < 0 ? 1.15 : 1 / 1.15);
+    return;
+  }
+  // Hexcrawl pan/zoom camera — same shape as Battlemap's own just above.
+  const hexViewport = ev.target.closest('.hexcrawl-viewport');
+  if (hexViewport) {
+    ev.preventDefault();
+    const rect = hexViewport.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    zoomHexcrawlCamera(ev.clientX - rect.left, ev.clientY - rect.top, ev.deltaY < 0 ? 1.15 : 1 / 1.15);
+    scheduleHexcrawlRangeCheck();
   }
 }
 
@@ -5598,6 +5806,14 @@ function onMouseDown(ev) {
   const viewport = ev.target.closest('.battlemap-viewport');
   if (viewport && !battlemapPlacingIcon && !ev.target.closest('[data-drag-battlemap-icon]')) {
     battlemapPan = { startClientX: ev.clientX, startClientY: ev.clientY, startX: battlemapCamera.x, startY: battlemapCamera.y };
+    return;
+  }
+  // Hexcrawl drag-to-pan — same reasoning as Battlemap's own just above:
+  // don't hijack a click meant to place/clear an armed icon (a hex-vertex
+  // or hex-select click, handled in onClick).
+  const hexViewport = ev.target.closest('.hexcrawl-viewport');
+  if (hexViewport && !hexcrawlPlacingIcon) {
+    hexcrawlPan = { startClientX: ev.clientX, startClientY: ev.clientY, startX: hexcrawlCamera.x, startY: hexcrawlCamera.y };
   }
 }
 
@@ -5745,6 +5961,11 @@ function onGraphMouseMove(ev) {
     updateBattlemapWorldTransform();
     return;
   }
+  if (hexcrawlPan) {
+    hexcrawlCamera = { ...hexcrawlCamera, x: hexcrawlPan.startX + (ev.clientX - hexcrawlPan.startClientX), y: hexcrawlPan.startY + (ev.clientY - hexcrawlPan.startClientY) };
+    updateHexcrawlWorldTransform();
+    return;
+  }
   if (!graphPan) return;
   const rect = graphPan.svg.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
@@ -5755,7 +5976,10 @@ function onGraphMouseMove(ev) {
   updateGraphViewBox();
 }
 
-function onGraphMouseUp() { graphPan = null; battlemapPan = null; }
+function onGraphMouseUp() {
+  graphPan = null; battlemapPan = null;
+  if (hexcrawlPan) { hexcrawlPan = null; scheduleHexcrawlRangeCheck(); }
+}
 
 // ---- drag-and-drop: entity → entity (relate) or entity → text (mention) --
 // Native HTML5 DnD, delegated at the root like everything else. A custom
@@ -6114,6 +6338,80 @@ function zoomBattlemapCamera(screenX, screenY, factor) {
   const scale = Math.min(6, Math.max(0.5, battlemapCamera.scale * factor));
   battlemapCamera = { scale, x: screenX - wx * scale, y: screenY - wy * scale };
   updateBattlemapWorldTransform();
+}
+
+// --- Hexcrawl pan/zoom camera + unbounded-range extension ------------------
+// Same translate(x,y) scale(scale) shape as Battlemap's own above, but the
+// hex world uses REAL pixel coordinates (domain/hexcrawls.js's
+// axialToPixel), never a 0-1 fraction of a fixed box — a hexcrawl has no
+// fixed box, it's meant to scroll past any extent.
+
+function updateHexcrawlWorldTransform() {
+  const world = root.querySelector('.hexcrawl-world');
+  if (!world) return;
+  world.style.transform = `translate(${hexcrawlCamera.x}px, ${hexcrawlCamera.y}px) scale(${hexcrawlCamera.scale})`;
+}
+
+/** Same cursor-anchored rescale math as zoomBattlemapCamera — clamped to
+ *  [0.35, 3] rather than Battlemap's [0.5, 6]: at HEX_SIZE=44px (drawers/
+ *  index.js), scale 1 shows roughly a 10-hex-wide view in a typical drawer
+ *  body, and scale 0.35 shrinks that down to roughly 30 hexes wide,
+ *  matching the requested 10x10-default/30x30-zoomed-out range. */
+function zoomHexcrawlCamera(screenX, screenY, factor) {
+  const wx = (screenX - hexcrawlCamera.x) / hexcrawlCamera.scale;
+  const wy = (screenY - hexcrawlCamera.y) / hexcrawlCamera.scale;
+  const scale = Math.min(3, Math.max(0.35, hexcrawlCamera.scale * factor));
+  hexcrawlCamera = { scale, x: screenX - wx * scale, y: screenY - wy * scale };
+  updateHexcrawlWorldTransform();
+}
+
+/** Inverts the hexcrawl camera transform — a click/viewport-relative
+ *  clientX/Y into real world-plane pixels (NOT a 0-1 fraction, unlike
+ *  Battlemap's screenToWorldFraction, since this world has no fixed
+ *  box) — the one conversion point click-to-select and the range-check
+ *  below both route through. */
+function screenToHexcrawlWorldPixel(rect, clientX, clientY) {
+  const sx = clientX - rect.left; const sy = clientY - rect.top;
+  return { x: (sx - hexcrawlCamera.x) / hexcrawlCamera.scale, y: (sy - hexcrawlCamera.y) / hexcrawlCamera.scale };
+}
+
+let hexcrawlRangeCheckTimer = null;
+/** Debounced (wheel fires many times per gesture; mouseup fires once) —
+ *  called after a pan/zoom gesture settles. */
+function scheduleHexcrawlRangeCheck() {
+  clearTimeout(hexcrawlRangeCheckTimer);
+  hexcrawlRangeCheckTimer = setTimeout(ensureHexcrawlRangeCoversViewport, 200);
+}
+
+/** If the camera has panned/zoomed such that the viewport now shows hexes
+ *  outside the currently-rendered window (hexcrawlRange), widen that
+ *  window (padded, and only ever grows — never shrinks, so a hex a GM
+ *  already painted never disappears mid-session) and re-render. This is
+ *  what makes the hex space reachable-by-scrolling genuinely unbounded
+ *  without ever rendering more hexes than are actually near the viewport
+ *  at any one time. */
+function ensureHexcrawlRangeCoversViewport() {
+  const viewport = root.querySelector('.hexcrawl-viewport');
+  if (!viewport) return;
+  const rect = viewport.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const corners = [
+    screenToHexcrawlWorldPixel(rect, rect.left, rect.top),
+    screenToHexcrawlWorldPixel(rect, rect.right, rect.top),
+    screenToHexcrawlWorldPixel(rect, rect.left, rect.bottom),
+    screenToHexcrawlWorldPixel(rect, rect.right, rect.bottom),
+  ].map((p) => pixelToAxial(p.x, p.y, HEX_SIZE));
+  const PAD = 3;
+  const qMin = Math.min(...corners.map((c) => c.q)) - PAD;
+  const qMax = Math.max(...corners.map((c) => c.q)) + PAD;
+  const rMin = Math.min(...corners.map((c) => c.r)) - PAD;
+  const rMax = Math.max(...corners.map((c) => c.r)) + PAD;
+  if (qMin >= hexcrawlRange.qMin && qMax <= hexcrawlRange.qMax && rMin >= hexcrawlRange.rMin && rMax <= hexcrawlRange.rMax) return;
+  hexcrawlRange = {
+    qMin: Math.min(qMin, hexcrawlRange.qMin), qMax: Math.max(qMax, hexcrawlRange.qMax),
+    rMin: Math.min(rMin, hexcrawlRange.rMin), rMax: Math.max(rMax, hexcrawlRange.rMax),
+  };
+  renderDrawerBody();
 }
 
 
@@ -6624,6 +6922,9 @@ function commitInlinePrompt() {
     applyMentionPage(meta.mentionEl, value);
   } else if (kind === 'battlemap-add') {
     store.update((d) => createBattlemap(d, value).campaign);
+  } else if (kind === 'hexcrawl-add') {
+    hexcrawlCamera = { scale: 1, x: 0, y: 0 }; hexcrawlSelectedHex = null; hexcrawlPlacingIcon = null;
+    store.update((d) => createHexMap(d, value).campaign);
   } else if (kind === 'battlemap-icon-note') {
     store.update((d) => updateBattlemapIcon(d, meta.mapId, meta.iconId, { note: value }));
   } else if (kind === 'sector-corner-label') {
@@ -7351,6 +7652,19 @@ function renderEntityPickerOverlay() {
   } else if (entityPicker.entityType === 'system') {
     candidates = listEntities(doc, ['location']).filter((l) => (l.tags || []).includes('system'));
     emptyMessage = 'No #system locations yet — tag one in Cast first.';
+  } else if (entityPicker.entityType === 'hexcrawl-location') {
+    // Hexcrawl's center icon (direct request) — every Location entity not
+    // already linked to some OTHER hex on THIS map (the same hex being
+    // edited is never in this "already linked" set, so re-picking it — or
+    // linking a different one over it — both stay reachable); reuses the
+    // real Cast Location roster rather than a decorative icon-only marker.
+    const scope = entityPicker.scope || {};
+    const map = getHexMap(doc, scope.mapId);
+    const linkedIds = new Set(Object.entries((map && map.hexes) || {})
+      .filter(([k]) => k !== `${scope.q},${scope.r}`)
+      .map(([, h]) => h.locationEntityId).filter(Boolean));
+    candidates = listEntities(doc, ['location']).filter((l) => !linkedIds.has(l.id));
+    emptyMessage = 'No available Location entities — every one is already linked elsewhere on this map, or add one in Cast first.';
   } else if (entityPicker.entityType === 'where-faction-link') {
     // WHO's Factions active nearby "+" (direct follow-up request) —
     // excludes whatever's already showing there (region presence, an
@@ -7824,6 +8138,7 @@ function buildDrawerUi() {
     journalEditOpen, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
+    hexcrawlPlacingIcon, hexcrawlCamera, hexcrawlSelectedHex, hexcrawlRange,
     contentPackFlags, contentPackImporting, hostileLocationsImporting, exportIncludeAttachments, exportAttachmentsPreview,
     worldTrackerTab, worldTrackerSelectedSector, worldTrackerMigrateOpen,
     expandedTurnStepGroups, editingTurnStepListId, turnStepListsCollapsed, turnStepMoveEditOpen, turnStepBranchEditOpen, crewTaskSelectedId, crewTaskSelectedMemberId, colonyPanelTab,

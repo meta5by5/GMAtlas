@@ -181,3 +181,20 @@ export function startNextStarshipCampaignTurn(campaign) {
   }
   return { campaign: next, turn };
 }
+
+/** The Warband tab's own "start the next Campaign Turn" (Five Leagues from
+ *  the Borderlands) — same shape as startNextStarshipCampaignTurn above, a
+ *  separate, non-accruing counter (party.warbandCampaignTurn) independent
+ *  of Colony's/Starship's own. Returns { campaign, turn }. */
+export function startNextWarbandCampaignTurn(campaign) {
+  const next = clone(campaign);
+  const party = next.party && typeof next.party === 'object' ? next.party : (next.party = {});
+  const turn = (Number(party.warbandCampaignTurn) || 0) + 1;
+  party.warbandCampaignTurn = turn;
+  const groups = resolveGroups(next, 'warband');
+  if (groups.length) {
+    next.turnStepProgress = next.turnStepProgress || {};
+    next.turnStepProgress.warband = { groupId: groups[0].id, stepIndex: 0, returnStack: [] };
+  }
+  return { campaign: next, turn };
+}

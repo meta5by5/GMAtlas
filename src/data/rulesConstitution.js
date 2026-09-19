@@ -102,6 +102,17 @@ export const RULES_PROVIDERS = {
     note: 'Character sheets (data/rulesets.js\'s dnd5e characterTemplate, phase 1 of this work) are original content in this app\'s own format, not a transcription. The "D&D 5e SRD Monsters A-Z" content pack (330 creatures) DOES transcribe real SRD 5.2.1 stat-block text and numbers, which the license explicitly permits — see that pack\'s own listing under Settings → Content Packs/Licenses for the required attribution statement.',
     rulesetId: 'dnd5e', genrePackId: 'dnd5e', get dedicatedRulesetId() { return this.rulesetId; },
   },
+  // Five Leagues from the Borderlands (assets/docs/5LFB) — unlike dnd5e
+  // above (CC-BY-4.0, ungated), this is a purchased commercial PDF, same
+  // licensing situation as swn's own transcribed content: gated behind an
+  // ownership-confirmation Game System Activation, not free to redistribute.
+  fiveleagues: {
+    label: 'Five Leagues from the Borderlands', status: 'ruleset + content pack authored (owned-sourcebook transcription)',
+    note: 'Character sheets (data/rulesets.js\'s fiveleagues characterTemplate) are original content in this app\'s own format, mirroring 5PFH\'s own field shape (its sister game, same publisher/designer). The Five Leagues Enemies content packs (core rulebook + Compendium) DO transcribe real Enemy Profile stat-block numbers and traits from the purchased PDF, which is why this system sits behind the Game System Activation gate below — same posture as swn. Also gates the Campaign panel\'s Warband tab.',
+    requiresActivation: true,
+    activationText: 'Activate Five Leagues from the Borderlands content — I confirm I own a copy of Five Leagues from the Borderlands (3rd Edition) and intend to use this transcribed content for my own personal GM reference, not for redistribution.',
+    rulesetId: 'fiveleagues', genrePackId: 'fantasy', get dedicatedRulesetId() { return this.rulesetId; },
+  },
 };
 
 // Canonical name for the registry above, per the Phase A audit's target

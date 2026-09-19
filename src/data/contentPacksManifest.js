@@ -76,6 +76,48 @@ export const CONTENT_PACKS_MANIFEST = [
     licenseStatus: 'included',
   },
   {
+    // Five Leagues from the Borderlands (assets/docs/5LFB) — every enemy
+    // profile from the core rulebook's own "THE ENEMY" chapter (pages
+    // 151-186: Ruin Within, Whispers from Beyond, Gnawling Horde, Ice-
+    // heart Court, Duskling Warband, the Oldest Kin, Curse of War,
+    // Faceless Kingdom, Roadside, Lurking Foes Enemy Tables, plus the
+    // Aberration Table), each as a #lifeform-tagged NPC with a full Five
+    // Leagues Enemy statblock (data/statblockTemplates.js's
+    // 'fiveleagues-lifeform'). Unlike dnd5e's SRD pack above, this is a
+    // purchased commercial PDF, not CC-licensed — gated behind
+    // `fiveleagues`'s own Game System Activation (ownership confirmation),
+    // same posture as swn's transcribed content. Extracted via a throwaway
+    // script (not shipped) parsing pdftotext -layout output; the six
+    // numeric Enemy Profile fields (Speed/Combat Skill/Damage/Toughness/
+    // Armor/Ranged) are independently sanity-checked, but this document's
+    // own two-column table rendering means a handful of entries may carry
+    // an imperfectly split Name/flavor-text boundary — a disclosed,
+    // best-effort automated-extraction limitation, not a data-integrity
+    // issue with the stat numbers themselves.
+    id: 'fiveleagues-core-enemies',
+    file: 'assets/content-packs/fiveleagues-core-enemies-content-pack.json',
+    title: 'Five Leagues Enemies (Core Rulebook)',
+    description: "100 named entries from the core rulebook's own \"THE ENEMY\" chapter (pages 151-186) across every Enemy Table (Ruin Within, Whispers from Beyond, Gnawling Horde, Ice-heart Court, Duskling Warband, the Oldest Kin, Curse of War, Faceless Kingdom, Roadside, Lurking Foes) plus the Aberration Table, each as a #lifeform-tagged NPC with a full Five Leagues Enemy statblock (Num./Speed/Combat Skill/Damage/Toughness/Armor/Ranged/Traits).",
+    ruleset: 'fiveleagues',
+    kind: 'content-pack',
+    licenseStatus: 'included',
+  },
+  {
+    // Five Leagues from the Borderlands Compendium — the same "THE ENEMY"
+    // chapter content, sourced from the Compendium's own two alternate-
+    // setting expansions (The Ancient Land of Dust's "The Dust Rises Enemy
+    // Table", and Deep Below's Random/Bloodstained/Outlaw Bands/Retinue of
+    // the Wolf Prince/Silent Battalion Enemy Tables) rather than the core
+    // rulebook — same gating/extraction caveats as the core pack above.
+    id: 'fiveleagues-compendium-enemies',
+    file: 'assets/content-packs/fiveleagues-compendium-enemies-content-pack.json',
+    title: 'Five Leagues Enemies (Compendium)',
+    description: "38 named entries from the Compendium's own Enemy Tables — The Ancient Land of Dust's \"The Dust Rises Enemy Table\" and Deep Below's Bloodstained/Outlaw Bands/Retinue of the Wolf Prince Enemy Tables — each as a #lifeform-tagged NPC with a full Five Leagues Enemy statblock.",
+    ruleset: 'fiveleagues',
+    kind: 'content-pack',
+    licenseStatus: 'included',
+  },
+  {
     id: 'hostile-near-earth-zone',
     file: 'assets/data-packs/hostile-near-earth-zone.json',
     title: 'HOSTILE — Near Earth Zone',

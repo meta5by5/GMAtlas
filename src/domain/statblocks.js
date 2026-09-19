@@ -171,7 +171,13 @@ export function makeStatblock(kind, rulesetId, templateId, settings) {
     // matching the app's "sandbox for one ruleset at a time, no hint of
     // unrelated features" philosophy. See addStatblockWeapon/
     // updateStatblockWeapon/removeStatblockWeapon/setStatblockGear below.
-    if (ruleset.id === '5pfh') { group.weapons = []; group.gear = ''; }
+    // Five Leagues from the Borderlands (data/rulesets.js) reuses this same
+    // weapons-table/gear mechanism verbatim rather than a parallel table —
+    // its own Weapon/Gear character-sheet layout fits the same Weapon/
+    // Range/Shots/Damage/Traits columns fine, and `gear` doubles as its
+    // free-text Skills list (see rulesets.js's own note on why Skills
+    // can't be a stats[]/tracks[] field).
+    if (['5pfh', 'fiveleagues'].includes(ruleset.id)) { group.weapons = []; group.gear = ''; }
     // D&D 5e's own Attacks table (direct request) — same shape/mechanism as
     // 5PFH's weapons table above, just its own ruleset-gated field
     // (name/hit/damageType/notes instead of name/range/shots/damage/

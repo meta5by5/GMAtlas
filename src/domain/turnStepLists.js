@@ -251,22 +251,24 @@ export function fixPlanetfallBranching(appConfig) {
 
 /** Idempotent backfill (same shape/purpose as rulesProfiles.js's
  *  backfillDefaultTurnSteps/backfillDefaultCrewTasks did before Turn Step
- *  Lists became a standalone inventory): ensures the "5PFH" and
- *  "Planetfall" named lists both exist, seeding whichever is missing from
- *  this app's own default content. A no-op once both already exist —
- *  never overwrites a list a GM has since renamed/edited/deleted on
+ *  Lists became a standalone inventory): ensures the "5PFH", "Planetfall",
+ *  and "Five Leagues" named lists all exist, seeding whichever is missing
+ *  from this app's own default content. A no-op once all three already
+ *  exist — never overwrites a list a GM has since renamed/edited/deleted on
  *  purpose (only checked by NAME, so a GM who renames "5PFH" away would
  *  see a fresh one reseeded next boot — the same fragile name-coupling the
  *  old profile-scoped version had, kept for continuity rather than
  *  introducing new provenance tracking here). */
-export function backfillTurnStepListInventory(appConfig, fivepfhGroups, planetfallGroups) {
+export function backfillTurnStepListInventory(appConfig, fivepfhGroups, planetfallGroups, fiveLeaguesGroups) {
   const lists = listTurnStepLists(appConfig);
   const has5pfh = lists.some((l) => l.name === '5PFH');
   const hasPlanetfall = lists.some((l) => l.name === 'Planetfall');
-  if (has5pfh && hasPlanetfall) return appConfig;
+  const hasFiveLeagues = lists.some((l) => l.name === 'Five Leagues');
+  if (has5pfh && hasPlanetfall && hasFiveLeagues) return appConfig;
   const next = clone(appConfig);
   const nextLists = ensureLists(next);
   if (!has5pfh) nextLists.push({ ...defaultTurnStepList('5PFH'), groups: clone(fivepfhGroups || []) });
   if (!hasPlanetfall) nextLists.push({ ...defaultTurnStepList('Planetfall'), groups: clone(planetfallGroups || []) });
+  if (!hasFiveLeagues) nextLists.push({ ...defaultTurnStepList('Five Leagues'), groups: clone(fiveLeaguesGroups || []) });
   return next;
 }

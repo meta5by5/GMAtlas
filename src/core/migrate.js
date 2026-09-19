@@ -16,9 +16,10 @@ import {
 } from './schema.js';
 import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
 import { PLANETFALL_TURN_STEPS } from '../data/turnStepListPlanetfall.js';
+import { TURN_STEPS_FIVE_LEAGUES } from '../data/turnStepListFiveLeagues.js';
 import { CREW_TASKS_5PFH } from '../data/crewTasksDefault5pfh.js';
 import { MAX_ENCOUNTERS } from '../domain/colony.js';
-import { dnd5eStoryboardProfile } from '../domain/rulesProfiles.js';
+import { dnd5eStoryboardProfile, fiveLeaguesStoryboardProfile } from '../domain/rulesProfiles.js';
 
 // Every legacy key the old app is known to write, plus the very old aliases.
 export const LEGACY_KEYS = [
@@ -312,11 +313,16 @@ export function wrapLegacyCampaignIntoAppConfig(legacyDoc, now = new Date().toIS
   // backfillTurnStepListInventory instead (domain/turnStepLists.js).
   const fivePfhList = { ...defaultTurnStepList('5PFH', now), groups: JSON.parse(JSON.stringify(TURN_STEPS_5PFH)) };
   const planetfallList = { ...defaultTurnStepList('Planetfall', now), groups: JSON.parse(JSON.stringify(PLANETFALL_TURN_STEPS)) };
+  // The Warband tab (Five Leagues from the Borderlands, its own real 3rd
+  // Campaign-panel slot) gets its own seeded list the same way — see
+  // store.js's backfillTurnStepListInventory for the already-migrated path.
+  const fiveLeaguesList = { ...defaultTurnStepList('Five Leagues', now), groups: JSON.parse(JSON.stringify(TURN_STEPS_FIVE_LEAGUES)) };
   // The Campaign panel's Colony tab plays Planetfall, Starship plays base
-  // 5PFH (direct follow-up request) — real per-campaign state, defaulted
-  // here for a first-time install the same way store.js's own
-  // backfillCampaignTurnStepSlots does for an already-migrated one.
-  doc.turnStepSlotAssignments = { colony: planetfallList.id, starship: fivePfhList.id };
+  // 5PFH (direct follow-up request), Warband plays Five Leagues — real
+  // per-campaign state, defaulted here for a first-time install the same
+  // way store.js's own backfillCampaignTurnStepSlots does for an
+  // already-migrated one.
+  doc.turnStepSlotAssignments = { colony: planetfallList.id, starship: fivePfhList.id, warband: fiveLeaguesList.id };
 
   // D&D 5e (Storyboard) campaign template (direct request) — seeded here
   // for a first-time install; an already-migrated install gets the exact
@@ -325,13 +331,15 @@ export function wrapLegacyCampaignIntoAppConfig(legacyDoc, now = new Date().toIS
   // call, so they can't drift apart into two different-shaped profiles
   // with the same name).
   const dnd5eProfile = dnd5eStoryboardProfile(now);
+  // Five Leagues (Storyboard) campaign template — same split as dnd5e above.
+  const fiveLeaguesProfile = fiveLeaguesStoryboardProfile(now);
 
   const appConfig = {
     ...defaultAppConfig(),
     activeCampaignId: doc.meta.id,
     campaigns: [campaignEntry],
-    profiles: [defaultProfile, fivePfhProfile, dnd5eProfile],
-    turnStepLists: [fivePfhList, planetfallList],
+    profiles: [defaultProfile, fivePfhProfile, dnd5eProfile, fiveLeaguesProfile],
+    turnStepLists: [fivePfhList, planetfallList, fiveLeaguesList],
   };
 
   return { appConfig, campaignDoc: doc };

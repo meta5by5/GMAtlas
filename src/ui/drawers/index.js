@@ -46,6 +46,8 @@ import { SOURCEBOOK_INVENTORY } from '../../data/sourcebookInventory.js';
 import { listGalleryImages, listGalleryTagVocabulary, getGalleryImage } from '../../domain/gallery.js';
 import { listBattlemaps, getActiveBattlemap } from '../../domain/battlemaps.js';
 import { BATTLEMAP_ICONS, findBattlemapIcon } from '../../data/battlemapIcons.js';
+import { listHexMaps, getActiveHexMap, getHex, axialToPixel, hexVertexPoints, HEX_SIZE } from '../../domain/hexcrawls.js';
+import { HEXCRAWL_GEOGRAPHY_ICONS, findHexcrawlGeography, HEXCRAWL_THREAT_ICONS, findHexcrawlThreat } from '../../data/hexcrawlIcons.js';
 import { getSector, listTouchedSectors, adjacentSectors, deriveSectorIcon, generateMissionHooks, gridSizeOf, countInvestigationSites, MAX_INVESTIGATION_SITES, worldTrackerAttentionItems } from '../../domain/worldTracker.js';
 import { WORLD_TRACKER_ICONS, findWorldTrackerIcon } from '../../data/worldTrackerIcons.js';
 import { GENRE_PACKS, bestiaryTerm } from '../../data/genrePacks.js';
@@ -124,6 +126,7 @@ export function renderDrawer(id, doc, ui = {}) {
     case 'documents': return documents(doc, ui);
     case 'gallery': return gallery(doc, ui);
     case 'battlemap': return battlemap(doc, ui);
+    case 'hexcrawl': return hexcrawl(doc, ui);
     case 'world-tracker': return worldTracker(doc, ui);
     default: return `<p class="ws-placeholder">Drawer “${esc(id)}”.</p>`;
   }
@@ -1486,7 +1489,7 @@ function characterSheetGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
         return `
           ${stats.length ? `<div class="character-sheet-stats">${stats.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}
           ${resources.length ? `<div class="character-sheet-resources">${resources.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}
-          ${group.ruleset === '5pfh' ? characterSheetWeaponsAndGearHtml(group, gi) : ''}`;
+          ${['5pfh', 'fiveleagues'].includes(group.ruleset) ? characterSheetWeaponsAndGearHtml(group, gi) : ''}`;
       })();
   // D&D 5e PDF character-sheet import (direct request, phase 4) — only
   // offered on a dnd5e Character Sheet group; a real file input hidden
@@ -1533,9 +1536,12 @@ function characterSheetAttacksHtml(group, gi) {
 }
 
 // Weapon table + Gear (design/adr/rules-profiles-multi-campaign.md, direct
-// follow-up request) — 5PFH character sheets only (ruleset gate in the
-// caller above), matching the Core rulebook's own character sheet layout
-// (Weapon/Range/Shots/Damage/Traits columns, a Gear line below). A real
+// follow-up request) — 5PFH and Five Leagues character sheets only
+// (ruleset gate in the caller above; Five Leagues' own sheet has the same
+// Weapon/Gear shape, p.15/Deep Below Warband Sheet, and reuses this Gear
+// field for its free-text Skills list too — see rulesets.js's own note),
+// matching the Core rulebook's own character sheet layout (Weapon/Range/
+// Shots/Damage/Traits columns, a Gear line below). A real
 // <table> (same pattern Trade's .trade-market-table already uses for
 // editable tabular data — <input>s inside <td>s, not a flex/grid mimic),
 // addressed by plain array index (weaponIndex), not a generated id, same
@@ -2313,7 +2319,7 @@ function turnStepsSettingsSection(doc, ui) {
   const editingList = lists.find((l) => l.id === editingId) || null;
   const groups = (editingList && editingList.groups) || [];
   const expanded = (ui && ui.expandedTurnStepGroups) || new Set();
-  const assignments = doc.turnStepSlotAssignments || { colony: null, starship: null };
+  const assignments = doc.turnStepSlotAssignments || { colony: null, starship: null, warband: null };
 
   const listOptions = lists.map((l) => `<option value="${esc(l.id)}" ${l.id === editingId ? 'selected' : ''}>${esc(l.name)}</option>`).join('');
   const slotOptions = (slot) => `<option value="">— None —</option>${lists.map((l) => `<option value="${esc(l.id)}" ${assignments[slot] === l.id ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}`;
@@ -2421,6 +2427,7 @@ function turnStepsSettingsSection(doc, ui) {
       <div class="field-row2">
         <label class="field-label sm">Colony tab uses<select data-turnstep-slot-assign="colony">${slotOptions('colony')}</select></label>
         <label class="field-label sm">Starship tab uses<select data-turnstep-slot-assign="starship">${slotOptions('starship')}</select></label>
+        <label class="field-label sm">Warband tab uses<select data-turnstep-slot-assign="warband">${slotOptions('warband')}</select></label>
       </div>
     </div>`;
 }
@@ -3286,17 +3293,21 @@ function colonyFieldHtml(doc, ui, fields, f) {
 
 // Turn Step widget (design/adr/rules-profiles-multi-campaign.md, direct
 // follow-up request): ◂/▸ walks getCurrentTurnStep's live position for the
-// given SLOT ('colony'/'starship' — direct follow-up request: the Campaign
-// panel's two tabs each walk their own assigned Turn Step List
+// given SLOT ('colony'/'starship'/'warband' — direct follow-up request:
+// the Campaign panel's tabs each walk their own assigned Turn Step List
 // independently) — quietly shows "—" with both arrows disabled when that
 // slot has no list assigned, rather than erroring or showing an irrelevant
 // control. Next stays enabled even once hasNext goes false (the true end
 // of the workflow) — direct follow-up request: shell.js's click handler
 // catches that case and asks "Do you want to start the next Campaign
 // Turn?" instead of just no-op'ing a disabled button.
+const TURN_STEP_NAV_ATTRS = {
+  colony: ['data-turn-step-prev', 'data-turn-step-next'],
+  starship: ['data-starship-turn-step-prev', 'data-starship-turn-step-next'],
+  warband: ['data-warband-turn-step-prev', 'data-warband-turn-step-next'],
+};
 function colonyTurnStepWidgetHtml(currentStep, slot = 'colony') {
-  const prevAttr = slot === 'starship' ? 'data-starship-turn-step-prev' : 'data-turn-step-prev';
-  const nextAttr = slot === 'starship' ? 'data-starship-turn-step-next' : 'data-turn-step-next';
+  const [prevAttr, nextAttr] = TURN_STEP_NAV_ATTRS[slot] || TURN_STEP_NAV_ATTRS.colony;
   return `
     <label class="field-label">Turn Step
       <span class="turn-step-nav">
@@ -3611,28 +3622,58 @@ function starshipTabHtml(doc, ui = {}) {
     ${stepTextHtml}`}`;
 }
 
+// The Warband tab (Five Leagues from the Borderlands) — same Campaign
+// Turn counter + Turn Step widget shape as starshipTabHtml above, but with
+// NO thumbnail/entity-picker row: a warband is the whole roster (already
+// visible via Cast/Party), not one reference-by-id entity like the
+// Starship tab's single #starship-tagged ship.
+function warbandTabHtml(doc, ui = {}) {
+  const currentStep = getCurrentTurnStep(doc, 'warband');
+  const turn = (doc.party && doc.party.warbandCampaignTurn) || 0;
+  const stepTextHtml = currentStep ? `
+    <div class="turn-step-text-row">
+      <div class="turn-step-text-body" data-turn-step-text-body>${buildMentionEditorHTML(doc, currentStep.step.text)}</div>
+      <button type="button" class="btn ghost sm" data-warband-turn-step-start title="Runs a ruleset for this step — placeholder, TBD">▶ Start</button>
+    </div>` : '';
+  const campaignGuideCollapsed = isPartySectionCollapsed(ui, 'warbandCampaignGuide', true);
+  return `
+    ${partySectionHeaderHtml('warbandCampaignGuide', 'Campaign Guide', campaignGuideCollapsed)}
+    ${campaignGuideCollapsed ? '' : `
+    <div class="colony-turn-row">
+      <label class="field-label">Campaign Turn
+        ${numStepper(`<input type="number" data-warband-campaign-turn value="${turn}">`)}
+      </label>
+      ${colonyTurnStepWidgetHtml(currentStep, 'warband')}
+    </div>
+    <hr class="field-divider">
+    ${stepTextHtml}`}`;
+}
+
 // The Campaign panel (direct follow-up request: "Rename the Colony panel
 // to Campaign and add two right-aligned links/buttons that enable separate
 // tabs of content... Colony and Starship") — same click-based internal
 // tab-strip pattern World Tracker/Settings already use, right-aligned per
 // the request (a modifier on the shared .settings-tab-bar class). Colony
 // tab hidden when Planetfall is deactivated, Starship tab hidden when
-// 5PFH is deactivated (direct follow-up request) — both via the same
-// Game System Activation gate every other gated system already goes
-// through (isGameSystemActivated), not a new mechanism. If the currently-
-// selected tab becomes hidden this way, falls back to whichever tab is
-// still visible.
+// 5PFH is deactivated (direct follow-up request), Warband tab hidden when
+// Five Leagues is deactivated — all three via the same Game System
+// Activation gate every other gated system already goes through
+// (isGameSystemActivated), not a new mechanism. If the currently-selected
+// tab becomes hidden this way, falls back to whichever tab is still
+// visible.
 const COLONY_PANEL_TABS = [
   { id: 'colony', label: 'Colony', system: 'planetfall' },
   { id: 'starship', label: 'Starship', system: 'fivepfh' },
+  { id: 'warband', label: 'Warband', system: 'fiveleagues' },
 ];
+const COLONY_PANEL_TAB_RENDERERS = { colony: colonyTabHtml, starship: starshipTabHtml, warband: warbandTabHtml };
 function colony(doc, ui = {}) {
   const visibleTabs = COLONY_PANEL_TABS.filter((t) => isGameSystemActivated(doc, t.system));
-  if (!visibleTabs.length) return '<p class="ws-placeholder">Both Colony and Starship are currently deactivated — enable Planetfall and/or 5PFH under Settings → Ruleset Profile Editor → Game System Activation.</p>';
+  if (!visibleTabs.length) return '<p class="ws-placeholder">Colony, Starship, and Warband are all currently deactivated — enable Planetfall, 5PFH, and/or Five Leagues under Settings → Ruleset Profile Editor → Game System Activation.</p>';
   const activeTab = visibleTabs.some((t) => t.id === ui.colonyPanelTab) ? ui.colonyPanelTab : visibleTabs[0].id;
   const tabBar = visibleTabs.length > 1 ? `<div class="settings-tab-bar align-right">${visibleTabs.map((t) => `
     <button class="btn ghost sm ${t.id === activeTab ? 'active' : ''}" data-colony-panel-tab="${t.id}" aria-selected="${t.id === activeTab}">${esc(t.label)}</button>`).join('')}</div>` : '';
-  return `${tabBar}${activeTab === 'starship' ? starshipTabHtml(doc, ui) : colonyTabHtml(doc, ui)}`;
+  return `${tabBar}${(COLONY_PANEL_TAB_RENDERERS[activeTab] || colonyTabHtml)(doc, ui)}`;
 }
 
 // --- Trade: Merchant Rules Lens (ADR 0003/0004) -----------------------------
@@ -4286,6 +4327,152 @@ function battlemap(doc, ui = {}) {
         ${markers}
       </div>
     </div>`;
+}
+
+// --- Hexcrawl — a genre-agnostic hex-grid overworld map --------------------
+// Distinct from both battlemap() above (tactical, gridless, fixed-size
+// fractional canvas) and worldTracker() below (strategic, but a fixed 6x6
+// SQUARE grid, Planetfall-specific). Reuses Battlemap's own pan/zoom-
+// camera and armed-palette-icon interaction shape (shell.js), generalized
+// off Battlemap's 0-1-fraction-of-a-fixed-box coordinate system to real
+// pixel positions on an unbounded plane (domain/hexcrawls.js's axialToPixel/
+// pixelToAxial), since a hexcrawl must genuinely scroll past any fixed
+// extent. HEX_SIZE is the center-to-vertex pixel radius at camera scale 1 —
+// tuned so a typical drawer-body width shows roughly a 10-hex-wide view by
+// default, and the camera's own [0.5, 6]-style zoom range lets a GM shrink
+// that down to roughly 30 hexes wide.
+const HEX_W = Math.sqrt(3) * HEX_SIZE;
+const HEX_H = 2 * HEX_SIZE;
+// clip-path is the same six points for every hex (only the div's own
+// left/top position differs per hex) — computed once, not per-cell.
+const HEX_CLIP_PATH = (() => {
+  const cx = HEX_W / 2; const cy = HEX_H / 2;
+  const pts = hexVertexPoints(HEX_SIZE).map((p) => `${(cx + p.x).toFixed(1)}px ${(cy + p.y).toFixed(1)}px`);
+  return `polygon(${pts.join(', ')})`;
+})();
+// Vertex icons sit INSET from the hex's true corners (0.72 of the way from
+// center to vertex) so they stay fully inside the clipped hex shape rather
+// than being cut off right at its edge.
+const HEX_VERTEX_INSET = 0.72;
+
+function hexcrawlPalette(ui) {
+  const armed = ui.hexcrawlPlacingIcon;
+  const geoChips = HEXCRAWL_GEOGRAPHY_ICONS.map((i) => `
+    <button type="button" class="chip sm ${armed && armed.layer === 'geography' && armed.key === i.key ? 'active' : ''}" data-hexcrawl-arm-geography="${esc(i.key)}" title="${esc(i.label)}">${i.glyph} ${esc(i.label)}</button>`).join('');
+  const threatChips = HEXCRAWL_THREAT_ICONS.map((i) => `
+    <button type="button" class="chip sm ${armed && armed.layer === 'threat' && armed.key === i.key ? 'active' : ''}" data-hexcrawl-arm-threat="${esc(i.key)}" title="${esc(i.label)}">${i.glyph} ${esc(i.label)}</button>`).join('');
+  return `
+    <div class="hexcrawl-palette-row"><span class="dim small">Geography (click a hex to paint)</span>${geoChips}</div>
+    <div class="hexcrawl-palette-row"><span class="dim small">Threats (click one of a hex's 6 corners)</span>${threatChips}</div>`;
+}
+
+function hexcrawlGrid(doc, mapId, ui) {
+  const range = ui.hexcrawlRange || { qMin: -8, qMax: 8, rMin: -8, rMax: 8 };
+  const cells = [];
+  for (let r = range.rMin; r <= range.rMax; r++) {
+    for (let q = range.qMin; q <= range.qMax; q++) {
+      const hex = getHex(doc, mapId, q, r);
+      const center = axialToPixel(q, r, HEX_SIZE);
+      const geo = hex.geography ? findHexcrawlGeography(hex.geography) : null;
+      const loc = hex.locationEntityId ? getEntity(doc, hex.locationEntityId) : null;
+      const locThumb = loc && loc.thumbnailId ? getGalleryImage(doc, loc.thumbnailId) : null;
+      const centerHtml = loc
+        ? `<button type="button" class="hex-center hex-center-filled" data-hex-center="${esc(mapId)}::${q}::${r}" title="${esc(loc.name || 'Unnamed')}">
+            ${locThumb ? `<img class="hex-center-img" src="${esc(locThumb.dataUrl)}" alt="">` : `<span class="hex-center-fallback">${esc((loc.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`}
+          </button>`
+        : `<button type="button" class="hex-center hex-center-empty" data-hex-center="${esc(mapId)}::${q}::${r}" title="Link a Location">＋</button>`;
+      // .hex-vertex buttons are DOM siblings of .hex-cell (see the CSS
+      // comment) — positioned in .hexcrawl-world's own coordinate space,
+      // same as the cell itself, so their left/top is the hex's world
+      // CENTER (not the cell's own local box) plus the vertex offset.
+      const vertexHtml = hexVertexPoints(HEX_SIZE * HEX_VERTEX_INSET).map((p, i) => {
+        const threatKey = hex.threats[i];
+        const t = threatKey ? findHexcrawlThreat(threatKey) : null;
+        const vx = (center.x + p.x).toFixed(1); const vy = (center.y + p.y).toFixed(1);
+        return `<button type="button" class="hex-vertex ${t ? 'hex-vertex-filled' : ''}" data-hex-vertex="${esc(mapId)}::${q}::${r}::${i}" style="left:${vx}px;top:${vy}px" title="${t ? esc(t.label) : 'Empty'}">${t ? t.glyph : ''}</button>`;
+      }).join('');
+      cells.push(`
+        <div class="hex-cell ${geo ? `hex-geo-${esc(geo.key)}` : ''} ${ui.hexcrawlSelectedHex && ui.hexcrawlSelectedHex.q === q && ui.hexcrawlSelectedHex.r === r ? 'active' : ''}"
+             style="left:${(center.x - HEX_W / 2).toFixed(1)}px;top:${(center.y - HEX_H / 2).toFixed(1)}px;width:${HEX_W.toFixed(1)}px;height:${HEX_H.toFixed(1)}px;clip-path:${HEX_CLIP_PATH}"
+             data-hex-select="${esc(mapId)}::${q}::${r}">
+          ${geo ? `<span class="hex-geo-glyph">${geo.glyph}</span>` : ''}
+          ${centerHtml}
+        </div>
+        ${vertexHtml}`);
+    }
+  }
+  return cells.join('');
+}
+
+function hexDetailPanel(doc, mapId, ui) {
+  const sel = ui.hexcrawlSelectedHex;
+  if (!sel) return '';
+  const hex = getHex(doc, mapId, sel.q, sel.r);
+  const loc = hex.locationEntityId ? getEntity(doc, hex.locationEntityId) : null;
+  const threatRows = hex.threats.map((threatKey, i) => {
+    const t = threatKey ? findHexcrawlThreat(threatKey) : null;
+    return `<div class="hex-detail-threat-row">
+      <span class="dim small">Corner ${i + 1}</span>
+      <span>${t ? `${t.glyph} ${esc(t.label)}` : '—'}</span>
+      ${t ? `<button type="button" class="icon-btn" data-hex-detail-threat-clear="${esc(mapId)}::${sel.q}::${sel.r}::${i}" title="Clear">✕</button>` : ''}
+    </div>`;
+  }).join('');
+  return `
+    <div class="settings-group hex-detail-panel">
+      <div class="section-head-row"><h3>Hex (${sel.q}, ${sel.r})</h3>
+        <button type="button" class="icon-btn" data-hex-detail-close title="Close">✕</button>
+      </div>
+      <label class="field-label">Geography
+        <select data-hex-detail-geography="${esc(mapId)}::${sel.q}::${sel.r}">
+          <option value="">— none —</option>
+          ${HEXCRAWL_GEOGRAPHY_ICONS.map((i) => `<option value="${esc(i.key)}" ${hex.geography === i.key ? 'selected' : ''}>${i.glyph} ${esc(i.label)}</option>`).join('')}
+        </select>
+      </label>
+      <div class="field-label">Location
+        ${loc
+          ? `<div class="entity-chip-row"><button type="button" class="chip" data-open-entity="${esc(loc.id)}">${esc(loc.name || 'Unnamed')}</button>
+              <button type="button" class="icon-btn" data-hex-detail-location-clear="${esc(mapId)}::${sel.q}::${sel.r}" title="Unlink">✕</button></div>`
+          : `<button type="button" class="btn ghost sm" data-hex-detail-location-pick="${esc(mapId)}::${sel.q}::${sel.r}">＋ Link Location</button>`}
+      </div>
+      <div class="field-label">Threats (6 corners)${threatRows}</div>
+      <label class="field-label">Notes
+        <textarea rows="3" data-hex-detail-notes="${esc(mapId)}::${sel.q}::${sel.r}" placeholder="Notes…">${esc(hex.notes || '')}</textarea>
+      </label>
+    </div>`;
+}
+
+function hexcrawl(doc, ui = {}) {
+  const helpKey = 'hexcrawl-intro';
+  const maps = listHexMaps(doc);
+  const active = getActiveHexMap(doc);
+
+  const head = `${sectionHeadRow('h3', 'Hexcrawl', helpKey)}
+    ${helpBody(helpKey, "Pick a Geography or Threat icon below, then click a hex (Geography) or one of its 6 corners (Threats) to paint it. Click a hex's center to link a Location entity — click it again to open that entity. Click anywhere else on a hex to see/edit its details below the map. Scroll to pan, wheel to zoom.", ui)}
+    <div class="battlemap-tabs">
+      ${maps.map((m) => `<button type="button" class="btn ghost sm ${active && active.id === m.id ? 'active' : ''}" data-hexcrawl-select="${esc(m.id)}">${esc(m.name)}</button>`).join('')}
+      <button type="button" class="chip sm" data-hexcrawl-add>＋ New Map</button>
+    </div>`;
+
+  if (!active) return `${head}<p class="ws-placeholder">No hex maps yet — create one to get started.</p>`;
+
+  const cam = ui.hexcrawlCamera || { scale: 1, x: 0, y: 0 };
+  return `${head}
+    <div class="battlemap-toolbar">
+      <input class="battlemap-name-input" data-hexcrawl-rename="${esc(active.id)}" value="${esc(active.name)}" placeholder="Map name">
+      <button type="button" class="icon-btn" data-hexcrawl-remove="${esc(active.id)}" title="Delete this map" aria-label="Delete map">✕</button>
+      <span class="battlemap-camera-controls">
+        <button type="button" class="icon-btn" data-hexcrawl-camera-zoom="out" title="Zoom out">－</button>
+        <button type="button" class="icon-btn" data-hexcrawl-camera-zoom="in" title="Zoom in">＋</button>
+        <button type="button" class="icon-btn" data-hexcrawl-camera-reset title="Reset view">⟲</button>
+      </span>
+    </div>
+    <div class="hexcrawl-palette">${hexcrawlPalette(ui)}</div>
+    <div class="hexcrawl-viewport ${ui.hexcrawlPlacingIcon ? 'placing' : ''}" data-hexcrawl-canvas="${esc(active.id)}">
+      <div class="hexcrawl-world" style="transform:translate(${cam.x}px,${cam.y}px) scale(${cam.scale})">
+        ${hexcrawlGrid(doc, active.id, ui)}
+      </div>
+    </div>
+    ${hexDetailPanel(doc, active.id, ui)}`;
 }
 
 // --- World Tracker (requirements/PLANETFALL_world_tracker.md) -------------

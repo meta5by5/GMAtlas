@@ -207,6 +207,62 @@ export const RULESETS = [
       ],
     },
   },
+  // Five Leagues from the Borderlands (assets/docs/5LFB) — confirmed in the
+  // rulebook's own text to be "the sister game of Five Parsecs from Home...
+  // Both games use a similar campaign structure, character profiles and
+  // game rules" (same publisher/designer, a fantasy-genre parallel to
+  // 5PFH). The character sheet (p.15, Deep Below Warband Sheet) is a
+  // single-page profile just like 5PFH's — not D&D 5e's sectioned shape —
+  // so this reuses the exact same flat stats/tracks template idiom as
+  // 5PFH above, field-for-field:
+  //   Agility (initiative), Speed (base movement in inches — a Dash bonus
+  //     exists in the real rules but isn't tracked per character, the same
+  //     simplification 5PFH's own Speed already makes), Combat Skill
+  //     (added to a D6 roll, p.15), Toughness (a threshold rolled against
+  //     by attackers), Armor (a worn rating, also rolled against, not
+  //     rolled by the character — rollMethod 'none', same idiom as
+  //     5PFH-lifeform's KP or Planetfall-lifeform's Melee Damage), and
+  //     Mystics' extra Casting score (same shape as Combat Skill).
+  //   Luck/Will (small spendable/regenerating point pools, p.53) and XP
+  //     are tracks, same shape as 5PFH's own Luck/XP.
+  // The rulebook's 12 named Skills (p.23 — Battlewise/Crafting/Devotion/
+  // Expertise/Leadership/Pathwise/Scholar/Scouting/Speech/Traveling/
+  // Wilderness/Wits) are a character either-has-or-doesn't list granting
+  // +2 to a 2D6 Proficiency Test, not an individually-valued numeric stat
+  // — the old flat stats[]/tracks[] shape (domain/statblocks.js's
+  // makeStatblock, non-sections branch) has no free-text field option at
+  // all (every stats[] entry is forced attribute:true; every tracks[]
+  // entry is a depleting resource box), so Skills doesn't fit either array
+  // — same scope-trim posture as D&D 5e's own free-text Spells/Equipment.
+  // Reuses the existing 5PFH group.gear free-text field (see
+  // domain/statblocks.js's makeStatblock and
+  // ui/drawers/index.js's characterSheetWeaponsAndGearHtml, both widened
+  // below to also gate on ruleset.id === 'fiveleagues') for the Skills
+  // list rather than inventing a new field or a sections-shape template
+  // just to hold one line of text.
+  {
+    id: 'fiveleagues',
+    label: 'Five Leagues',
+    doc: 'assets/docs/5LFB/five-leagues-from-the-borderlands-3e.pdf',
+    characterTemplate: {
+      attributeRollMethod: 'flat', // d6 + stat vs target
+      attributeTarget: 6,
+      attributeFormat: 'sign',
+      stats: [
+        { key: 'Agility', value: 1 },
+        { key: 'Speed', value: 4, format: 'inches', rollMethod: 'none' },
+        { key: 'Combat Skill', value: 0 },
+        { key: 'Toughness', value: 3 },
+        { key: 'Armor', value: 0, rollMethod: 'none', format: 'plain' },
+        { key: 'Casting', value: 0 },
+      ],
+      tracks: [
+        { key: 'Luck', value: 1, max: 3 },
+        { key: 'Will', value: 1, max: 3 },
+        { key: 'XP', value: 0, max: 10 },
+      ],
+    },
+  },
 ];
 
 export function findRuleset(id) {

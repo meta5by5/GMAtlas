@@ -1279,6 +1279,60 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 }
 .battlemap-icon:hover .battlemap-icon-remove, .battlemap-icon:focus-within .battlemap-icon-remove { opacity: 1; }
 
+/* Hexcrawl — a genre-agnostic hex-grid overworld map, distinct from both
+   Battlemap above (tactical, gridless, fixed-size fractional canvas) and
+   World Tracker below (strategic, but a fixed 6x6 SQUARE grid). Reuses
+   Battlemap's own viewport/toolbar/camera-controls classes verbatim
+   (identical box/toolbar shape) but needs its own world/cell classes
+   since the coordinate system is real unbounded pixels, not a 0-1
+   fraction of a fixed box. transform-origin: 0 0 is load-bearing here for
+   the exact same reason as .battlemap-world's own — shell.js's
+   screenToHexcrawlWorldPixel/zoomHexcrawlCamera math assumes translate/
+   scale apply relative to the viewport's own top-left corner. */
+.hexcrawl-palette-row { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; margin-bottom: var(--sp-1); }
+.hexcrawl-viewport {
+  position: relative; width: 100%; padding-top: 60%; overflow: hidden;
+  background-color: var(--bg-inset);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.hexcrawl-viewport.placing { cursor: crosshair; }
+.hexcrawl-world { position: absolute; inset: 0; transform-origin: 0 0; cursor: grab; }
+.hexcrawl-world:active { cursor: grabbing; }
+/* Each .hex-cell is absolutely positioned (left/top set inline per hex,
+   drawers/index.js) and clipped to a real hexagon via clip-path (the
+   same six points for every hex, computed once — only the div's own
+   position differs). The 6 .hex-vertex dots are deliberately SIBLINGS of
+   .hex-cell, not children — a clip-path'd parent would cut off anything
+   sitting right at its own edge, so vertex dots render just outside that
+   clip in the same unclipped .hexcrawl-world layer, positioned via the
+   identical center+inset-vertex math (drawers/index.js's
+   HEX_VERTEX_INSET) so they still read as "this hex's own corner." */
+.hex-cell {
+  position: absolute; background: var(--tier2-bg); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+}
+.hex-cell.active { outline: 2px solid var(--accent); outline-offset: -2px; }
+.hex-geo-glyph { position: absolute; font-size: 1.6rem; opacity: 0.35; pointer-events: none; }
+.hex-center {
+  position: relative; width: 1.8rem; height: 1.8rem; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--tier3-bg); border: 1px solid var(--border-strong); font-size: 1rem;
+}
+.hex-center-empty { opacity: 0.5; }
+.hex-center-empty:hover { opacity: 1; }
+.hex-center-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.hex-center-fallback { font-weight: bold; color: var(--accent); }
+.hex-vertex {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 1.1rem; height: 1.1rem; min-width: 0; border-radius: 50%; padding: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 0.7rem;
+  background: var(--bg-raised); border: 1px solid var(--border); opacity: 0.35;
+}
+.hex-vertex-filled { opacity: 1; background: var(--tier3-bg); border-color: var(--border-strong); }
+.hex-vertex:hover { opacity: 1; }
+.hex-detail-panel { margin-top: var(--sp-2); }
+.hex-detail-threat-row { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-1); }
+
 /* World Tracker (requirements/PLANETFALL_world_tracker.md) — a fixed,
    small integer grid, so plain CSS grid + flat buttons is enough; no
    canvas/pan-zoom camera needed the way battlemap's variable-size freeform

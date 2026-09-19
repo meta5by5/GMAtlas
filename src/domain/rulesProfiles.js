@@ -247,6 +247,45 @@ export function dnd5eStoryboardProfile(now = new Date().toISOString()) {
   return profile;
 }
 
+/** Seeds the "Five Leagues (Storyboard)" campaign template for an install
+ *  that already has an appConfig — same split/idempotency posture as
+ *  backfillDnd5eStoryboardProfile above (a brand-new install gets it
+ *  directly from migrate.js's wrapLegacyCampaignIntoAppConfig instead).
+ *  Called once from store.js's load(). */
+export function backfillFiveLeaguesStoryboardProfile(appConfig, now = new Date().toISOString()) {
+  if (appConfig.profiles.some((p) => p.name === 'Five Leagues (Storyboard)')) return appConfig;
+  return { ...appConfig, profiles: [...appConfig.profiles, fiveLeaguesStoryboardProfile(now)] };
+}
+
+/** The actual "Five Leagues (Storyboard)" profile shape — same all-off
+ *  GATEABLE_MODULES sweep as dnd5eStoryboardProfile above, EXCEPT `colony`
+ *  is re-enabled: unlike D&D 5e (fully Storyboard-only), Five Leagues has
+ *  real campaign-turn tracking (Preparation/Adventuring/Encounters/
+ *  Resolution) that lives in the Campaign panel's Warband tab, which is
+ *  gated by the `colony` module the same as Colony/Starship are.
+ *  `gameSystemActivations.fiveleagues` stays explicitly false — a GM must
+ *  still tick the ownership-confirmation checkbox themselves even on this
+ *  seeded profile, same as every other requiresActivation system
+ *  regardless of which profile is active (see rulesConstitution.js's
+ *  isGameSystemActivated). Shared between the backfill above and
+ *  migrate.js's own first-install seeding so the two paths can't drift
+ *  apart into two different-shaped profiles with the same name. */
+export function fiveLeaguesStoryboardProfile(now = new Date().toISOString()) {
+  const profile = defaultRulesProfile('Five Leagues (Storyboard)', now);
+  profile.moduleEnabled = GATEABLE_MODULES.reduce((acc, id) => { acc[id] = false; return acc; }, {});
+  profile.moduleEnabled.colony = true;
+  profile.ruleset = {
+    ...profile.ruleset,
+    // The relabeled "Fantasy (generic)" pack (data/genrePacks.js) —
+    // Five Leagues is a Game System living inside it, not its own pack.
+    genrePack: 'fantasy',
+    statRuleset: 'fiveleagues',
+    gameSystemActivations: { swn: false, fivepfh: false, planetfall: false, fiveleagues: false },
+    partyHeadlineFields: ['Toughness'],
+  };
+  return profile;
+}
+
 /** Phase A audit (A4): "hostile" stopped being a Genre Pack id — it's now
  *  a Game System inside the "sci-fi-generic" pack (data/genrePacks.js).
  *  migrate.js's own migrateDocument backfill rewrites a raw campaign

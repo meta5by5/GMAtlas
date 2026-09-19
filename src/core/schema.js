@@ -15,7 +15,7 @@ export const SCHEMA_VERSION = 1;
 // Modules a Rules Profile can hide entirely (design/adr/rules-profiles-
 // multi-campaign.md). Party is deliberately NOT here — it stays always-
 // reachable regardless of profile, same as Guide/Oracle/Cast/Journal/etc.
-export const GATEABLE_MODULES = ['colony', 'world-tracker', 'trade', 'battlemap', 'graph', 'faction-events'];
+export const GATEABLE_MODULES = ['colony', 'world-tracker', 'trade', 'battlemap', 'hexcrawl', 'graph', 'faction-events'];
 
 // The canonical WHO / WHERE / WHAT / WHY / HOW context — a first-class stored
 // model, not something re-derived on every render (that was a v0.53 weakness).
@@ -155,6 +155,17 @@ export function defaultCampaign(now = new Date().toISOString()) {
     // driftable counter.
     worldTracker: { gridSize: 6, sectors: {}, homeBaseSector: null, notes: '' },
 
+    // Hexcrawl — a genre-agnostic hex-grid overworld map, distinct from
+    // both battlemaps above (tactical, gridless, fixed-size fractional
+    // canvas) and worldTracker above (strategic, but a fixed 6x6 SQUARE
+    // grid, Planetfall-specific). Same named-maps-with-activeId shape as
+    // battlemaps; each map's own `hexes` is a SPARSE map keyed "q,r"
+    // (axial hex coordinates) — a coordinate with no entry yet reads as a
+    // synthesized default (domain/hexcrawls.js's getHex()), same
+    // additive-lazy-init posture as everywhere else here, and genuinely
+    // unbounded (no gridSize cap the way worldTracker has one).
+    hexcrawls: { maps: [], activeId: null },
+
     // Party-wide resource trackers not tied to any one entity (credits,
     // custom clocks, timers) — the Party tab's member roster is instead a
     // live filter over entities (NPC + #character tag), not stored here.
@@ -198,13 +209,16 @@ export function defaultCampaign(now = new Date().toISOString()) {
     turnStepProgress: {
       colony: { groupId: null, stepIndex: 0, returnStack: [] },
       starship: { groupId: null, stepIndex: 0, returnStack: [] },
+      // Five Leagues from the Borderlands' own Warband tab (Campaign panel)
+      // — a real 3rd slot, same shape as colony/starship above.
+      warband: { groupId: null, stepIndex: 0, returnStack: [] },
     },
     // Which Turn Step List (appConfig.turnStepLists, by id) backs each
     // Campaign-panel tab — real per-campaign state (a GM's own choice),
     // distinct from the shared list CONTENT itself. Defaulted by
     // migrate.js to the "Planetfall"/"5PFH"-named lists; null until then
     // (e.g. mid-migration) means that tab has no current step to show.
-    turnStepSlotAssignments: { colony: null, starship: null },
+    turnStepSlotAssignments: { colony: null, starship: null, warband: null },
 
     // Crew Tasks PLAY state (design/adr/rules-profiles-multi-campaign.md,
     // direct follow-up request) — which party members have already

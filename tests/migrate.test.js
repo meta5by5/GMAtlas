@@ -176,8 +176,8 @@ test('wrapLegacyCampaignIntoAppConfig: a pre-Rules-Profile single campaign becom
   assert.equal(appConfig.campaigns[0].title, 'My Old Campaign');
   assert.equal(appConfig.activeCampaignId, campaignDoc.meta.id);
 
-  assert.equal(appConfig.profiles.length, 3);
-  const [defaultProfile, fivePfhProfile, dnd5eProfile] = appConfig.profiles;
+  assert.equal(appConfig.profiles.length, 4);
+  const [defaultProfile, fivePfhProfile, dnd5eProfile, fiveLeaguesProfile] = appConfig.profiles;
   assert.equal(defaultProfile.name, 'Default');
   assert.equal(appConfig.campaigns[0].profileId, defaultProfile.id);
   assert.equal(defaultProfile.ruleset.statRuleset, 'traveller', 'carries over the legacy doc\'s own ruleset choice');
@@ -205,16 +205,35 @@ test('wrapLegacyCampaignIntoAppConfig: a pre-Rules-Profile single campaign becom
   for (const id of GATEABLE_MODULES) assert.equal(dnd5eProfile.moduleEnabled[id], false, `D&D 5e profile: ${id} is off`);
   assert.deepEqual(dnd5eProfile.storyboardPositions, { composer: 'dashboard', navigator: 'narrative', advisor: 'copilot' });
 
+  // A fourth seeded template (Five Leagues from the Borderlands) — same
+  // independence from the legacy doc's ruleset as D&D 5e above, but with
+  // `colony` left ON (unlike D&D 5e's fully Storyboard-only profile),
+  // since Warband campaign-turn tracking lives in the Campaign panel.
+  assert.equal(fiveLeaguesProfile.name, 'Five Leagues (Storyboard)');
+  assert.equal(fiveLeaguesProfile.ruleset.statRuleset, 'fiveleagues');
+  assert.equal(fiveLeaguesProfile.ruleset.genrePack, 'fantasy');
+  assert.equal(fiveLeaguesProfile.moduleEnabled.colony, true);
+  for (const id of GATEABLE_MODULES) {
+    if (id !== 'colony') assert.equal(fiveLeaguesProfile.moduleEnabled[id], false, `Five Leagues profile: ${id} is off`);
+  }
+
   // Direct follow-up request ("create an inventory of Turn Step List
-  // profiles managed in Settings"): a first-time install seeds both named
-  // lists in the standalone appConfig.turnStepLists inventory, and the
-  // Campaign panel's Colony/Starship tabs are pre-assigned to them.
-  assert.equal(appConfig.turnStepLists.length, 2);
+  // profiles managed in Settings"): a first-time install seeds all three
+  // named lists in the standalone appConfig.turnStepLists inventory, and
+  // the Campaign panel's Colony/Starship/Warband tabs are pre-assigned to
+  // them.
+  assert.equal(appConfig.turnStepLists.length, 3);
   const fivePfhList = appConfig.turnStepLists.find((l) => l.name === '5PFH');
   const planetfallList = appConfig.turnStepLists.find((l) => l.name === 'Planetfall');
+  const fiveLeaguesList = appConfig.turnStepLists.find((l) => l.name === 'Five Leagues');
   assert.ok(fivePfhList && fivePfhList.groups.length, '5PFH list seeded with real content');
   assert.ok(planetfallList && planetfallList.groups.length, 'Planetfall list seeded with real content');
-  assert.deepEqual(campaignDoc.turnStepSlotAssignments, { colony: planetfallList.id, starship: fivePfhList.id }, 'Colony tab -> Planetfall, Starship tab -> 5PFH, per direct request');
+  assert.ok(fiveLeaguesList && fiveLeaguesList.groups.length, 'Five Leagues list seeded with real content');
+  assert.deepEqual(
+    campaignDoc.turnStepSlotAssignments,
+    { colony: planetfallList.id, starship: fivePfhList.id, warband: fiveLeaguesList.id },
+    'Colony tab -> Planetfall, Starship tab -> 5PFH, Warband tab -> Five Leagues, per direct request',
+  );
 });
 
 test('wrapLegacyCampaignIntoAppConfig runs the campaign doc through the normal migrateDocument upgrade path (e.g. the SWN grandfather step still fires)', () => {
@@ -334,7 +353,11 @@ test('migrateDocument converts a pre-existing FLAT turnStepProgress ({groupId,st
 
   // Already-current shape is left alone.
   const current = defaultCampaign();
-  current.turnStepProgress = { colony: { groupId: 'g1', stepIndex: 1, returnStack: [] }, starship: { groupId: null, stepIndex: 0, returnStack: [] } };
+  current.turnStepProgress = {
+    colony: { groupId: 'g1', stepIndex: 1, returnStack: [] },
+    starship: { groupId: null, stepIndex: 0, returnStack: [] },
+    warband: { groupId: null, stepIndex: 0, returnStack: [] },
+  };
   const reMigrated = migrateDocument(current);
   assert.deepEqual(reMigrated.turnStepProgress, current.turnStepProgress);
 
@@ -343,4 +366,20 @@ test('migrateDocument converts a pre-existing FLAT turnStepProgress ({groupId,st
   delete bare.turnStepProgress;
   const migratedBare = migrateDocument(bare);
   assert.deepEqual(migratedBare.turnStepProgress, defaultCampaign().turnStepProgress);
+});
+
+test('migrateDocument backfills turnStepProgress.warband and turnStepSlotAssignments.warband (the Warband tab\'s own real 3rd Campaign-panel slot, Five Leagues from the Borderlands) for a pre-existing doc that only has colony/starship — additively, via the generic schema-default deep-merge, never disturbing the existing colony/starship values', () => {
+  const legacy = defaultCampaign();
+  legacy.turnStepProgress = { colony: { groupId: 'g1', stepIndex: 2, returnStack: [] }, starship: { groupId: 'g2', stepIndex: 0, returnStack: [] } };
+  delete legacy.turnStepProgress.warband;
+  legacy.turnStepSlotAssignments = { colony: 'list-a', starship: 'list-b' };
+  delete legacy.turnStepSlotAssignments.warband;
+
+  const migrated = migrateDocument(legacy);
+  assert.deepEqual(migrated.turnStepProgress.warband, { groupId: null, stepIndex: 0, returnStack: [] });
+  assert.deepEqual(migrated.turnStepProgress.colony, { groupId: 'g1', stepIndex: 2, returnStack: [] });
+  assert.deepEqual(migrated.turnStepProgress.starship, { groupId: 'g2', stepIndex: 0, returnStack: [] });
+  assert.equal(migrated.turnStepSlotAssignments.warband, null);
+  assert.equal(migrated.turnStepSlotAssignments.colony, 'list-a');
+  assert.equal(migrated.turnStepSlotAssignments.starship, 'list-b');
 });

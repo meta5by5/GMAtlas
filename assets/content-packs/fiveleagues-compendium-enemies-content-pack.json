@@ -1,0 +1,2477 @@
+{
+  "app": "GMAtlas",
+  "kind": "content-pack",
+  "schemaVersion": 1,
+  "entities": [
+    {
+      "id": "ent_5lfb_ancient_raving-cultists",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Raving cultists",
+      "overview": "Not all of the cults in The Dust are tied to the great battles that were once fought here. Some simply go mad as they try to gain the patronage of otherworldly entities they encounter among the many ruins. Blood stench rituals: In the Tracking Phase, roll 1D6. Roll an additional D6 for every warband member that became a casualty during the round. For every 5+, a Wracked (from this encounter list) is placed randomly along a battlefield edge. Trait: Poison (melee attacks only).",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 Self-bows"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_ancient_wind-swept-to",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Wind-swept to",
+      "overview": "The Dust itself. When their droning chant becomes one with the howling of the wind, the gates open. Conjuring chant: Every Tracking Phase, roll 1D6 per Wind-swept Wanderer on the table. Tally up any 6s rolled. Once a total of five 6s have been rolled, a randomly selected Aberration is placed randomly along a battlefield edge. Only one Aberration can be summoned per battle. Trait: Sand Dweller.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 Self-bows wanderers A coven of those who have given their minds over"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_ancient_soldiers-time",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Soldiers time",
+      "overview": "Across The Dust the armies of the Warlord gather once more, as the harsh desert winds howl. Dust shroud: Ranged attacks against the Soldiers hit only on a natural 6. This does not extend to any other characters fighting alongside them.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 Darts from out of"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_ancient_villainous-hunting-beasts-raiders",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Villainous hunting beasts raiders",
+      "overview": "The Dust is as wild a land as any border region, and raiders looking for pillage are common. Trait: Sand Dweller.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 Self-bows"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_ancient_hunters-of-the",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Hunters of the",
+      "overview": "Sands Fierce and fast predators, these long-limbed beasts like to wear down their prey before the final pounce. Hard to target: Ranged attacks from a distance exceeding 6\" will hit only on a natural 6 when targeting a Hunter of the Sands. This ability does not extend to any characters accompanying the Hunters. Ambush tactics: When playing a meeting engagement, after both sides have set up, roll 1D6 for each Hunter of the Sands. On a 5-6 the figure immediately moves into / directly behind the closest terrain feature to their front, then rolls again. This can happen multiple times. If no features remain between the Hunter and the closest warband member, move the figure to within 2\" of the warband member and stop rolling for this Hunter. Trait: Sand Dweller.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "�"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_ancient_those-of",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Those of",
+      "overview": "Sand and Dust It is rumored that when someone dies in the desert, their desperation gives rise to these human-like sand creatures. Made of sand: Ranged attacks have no effect. Trait: Sand Dweller. 67-73",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "�"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_ancient_devoted-a",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Devoted a",
+      "overview": "Devoted Servant is removed as a casualty, another immediately arrives on the enemy battlefield edge, immediately behind the position of the removed figure. Figures removed due to morale failures are not replaced in this fashion. The new arrival has a sling, if the figure they are replacing did.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 Slings Servants The Warlord has many loyal minions throughout the land, eager to bring about his return. Manic onslaught: For the first 5 battle rounds, every time"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_ancient_lurking-was",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Lurking was",
+      "overview": "Wounded in melee combat against a Lurking Stalker must roll 1D6. On a roll of a 1, they become a casualty, and are removed from the table. Trait: Sand Dweller.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+5"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "� Stalkers Ambush predators known for their terrible rending claws. Horrible wounds: Every Tracking Phase, any warband member that"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_ancient_strider-clan-bows",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Strider clan bows",
+      "overview": "Combining the shape of four legged animals with a humanoid torso, the Striders are relentlessly hostile to any two legged creatures they encounter. Bulky charge: When a Strider initiatives melee combat, the opponent is unable to use or gain the Counterattack ability from any source for the duration of that melee. This does not apply when other figures initiate combat with the Strider. Powerful archery: Strider archery hits with a damage of +1 / +0. Trait: Sand Dweller. Skeletal +3 6\" +2 +1 / +1 5 3 � constructs Built for war, these remnants of the Warlord's armies still roam the land. Most resemble humanoid skeletal constructions, pieced together from multiple creatures, and heavily reinforced. Brute force: Opponents are unable to use or gain the Parry ability from any source. Trait: Undead.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 8,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "4 Long"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_blood-mad-villagers",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Blood-mad villagers",
+      "overview": "The inhabitants of a village in the Duke's domain. Sorcerous blood leaked into their water supply and drove them mad.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 Slings"
+            },
+            {
+              "key": "Traits",
+              "value": "Fearless, Poor Shots."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_blood-loyal-followers",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Blood-loyal followers",
+      "overview": "Servants, henchmen, and petty soldiers devoted to the Duke.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 Self bows"
+            },
+            {
+              "key": "Traits",
+              "value": "Brave. Prowling +3 5\" +0 +0 / +0 4 0 None ghouls These corpse-eaters seem to be everywhere, and this particular breed is as unpleasant as any you have met. Traits: Undead, Slippery."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_black-blood-wolves",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Black blood wolves",
+      "overview": "Their fangs are slick with dark blood from an unknown source.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Vampiric, Outflank. Grave haunts +2 5\" +1 +0 / +0 Special Special None Vague shapes with faces distorted in torment. Traits: Undead, Unknown Enemies. Shapeless forms: Any hit on a Grave Haunt does not follow the normal combat rules. Instead, roll 1D6: 1-2: Nothing happens. 3-4:The Haunt is repelled 8\". If this takes it off the battlefield edge, it is removed from play. 5: It is repelled 12\". 6: It is destroyed. 57-63 Skeletal +5 4\" +0 +0 / +0 3 2 2 Crossbows soldiers Some of the Duke's minions dabble in necromancy to bolster the ranks. Traits: Undead. Moldering bones: If a melee attacker rolls a natural 6 on the combat roll, the skeletal soldier is destroyed automatically. 64-76"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_blood-loyal-soldiers",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Blood-loyal soldiers",
+      "overview": "Soldiers that do not age and will never betray their master are any commander's dream.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 Self bows"
+            },
+            {
+              "key": "Traits",
+              "value": "Brave."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_vampiric-minions",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Vampiric minions",
+      "overview": "Some of these minions are loyal servants, others are former foes. All have been given the blood.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Vampiric. Ink-black night: At the end of every battle round, visibility drops by 1\" to a minimum of 3\"."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_demons-of-the",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Demons of the",
+      "overview": "Third Portal Their origin is unknown, but these snarling fiends are a foe to be reckoned with.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+2 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Flying. Demonic magic: Demons within 6\" of an opponent will shoot magical flames. Roll to hit with +0 Combat Skill and resolve damage with +1 / +0. The Demon is not affected by movement and cannot run out of ammunition."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_vampiric-the-knights",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Vampiric the knights",
+      "overview": "The elite of the Duke's forces, fangs bared and swords gleaming.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 3,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 3,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Vampiric, Parry, Terrifying. Mist form: Whenever a Vampiric Knight is slain, roll 1D6. On a 6, place a Mist Form marker 6\" away in a random direction. The marker blocks Line of Sight. At the end of each battle round including the current one, roll a D6 for each Fog marker. On a 6, it is removed and replaced with a Vampiric Knight. On a 1, it is removed. Otherwise, it remains in play. Vampiric (Trait) Accepting the Darkest Gift Many enemies have this trait. Characters that are slain fighting the Duke's forces become part of them. Vampiric foes are considered to be Undead for the purpose of all spells, A post-battle injury roll of Dead or Slain item or rules. They are Fearless and while fleeing counts. Tough but, unlike normal Undead, can take Dash moves normally. If you attempt to save the character with items and it fails, they are assumed to Vampiric characters cannot cross sneak off at night after your warband has running water such as streams given up on saving them. or rivers. Followers becoming Minions If a Wounded Vampiric foe knocks out an enemy in melee combat, the Wound Next time you fight the Duke's forces, is healed immediately. This does place the minion as part of the enemy not apply against undead, magically forces. They have the same abilities and conjured or construct type of foes. equipment as when they were alive but are now Undead. If slain (again) ex-followers are destroyed permanently. Otherwise, you will keep encountering them until they are finally laid to rest."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_looting",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Looting",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+6"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 Slings rabble A band of criminals set on shaking down the farmers and traveling merchants. Cowardly: Morale tests fail on 1-3."
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_crude",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Crude",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None extortionists A gang that travels from town to town, threatening the locals with murder and arson unless you pay up. Grateful locals: If you kill 5 or more enemies, earn 1 Adventure Point."
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_secretive-smugglers",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Secretive smugglers",
+      "overview": "While the common folk rarely find fault with smugglers, the authorities assuredly do. Ill-gotten gains: When setting up, roll 1D6 for each Smuggler who is not a Leader. On a 6 they are carrying goods. They get the Hang Back trait. If slain, they drop 1 Gold Mark worth of goods where they died which can be collected by moving to the location. If the battle ends, any goods not collected are lost.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 Self Bows"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_highway-robbers",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Highway robbers",
+      "overview": "These charlatans are often considered dashing characters, but most would cut your throat as soon as steal your jewelry. Your money or your life: You may pay them 2 Gold Marks to avoid the battle at any time.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 Self Bows"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_cold-hearted-poachers",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Cold-hearted poachers",
+      "overview": "Some poachers turn to hunting for more exciting prey than the deer of the Duke's forest.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 Longbows"
+            },
+            {
+              "key": "Traits",
+              "value": "Outflank, Skirmishers."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_knife-wielding-thieves",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Knife-wielding thieves",
+      "overview": "The line between thievery and assassination can be quite narrow.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "Special"
+            },
+            {
+              "key": "Traits",
+              "value": "Outflank. Deadly knives: Each enemy phase, the two thieves closest to your warband will throw knives instead of attacking in melee. Thieves cannot run out of ammunition and which thieves throw knives can change from round to round."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_devout-knives",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Devout knives",
+      "overview": "Occasionally groups of malcontents elevate their random acts of brutality into a spiritual experience.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 Throwing murderers"
+            },
+            {
+              "key": "Traits",
+              "value": "Counter Attack. Blood-soaked faith: Every time a murderer knocks out a warband member, the enemy may ignore the next two Morale dice."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_hopeful-the",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Hopeful the",
+      "overview": "Fast Actions Phase, randomly pick a zealot that will pray this turn. In the Enemy Actions Phase, roll a D6: On a 6, the prayers are heard, and they unleash a magical bolt: This has a range of 8\" and hits the closest foe with +2 / +2 damage. A survivor is knocked back 3\". On any other result, the prayer goes unanswered. In all cases the zealot praying cannot move or take any other actions. The prayer is only interrupted by killing the zealot first.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None zealots A roving band of worshippers confusing a rudimentary knowledge of sorcery with the worship of unholy powers. Traits: Brave. Partially heard prayers: At the start of"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_grim-faced-separatists",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Grim-faced separatists",
+      "overview": "Some communities are engaged in a near-perpetual stage of rebellion. They often become quite adept at the art of war.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 Self bows"
+            },
+            {
+              "key": "Traits",
+              "value": "Brave."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_uncaring-brutes",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Uncaring brutes",
+      "overview": "The biggest qualification to joining the gang is a glorious lack of sophistication. Heavy strikes: When a Brute Stuns an opponent, they lose the ability to Parry or Counter Attack for the rest of that melee, regardless of the source of the ability.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_repentant-deserters",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Repentant deserters",
+      "overview": "Some deserters want to reclaim their honor in a manner of speaking and take to harassing servants of the authorities. Well-supplied: Deserter archers do not run out of ammunition. Wanted men: Earn 1 Adventure Point for Holding the Field. Found wanting: Deserters do not benefit from the Courage in Numbers rule.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 Self bows"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_outlaw-knights-the",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Outlaw knights the",
+      "overview": "Howling Wolf Prince If there are four or more enemies on the Once a well-loved member of royalty who battlefield, at the start of the battle round inspired loyalty throughout his domain, before rolling and assigning your initiative the Prince became obsessed with his own dice, randomly select one enemy figure. mortality. Delving deeper and deeper into forgotten tomes, his quest finally led If the figure is still alive during the Enemy him to a dire bargain: The old gods would Phase, place a Wolf Rage marker next to grant his wish for immortality if only he them. They will not move or attack this would drink from the Chalice of the Wolf. round. A figure can potentially accumulate multiple markers throughout a battle. When the Prince returned to his lands, he was no longer human. His lands fell to A Wolf Rage marker is discarded if: fierce battles between those that swore to follow him beyond mortality and those The figure loses a melee exchange; if who were aghast at the sacrifices asked. so, they manifest berserk rage: Both characters must immediately reroll Prowlers in the Night their Combat Skill die to determine who wins the exchange. All battles against the Retinue of the Wolf Prince take place at night with a maximum The figure would become a visibility of 10\". If multiple visibility limits casualty; if so, they manifest the would apply, use the single lowest distance. determination of the wolf: The blow is treated as having no effect. If a Howling figure is slain before the Wolf Rage can develop, the Howling has no effect.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None Each of these armored foot soldiers has a story of betrayal, love lost, or oaths betrayed. They refuse any offer of peaceful encounters, claiming they must regain their honor on the field of battle. Traits: Parry, Brave. Kite shields: +1 Armor versus missile attacks. Designer's Note You may notice that \"criminal\" encounter types have multiple versions throughout the encounter tables with slight variations in profiles and names. There is no hidden lore significance to this; it is a factor of providing more variety in battles."
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_faithful-villagers",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Faithful villagers",
+      "overview": "Loyal to their Prince, these villagers are brandishing simple weapons and tools.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 Slings"
+            },
+            {
+              "key": "Traits",
+              "value": "Brave."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_wolfblood-scouts",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Wolfblood scouts",
+      "overview": "Light infantry that patrols the edges of the Prince's domain.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+5"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 Self Bows"
+            },
+            {
+              "key": "Traits",
+              "value": "Awareness, Skirmisher."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_wolfblood-infantry",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Wolfblood infantry",
+      "overview": "Rank and file troops who have served the Prince since they were born. Their armor is painted with wolf motifs.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 Crossbows"
+            },
+            {
+              "key": "Traits",
+              "value": "Brave, Outflank."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_loyal-wolves",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Loyal wolves",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None While they resemble ordinary wolves, they seem unusually intelligent. Traits: Awareness, Brave."
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_wolfblood-serjeants",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Wolfblood serjeants",
+      "overview": "Seasoned soldiers with the scars to prove it. Unlike their comrades they fight in determined silence.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 Longbows"
+            },
+            {
+              "key": "Traits",
+              "value": "Brave. Covered advance: Missile attacks are -1 to hit vs Serjeants if performed in the Slow Action Phase."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_shadow",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Shadow",
+      "overview": "Half-changed +3 5\" / +3\" +1 +0 / +1 4 It is rumored that every follower of the Prince consumes a single drop of true wolf blood. For some, the results are horrifying as they twist into a half-bestial mockery.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None wolves A large wolf that seems to exist partially on another plane of existence. They are said to be the spirits of the ancient lords of the wolf race. Traits: Awareness, Outflank, Terrifying. 1 None"
+            },
+            {
+              "key": "Traits",
+              "value": "Counter Attack, Relentless. Final gift: When a Half-changed dies, roll 1D6. On a 6, replace the character with a Loyal Wolf (from this list). If the Half-changed was slain in melee combat begin a new melee immediately, with the wolf as the attacker. 70-78"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_feral-mercenaries",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Feral mercenaries",
+      "overview": "The only outsiders the Prince tends to trust is that of the Feral mercenary bands.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 Self bows"
+            },
+            {
+              "key": "Traits",
+              "value": "Parry. Polearms: The Feral may assist an ally within 2\", granting a Combat Bonus."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_gladeborn-bows",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Gladeborn bows",
+      "overview": "Wolfkin A venerable tribe that lives in the deepest and darkest forests. The Gladeborn are said to be the mentors of the Prince's dark arts, and they have sworn undying loyalty to him ever since.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "4 Self"
+            },
+            {
+              "key": "Traits",
+              "value": "Awareness, Skirmisher. 2 None Dire wolves +3 5\" / +4\" +1 +1 / +1 5 Hulking brutes with jaws that can mangle their way through steel plate. Traits: Awareness, Outflank."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_wolf-knights-the",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Wolf knights the",
+      "overview": "Prince, these women are clad in grey armor and armed with long, straight blades. Sudden evasion: Wolf Knights always count as being in cover against missile attacks. Leaping strike: At the start of the Enemy Phase, randomly select a Wolf Knight. They will leap 1D6\" in addition to their normal move. If the leap lands them in melee combat, they may roll twice and pick the best roll for each exchange. The",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None The inner circle of"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_deepbelow_dearest-the",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Dearest the",
+      "overview": "Prince, the transformation is complete. They have no semblance of humanity left as the beast has fully consumed them.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None Kin For the family of"
+            },
+            {
+              "key": "Traits",
+              "value": "Awareness, Regeneration, Terrifying Pledging Fealty While secretly in his service, you receive a bonus of 1 Adventure Point and 1 Gold You may opt to pledge your loyalty to the Mark every time you slay a Leader from Wolf Prince instead of doing battle. You the rival Threat. can do this after having won at least two battles against their forces. You must After defeating three rival Leaders, the locate a meeting point (using the normal Seneschal summons you to a Hideout. adventure milestone process � once Place this in the wilderness and travel located, place it in the wilderness) and there. Upon arrival, you are granted a travel there. Quest and given the Wolf's Blessing, allowing you to add +1 to all Seize the The Wolf Prince will make you swear an Initiative Rolls going forward. You can no oath to never oppose his forces again, longer benefit from the normal blessing in which case remove the Prince as a available in town, however. Threat and generate a new Threat at the same Threat value. This new Threat If you complete the Quest, the Prince is a personal rival of the Prince and he will offer each member of the warband demands their destruction. a drop of his blood. There is no refusal. Roll 2D6 for each warband member on Fealty to the Wolf Prince Table the table below. 2D6 Result Description 2 Dies instantly The character dies on the spot. A Soul Sphere will revive them, but no other remedy will do so. If 3 Dies if Follower revived in this fashion, they become Wolfkin. 4 Half-changed A Follower dies as above. A Hero becomes Wolfkin. 5-9 Absorb the blood The character becomes one of the Half-changed. Become one with the blood The character becomes Wolfkin. The character becomes Wolf Born."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

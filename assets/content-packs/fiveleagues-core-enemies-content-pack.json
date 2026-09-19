@@ -1,0 +1,6507 @@
+{
+  "app": "GMAtlas",
+  "kind": "content-pack",
+  "schemaVersion": 1,
+  "entities": [
+    {
+      "id": "ent_5lfb_core_desperate-mob",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Desperate mob",
+      "overview": "A cruel world took everything they had and driven to madness by desperation, they are preying on travelers for resources. Break point: The mob does not roll Morale dice normally. In the Tracking Phase, if casualties exceed half the initial number, they flee, and the battle ends. 09-18",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 slingers"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_sneaky-thieves",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Sneaky thieves",
+      "overview": "Scoundrels looking to fill their purses through thievery and robbery. Sneak attack: A thief that begins the Enemy Actions Phase in or immediately behind a terrain feature receives a Combat Bonus in melee that phase. Looted loot: Each Loot roll that awards Valuables also grants 1 Gold Mark worth of petty coin.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+1"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 self bows"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_slave-raiders-slingers",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Slave raiders slingers",
+      "overview": "Whether they are looking to press their victims into naval service, draft them to fight some war, or sell them for coin, these people are the lowest of the low. Craven: If the Leader is slain, roll 2 additional Morale dice. Just in time: If you Hold the Field, you rescue a local villager (forester, if in the Wilderness). Add a Friend.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_grim-faced-rebels",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Grim-faced rebels",
+      "overview": "The world is full of pretenders to titles and thrones. To fund their wars, they often extort peaceful folk \"for the cause\". Uprising: If you have a noble Friend, or are carrying out a Contract for a noble, they become Brave.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+1"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 self bows"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_outlaw-gang-slingers",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Outlaw gang slingers",
+      "overview": "Not all outlaws are romantic fighters against oppression. These folk are simply mean and violent.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Outflank."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_deserter-squad",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Deserter squad",
+      "overview": "Whatever army these came from is irrelevant. They've figured out that pillaging the countryside is more profitable than fighting in the field. Hardened fighters: After determining if any Leaders are present, swap 1 basic Melee Trooper for a Sergeant. 54-61",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 self bows"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_blood-stained-renegades",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Blood-stained renegades",
+      "overview": "Bandits, deserters, and other low-lifes who burn and loot for the heck of it. Often outcasts so unpleasant even the outlaw gangs and slavers won't deal with them.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+1"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 self bows"
+            },
+            {
+              "key": "Traits",
+              "value": "Brave. Sergeants are also Tough."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_well-armed-brigands",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Well-armed brigands",
+      "overview": "Some outlaw groups begin to stock up on weapons and armor, allowing them to go toe-to-toe with soldiers and guards. Lie in wait: At the start of the first Enemy Actions Phase in the game, each brigand archer will shoot at a visible target before any Actions are carried out. This shot does not prevent them from acting normally during this Enemy Actions Phase.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 self bows"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_hired-knives",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Hired knives",
+      "overview": "Your deeds have attracted the attention of someone who wants you dead and is willing to pay well for the privilege.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+1"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 throwing murderers"
+            },
+            {
+              "key": "Traits",
+              "value": "Outflank, Slippery."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_murder-knives",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Murder knives",
+      "overview": "In a violent world, some become obsessed with the act of violence itself and seek to perpetuate it in ever more arcane and intricate ways.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 throwing cultists"
+            },
+            {
+              "key": "Traits",
+              "value": "Brave, Counter Attack."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_penitent-zealots",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Penitent zealots",
+      "overview": "Roaming groups that believe the world will be reborn, once it has been drowned in the blood of the innocent and guilty alike. Battle Zeal: The zealot currently closest to the player's battlefield edge receives a Combat Bonus in melee.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Fearless."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_order-of-the-from",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Order of the from",
+      "overview": "Beyond Patterns Unseen The dead and the sinful have always Whether it is securing scraps of roamed the lands by moonlight, as do documents from practitioners of the dark those who seek to wrest control over life arts, or simply ridding the land of Threats, and death from ancient tomes. With fighting the Whispers can only further the every sinner that attempts to break open cause of the light. the barriers between this life and the next world, the veil grows thinner, and the In any battle where you defeat 5+ figures shadows begin to move. from this encounter list, you may add +1 Adventure Point. Many scholars believe that a malign power rules over these denizens of the The Fog that Shrouds the Land gloom, directing them for some ulterior motive inimical to the survival of When fighting the Whispers, visibility day-dwellers. Cultists speak of a voice for warband members is limited to 9\". If that whispers in their fevered dreams, another game rule or event would restrict declaring the insignificance of their visibility, use the lower score. Note that mortal lives. enemies from this list are not themselves affected by the 9\" limitation, nor are any Unique Foes accompanying them.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+1"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 throwing snake knives A secretive society of assassins identified by a snake tattoo on the underside of their wrists. Their goals and agenda are unknown, but they never kill for coin. Traits: Brave, Poison, Crawling, Counter Attack."
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_broken-fanatics",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Broken fanatics",
+      "overview": "When you listen to the whispers for too long, your sanity is unlikely to remain. Driven to fury: Fanatics receive a Combat Bonus when Wounded.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+1"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "1 crossbow"
+            },
+            {
+              "key": "Traits",
+              "value": "Fearless. Roaming +4 3\" / 0\" +0 +0 / +0 5 0 None dead On a moonless night, the dead may rise to vent their hatred of those who still walk in the light. Swarming: Every time a warband member becomes a casualty, place another Roaming Dead on a random battlefield edge. Traits: Undead, Unknown Enemy. 0 2 slings 27-34 The outcast +2 5\" / +3\" +0 +0 / +0 3 In a harsh winter, it is said a village may turn to Human flesh for survival. The guilty are exiled and the taint takes what Humanity remained. Bounty on their heads: Roll a D6 for every Leader slain. On a 6, you are awarded 1 Gold Mark after the battle in bounties. Traits: Outflanking. 35-46"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_cultist-whisperers",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Cultist whisperers",
+      "overview": "Shady, cloaked worshippers hoping to bring forth He Who Whispers.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "1 self bow"
+            },
+            {
+              "key": "Traits",
+              "value": "All Leaders have Poison, Outflank, Brave."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_coven-of-the-revenants-the",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Coven of the revenants the",
+      "overview": "Tracking Phase, roll D6 for any Wounded Coven member, including Leaders and Unique Foes. On a 5-6, they are transformed to a Maddened Revenant (see the next entry on this table). This is a spell ability.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None half-dead A secretive cult looking to bridge the gap between life and death, achieving a form of immortality in the process. Pained ascension: During"
+            },
+            {
+              "key": "Traits",
+              "value": "Brave."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_collector-mob",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Collector mob",
+      "overview": "Macabre scavengers who roam the land searching for trinkets and Human remains to stockpile in their caves and pits. Morbid pack: When rolling Morale dice, a roll of 1-2 removes a Collector as normal. However, a roll of a 6 causes 1 additional Melee Trooper Collector to be placed on the table in or by the terrain feature closest to the center of the table.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 slings"
+            },
+            {
+              "key": "Traits",
+              "value": "Outflank. 2 None The Corrupt +3 4\" / 0\" +1 +0 / +0 5 Mutated wretches that roam the outskirts of civilization. The whispers tormented their physical form and shaped their minds towards evil. Twisting forms: Warband members do not gain Combat Bonuses from allies against the Corrupt. Traits: Monsters. 78-85 Fog"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_born-the",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Born the",
+      "overview": "Fog Born creep from the mist. Vaguely humanoid creatures with metallic claws, they are said to have once been men who committed crimes so terrible that even the old gods took notice. Fog bound: All ranged attacks against the Fog Born will Hit only on a natural 6. Servants of the Mistress: Slaying a Fog Born Leader grants +1 Adventure Point.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None When the fog is so thick you can feel it on your skin,"
+            },
+            {
+              "key": "Traits",
+              "value": "Gruesome, Brave. Grave +2 4\" / 0\" +2 +1 / +0 5 2 None Walkers The skeletal remains of knights and champions slain through betrayal or treason. They yearn for destruction against a worthy adversary. Traits: Undead. 94-100 Night"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_folk-the",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Folk the",
+      "overview": "Night Folk are shrouded in swirling fog. They never communicate with outsiders, but raise blood-soaked battle sacrifices to the Whispers.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+1"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 throwing knives A strange, insular breed,"
+            },
+            {
+              "key": "Traits",
+              "value": "Poison, Outflank, Fey."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_skirmisher-pack",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Skirmisher pack",
+      "overview": "Lightly equipped Gnawlings that range ahead of the horde during war. They often function as scouts and spies.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 7,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "4 slings"
+            },
+            {
+              "key": "Traits",
+              "value": "Skirmisher, Crawling. 10-19"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_gibbering-horde",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Gibbering horde",
+      "overview": "As age takes them, the curse claims their minds. Their comrades push them forward in a final battle as their senses begin to fail. Ignore Wounds: In the Tracking Phase, the Wounded Horde figure closest to your battlefield edge recovers from being Wounded.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+6"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Unknown Enemy."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_gnawling-raiders",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Gnawling raiders",
+      "overview": "The Gnawlings often supplement their weaponry and supplies with the products of surface raids.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+5"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 slings"
+            },
+            {
+              "key": "Traits",
+              "value": "Skirmisher, Crawling."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_curse",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Curse-",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None Bound Some the curse deforms even more, their limbs ending in grotesque claws fit only for rending. Traits: Gruesome."
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_gnawling-of",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Gnawling of",
+      "overview": "Gnawlings, prowling the surface world for a fight.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 crossbows warriors A war party"
+            },
+            {
+              "key": "Traits",
+              "value": "Skirmisher, Counter Attack."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_knife-breakers",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Knife- breakers",
+      "overview": "Knife-breakers specialize in snapping blades, to deny the enemy the ability to scavenge. Break the knife: Any character that becomes a casualty must make an 8+ [Crafting] test or have a random weapon Damaged.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+5"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Outflank."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_tunnel-fighters",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Tunnel fighters",
+      "overview": "Gnawling fighters are battle-hardened veterans from years of fighting their foes underground.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 crossbows"
+            },
+            {
+              "key": "Traits",
+              "value": "Slippery."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_seething-infiltrators",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Seething infiltrators",
+      "overview": "Infiltrators rely on swarm tactics and sling shots imbued with foul magics to disable their foes.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+5"
+            },
+            {
+              "key": "Speed",
+              "value": 7,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 slings"
+            },
+            {
+              "key": "Traits",
+              "value": "Outflank, Unknown Enemy, Poison, Crawling. 1 None 73-80 The Silenced +4 6\" / +4\" +1 +0 / +0 4 A secretive cult of assassination experts among the Gnawlings. Traits: Silenced receive the Poison trait and increase damage to +2/+0 when fighting a warband member that has no allies within 3\". 81-87"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_shield-bearers",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Shield- bearers",
+      "overview": "Common in siege fighting, the shield-bearers use sharp, angled shields for close combat, while their ranged troops use them for protection. Carries Shields (+1 to armor vs ranged)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 crossbows"
+            },
+            {
+              "key": "Traits",
+              "value": "Parry. Return shots: Shield-bearer ranged troops will immediately shoot back if they are Hit by a ranged attack that is saved by their Armor."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_hate-sworn-crossbows",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Hate-sworn crossbows",
+      "overview": "Gnawlings that are unable to resist the madness that engulfs their people may swear themselves to die in battle. The intensity of the oath drives them to furious attacks. Death Frenzy: When slain, the Hate-sworn enter a death frenzy. They immediately make a standard move if not in base contact with a foe, then enter melee combat as normal. Ignore all Wounds on the Hate-sworn while they are in a death frenzy. They die immediately if \"slain' a second time, or when the 3rd exchange has been resolved.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Counter Attack."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_the-each",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "The each",
+      "overview": "Enemy Actions Phase, select the Ascended furthest from your battlefield edge. Ignore figures that have no Line of Sight to any members of the warband. The Ascended will then begin chanting a spell. Place a marker by the figure to remind you. If the figure becomes Wounded or Stunned before the start of the next Enemy Actions Phase, the spell is disrupted. If not, when the figure activates next, they will unleash the spell against the closest warband member they can see at that point (the spell fizzling if none are visible). The target must make a 10+ [Devotion] test or be thrown D6\" directly backwards and Wounded.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None Ascended The Gnawlings constantly experiment with sorcery to break their curse. For some, infusions of fey magic promise a path to great power. Bolts of energy: At the start of"
+            },
+            {
+              "key": "Traits",
+              "value": "Fey."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_goblin-raiders",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Goblin raiders",
+      "overview": "Small, long-limbed fiends that lurk in forest caves. They are said to be former fey that succumbed to their cruel impulses. Goblin cruelty: If multiple targets are in range for melee or ranged attacks, they will always prioritize Wounded foes as targets.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+5"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Outflank, Fey. 12-23"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_forest-folk-provide",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Forest folk provide",
+      "overview": "Cover against Forest Folk archery.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 self bows A number of people live in the fey-woods, fighting for their otherworldly lords. Forest fighting: Forest and bush features do not"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_elfin-hounds-against",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Elfin hounds against",
+      "overview": "Elfin hounds do not add Combat Skill to the attack roll.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None Sleek and fierce, these hunting dogs have an unnatural cunning, and a thirst for war. Unpredictable movements: Ranged attacks"
+            },
+            {
+              "key": "Traits",
+              "value": "Awareness, Outflank, Fey."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_spider-touched",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Spider- touched",
+      "overview": "An old sect that worships the great spiders of the forest. They swear personal oaths of fealty to the Fey Queen herself.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 self bows"
+            },
+            {
+              "key": "Traits",
+              "value": "Poison, Outflank, Brave."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_time-lost-warriors",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Time-lost warriors",
+      "overview": "The fey have little use for the constraints of time, and some of their allies are warrior clans long consigned to forgotten history.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 crossbows"
+            },
+            {
+              "key": "Traits",
+              "value": "Brave. 2 None War dryads +3 6\" / +2\" +0 +0 / +0 4 Dryads are known to pull hapless wanderers into the fey realm. The results are often fatal. Painful Lure: A character Wounded by a Dryad must make a 7+ [Devotion] test. Failure causes them to be removed from the table. Forest whispers: All characters removed from the table due to Painful Lure or as casualties must roll on the Flight in the Dark Table, instead of the Injury Table. Traits: Counter Attack, Fey."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_tree-wardens",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Tree wardens",
+      "overview": "The fey grant sentience to young, small trees, imbuing them with mobility and a fierce hatred for outsiders.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Tough, Regeneration, Fey. 1 3 self bows 64-71 Fey spirits +3 6\" / +3\" +1 +0 / +0 5 Faerie-kind that linger too long in the otherworld tend to lose their grip on reality, as well as sanity. When they take to the field, it is as howling, half-ethereal forms, lingering for just one more battle. Traits: Terrifying, Flying, Fey. 3 3 crossbows 72-81 Fey soldiers +3 6\" / +3\" +1 +1 / +0 4 The ranks of the Faerie Court armies are a sight to behold, clad in armor of Elven silver. Traits: Skirmisher, Fey. 82-89"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_winter-crossbows",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Winter crossbows",
+      "overview": "Legion Part of the Queen's armies have been tasked with finding ways to weaken the hold of the gods on the mortal realms. Frozen winds envelop them in battle. Winter Mist: Ranged attacks against the Winter Legion do not add Combat Skill to the Hit roll.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 3,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3"
+            },
+            {
+              "key": "Traits",
+              "value": "Brave, Fey."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_fey-knights",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Fey knights",
+      "overview": "Queen's own +2 6\" / +2\" +2 +1 / +1 4 The hand-picked guard of the Eternal Queen. A worthy struggle: Add +1 Story Point and +1 Adventure Point if you Hold the Field.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 3,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None While they often fight dismounted (faerie horses persisting only briefly in the mortal realms), Fey knights are a terrifying force on the battlefield. Traits: Fearless, Tough, Fey. 3 3 crossbows"
+            },
+            {
+              "key": "Traits",
+              "value": "Parry, Counter Attack, Fey."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_unforgiven-warband",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Unforgiven warband",
+      "overview": "A band of wretched Dusklings that have fallen into disgrace and been cast out.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 self bows"
+            },
+            {
+              "key": "Traits",
+              "value": "Unknown Enemy. 10-20"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_aspiring-party",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Aspiring party",
+      "overview": "Young raiders hoping to gain status by slaying a particularly worthy opponent in battle. Aspire to glory: The Aspiring receive a Combat Bonus in melee against foes with a Combat Skill of +1 or greater.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+1"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 self bows war"
+            },
+            {
+              "key": "Traits",
+              "value": "Brave."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_warband-remnants",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Warband remnants",
+      "overview": "The stragglers of a failed raid, limping away with the meager spoils they have acquired. Scattering these bands before they can regroup will help your long-term prospects. Gather the spoils: Holding the Field awards +1 Adventure Point and +1 Gold Mark in petty coin.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "1 self bow"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_hunting-band",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Hunting band",
+      "overview": "Duskling hunters are relentless and talented, often acting both as hunters, foragers and raiding forces. Hunters: If you Hold the Field, you may add 1 ration.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+1"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 self bows"
+            },
+            {
+              "key": "Traits",
+              "value": "Slippery."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_blood-band",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Blood- band",
+      "overview": "Some warbands believe that warpaint made from the blood of their comrades grants them resilience to strikes in battle.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 self bows streaked"
+            },
+            {
+              "key": "Traits",
+              "value": "Tough."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_maddened-wave",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Maddened wave",
+      "overview": "Consumed by some mania, the attack has lost all cohesion. The Dusklings simply hurl themselves at you, eager to sate their blood-mad ambitions. Status through glory: Whenever a non-Leader figure knocks out a foe in melee combat, roll D6. On a roll of a 1, immediately promote them to a Sergeant. Increase their Toughness to 5 and grant the Parry trait.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_mist-clad-warband",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Mist-clad warband",
+      "overview": "A warband worshipping a canine predator of their homelands known for hunting in the morning fog. The members often decorate themselves with pelts and animal fangs. Hard to spot: In Defensive battles, modify spotting rolls against them by -1.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+1"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 self bows"
+            },
+            {
+              "key": "Traits",
+              "value": "Poor shots, Unknown Enemy. 66-75"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_prowling",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Prowling",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 self bows renegades A warband that has transgressed against a war leader and struck out on their own, until they can return in blood-soaked glory. Traits: Skirmisher, Brave, Poor Shots, Crawling."
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_death-warriors",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Death- warriors",
+      "overview": "Whether from a great disgrace or a boast gone out of hand, the Death-sworn don heavy coats of mail, and hurl themselves at the strongest foes they can find.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None sworn"
+            },
+            {
+              "key": "Traits",
+              "value": "Parry, Terrifying."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_winding-bows",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Winding bows",
+      "overview": "Path warband A secretive cult distrusted by their comrades for their adherence to the Old Gods instead of the Duskling ways. Bitter determination: If at the start of the Tracking Phase, a Winding Path member is within 6\" of a warband member, they all become Fearless.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 self"
+            },
+            {
+              "key": "Traits",
+              "value": "Poisoned, Poor Shots, Crawling."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_notched-blades",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Notched blades",
+      "overview": "Highly skilled warriors that disdain a ranged attack, preferring to engage their foes up close.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+1"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Parry, Relentless."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_skull-taker-warband",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Skull-taker warband",
+      "overview": "The elite of the Duskling forces, they have forsaken any semblance of individuality to pursue the ways of war. Even other Dusklings view them with fear.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+1"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 self bows"
+            },
+            {
+              "key": "Traits",
+              "value": "Poor Shots, Gruesome, Relentless, Terrifying. Leaders receive Regeneration."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_spawned-brood",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Spawned brood",
+      "overview": "Those who have never witnessed battle before attack eagerly, though they lack much of the toughness and brute strength of their more battle-hardened cousins.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+1"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 javelins"
+            },
+            {
+              "key": "Traits",
+              "value": "Skirmisher. 1 2 self bows 12-24 Kin-blooded +1 5\" / +2\" +0 +0 / +0 4 While appearing Human in form and physique, their unblinking eyes and scaly skin suggests an ancient connection to the Oldest Kin. Thin blood: Kin-Blooded are not subject to the Old Kin special rules. Traits: Unknown Enemy. 25-35"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_warrior-brood",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Warrior brood",
+      "overview": "The rank and file of the Kin armies, wielding weapons of bone, with leather harnesses strapped over their scaly hides. Silver jewelry: Collect 1 Gold Mark for every Leader slain. 1 None Relict brood +2 5\" / +2\" +0 +0 / +1 5 A brood reeking of sorcery, their crude humanoid forms were conjured from times long past.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 javelins"
+            },
+            {
+              "key": "Traits",
+              "value": "Regeneration. 41-47 Needle"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_fang-pack",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Fang pack",
+      "overview": "Long-limbed lizards with a mouth full of fangs, they seem to share a primitive pack intelligence.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Awareness."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_raider-brood",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Raider brood",
+      "overview": "Skulking foes that hurl venom-tipped darts at their foes, they are at their most dangerous in cramped conditions and close quarters.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 javelins"
+            },
+            {
+              "key": "Traits",
+              "value": "Crawling. Ranged attacks have Poison."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_ravager-brood",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Ravager brood",
+      "overview": "These broods are employed specifically to harry and hunt. Their scales have an iron-like sheen that is like a coat of steel maille.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+1"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 javelins"
+            },
+            {
+              "key": "Traits",
+              "value": "Awareness."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_hunter-beast-pack",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Hunter beast pack",
+      "overview": "These ferocious war-beasts share the reptilian ancestry of their masters. They are unrelenting hunters used to harass and demoralize foes before a raid. Jungle tactics: Hunter Beasts receive a Combat Bonus in melee if they or their opponent is within 1\" of a terrain feature.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Slippery. 74-82"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_war-strong-brood",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "War-strong brood",
+      "overview": "Battle-hardened veterans of many campaigns, the War-strong have grown to monstrous bulk and power.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Relentless. 1 None Deep coven +2 4\" / +2 +1 +0 / +1 5 Advancing with chants of the old oceans, the Covens are wreathed in the heavy stench of salt and magic. Call the kindred: In each Tracking Phase, roll D6 for every coven member within 8\" of a warband member. For every roll of 6, place a Kin-Blooded figure (from the above entry on this table) adjacent to the coven-member in question. This ability is a spell, cast by all coven figures in range. Traits: Terrifying, Poison. 89-94"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_cold-band",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Cold band",
+      "overview": "The war-priests of the Kin have gazed into worlds beyond. As such, the mortal realms hold no terrors to cow their cold hearts.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 sorcerous bolts blooded (equal to crossbows) priest"
+            },
+            {
+              "key": "Traits",
+              "value": "Tough, Fearless, Skirmisher."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_battle-band",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Battle band",
+      "overview": "The most scarred and battle-worn of the Old Kin, these warriors have seen all and slain most of those the warm-blooded can muster.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 javelins champion"
+            },
+            {
+              "key": "Traits",
+              "value": "Relentless, Fearless."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_craven",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Craven",
+      "overview": "deserters 20-28 Wayward soldiers who have forsaken the war and resorted to looting travelers. 29-35 Not dying today: Morale dice fail on a 1-3. 36-45",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 slings"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_opportunistic-pillagers",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Opportunistic pillagers",
+      "overview": "Foragers for one of the warring armies. They seem more concerned with acquiring loot than any military purpose. Pillagers: If you Hold the Field, roll 2D6. For each of the dice showing a 5 or 6, you receive looted foodstuffs worth 1 ration.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 slings"
+            },
+            {
+              "key": "Traits",
+              "value": "Slippery."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_cruel-deserters",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Cruel deserters",
+      "overview": "In a few more weeks, the war will take their minds too, but for now, they cling to the few shreds of base Human emotion they can still muster.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 self bows"
+            },
+            {
+              "key": "Traits",
+              "value": "Skirmisher, Gruesome."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_torch-a",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Torch a",
+      "overview": "Unique Foe, a roll on the Enemy Plans Table (p.207) is triggered after the battle, unless you slay the Unique Foe.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 slings bearers A frantic cult devoted to the purifying torch. Rarely good news near settlements. The tip of the spear: If accompanied by"
+            },
+            {
+              "key": "Traits",
+              "value": "Outflank."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_gibbering-crawlers",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Gibbering crawlers",
+      "overview": "It is hard to tell what is worse: Their manic laughter, or how they swarm at the smell of fresh blood. Drawn by blood: Every time a warband member is knocked out, place 2 more Corpse-Crawlers randomly along the edge of the battlefield.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None corpse-"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_soot-stained-fiends",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Soot-stained fiends",
+      "overview": "With blackened wings, these imp-like devils descend on the dying. Dampening aura: Each Tracking Phase, roll 2D6. If the roll is equal to or below the battle round number just finished, any Mystic becomes unable to cast spells for the rest of the battle.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Fly."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_forsaken",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Forsaken",
+      "overview": "While they still resemble the people they once were, the war has taken their minds. They remember nothing but the slaughter.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 crossbows infantry"
+            },
+            {
+              "key": "Traits",
+              "value": "Tough, Gruesome."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_war-mad-roamers",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "War-mad roamers",
+      "overview": "Animalistic in mind, these war-taken cling to life so they might hunt the prey of those who have not yet seen their light. Hunted in the gloom: Characters forced to roll on the Flight in the Dark Table cannot reroll or negate the result in any way.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 self bows"
+            },
+            {
+              "key": "Traits",
+              "value": "Awareness."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_battlefield-stalkers",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Battlefield stalkers",
+      "overview": "Hunched over, these semi-intelligent creatures prowl the battlefields for flesh to consume. They reek with filth. Dark blood: Any Wounds sustained by the warband cannot be healed or removed during the battle, regardless of methods.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_war-cultists-the",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "War cultists the",
+      "overview": "Tracking Phase, roll 2D6. If the roll is equal to or below the number of the battle round just finishing, their chanting summons a Minotaur (from the",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None Drenched in the death-stained soil, their keening wails call to the war-beasts of the fog. Calling the sons of the earth: In"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_torn-flags",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Torn flags",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None The Torn Flags have renounced all allegiance except to the war itself. They leave no survivors. Traits: Parry, Counter Attack."
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_forsaken-crossbows",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Forsaken crossbows",
+      "overview": "Beneath their steel helmets, unblinking eyes stare from pale faces. Before the war took their minds, they were the brightly clad elite of an army.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 22,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "elite"
+            },
+            {
+              "key": "Traits",
+              "value": "Relentless, Tough, Gruesome."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_unmarked-legion",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Unmarked legion",
+      "overview": "The Unmarked legion consists of soldiers who have not yet been admitted into any of the beast legions. They will go to great lengths to earn their admittance in battle.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 slings"
+            },
+            {
+              "key": "Traits",
+              "value": "Brave. 13-22"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_legion-of-the",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Legion of the",
+      "overview": "Weasel A legion selected for speed and agility, its soldiers are often shorter than their counterparts.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 slings"
+            },
+            {
+              "key": "Traits",
+              "value": "Slippery."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_legion-of-the-2",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Legion of the",
+      "overview": "Owl The legion is deployed to act as sentries and guards, intercepting threats before they can strike at vital points.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 crossbows"
+            },
+            {
+              "key": "Traits",
+              "value": "Awareness."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_legion-of-the-3",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Legion of the",
+      "overview": "Raven A sinister legion specializing in hit-and-run tactics. Hit and run: Legionaries that survive losing a melee exchange will immediately withdraw a full move directly away from the winner. This ends the melee engagement.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 crossbows"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_legion-of-the-4",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Legion of the",
+      "overview": "Swine A tough legion that prides itself on violent tactics and self-determination. We stand alone: Crossbow legionaries cannot provide a Combat Bonus to melee troops.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 crossbows"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_legion-of-the-5",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Legion of the",
+      "overview": "Ox The Legion of the Ox accompanies the vanguard, focusing on a flexible fighting style combined with staying power.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 crossbows"
+            },
+            {
+              "key": "Traits",
+              "value": "Outflank."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_legion-of-the-6",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Legion of the",
+      "overview": "Lion One of the primary legions, the lions are stout, front-line troops emphasizing a steady advance on the enemy position. Their great chain of victories is marked on their banners.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 crossbows"
+            },
+            {
+              "key": "Traits",
+              "value": "Parry. 68-75"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_legion-of-the-7",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Legion of the",
+      "overview": "Viper Clad in coats of scale armor, the vipers rely on mobile firepower to back up the infantry attack.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 crossbows"
+            },
+            {
+              "key": "Traits",
+              "value": "Skirmisher."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_legion-of-the-crossbows",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Legion of the crossbows",
+      "overview": "Wolverine Snarling like their totems, the legionaries hurl themselves forward in battle-lust.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3"
+            },
+            {
+              "key": "Traits",
+              "value": "Awareness, Counter Attack."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_legion-of-the-8",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Legion of the",
+      "overview": "Mole Renowned for its stubbornness and defensive fighting, the Legion of the Mole is obstinate in the extreme. Combined arms: Each Melee Trooper must remain within 1\" of a Ranged Trooper if possible, and will only move to attack foes within one move.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "4 crossbows"
+            },
+            {
+              "key": "Traits",
+              "value": "Brave."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_legion-of-the-9",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Legion of the",
+      "overview": "Eagle The most valorous of the legions, the Eagles carry the finest weapons in the kingdom.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 crossbows"
+            },
+            {
+              "key": "Traits",
+              "value": "Brave."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_legion-of-crossbows",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Legion of crossbows",
+      "overview": "Iron The only legion not carrying an animal totem. To join the guard, a legionary must put loyalty above even the spirits. Belt purse: Defeating a Leader figure accompanying the Guard always awards +1 Gold Mark above and beyond any normal rewards.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 3,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3"
+            },
+            {
+              "key": "Traits",
+              "value": "Relentless, Brave."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_dust-of",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Dust of",
+      "overview": "Dust Hounds prowl the land, looking for prey. While normally they would not attack a group of Humans, it seems the dark whispers in the foggy forests affect them too.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None Hounds Fierce and highly aggressive canines, packs"
+            },
+            {
+              "key": "Traits",
+              "value": "Awareness."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_petty-robbers",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Petty robbers",
+      "overview": "When armies prey on the common folk, the common folk prey on each other. Untrained rabble: Morale dice will fail on a 1-3.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 slings"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_roving-fiends",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Roving fiends",
+      "overview": "Flocks of humanoid beasts with rudimentary intelligence, they live off carcasses and what they can kill with their clawed hands.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Regenerate."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_rag-tag-brigands",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Rag-tag brigands",
+      "overview": "More successful bands of brigands often have a reward on their heads. The duke pays a bounty: Roll D6 for every Leader or Unique Foe slain. On a 5-6, receive 1 Gold Mark extra.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+4"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "1 self bow"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_goblin-war-dead-party",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Goblin war dead party",
+      "overview": "The twisted goblins are a common sight near deep forests, hunting for anything that will give them sport.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 slings"
+            },
+            {
+              "key": "Traits",
+              "value": "Skirmisher, Fey."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_organized-robbers",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Organized robbers",
+      "overview": "More ambitious criminals can often become quite adept at skirmish tactics. Crime does pay a little: If you Hold the Field, you find 1 Gold Mark in petty coin.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 self bows"
+            },
+            {
+              "key": "Traits",
+              "value": "Skirmisher."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_northern-wolves",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Northern wolves",
+      "overview": "Unlike normal wolves, the wolves of the North are malign and aggressive creatures driven by a cruel cunning. In recent years, packs have escaped South, driven from their lands by some unknown horror.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Awareness, Outflank."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_robber-you",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Robber you",
+      "overview": "Hold the Field, you find 1 Gold Mark in petty coin.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 crossbows baron patrol A petty noble has decided to do a bit of tax collection by shaking down whoever can't resist. Tax the taxman: If"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_strange-troops",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Strange troops",
+      "overview": "Unknown soldiers with strange markings on their equipment. They attack as soon as you hail them, and do not seem to speak a language you have ever heard before.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 self bows"
+            },
+            {
+              "key": "Traits",
+              "value": "Brave, Parry."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_infamous-marauders",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Infamous marauders",
+      "overview": "Brutal raiders from a far-away land, their reputation precedes them. Raiders: If playing a defensive battle scenario, all rolls to spot infiltrators are at a -1 penalty, and the enemy strength is increased by 1 melee figure.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+1"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "2 self bows"
+            },
+            {
+              "key": "Traits",
+              "value": "Counter Attack."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_half-fey-raiders",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Half-Fey raiders",
+      "overview": "The fey madness occasionally strikes those of half-fey heritage. Such bands will roam the land, howling, and laughing as they search for blood.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+1"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "3 longbows"
+            },
+            {
+              "key": "Traits",
+              "value": "Fey, Parry."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_giant-rats",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Giant rats",
+      "overview": "It's disputed whether they even really exist.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+5"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Slippery, Crawling. 1 None 15-24 Giant bugs +4 6\" / +3\" +0 +0 / +0 3 Too many legs and too many mandibles, these beasts express little fear of death. Traits: Brave, Crawling. 25-31 Winged +3 5\" / 0\" +0 +0 / +0 4 2 None Imps Minions of a powerful Aberration struggling to enter our realms, these sniveling beings rejoice in inflicting injury and pain. Traits: Flying, Monster. 32-44 Skeletal +4 4\" / 0\" +0 +0 / +0 4 1 None defenders While the curses and injustices of the world are quite capable of animating the undead, these defenders seem to have been created specifically for the purpose. Traits: Undead. 45-50"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_decrepit-worshippers",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Decrepit worshippers",
+      "overview": "Blood-soaked followers of some minor Aberration. They huddle in filth and gibberish while chanting insane oaths in the gloom. Soaked in blood: A worshipper that knocks out a warband member raises their Combat Skill and Toughness by +1 each for the rest of the battle. This can only apply once per figure.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Crawling."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_goblin-infestation",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Goblin infestation",
+      "overview": "Twisted cousins of the Ice-Court, it is said that they were cursed to bear a visage that matches their vile hearts. Gremlin aura: Any character assigned a 1 on the initiative dice cannot use any enchanted item or cast any spells for the duration of the battle round.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+5"
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Fey, Gruesome, Crawling."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_cave",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Cave",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+3"
+            },
+            {
+              "key": "Speed",
+              "value": 7,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None Runners Large and dangerous beasts, clad in thick, mottled hides and rushing to the attack. Charge: Cave runners moving at least 4\" in a straight line before entering melee combat do +0 / +1 damage in the first exchange. Traits: Brave, Crawling."
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_gargoyle-sentries",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Gargoyle sentries",
+      "overview": "A sorcerer of old conjured these demon-like beings and bound them as guards. Over the decades, they slowly turn more stone-like until they lose their final form and memories. As such they are fearless in battle, preferring death to decay.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Fearless, Tough, Crawling. 76-81 Tomb +2 5\" / 0\" +1 +1 / +0 4 2 None shades Ghostlike visages that cling to the last places of the living world. Their attacks are accompanied by bone-chilling howls. Traits: Undead, Regeneration, Terrifying. 82-90"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_delve-enters",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Delve enters",
+      "overview": "Line of Sight of one or more Delve crawlers they could not see at the start of their move, roll D6. If the roll exceeds the Agility score of the warband figure, they are encumbered by webs, and must halt moving immediately. The webs have no further effect.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+2"
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None crawlers A horror often only whispered about, these multi-legged hell creatures attack by trap and by poisoned fang. Webbed: When a moving warband member"
+            },
+            {
+              "key": "Traits",
+              "value": "Poison, Slippery, Crawling."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_crystal-wards",
+      "type": "npc",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Crystal wards",
+      "overview": "The greatest of wizards are said to have been able to bind sentience and life-force inside statues of hard, rock-like crystal. Hardened shells: If the roll to Overcome Toughness in melee combat against a Crystal ward is a natural 1, the weapon becomes Damaged.",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": "+1"
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "Traits",
+              "value": "Relentless, Fearless, Crawling. Eternal +2 4\" / 0\" +2 +0 / +1 4 2 None Guard A grim-faced oath of eternal service to a long-forgotten master still echoes when these fell warriors challenge an intruder. Guardian legion: Every time a warband member becomes a casualty for any reason, place a Tomb Shade (from earlier on this table) in the place they fell. The shade cannot act this battle round. Traits: Undead, Counter Attack."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
