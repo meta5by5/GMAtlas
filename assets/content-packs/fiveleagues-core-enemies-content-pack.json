@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "ent_5lfb_core_desperate-mob",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -61,6 +61,17 @@
               "value": "2 slingers"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -70,7 +81,7 @@
     },
     {
       "id": "ent_5lfb_core_sneaky-thieves",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -126,6 +137,17 @@
               "value": "2 self bows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -135,7 +157,7 @@
     },
     {
       "id": "ent_5lfb_core_slave-raiders-slingers",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -191,6 +213,17 @@
               "value": "2"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -200,7 +233,7 @@
     },
     {
       "id": "ent_5lfb_core_grim-faced-rebels",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -256,6 +289,17 @@
               "value": "2 self bows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -265,7 +309,7 @@
     },
     {
       "id": "ent_5lfb_core_outlaw-gang-slingers",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -321,6 +365,17 @@
               "value": "2"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Outflank."
             }
@@ -330,7 +385,7 @@
     },
     {
       "id": "ent_5lfb_core_deserter-squad",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -386,6 +441,17 @@
               "value": "2 self bows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -395,7 +461,7 @@
     },
     {
       "id": "ent_5lfb_core_blood-stained-renegades",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -451,6 +517,17 @@
               "value": "2 self bows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Brave. Sergeants are also Tough."
             }
@@ -460,7 +537,7 @@
     },
     {
       "id": "ent_5lfb_core_well-armed-brigands",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -516,6 +593,17 @@
               "value": "2 self bows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -525,7 +613,7 @@
     },
     {
       "id": "ent_5lfb_core_hired-knives",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -581,6 +669,17 @@
               "value": "3 throwing murderers"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Outflank, Slippery."
             }
@@ -590,7 +689,7 @@
     },
     {
       "id": "ent_5lfb_core_murder-knives",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -646,6 +745,17 @@
               "value": "3 throwing cultists"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Brave, Counter Attack."
             }
@@ -655,7 +765,7 @@
     },
     {
       "id": "ent_5lfb_core_penitent-zealots",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -711,6 +821,17 @@
               "value": "None"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Fearless."
             }
@@ -720,7 +841,7 @@
     },
     {
       "id": "ent_5lfb_core_order-of-the-from",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -776,6 +897,17 @@
               "value": "3 throwing snake knives A secretive society of assassins identified by a snake tattoo on the underside of their wrists. Their goals and agenda are unknown, but they never kill for coin. Traits: Brave, Poison, Crawling, Counter Attack."
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -785,7 +917,7 @@
     },
     {
       "id": "ent_5lfb_core_broken-fanatics",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -841,6 +973,17 @@
               "value": "1 crossbow"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Fearless. Roaming +4 3\" / 0\" +0 +0 / +0 5 0 None dead On a moonless night, the dead may rise to vent their hatred of those who still walk in the light. Swarming: Every time a warband member becomes a casualty, place another Roaming Dead on a random battlefield edge. Traits: Undead, Unknown Enemy. 0 2 slings 27-34 The outcast +2 5\" / +3\" +0 +0 / +0 3 In a harsh winter, it is said a village may turn to Human flesh for survival. The guilty are exiled and the taint takes what Humanity remained. Bounty on their heads: Roll a D6 for every Leader slain. On a 6, you are awarded 1 Gold Mark after the battle in bounties. Traits: Outflanking. 35-46"
             }
@@ -850,7 +993,7 @@
     },
     {
       "id": "ent_5lfb_core_cultist-whisperers",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -906,6 +1049,17 @@
               "value": "1 self bow"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "All Leaders have Poison, Outflank, Brave."
             }
@@ -915,7 +1069,7 @@
     },
     {
       "id": "ent_5lfb_core_coven-of-the-revenants-the",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -971,6 +1125,17 @@
               "value": "None half-dead A secretive cult looking to bridge the gap between life and death, achieving a form of immortality in the process. Pained ascension: During"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Brave."
             }
@@ -980,7 +1145,7 @@
     },
     {
       "id": "ent_5lfb_core_collector-mob",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1036,6 +1201,17 @@
               "value": "3 slings"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Outflank. 2 None The Corrupt +3 4\" / 0\" +1 +0 / +0 5 Mutated wretches that roam the outskirts of civilization. The whispers tormented their physical form and shaped their minds towards evil. Twisting forms: Warband members do not gain Combat Bonuses from allies against the Corrupt. Traits: Monsters. 78-85 Fog"
             }
@@ -1045,7 +1221,7 @@
     },
     {
       "id": "ent_5lfb_core_born-the",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1101,6 +1277,17 @@
               "value": "None When the fog is so thick you can feel it on your skin,"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Gruesome, Brave. Grave +2 4\" / 0\" +2 +1 / +0 5 2 None Walkers The skeletal remains of knights and champions slain through betrayal or treason. They yearn for destruction against a worthy adversary. Traits: Undead. 94-100 Night"
             }
@@ -1110,7 +1297,7 @@
     },
     {
       "id": "ent_5lfb_core_folk-the",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1166,6 +1353,17 @@
               "value": "2 throwing knives A strange, insular breed,"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Poison, Outflank, Fey."
             }
@@ -1175,7 +1373,7 @@
     },
     {
       "id": "ent_5lfb_core_skirmisher-pack",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1231,6 +1429,17 @@
               "value": "4 slings"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Skirmisher, Crawling. 10-19"
             }
@@ -1240,7 +1449,7 @@
     },
     {
       "id": "ent_5lfb_core_gibbering-horde",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1296,6 +1505,17 @@
               "value": "None"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Unknown Enemy."
             }
@@ -1305,7 +1525,7 @@
     },
     {
       "id": "ent_5lfb_core_gnawling-raiders",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1361,6 +1581,17 @@
               "value": "3 slings"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Skirmisher, Crawling."
             }
@@ -1370,7 +1601,7 @@
     },
     {
       "id": "ent_5lfb_core_curse",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1426,6 +1657,17 @@
               "value": "None Bound Some the curse deforms even more, their limbs ending in grotesque claws fit only for rending. Traits: Gruesome."
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -1435,7 +1677,7 @@
     },
     {
       "id": "ent_5lfb_core_gnawling-of",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1491,6 +1733,17 @@
               "value": "2 crossbows warriors A war party"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Skirmisher, Counter Attack."
             }
@@ -1500,7 +1753,7 @@
     },
     {
       "id": "ent_5lfb_core_knife-breakers",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1556,6 +1809,17 @@
               "value": "None"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Outflank."
             }
@@ -1565,7 +1829,7 @@
     },
     {
       "id": "ent_5lfb_core_tunnel-fighters",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1621,6 +1885,17 @@
               "value": "2 crossbows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Slippery."
             }
@@ -1630,7 +1905,7 @@
     },
     {
       "id": "ent_5lfb_core_seething-infiltrators",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1686,6 +1961,17 @@
               "value": "3 slings"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Outflank, Unknown Enemy, Poison, Crawling. 1 None 73-80 The Silenced +4 6\" / +4\" +1 +0 / +0 4 A secretive cult of assassination experts among the Gnawlings. Traits: Silenced receive the Poison trait and increase damage to +2/+0 when fighting a warband member that has no allies within 3\". 81-87"
             }
@@ -1695,7 +1981,7 @@
     },
     {
       "id": "ent_5lfb_core_shield-bearers",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1751,6 +2037,17 @@
               "value": "2 crossbows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Parry. Return shots: Shield-bearer ranged troops will immediately shoot back if they are Hit by a ranged attack that is saved by their Armor."
             }
@@ -1760,7 +2057,7 @@
     },
     {
       "id": "ent_5lfb_core_hate-sworn-crossbows",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1816,6 +2113,17 @@
               "value": "2"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Counter Attack."
             }
@@ -1825,7 +2133,7 @@
     },
     {
       "id": "ent_5lfb_core_the-each",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1881,6 +2189,17 @@
               "value": "None Ascended The Gnawlings constantly experiment with sorcery to break their curse. For some, infusions of fey magic promise a path to great power. Bolts of energy: At the start of"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Fey."
             }
@@ -1890,7 +2209,7 @@
     },
     {
       "id": "ent_5lfb_core_goblin-raiders",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1946,6 +2265,17 @@
               "value": "None"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Outflank, Fey. 12-23"
             }
@@ -1955,7 +2285,7 @@
     },
     {
       "id": "ent_5lfb_core_forest-folk-provide",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2011,6 +2341,17 @@
               "value": "2 self bows A number of people live in the fey-woods, fighting for their otherworldly lords. Forest fighting: Forest and bush features do not"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -2020,7 +2361,7 @@
     },
     {
       "id": "ent_5lfb_core_elfin-hounds-against",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2076,6 +2417,17 @@
               "value": "None Sleek and fierce, these hunting dogs have an unnatural cunning, and a thirst for war. Unpredictable movements: Ranged attacks"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Awareness, Outflank, Fey."
             }
@@ -2085,7 +2437,7 @@
     },
     {
       "id": "ent_5lfb_core_spider-touched",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2141,6 +2493,17 @@
               "value": "2 self bows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Poison, Outflank, Brave."
             }
@@ -2150,7 +2513,7 @@
     },
     {
       "id": "ent_5lfb_core_time-lost-warriors",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2206,6 +2569,17 @@
               "value": "2 crossbows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Brave. 2 None War dryads +3 6\" / +2\" +0 +0 / +0 4 Dryads are known to pull hapless wanderers into the fey realm. The results are often fatal. Painful Lure: A character Wounded by a Dryad must make a 7+ [Devotion] test. Failure causes them to be removed from the table. Forest whispers: All characters removed from the table due to Painful Lure or as casualties must roll on the Flight in the Dark Table, instead of the Injury Table. Traits: Counter Attack, Fey."
             }
@@ -2215,7 +2589,7 @@
     },
     {
       "id": "ent_5lfb_core_tree-wardens",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2271,6 +2645,17 @@
               "value": "None"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Tough, Regeneration, Fey. 1 3 self bows 64-71 Fey spirits +3 6\" / +3\" +1 +0 / +0 5 Faerie-kind that linger too long in the otherworld tend to lose their grip on reality, as well as sanity. When they take to the field, it is as howling, half-ethereal forms, lingering for just one more battle. Traits: Terrifying, Flying, Fey. 3 3 crossbows 72-81 Fey soldiers +3 6\" / +3\" +1 +1 / +0 4 The ranks of the Faerie Court armies are a sight to behold, clad in armor of Elven silver. Traits: Skirmisher, Fey. 82-89"
             }
@@ -2280,7 +2665,7 @@
     },
     {
       "id": "ent_5lfb_core_winter-crossbows",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2336,6 +2721,17 @@
               "value": "3"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Brave, Fey."
             }
@@ -2345,7 +2741,7 @@
     },
     {
       "id": "ent_5lfb_core_fey-knights",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2401,6 +2797,17 @@
               "value": "None While they often fight dismounted (faerie horses persisting only briefly in the mortal realms), Fey knights are a terrifying force on the battlefield. Traits: Fearless, Tough, Fey. 3 3 crossbows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Parry, Counter Attack, Fey."
             }
@@ -2410,7 +2817,7 @@
     },
     {
       "id": "ent_5lfb_core_unforgiven-warband",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2466,6 +2873,17 @@
               "value": "2 self bows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Unknown Enemy. 10-20"
             }
@@ -2475,7 +2893,7 @@
     },
     {
       "id": "ent_5lfb_core_aspiring-party",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2531,6 +2949,17 @@
               "value": "2 self bows war"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Brave."
             }
@@ -2540,7 +2969,7 @@
     },
     {
       "id": "ent_5lfb_core_warband-remnants",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2596,6 +3025,17 @@
               "value": "1 self bow"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -2605,7 +3045,7 @@
     },
     {
       "id": "ent_5lfb_core_hunting-band",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2661,6 +3101,17 @@
               "value": "3 self bows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Slippery."
             }
@@ -2670,7 +3121,7 @@
     },
     {
       "id": "ent_5lfb_core_blood-band",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2726,6 +3177,17 @@
               "value": "2 self bows streaked"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Tough."
             }
@@ -2735,7 +3197,7 @@
     },
     {
       "id": "ent_5lfb_core_maddened-wave",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2791,6 +3253,17 @@
               "value": "None"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -2800,7 +3273,7 @@
     },
     {
       "id": "ent_5lfb_core_mist-clad-warband",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2856,6 +3329,17 @@
               "value": "2 self bows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Poor shots, Unknown Enemy. 66-75"
             }
@@ -2865,7 +3349,7 @@
     },
     {
       "id": "ent_5lfb_core_prowling",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2921,6 +3405,17 @@
               "value": "2 self bows renegades A warband that has transgressed against a war leader and struck out on their own, until they can return in blood-soaked glory. Traits: Skirmisher, Brave, Poor Shots, Crawling."
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -2930,7 +3425,7 @@
     },
     {
       "id": "ent_5lfb_core_death-warriors",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2986,6 +3481,17 @@
               "value": "None sworn"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Parry, Terrifying."
             }
@@ -2995,7 +3501,7 @@
     },
     {
       "id": "ent_5lfb_core_winding-bows",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -3051,6 +3557,17 @@
               "value": "2 self"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Poisoned, Poor Shots, Crawling."
             }
@@ -3060,7 +3577,7 @@
     },
     {
       "id": "ent_5lfb_core_notched-blades",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -3116,6 +3633,17 @@
               "value": "None"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Parry, Relentless."
             }
@@ -3125,7 +3653,7 @@
     },
     {
       "id": "ent_5lfb_core_skull-taker-warband",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -3181,6 +3709,17 @@
               "value": "2 self bows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Poor Shots, Gruesome, Relentless, Terrifying. Leaders receive Regeneration."
             }
@@ -3190,7 +3729,7 @@
     },
     {
       "id": "ent_5lfb_core_spawned-brood",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -3246,6 +3785,17 @@
               "value": "2 javelins"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Skirmisher. 1 2 self bows 12-24 Kin-blooded +1 5\" / +2\" +0 +0 / +0 4 While appearing Human in form and physique, their unblinking eyes and scaly skin suggests an ancient connection to the Oldest Kin. Thin blood: Kin-Blooded are not subject to the Old Kin special rules. Traits: Unknown Enemy. 25-35"
             }
@@ -3255,7 +3805,7 @@
     },
     {
       "id": "ent_5lfb_core_warrior-brood",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -3311,6 +3861,17 @@
               "value": "2 javelins"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Regeneration. 41-47 Needle"
             }
@@ -3320,7 +3881,7 @@
     },
     {
       "id": "ent_5lfb_core_fang-pack",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -3376,6 +3937,17 @@
               "value": "None"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Awareness."
             }
@@ -3385,7 +3957,7 @@
     },
     {
       "id": "ent_5lfb_core_raider-brood",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -3441,6 +4013,17 @@
               "value": "3 javelins"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Crawling. Ranged attacks have Poison."
             }
@@ -3450,7 +4033,7 @@
     },
     {
       "id": "ent_5lfb_core_ravager-brood",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -3506,6 +4089,17 @@
               "value": "2 javelins"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Awareness."
             }
@@ -3515,7 +4109,7 @@
     },
     {
       "id": "ent_5lfb_core_hunter-beast-pack",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -3571,6 +4165,17 @@
               "value": "None"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Slippery. 74-82"
             }
@@ -3580,7 +4185,7 @@
     },
     {
       "id": "ent_5lfb_core_war-strong-brood",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -3636,6 +4241,17 @@
               "value": "None"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Relentless. 1 None Deep coven +2 4\" / +2 +1 +0 / +1 5 Advancing with chants of the old oceans, the Covens are wreathed in the heavy stench of salt and magic. Call the kindred: In each Tracking Phase, roll D6 for every coven member within 8\" of a warband member. For every roll of 6, place a Kin-Blooded figure (from the above entry on this table) adjacent to the coven-member in question. This ability is a spell, cast by all coven figures in range. Traits: Terrifying, Poison. 89-94"
             }
@@ -3645,7 +4261,7 @@
     },
     {
       "id": "ent_5lfb_core_cold-band",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -3701,6 +4317,17 @@
               "value": "2 sorcerous bolts blooded (equal to crossbows) priest"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Tough, Fearless, Skirmisher."
             }
@@ -3710,7 +4337,7 @@
     },
     {
       "id": "ent_5lfb_core_battle-band",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -3766,6 +4393,17 @@
               "value": "2 javelins champion"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Relentless, Fearless."
             }
@@ -3775,7 +4413,7 @@
     },
     {
       "id": "ent_5lfb_core_craven",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -3831,6 +4469,17 @@
               "value": "2 slings"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -3840,7 +4489,7 @@
     },
     {
       "id": "ent_5lfb_core_opportunistic-pillagers",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -3896,6 +4545,17 @@
               "value": "2 slings"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Slippery."
             }
@@ -3905,7 +4565,7 @@
     },
     {
       "id": "ent_5lfb_core_cruel-deserters",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -3961,6 +4621,17 @@
               "value": "2 self bows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Skirmisher, Gruesome."
             }
@@ -3970,7 +4641,7 @@
     },
     {
       "id": "ent_5lfb_core_torch-a",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -4026,6 +4697,17 @@
               "value": "3 slings bearers A frantic cult devoted to the purifying torch. Rarely good news near settlements. The tip of the spear: If accompanied by"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Outflank."
             }
@@ -4035,7 +4717,7 @@
     },
     {
       "id": "ent_5lfb_core_gibbering-crawlers",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -4091,6 +4773,17 @@
               "value": "None corpse-"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -4100,7 +4793,7 @@
     },
     {
       "id": "ent_5lfb_core_soot-stained-fiends",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -4156,6 +4849,17 @@
               "value": "None"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Fly."
             }
@@ -4165,7 +4869,7 @@
     },
     {
       "id": "ent_5lfb_core_forsaken",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -4221,6 +4925,17 @@
               "value": "2 crossbows infantry"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Tough, Gruesome."
             }
@@ -4230,7 +4945,7 @@
     },
     {
       "id": "ent_5lfb_core_war-mad-roamers",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -4286,6 +5001,17 @@
               "value": "3 self bows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Awareness."
             }
@@ -4295,7 +5021,7 @@
     },
     {
       "id": "ent_5lfb_core_battlefield-stalkers",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -4351,6 +5077,17 @@
               "value": "None"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -4360,12 +5097,12 @@
     },
     {
       "id": "ent_5lfb_core_war-cultists-the",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
       "name": "War cultists the",
-      "overview": "Tracking Phase, roll 2D6. If the roll is equal to or below the number of the battle round just finishing, their chanting summons a Minotaur (from the",
+      "overview": "Tracking Phase, roll 2D6. If the roll is equal to or below the number of the battle round just finishing, their chanting summons a Minotaur (from the Aberration Table, p.182). Place the monster in the center of the table. This can happen only once per battle. While this is a spell-like ability, the spell was cast prior to the battle, and cannot be prevented except by killing every cultist.",
       "revealed": "",
       "relationships": [],
       "createdAt": "2026-09-18T00:00:00.000Z",
@@ -4416,8 +5153,19 @@
               "value": "None Drenched in the death-stained soil, their keening wails call to the war-beasts of the fog. Calling the sons of the earth: In"
             },
             {
-              "key": "Traits",
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
               "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": "Brave."
             }
           ]
         }
@@ -4425,7 +5173,7 @@
     },
     {
       "id": "ent_5lfb_core_torn-flags",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -4481,6 +5229,17 @@
               "value": "None The Torn Flags have renounced all allegiance except to the war itself. They leave no survivors. Traits: Parry, Counter Attack."
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -4490,7 +5249,7 @@
     },
     {
       "id": "ent_5lfb_core_forsaken-crossbows",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -4546,6 +5305,17 @@
               "value": "elite"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Relentless, Tough, Gruesome."
             }
@@ -4555,7 +5325,7 @@
     },
     {
       "id": "ent_5lfb_core_unmarked-legion",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -4611,6 +5381,17 @@
               "value": "2 slings"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Brave. 13-22"
             }
@@ -4620,7 +5401,7 @@
     },
     {
       "id": "ent_5lfb_core_legion-of-the",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -4676,6 +5457,17 @@
               "value": "2 slings"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Slippery."
             }
@@ -4685,7 +5477,7 @@
     },
     {
       "id": "ent_5lfb_core_legion-of-the-2",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -4741,6 +5533,17 @@
               "value": "2 crossbows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Awareness."
             }
@@ -4750,7 +5553,7 @@
     },
     {
       "id": "ent_5lfb_core_legion-of-the-3",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -4806,6 +5609,17 @@
               "value": "3 crossbows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -4815,7 +5629,7 @@
     },
     {
       "id": "ent_5lfb_core_legion-of-the-4",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -4871,6 +5685,17 @@
               "value": "2 crossbows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -4880,7 +5705,7 @@
     },
     {
       "id": "ent_5lfb_core_legion-of-the-5",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -4936,6 +5761,17 @@
               "value": "2 crossbows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Outflank."
             }
@@ -4945,7 +5781,7 @@
     },
     {
       "id": "ent_5lfb_core_legion-of-the-6",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -5001,6 +5837,17 @@
               "value": "2 crossbows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Parry. 68-75"
             }
@@ -5010,7 +5857,7 @@
     },
     {
       "id": "ent_5lfb_core_legion-of-the-7",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -5066,6 +5913,17 @@
               "value": "3 crossbows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Skirmisher."
             }
@@ -5075,7 +5933,7 @@
     },
     {
       "id": "ent_5lfb_core_legion-of-the-crossbows",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -5131,6 +5989,17 @@
               "value": "3"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Awareness, Counter Attack."
             }
@@ -5140,7 +6009,7 @@
     },
     {
       "id": "ent_5lfb_core_legion-of-the-8",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -5196,6 +6065,17 @@
               "value": "4 crossbows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Brave."
             }
@@ -5205,7 +6085,7 @@
     },
     {
       "id": "ent_5lfb_core_legion-of-the-9",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -5261,6 +6141,17 @@
               "value": "2 crossbows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Brave."
             }
@@ -5270,7 +6161,7 @@
     },
     {
       "id": "ent_5lfb_core_legion-of-crossbows",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -5326,6 +6217,17 @@
               "value": "3"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Relentless, Brave."
             }
@@ -5335,7 +6237,7 @@
     },
     {
       "id": "ent_5lfb_core_dust-of",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -5391,6 +6293,17 @@
               "value": "None Hounds Fierce and highly aggressive canines, packs"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Awareness."
             }
@@ -5400,7 +6313,7 @@
     },
     {
       "id": "ent_5lfb_core_petty-robbers",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -5456,6 +6369,17 @@
               "value": "2 slings"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -5465,7 +6389,7 @@
     },
     {
       "id": "ent_5lfb_core_roving-fiends",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -5521,6 +6445,17 @@
               "value": "None"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Regenerate."
             }
@@ -5530,7 +6465,7 @@
     },
     {
       "id": "ent_5lfb_core_rag-tag-brigands",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -5586,6 +6521,17 @@
               "value": "1 self bow"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -5595,7 +6541,7 @@
     },
     {
       "id": "ent_5lfb_core_goblin-war-dead-party",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -5651,6 +6597,17 @@
               "value": "3 slings"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Skirmisher, Fey."
             }
@@ -5660,7 +6617,7 @@
     },
     {
       "id": "ent_5lfb_core_organized-robbers",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -5716,6 +6673,17 @@
               "value": "2 self bows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Skirmisher."
             }
@@ -5725,7 +6693,7 @@
     },
     {
       "id": "ent_5lfb_core_northern-wolves",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -5781,6 +6749,17 @@
               "value": "None"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Awareness, Outflank."
             }
@@ -5790,7 +6769,7 @@
     },
     {
       "id": "ent_5lfb_core_robber-you",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -5846,6 +6825,17 @@
               "value": "2 crossbows baron patrol A petty noble has decided to do a bit of tax collection by shaking down whoever can't resist. Tax the taxman: If"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -5855,7 +6845,7 @@
     },
     {
       "id": "ent_5lfb_core_strange-troops",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -5911,6 +6901,17 @@
               "value": "2 self bows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Brave, Parry."
             }
@@ -5920,7 +6921,7 @@
     },
     {
       "id": "ent_5lfb_core_infamous-marauders",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -5976,6 +6977,17 @@
               "value": "2 self bows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Counter Attack."
             }
@@ -5985,7 +6997,7 @@
     },
     {
       "id": "ent_5lfb_core_half-fey-raiders",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -6041,6 +7053,17 @@
               "value": "3 longbows"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Fey, Parry."
             }
@@ -6050,7 +7073,7 @@
     },
     {
       "id": "ent_5lfb_core_giant-rats",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -6106,6 +7129,17 @@
               "value": "None"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Slippery, Crawling. 1 None 15-24 Giant bugs +4 6\" / +3\" +0 +0 / +0 3 Too many legs and too many mandibles, these beasts express little fear of death. Traits: Brave, Crawling. 25-31 Winged +3 5\" / 0\" +0 +0 / +0 4 2 None Imps Minions of a powerful Aberration struggling to enter our realms, these sniveling beings rejoice in inflicting injury and pain. Traits: Flying, Monster. 32-44 Skeletal +4 4\" / 0\" +0 +0 / +0 4 1 None defenders While the curses and injustices of the world are quite capable of animating the undead, these defenders seem to have been created specifically for the purpose. Traits: Undead. 45-50"
             }
@@ -6115,7 +7149,7 @@
     },
     {
       "id": "ent_5lfb_core_decrepit-worshippers",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -6171,6 +7205,17 @@
               "value": "None"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Crawling."
             }
@@ -6180,7 +7225,7 @@
     },
     {
       "id": "ent_5lfb_core_goblin-infestation",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -6236,6 +7281,17 @@
               "value": "None"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Fey, Gruesome, Crawling."
             }
@@ -6245,7 +7301,7 @@
     },
     {
       "id": "ent_5lfb_core_cave",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -6301,6 +7357,17 @@
               "value": "None Runners Large and dangerous beasts, clad in thick, mottled hides and rushing to the attack. Charge: Cave runners moving at least 4\" in a straight line before entering melee combat do +0 / +1 damage in the first exchange. Traits: Brave, Crawling."
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": ""
             }
@@ -6310,7 +7377,7 @@
     },
     {
       "id": "ent_5lfb_core_gargoyle-sentries",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -6366,6 +7433,17 @@
               "value": "None"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Fearless, Tough, Crawling. 76-81 Tomb +2 5\" / 0\" +1 +1 / +0 4 2 None shades Ghostlike visages that cling to the last places of the living world. Their attacks are accompanied by bone-chilling howls. Traits: Undead, Regeneration, Terrifying. 82-90"
             }
@@ -6375,7 +7453,7 @@
     },
     {
       "id": "ent_5lfb_core_delve-enters",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -6431,6 +7509,17 @@
               "value": "None crawlers A horror often only whispered about, these multi-legged hell creatures attack by trap and by poisoned fang. Webbed: When a moving warband member"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Poison, Slippery, Crawling."
             }
@@ -6440,7 +7529,7 @@
     },
     {
       "id": "ent_5lfb_core_crystal-wards",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -6496,8 +7585,1615 @@
               "value": "None"
             },
             {
+              "key": "MP",
+              "value": 0,
+              "max": 0,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": ""
+            },
+            {
               "key": "Traits",
               "value": "Relentless, Fearless, Crawling. Eternal +2 4\" / 0\" +2 +0 / +1 4 2 None Guard A grim-faced oath of eternal service to a long-forgotten master still echoes when these fell warriors challenge an intruder. Guardian legion: Every time a warband member becomes a casualty for any reason, place a Tomb Shade (from earlier on this table) in the place they fell. The shade cannot act this battle round. Traits: Undead, Counter Attack."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_ogre",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Ogre",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "None"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_troll",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Troll",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Difficult to Kill"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_minotaur",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Minotaur",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+2 / +2"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "3"
+            },
+            {
+              "key": "Traits",
+              "value": "Knock Back, Magic Resistant"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_werewolf",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Werewolf",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 7,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 3,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "3"
+            },
+            {
+              "key": "Traits",
+              "value": "Cruel Wounds, Difficult to Kill, Charge"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_golem",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Golem",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 3,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+3 / +2"
+            },
+            {
+              "key": "Toughness",
+              "value": 6,
+              "max": 6,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Knock Back"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_giant-lizard",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Giant lizard",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 6,
+              "max": 6,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "None"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_spitting-lizard",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Spitting lizard",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 2,
+              "max": 2,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Area Attack (9\", Damage +0/+1), Venom (melee and range)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_manticore",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Manticore",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+2 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "3"
+            },
+            {
+              "key": "Traits",
+              "value": "Ranged Attack (9\", Damage +1/+0), Lash"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_griffon",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Griffon",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 9,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Wings, Charge"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_giant",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Giant",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 8,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+2 / +3"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 6,
+              "max": 6,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "3"
+            },
+            {
+              "key": "Traits",
+              "value": "Size, Knock Back"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_wraith",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Wraith",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Ethereal, Terror, Undead"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_wight",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Wight",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "3"
+            },
+            {
+              "key": "Traits",
+              "value": "Cruel Wounds, Ethereal, Fell Touch, Terror, Undead"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_death-knight",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Death knight",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 3,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "3"
+            },
+            {
+              "key": "Traits",
+              "value": "Terror, Magic Resistant, Undead"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_fiend",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Fiend",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 3,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 6,
+              "max": 6,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 3,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 6,
+              "max": 6,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "3"
+            },
+            {
+              "key": "Traits",
+              "value": "Cruel Wounds, Magic Resistant, Terror, Size"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_undead-construct",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Undead construct",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +2"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 7,
+              "max": 7,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "4"
+            },
+            {
+              "key": "Traits",
+              "value": "Difficult to Kill, Terror, Size, Undead"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_elemental",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Elemental",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+2 / +2"
+            },
+            {
+              "key": "Toughness",
+              "value": 6,
+              "max": 6,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 3,
+              "max": 3,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Fell Touch"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_giant-spider",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Giant spider",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 4,
+              "max": 4,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Size, Terror, Venom"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_wyvern",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Wyvern",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +1"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "3"
+            },
+            {
+              "key": "Traits",
+              "value": "Size, Venom, Wings"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_hydra",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Hydra",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 8,
+              "max": 8,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "3"
+            },
+            {
+              "key": "Traits",
+              "value": "Lash, Size, Difficult to Kill"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_monster-lizard",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Monster lizard",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 3,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+2 / +2"
+            },
+            {
+              "key": "Toughness",
+              "value": 6,
+              "max": 6,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 8,
+              "max": 8,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "4"
+            },
+            {
+              "key": "Traits",
+              "value": "Size, Terror, Charge"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_5lfb_core_drake",
+      "type": "lifeform",
+      "tags": [
+        "lifeform"
+      ],
+      "name": "Drake",
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-18T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "fiveleagues-lifeform",
+          "fields": [
+            {
+              "key": "Num.",
+              "value": ""
+            },
+            {
+              "key": "Speed",
+              "value": 8,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat Skill",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Damage",
+              "value": "+3 / +3"
+            },
+            {
+              "key": "Toughness",
+              "value": 6,
+              "max": 6,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Armor",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "plain"
+            },
+            {
+              "key": "Ranged",
+              "value": "None"
+            },
+            {
+              "key": "MP",
+              "value": 10,
+              "max": 10,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "Reward Rating",
+              "value": "5"
+            },
+            {
+              "key": "Traits",
+              "value": "Area Attack (12\", Damage +1/+2), Size, Terror, Wings"
             }
           ]
         }

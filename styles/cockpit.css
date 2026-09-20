@@ -1291,45 +1291,106 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    scale apply relative to the viewport's own top-left corner. */
 .hexcrawl-palette-row { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; margin-bottom: var(--sp-1); }
 .hexcrawl-viewport {
-  position: relative; width: 100%; padding-top: 60%; overflow: hidden;
+  position: relative; width: 100%; padding-top: 60%; min-height: 320px; overflow: hidden;
   background-color: var(--bg-inset);
   border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
 .hexcrawl-viewport.placing { cursor: crosshair; }
+/* Direct follow-up request: "make the Hex grid window fill the panel to
+   the bottom... and adjust as the browser is resized" — the plain
+   padding-top aspect-ratio box above sizes off the drawer's WIDTH, not
+   its available height, so it can never reach the panel's own bottom
+   edge nor respond to a vertical resize. :has() lets .mc-drawer (a real,
+   definite-height fixed panel — position:fixed;top;bottom:0) become a
+   flex column ONLY while it's actually showing the Hexcrawl drawer,
+   without touching its shared layout for every other drawer; the
+   viewport then flex-grows to fill whatever vertical space the
+   header/toolbar/palette/detail-panel don't use, genuinely reaching the
+   panel's bottom and re-flowing on every resize. Browsers without :has()
+   support simply keep the width-based aspect-ratio box above instead —
+   graceful degradation, not a hard requirement. */
+.mc-drawer:has(.hexcrawl-viewport) { display: flex; flex-direction: column; overflow: hidden; }
+.mc-drawer:has(.hexcrawl-viewport) .mc-drawer-body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.mc-drawer:has(.hexcrawl-viewport) .hexcrawl-viewport { flex: 1 1 auto; padding-top: 0; min-height: 320px; }
 .hexcrawl-world { position: absolute; inset: 0; transform-origin: 0 0; cursor: grab; }
 .hexcrawl-world:active { cursor: grabbing; }
-/* Each .hex-cell is absolutely positioned (left/top set inline per hex,
-   drawers/index.js) and clipped to a real hexagon via clip-path (the
-   same six points for every hex, computed once — only the div's own
-   position differs). The 6 .hex-vertex dots are deliberately SIBLINGS of
-   .hex-cell, not children — a clip-path'd parent would cut off anything
-   sitting right at its own edge, so vertex dots render just outside that
-   clip in the same unclipped .hexcrawl-world layer, positioned via the
-   identical center+inset-vertex math (drawers/index.js's
-   HEX_VERTEX_INSET) so they still read as "this hex's own corner." */
+/* --hex-default-fill is the solid color an unpainted hex's own SVG
+   polygon uses (drawers/index.js reads it via fill="var(--hex-default-
+   fill)" when a hex has no Geography set) — same neutral cell tone the
+   old plain-div background used to be. */
+:root { --hex-default-fill: #1a2438; }
+/* The hex SHAPE (solid Geography fill + border lines on every edge,
+   direct follow-up request) is a real SVG <polygon> per hex, not a CSS
+   clip-path'd div — a clip-path border is unreliable at shared edges
+   between neighboring hexes (see drawers/index.js's own comment on
+   HEX_SVG_POINTS for why), where an SVG polygon's stroke always draws
+   cleanly regardless of neighboring shapes. pointer-events:none so every
+   click passes through to .hex-cell below, which is what's actually
+   clickable (and stays clip-path'd, purely for correct hex-shaped hit-
+   testing — never painted with a visible background of its own). */
+.hex-shape { position: absolute; pointer-events: none; overflow: visible; }
+.hex-shape-outline { stroke: var(--border-strong); stroke-width: 1.5; }
+.hex-shape-outline.active { stroke: var(--accent); stroke-width: 2.5; }
 .hex-cell {
-  position: absolute; background: var(--tier2-bg); border: 1px solid var(--border);
+  position: absolute; background: transparent;
   display: flex; align-items: center; justify-content: center;
 }
-.hex-cell.active { outline: 2px solid var(--accent); outline-offset: -2px; }
-.hex-geo-glyph { position: absolute; font-size: 1.6rem; opacity: 0.35; pointer-events: none; }
+/* Direct follow-up request: "increase the geography icon to fill the hex
+   so it is visible when the location icon is selected" — sized inline
+   (drawers/index.js, relative to HEX_SIZE) rather than a fixed rem value
+   here, so it scales if the hex's own size ever changes; inset:0 + flex
+   centering guarantees it lands dead-center regardless of .hex-cell's own
+   flex/absolute-positioning quirks (an abs-positioned flex child with no
+   explicit offsets has a spec-ambiguous static position otherwise). */
+.hex-geo-glyph {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  opacity: 0.7; pointer-events: none; text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+}
+/* The pen-and-ink art variant (hexGeoGlyphHtml) is a real <img>, not text —
+   inset:0 on a sized replaced element pins it top-left instead of
+   centering it, so it overrides the emoji rule's layout with explicit
+   centering via transform instead. */
+.hex-geo-glyph-img {
+  inset: auto; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: block; opacity: 0.85; object-fit: contain;
+}
+/* Direct follow-up request: "the location icon... have a white background
+   with thin black border to stand out from the location background" —
+   deliberately literal white/black rather than this app's own dark-theme
+   tokens, so the icon reads clearly against ANY Geography fill color
+   behind it, not just the app's usual dark surfaces. Applies once a
+   Location is actually linked (.hex-center-filled) — the EMPTY "+" state
+   is a separate, invisible-until-hover control (below), so it doesn't
+   cover the (now much bigger) Geography glyph while unused. */
 .hex-center {
   position: relative; width: 1.8rem; height: 1.8rem; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  background: var(--tier3-bg); border: 1px solid var(--border-strong); font-size: 1rem;
+  font-size: 1rem;
 }
-.hex-center-empty { opacity: 0.5; }
-.hex-center-empty:hover { opacity: 1; }
+.hex-center-filled { background: #fff; border: 1px solid #000; box-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+/* Direct follow-up request: "make the + and circle in the hex invisible
+   so that the geography icon is visible" — fully transparent at rest
+   (no fill/border/shadow/"+" glyph), same "invisible but still a real,
+   full-size clickable target, revealed on hover for discoverability"
+   posture as .hex-vertex just below. */
+.hex-center-empty { background: transparent; border: none; box-shadow: none; opacity: 0; color: #000; }
+.hex-center-empty:hover { opacity: 1; background: #fff; border: 1px solid #000; box-shadow: 0 1px 3px rgba(0,0,0,0.5); }
 .hex-center-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
-.hex-center-fallback { font-weight: bold; color: var(--accent); }
+.hex-center-fallback { font-weight: bold; color: #000; }
+/* Direct follow-up request: "make the circles in the corners not visible"
+   — invisible at rest (no fill/border/glyph chrome), still a real
+   clickable hit target at full size; a faint hover hint keeps the 6 slots
+   discoverable without cluttering an empty hex. .hex-vertex-filled (a
+   placed Threat) is always fully visible regardless of hover. */
 .hex-vertex {
   position: absolute; transform: translate(-50%, -50%);
   width: 1.1rem; height: 1.1rem; min-width: 0; border-radius: 50%; padding: 0;
   display: flex; align-items: center; justify-content: center; font-size: 0.7rem;
-  background: var(--bg-raised); border: 1px solid var(--border); opacity: 0.35;
+  background: transparent; border: none; opacity: 0;
 }
-.hex-vertex-filled { opacity: 1; background: var(--tier3-bg); border-color: var(--border-strong); }
-.hex-vertex:hover { opacity: 1; }
+.hex-vertex:hover { opacity: 0.6; background: var(--bg-raised); border: 1px solid var(--border); }
+.hex-vertex-filled { opacity: 1; background: var(--tier3-bg); border: 1px solid var(--border-strong); }
+.hex-vertex-filled:hover { opacity: 1; }
 .hex-detail-panel { margin-top: var(--sp-2); }
 .hex-detail-threat-row { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-1); }
 

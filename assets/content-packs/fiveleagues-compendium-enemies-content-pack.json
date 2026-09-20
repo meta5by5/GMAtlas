@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "ent_5lfb_ancient_raving-cultists",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -70,7 +70,7 @@
     },
     {
       "id": "ent_5lfb_ancient_wind-swept-to",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -135,7 +135,7 @@
     },
     {
       "id": "ent_5lfb_ancient_soldiers-time",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -200,7 +200,7 @@
     },
     {
       "id": "ent_5lfb_ancient_villainous-hunting-beasts-raiders",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -265,7 +265,7 @@
     },
     {
       "id": "ent_5lfb_ancient_hunters-of-the",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -330,7 +330,7 @@
     },
     {
       "id": "ent_5lfb_ancient_those-of",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -395,7 +395,7 @@
     },
     {
       "id": "ent_5lfb_ancient_devoted-a",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -460,7 +460,7 @@
     },
     {
       "id": "ent_5lfb_ancient_lurking-was",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -525,7 +525,7 @@
     },
     {
       "id": "ent_5lfb_ancient_strider-clan-bows",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -590,7 +590,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_blood-mad-villagers",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -655,7 +655,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_blood-loyal-followers",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -720,7 +720,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_black-blood-wolves",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -785,7 +785,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_blood-loyal-soldiers",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -850,7 +850,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_vampiric-minions",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -915,7 +915,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_demons-of-the",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -980,7 +980,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_vampiric-the-knights",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1045,7 +1045,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_looting",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1110,7 +1110,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_crude",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1175,7 +1175,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_secretive-smugglers",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1240,7 +1240,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_highway-robbers",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1305,7 +1305,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_cold-hearted-poachers",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1370,7 +1370,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_knife-wielding-thieves",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1435,7 +1435,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_devout-knives",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1500,7 +1500,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_hopeful-the",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1565,7 +1565,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_grim-faced-separatists",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1630,7 +1630,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_uncaring-brutes",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1695,7 +1695,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_repentant-deserters",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1760,7 +1760,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_outlaw-knights-the",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1825,7 +1825,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_faithful-villagers",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1890,7 +1890,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_wolfblood-scouts",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -1955,7 +1955,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_wolfblood-infantry",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2020,7 +2020,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_loyal-wolves",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2085,7 +2085,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_wolfblood-serjeants",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2150,7 +2150,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_shadow",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2215,7 +2215,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_feral-mercenaries",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2280,7 +2280,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_gladeborn-bows",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2345,7 +2345,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_wolf-knights-the",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],
@@ -2410,7 +2410,7 @@
     },
     {
       "id": "ent_5lfb_deepbelow_dearest-the",
-      "type": "npc",
+      "type": "lifeform",
       "tags": [
         "lifeform"
       ],

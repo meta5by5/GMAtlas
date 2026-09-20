@@ -16,6 +16,8 @@
 // VERTEX — see hexVertexPoints below — each a HEXCRAWL_THREAT_ICONS key
 // or null, addressed by plain array index like 5PFH's weapon table).
 
+import { findHexcrawlGeography } from '../data/hexcrawlIcons.js';
+
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 
 function ensure(campaign) {
@@ -30,7 +32,7 @@ function newId(prefix) { return prefix + '_' + Date.now().toString(36) + Math.ra
 function key(q, r) { return `${q},${r}`; }
 
 function defaultHex() {
-  return { geography: null, locationEntityId: null, threats: [null, null, null, null, null, null], notes: '' };
+  return { geography: null, geoVariant: 0, locationEntityId: null, threats: [null, null, null, null, null, null], notes: '' };
 }
 
 // --- Map management (mirrors battlemaps.js's own createBattlemap/etc.) ----
@@ -112,11 +114,22 @@ function touchHex(map, q, r) {
   return map.hexes[k];
 }
 
+// Direct follow-up request: "Add 3 variations of each geography biome icon
+// that rotate when placed to create variety" — a random variant is picked
+// at PAINT time (real randomness, same posture this app already uses for
+// gameplay rolls — this is cosmetic, not gameplay-critical, so no rng
+// injection needed) and stored on the hex itself, so it stays the same
+// variant across re-renders until the hex is repainted.
 export function setHexGeography(campaign, mapId, q, r, geographyKey) {
   const next = clone(campaign);
   const m = ensure(next).maps.find((x) => x.id === mapId);
   if (!m) return next;
-  touchHex(m, q, r).geography = geographyKey || null;
+  const hex = touchHex(m, q, r);
+  hex.geography = geographyKey || null;
+  const geo = geographyKey ? findHexcrawlGeography(geographyKey) : null;
+  hex.geoVariant = geo && Array.isArray(geo.iconArt) && geo.iconArt.length
+    ? Math.floor(Math.random() * geo.iconArt.length)
+    : 0;
   return next;
 }
 

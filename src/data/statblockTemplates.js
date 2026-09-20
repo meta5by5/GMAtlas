@@ -173,6 +173,24 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
   // 153) and any creature-specific special rules, matching the same
   // "flat field list, not a fully mechanized every-rule sheet" scope-trim
   // posture as '5pfh-lifeform'/'dnd5e-lifeform' above.
+  //
+  // Direct follow-up request: "the bestiary statblock must include the MP
+  // monster point and related mechanics" — Aberrations (p.182-186, the
+  // book's own catch-all for a unique "boss-tier" creature — Ogre through
+  // Drake, the Aberration Table) don't use ordinary Toughness-based Wound
+  // tracking at all; they have their own Monster Points (MP) pool instead,
+  // reduced by a DIFFERENT roll-to-Overcome-Toughness outcome than a normal
+  // creature's: a roll equal to Toughness is -1 MP; a roll ABOVE Toughness
+  // is -1 MP if the Aberration's current MP is 3 or less, or -2 MP if it's
+  // 4 or more; a roll at or below 1 has no effect at all; destroyed at 0
+  // MP. Reward Rating (Slayer's Rewards, p.182-183) is the flat number of
+  // Gold Marks/bonus XP/Loot rolls earned for the kill, plus 1 Story Point
+  // and 1 Adventure Point per Aberration regardless of its own Rating.
+  // Both fields stay at their plain defaults (0 MP, blank Reward Rating)
+  // for every ordinary (non-Aberration) Enemy Table creature, which simply
+  // don't use this subsystem — same "not every field applies to every
+  // entity, GM's own discretion" posture as D&D 5e's own Legendary Actions
+  // field staying blank for a non-legendary creature.
   'fiveleagues-lifeform': {
     label: 'Five Leagues Enemy',
     fields: withDefaults([
@@ -183,6 +201,8 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
       { key: 'Toughness', kind: 'track', rollMethod: 'none', max: 5 },
       { key: 'Armor', kind: 'attribute', rollMethod: 'none', format: 'plain' },
       { key: 'Ranged', kind: 'text' },
+      { key: 'MP', kind: 'track', rollMethod: 'none', max: 0 },
+      { key: 'Reward Rating', kind: 'text' },
       { key: 'Traits', kind: 'text' },
     ]),
   },

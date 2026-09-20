@@ -28,7 +28,7 @@ import {
   addEntityStatblockWeapon, updateEntityStatblockWeapon, removeEntityStatblockWeapon, setEntityStatblockGear,
   addEntityStatblockAttack, updateEntityStatblockAttack, removeEntityStatblockAttack, applyDnd5ePdfImport,
   setEntityStatblockTrackValue, setEntityStatblockAttributeValue, updateRelationshipLabel, updateRelationshipType, updateRelationshipStrength,
-  listEntities, ENTITY_TYPES, TYPE_LABEL, setFactionStat, addFactionAsset, removeFactionAsset, createItemFromCatalog,
+  listEntities, ENTITY_TYPES, TYPE_LABEL, entityTypeLabel, setFactionStat, addFactionAsset, removeFactionAsset, createItemFromCatalog,
   addLocationTradeCode, removeLocationTradeCode, addLocationBase, removeLocationBase,
   addConflictSessionHook, toggleConflictSessionHookUsed, removeConflictSessionHook, addConflictIrreversibleFact,
   setConflictFactionPosture, removeConflictFactionPosture, updateConflictInformationAsymmetry,
@@ -3726,6 +3726,10 @@ function onClick(ev) {
       ? { entityType: 'asset', mode: 'asset', scope: null, query: '' }
       : raw === 'party-vehicle'
         ? { entityType: 'party-vehicle', mode: 'party-vehicle', scope: null, query: '' }
+        : raw === 'party-item'
+          ? { entityType: 'party-item', mode: 'party-item', scope: null, query: '' }
+          : raw === 'party-asset'
+            ? { entityType: 'party-asset', mode: 'party-asset', scope: null, query: '' }
         : raw === 'party-starship'
           ? { entityType: 'party-starship', mode: 'party-starship', scope: null, query: '' }
           : raw === 'colony-crew'
@@ -3793,11 +3797,15 @@ function onClick(ev) {
       const { mapId, q, r } = picker.scope || {};
       return store.update((d) => setHexLocation(d, mapId, q, r, id));
     }
-    if (picker.entityType === 'party-vehicle') {
+    if (picker.entityType === 'party-vehicle' || picker.entityType === 'party-item' || picker.entityType === 'party-asset') {
       // Party's Shared Assets — unlike WHO's own 'asset' mode above, this
       // isn't scene-scoped (a Party Tracker's Shared Assets persist across
       // scenes), so it must NOT go through the currentSceneId() early
-      // return below.
+      // return below. "+ Item"/"+ Asset" (direct follow-up request) reuse
+      // this exact same link — sharedAssetIds/addPartySharedAssetEntity
+      // were already entity-type-agnostic (just a plain id reference), the
+      // only thing that made this "vehicles only" before was the picker's
+      // own candidate filter (renderEntityPickerOverlay, below).
       return store.update((d) => addPartySharedAssetEntity(d, id));
     }
     if (picker.entityType === 'party-starship') {
@@ -4710,8 +4718,9 @@ function onChange(ev) {
     const field = ef.dataset.entityField;
     if (field === 'type') {
       const current = getEntity(store.get(), active);
-      const from = current ? (TYPE_LABEL[current.type] || current.type) : '';
-      const to = TYPE_LABEL[t.value] || t.value;
+      const genrePack = store.get().settings.genrePack;
+      const from = current ? entityTypeLabel(current.type, genrePack) : '';
+      const to = entityTypeLabel(t.value, genrePack);
       if (current && current.type !== t.value && !window.confirm(`Change entity type from ${from} to ${to}?`)) {
         t.value = current.type;
         return;
@@ -6996,7 +7005,7 @@ function updateMentionSuggest(field) {
   const entityItems = listEntities(doc)
     .filter((e) => (e.name || '').toLowerCase().includes(query))
     .slice(0, MENTION_MAX_SUGGESTIONS)
-    .map((e) => ({ kind: 'entity', id: e.id, label: e.name || 'Unnamed', sublabel: TYPE_LABEL[e.type] || 'Entity' }));
+    .map((e) => ({ kind: 'entity', id: e.id, label: e.name || 'Unnamed', sublabel: entityTypeLabel(e.type, doc.settings.genrePack) }));
   const docItems = [
     ...listDocuments(doc).map((d) => ({ kind: 'doc', title: d.title || d.fileName || 'Untitled document', sublabel: 'document', tabKey: 'lib:' + d.id })),
     ...listReferenceDocuments(doc).map((r) => ({ kind: 'doc', title: r.title, sublabel: 'reference library', tabKey: 'ref:' + r.key })),
@@ -7588,6 +7597,20 @@ function renderEntityPickerOverlay() {
     const excludeIds = new Set((doc.party && doc.party.sharedAssetIds) || []);
     candidates = listEntities(doc, ['asset']).filter((a) => (a.tags || []).includes('vehicle') && !excludeIds.has(a.id));
     emptyMessage = 'No #vehicle Asset entities yet — add one in Cast (type Asset, tag #vehicle) first.';
+  } else if (entityPicker.entityType === 'party-item') {
+    // Party's Shared Assets "+Item" (direct follow-up request) — every
+    // Item entity not already linked.
+    const excludeIds = new Set((doc.party && doc.party.sharedAssetIds) || []);
+    candidates = listEntities(doc, ['item']).filter((it) => !excludeIds.has(it.id));
+    emptyMessage = 'No Item entities yet — add one in Cast first.';
+  } else if (entityPicker.entityType === 'party-asset') {
+    // Party's Shared Assets "+Asset" (direct follow-up request) — every
+    // Asset entity NOT already reachable via "+Vehicle" above (its own
+    // #vehicle-tagged subset), so the two buttons' candidate pools never
+    // overlap; excludes ones already linked, same as every sibling button.
+    const excludeIds = new Set((doc.party && doc.party.sharedAssetIds) || []);
+    candidates = listEntities(doc, ['asset']).filter((a) => !(a.tags || []).includes('vehicle') && !excludeIds.has(a.id));
+    emptyMessage = 'No non-vehicle Asset entities yet — add one in Cast first.';
   } else if (entityPicker.entityType === 'party-starship') {
     // Party's Starship section, and the Campaign panel's Starship-tab
     // empty-thumbnail (direct follow-up request — same trigger, same
@@ -8104,9 +8127,10 @@ function titleForDrawer(doc, id, profile) {
 // stay inside their own body content, but Cast's search/filter/list
 // already fills that space. A no-op ('') for every other drawer id.
 function castGenerateSelectHtml() {
+  const genrePack = store.get().settings.genrePack;
   return `<select class="entity-generate-select" data-entity-generate title="Create a new entity of this type">
     <option value="" selected>Generate…</option>
-    ${ENTITY_TYPES.map((t) => `<option value="${t}">${TYPE_LABEL[t]}</option>`).join('')}
+    ${ENTITY_TYPES.map((t) => `<option value="${t}">${entityTypeLabel(t, genrePack)}</option>`).join('')}
     <option value="generate-npc">🎲 NPC (rolled)</option>
     <option value="catalog-item">📦 Item (from catalog)</option>
   </select>`;

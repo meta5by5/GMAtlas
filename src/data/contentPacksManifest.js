@@ -97,7 +97,7 @@ export const CONTENT_PACKS_MANIFEST = [
     id: 'fiveleagues-core-enemies',
     file: 'assets/content-packs/fiveleagues-core-enemies-content-pack.json',
     title: 'Five Leagues Enemies (Core Rulebook)',
-    description: "100 named entries from the core rulebook's own \"THE ENEMY\" chapter (pages 151-186) across every Enemy Table (Ruin Within, Whispers from Beyond, Gnawling Horde, Ice-heart Court, Duskling Warband, the Oldest Kin, Curse of War, Faceless Kingdom, Roadside, Lurking Foes) plus the Aberration Table, each as a #lifeform-tagged NPC with a full Five Leagues Enemy statblock (Num./Speed/Combat Skill/Damage/Toughness/Armor/Ranged/Traits).",
+    description: "121 named entries from the core rulebook's own \"THE ENEMY\" chapter (pages 151-186) — 100 across every regular Enemy Table (Ruin Within, Whispers from Beyond, Gnawling Horde, Ice-heart Court, Duskling Warband, the Oldest Kin, Curse of War, Faceless Kingdom, Roadside, Lurking Foes) plus 21 unique \"boss-tier\" Aberrations (Ogre through Drake, the Aberration Table, p.182-186) with their own Monster Points (MP)/Reward Rating fields, each as a #lifeform-tagged NPC with a full Five Leagues Enemy statblock (Num./Speed/Combat Skill/Damage/Toughness/Armor/Ranged/MP/Reward Rating/Traits).",
     ruleset: 'fiveleagues',
     kind: 'content-pack',
     licenseStatus: 'included',

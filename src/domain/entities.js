@@ -43,6 +43,19 @@ import { SWN_XP_TABLE } from '../data/swnFactionData.js';
 export const ENTITY_TYPES = ['npc', 'location', 'faction', 'asset', 'lore', 'item', 'conflict', 'lifeform'];
 export const TYPE_LABEL = { npc: 'NPC', location: 'Location', faction: 'Faction', asset: 'Asset', lore: 'Lore', item: 'Item', conflict: 'Conflict', lifeform: 'Lifeform' };
 
+/** Direct follow-up request: "For all Fantasy (generic) genres, change any
+ *  reference to 'Lifeform' as an entity type to 'Monster'" — genre-aware,
+ *  same "data label swap keyed by genrePack" posture as data/genrePacks.js's
+ *  own bestiaryTerm(), not a second parallel entity type (the stored
+ *  `type: 'lifeform'` value itself never changes, only its display label).
+ *  Every UI call site that renders TYPE_LABEL for on-screen text should use
+ *  this instead; TYPE_LABEL itself stays the plain, non-genre-aware map for
+ *  any internal (non-display) lookup. */
+export function entityTypeLabel(type, genrePackId) {
+  if (type === 'lifeform' && genrePackId === 'fantasy') return 'Monster';
+  return TYPE_LABEL[type] || type;
+}
+
 // Relationship edge taxonomy (Phase 7, Constitution pack 66's Context Graph
 // depth item): a relationship now carries a semantic `type` alongside its
 // free-text `label` note, plus a 0-10 `strength` weight. `linked` is the
@@ -123,7 +136,7 @@ export function filterEntities(campaign, { types, search = '', tags = [] } = {})
   return listEntities(campaign, types && types.length ? types : null).filter((e) => {
     if (requiredTags.length && !requiredTags.every((t) => (e.tags || []).some((et) => et.toLowerCase() === t))) return false;
     if (!q) return true;
-    return [e.name, TYPE_LABEL[e.type] || '', e.type, ...(e.tags || [])].join(' ').toLowerCase().includes(q);
+    return [e.name, entityTypeLabel(e.type, campaign.settings.genrePack), e.type, ...(e.tags || [])].join(' ').toLowerCase().includes(q);
   });
 }
 

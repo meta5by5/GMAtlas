@@ -10,7 +10,7 @@ import {
 import { ORACLE_TABLE_SOURCES } from '../../data/oracleGroups.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import {
-  listEntities, filterEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, listTagVocabulary, listEntityTagVocabulary,
+  listEntities, filterEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, entityTypeLabel, listTagVocabulary, listEntityTagVocabulary,
   RELATIONSHIP_TYPES, RELATIONSHIP_TYPE_LABEL, isRelationshipFlagged, computeFactionMaxHp,
   getSystemForLocation, getStarForLocation, getHexZoneForLocation,
 } from '../../domain/entities.js';
@@ -134,8 +134,13 @@ export function renderDrawer(id, doc, ui = {}) {
 
 // Sorted by label (Asset/Faction/Location/Lore/NPC), not ENTITY_TYPES'
 // declaration order — that order still governs "+ Add" button placement and
-// statblock-add-choices elsewhere, just not this filter row.
-const ENTITY_TYPES_BY_LABEL = [...ENTITY_TYPES].sort((a, b) => TYPE_LABEL[a].localeCompare(TYPE_LABEL[b]));
+// statblock-add-choices elsewhere, just not this filter row. A function, not
+// a module-level constant, since the label (and therefore the sort order)
+// is genre-aware (entityTypeLabel) — Fantasy (generic)'s "Monster" sorts
+// differently than "Lifeform" would.
+function entityTypesByLabel(genrePackId) {
+  return [...ENTITY_TYPES].sort((a, b) => entityTypeLabel(a, genrePackId).localeCompare(entityTypeLabel(b, genrePackId)));
+}
 
 // The Cast drawer: list-only — search, type filter, "Generate…" (its head,
 // see shell.js's headExtraForDrawer), draggable/clickable rows. No inline
@@ -157,8 +162,8 @@ export function entities(doc, ui) {
   // ITSELF still shows, not just the first one in the whole campaign).
   const items = filterEntities(doc, { types: typeFilter ? [typeFilter] : null, search, tags: [...activeTags] });
   const active = getEntity(doc, doc.entities && doc.entities.activeId);
-  const typeChips = ['', ...ENTITY_TYPES_BY_LABEL].map((t) => `
-    <button class="chip sm ${typeFilter === t ? 'active' : ''}" data-entity-type-filter="${t}">${t ? TYPE_LABEL[t] : 'All'}</button>`).join('');
+  const typeChips = ['', ...entityTypesByLabel(doc.settings.genrePack)].map((t) => `
+    <button class="chip sm ${typeFilter === t ? 'active' : ''}" data-entity-type-filter="${t}">${t ? entityTypeLabel(t, doc.settings.genrePack) : 'All'}</button>`).join('');
   return `
     <input class="drawer-search" data-entity-search value="${esc(ui.entitySearch || '')}" placeholder="Search Cast by name or tag…">
     <div class="entity-type-filter-row">${typeChips}</div>
@@ -168,7 +173,7 @@ export function entities(doc, ui) {
       ${items.length ? items.map((e) => `
         <button class="entity-list-row ${active && active.id === e.id ? 'sel' : ''}" draggable="true" data-drag-entity="${esc(e.id)}" data-drop-entity="${esc(e.id)}" data-open-entity="${esc(e.id)}" title="Click to open · drag anywhere on the row to link with another entity, or onto Journal/context fields to mention">
           <span class="entity-drag-handle" aria-hidden="true">⠿</span>
-          <span class="entity-type-tag">${TYPE_LABEL[e.type] || 'Entity'}</span>
+          <span class="entity-type-tag">${entityTypeLabel(e.type, doc.settings.genrePack) || 'Entity'}</span>
           <span class="entity-list-name">${esc(e.name) || '<em>Unnamed</em>'}</span>
           ${e.relationships && e.relationships.length ? `<span class="dim">🔗${e.relationships.length}</span>` : ''}
         </button>`).join('')
@@ -243,7 +248,7 @@ function relPickerBlock(doc, e, ui) {
   const items = filterEntities(doc, { search: q }).filter((x) => x.id !== e.id);
   const rows = items.map((x) => `
     <button class="catalog-item-row" data-rel-picker-pick="${esc(x.id)}" title="Link ${esc(x.name) || 'Unnamed'} to ${esc(e.name) || 'this entity'}">
-      <span class="entity-type-tag">${TYPE_LABEL[x.type] || 'Entity'}</span>
+      <span class="entity-type-tag">${entityTypeLabel(x.type, doc.settings.genrePack) || 'Entity'}</span>
       <span class="catalog-item-name">${esc(x.name) || '<em>Unnamed</em>'}</span>
       <span class="catalog-item-tags">${(x.tags || []).map((t) => `<span class="chip sm">${esc(t)}</span>`).join('')}</span>
     </button>`).join('');
@@ -371,7 +376,7 @@ function inspector(doc, e, ui) {
       ? `<span class="rel-bond-value" title="Bond progress — tracked on the Character Sheet below, not editable here">${bond.field.value}<small>/${bond.field.max}</small></span>
          <button type="button" class="icon-btn" data-view-bond-track="${bond.gi}" title="View in Character Sheet">↧</button>`
       : numStepper(`<input type="number" class="rel-strength-input" data-entity-rel-strength="${esc(r.to)}" min="0" max="10" value="${Number(r.strength) || 0}" title="Strength/weight 0-10">`));
-    return `<span class="rel-chip ${flagged ? 'rel-flagged' : ''}">${flagged ? `<span class="rel-flag" title="Flagged: ${RELATIONSHIP_TYPE_LABEL[r.type]} doesn't usually apply between ${withArticle(TYPE_LABEL[e.type] || e.type)} entity and ${withArticle(TYPE_LABEL[other.type] || other.type)} entity — nothing changed, just worth a review">⚠</span>` : ''}<select class="rel-type-select" data-entity-rel-type="${esc(r.to)}" title="Relationship type">${relTypeOptions(r.type)}</select>
+    return `<span class="rel-chip ${flagged ? 'rel-flagged' : ''}">${flagged ? `<span class="rel-flag" title="Flagged: ${RELATIONSHIP_TYPE_LABEL[r.type]} doesn't usually apply between ${withArticle(entityTypeLabel(e.type, doc.settings.genrePack))} entity and ${withArticle(entityTypeLabel(other.type, doc.settings.genrePack))} entity — nothing changed, just worth a review">⚠</span>` : ''}<select class="rel-type-select" data-entity-rel-type="${esc(r.to)}" title="Relationship type">${relTypeOptions(r.type)}</select>
       <button type="button" class="rel-chip-name" data-open-entity="${esc(other.id)}" title="Open ${esc(other.name) || 'Unnamed'}">${esc(other.name) || 'Unnamed'}</button>
       <input class="rel-label-input" data-entity-rel-label="${esc(r.to)}" value="${esc(r.label)}" placeholder="note (ally, rival…)" title="Edit this relationship's note">
       ${strengthOrBond}
@@ -464,7 +469,7 @@ function entityTypeTagsRowHtml(doc, e, ui) {
   return `
     <div class="inspector-type-tags-row">
       <label class="field-label inspector-type-field">Type
-        <select data-entity-field="type">${ENTITY_TYPES.map((t) => `<option value="${t}" ${t === e.type ? 'selected' : ''}>${TYPE_LABEL[t]}</option>`).join('')}</select>
+        <select data-entity-field="type">${ENTITY_TYPES.map((t) => `<option value="${t}" ${t === e.type ? 'selected' : ''}>${entityTypeLabel(t, doc.settings.genrePack)}</option>`).join('')}</select>
       </label>
       <div class="tag-editor">${tagEditorHead(doc, e, ui)}</div>
     </div>
@@ -3121,7 +3126,18 @@ function sharedAssetVehicleThumb(doc, entityId) {
 // its statblocks when expanded via partyMemberStatblocks — nothing in it
 // assumes 'npc'), instead of the earlier bespoke read-only thumbnail-only
 // row this section used before statblocks were ever shown here.
+//
+// Direct follow-up request: "dedicate to scifi (generic) genre. It is
+// specific to 5PFH, but could be used for other games like Traveller" —
+// unconditionally visible before this, even in a Fantasy/D&D 5e/Five
+// Leagues campaign where "Starship" makes no sense. Scoped to the whole
+// sci-fi-generic Genre Pack (data/genrePacks.js — 5PFH/Traveller/
+// Starforged/SWN/Planetfall/Hostile all live inside it), not narrowed to
+// 5PFH specifically — same Genre-Pack-scoping posture Phase B's Rules
+// Constitution/Game System Activation sections already established,
+// applied here rather than only there.
 function partyStarshipSectionHtml(doc, ui) {
+  if ((doc.settings.genrePack || 'sci-fi-generic') !== 'sci-fi-generic') return '';
   const entityId = doc.party && doc.party.starshipEntityId;
   const entity = entityId ? getEntity(doc, entityId) : null;
   const collapsed = isPartySectionCollapsed(ui, 'starship', true);
@@ -3248,7 +3264,7 @@ function party(doc, ui = {}) {
     </div>`}
     ${partySectionHeaderHtml('sharedGear', 'Shared Gear', sharedGearCollapsed, richToolbarToggleHTML(sharedGearKey, toolbarCollapsed(doc, ui, sharedGearKey)))}
     ${sharedGearCollapsed ? '' : `<div class="rich-field">${richToolbarHTML(sharedGearKey, toolbarCollapsed(doc, ui, sharedGearKey), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-party-field="sharedGear" data-placeholder="A shared toolkit, the ship's medkit, anything not tied to one character…">${buildMentionEditorHTML(doc, party_.sharedGear)}</div></div>`}
-    ${partySectionHeaderHtml('sharedAssets', 'Shared Assets', sharedAssetsCollapsed, '<button class="chip" data-entity-picker-open="party-vehicle">＋ Vehicle</button>')}
+    ${partySectionHeaderHtml('sharedAssets', 'Shared Assets', sharedAssetsCollapsed, `<button class="chip" data-entity-picker-open="party-vehicle">＋ Vehicle</button><button class="chip" data-entity-picker-open="party-item">＋ Item</button><button class="chip" data-entity-picker-open="party-asset">＋ Asset</button>`)}
     ${sharedAssetsCollapsed ? '' : `
     ${sharedAssetVehicleThumbs ? `<div class="actor-thumb-row">${sharedAssetVehicleThumbs}</div>` : ''}
     <div class="entity-chips">${sharedAssetChips || (sharedAssetVehicleThumbs ? '' : '<span class="dim small">None yet.</span>')}</div>
@@ -3811,26 +3827,40 @@ function cargoManifestSection(doc, ui, { collapsible = false } = {}) {
     </div>`;
 }
 
+// Direct follow-up request: "change 'Contracts' to 'Quests' on the Party
+// panel for 'Fantasy (generic)' genre" — genre-aware, same "data label
+// swap keyed by genrePack" posture as entityTypeLabel/bestiaryTerm, not a
+// second parallel concept (Threads' own `kind: 'contract'` data shape is
+// completely unchanged, only this display label). Scoped to the Party
+// panel specifically, per the request's own wording — the Trade drawer's
+// own Contracts section (this same function, `collapsible: false`) always
+// reads "Contracts" regardless of genre, since Trade's Merchant framing
+// (buy/sell markets, supply/demand) doesn't shift the same way.
+function contractsLabel(genrePackId) {
+  return genrePackId === 'fantasy' ? 'Quests' : 'Contracts';
+}
+
 function contractsSection(doc, ui, { collapsible = false } = {}) {
   const locations = listEntities(doc, ['location']);
   const npcs = listEntities(doc, ['npc']);
   const contracts = listContracts(doc);
   const collapsed = collapsible && isPartySectionCollapsed(ui, 'contracts', true);
+  const label = collapsible ? contractsLabel(doc.settings.genrePack) : 'Contracts';
   const headerActions = `<div class="trade-contract-head-actions">
         <button class="chip" data-trade-generate-contract title="Roll the Contract Type oracle table into a new contract">🎲 Generate</button>
-        ${ui.tradeContractAddOpen ? '' : '<button class="chip" data-trade-contract-add-toggle>＋ Contract</button>'}
+        ${ui.tradeContractAddOpen ? '' : `<button class="chip" data-trade-contract-add-toggle>＋ ${esc(label.replace(/s$/, ''))}</button>`}
       </div>`;
   const header = collapsible
-    ? partySectionHeaderHtml('contracts', 'Contracts', collapsed, headerActions)
+    ? partySectionHeaderHtml('contracts', label, collapsed, headerActions)
     : `<div class="statblock-head" style="margin-top: var(--sp-4);">
-      <h4>Contracts</h4>
+      <h4>${esc(label)}</h4>
       ${headerActions}
     </div>`;
   if (collapsed) return header;
   return `${header}
     ${ui.tradeContractAddOpen ? contractAddForm(locations, npcs) : ''}
     <div class="trade-contract-list">
-      ${contracts.length ? contracts.map((c) => contractRow(doc, c, ui)).join('') : '<p class="ws-placeholder">No contracts yet — generate one, or add one manually.</p>'}
+      ${contracts.length ? contracts.map((c) => contractRow(doc, c, ui)).join('') : `<p class="ws-placeholder">No ${esc(label.toLowerCase())} yet — generate one, or add one manually.</p>`}
     </div>`;
 }
 
@@ -3974,13 +4004,13 @@ function graph(doc, ui = {}) {
     const matches = filter ? n.name.toLowerCase().includes(filter) : null;
     const stateClass = matches === null ? '' : matches ? ' graph-node-match' : ' graph-node-dim';
     return `<g class="graph-node ${active === n.id ? 'sel' : ''}${stateClass}" data-graph-node="${esc(n.id)}" tabindex="0">
-      <title>${esc(n.name)} · ${TYPE_LABEL[n.type] || n.type} · ${n.degree} link${n.degree === 1 ? '' : 's'}</title>
+      <title>${esc(n.name)} · ${entityTypeLabel(n.type, doc.settings.genrePack)} · ${n.degree} link${n.degree === 1 ? '' : 's'}</title>
       <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" fill="${nodeColor(n.type)}"/>
       <text x="${p.x.toFixed(1)}" y="${(p.y + r + 12).toFixed(1)}" class="graph-node-label">${esc(clip(n.name, 18))}</text>
     </g>`;
   }).join('');
 
-  const legend = ENTITY_TYPES.map((t) => `<span class="graph-legend-item"><span class="dot" style="background:${nodeColor(t)}"></span>${TYPE_LABEL[t]}</span>`).join('');
+  const legend = ENTITY_TYPES.map((t) => `<span class="graph-legend-item"><span class="dot" style="background:${nodeColor(t)}"></span>${entityTypeLabel(t, doc.settings.genrePack)}</span>`).join('');
 
   return `
     <p class="dim small">Click a node to open it.</p>
@@ -4343,6 +4373,11 @@ function battlemap(doc, ui = {}) {
 // that down to roughly 30 hexes wide.
 const HEX_W = Math.sqrt(3) * HEX_SIZE;
 const HEX_H = 2 * HEX_SIZE;
+// Direct follow-up request: "increase the geography icon to fill the hex
+// so it is visible when the location icon is selected" — sized relative
+// to HEX_SIZE (not a fixed CSS rem value) so it stays proportionate to
+// the hex itself if that constant ever changes.
+const HEX_GEO_GLYPH_SIZE = HEX_SIZE * 1.4;
 // clip-path is the same six points for every hex (only the div's own
 // left/top position differs per hex) — computed once, not per-cell.
 const HEX_CLIP_PATH = (() => {
@@ -4350,10 +4385,37 @@ const HEX_CLIP_PATH = (() => {
   const pts = hexVertexPoints(HEX_SIZE).map((p) => `${(cx + p.x).toFixed(1)}px ${(cy + p.y).toFixed(1)}px`);
   return `polygon(${pts.join(', ')})`;
 })();
+// Direct follow-up request: "have hex lines around all edges of the hex"
+// — a CSS border on a clip-path'd div is unreliable at shared edges
+// (neighboring hex-cells' own rectangular bounding boxes overlap at their
+// clipped-away corners, and paint order can hide one side's line under
+// the next hex's opaque fill). An SVG <polygon> sidesteps this entirely —
+// its stroke always draws cleanly along the exact vertices regardless of
+// neighboring shapes, and its own fill IS the Geography solid-color layer
+// (direct follow-up request), so this replaces both the old CSS
+// background-color-by-class approach AND the border in one shape. Same
+// six points as the clip-path above, formatted as SVG's "x,y x,y ..."
+// list instead of CSS's "x y, x y, ...".
+const HEX_SVG_POINTS = (() => {
+  const cx = HEX_W / 2; const cy = HEX_H / 2;
+  return hexVertexPoints(HEX_SIZE).map((p) => `${(cx + p.x).toFixed(1)},${(cy + p.y).toFixed(1)}`).join(' ');
+})();
 // Vertex icons sit INSET from the hex's true corners (0.72 of the way from
 // center to vertex) so they stay fully inside the clipped hex shape rather
 // than being cut off right at its edge.
 const HEX_VERTEX_INSET = 0.72;
+
+// Direct follow-up request: pen-and-ink art (geo.iconArt, from
+// hexcrawlIcons.js) replaces the plain emoji glyph when a biome has real
+// crops available; `water`/`ice` (no matching source art) fall back to
+// their emoji glyph, same rendering rule the palette/select still use.
+function hexGeoGlyphHtml(geo, geoVariant) {
+  if (Array.isArray(geo.iconArt) && geo.iconArt.length) {
+    const file = geo.iconArt[geoVariant % geo.iconArt.length] || geo.iconArt[0];
+    return `<img class="hex-geo-glyph hex-geo-glyph-img" src="./assets/hexcrawl-icons/${esc(file)}" alt="" style="width:${HEX_GEO_GLYPH_SIZE.toFixed(1)}px;height:${HEX_GEO_GLYPH_SIZE.toFixed(1)}px">`;
+  }
+  return `<span class="hex-geo-glyph" style="font-size:${HEX_GEO_GLYPH_SIZE.toFixed(1)}px">${geo.glyph}</span>`;
+}
 
 function hexcrawlPalette(ui) {
   const armed = ui.hexcrawlPlacingIcon;
@@ -4391,11 +4453,21 @@ function hexcrawlGrid(doc, mapId, ui) {
         const vx = (center.x + p.x).toFixed(1); const vy = (center.y + p.y).toFixed(1);
         return `<button type="button" class="hex-vertex ${t ? 'hex-vertex-filled' : ''}" data-hex-vertex="${esc(mapId)}::${q}::${r}::${i}" style="left:${vx}px;top:${vy}px" title="${t ? esc(t.label) : 'Empty'}">${t ? t.glyph : ''}</button>`;
       }).join('');
+      const cellLeft = (center.x - HEX_W / 2).toFixed(1); const cellTop = (center.y - HEX_H / 2).toFixed(1);
+      const active = ui.hexcrawlSelectedHex && ui.hexcrawlSelectedHex.q === q && ui.hexcrawlSelectedHex.r === r;
+      // Two layers at the same position: an SVG polygon purely for the
+      // visual shape (solid Geography fill + border lines on all 6
+      // edges, pointer-events:none so clicks pass through to the hit-test
+      // div below), and the actual clip-path'd click target (kept for
+      // correct hex-shaped hit-testing — a click on this div's own
+      // transparent, clipped-away rectangle corners never fires at all).
       cells.push(`
-        <div class="hex-cell ${geo ? `hex-geo-${esc(geo.key)}` : ''} ${ui.hexcrawlSelectedHex && ui.hexcrawlSelectedHex.q === q && ui.hexcrawlSelectedHex.r === r ? 'active' : ''}"
-             style="left:${(center.x - HEX_W / 2).toFixed(1)}px;top:${(center.y - HEX_H / 2).toFixed(1)}px;width:${HEX_W.toFixed(1)}px;height:${HEX_H.toFixed(1)}px;clip-path:${HEX_CLIP_PATH}"
+        <svg class="hex-shape" style="left:${cellLeft}px;top:${cellTop}px" width="${HEX_W.toFixed(1)}" height="${HEX_H.toFixed(1)}">
+          <polygon points="${HEX_SVG_POINTS}" fill="${geo ? geo.color : 'var(--hex-default-fill)'}" class="hex-shape-outline ${active ? 'active' : ''}" />
+        </svg>
+        <div class="hex-cell" style="left:${cellLeft}px;top:${cellTop}px;width:${HEX_W.toFixed(1)}px;height:${HEX_H.toFixed(1)}px;clip-path:${HEX_CLIP_PATH}"
              data-hex-select="${esc(mapId)}::${q}::${r}">
-          ${geo ? `<span class="hex-geo-glyph">${geo.glyph}</span>` : ''}
+          ${geo ? hexGeoGlyphHtml(geo, hex.geoVariant) : ''}
           ${centerHtml}
         </div>
         ${vertexHtml}`);

@@ -1162,7 +1162,7 @@ test('opening a document tab at a page anchors the resolved src with #page=N', (
 });
 
 // --- entities + auto-linking (Phase 3A) -----------------------------------
-import { createEntity, updateEntity, removeEntity, addRelationship, removeRelationship, findByName, parseMentions, linkMentions, listEntities, filterEntities, addEntityTag, removeEntityTag, listTagVocabulary } from '../src/domain/entities.js';
+import { createEntity, updateEntity, removeEntity, addRelationship, removeRelationship, findByName, parseMentions, linkMentions, listEntities, filterEntities, addEntityTag, removeEntityTag, listTagVocabulary, entityTypeLabel } from '../src/domain/entities.js';
 import { addNote, editContextText, editNote, addContextEntity, removeContextEntity, updateSceneField } from '../src/domain/session.js';
 
 test('editNote updates an existing journal entry in place and re-links mentions', () => {
@@ -3896,12 +3896,12 @@ test('getStatblockTemplates exposes the shipped defaults when settings has no ov
   assert.ok(listStatblockTemplateIds({}).includes('generic'));
 });
 
-test('the "fiveleagues-lifeform" Bestiary template maps 1:1 onto the core rulebook\'s own Enemy Profile columns (Enemy/Num./Speed/Combat/Damage/Tough./Armor/Ranged, p.152) plus a free-text Traits field', () => {
+test('the "fiveleagues-lifeform" Bestiary template maps 1:1 onto the core rulebook\'s own Enemy Profile columns (Enemy/Num./Speed/Combat/Damage/Tough./Armor/Ranged, p.152), plus MP/Reward Rating (the Aberration Table\'s own Monster Points mechanic, p.182-183, direct follow-up request) and a free-text Traits field', () => {
   const templates = getStatblockTemplates({});
   const tpl = templates['fiveleagues-lifeform'];
   assert.equal(tpl.label, 'Five Leagues Enemy');
   const keys = tpl.fields.map((f) => f.key);
-  assert.deepEqual(keys, ['Num.', 'Speed', 'Combat Skill', 'Damage', 'Toughness', 'Armor', 'Ranged', 'Traits']);
+  assert.deepEqual(keys, ['Num.', 'Speed', 'Combat Skill', 'Damage', 'Toughness', 'Armor', 'Ranged', 'MP', 'Reward Rating', 'Traits']);
   const speed = tpl.fields.find((f) => f.key === 'Speed');
   assert.equal(speed.kind, 'attribute');
   assert.equal(speed.rollMethod, 'none');
@@ -3909,6 +3909,11 @@ test('the "fiveleagues-lifeform" Bestiary template maps 1:1 onto the core rulebo
   assert.equal(combat.rollMethod, 'flat');
   const toughness = tpl.fields.find((f) => f.key === 'Toughness');
   assert.equal(toughness.kind, 'track');
+  const mp = tpl.fields.find((f) => f.key === 'MP');
+  assert.equal(mp.kind, 'track', 'MP depletes like Toughness, but via its own Overcome-Toughness-outcome rule (p.182), not a normal Hit');
+  assert.equal(mp.rollMethod, 'none');
+  const rewardRating = tpl.fields.find((f) => f.key === 'Reward Rating');
+  assert.equal(rewardRating.kind, 'text', 'a flat printed number (Slayer\'s Rewards, p.182-183), not something rolled');
 });
 
 test('a NPC entity can add a Bestiary template by id, alongside its existing group', () => {
@@ -5099,6 +5104,27 @@ test('filterEntities narrows by type, required tags (AND, case-insensitive), and
 
 test('filterEntities returns [] rather than throwing on an empty/default campaign', () => {
   assert.deepEqual(filterEntities(defaultCampaign(), { types: ['npc'], search: 'x', tags: ['y'] }), []);
+});
+
+test('entityTypeLabel reads "Monster" for the lifeform type only under the Fantasy (generic) Genre Pack (direct follow-up request) — every other genre pack, and every other entity type, is unaffected', () => {
+  assert.equal(entityTypeLabel('lifeform', 'fantasy'), 'Monster');
+  assert.equal(entityTypeLabel('lifeform', 'sci-fi-generic'), 'Lifeform');
+  assert.equal(entityTypeLabel('lifeform', 'dnd5e'), 'Lifeform');
+  assert.equal(entityTypeLabel('lifeform', undefined), 'Lifeform');
+  assert.equal(entityTypeLabel('npc', 'fantasy'), 'NPC', 'only the lifeform type\'s label changes, not every type');
+  assert.equal(entityTypeLabel('not-a-real-type', 'fantasy'), 'not-a-real-type', 'falls back to the raw type id, same as TYPE_LABEL[type] || type');
+});
+
+test('filterEntities\' search matches a lifeform entity by "monster" under the Fantasy (generic) Genre Pack, not just its literal "Lifeform" label — the search haystack is genre-aware too', () => {
+  let camp = defaultCampaign();
+  camp = { ...camp, settings: { ...camp.settings, genrePack: 'fantasy' } };
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'lifeform', name: 'Owlbear' }));
+  assert.deepEqual(filterEntities(camp, { search: 'monster' }).map((e) => e.id), [id]);
+  assert.deepEqual(filterEntities(camp, { search: 'lifeform' }).map((e) => e.id), [id], 'the raw type id still matches too');
+
+  const sciFi = { ...camp, settings: { ...camp.settings, genrePack: 'sci-fi-generic' } };
+  assert.deepEqual(filterEntities(sciFi, { search: 'monster' }), [], 'no "monster" wording outside Fantasy (generic)');
+  assert.deepEqual(filterEntities(sciFi, { search: 'lifeform' }).map((e) => e.id), [id]);
 });
 
 // --- Planetfall Grid Battlemap (Phase 11, docs/adr/0023) -------------------
