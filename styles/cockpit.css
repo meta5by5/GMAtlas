@@ -692,6 +692,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .btn.primary:hover { background: linear-gradient(180deg, #38bdf8, #0ea5e9); }
 .btn.ghost { background: transparent; }
 .btn.sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; }
+.btn.danger { color: var(--danger); border-color: var(--danger); }
+.btn.danger:hover { background: var(--danger); color: #1a0505; }
 .icon-btn { background: none; border: none; color: var(--text-dim); padding: 0.15rem 0.4rem; border-radius: var(--radius-sm); font-size: 0.9rem; }
 .icon-btn:hover { color: var(--accent); background: var(--tier2-bg); }
 
@@ -1211,7 +1213,7 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .gallery-card { position: relative; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--tier2-bg); padding: var(--sp-3); display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); text-align: center; }
 .gallery-card > [data-gallery-delete] { position: absolute; top: 0.3rem; right: 0.3rem; }
 .gallery-card-meta { display: flex; flex-direction: column; gap: var(--sp-1); align-items: center; width: 100%; }
-.gallery-thumb-circle { width: 5rem; height: 5rem; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); background: var(--bg-inset); }
+.gallery-thumb-circle { display: block; width: 5rem; height: 5rem; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); background: var(--bg-inset); }
 .gallery-original-img { width: 100%; max-height: 8rem; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); }
 .tag-chip-locked { opacity: 0.85; }
 /* Phase B entitlement stub — a gated Game System an install isn't entitled
@@ -1223,6 +1225,10 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .battlemap-tabs { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-2); }
 .battlemap-toolbar { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-2); }
 .battlemap-name-input { width: auto; flex: 1 1 12rem; min-width: 8rem; }
+/* Direct follow-up request: "Make the hexcrawl map title field readonly
+   with an edit pencil icon to switch to edit mode" — the read-only
+   display counterpart to .battlemap-name-input above. */
+.hexcrawl-map-name { flex: 1 1 12rem; min-width: 8rem; font-weight: 600; }
 .battlemap-toolbar select, .battlemap-grid-size-input { width: auto; }
 .battlemap-palette { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: var(--sp-2); }
 /* The viewport: a fixed-aspect box (padding-top trick — no fixed height,
@@ -1289,9 +1295,38 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    the exact same reason as .battlemap-world's own — shell.js's
    screenToHexcrawlWorldPixel/zoomHexcrawlCamera math assumes translate/
    scale apply relative to the viewport's own top-left corner. */
-.hexcrawl-palette-row { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; margin-bottom: var(--sp-1); }
+/* Direct follow-up request: "Put Geography, Encounters and Overlays as
+   side-by-side columns with vertical lines between to separate them" —
+   .hexcrawl-palette (the plain wrapper div drawers/index.js already
+   renders hexcrawlPalette's output into) becomes the flex row of
+   columns; each column keeps its own chips wrapping vertically as
+   needed. border-left on every column but the first draws the dividing
+   lines without a stray line on the outer edge. */
+.hexcrawl-palette { display: flex; align-items: flex-start; gap: var(--sp-3); flex-wrap: wrap; }
+.hexcrawl-palette-col {
+  display: flex; flex-direction: column; flex-wrap: wrap; gap: var(--sp-1); align-items: flex-start;
+  flex: 1 1 12rem; min-width: 10rem; padding-left: var(--sp-3);
+}
+.hexcrawl-palette-col:first-child { padding-left: 0; }
+.hexcrawl-palette-col:not(:first-child) { border-left: 1px solid var(--border); }
+/* Direct follow-up request: "Use a dropdown to select Geography,
+   Encounters and Overlays instead of a list of buttons" — the column's
+   own flex-direction:column already stacks the label above the select;
+   width:100% just keeps the select from shrink-wrapping to its currently
+   selected option's own text width (which would make it visibly resize
+   every time the selection changes). */
+.hexcrawl-palette-col select { width: 100%; }
+/* min-height 690px ~= 10 hex rows tall at HEX_SIZE=44 (domain/hexcrawls.js
+   — row spacing 1.5*HEX_SIZE=66px, so 9 row-steps + one full hex height:
+   66*9 + 2*44 = 682px, rounded up a bit) — direct follow-up request:
+   "expand the hexcrawl vertical window to show 10 hexes, or extend to the
+   bottom of the browser window, whichever fits best." The :has()-scoped
+   flex-fill rule below (mc-drawer:has(.hexcrawl-viewport)) is the "extend
+   to the bottom" half — it grows past this floor whenever the panel
+   actually has more room; this min-height is what guarantees at least 10
+   rows even on a short window/no-:has() fallback. */
 .hexcrawl-viewport {
-  position: relative; width: 100%; padding-top: 60%; min-height: 320px; overflow: hidden;
+  position: relative; width: 100%; padding-top: 60%; min-height: 690px; overflow: hidden;
   background-color: var(--bg-inset);
   border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
@@ -1311,7 +1346,7 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    graceful degradation, not a hard requirement. */
 .mc-drawer:has(.hexcrawl-viewport) { display: flex; flex-direction: column; overflow: hidden; }
 .mc-drawer:has(.hexcrawl-viewport) .mc-drawer-body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-.mc-drawer:has(.hexcrawl-viewport) .hexcrawl-viewport { flex: 1 1 auto; padding-top: 0; min-height: 320px; }
+.mc-drawer:has(.hexcrawl-viewport) .hexcrawl-viewport { flex: 1 1 auto; padding-top: 0; min-height: 690px; }
 .hexcrawl-world { position: absolute; inset: 0; transform-origin: 0 0; cursor: grab; }
 .hexcrawl-world:active { cursor: grabbing; }
 /* --hex-default-fill is the solid color an unpainted hex's own SVG
@@ -1354,20 +1389,33 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
   inset: auto; left: 50%; top: 50%; transform: translate(-50%, -50%);
   display: block; opacity: 0.85; object-fit: contain;
 }
+/* The inline-SVG variant (hexGeoGlyphHtml's `svgArt` branch — a biome
+   with no source-crop art, e.g. Ocean's waves) needs the same centering
+   treatment as the <img> variant just above. */
+.hex-geo-glyph-svg {
+  inset: auto; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: block; opacity: 0.85;
+}
 /* Direct follow-up request: "the location icon... have a white background
    with thin black border to stand out from the location background" —
-   deliberately literal white/black rather than this app's own dark-theme
-   tokens, so the icon reads clearly against ANY Geography fill color
-   behind it, not just the app's usual dark surfaces. Applies once a
-   Location is actually linked (.hex-center-filled) — the EMPTY "+" state
-   is a separate, invisible-until-hover control (below), so it doesn't
-   cover the (now much bigger) Geography glyph while unused. */
+   deliberately literal black border (kept) rather than this app's own
+   dark-theme tokens, so the icon reads clearly against ANY Geography fill
+   color behind it, not just the app's usual dark surfaces. A LATER direct
+   follow-up ("fill the thumbnail icon in the hexmap hex so there is no
+   white background") dropped the white FILL specifically — a real photo's
+   object-fit:cover already reaches every edge, so that white only ever
+   showed through a photo with its own transparent regions (a token-style
+   PNG); transparent lets the Geography color underneath show through
+   there instead. Applies once a Location is actually linked
+   (.hex-center-filled) — the EMPTY "+" state is a separate,
+   invisible-until-hover control (below), so it doesn't cover the (now
+   much bigger) Geography glyph while unused. */
 .hex-center {
-  position: relative; width: 1.8rem; height: 1.8rem; border-radius: 50%;
+  position: relative; width: 1.8rem; height: 1.8rem; border-radius: 50%; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
   font-size: 1rem;
 }
-.hex-center-filled { background: #fff; border: 1px solid #000; box-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+.hex-center-filled { background: transparent; border: 1px solid #000; box-shadow: 0 1px 3px rgba(0,0,0,0.5); }
 /* Direct follow-up request: "make the + and circle in the hex invisible
    so that the geography icon is visible" — fully transparent at rest
    (no fill/border/shadow/"+" glyph), same "invisible but still a real,
@@ -1375,8 +1423,31 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    posture as .hex-vertex just below. */
 .hex-center-empty { background: transparent; border: none; box-shadow: none; opacity: 0; color: #000; }
 .hex-center-empty:hover { opacity: 1; background: #fff; border: 1px solid #000; box-shadow: 0 1px 3px rgba(0,0,0,0.5); }
-.hex-center-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+/* display:block (direct follow-up clarification: "the location thumbnail
+   image must be increased as needed to fill the entire circle with no
+   background showing... [transparency] was only to explain how the
+   thumbnail image needed to fill the location circle") fixed a plain
+   <img>'s inline-baseline phantom gap. That alone wasn't enough — direct
+   follow-up report + attached screenshot showed a ring of background
+   still visible around the artwork: the uploaded image itself often has
+   its own baked-in empty/transparent margin around a circular or oval
+   vignette (common for token-style portrait art), which object-fit:cover
+   alone can't crop away since the image's own overall aspect ratio
+   already roughly matches the circle. transform:scale(1.4) forces a
+   further, deliberate over-crop around the image's own center — trading a
+   bit of its outer content for a guarantee that the circle is always
+   fully covered by real image pixels, regardless of how much padding any
+   given upload happens to carry. */
+.hex-center-img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; transform: scale(1.4); }
 .hex-center-fallback { font-weight: bold; color: #000; }
+/* Direct follow-up request: "update the image of the location icon to fill
+   the circle to remove the need for the whitespace" — sized to the same
+   1.8rem diameter as .hex-center itself (minus a hair so the glyph's own
+   internal padding never clips against the circle's overflow:hidden edge)
+   instead of the much smaller original 1.1rem, so it reads as a filled
+   icon the same way .hex-center-img's object-fit:cover already does for a
+   real uploaded photo, rather than a small glyph floating in a white disc. */
+.hex-center-type-icon { font-size: 1.7rem; line-height: 1; }
 /* Direct follow-up request: "make the circles in the corners not visible"
    — invisible at rest (no fill/border/glyph chrome), still a real
    clickable hit target at full size; a faint hover hint keeps the 6 slots
@@ -1393,6 +1464,45 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .hex-vertex-filled:hover { opacity: 1; }
 .hex-detail-panel { margin-top: var(--sp-2); }
 .hex-detail-threat-row { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-1); }
+/* Direct follow-up request (river feature): a hex's 6 edge midpoints —
+   invisible at rest, same "real full-size hit target, hover-revealed"
+   posture as .hex-vertex, just smaller and elongated along the border
+   rather than round, so it doesn't read as a 7th corner. Only meaningful
+   while the River tool is armed (shell.js no-ops an edge click
+   otherwise), so it stays fully transparent even on hover unless armed —
+   .hexcrawl-viewport.placing (already toggled while ANY tool is armed)
+   is what turns hover feedback on. */
+.hex-edge {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 0.9rem; height: 0.5rem; min-width: 0; border-radius: 999px; padding: 0;
+  background: transparent; border: none; opacity: 0; cursor: default;
+}
+.hexcrawl-viewport.placing .hex-edge:hover { opacity: 0.8; background: #2d6a8f; cursor: pointer; }
+.hex-edge-pending { opacity: 1; background: #2d6a8f; box-shadow: 0 0 0 2px #fff; }
+/* Lake/river overlays (direct follow-up request) — rendered inside
+   .hex-shape's own SVG, same coordinate space as the Geography polygon,
+   so they sit above its solid fill but (DOM order) below the actual
+   .hex-cell click target/center icon. pointer-events:none throughout —
+   same reasoning as .hex-shape-outline, clicks must reach the real hit-
+   test targets (.hex-edge/.hex-cell) underneath/alongside, not this
+   purely-visual layer. */
+.hex-lake { fill: #1d4e6e; fill-opacity: 0.88; stroke: #0a0a0a; stroke-width: 1.2; pointer-events: none; }
+.hex-river { fill: none; stroke: #2d6a8f; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.hex-river-mouth { fill: #2d6a8f; pointer-events: none; }
+/* Direct follow-up request: "when the river icon is selected, any river
+   lines already placed should be selectable and clicking a line should
+   prompt to remove it." This whole extra svg only renders at all while
+   the River tool is armed (hexcrawlGrid's own riverToolArmed check), and
+   sits AFTER .hex-cell in DOM order (same "must paint on top to actually
+   receive the click" fix .hex-edge itself needed — see the comment on
+   riverToolArmed's call site) — pointer-events:none on the svg root
+   itself so it doesn't block clicks on .hex-cell/.hex-center/.hex-edge
+   wherever a river ISN'T, re-enabled per-path via stroke-only hit-testing
+   on a much wider invisible stroke than the 3px visible line, so the
+   actual click target is generous without changing how the river looks. */
+.hex-river-hit-layer { pointer-events: none; }
+.hex-river-hit { fill: none; stroke: transparent; stroke-width: 14; stroke-linecap: round; pointer-events: stroke; cursor: pointer; }
+.hex-river-hit:hover { stroke: rgba(255,255,255,0.25); }
 
 /* World Tracker (requirements/PLANETFALL_world_tracker.md) — a fixed,
    small integer grid, so plain CSS grid + flat buttons is enough; no
@@ -1535,8 +1645,11 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    row as thumbnail" — Type/Tags moved out to their own row further down,
    below the field-divider). */
 .inspector-photo-row { display: flex; gap: var(--sp-3); align-items: flex-start; margin-top: var(--sp-3); }
-/* 40% of the row's width whether or not a photo is assigned yet — an
-   unassigned entity still reserves the same space (via
+/* 40% of the row's width (direct follow-up request: "increase the
+   thumbnail size by 30% in the entity editor" — 3.5rem -> 4.55rem, kept
+   proportionate to the explicit circle size below, same ratio as the
+   earlier 40%-width/4.5rem pairing) whether or not a photo is assigned
+   yet — an unassigned entity still reserves the same space (via
    .inspector-photo-empty's dashed placeholder box below) so the layout
    doesn't jump once a photo is added. */
 .inspector-photo { flex: 0 0 40%; max-width: 40%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); }
@@ -1553,12 +1666,50 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    .tag-editor-toggle. */
 .inspector-type-tags-row { display: flex; align-items: flex-end; gap: var(--sp-3); }
 .inspector-type-field { flex: 0 0 auto; min-width: 0; }
-.inspector-photo .gallery-thumb-circle { width: 4.5rem; height: 4.5rem; }
+/* 3.5rem -> 4.55rem (direct follow-up request: "increase the thumbnail
+   size by 30%"). */
+.inspector-photo .gallery-thumb-circle { width: 4.55rem; height: 4.55rem; }
 /* Direct follow-up request: clicking the thumbnail shows the full-size
    image (see image-lightbox-overlay below). Bare-button reset so the
    circular photo inside doesn't pick up default button chrome. */
-.gallery-thumb-circle-btn { background: none; border: none; padding: 0; cursor: zoom-in; border-radius: 50%; }
+/* overflow:hidden turns this button into a fixed clip container — a
+   direct follow-up report + screenshot ("the fill is still not
+   complete") showed display:block/object-fit:cover alone wasn't enough:
+   a source portrait/token-style image very often has its own baked-in
+   empty margin around a circular or oval vignette, close enough to this
+   box's own aspect ratio that cover has little left to crop. The img
+   below is transform:scale(1.4)'d to force a further, deliberate
+   over-crop around ITS OWN center — CSS transform never affects layout
+   size, only paint, so this button still sizes itself to the img's
+   normal (unscaled) dimensions and this overflow:hidden clips the
+   now-larger painted image back down to fit it exactly, same "fixed-size
+   parent clips a transform-scaled child" technique .hex-center/
+   .hex-center-img already use for the identical problem on the Hexcrawl
+   map. Scoped to just the .gallery-thumb-circle used as an entity
+   portrait (inside this button) — the Gallery library's own card view
+   shows a plain, unscaled thumbnail deliberately, since that view is
+   for confirming exactly what was uploaded. */
+.gallery-thumb-circle-btn { background: none; border: none; padding: 0; cursor: zoom-in; border-radius: 50%; overflow: hidden; display: inline-block; }
+.gallery-thumb-circle-btn .gallery-thumb-circle { transform: scale(1.4); }
 .gallery-thumb-circle-btn:hover .gallery-thumb-circle { border-color: var(--accent); }
+/* Direct follow-up request: "move the edit icon to the 60 degree or 5pm
+   position in the bottom right of the thumbnail" — back to an overlay
+   badge (an earlier request had moved it off the thumbnail entirely; this
+   supersedes that), but at the precise 5-o'clock point on the circle
+   itself rather than the generic bottom-right corner the very first
+   overlay version used. Clock position -> percentage offset from center:
+   angle clockwise from 12 = hour*30° = 150° for 5 o'clock; offset from
+   center = radius*(sin150°, -cos150°) = radius*(0.5, 0.866); at radius =
+   50% of the box (a diameter-100% circle), that's +25%/+43.3% from
+   center (50%,50%), i.e. left:75%, top:93.3%. */
+.inspector-photo-edit-overlay { position: relative; display: inline-flex; }
+.photo-edit-btn {
+  position: absolute; left: 75%; top: 93.3%; transform: translate(-50%, -50%);
+  width: 1.3rem; height: 1.3rem; display: flex; align-items: center; justify-content: center; padding: 0;
+  background: #fff; color: #000; border: 1px solid #000; border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.5); font-size: 0.7rem; cursor: pointer;
+}
+.photo-edit-btn:hover { background: var(--accent); border-color: var(--accent); color: #04121f; }
 .inspector-photo-empty {
   display: flex; align-items: center; justify-content: center; width: 100%;
   aspect-ratio: 1 / 1; border: 1px dashed var(--border); border-radius: var(--radius-sm);
@@ -1711,6 +1862,12 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .statblock-block { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-3); }
 .statblock-head { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); }
 .statblock-head h4 { flex: 1; margin: 0; font-size: 0.8rem; color: var(--accent); }
+/* Direct follow-up request: "Add an up & down arrow to the left of the
+   delete icon for each statblock so it can be reordered" — a tight pair
+   (no gap between them, own smaller font) so they read as one up/down
+   control, distinct from the looser-spaced icons around them. */
+.statblock-move-buttons { display: inline-flex; gap: 0; }
+.statblock-move-buttons .icon-btn { font-size: 0.7rem; padding: 0.15rem 0.25rem; }
 /* Party drawer's collapsible section headers (direct follow-up request) —
    same size/color/weight as .statblock-head h4 above so a section reads
    identically whether or not it happens to be collapsible, just as a real
@@ -2564,6 +2721,12 @@ input[type="number"] { -moz-appearance: textfield; }
    candidate below it, so rolling up a brand new creature never reads as
    picking one already named that. */
 .entity-picker-row-create { color: var(--accent-strong); font-weight: 600; border-bottom: 1px solid var(--border); margin-bottom: 0.2rem; padding-bottom: 0.6rem; }
+/* Direct follow-up request: "remove link to this [entity type]" — the
+   Hexcrawl pickers' own escape hatch for backing out of a placed-but-
+   unlinked map icon, styled like .entity-picker-row-create's own standout
+   treatment but in the danger color instead of the accent, so it doesn't
+   get mistaken for another candidate in the list. */
+.entity-picker-row-remove { color: var(--danger); border-top: 1px solid var(--border); margin-top: 0.2rem; padding-top: 0.6rem; }
 
 /* Turn Step widget (Colony) + Step Text row (design/adr/rules-profiles-
    multi-campaign.md) */

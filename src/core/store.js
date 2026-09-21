@@ -177,12 +177,19 @@ function createStore() {
   // every doc unconditionally, even when no profile resolves at all
   // (unlike settings/crewTasks below, which need an active profile to mean
   // anything).
-  function overlayProfile(rawDoc) {
+  function overlayProfileWith(rawDoc, profile) {
     if (!rawDoc) return rawDoc;
     const withLists = { ...rawDoc, turnStepLists: appConfig.turnStepLists || [] };
-    const profile = activeProfile();
     if (!profile) return withLists;
     return { ...withLists, settings: { ...rawDoc.settings, ...profile.ruleset }, crewTasks: profile.crewTasks };
+  }
+
+  function overlayProfile(rawDoc) { return overlayProfileWith(rawDoc, activeProfile()); }
+
+  function profileForCampaign(campaignId) {
+    const entry = appConfig.campaigns.find((c) => c.id === campaignId);
+    const byId = entry && appConfig.profiles.find((p) => p.id === entry.profileId);
+    return byId || appConfig.profiles[0] || null;
   }
 
   // Real per-campaign state (which list backs which Campaign-panel tab) —
@@ -388,6 +395,48 @@ function createStore() {
     return get();
   }
 
+  /** Serialize any one campaign (not necessarily the active one) for a
+   *  standalone backup download — direct follow-up request ("Add the
+   *  ability to delete a campaign and all its data. Prompt to backup the
+   *  data first."). Same overlay-the-right-profile-onto-settings shape as
+   *  exportDocument()/get(), just resolved for an arbitrary campaign id
+   *  instead of always the active one, and without switching away from
+   *  whatever campaign is actually active right now. Returns null if the
+   *  campaign doesn't exist. */
+  async function exportCampaignById(campaignId) {
+    let target = docs.get(campaignId);
+    if (!target) {
+      const database = await db();
+      const raw = await idbGet(database, campaignDocKey(campaignId));
+      if (!raw) return null;
+      target = migrateDocument(raw);
+    }
+    return JSON.stringify(overlayProfileWith(target, profileForCampaign(campaignId)), null, 2);
+  }
+
+  /** Permanently remove a campaign and its document + backup from
+   *  IndexedDB. Refuses to delete the active campaign (switch away first —
+   *  callers should only ever offer this for a non-active row, same as the
+   *  existing Switch button) or the last remaining campaign (this app
+   *  always needs one active campaign to exist). Never touches any other
+   *  campaign's data. */
+  async function deleteCampaign(campaignId) {
+    if (campaignId === appConfig.activeCampaignId) {
+      return { ok: false, error: new Error('Cannot delete the active campaign — switch to another one first.') };
+    }
+    if (appConfig.campaigns.length <= 1) {
+      return { ok: false, error: new Error('Cannot delete the only campaign.') };
+    }
+    const database = await db();
+    await idbDelete(database, campaignDocKey(campaignId));
+    await idbDelete(database, campaignBackupDocKey(campaignId));
+    docs.delete(campaignId);
+    appConfig = { ...appConfig, campaigns: appConfig.campaigns.filter((c) => c.id !== campaignId) };
+    await persistAppConfig();
+    notify();
+    return { ok: true };
+  }
+
   /** Rename a campaign's title — keeps the campaign-list entry and (once
    *  loaded) its own document's meta.title in sync. */
   async function renameCampaign(campaignId, title) {
@@ -586,7 +635,7 @@ function createStore() {
     supportsFileBinding, bindFile, saveBoundFile,
     storageInfo, restoreBackup,
     putDocBlob, getDocBlob, deleteDocBlob, listDocBlobKeys,
-    listCampaigns, switchCampaign, renameCampaign, setCampaignProfile,
+    listCampaigns, switchCampaign, renameCampaign, setCampaignProfile, deleteCampaign, exportCampaignById,
     listProfiles, getActiveProfile, getAppConfig, createProfile, updateProfile, renameProfile,
     addTurnStepList, updateAppConfig,
     STORAGE_KEY, BACKUP_KEY, LEGACY_KEYS,

@@ -7,13 +7,14 @@
 // v0.53 migration already fills it; this module gives it behavior.
 
 import {
-  ensureAutoStatblock, addStatblockGroup, removeStatblockGroup, setStatblockField, addStatblockField, removeStatblockField,
+  ensureAutoStatblock, addStatblockGroup, removeStatblockGroup, moveStatblockGroup, setStatblockField, addStatblockField, removeStatblockField,
   toggleStatblockFieldTrack, setStatblockTrackValue, toggleStatblockFieldAttribute, setStatblockAttributeValue,
   addStatblockWeapon, updateStatblockWeapon, removeStatblockWeapon, setStatblockGear,
   addStatblockAttack, updateStatblockAttack, removeStatblockAttack,
 } from './statblocks.js';
 import { economyTypesForModel } from '../data/economyTypes.js';
 import { SWN_XP_TABLE } from '../data/swnFactionData.js';
+import { entityTagSeedsFor, locationTagSeedsFor } from '../data/entityTagSeeds.js';
 
 // `item` (ADR 0012): gear/weapons/armor as first-class entities — tags,
 // @mentions, relationships (`owns` now has a concrete use: "NPC X owns Item
@@ -44,15 +45,18 @@ export const ENTITY_TYPES = ['npc', 'location', 'faction', 'asset', 'lore', 'ite
 export const TYPE_LABEL = { npc: 'NPC', location: 'Location', faction: 'Faction', asset: 'Asset', lore: 'Lore', item: 'Item', conflict: 'Conflict', lifeform: 'Lifeform' };
 
 /** Direct follow-up request: "For all Fantasy (generic) genres, change any
- *  reference to 'Lifeform' as an entity type to 'Monster'" — genre-aware,
- *  same "data label swap keyed by genrePack" posture as data/genrePacks.js's
- *  own bestiaryTerm(), not a second parallel entity type (the stored
+ *  reference to 'Lifeform' as an entity type to 'Monster'" (later renamed
+ *  again, direct follow-up request, to "Bestiary" — matching
+ *  data/genrePacks.js's own bestiaryTerm(), which already calls this same
+ *  fantasy-genre concept "Bestiary" everywhere else in the app) —
+ *  genre-aware, same "data label swap keyed by genrePack" posture as
+ *  bestiaryTerm(), not a second parallel entity type (the stored
  *  `type: 'lifeform'` value itself never changes, only its display label).
  *  Every UI call site that renders TYPE_LABEL for on-screen text should use
  *  this instead; TYPE_LABEL itself stays the plain, non-genre-aware map for
  *  any internal (non-display) lookup. */
 export function entityTypeLabel(type, genrePackId) {
-  if (type === 'lifeform' && genrePackId === 'fantasy') return 'Monster';
+  if (type === 'lifeform' && genrePackId === 'fantasy') return 'Bestiary';
   return TYPE_LABEL[type] || type;
 }
 
@@ -745,6 +749,26 @@ export function addEntityTag(campaign, id, tag) {
   return next;
 }
 
+/** Direct follow-up request: "for tags that are protected, like character
+ *  ... since removing character tag would make the entity an NPC and not
+ *  a player/party member, convert the statblock to a regular NPC
+ *  statblock and remove the character statblock from view, retaining the
+ *  character stats in case it is restored later." A Character Sheet's own
+ *  fields (attribute/track rows, possibly `sections`) don't map onto a
+ *  Bestiary template's shape at all, so this doesn't attempt a lossy
+ *  field-by-field conversion — it just marks the kind:'character' group(s)
+ *  `archived` (hiding them from characterSheetSectionHtml, drawers/
+ *  index.js) rather than deleting them, so re-adding the tag can restore
+ *  the exact same stats via the counterpart call below. */
+export function setCharacterStatblocksArchived(campaign, id, archived) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (e && Array.isArray(e.statblocks)) {
+    for (const g of e.statblocks) if (g.kind === 'character') g.archived = archived;
+  }
+  return next;
+}
+
 export function removeEntityTag(campaign, id, tag) {
   const next = clone(campaign);
   const e = getEntity(next, id);
@@ -779,6 +803,22 @@ export function listTagVocabulary(campaign, entityType, excludeEntityId) {
       const low = t.label.toLowerCase();
       if (!own.has(low) && !seen.has(low)) seen.set(low, t.label);
     }
+  }
+  // Genre-flavored suggestions (data/entityTagSeeds.js) — direct follow-up
+  // request: "make the scifi tags tied to the SciFi (generic) genre and
+  // create similar but appropriate fantasy tags for Fantasy (generic)
+  // genre." A Location's own seeds are swapped out entirely for Five
+  // Leagues from the Borderlands' canonical location categories (Delve,
+  // Monster Lair, ...) whenever it's the active ruleset — see
+  // locationTagSeedsFor's own doc comment for why that's an override, not
+  // an addition, to the generic fantasy list.
+  const genrePack = (campaign.settings && campaign.settings.genrePack) || 'sci-fi-generic';
+  const seeds = entityType === 'location'
+    ? locationTagSeedsFor(genrePack, campaign.settings && campaign.settings.statRuleset)
+    : entityTagSeedsFor(genrePack, entityType);
+  for (const label of seeds) {
+    const low = label.toLowerCase();
+    if (!own.has(low) && !seen.has(low)) seen.set(low, label);
   }
   return [...seen.values()].sort((a, b) => a.localeCompare(b));
 }
@@ -934,6 +974,17 @@ export function removeEntityStatblockGroup(campaign, id, groupIndex) {
   const next = clone(campaign);
   const e = getEntity(next, id);
   if (e) removeStatblockGroup(e, groupIndex);
+  return next;
+}
+
+/** Direct follow-up request: "Add an up & down arrow... so it can be
+ *  reordered" — see moveStatblockGroup's own doc comment (statblocks.js)
+ *  for how this interacts with sortStatblockGroups' own kind-rank display
+ *  order. */
+export function moveEntityStatblockGroup(campaign, id, groupIndex, direction) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (e) moveStatblockGroup(e, groupIndex, direction);
   return next;
 }
 

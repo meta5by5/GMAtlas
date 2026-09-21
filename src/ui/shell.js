@@ -24,7 +24,7 @@ import {
 } from '../domain/dice.js';
 import {
   createEntity, updateEntity, addEntityTag, removeEntityTag, removeEntity, filterEntities, setActiveEntity, addRelationship, removeRelationship,
-  getEntity, addEntityStatblockGroup, removeEntityStatblockGroup, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
+  getEntity, addEntityStatblockGroup, removeEntityStatblockGroup, moveEntityStatblockGroup, setCharacterStatblocksArchived, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
   addEntityStatblockWeapon, updateEntityStatblockWeapon, removeEntityStatblockWeapon, setEntityStatblockGear,
   addEntityStatblockAttack, updateEntityStatblockAttack, removeEntityStatblockAttack, applyDnd5ePdfImport,
   setEntityStatblockTrackValue, setEntityStatblockAttributeValue, updateRelationshipLabel, updateRelationshipType, updateRelationshipStrength,
@@ -51,8 +51,11 @@ import {
 import {
   getHexMap, getActiveHexMap, getHex, createHexMap, renameHexMap, deleteHexMap, setActiveHexMap,
   setHexGeography, setHexLocation, clearHexLocation, setHexThreat, clearHexThreat, setHexNotes,
-  axialToPixel, pixelToAxial, HEX_SIZE,
+  axialToPixel, pixelToAxial, HEX_SIZE, nextOpenThreatVertex,
+  addHexRiverSegment, clearHexRivers, removeHexRiverSegment, setHexLake, edgeNeighbor,
+  setHexVertexConflict, clearHexVertexConflict,
 } from '../domain/hexcrawls.js';
+import { findHexcrawlThreat } from '../data/hexcrawlIcons.js';
 import { generateCreatureConcept, formatCreatureConcept, generateSiteConcept, formatSiteConcept, generateAdventureSeed, formatAdventureSeed } from '../domain/worldbuilding.js';
 import {
   addDocument, updateDocument, removeDocument, getDocument, addDocumentTag, removeDocumentTag, renameDocument,
@@ -96,7 +99,7 @@ import { addTemplateSystem, addTemplateField, updateTemplateField, removeTemplat
 import { universalSearch } from '../domain/search.js';
 import { positionCardHtml, composerBodyHtml, navigatorBodyHtml } from './workspace/index.js';
 import { renderCopilot } from './copilotPanel.js';
-import { renderDrawer, formatBytes, helpToggle, partyMemberCard } from './drawers/index.js';
+import { renderDrawer, formatBytes, helpToggle, partyMemberCard, isProtectedEntityTag } from './drawers/index.js';
 import { listCombatTrackerEntries, addCombatTrackerEntity, removeCombatTrackerEntry, moveCombatTrackerEntry, clearCombatTracker, getCombatTrackerActiveEntryId, setCombatTrackerActiveEntry, addAllPartyMembersToCombatTracker } from '../domain/combatTracker.js';
 import { hasCharacterTag } from '../domain/statblocks.js';
 import { renderFactionEvents } from './drawers/factionEvents.js';
@@ -459,10 +462,34 @@ let battlemapCamera = { scale: 1, x: 0, y: 0 };
 let battlemapPan = null; // { world, startClientX, startClientY, startX, startY } while a drag-pan is in progress
 // Hexcrawl — same ephemeral camera/pan/armed-icon shape as Battlemap's own
 // above, generalized to a real-pixel (not 0-1-fraction) unbounded plane.
-// hexcrawlPlacingIcon is { layer: 'geography'|'threat', key } or null.
+// hexcrawlPlacingIcon is { layer: 'geography'|'threat'|'river'|'lake', key }
+// or null ('river'/'lake' carry no key — there's only one of each tool).
 let hexcrawlPlacingIcon = null;
 let hexcrawlCamera = { scale: 1, x: 0, y: 0 };
 let hexcrawlPan = null;
+// Direct follow-up request: "allow scrolling of the hexmap by left
+// clicking with the mouse to drag" — drag-to-pan used to be disabled
+// entirely whenever a tool was armed (to avoid it eating a click meant to
+// place something), which meant a GM couldn't scroll the map at all while
+// painting. Panning now always starts tracking on mousedown over the
+// viewport regardless of armed state; hexcrawlPanMoved flips true once
+// the drag has actually moved past a small threshold (onGraphMouseMove),
+// and the resulting mouseup (onGraphMouseUp) uses that to decide: a real
+// drag suppresses the click that would otherwise follow it (so panning
+// never ALSO places/selects whatever the cursor ended up over), while a
+// stationary press-and-release still reaches onClick as an ordinary
+// click, armed tool or not.
+let hexcrawlPanMoved = false;
+let hexcrawlSuppressNextClick = false;
+// Direct follow-up request (river feature) — the pending first edge of an
+// in-progress river segment: { mapId, q, r, edge } or null. Set by the
+// FIRST data-hex-edge click while the River tool is armed; the SECOND
+// click (same hex) completes the segment and this auto-advances to the
+// mirrored edge of whichever neighboring hex that segment just exited
+// into, so the very next click continues the river without re-arming
+// anything — see placeRiverEdgeClick's own doc comment. Cleared whenever
+// the River tool itself is disarmed/re-armed, or a map switch happens.
+let hexcrawlRiverStart = null;
 // Which hex's own detail panel is currently shown below the canvas (null
 // = none) — same "click a cell, see/edit it below" shape as World
 // Tracker's own worldTrackerSelectedSector.
@@ -1692,12 +1719,32 @@ function onClick(ev) {
   const hexDetailThreatClear = hit('[data-hex-detail-threat-clear]');
   if (hexDetailThreatClear) {
     const [mapId, q, r, i] = hexDetailThreatClear.dataset.hexDetailThreatClear.split('::');
-    return store.update((d) => clearHexThreat(d, mapId, Number(q), Number(r), Number(i)));
+    const qn = Number(q); const rn = Number(r); const vi = Number(i);
+    // Clearing the encounter also clears any Conflict linked to that same
+    // slot — an empty corner has nothing left to link to.
+    return store.update((d) => clearHexVertexConflict(clearHexThreat(d, mapId, qn, rn, vi), mapId, qn, rn, vi));
   }
   const hexDetailLocationClear = hit('[data-hex-detail-location-clear]');
   if (hexDetailLocationClear) {
     const [mapId, q, r] = hexDetailLocationClear.dataset.hexDetailLocationClear.split('::');
     return store.update((d) => clearHexLocation(d, mapId, Number(q), Number(r)));
+  }
+  const hexDetailLakeAdd = hit('[data-hex-detail-lake-add]');
+  if (hexDetailLakeAdd) {
+    const [mapId, q, r] = hexDetailLakeAdd.dataset.hexDetailLakeAdd.split('::');
+    return store.update((d) => setHexLake(d, mapId, Number(q), Number(r), true));
+  }
+  const hexDetailLakeClear = hit('[data-hex-detail-lake-clear]');
+  if (hexDetailLakeClear) {
+    const [mapId, q, r] = hexDetailLakeClear.dataset.hexDetailLakeClear.split('::');
+    if (!window.confirm('Remove this lake? Any river segments already connected to it stay on their hexes, but stop showing a lake endpoint until one exists here again.')) return;
+    return store.update((d) => setHexLake(d, mapId, Number(q), Number(r), false));
+  }
+  const hexDetailRiversClear = hit('[data-hex-detail-rivers-clear]');
+  if (hexDetailRiversClear) {
+    const [mapId, q, r] = hexDetailRiversClear.dataset.hexDetailRiversClear.split('::');
+    if (!window.confirm('Clear every river segment on this hex? This cannot be undone.')) return;
+    return store.update((d) => clearHexRivers(d, mapId, Number(q), Number(r)));
   }
   const hexDetailLocationPick = hit('[data-hex-detail-location-pick]');
   if (hexDetailLocationPick) {
@@ -1710,39 +1757,111 @@ function onClick(ev) {
   }
   if (hit('[data-hex-detail-close]')) { hexcrawlSelectedHex = null; return renderDrawerBody(); }
 
-  // A hex's 6 corner dots: an armed Threat icon places/replaces itself
-  // there and disarms; with nothing (threat-layer) armed, a click on an
-  // already-filled dot clears it; an empty dot with nothing armed is a
-  // no-op (armed Geography deliberately does NOT act here — see
-  // data-hex-select below, geography paints the WHOLE hex).
+  // A real drag-pan gesture (onGraphMouseUp) suppresses the ONE click that
+  // would otherwise follow it, so panning the map never ALSO places/
+  // selects/removes whatever the cursor happened to end up over. Scoped
+  // to just the viewport's own interactive targets (below) — Hex Detail
+  // panel buttons and the map switcher above are never where a pan
+  // starts, so they're never affected either way.
+  if (hexcrawlSuppressNextClick && ev.target.closest('.hexcrawl-viewport')) {
+    hexcrawlSuppressNextClick = false;
+    return;
+  }
+  hexcrawlSuppressNextClick = false;
+
+  // Direct follow-up request: "when the river icon is selected, any river
+  // lines already placed should be selectable and clicking a line should
+  // prompt to remove it." Checked before data-hex-edge/data-hex-select
+  // below — the hit-path only exists in the DOM at all while the River
+  // tool is armed (hexcrawlGrid's own riverToolArmed check), so this can
+  // fire unconditionally without re-checking hexcrawlPlacingIcon here.
+  const hexRiverEl = hit('[data-hex-river]');
+  if (hexRiverEl) {
+    const [mapId, q, r, index] = hexRiverEl.dataset.hexRiver.split('::');
+    if (!window.confirm('Remove this river segment?')) return;
+    return store.update((d) => removeHexRiverSegment(d, mapId, Number(q), Number(r), Number(index)));
+  }
+
+  // A hex's 6 corners are no longer a manual PLACEMENT target (direct
+  // follow-up request: "change the hex corner functionality such that
+  // they are not selectable... The user adds encounters by clicking the
+  // encounter icon and then the hex, not the corner it would be placed" —
+  // see data-hex-center/data-hex-select's own Encounter branches below for
+  // the actual placement flow). An empty corner is a pure no-op regardless
+  // of what's armed. A FILLED corner (a LATER direct follow-up: "add a
+  // clickable link to each encounter and map it to a Conflict entity
+  // record... similar to how Location works") opens its already-linked
+  // Conflict, or offers to link/create one. Removal (LATER direct follow-
+  // up: "clicking an existing, populated conflict icon should open that
+  // conflict entity but there needs to be a way to disassociate it from
+  // the hex and remove the icon reference in the hex") reuses the exact
+  // same arm-then-click-the-existing-thing-to-remove-it gesture River
+  // already established just above (window.confirm, same wording style):
+  // with the Locations/corner tool armed, clicking an already-filled
+  // corner prompts to clear it instead of opening it — the Hex Detail
+  // panel's own "✕ Clear" per row still works too, this is just a second,
+  // faster path straight from the map.
   const hexVertexEl = hit('[data-hex-vertex]');
   if (hexVertexEl) {
     const [mapId, q, r, i] = hexVertexEl.dataset.hexVertex.split('::');
     const qn = Number(q); const rn = Number(r); const vi = Number(i);
+    const hex = getHex(store.get(), mapId, qn, rn);
+    if (!hex.threats[vi]) return;
     if (hexcrawlPlacingIcon && hexcrawlPlacingIcon.layer === 'threat') {
-      const armedKey = hexcrawlPlacingIcon.key;
-      hexcrawlPlacingIcon = null;
-      return store.update((d) => setHexThreat(d, mapId, qn, rn, vi, armedKey));
+      if (!window.confirm('Remove this encounter and unlink its Conflict?')) return;
+      return store.update((d) => clearHexVertexConflict(clearHexThreat(d, mapId, qn, rn, vi), mapId, qn, rn, vi));
     }
-    if (!hexcrawlPlacingIcon) {
-      const hex = getHex(store.get(), mapId, qn, rn);
-      if (hex.threats[vi]) return store.update((d) => clearHexThreat(d, mapId, qn, rn, vi));
+    const linkedId = hex.vertexConflicts[vi];
+    if (linkedId) {
+      openDrawerTab('entity-detail');
+      return store.update((d) => setActiveEntity(d, linkedId));
     }
+    entityPicker = { entityType: 'hexcrawl-vertex-conflict', mode: 'hexcrawl-vertex-conflict', scope: { mapId, q: qn, r: rn, vertexIndex: vi }, query: '' };
+    renderEntityPickerOverlay();
+    const inp = root.querySelector('[data-entity-picker-query]');
+    if (inp) { inp.value = ''; inp.focus(); }
     return;
   }
-  // A hex's own center: an armed Geography icon paints the whole hex (same
-  // as clicking anywhere else on it — center is just another point inside
-  // the cell while painting); otherwise it either opens the linked
-  // Location entity or, if none is linked yet, opens the entity picker
-  // scoped to Locations.
+  // A hex's 6 edges (direct follow-up request, river feature) — only ever
+  // meaningful while the River tool is armed; see placeRiverEdgeClick's
+  // own doc comment for the full two-click-plus-auto-continue flow.
+  const hexEdgeEl = hit('[data-hex-edge]');
+  if (hexEdgeEl) {
+    if (!hexcrawlPlacingIcon || hexcrawlPlacingIcon.layer !== 'river') return;
+    const [mapId, q1, r1, e1, q2, r2, e2] = hexEdgeEl.dataset.hexEdge.split('::');
+    const candidates = [{ q: Number(q1), r: Number(r1), edge: Number(e1) }, { q: Number(q2), r: Number(r2), edge: Number(e2) }];
+    return placeRiverEdgeClick(mapId, candidates);
+  }
+  // A hex's own center: an armed Geography or Lake icon still paints/places
+  // via a click here (center is just another point inside the cell while
+  // painting a whole hex); otherwise — and ALWAYS regardless of an armed
+  // Locations/Encounter corner icon, direct follow-up report: "clicking
+  // the location icon should open the existing selection in the entity
+  // editor or offer to select or create a new location. However it
+  // currently adds another Encounter entry in the hex" — it opens the
+  // linked Location entity or, if none is linked yet, the entity picker
+  // scoped to Locations. The center is the one dedicated, always-on
+  // control for a hex's single Location; an armed corner icon (which
+  // stays armed across many hexes, same as Geography, so a GM can place
+  // several without re-arming) places at the next open CORNER via a click
+  // anywhere else on the hex (data-hex-select, below) — never here.
   const hexCenterEl = hit('[data-hex-center]');
   if (hexCenterEl) {
     const [mapId, q, r] = hexCenterEl.dataset.hexCenter.split('::');
     const qn = Number(q); const rn = Number(r);
+    // Direct follow-up request/report: "when you click a geography button
+    // it remains selected as you apply to different hexes until
+    // deselected" — an armed Geography icon stays armed across many hexes
+    // so a GM can paint a whole contiguous biome without re-arming it
+    // every click; only picking "Select" in its dropdown or switching
+    // maps clears it.
     if (hexcrawlPlacingIcon && hexcrawlPlacingIcon.layer === 'geography') {
-      const armedKey = hexcrawlPlacingIcon.key;
-      hexcrawlPlacingIcon = null;
-      return store.update((d) => setHexGeography(d, mapId, qn, rn, armedKey));
+      return store.update((d) => setHexGeography(d, mapId, qn, rn, hexcrawlPlacingIcon.key));
+    }
+    // Armed Lake tool toggles a lake on/off this hex (direct follow-up
+    // request) — same click-anywhere-on-the-hex posture as Geography.
+    if (hexcrawlPlacingIcon && hexcrawlPlacingIcon.layer === 'lake') {
+      return placeArmedLake(mapId, qn, rn);
     }
     const hex = getHex(store.get(), mapId, qn, rn);
     if (hex.locationEntityId) {
@@ -1756,35 +1875,30 @@ function onClick(ev) {
     return;
   }
   // The hex cell itself (checked after the more specific center/vertex
-  // targets above) — an armed Geography icon paints it; otherwise a plain
-  // click opens/updates the Hex Detail panel below the canvas.
+  // targets above) — an armed Geography icon paints it, an armed Encounter
+  // icon places itself at the next open corner; otherwise a plain click
+  // opens/updates the Hex Detail panel below the canvas.
   const hexSelectEl = hit('[data-hex-select]');
   if (hexSelectEl) {
     const [mapId, q, r] = hexSelectEl.dataset.hexSelect.split('::');
     const qn = Number(q); const rn = Number(r);
+    // Stays armed across many hexes — see the identical comment on
+    // data-hex-center's own Geography branch just above.
     if (hexcrawlPlacingIcon && hexcrawlPlacingIcon.layer === 'geography') {
-      const armedKey = hexcrawlPlacingIcon.key;
-      hexcrawlPlacingIcon = null;
-      return store.update((d) => setHexGeography(d, mapId, qn, rn, armedKey));
+      return store.update((d) => setHexGeography(d, mapId, qn, rn, hexcrawlPlacingIcon.key));
+    }
+    if (hexcrawlPlacingIcon && hexcrawlPlacingIcon.layer === 'threat') {
+      return placeArmedEncounter(mapId, qn, rn);
+    }
+    if (hexcrawlPlacingIcon && hexcrawlPlacingIcon.layer === 'lake') {
+      return placeArmedLake(mapId, qn, rn);
     }
     hexcrawlSelectedHex = { q: qn, r: rn };
     return renderDrawerBody();
   }
-  const hexArmGeo = hit('[data-hexcrawl-arm-geography]');
-  if (hexArmGeo) {
-    const key = hexArmGeo.dataset.hexcrawlArmGeography;
-    hexcrawlPlacingIcon = (hexcrawlPlacingIcon && hexcrawlPlacingIcon.layer === 'geography' && hexcrawlPlacingIcon.key === key) ? null : { layer: 'geography', key };
-    return renderDrawerBody();
-  }
-  const hexArmThreat = hit('[data-hexcrawl-arm-threat]');
-  if (hexArmThreat) {
-    const key = hexArmThreat.dataset.hexcrawlArmThreat;
-    hexcrawlPlacingIcon = (hexcrawlPlacingIcon && hexcrawlPlacingIcon.layer === 'threat' && hexcrawlPlacingIcon.key === key) ? null : { layer: 'threat', key };
-    return renderDrawerBody();
-  }
   const hexSelect = hit('[data-hexcrawl-select]');
   if (hexSelect) {
-    hexcrawlCamera = { scale: 1, x: 0, y: 0 }; hexcrawlSelectedHex = null; hexcrawlPlacingIcon = null;
+    hexcrawlCamera = { scale: 1, x: 0, y: 0 }; hexcrawlSelectedHex = null; hexcrawlPlacingIcon = null; hexcrawlRiverStart = null;
     return store.update((d) => setActiveHexMap(d, hexSelect.dataset.hexcrawlSelect));
   }
   const hexCameraReset = hit('[data-hexcrawl-camera-reset]');
@@ -1803,6 +1917,17 @@ function onClick(ev) {
   if (hexAdd) {
     openInlinePrompt('hexcrawl-add', { label: 'Map name', placeholder: 'e.g. The Borderlands', anchorRect: hexAdd.getBoundingClientRect() });
     return;
+  }
+  // Direct follow-up request: "Make the hexcrawl map title field readonly
+  // with an edit pencil icon to switch to edit mode" — same read-only-
+  // text-plus-pencil-opens-openInlinePrompt convention Campaign/Profile
+  // renames already use (data-campaign-rename/data-profile-rename above),
+  // replacing the old always-editable <input data-hexcrawl-rename>.
+  const hexRenameOpen = hit('[data-hexcrawl-rename-open]');
+  if (hexRenameOpen) {
+    const id = hexRenameOpen.dataset.hexcrawlRenameOpen;
+    const current = getHexMap(store.get(), id);
+    return openInlinePrompt('hexcrawl-rename', { label: 'Map name', value: current ? current.name : '', meta: { id }, anchorRect: hexRenameOpen.getBoundingClientRect() });
   }
   const hexRemove = hit('[data-hexcrawl-remove]');
   if (hexRemove) {
@@ -1981,10 +2106,23 @@ function onClick(ev) {
   const entTagRemove = hit('[data-entity-tag-remove]');
   if (entTagRemove) {
     const active = store.get().entities.activeId;
-    // Direct follow-up request: removing an entity's #character tag (an
-    // established way to remove a Party member, per Party's own "tag an
-    // NPC #character" convention) also removes their Crew Roster row.
-    return store.update((d) => syncCrewRosterWithParty(removeEntityTag(d, active, entTagRemove.dataset.entityTagRemove)));
+    const tag = entTagRemove.dataset.entityTagRemove;
+    // Direct follow-up request: "for tags that are protected, like
+    // character, add a lock icon and prompt user if it is removed" —
+    // removing #character also removes the Crew Roster row (established
+    // behavior) AND archives (not deletes) any Character Sheet statblock,
+    // since removing the tag turns this back into a plain NPC. A LATER
+    // direct follow-up extended "protected" to every Hexcrawl Encounter
+    // label too (isProtectedEntityTag, drawers/index.js) — those get a
+    // plain generic confirm, no special side effect.
+    if (tag.toLowerCase() === 'character') {
+      if (!window.confirm('Remove the "character" tag? This entity stops being a Party member. Its Character Sheet stats are kept but hidden from view — re-add the tag later to restore them.')) return;
+      return store.update((d) => setCharacterStatblocksArchived(syncCrewRosterWithParty(removeEntityTag(d, active, tag)), active, true));
+    }
+    if (isProtectedEntityTag(tag)) {
+      if (!window.confirm(`Remove the protected "${tag}" tag?`)) return;
+    }
+    return store.update((d) => syncCrewRosterWithParty(removeEntityTag(d, active, tag)));
   }
   // A tag on an entity's own tagEditor is clickable — jumps to Cast
   // filtered to just that tag (replacing whatever filter Cast already
@@ -2043,6 +2181,14 @@ function onClick(ev) {
     const active = store.get().entities.activeId;
     store.update((d) => removeEntityStatblockGroup(d, active, Number(rmGroup.dataset.statblockRemoveGroup)));
     return toast('Statblock removed');
+  }
+  // Direct follow-up request: "Add an up & down arrow to the left of the
+  // delete icon for each statblock so it can be reordered."
+  const moveGroup = hit('[data-statblock-move-group]');
+  if (moveGroup) {
+    const [gi, direction] = moveGroup.dataset.statblockMoveGroup.split('::');
+    const active = store.get().entities.activeId;
+    return store.update((d) => moveEntityStatblockGroup(d, active, Number(gi), direction));
   }
   const sbAddField = hit('[data-statblock-add-field]');
   if (sbAddField) {
@@ -3772,105 +3918,133 @@ function onClick(ev) {
     });
     return;
   }
+  // Direct follow-up request: "Include a create Location entity icon in
+  // the list window when the location button is selected and the option
+  // list pops up" — creates a blank Location entity, links it to the hex
+  // this picker was opened for, then opens the Entity Editor with the name
+  // field focused. Mirrors data-where-add-location's own create-a-new-
+  // Location flow (creates, then jumps straight to naming it) rather than
+  // the Lifeform picker's inline-name-prompt-first flow above, since a
+  // Location has no roll to perform first — nothing to ask for before
+  // creating it.
+  if (hit('[data-hexcrawl-location-create]')) {
+    const picker = entityPicker;
+    entityPicker = null;
+    renderEntityPickerOverlay();
+    if (!picker || !picker.scope) return;
+    const { mapId, q, r } = picker.scope;
+    let newId = null;
+    store.update((d) => {
+      const created = createEntity(d, { type: 'location', name: '' });
+      newId = created.id;
+      return setHexLocation(created.campaign, mapId, q, r, newId);
+    });
+    if (newId) {
+      openDrawerTab('entity-detail');
+      focusInspectorNameNextRender = true;
+      store.update((d) => setActiveEntity(d, newId));
+    }
+    return;
+  }
+  // Direct follow-up request: "add a 'remove link to conflict' option to
+  // the conflict list similar to 'add conflict' if clicking on a populated
+  // conflict icon that is not tied to a conflict entity yet." This picker
+  // only ever opens for a corner that already has an Encounter icon placed
+  // but no Conflict linked yet (a linked corner opens straight to its
+  // Conflict instead, no picker involved) — so "remove" here means
+  // clearing that placed-but-unlinked icon itself, same pair of fields
+  // (clearHexThreat + clearHexVertexConflict) the map's own arm-then-
+  // click-to-remove gesture and Hex Detail's "✕ Clear" already use.
+  if (hit('[data-hexcrawl-vertex-conflict-unlink]')) {
+    const picker = entityPicker;
+    entityPicker = null;
+    renderEntityPickerOverlay();
+    if (!picker || !picker.scope) return;
+    const { mapId, q, r, vertexIndex } = picker.scope;
+    return store.update((d) => clearHexVertexConflict(clearHexThreat(d, mapId, q, r, vertexIndex), mapId, q, r, vertexIndex));
+  }
+  // Same follow-up request, generalized: "Include a 'remove link to this
+  // [entity type]' like this similarly for all other entity selection
+  // lists on the hexmap" — the Location picker's own equivalent. Unlike
+  // the corner/Conflict case, this picker only ever opens when the hex has
+  // no Location linked yet, so there's nothing to actually clear here
+  // today; included anyway for a consistent escape hatch across both
+  // hexmap pickers (same posture as clearHexLocation's own Hex Detail
+  // "✕ Unlink" row), and it's a real no-op-safe clear either way.
+  if (hit('[data-hexcrawl-location-unlink]')) {
+    const picker = entityPicker;
+    entityPicker = null;
+    renderEntityPickerOverlay();
+    if (!picker || !picker.scope) return;
+    const { mapId, q, r } = picker.scope;
+    return store.update((d) => clearHexLocation(d, mapId, q, r));
+  }
+  // Direct follow-up request: "add a clickable link to each encounter and
+  // map it to a Conflict entity record (or option to add a new one)
+  // similar to how Location works," THEN a follow-up on that: "When
+  // creating a new encounter as a conflict entity, add the type of
+  // encounter as a non-editable, protected tag." Creates a blank Conflict,
+  // tags it with the encounter's own label (isProtectedEntityTag,
+  // drawers/index.js, already treats every Encounter label as protected —
+  // no separate flag needed), links it to the vertex, then opens the
+  // Entity Editor. Mirrors data-hexcrawl-location-create's own shape
+  // almost exactly, plus the one extra tag step.
+  if (hit('[data-hexcrawl-vertex-conflict-create]')) {
+    const picker = entityPicker;
+    entityPicker = null;
+    renderEntityPickerOverlay();
+    if (!picker || !picker.scope) return;
+    const { mapId, q, r, vertexIndex } = picker.scope;
+    const hex = getHex(store.get(), mapId, q, r);
+    const encounterLabel = (findHexcrawlThreat(hex.threats[vertexIndex]) || {}).label || 'Encounter';
+    let newId = null;
+    store.update((d) => {
+      const created = createEntity(d, { type: 'conflict', name: '' });
+      newId = created.id;
+      let next = addEntityTag(created.campaign, newId, encounterLabel);
+      return setHexVertexConflict(next, mapId, q, r, vertexIndex, newId);
+    });
+    if (newId) {
+      openDrawerTab('entity-detail');
+      focusInspectorNameNextRender = true;
+      store.update((d) => setActiveEntity(d, newId));
+    }
+    return;
+  }
   const entityPickerSelectBtn = hit('[data-entity-picker-select]');
   if (entityPickerSelectBtn) {
     const id = entityPickerSelectBtn.dataset.entityPickerSelect;
     const picker = entityPicker;
     entityPicker = null;
+    return commitEntityPickerPick(picker, id);
+  }
+  // Direct follow-up request: "for any entity search list (to select an
+  // item, location, asset, etc) include a button to add an entity of that
+  // type" — creates a blank entity of whatever type THIS picker's own
+  // candidate list is drawn from (entityPickerCreateType, below), then
+  // runs it through the exact same commitEntityPickerPick wiring a normal
+  // pick uses, so the brand-new entity ends up attached exactly where
+  // picking an existing one would have. Skipped for the two pickers that
+  // already had their own bespoke create row before this request
+  // (hexcrawl-location's "Create New Location", colony-encounter's own
+  // stat-rolling "Create New Lifeform") — see renderEntityPickerOverlay.
+  const entityPickerCreateBtn = hit('[data-entity-picker-create]');
+  if (entityPickerCreateBtn) {
+    const picker = entityPicker;
+    entityPicker = null;
     if (!picker) return renderEntityPickerOverlay();
-    if (picker.entityType === 'where-faction-link') {
-      // WHO's "+" on Factions active nearby (direct follow-up request,
-      // replacing the old inline <select>) — links the picked faction to
-      // the scope Location via a real located_at relationship (same
-      // action the old dropdown's onChange took), and clears any stale
-      // dismissal (scenes.js's removeSceneDismissedFaction) so a
-      // deliberate re-add isn't immediately hidden again.
-      const locationId = picker.scope;
-      const sceneId0 = currentSceneId();
-      return store.update((d) => {
-        let next = addRelationship(d, id, locationId, 'Located At', 'located_at');
-        if (sceneId0) next = removeSceneDismissedFaction(next, sceneId0, id);
-        return next;
-      });
-    }
-    if (picker.entityType === 'hexcrawl-location') {
-      const { mapId, q, r } = picker.scope || {};
-      return store.update((d) => setHexLocation(d, mapId, q, r, id));
-    }
-    if (picker.entityType === 'party-vehicle' || picker.entityType === 'party-item' || picker.entityType === 'party-asset') {
-      // Party's Shared Assets — unlike WHO's own 'asset' mode above, this
-      // isn't scene-scoped (a Party Tracker's Shared Assets persist across
-      // scenes), so it must NOT go through the currentSceneId() early
-      // return below. "+ Item"/"+ Asset" (direct follow-up request) reuse
-      // this exact same link — sharedAssetIds/addPartySharedAssetEntity
-      // were already entity-type-agnostic (just a plain id reference), the
-      // only thing that made this "vehicles only" before was the picker's
-      // own candidate filter (renderEntityPickerOverlay, below).
-      return store.update((d) => addPartySharedAssetEntity(d, id));
-    }
-    if (picker.entityType === 'party-starship') {
-      // Reached from BOTH Party's own "+ Select Starship" button AND the
-      // Campaign panel's Starship-tab empty-thumbnail click (direct
-      // follow-up request: "if a ship is not active... open a vehicle
-      // selection list to first select the entity record" — same trigger
-      // either way). "Have a prompt ask if this will be the Party's
-      // starship" — a plain non-destructive-reassignment confirm, same
-      // phrasing convention as the entity-type-change confirm above.
-      const target = getEntity(store.get(), id);
-      const prevId = store.get().party && store.get().party.starshipEntityId;
-      const prev = prevId ? getEntity(store.get(), prevId) : null;
-      const question = `Make "${target ? (target.name || 'Unnamed') : 'this entity'}" the Party's starship?${prev ? ` This replaces "${prev.name || 'Unnamed'}".` : ''}`;
-      if (!window.confirm(question)) return renderEntityPickerOverlay();
-      store.update((d) => setPartyStarship(d, id));
-      return toast('Starship set');
-    }
-    if (picker.entityType === 'colony-crew') {
-      // Colony's Crew Roster "+Crew" (direct follow-up request — "select
-      // from available NPCs" instead of adding a blank row to fill in, and
-      // removing the separate "+ Add NPC" quick-create shortcut) — not
-      // scene-scoped (a colony's crew persists across scenes), same
-      // posture as party-vehicle above.
-      return store.update((d) => addCrewRow(d, { characterId: id }));
-    }
-    if (picker.entityType === 'combat-tracker') {
-      // Combat Initiative Tracker's own "+" — same completeCombatTrackerAdd
-      // the drag paths use (its own empty-tracker/#character bulk-load
-      // confirm applies here too, for consistency regardless of how a
-      // party member got added).
-      completeCombatTrackerAdd(null, id);
-      return;
-    }
-    if (picker.entityType === 'colony-crew-assign') {
-      // Crew Roster's own per-row thumbnail (direct follow-up request —
-      // replaces the old inline character <select>): assigns the picked
-      // NPC to THIS existing row (picker.scope, the row id) instead of
-      // creating a new one — the role dropdown next to it is untouched.
-      return store.update((d) => updateCrewRow(d, picker.scope, { characterId: id }));
-    }
-    if (picker.entityType === 'what-conflict') {
-      // WHAT's "+" (direct follow-up request: "adds a Conflict entity as
-      // a chip under the Situation textbox") — context.what.entityIds is
-      // the same generic array/addContextEntity every other context
-      // question already has; not scene-scoped, since Situation itself
-      // isn't either (a GM's attached Conflicts persist the same way).
-      return store.update((d) => addContextEntity(d, 'what', id));
-    }
-    if (picker.entityType === 'colony-encounter') {
-      // Colony's Lifeform Encounters row "+" (direct follow-up request) —
-      // attaches the picked Lifeform entity to the row's own entityId, not
-      // scene-scoped (the Encounters log persists across scenes like the
-      // rest of Colony).
-      return store.update((d) => updateColonyEncounter(d, picker.scope, { entityId: id }));
-    }
-    const sceneId = currentSceneId();
-    if (!sceneId) return renderEntityPickerOverlay();
-    if (picker.entityType === 'asset') return store.update((d) => addSceneAsset(d, sceneId, id));
-    if (picker.entityType === 'location-current') return store.update((d) => addSceneLocation(d, sceneId, id));
-    if (picker.entityType === 'system') return store.update((d) => setSceneSystem(d, sceneId, id));
-    if (picker.mode === 'protagonist') return store.update((d) => addSceneProtagonist(d, sceneId, id));
-    if (picker.mode === 'antagonist') return store.update((d) => addSceneAntagonist(d, sceneId, id));
-    if (picker.mode === 'bystander') return store.update((d) => addSceneBystander(d, sceneId, id));
-    return renderEntityPickerOverlay();
+    const createType = entityPickerCreateType(picker);
+    if (!createType) return renderEntityPickerOverlay();
+    let newId = null;
+    store.update((d) => {
+      const created = createEntity(d, { type: createType, name: '' });
+      newId = created.id;
+      return created.campaign;
+    });
+    if (newId) commitEntityPickerPick(picker, newId);
+    openDrawerTab('entity-detail');
+    focusInspectorNameNextRender = true;
+    return store.update((d) => setActiveEntity(d, newId));
   }
   // Current Location's System/Star rows (now read-only, relationship-
   // derived) get a "🔗" link instead of a "+" picker — opens that
@@ -3935,6 +4109,30 @@ function onClick(ev) {
     const id = campaignRenameBtn.dataset.campaignRename;
     const current = store.listCampaigns().find((c) => c.id === id);
     return openInlinePrompt('campaign-rename', { label: 'Campaign title', value: current ? current.title : '', meta: { id }, anchorRect: campaignRenameBtn.getBoundingClientRect() });
+  }
+  // Direct follow-up request: "Add the ability to delete a campaign and all
+  // its data. Prompt to backup the data first." Only offered for a
+  // non-active campaign (mirrors Switch's own visibility rule — deleting
+  // the campaign you're currently looking at is a switch-first operation,
+  // not a one-click one) and store.deleteCampaign() itself refuses the
+  // active/last-remaining cases too as defense in depth. The backup is an
+  // actual downloaded file, not just a warning — window.confirm() gates
+  // each step, same "double confirm for something this destructive" shape
+  // as restoreBackup's own confirm below.
+  const campaignDeleteBtn = hit('[data-campaign-delete]');
+  if (campaignDeleteBtn) {
+    const id = campaignDeleteBtn.dataset.campaignDelete;
+    const entry = store.listCampaigns().find((c) => c.id === id);
+    if (!entry || entry.active) return;
+    if (!window.confirm(`Delete campaign "${entry.title}" and ALL its data (Cast, Journal, scenes, entities — everything)? This cannot be undone.\n\nClick OK to download a backup first, then confirm the final deletion.`)) return;
+    return store.exportCampaignById(id).then((json) => {
+      if (json) download(`gmatlas-${entry.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-backup-${stamp()}.json`, json);
+      if (!window.confirm(`Backup downloaded. Permanently delete "${entry.title}" now? This cannot be undone.`)) return;
+      return store.deleteCampaign(id).then((result) => {
+        if (result.ok) toast('Campaign deleted');
+        else toast((result.error && result.error.message) || 'Delete failed');
+      });
+    });
   }
   if (hit('[data-campaign-create]')) {
     const profiles = store.listProfiles();
@@ -4558,8 +4756,34 @@ function onChange(ev) {
   }
 
   // --- Hexcrawl ---------------------------------------------------------
-  const hexRename = t.closest('[data-hexcrawl-rename]');
-  if (hexRename) return store.update((d) => renameHexMap(d, hexRename.dataset.hexcrawlRename, t.value));
+  // Direct follow-up request: "Use a dropdown to select Geography,
+  // Encounters and Overlays instead of a list of buttons. Default to
+  // 'Select' and when one of the options is selected, it is considered
+  // active." Each <select>'s own value directly represents whether ITS
+  // category is armed — no more toggle-if-already-armed logic the old
+  // chip buttons needed, since a dropdown can't be "clicked again" the
+  // same way; picking the blank placeholder option disarms explicitly.
+  // Only one category is ever armed at a time (hexcrawlPlacingIcon is a
+  // single value) — hexcrawlPalette's own render reflects that by
+  // resetting the OTHER two selects back to "Select" whenever a different
+  // one is actually armed, so the dropdowns never show a stale selection.
+  const hexSelectGeo = t.closest('[data-hexcrawl-select-geography]');
+  if (hexSelectGeo) {
+    hexcrawlPlacingIcon = t.value ? { layer: 'geography', key: t.value } : null;
+    return renderDrawerBody();
+  }
+  const hexSelectThreat = t.closest('[data-hexcrawl-select-threat]');
+  if (hexSelectThreat) {
+    hexcrawlPlacingIcon = t.value ? { layer: 'threat', key: t.value } : null;
+    hexcrawlRiverStart = null;
+    return renderDrawerBody();
+  }
+  const hexSelectOverlay = t.closest('[data-hexcrawl-select-overlay]');
+  if (hexSelectOverlay) {
+    hexcrawlPlacingIcon = t.value ? { layer: t.value } : null;
+    hexcrawlRiverStart = null;
+    return renderDrawerBody();
+  }
   const hexDetailGeo = t.closest('[data-hex-detail-geography]');
   if (hexDetailGeo) {
     const [mapId, q, r] = hexDetailGeo.dataset.hexDetailGeography.split('::');
@@ -4640,7 +4864,16 @@ function onChange(ev) {
     // Direct follow-up request: tagging an existing NPC #character here
     // (Party's own documented way to add one you already made) also adds
     // a Crew Roster row for them.
-    if (value) return store.update((d) => syncCrewRosterWithParty(addEntityTag(d, active, value)));
+    // Re-adding "character" restores any Character Sheet stats archived
+    // when the tag was previously removed (see the protected-tag confirm
+    // below) — a plain no-op if there was nothing archived.
+    if (value) {
+      return store.update((d) => {
+        let next = syncCrewRosterWithParty(addEntityTag(d, active, value));
+        if (value.toLowerCase() === 'character') next = setCharacterStatblocksArchived(next, active, false);
+        return next;
+      });
+    }
     return;
   }
 
@@ -5817,12 +6050,17 @@ function onMouseDown(ev) {
     battlemapPan = { startClientX: ev.clientX, startClientY: ev.clientY, startX: battlemapCamera.x, startY: battlemapCamera.y };
     return;
   }
-  // Hexcrawl drag-to-pan — same reasoning as Battlemap's own just above:
-  // don't hijack a click meant to place/clear an armed icon (a hex-vertex
-  // or hex-select click, handled in onClick).
+  // Hexcrawl drag-to-pan — direct follow-up request: "allow scrolling of
+  // the hexmap by left clicking with the mouse to drag." Unlike
+  // Battlemap's own version above, this ALWAYS arms on mousedown
+  // regardless of hexcrawlPlacingIcon — an armed tool no longer blocks
+  // panning outright; see hexcrawlPanMoved's own doc comment for how a
+  // genuine drag still avoids ALSO firing whatever click the cursor ends
+  // up over.
   const hexViewport = ev.target.closest('.hexcrawl-viewport');
-  if (hexViewport && !hexcrawlPlacingIcon) {
+  if (hexViewport) {
     hexcrawlPan = { startClientX: ev.clientX, startClientY: ev.clientY, startX: hexcrawlCamera.x, startY: hexcrawlCamera.y };
+    hexcrawlPanMoved = false;
   }
 }
 
@@ -5971,7 +6209,9 @@ function onGraphMouseMove(ev) {
     return;
   }
   if (hexcrawlPan) {
-    hexcrawlCamera = { ...hexcrawlCamera, x: hexcrawlPan.startX + (ev.clientX - hexcrawlPan.startClientX), y: hexcrawlPan.startY + (ev.clientY - hexcrawlPan.startClientY) };
+    const dx = ev.clientX - hexcrawlPan.startClientX; const dy = ev.clientY - hexcrawlPan.startClientY;
+    if (Math.abs(dx) + Math.abs(dy) > 5) hexcrawlPanMoved = true;
+    hexcrawlCamera = { ...hexcrawlCamera, x: hexcrawlPan.startX + dx, y: hexcrawlPan.startY + dy };
     updateHexcrawlWorldTransform();
     return;
   }
@@ -5987,7 +6227,11 @@ function onGraphMouseMove(ev) {
 
 function onGraphMouseUp() {
   graphPan = null; battlemapPan = null;
-  if (hexcrawlPan) { hexcrawlPan = null; scheduleHexcrawlRangeCheck(); }
+  if (hexcrawlPan) {
+    if (hexcrawlPanMoved) hexcrawlSuppressNextClick = true;
+    hexcrawlPan = null;
+    scheduleHexcrawlRangeCheck();
+  }
 }
 
 // ---- drag-and-drop: entity → entity (relate) or entity → text (mention) --
@@ -6359,6 +6603,110 @@ function updateHexcrawlWorldTransform() {
   const world = root.querySelector('.hexcrawl-world');
   if (!world) return;
   world.style.transform = `translate(${hexcrawlCamera.x}px, ${hexcrawlCamera.y}px) scale(${hexcrawlCamera.scale})`;
+}
+
+/** Direct follow-up request: "The user adds encounters by clicking the
+ *  encounter icon and then the hex, not the corner it would be placed.
+ *  The encounter icon will populate the first open corner starting with
+ *  the top right and going clockwise." Shared by data-hex-center/
+ *  data-hex-select's own Encounter branches — a click anywhere on the hex
+ *  places the armed icon at nextOpenThreatVertex's own narrative-sequence
+ *  slot (domain/hexcrawls.js). Stays armed afterward, same as Geography;
+ *  a full hex (all 6 corners taken) is a silent no-op via a toast rather
+ *  than disarming or throwing. LATER direct follow-up report: "nothing
+ *  happens to select an encounter entity... only the encounter icon is
+ *  added to the corner" — placing now immediately opens the same
+ *  link/create-a-Conflict entity picker a direct click on that (now
+ *  filled, unlinked) corner would open, instead of leaving the GM to find
+ *  and click the tiny corner dot as a separate step. */
+function placeArmedEncounter(mapId, qn, rn) {
+  const hex = getHex(store.get(), mapId, qn, rn);
+  const vi = nextOpenThreatVertex(hex);
+  if (vi === null) return toast("This hex's 6 corners are all full");
+  const key = hexcrawlPlacingIcon.key;
+  store.update((d) => setHexThreat(d, mapId, qn, rn, vi, key));
+  entityPicker = { entityType: 'hexcrawl-vertex-conflict', mode: 'hexcrawl-vertex-conflict', scope: { mapId, q: qn, r: rn, vertexIndex: vi }, query: '' };
+  renderEntityPickerOverlay();
+  const inp = root.querySelector('[data-entity-picker-query]');
+  if (inp) { inp.value = ''; inp.focus(); }
+}
+
+/** Direct follow-up request: "create a lake overlay icon that drops in
+ *  over the existing terrain," LATER refined: "clicking the hex when the
+ *  lake button is active should replace the current lake with a new
+ *  shape and make sure any rivers remain connected." So this always
+ *  PLACES (setHexLake's own present:true re-rolls a fresh offset/shape
+ *  seed every time, whether or not one already existed here) rather than
+ *  toggling off on a second click — removing a lake is the Hex Detail
+ *  panel's own explicit "Remove Lake" button instead (data-hex-detail-
+ *  lake-clear), same "map click only ever adds, Hex Detail is where you
+ *  remove" split Encounters/corners already settled on this same request
+ *  thread. A river segment connecting to 'lake' needs no action here to
+ *  "remain connected" — it's resolved fresh at render time off whatever
+ *  hex.lake currently holds, never a stored position of its own. */
+function placeArmedLake(mapId, qn, rn) {
+  return store.update((d) => setHexLake(d, mapId, qn, rn, true));
+}
+
+/** Direct follow-up request: "add a 'river' feature... by clicking one
+ *  side/border of the hex and then another side/border and a randomly
+ *  meandering river is drawn between [them]... This can continue to then
+ *  make a river that spans hexes." Handles ONE data-hex-edge click while
+ *  the River tool is armed. Every border is physically shared by TWO
+ *  hexes, and (a direct bug report: "when clicking a river end point and
+ *  then clicking another edge, no river is inserted") each edge button
+ *  carries BOTH hexes' own interpretation of that same border as
+ *  `candidates` — a fixed "pick one owner" rule turned out to be wrong,
+ *  since it could split a single hex's 6 borders across different owning
+ *  hexes independently, making two clicks the GM intended as "two edges
+ *  of the SAME hex" resolve to two unrelated hexes instead. Resolving it
+ *  HERE instead — by finding whichever hex is common to both clicks' own
+ *  candidate pairs — is correct regardless of which of the two
+ *  overlapping buttons the browser happened to hit for either click.
+ *  - No pending start yet: EITHER candidate that currently has a lake
+ *    resolves immediately (one click suffices — direct follow-up: "it
+ *    will connect from the side/border to the lake... from all
+ *    side/borders"); otherwise this border's own candidate pair becomes
+ *    the pending start, ambiguous until the second click narrows it down.
+ *  - A pending start exists: if any candidate hex is common to BOTH the
+ *    start's own candidates and this click's, that common hex is the
+ *    real target — completes the segment there, then AUTO-CONTINUES (the
+ *    new pending start becomes THIS border's own 2-hex candidate pair,
+ *    same shape as any other border, ready for a third click) unless the
+ *    just-entered neighbor already has a lake, which completes the
+ *    continuation immediately instead. No common hex (the GM clicked
+ *    somewhere unrelated to the pending start): abandon it and treat this
+ *    as a fresh first click instead. Clicking the exact same edge again
+ *    cancels the pending start (a "changed my mind" gesture). */
+function placeRiverEdgeClick(mapId, candidates) {
+  const lakeCandidate = candidates.find((c) => getHex(store.get(), mapId, c.q, c.r).lake);
+  const start = hexcrawlRiverStart;
+  if (start) {
+    for (const s of start.candidates) {
+      const c = candidates.find((x) => x.q === s.q && x.r === s.r);
+      if (!c) continue;
+      if (c.edge === s.edge) { hexcrawlRiverStart = null; return renderDrawerBody(); }
+      store.update((d) => addHexRiverSegment(d, mapId, s.q, s.r, s.edge, c.edge));
+      const nb = edgeNeighbor(s.q, s.r, c.edge);
+      const nbHex = getHex(store.get(), mapId, nb.q, nb.r);
+      if (nbHex.lake) {
+        store.update((d) => addHexRiverSegment(d, mapId, nb.q, nb.r, nb.edge, 'lake'));
+        hexcrawlRiverStart = null;
+      } else {
+        hexcrawlRiverStart = { mapId, candidates: [{ q: s.q, r: s.r, edge: c.edge }, { q: nb.q, r: nb.r, edge: nb.edge }] };
+      }
+      return renderDrawerBody();
+    }
+    // No common hex with the pending start — abandon it, fall through to
+    // treat this click as a fresh first click instead.
+  }
+  if (lakeCandidate) {
+    store.update((d) => addHexRiverSegment(d, mapId, lakeCandidate.q, lakeCandidate.r, lakeCandidate.edge, 'lake'));
+    hexcrawlRiverStart = null;
+    return renderDrawerBody();
+  }
+  hexcrawlRiverStart = { mapId, candidates };
+  return renderDrawerBody();
 }
 
 /** Same cursor-anchored rescale math as zoomBattlemapCamera — clamped to
@@ -6932,8 +7280,10 @@ function commitInlinePrompt() {
   } else if (kind === 'battlemap-add') {
     store.update((d) => createBattlemap(d, value).campaign);
   } else if (kind === 'hexcrawl-add') {
-    hexcrawlCamera = { scale: 1, x: 0, y: 0 }; hexcrawlSelectedHex = null; hexcrawlPlacingIcon = null;
+    hexcrawlCamera = { scale: 1, x: 0, y: 0 }; hexcrawlSelectedHex = null; hexcrawlPlacingIcon = null; hexcrawlRiverStart = null;
     store.update((d) => createHexMap(d, value).campaign);
+  } else if (kind === 'hexcrawl-rename') {
+    store.update((d) => renameHexMap(d, meta.id, value));
   } else if (kind === 'battlemap-icon-note') {
     store.update((d) => updateBattlemapIcon(d, meta.mapId, meta.iconId, { note: value }));
   } else if (kind === 'sector-corner-label') {
@@ -7565,6 +7915,146 @@ function renderSearchOverlay() {
   if (resultsEl) resultsEl.innerHTML = searchOpen ? renderSearchPanel(store.get(), searchQuery) : '';
 }
 
+/** What commitEntityPickerPick above actually does once a candidate
+ *  (existing or freshly created) has an id — pulled out of the old
+ *  data-entity-picker-select click handler verbatim so BOTH picking an
+ *  existing entity and the newer "+ Create New" button (which creates
+ *  one, then wires it up the exact same way) share one implementation. */
+function commitEntityPickerPick(picker, id) {
+  if (!picker) return renderEntityPickerOverlay();
+  if (picker.entityType === 'where-faction-link') {
+    // WHO's "+" on Factions active nearby (direct follow-up request,
+    // replacing the old inline <select>) — links the picked faction to
+    // the scope Location via a real located_at relationship (same
+    // action the old dropdown's onChange took), and clears any stale
+    // dismissal (scenes.js's removeSceneDismissedFaction) so a
+    // deliberate re-add isn't immediately hidden again.
+    const locationId = picker.scope;
+    const sceneId0 = currentSceneId();
+    return store.update((d) => {
+      let next = addRelationship(d, id, locationId, 'Located At', 'located_at');
+      if (sceneId0) next = removeSceneDismissedFaction(next, sceneId0, id);
+      return next;
+    });
+  }
+  if (picker.entityType === 'hexcrawl-location') {
+    const { mapId, q, r } = picker.scope || {};
+    return store.update((d) => setHexLocation(d, mapId, q, r, id));
+  }
+  if (picker.entityType === 'hexcrawl-vertex-conflict') {
+    // Linking an EXISTING Conflict — unlike data-hexcrawl-vertex-conflict-
+    // create just above, this never adds the encounter-type tag: that's
+    // specifically for a brand-new Conflict created FOR this encounter,
+    // not an existing one the GM is choosing to reuse (which may already
+    // represent several other encounters, each with a different type).
+    const { mapId, q, r, vertexIndex } = picker.scope || {};
+    return store.update((d) => setHexVertexConflict(d, mapId, q, r, vertexIndex, id));
+  }
+  if (picker.entityType === 'party-vehicle' || picker.entityType === 'party-item' || picker.entityType === 'party-asset') {
+    // Party's Shared Assets — unlike WHO's own 'asset' mode above, this
+    // isn't scene-scoped (a Party Tracker's Shared Assets persist across
+    // scenes), so it must NOT go through the currentSceneId() early
+    // return below. "+ Item"/"+ Asset" (direct follow-up request) reuse
+    // this exact same link — sharedAssetIds/addPartySharedAssetEntity
+    // were already entity-type-agnostic (just a plain id reference), the
+    // only thing that made this "vehicles only" before was the picker's
+    // own candidate filter (renderEntityPickerOverlay, below).
+    return store.update((d) => addPartySharedAssetEntity(d, id));
+  }
+  if (picker.entityType === 'party-starship') {
+    // Reached from BOTH Party's own "+ Select Starship" button AND the
+    // Campaign panel's Starship-tab empty-thumbnail click (direct
+    // follow-up request: "if a ship is not active... open a vehicle
+    // selection list to first select the entity record" — same trigger
+    // either way). "Have a prompt ask if this will be the Party's
+    // starship" — a plain non-destructive-reassignment confirm, same
+    // phrasing convention as the entity-type-change confirm above.
+    const target = getEntity(store.get(), id);
+    const prevId = store.get().party && store.get().party.starshipEntityId;
+    const prev = prevId ? getEntity(store.get(), prevId) : null;
+    const question = `Make "${target ? (target.name || 'Unnamed') : 'this entity'}" the Party's starship?${prev ? ` This replaces "${prev.name || 'Unnamed'}".` : ''}`;
+    if (!window.confirm(question)) return renderEntityPickerOverlay();
+    store.update((d) => setPartyStarship(d, id));
+    return toast('Starship set');
+  }
+  if (picker.entityType === 'colony-crew') {
+    // Colony's Crew Roster "+Crew" (direct follow-up request — "select
+    // from available NPCs" instead of adding a blank row to fill in, and
+    // removing the separate "+ Add NPC" quick-create shortcut) — not
+    // scene-scoped (a colony's crew persists across scenes), same
+    // posture as party-vehicle above.
+    return store.update((d) => addCrewRow(d, { characterId: id }));
+  }
+  if (picker.entityType === 'combat-tracker') {
+    // Combat Initiative Tracker's own "+" — same completeCombatTrackerAdd
+    // the drag paths use (its own empty-tracker/#character bulk-load
+    // confirm applies here too, for consistency regardless of how a
+    // party member got added).
+    completeCombatTrackerAdd(null, id);
+    return;
+  }
+  if (picker.entityType === 'colony-crew-assign') {
+    // Crew Roster's own per-row thumbnail (direct follow-up request —
+    // replaces the old inline character <select>): assigns the picked
+    // NPC to THIS existing row (picker.scope, the row id) instead of
+    // creating a new one — the role dropdown next to it is untouched.
+    return store.update((d) => updateCrewRow(d, picker.scope, { characterId: id }));
+  }
+  if (picker.entityType === 'what-conflict') {
+    // WHAT's "+" (direct follow-up request: "adds a Conflict entity as
+    // a chip under the Situation textbox") — context.what.entityIds is
+    // the same generic array/addContextEntity every other context
+    // question already has; not scene-scoped, since Situation itself
+    // isn't either (a GM's attached Conflicts persist the same way).
+    return store.update((d) => addContextEntity(d, 'what', id));
+  }
+  if (picker.entityType === 'colony-encounter') {
+    // Colony's Lifeform Encounters row "+" (direct follow-up request) —
+    // attaches the picked Lifeform entity to the row's own entityId, not
+    // scene-scoped (the Encounters log persists across scenes like the
+    // rest of Colony).
+    return store.update((d) => updateColonyEncounter(d, picker.scope, { entityId: id }));
+  }
+  const sceneId = currentSceneId();
+  if (!sceneId) return renderEntityPickerOverlay();
+  if (picker.entityType === 'asset') return store.update((d) => addSceneAsset(d, sceneId, id));
+  if (picker.entityType === 'location-current') return store.update((d) => addSceneLocation(d, sceneId, id));
+  if (picker.entityType === 'system') return store.update((d) => setSceneSystem(d, sceneId, id));
+  if (picker.mode === 'protagonist') return store.update((d) => addSceneProtagonist(d, sceneId, id));
+  if (picker.mode === 'antagonist') return store.update((d) => addSceneAntagonist(d, sceneId, id));
+  if (picker.mode === 'bystander') return store.update((d) => addSceneBystander(d, sceneId, id));
+  return renderEntityPickerOverlay();
+}
+
+// Direct follow-up request: "for any entity search list... include a
+// button to add an entity of that type" — which ENTITY_TYPES value a
+// brand-new entity should be created as, for each picker.entityType.
+// 'hexcrawl-location'/'colony-encounter' aren't listed — they already had
+// their own bespoke create row before this request (a plain create isn't
+// enough for colony-encounter, which needs to roll stats too).
+const ENTITY_PICKER_CREATE_TYPE = {
+  'where-faction-link': 'faction',
+  'party-vehicle': 'asset',
+  'party-item': 'item',
+  'party-asset': 'asset',
+  'party-starship': 'asset',
+  'colony-crew': 'npc',
+  'colony-crew-assign': 'npc',
+  'combat-tracker': 'npc',
+  'what-conflict': 'conflict',
+  asset: 'asset',
+  'location-current': 'location',
+  system: 'location',
+};
+function entityPickerCreateType(picker) {
+  if (!picker) return null;
+  if (picker.entityType === 'hexcrawl-location' || picker.entityType === 'colony-encounter' || picker.entityType === 'hexcrawl-vertex-conflict') return null;
+  if (Object.prototype.hasOwnProperty.call(ENTITY_PICKER_CREATE_TYPE, picker.entityType)) return ENTITY_PICKER_CREATE_TYPE[picker.entityType];
+  // The catch-all NPC-role pickers (protagonist/antagonist/bystander,
+  // renderEntityPickerOverlay's own final else branch) all create an npc.
+  return 'npc';
+}
+
 // The shared "+" entity picker (WHO's Actors/Assets + WHERE's Location
 // details/System rows, workspace/index.js) — same static-
 // skeleton/targeted-update shape as renderSearchOverlay above. Branches
@@ -7688,6 +8178,12 @@ function renderEntityPickerOverlay() {
       .map(([, h]) => h.locationEntityId).filter(Boolean));
     candidates = listEntities(doc, ['location']).filter((l) => !linkedIds.has(l.id));
     emptyMessage = 'No available Location entities — every one is already linked elsewhere on this map, or add one in Cast first.';
+  } else if (entityPicker.entityType === 'hexcrawl-vertex-conflict') {
+    // A hex corner's own Encounter (direct follow-up request) — every
+    // Conflict entity, no exclusion (unlike Location, the same Conflict
+    // can reasonably represent more than one Encounter across a map).
+    candidates = listEntities(doc, ['conflict']);
+    emptyMessage = 'No Conflict entities yet — create one below.';
   } else if (entityPicker.entityType === 'where-faction-link') {
     // WHO's Factions active nearby "+" (direct follow-up request) —
     // excludes whatever's already showing there (region presence, an
@@ -7735,7 +8231,55 @@ function renderEntityPickerOverlay() {
   const createLifeformBtn = entityPicker.entityType === 'colony-encounter'
     ? `<button type="button" class="entity-picker-row entity-picker-row-create" data-lifeform-generate="${escapeHtml(entityPicker.scope)}">✨ Create New Lifeform (roll stats — Planetfall p.146)</button>`
     : '';
-  resultsEl.innerHTML = createLifeformBtn + (candidates.length
+  // Direct follow-up request: "Include a create Location entity icon in
+  // the list window when the location button is selected and the option
+  // list pops up" — same prepended-create-row convention as the Lifeform
+  // Encounters picker just above, but for Hexcrawl's own center-icon
+  // picker. data-hexcrawl-location-create's click handler creates a blank
+  // Location entity, links it to this hex, and opens the Entity Editor —
+  // mirrors the WHERE System section's own "create a new #system Location"
+  // flow (data-where-add-location) almost exactly.
+  const createLocationBtn = entityPicker.entityType === 'hexcrawl-location'
+    ? `<button type="button" class="entity-picker-row entity-picker-row-create" data-hexcrawl-location-create>🗺️ Create New Location</button>`
+    : '';
+  // Direct follow-up request: "Include a 'remove link to this [entity
+  // type]' like this similarly for all other entity selection lists on the
+  // hexmap" — same row style as the create button above, one per hexmap
+  // picker type; data-hexcrawl-location-unlink/-vertex-conflict-unlink's
+  // own click handlers (above) do the actual clearing.
+  const unlinkLocationBtn = entityPicker.entityType === 'hexcrawl-location'
+    ? `<button type="button" class="entity-picker-row entity-picker-row-remove" data-hexcrawl-location-unlink>✕ Remove link to this Location</button>`
+    : '';
+  // Direct follow-up request: "add a clickable link to each encounter and
+  // map it to a Conflict entity record (or option to add a new one)" —
+  // bespoke (not the generic create button below) because a THEN-LATER
+  // direct follow-up ("add the type of encounter as a non-editable,
+  // protected tag") needs data-hexcrawl-vertex-conflict-create's own click
+  // handler to tag the new Conflict with the encounter's own label, which
+  // the generic flow has no hook for.
+  const createConflictBtn = entityPicker.entityType === 'hexcrawl-vertex-conflict'
+    ? `<button type="button" class="entity-picker-row entity-picker-row-create" data-hexcrawl-vertex-conflict-create>⚔️ Create New Conflict</button>`
+    : '';
+  // Direct follow-up request: "add a 'remove link to conflict' option to
+  // the conflict list similar to 'add conflict' if clicking on a populated
+  // conflict icon that is not tied to a conflict entity yet" — lets the GM
+  // back out of a placed-but-unlinked Encounter icon right from this same
+  // list instead of re-arming the Locations tool or opening Hex Detail.
+  const unlinkConflictBtn = entityPicker.entityType === 'hexcrawl-vertex-conflict'
+    ? `<button type="button" class="entity-picker-row entity-picker-row-remove" data-hexcrawl-vertex-conflict-unlink>✕ Remove link to Conflict</button>`
+    : '';
+  // Direct follow-up request: "for any entity search list (to select an
+  // item, location, asset, etc) include a button to add an entity of that
+  // type" — every OTHER picker (i.e. not the two bespoke ones just above)
+  // gets this generic version instead; data-entity-picker-create's click
+  // handler creates a blank entity of entityPickerCreateType's own mapping
+  // and runs it through commitEntityPickerPick, same wiring a normal pick
+  // gets.
+  const createGenericType = entityPickerCreateType(entityPicker);
+  const createGenericBtn = createGenericType
+    ? `<button type="button" class="entity-picker-row entity-picker-row-create" data-entity-picker-create>＋ Create New ${escapeHtml(entityTypeLabel(createGenericType, store.get().settings.genrePack))}</button>`
+    : '';
+  resultsEl.innerHTML = createLifeformBtn + createLocationBtn + createConflictBtn + createGenericBtn + unlinkLocationBtn + unlinkConflictBtn + (candidates.length
     ? candidates.map((n) => `<button type="button" class="entity-picker-row" data-entity-picker-select="${escapeHtml(n.id)}">${escapeHtml(n.name || 'Unnamed')}</button>`).join('')
     : `<p class="dim small">${escapeHtml(emptyMessage)}</p>`);
 }
@@ -8162,7 +8706,7 @@ function buildDrawerUi() {
     journalEditOpen, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
-    hexcrawlPlacingIcon, hexcrawlCamera, hexcrawlSelectedHex, hexcrawlRange,
+    hexcrawlPlacingIcon, hexcrawlCamera, hexcrawlSelectedHex, hexcrawlRange, hexcrawlRiverStart,
     contentPackFlags, contentPackImporting, hostileLocationsImporting, exportIncludeAttachments, exportAttachmentsPreview,
     worldTrackerTab, worldTrackerSelectedSector, worldTrackerMigrateOpen,
     expandedTurnStepGroups, editingTurnStepListId, turnStepListsCollapsed, turnStepMoveEditOpen, turnStepBranchEditOpen, crewTaskSelectedId, crewTaskSelectedMemberId, colonyPanelTab,

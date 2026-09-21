@@ -1261,6 +1261,7 @@ test('removeEntityTag removes a tag case-insensitively without touching others',
 
 test('listTagVocabulary lists tags used by other entities of the same type, excluding ones the entity already has', () => {
   let camp = defaultCampaign();
+  camp.settings.genrePack = 'cyberpunk'; // no genre-flavored seeds defined for this pack (entityTagSeeds.js) — isolates this test to pure usage-based vocabulary
   let a, b, c, loc;
   ({ campaign: camp, id: a } = createEntity(camp, { type: 'npc', name: 'A' }));
   ({ campaign: camp, id: b } = createEntity(camp, { type: 'npc', name: 'B' }));
@@ -1274,6 +1275,53 @@ test('listTagVocabulary lists tags used by other entities of the same type, excl
 
   assert.deepEqual(listTagVocabulary(camp, 'npc', c), ['character']);
   assert.deepEqual(listTagVocabulary(camp, 'npc', a).sort(), ['hostile']);
+});
+
+test('listTagVocabulary layers genre-flavored seed tags (data/entityTagSeeds.js) on top of real usage — direct follow-up request: sci-fi tags for Sci-Fi (generic), fantasy tags for Fantasy (generic)', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'A' }));
+  camp.settings.genrePack = 'sci-fi-generic';
+  let vocab = listTagVocabulary(camp, 'npc', id);
+  assert.ok(vocab.includes('Pilot') && vocab.includes('Android'), 'sci-fi npc seeds present');
+  assert.ok(!vocab.includes('Knight'), 'fantasy-only seed absent under sci-fi-generic');
+
+  camp.settings.genrePack = 'fantasy';
+  vocab = listTagVocabulary(camp, 'npc', id);
+  assert.ok(vocab.includes('Knight') && vocab.includes('Wizard'), 'fantasy npc seeds present');
+  assert.ok(!vocab.includes('Pilot'), 'sci-fi-only seed absent under fantasy');
+
+  camp.settings.genrePack = 'cyberpunk';
+  vocab = listTagVocabulary(camp, 'npc', id);
+  assert.ok(!vocab.includes('Pilot') && !vocab.includes('Knight'), 'no seeds defined for a genre pack this request never named');
+});
+
+test('listTagVocabulary always offers the reserved "character" npc tag (Party membership) regardless of genre pack — direct follow-up request: "include the reserved tag \'character\' in the 5LFB and every genre that uses the Party panel"', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'A' }));
+  for (const genrePack of ['sci-fi-generic', 'fantasy', 'cyberpunk', 'dnd5e']) {
+    camp.settings.genrePack = genrePack;
+    assert.ok(listTagVocabulary(camp, 'npc', id).includes('character'), `"character" offered under genrePack ${genrePack}, including one with no other npc seeds`);
+  }
+  // Five Leagues from the Borderlands lives inside the 'fantasy' genre pack.
+  camp.settings.genrePack = 'fantasy';
+  camp.settings.statRuleset = 'fiveleagues';
+  assert.ok(listTagVocabulary(camp, 'npc', id).includes('character'), '"character" still offered under Five Leagues specifically');
+});
+
+test('listTagVocabulary swaps a Location\'s seeds for Five Leagues from the Borderlands\' own canonical location categories when it is the active ruleset, overriding (not merging with) the generic fantasy list — direct follow-up request', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'location', name: 'Waystop' }));
+  camp.settings.genrePack = 'fantasy';
+  let vocab = listTagVocabulary(camp, 'location', id);
+  assert.ok(vocab.includes('Village'), 'generic fantasy location seed present without Five Leagues active');
+  assert.ok(!vocab.includes('Delve'), '5LFB-specific seed absent without Five Leagues active');
+
+  camp.settings.statRuleset = 'fiveleagues';
+  vocab = listTagVocabulary(camp, 'location', id);
+  for (const t of ['Settlement', 'Enemy Camp', 'Enemy Hideout', 'Delve', 'Monster Lair', 'Unexplored Location']) {
+    assert.ok(vocab.includes(t), `5LFB location seed "${t}" present once Five Leagues is active`);
+  }
+  assert.ok(!vocab.includes('Village'), 'generic fantasy location seed replaced, not merged, once Five Leagues is active');
 });
 
 import { findRuleset } from '../src/data/rulesets.js';
@@ -1673,7 +1721,7 @@ test('empty graph yields empty layout; nodeColor covers all types', () => {
 // --- statblocks (Phase 3C, multi-group array since the Phase 5 revision) ---
 import { makeStatblock, hasVehicleTag, ensureAutoStatblock, setStatblockField, addStatblockField, removeStatblockField, addStatblockWeapon, updateStatblockWeapon, removeStatblockWeapon, setStatblockGear, addStatblockAttack, updateStatblockAttack, removeStatblockAttack } from '../src/domain/statblocks.js';
 import {
-  addEntityStatblockGroup, removeEntityStatblockGroup, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
+  addEntityStatblockGroup, removeEntityStatblockGroup, moveEntityStatblockGroup, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
   addEntityStatblockWeapon, updateEntityStatblockWeapon, removeEntityStatblockWeapon, setEntityStatblockGear,
   getEntity, setEntityTags,
 } from '../src/domain/entities.js';
@@ -1890,6 +1938,31 @@ test('manual statblock group add/remove and field edits via campaign-level API',
 
   camp = removeEntityStatblockGroup(camp, id, 0);
   assert.deepEqual(getEntity(camp, id).statblocks, []);
+});
+
+test('moveEntityStatblockGroup swaps a group with its immediate up/down neighbor, bounds-checked no-op past either end — direct follow-up request ("Add an up & down arrow... so it can be reordered")', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'item', name: 'Kit' }));
+  camp = addEntityStatblockGroup(camp, id, 'gear', 'starforged');
+  camp = addEntityStatblockGroup(camp, id, 'gear', '5pfh');
+  camp = addEntityStatblockGroup(camp, id, 'gear', 'traveller');
+  const rulesetsInOrder = () => getEntity(camp, id).statblocks.map((g) => g.ruleset);
+  assert.deepEqual(rulesetsInOrder(), ['starforged', '5pfh', 'traveller']);
+
+  camp = moveEntityStatblockGroup(camp, id, 1, 'up');
+  assert.deepEqual(rulesetsInOrder(), ['5pfh', 'starforged', 'traveller'], 'swapped index 1 with index 0');
+
+  camp = moveEntityStatblockGroup(camp, id, 1, 'down');
+  assert.deepEqual(rulesetsInOrder(), ['5pfh', 'traveller', 'starforged'], 'swapped index 1 with index 2');
+
+  camp = moveEntityStatblockGroup(camp, id, 0, 'up');
+  assert.deepEqual(rulesetsInOrder(), ['5pfh', 'traveller', 'starforged'], 'no-op past the top end');
+
+  camp = moveEntityStatblockGroup(camp, id, 2, 'down');
+  assert.deepEqual(rulesetsInOrder(), ['5pfh', 'traveller', 'starforged'], 'no-op past the bottom end');
+
+  const unaffected = moveEntityStatblockGroup(camp, 'not-a-real-id', 0, 'up');
+  assert.deepEqual(unaffected, camp, 'no-op, no throw, for an unknown entity id');
 });
 
 test('addEntityStatblockGroup lets an entity hold both a Bestiary group and a manually-added second one', () => {
@@ -5106,8 +5179,8 @@ test('filterEntities returns [] rather than throwing on an empty/default campaig
   assert.deepEqual(filterEntities(defaultCampaign(), { types: ['npc'], search: 'x', tags: ['y'] }), []);
 });
 
-test('entityTypeLabel reads "Monster" for the lifeform type only under the Fantasy (generic) Genre Pack (direct follow-up request) — every other genre pack, and every other entity type, is unaffected', () => {
-  assert.equal(entityTypeLabel('lifeform', 'fantasy'), 'Monster');
+test('entityTypeLabel reads "Bestiary" for the lifeform type only under the Fantasy (generic) Genre Pack (direct follow-up request, later renamed from "Monster") — every other genre pack, and every other entity type, is unaffected', () => {
+  assert.equal(entityTypeLabel('lifeform', 'fantasy'), 'Bestiary');
   assert.equal(entityTypeLabel('lifeform', 'sci-fi-generic'), 'Lifeform');
   assert.equal(entityTypeLabel('lifeform', 'dnd5e'), 'Lifeform');
   assert.equal(entityTypeLabel('lifeform', undefined), 'Lifeform');
@@ -5115,11 +5188,11 @@ test('entityTypeLabel reads "Monster" for the lifeform type only under the Fanta
   assert.equal(entityTypeLabel('not-a-real-type', 'fantasy'), 'not-a-real-type', 'falls back to the raw type id, same as TYPE_LABEL[type] || type');
 });
 
-test('filterEntities\' search matches a lifeform entity by "monster" under the Fantasy (generic) Genre Pack, not just its literal "Lifeform" label — the search haystack is genre-aware too', () => {
+test('filterEntities\' search matches a lifeform entity by "bestiary" under the Fantasy (generic) Genre Pack, not just its literal "Lifeform" label — the search haystack is genre-aware too', () => {
   let camp = defaultCampaign();
   camp = { ...camp, settings: { ...camp.settings, genrePack: 'fantasy' } };
   let id; ({ campaign: camp, id } = createEntity(camp, { type: 'lifeform', name: 'Owlbear' }));
-  assert.deepEqual(filterEntities(camp, { search: 'monster' }).map((e) => e.id), [id]);
+  assert.deepEqual(filterEntities(camp, { search: 'bestiary' }).map((e) => e.id), [id]);
   assert.deepEqual(filterEntities(camp, { search: 'lifeform' }).map((e) => e.id), [id], 'the raw type id still matches too');
 
   const sciFi = { ...camp, settings: { ...camp.settings, genrePack: 'sci-fi-generic' } };
@@ -5316,7 +5389,9 @@ test('multiple named maps coexist independently — icons/background/grid on one
 import {
   listHexMaps, getHexMap, getActiveHexMap, createHexMap, renameHexMap, deleteHexMap, setActiveHexMap,
   getHex, listTouchedHexes, setHexGeography, setHexLocation, clearHexLocation, setHexThreat, clearHexThreat,
-  setHexNotes, axialToPixel, hexVertexPoints, pixelToAxial, HEX_SIZE,
+  setHexNotes, axialToPixel, hexVertexPoints, pixelToAxial, HEX_SIZE, nextOpenThreatVertex, ENCOUNTER_VERTEX_ORDER,
+  addHexRiverSegment, clearHexRivers, removeHexRiverSegment, setHexLake, hexEdgeMidpoints, edgeNeighbor, EDGE_NEIGHBOR_OFFSETS,
+  setHexVertexConflict, clearHexVertexConflict,
 } from '../src/domain/hexcrawls.js';
 
 test('a fresh campaign has no hex maps; createHexMap adds one, names it, and makes it active', () => {
@@ -5415,6 +5490,146 @@ test('setHexThreat/clearHexThreat address the 6-slot vertex array by plain index
   assert.deepEqual(getHexMap(camp, mapId).hexes, before, 'index 6 is out of range, untouched');
   camp = setHexThreat(camp, mapId, 5, 5, -1, 'lair');
   assert.deepEqual(getHexMap(camp, mapId).hexes, before, 'index -1 is out of range, untouched');
+});
+
+test('setHexVertexConflict/clearHexVertexConflict address the 6-slot vertexConflicts array by plain index, independent of the threats array, no-op out of range — direct follow-up request ("map it to a Conflict entity record... similar to how Location works")', () => {
+  let camp = defaultCampaign();
+  let mapId; ({ campaign: camp, id: mapId } = createHexMap(camp, 'Map'));
+  assert.deepEqual(getHex(camp, mapId, 5, 5).vertexConflicts, [null, null, null, null, null, null]);
+
+  camp = setHexThreat(camp, mapId, 5, 5, 2, 'lair');
+  camp = setHexVertexConflict(camp, mapId, 5, 5, 2, 'ent_conflict_1');
+  assert.deepEqual(getHex(camp, mapId, 5, 5).vertexConflicts, [null, null, 'ent_conflict_1', null, null, null]);
+  assert.equal(getHex(camp, mapId, 5, 5).threats[2], 'lair', 'linking a Conflict never disturbs the encounter type in that slot');
+
+  // Re-picking a different encounter icon in the same slot leaves the link alone.
+  camp = setHexThreat(camp, mapId, 5, 5, 2, 'raiders');
+  assert.equal(getHex(camp, mapId, 5, 5).vertexConflicts[2], 'ent_conflict_1', 'changing the encounter type never disturbs its Conflict link');
+
+  camp = clearHexVertexConflict(camp, mapId, 5, 5, 2);
+  assert.deepEqual(getHex(camp, mapId, 5, 5).vertexConflicts, [null, null, null, null, null, null]);
+
+  const before = getHexMap(camp, mapId).hexes;
+  camp = setHexVertexConflict(camp, mapId, 5, 5, 6, 'x');
+  assert.deepEqual(getHexMap(camp, mapId).hexes, before, 'index 6 is out of range, untouched');
+});
+
+test('nextOpenThreatVertex finds the first empty corner in ENCOUNTER_VERTEX_ORDER\'s own top-right-then-clockwise sequence, and returns null once full — direct follow-up request ("the encounter icon will populate the first open corner starting with the top right and going clockwise")', () => {
+  assert.deepEqual(ENCOUNTER_VERTEX_ORDER, [1, 2, 3, 4, 5, 0]);
+  let camp = defaultCampaign();
+  let mapId; ({ campaign: camp, id: mapId } = createHexMap(camp, 'Map'));
+  const hex = () => getHex(camp, mapId, 0, 0);
+  assert.equal(nextOpenThreatVertex(hex()), 1, 'an empty hex starts at the top-right corner (index 1), not raw index 0');
+
+  camp = setHexThreat(camp, mapId, 0, 0, 1, 'lair');
+  assert.equal(nextOpenThreatVertex(hex()), 2, 'next is bottom-right');
+  camp = setHexThreat(camp, mapId, 0, 0, 2, 'raiders');
+  assert.equal(nextOpenThreatVertex(hex()), 3);
+  camp = setHexThreat(camp, mapId, 0, 0, 3, 'hazard');
+  assert.equal(nextOpenThreatVertex(hex()), 4);
+  camp = setHexThreat(camp, mapId, 0, 0, 4, 'anomaly');
+  assert.equal(nextOpenThreatVertex(hex()), 5);
+  camp = setHexThreat(camp, mapId, 0, 0, 5, 'patrol');
+  assert.equal(nextOpenThreatVertex(hex()), 0, 'last slot is the plain top corner (index 0)');
+  camp = setHexThreat(camp, mapId, 0, 0, 0, 'unknown');
+  assert.equal(nextOpenThreatVertex(hex()), null, 'all 6 full -> null');
+
+  // Filling out of narrative order still finds whichever slot is actually
+  // open next in sequence, not just "the next unfilled raw index."
+  camp = clearHexThreat(camp, mapId, 0, 0, 3);
+  assert.equal(nextOpenThreatVertex(hex()), 3);
+});
+
+test('hexEdgeMidpoints returns 6 points, and edgeNeighbor mirrors each edge to the correct neighboring hex\'s own opposite edge — direct follow-up request (river feature)', () => {
+  const mids = hexEdgeMidpoints(HEX_SIZE);
+  assert.equal(mids.length, 6);
+  assert.equal(EDGE_NEIGHBOR_OFFSETS.length, 6);
+  for (let i = 0; i < 6; i++) {
+    const nb = edgeNeighbor(5, 5, i);
+    assert.equal(nb.edge, (i + 3) % 6, `edge ${i}'s neighbor sees it as the opposite edge`);
+    // Round-tripping back from the neighbor's own edge lands on the
+    // original hex and the original edge.
+    const back = edgeNeighbor(nb.q, nb.r, nb.edge);
+    assert.equal(back.q, 5, `edge ${i} round-trips q`);
+    assert.equal(back.r, 5, `edge ${i} round-trips r`);
+    assert.equal(back.edge, i, `edge ${i} round-trips back to itself`);
+  }
+});
+
+test('addHexRiverSegment/clearHexRivers — a hex accumulates independent segments, each with a stable random seed, cleared as a whole per hex', () => {
+  let camp = defaultCampaign();
+  let mapId; ({ campaign: camp, id: mapId } = createHexMap(camp, 'Map'));
+  assert.deepEqual(getHex(camp, mapId, 0, 0).rivers, []);
+
+  camp = addHexRiverSegment(camp, mapId, 0, 0, 0, 3);
+  camp = addHexRiverSegment(camp, mapId, 0, 0, 1, 'lake');
+  const rivers = getHex(camp, mapId, 0, 0).rivers;
+  assert.equal(rivers.length, 2);
+  assert.deepEqual([rivers[0].from, rivers[0].to], [0, 3]);
+  assert.deepEqual([rivers[1].from, rivers[1].to], [1, 'lake']);
+  assert.ok(typeof rivers[0].seed === 'number' && rivers[0].seed >= 0 && rivers[0].seed < 1, 'each segment gets its own stable 0-1 seed');
+  assert.notEqual(rivers[0].seed, rivers[1].seed, 'two segments get independently-rolled seeds (astronomically unlikely to collide)');
+
+  camp = clearHexRivers(camp, mapId, 0, 0);
+  assert.deepEqual(getHex(camp, mapId, 0, 0).rivers, []);
+});
+
+test('removeHexRiverSegment removes just the one segment by index, bounds-checked no-op out of range — direct follow-up request ("clicking a line should prompt to remove it")', () => {
+  let camp = defaultCampaign();
+  let mapId; ({ campaign: camp, id: mapId } = createHexMap(camp, 'Map'));
+  camp = addHexRiverSegment(camp, mapId, 0, 0, 0, 3);
+  camp = addHexRiverSegment(camp, mapId, 0, 0, 1, 4);
+  camp = addHexRiverSegment(camp, mapId, 0, 0, 2, 'lake');
+
+  camp = removeHexRiverSegment(camp, mapId, 0, 0, 1);
+  const rivers = getHex(camp, mapId, 0, 0).rivers;
+  assert.equal(rivers.length, 2);
+  assert.deepEqual([rivers[0].from, rivers[0].to], [0, 3], 'segment before the removed index is untouched');
+  assert.deepEqual([rivers[1].from, rivers[1].to], [2, 'lake'], 'segment after the removed index shifts down, still intact');
+
+  const before = getHexMap(camp, mapId).hexes;
+  camp = removeHexRiverSegment(camp, mapId, 0, 0, 5);
+  assert.deepEqual(getHexMap(camp, mapId).hexes, before, 'out-of-range index is untouched');
+  camp = removeHexRiverSegment(camp, mapId, 0, 0, -1);
+  assert.deepEqual(getHexMap(camp, mapId).hexes, before, 'negative index is untouched');
+});
+
+test('setHexLake places a lake with a random offset+shape seed, RE-ROLLS both every time it\'s placed again (direct follow-up request: "clicking the hex when the lake button is active should replace the current lake with a new shape"), and removes cleanly', () => {
+  let camp = defaultCampaign();
+  let mapId; ({ campaign: camp, id: mapId } = createHexMap(camp, 'Map'));
+  assert.equal(getHex(camp, mapId, 0, 0).lake, null);
+
+  camp = setHexLake(camp, mapId, 0, 0, true);
+  const lake1 = getHex(camp, mapId, 0, 0).lake;
+  assert.ok(lake1 && typeof lake1.offsetAngle === 'number' && typeof lake1.offsetDist === 'number' && typeof lake1.seed === 'number');
+  assert.ok(lake1.offsetAngle >= 0 && lake1.offsetAngle < 360);
+
+  camp = setHexLake(camp, mapId, 0, 0, true); // placing again RE-ROLLS a new shape/position
+  const lake2 = getHex(camp, mapId, 0, 0).lake;
+  assert.ok(lake2, 'still has a lake');
+  assert.notDeepEqual(lake2, lake1, 'placing again produced a different offset/seed (astronomically unlikely to collide)');
+
+  camp = setHexLake(camp, mapId, 0, 0, false);
+  assert.equal(getHex(camp, mapId, 0, 0).lake, null);
+});
+
+test('rivers/lake read as present-but-empty on a hex touched before either feature existed (schema backfill, getHex AND the mutators\' own touchHex)', () => {
+  let camp = defaultCampaign();
+  let mapId; ({ campaign: camp, id: mapId } = createHexMap(camp, 'Map'));
+  // Simulate a pre-existing hex record missing the new fields entirely.
+  camp = setHexGeography(camp, mapId, 2, 2, 'forest');
+  const map = getHexMap(camp, mapId);
+  delete map.hexes['2,2'].rivers;
+  delete map.hexes['2,2'].lake;
+
+  const read = getHex(camp, mapId, 2, 2);
+  assert.deepEqual(read.rivers, []);
+  assert.equal(read.lake, null);
+
+  // A mutator touching this same pre-existing hex must not throw on the
+  // missing array (this is what would break without touchHex's own backfill).
+  const mutated = addHexRiverSegment(camp, mapId, 2, 2, 0, 1);
+  assert.equal(getHex(mutated, mapId, 2, 2).rivers.length, 1);
 });
 
 test('multiple named hex maps coexist independently — painting one never affects another (mirrors Battlemap\'s own multi-map isolation)', () => {

@@ -46,8 +46,9 @@ import { SOURCEBOOK_INVENTORY } from '../../data/sourcebookInventory.js';
 import { listGalleryImages, listGalleryTagVocabulary, getGalleryImage } from '../../domain/gallery.js';
 import { listBattlemaps, getActiveBattlemap } from '../../domain/battlemaps.js';
 import { BATTLEMAP_ICONS, findBattlemapIcon } from '../../data/battlemapIcons.js';
-import { listHexMaps, getActiveHexMap, getHex, axialToPixel, hexVertexPoints, HEX_SIZE } from '../../domain/hexcrawls.js';
+import { listHexMaps, getActiveHexMap, getHex, axialToPixel, hexVertexPoints, HEX_SIZE, ENCOUNTER_VERTEX_ORDER, hexEdgeMidpoints, edgeNeighbor } from '../../domain/hexcrawls.js';
 import { HEXCRAWL_GEOGRAPHY_ICONS, findHexcrawlGeography, HEXCRAWL_THREAT_ICONS, findHexcrawlThreat } from '../../data/hexcrawlIcons.js';
+import { findLocationTypeIcon } from '../../data/locationTypeIcons.js';
 import { getSector, listTouchedSectors, adjacentSectors, deriveSectorIcon, generateMissionHooks, gridSizeOf, countInvestigationSites, MAX_INVESTIGATION_SITES, worldTrackerAttentionItems } from '../../domain/worldTracker.js';
 import { WORLD_TRACKER_ICONS, findWorldTrackerIcon } from '../../data/worldTrackerIcons.js';
 import { GENRE_PACKS, bestiaryTerm } from '../../data/genrePacks.js';
@@ -389,14 +390,16 @@ function inspector(doc, e, ui) {
   // apply to a player character the same way they do to an antagonist or
   // bystander NPC, so both are hidden once this tag is present.
   const isPartyCharacter = e.type === 'npc' && (e.tags || []).some((t) => t.toLowerCase() === 'character');
-  // Overview defaults OPEN (unlike most of this session's new
-  // collapsibles) — it's an entity's core identifying summary, the first
-  // thing a GM wants on opening one, not a rarely-needed detail; the
-  // Set here tracks which entities have been explicitly COLLAPSED
-  // (inverse of the usual "tracks expanded" convention).
-  const overviewOpen = !((ui.collapsedOverview || new Set()).has(e.id));
+  // Overview now defaults COLLAPSED (direct follow-up request: "Default
+  // the character sheet section to be open, but all other sections to be
+  // collapsed when the entity record is opened" — supersedes the earlier
+  // "Overview defaults open" decision below). ui.collapsedOverview's own
+  // toggle handler (shell.js's data-overview-toggle) is a plain has/
+  // delete/add flip either way, so membership now reads as "explicitly
+  // EXPANDED" instead of "explicitly collapsed" — no handler change needed.
+  const overviewOpen = (ui.collapsedOverview || new Set()).has(e.id);
   const relKey = `entityRelationships:${e.id}`;
-  const relCollapsed = isPartySectionCollapsed(ui, relKey, false);
+  const relCollapsed = isPartySectionCollapsed(ui, relKey, true);
   const relAddHtml = others.length
     ? `<div class="rel-add">
         <select data-entity-link-type>${relTypeOptions('linked')}</select>
@@ -433,6 +436,8 @@ function inspector(doc, e, ui) {
         </div>
       </div>
     </div>
+    ${characterSheetSectionHtml(e, doc, ui)}
+    ${nonCharacterStatblockCardsHtml(e, doc, ui)}
     ${isPartyCharacter ? '' : `<div class="revealed-block">
       <span class="field-label-row">
         <button class="section-toggle" data-reveal-toggle="${esc(e.id)}">${e.revealedOpen ? '▾' : '▸'} Revealed / hidden (GM)</button>
@@ -442,29 +447,16 @@ function inspector(doc, e, ui) {
       ${e.revealedOpen ? `<div class="rich-field">${richToolbarHTML(`entity:${e.id}:revealed`, toolbarCollapsed(doc, ui, `entity:${e.id}:revealed`), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-entity-field="revealed" data-placeholder="Secrets, twists, true motives.">${buildMentionEditorHTML(doc, e.revealed)}</div></div>` : ''}
     </div>`}
     <hr class="field-divider">
-    ${entityTypeTagsBlockHtml(doc, e, ui)}
     ${npcSection(e)}
     ${factionSection(doc, e, ui)}
     ${conflictSection(doc, e, ui)}
     ${worldProfileSection(doc, e, ui)}
     ${worldDemographicsSection(doc, e, ui)}
-    ${TOP_OF_STATBLOCK_TYPE_TAGS_TYPES.includes(e.type) ? `${entityTypeTagsRowHtml(doc, e, ui)}<hr class="field-divider-half">` : ''}
-    ${statblockSection(e, doc, ui)}
+    ${entityConfigurationSectionHtml(doc, e, ui)}
     ${relBlockHtml}`;
 }
 
-// Direct follow-up request: "Move the entity type and tags and tag list
-// rows for NPC, Asset and Lifeform entities to the top of the 'Add a
-// Statblock or Attribute' section... For Faction, Conflict, Lore and
-// Location entities, move those rows under a section header 'tags' that is
-// collapsed by default." Item (and any future type not in either list)
-// keeps the original always-visible, in-place behavior as its default.
-const TOP_OF_STATBLOCK_TYPE_TAGS_TYPES = ['npc', 'asset', 'lifeform'];
-const COLLAPSIBLE_TAGS_HEADER_TYPES = ['faction', 'conflict', 'lore', 'location'];
-
-// The Type <select> + tag editor + tag chip list — extracted so it can be
-// rendered in either of two different spots (entityTypeTagsBlockHtml,
-// right below) without duplicating the markup.
+// The Type <select> + tag editor + tag chip list.
 function entityTypeTagsRowHtml(doc, e, ui) {
   return `
     <div class="inspector-type-tags-row">
@@ -476,19 +468,27 @@ function entityTypeTagsRowHtml(doc, e, ui) {
     ${tagEditorList(doc, e, ui)}`;
 }
 
-// Decides WHERE the Type/Tags row renders for this entity's type — right
-// here (item, or under a collapsed-by-default "Tags" header for Faction/
-// Conflict/Lore/Location), or not at all (NPC/Asset/Lifeform, which render
-// it at the top of the statblock section instead — see TOP_OF_STATBLOCK_
-// TYPE_TAGS_TYPES's own call site above).
-function entityTypeTagsBlockHtml(doc, e, ui) {
-  if (TOP_OF_STATBLOCK_TYPE_TAGS_TYPES.includes(e.type)) return '';
-  if (COLLAPSIBLE_TAGS_HEADER_TYPES.includes(e.type)) {
-    const tagsKey = `entityTags:${e.id}`;
-    const tagsCollapsed = isPartySectionCollapsed(ui, tagsKey, true);
-    return `${partySectionHeaderHtml(tagsKey, 'Tags', tagsCollapsed)}${tagsCollapsed ? '' : entityTypeTagsRowHtml(doc, e, ui)}`;
-  }
-  return entityTypeTagsRowHtml(doc, e, ui);
+// Direct follow-up request: "move tags above Relationships in the entity
+// editor" — every entity type now renders Type/Tags in the SAME position
+// (right before Relationships, inspector()'s own return), under the same
+// collapsed-by-default header (this used to fork three ways by entity
+// type: inline at the top for Faction/Conflict/Lore/Location under a
+// collapsed "Tags" header, at the top of the statblock section —
+// un-collapsible — for NPC/Asset/Lifeform, and inline at the top for Item;
+// that three-way split is gone, one position and one collapse behavior for
+// every type). A LATER direct follow-up renamed the header from "Tags" to
+// "Configuration" and folded the "+Field"/"+Track"/"+ Add a Statblock"
+// admin controls (statblockAddControlsHtml, previously their own
+// always-visible row directly under the statblock cards) into this same
+// section — Type/Tags and "add a statblock" are both configuration-y,
+// occasional actions a GM reaches for far less often than reading/editing
+// the statblocks/fields themselves, so they now share one collapsed
+// section instead of two separate ones.
+function entityConfigurationSectionHtml(doc, e, ui) {
+  const key = `entityConfiguration:${e.id}`;
+  const collapsed = isPartySectionCollapsed(ui, key, true);
+  const body = collapsed ? '' : `${entityTypeTagsRowHtml(doc, e, ui)}${statblockAddControlsHtml(e, doc, ui)}`;
+  return `${partySectionHeaderHtml(key, 'Configuration', collapsed)}${body}`;
 }
 
 // NPC "current goal" (docs/design/scene-story-integration-plan.md) — one
@@ -522,11 +522,12 @@ function factionSection(doc, e, ui) {
   // Direct follow-up request: "make the section headers such as 'Conflict'
   // and 'Relationships'... use the same collapseable format used on the
   // Campaign panel" — same partySectionHeaderHtml/isPartySectionCollapsed
-  // mechanism as the new Relationships/Tags headers above, default OPEN
-  // (this is an entity's own core identifying content, same reasoning
-  // Overview's own default-open comment already gives).
+  // mechanism as the Relationships/Tags headers. Default COLLAPSED (a
+  // later direct follow-up superseded the original default-open decision:
+  // "Default the character sheet section to be open, but all other
+  // sections to be collapsed when the entity record is opened").
   const cardKey = `entityFactionCard:${e.id}`;
-  const cardCollapsed = isPartySectionCollapsed(ui, cardKey, false);
+  const cardCollapsed = isPartySectionCollapsed(ui, cardKey, true);
   const cardBodyHtml = `
       <label class="field-label">${fieldLabelRow('HQ', 'faction', 'hq')}
         <input data-entity-field="hq" value="${esc(e.hq)}" placeholder="Where they operate from">
@@ -602,10 +603,10 @@ function conflictSection(doc, e, ui) {
   const linkableFactions = localFactions.filter((f) => !involvedIds.has(f.id));
   // Direct follow-up request: "make the section headers such as 'Conflict'
   // and 'Relationships'... use the same collapseable format used on the
-  // Campaign panel" — default OPEN, same reasoning factionSection's own
-  // "Faction card" header above already uses.
+  // Campaign panel" — default COLLAPSED, same reasoning factionSection's
+  // own "Faction card" header above now uses.
   const conflictKey = `entityConflict:${e.id}`;
-  const conflictCollapsed = isPartySectionCollapsed(ui, conflictKey, false);
+  const conflictCollapsed = isPartySectionCollapsed(ui, conflictKey, true);
   const conflictBodyHtml = `
       <label class="field-label">Status
         <select data-entity-field="status">${CONFLICT_STATUS_OPTIONS.map(([v, l]) => `<option value="${v}" ${e.status === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
@@ -1258,14 +1259,22 @@ function entityPhotoHtml(doc, e) {
     // src/alt straight off the clicked <img> itself (it's already inline in
     // the DOM as a data: URL) rather than duplicating potentially-large
     // image data into a second attribute.
+    // Direct follow-up request: the old "Replace" text button is a bare
+    // pencil icon (✎, the same glyph every other rename/edit control in
+    // this app uses) — moved off the thumbnail into normal flow at one
+    // point, then a LATER direct follow-up put it back as an overlay
+    // badge at the thumbnail's own 5-o'clock position (see .photo-edit-btn
+    // in cockpit.css for the exact placement math).
     return `<div class="inspector-photo">
-      <button type="button" class="gallery-thumb-circle-btn" title="View full size">
-        <img class="gallery-thumb-circle" data-open-image-lightbox src="${esc(img.dataUrl)}" alt="${esc(e.name || 'Entity')} thumbnail">
-      </button>
-      <label class="btn ghost sm file-btn">Replace<input type="file" accept="image/*" data-entity-photo-upload="${esc(e.id)}" hidden></label>
+      <div class="inspector-photo-edit-overlay">
+        <button type="button" class="gallery-thumb-circle-btn" title="View full size">
+          <img class="gallery-thumb-circle" data-open-image-lightbox src="${esc(img.dataUrl)}" alt="${esc(e.name || 'Entity')} thumbnail">
+        </button>
+        <label class="icon-btn photo-edit-btn file-btn" title="Replace photo">✎<input type="file" accept="image/*" data-entity-photo-upload="${esc(e.id)}" hidden></label>
+      </div>
     </div>`;
   }
-  // Unassigned still reserves the same 40%-of-row width (.inspector-photo
+  // Unassigned still reserves the same reduced column width (.inspector-photo
   // CSS) as the assigned state above, via a dashed placeholder box —
   // previously this was just a small floating button with no reserved
   // space, which made the layout jump once a photo was added.
@@ -1302,15 +1311,39 @@ function tagEditorHead(doc, e, ui) {
       <datalist id="entity-tag-list">${vocab.map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
     </div>`;
 }
+// Direct follow-up request: "for tags that are protected, like character,
+// add a lock icon and prompt user if it is removed from the entity" —
+// mechanically special tags this app's own domain logic keys off of by
+// exact string (party.js's #character, similar to #vehicle/#starship
+// elsewhere), where removing it has a real consequence beyond just
+// dropping a label. Case-insensitive, matching every other tag comparison
+// in this app. A LATER direct follow-up ("When creating a new encounter as
+// a conflict entity, add the type of encounter as a non-editable,
+// protected tag") extended this to every Hexcrawl Encounter label too
+// (Monster Lair, Bandits / Raiders, ...) — checked dynamically against
+// HEXCRAWL_THREAT_ICONS rather than duplicated into the fixed list, so a
+// future catalog addition is automatically protected too. Exported so
+// shell.js's tag-remove handler can gate its own confirm the same way.
+const PROTECTED_ENTITY_TAGS = ['character'];
+export function isProtectedEntityTag(tag) {
+  const clean = String(tag || '').toLowerCase();
+  if (PROTECTED_ENTITY_TAGS.includes(clean)) return true;
+  return HEXCRAWL_THREAT_ICONS.some((i) => i.label.toLowerCase() === clean);
+}
+
 function tagEditorList(doc, e, ui) {
   const expanded = !((ui.collapsedEntityTags || new Set()).has(e.id));
   if (!expanded) return '';
   const tags = e.tags || [];
-  const chips = tags.map((t) => `
-    <span class="tag-chip">
+  const chips = tags.map((t) => {
+    const protectedTag = isProtectedEntityTag(t);
+    return `
+    <span class="tag-chip ${protectedTag ? 'tag-chip-protected' : ''}">
+      ${protectedTag ? '<span class="tag-chip-lock" title="Protected — removing this asks first">🔒</span>' : ''}
       <button type="button" class="tag-chip-jump" data-entity-tag-jump="${esc(t)}" title="Filter Cast by #${esc(t)}">${esc(t)}</button>
       <button class="icon-btn" data-entity-tag-remove="${esc(t)}" title="Remove tag">✕</button>
-    </span>`).join('');
+    </span>`;
+  }).join('');
   return `<div class="tag-chips">${chips || '<span class="dim small">None yet.</span>'}</div>`;
 }
 
@@ -1332,10 +1365,47 @@ function tagEditorList(doc, e, ui) {
 // ui.statblockAddOpen) alongside the existing "add a whole new statblock
 // group" chips, instead of competing for attention with the fields
 // themselves.
-function statblockSection(e, doc, ui = {}, opts = {}) {
+// Direct follow-up request: "move character sheet section right below the
+// thumbnail and above 'Revealed / hidden (GM)'" — renders just the
+// Character Sheet group(s) (kind: 'character'; there's normally at most
+// one, but this handles more than one the same defensive way every other
+// sortStatblockGroups-based function here does), reusing statblockGroupBlock
+// (which already dispatches kind:'character' to characterSheetGroupBlock)
+// so there's exactly one place that knows how to render a Character Sheet
+// card, just two call sites now instead of one.
+function characterSheetSectionHtml(e, doc, ui = {}, opts = {}) {
+  const sorted = sortStatblockGroups(e.statblocks || [], doc.settings);
+  // group.archived (direct follow-up request — removing the protected
+  // "character" tag archives rather than deletes its Character Sheet)
+  // hides it from view here; re-adding the tag (shell.js) clears the flag.
+  return sorted.filter(({ group }) => group.kind === 'character' && !group.archived)
+    .map(({ group, index }) => statblockGroupBlock(e, group, index, doc, ui, opts)).join('');
+}
+
+// Direct follow-up request: "any statblocks that are selected must be
+// added under the last statblock added under thumbnail" — every OTHER
+// statblock group (Bestiary/Vehicle/Gear; anything sortStatblockGroups
+// doesn't rank as 'character') now renders immediately after
+// characterSheetSectionHtml (inspector()'s own return), right under the
+// thumbnail alongside Character Sheet, instead of much further down past
+// Faction/Conflict/World Profile/etc. — a newly-added group lands right
+// there too, since this reads the live entity.statblocks on every render.
+function nonCharacterStatblockCardsHtml(e, doc, ui = {}, opts = {}) {
+  const sorted = sortStatblockGroups(e.statblocks || [], doc.settings);
+  return sorted.filter(({ group }) => group.kind !== 'character')
+    .map(({ group, index }) => statblockGroupBlock(e, group, index, doc, ui, opts)).join('');
+}
+
+// The "+Field"/"+Track" (one picker per existing group), "+ Add a whole
+// new statblock group" chips, and Enhancements — direct follow-up request
+// moved these out from directly under the statblock cards (which moved up
+// near the thumbnail — see nonCharacterStatblockCardsHtml above) and into
+// the Configuration section (entityConfigurationSectionHtml, below)
+// alongside Type/Tags, consolidated under ONE collapsed-by-default header
+// instead of two.
+function statblockAddControlsHtml(e, doc, ui = {}) {
   const groups = e.statblocks || [];
   const sorted = sortStatblockGroups(groups, doc.settings);
-  const rows = sorted.map(({ group, index }) => statblockGroupBlock(e, group, index, doc, ui, opts)).join('');
   const addChoices = statblockAddChoices(e, groups, doc);
   const fieldAddRows = sorted.map(({ group, index }) => `
     <div class="statblock-add-row">
@@ -1345,14 +1415,12 @@ function statblockSection(e, doc, ui = {}, opts = {}) {
     </div>`).join('');
   const enhancements = enhancementsSection(e, ui);
   const open = !!ui.statblockAddOpen;
-  const toggle = (addChoices || fieldAddRows || enhancements)
-    ? `<div class="statblock-add-toggle-row">
-        <button class="icon-btn" data-statblock-add-toggle title="${open ? 'Hide statblock options' : 'Add a Statblock or Attribute'}">⚙</button>
-        <span class="dim small">Add a Statblock or Attribute</span>
-      </div>
-      ${open ? `${fieldAddRows}${addChoices}${enhancements}` : ''}`
-    : '';
-  return `${rows}${toggle}`;
+  if (!(addChoices || fieldAddRows || enhancements)) return '';
+  return `<div class="statblock-add-toggle-row">
+      <button class="icon-btn" data-statblock-add-toggle title="${open ? 'Hide statblock options' : 'Add a Statblock or Attribute'}">⚙</button>
+      <span class="dim small">Add a Statblock or Attribute</span>
+    </div>
+    ${open ? `${fieldAddRows}${addChoices}${enhancements}` : ''}`;
 }
 
 // Shared by statblockGroupBlock/characterSheetGroupBlock's own headers AND
@@ -1364,14 +1432,36 @@ function statblockGroupLabel(group, doc) {
   if (group.kind === 'vehicle') return 'Vehicle Statblock';
   if (group.kind === 'gear') return `Gear Stats · ${esc(findGearTemplate(group.ruleset).label)}`;
   // Bestiary (or LifeForm, genre-dependent — see bestiaryTerm) is a subtype
-  // of NPC (like Character) — its label reflects that.
-  return `${bestiaryTerm(doc.settings.genrePack)} (NPC) · ${esc(templateLabel(group.templateId, doc.settings))}`;
+  // of NPC (like Character) internally (group.kind stays the literal string
+  // 'npc' — statblocks.js/this file's own presentTemplates check rely on
+  // that exact value) but reads oddly labeled "(NPC)" to a GM looking at a
+  // monster's stat block — direct follow-up request changed the DISPLAYED
+  // suffix to "(Creature)", then (another direct follow-up, matching
+  // entityTypeLabel's own Fantasy-genre "Bestiary" entity-type rename) to
+  // "(Bestiary)". Only appended when it would say something the term
+  // itself doesn't already — bestiaryTerm returns literally "Bestiary" for
+  // the Fantasy/D&D 5e genre packs, so appending "(Bestiary)" there too
+  // would read as "Bestiary (Bestiary)"; Sci-Fi/Cyberpunk's own "LifeForm"
+  // term still gets the qualifier, since "LifeForm (Bestiary)" says
+  // something new.
+  const term = bestiaryTerm(doc.settings.genrePack);
+  const suffix = term === 'Bestiary' ? '' : ' (Bestiary)';
+  return `${term}${suffix} · ${esc(templateLabel(group.templateId, doc.settings))}`;
 }
 
 function statblockGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
   if (group.kind === 'character') return characterSheetGroupBlock(e, group, gi, doc, ui, opts);
   const key = `${e.id}::${gi}`;
-  const collapsed = !!(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
+  // Direct follow-up request: "Default the character sheet section to be
+  // open, but all other sections to be collapsed when the entity record is
+  // opened" — collapsed BY DEFAULT now (inverted from the open-by-default
+  // this used to share with characterSheetGroupBlock's own identical
+  // formula just below); membership in the SAME ui.collapsedStatblockGroups
+  // Set/toggle mechanism now reads as "explicitly expanded" for a
+  // Bestiary/Vehicle/Gear group instead of "explicitly collapsed" —
+  // data-statblock-group-toggle's click handler (shell.js) is a plain
+  // has/delete/add toggle either way, so this flip needs no handler change.
+  const collapsed = !(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
   // Direct follow-up request: "the 'LifeForm (NPC) · Starforged' statblock
   // should put the editable stat field pill on the top row like other
   // statblocks" — attribute-kind fields (a Bestiary template's rollable
@@ -1406,6 +1496,7 @@ function statblockGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
     <div class="statblock-head">
       <button class="icon-btn statblock-collapse-toggle" data-statblock-group-toggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button>
       <h4>${statblockGroupLabel(group, doc)}</h4>
+      ${statblockMoveButtonsHtml(gi)}
       <button class="icon-btn" data-statblock-remove-group="${gi}" title="Remove this statblock">🗑</button>
     </div>
     ${collapsed ? '' : `
@@ -1466,6 +1557,10 @@ function statblockAddChoices(e, groups, doc) {
 // without a full-width row per field forcing a long scroll.
 function characterSheetGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
   const key = `${e.id}::${gi}`;
+  // Open by default (unlike the generic statblockGroupBlock's own,
+  // now-inverted formula just above) — direct follow-up request: "Default
+  // the character sheet section to be open, but all other sections to be
+  // collapsed."
   const collapsed = !!(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
   const ruleset = findRuleset(group.ruleset);
   const indexed = group.fields.map((f, fi) => ({ f, fi }));
@@ -1509,10 +1604,26 @@ function characterSheetGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
       <button class="icon-btn statblock-collapse-toggle" data-statblock-group-toggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button>
       <h4>Character Sheet · ${esc(ruleset.label)}</h4>
       ${pdfImportBtn}
+      ${statblockMoveButtonsHtml(gi)}
       <button class="icon-btn" data-statblock-remove-group="${gi}" title="Remove this statblock">🗑</button>
     </div>
     ${collapsed ? '' : bodyHtml}
   </div>`;
+}
+
+// Direct follow-up request: "Add an up & down arrow to the left of the
+// delete icon for each statblock so it can be reordered" — shared by both
+// statblockGroupBlock and characterSheetGroupBlock's own headers, same
+// "one place instead of two copies drifting apart" posture as
+// statblockGroupLabel just above. data-statblock-move-group carries
+// "gi::direction"; moveEntityStatblockGroup (shell.js/domain/entities.js)
+// is a bounds-checked no-op past either end of the array, so no disabled
+// state is needed here — clicking past an end simply does nothing.
+function statblockMoveButtonsHtml(gi) {
+  return `<span class="statblock-move-buttons">
+    <button class="icon-btn" data-statblock-move-group="${gi}::up" title="Move up">▲</button>
+    <button class="icon-btn" data-statblock-move-group="${gi}::down" title="Move down">▼</button>
+  </span>`;
 }
 
 // D&D 5e's own Attacks table (direct request) — same real-<table> pattern
@@ -2115,6 +2226,7 @@ function campaignsSection(doc, ui) {
       </label>
       ${c.active ? '<span class="chip sm">Active</span>' : `<button class="btn ghost sm" data-campaign-switch="${esc(c.id)}">Switch</button>`}
       <button class="btn ghost sm" data-campaign-rename="${esc(c.id)}">Rename</button>
+      ${!c.active && campaigns.length > 1 ? `<button class="btn ghost sm danger" data-campaign-delete="${esc(c.id)}" title="Downloads a backup, then deletes this campaign and all its data">Delete</button>` : ''}
     </div>`).join('');
 
   return `
@@ -3973,9 +4085,15 @@ function mechanicsIndexList(doc) {
 // shell.js's GRAPH_W/GRAPH_H (kept in sync with these two numbers), onWheel,
 // onGraphMouseDown/Move/Up, and the data-graph-zoom buttons below.
 function graph(doc, ui = {}) {
-  const g = buildGraph(doc);
+  // Direct follow-up request: "do not display any entities unless they
+  // have an existing relationship" — buildGraph's own `degree` (a node's
+  // relationship count) is already exactly what's needed; filtered here,
+  // before computeLayout, so an isolated entity never enters the
+  // force-directed layout at all (not just hidden after the fact).
+  const gRaw = buildGraph(doc);
+  const g = { nodes: gRaw.nodes.filter((n) => n.degree > 0), edges: gRaw.edges };
   if (!g.nodes.length) {
-    return '<p class="ws-placeholder">No entities yet. Add a cast (or type @Name in a note) and their relationships appear here as a graph.</p>';
+    return '<p class="ws-placeholder">No entities with a relationship yet. Link two entities (drag one onto another, or use "Find entity to link" in the Entity Editor) and they\'ll appear here as a graph.</p>';
   }
   const W = 600, H = 520;
   const pos = computeLayout(g, { width: W, height: H });
@@ -4404,32 +4522,298 @@ const HEX_SVG_POINTS = (() => {
 // center to vertex) so they stay fully inside the clipped hex shape rather
 // than being cut off right at its edge.
 const HEX_VERTEX_INSET = 0.72;
+// Direct follow-up request (river/lake overlays) — edge midpoints in the
+// SAME local box-space HEX_SVG_POINTS/HEX_CLIP_PATH already use (offset
+// from cx,cy, not the hex's own world-space center), for drawing river
+// paths/the lake circle INSIDE the .hex-shape SVG alongside the polygon —
+// computed once, not per-cell, same posture as those two.
+const HEX_EDGE_MIDPOINTS_LOCAL = (() => {
+  const cx = HEX_W / 2; const cy = HEX_H / 2;
+  return hexEdgeMidpoints(HEX_SIZE).map((p) => ({ x: cx + p.x, y: cy + p.y }));
+})();
+
+// ~30% of the hex's own area as a circle (direct follow-up request: "fill
+// 30% of the hex") — hex area for a regular hexagon with center-to-vertex
+// radius HEX_SIZE is 1.5*sqrt(3)*HEX_SIZE^2; solve pi*r^2 = 0.3*that area.
+const HEX_LAKE_RADIUS = Math.sqrt((0.3 * 1.5 * Math.sqrt(3) * HEX_SIZE * HEX_SIZE) / Math.PI);
+
+/** The lake's own irregular blob OUTLINE — direct follow-up request: "The
+ *  lakes must be irregular shaped blobs that look more like natural
+ *  bodies of water, not circles. Each lake should be a different shape."
+ *  9 points ringed around the lake's stored offset center, each at a
+ *  seeded radius (0.72x-1.28x HEX_LAKE_RADIUS, so the AVERAGE area still
+ *  targets ~30% of the hex per the original request even though no two
+ *  lakes' own `seed` produce the same wobble), threaded into a smooth
+ *  CLOSED path via the same "quadratic through points" technique
+ *  riverMeanderPoints/smoothPathD already use for a river's own wiggle. */
+function hexLakeBlobPoints(cx, cy, lake) {
+  const rad = (lake.offsetAngle * Math.PI) / 180;
+  const dist = lake.offsetDist * HEX_SIZE;
+  const lx = cx + Math.cos(rad) * dist;
+  const ly = cy + Math.sin(rad) * dist;
+  const M = 9;
+  const pts = [];
+  for (let i = 0; i < M; i++) {
+    const a = (i / M) * Math.PI * 2;
+    const h = hashFrac(lake.seed * 31.7 + i * 5.13);
+    const r = HEX_LAKE_RADIUS * (0.72 + h * 0.56);
+    pts.push({ x: lx + Math.cos(a) * r, y: ly + Math.sin(a) * r });
+  }
+  return pts;
+}
+
+// Closed-loop counterpart to smoothPathD (river paths are open) — wraps
+// back to the first point instead of ending with a straight line, so a
+// lake's own outline has no visible seam.
+function smoothClosedPathD(pts) {
+  const n = pts.length;
+  const midOf = (i) => { const j = (i + 1) % n; return { x: (pts[i].x + pts[j].x) / 2, y: (pts[i].y + pts[j].y) / 2 }; };
+  const start = midOf(n - 1);
+  let d = `M${start.x.toFixed(1)},${start.y.toFixed(1)}`;
+  for (let i = 0; i < n; i++) {
+    const m = midOf(i);
+    d += ` Q${pts[i].x.toFixed(1)},${pts[i].y.toFixed(1)} ${m.x.toFixed(1)},${m.y.toFixed(1)}`;
+  }
+  return `${d} Z`;
+}
+
+/** The lake overlay itself — rendered INSIDE .hex-shape, above the
+ *  Geography fill/polygon but still under the actual .hex-cell
+ *  click-target div and center Location icon (DOM order — this <svg> is
+ *  a sibling BEFORE .hex-cell; the lake has no click behavior of its own,
+ *  so unlike rivers it doesn't need a second on-top hit layer). */
+function hexLakeSvgHtml(hex, cx, cy) {
+  if (!hex.lake) return '';
+  return `<path class="hex-lake" d="${smoothClosedPathD(hexLakeBlobPoints(cx, cy, hex.lake))}" />`;
+}
+
+// A cheap deterministic 0-1 pseudo-random hash (no dependency, no state) —
+// river meander points (below) need SEVERAL independent-looking random
+// values derived from one stored seed (domain/hexcrawls.js), not just one.
+function hashFrac(x) {
+  const v = Math.sin(x * 12.9898) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+/** A river segment's full meander path — direct follow-up request: "the
+ *  river anchor... is making a curved line that must change to an
+ *  irregular waving, meandering line that is more natural to a river."
+ *  The original single-control-point quadratic (one smooth arc) reads as
+ *  a curve, not a meander — this instead walks 3 intermediate points
+ *  along the A-B line, each displaced perpendicular by a seeded amount
+ *  and ALTERNATING side (left-right-left), then threads a smooth path
+ *  through all of them via the standard "quadratic-through-points"
+ *  technique (each point as a Bezier control, ending at the midpoint to
+ *  the next one) — the classic cheap way to get a natural-looking wavy
+ *  line through several waypoints without sharp corners. Returns the
+ *  point LIST (not just the `d` string) so callers needing a "which way
+ *  is the river approaching from" direction (the ocean-mouth funnel,
+ *  below) have a real nearby point to work from instead of one shared
+ *  midpoint. */
+function riverMeanderPoints(a, b, seed) {
+  const dx = b.x - a.x; const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const px = -dy / len; const py = dx / len;
+  const N = 3;
+  const pts = [a];
+  for (let i = 1; i <= N; i++) {
+    const t = i / (N + 1);
+    const bx = a.x + dx * t; const by = a.y + dy * t;
+    const h = hashFrac(seed * 17.13 + i * 3.71);
+    const sign = i % 2 === 0 ? 1 : -1;
+    const mag = (0.1 + h * 0.16) * len;
+    pts.push({ x: bx + px * mag * sign, y: by + py * mag * sign });
+  }
+  pts.push(b);
+  return pts;
+}
+
+function smoothPathD(pts) {
+  let d = `M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const mid = { x: (pts[i].x + pts[i + 1].x) / 2, y: (pts[i].y + pts[i + 1].y) / 2 };
+    d += ` Q${pts[i].x.toFixed(1)},${pts[i].y.toFixed(1)} ${mid.x.toFixed(1)},${mid.y.toFixed(1)}`;
+  }
+  const last = pts[pts.length - 1];
+  d += ` L${last.x.toFixed(1)},${last.y.toFixed(1)}`;
+  return d;
+}
+
+// Shared by hexRiverSvgHtml (visible, decorative — stays in the
+// background .hex-shape svg, BEFORE .hex-cell in DOM order) and
+// hexRiverHitSvgHtml (the clickable hit-paths, rendered in their OWN svg
+// positioned identically but AFTER .hex-cell — see that function's own
+// doc comment for why they can't share one svg element).
+function riverSegmentGeometry(doc, mapId, q, r, hex, cx, cy) {
+  const lakePt = hex.lake ? hexLakeSvgPoint(cx, cy, hex.lake) : null;
+  const endPoint = (end) => (end === 'lake' ? lakePt : HEX_EDGE_MIDPOINTS_LOCAL[end]);
+  const isOceanMouth = (end) => {
+    if (end === 'lake') return false;
+    const nb = edgeNeighbor(q, r, end);
+    const nbHex = getHex(doc, mapId, nb.q, nb.r);
+    return nbHex.geography === 'ocean';
+  };
+  return (hex.rivers || []).map((seg, index) => {
+    const a = endPoint(seg.from); const b = endPoint(seg.to);
+    if (!a || !b) return null;
+    const pts = riverMeanderPoints(a, b, seg.seed);
+    return { index, d: smoothPathD(pts), pts, mouthFrom: isOceanMouth(seg.from), mouthTo: isOceanMouth(seg.to) };
+  }).filter(Boolean);
+}
+
+/** Renders every river segment on this hex — narrow blue meandering
+ *  strokes between two edge midpoints (or an edge and the lake, when
+ *  `to`/`from` is the 'lake' sentinel). A segment whose edge borders a
+ *  NEIGHBORING hex painted 'ocean' gets a widened funnel at that end
+ *  (direct follow-up request: "Rivers connecting to the ocean will have a
+ *  wider endpoint... representing the mouth of the river"). Purely
+ *  decorative (pointer-events:none via CSS) — see hexRiverHitSvgHtml for
+ *  the actual clickable layer. */
+function hexRiverSvgHtml(doc, mapId, q, r, hex, cx, cy) {
+  const segs = riverSegmentGeometry(doc, mapId, q, r, hex, cx, cy);
+  return segs.map((s) => {
+    const mouthA = s.mouthFrom ? riverMouthHtml(s.pts[0], s.pts[1]) : '';
+    const mouthB = s.mouthTo ? riverMouthHtml(s.pts[s.pts.length - 1], s.pts[s.pts.length - 2]) : '';
+    return `<path class="hex-river" d="${s.d}" />${mouthA}${mouthB}`;
+  }).join('');
+}
+
+/** Direct follow-up request: "when the river icon is selected, any river
+ *  lines already placed should be selectable and clicking a line should
+ *  prompt to remove it." A separate, EMPTY-until-armed svg positioned
+ *  identically to (and reusing the exact same path geometry as)
+ *  hexRiverSvgHtml's own decorative one, but rendered as a DOM sibling
+ *  AFTER .hex-cell (same "must paint on top to actually receive the
+ *  click" reasoning as .hex-vertex/.hex-edge) — the decorative svg can't
+ *  double as the hit target itself because it sits BEFORE .hex-cell,
+ *  which would silently swallow the click the same bug this same request
+ *  turn found and fixed for .hex-edge. Each hit path is much WIDER
+ *  (invisible) than the 3px visible stroke, so it's actually clickable;
+ *  only rendered at all while the River tool is armed (`ui.
+ *  hexcrawlPlacingIcon.layer === 'river'`), same as the pending-start
+ *  highlight on .hex-edge. */
+function hexRiverHitSvgHtml(doc, mapId, q, r, hex, cx, cy, armed) {
+  if (!armed) return '';
+  const segs = riverSegmentGeometry(doc, mapId, q, r, hex, cx, cy);
+  if (!segs.length) return '';
+  return segs.map((s) => `<path class="hex-river-hit" d="${s.d}" data-hex-river="${esc(mapId)}::${q}::${r}::${s.index}" />`).join('');
+}
+
+// Same offset math as hexLakeSvgHtml, factored out so hexRiverSvgHtml can
+// find the lake's own local-space point without re-deriving it.
+function hexLakeSvgPoint(cx, cy, lake) {
+  const rad = (lake.offsetAngle * Math.PI) / 180;
+  const dist = lake.offsetDist * HEX_SIZE;
+  return { x: cx + Math.cos(rad) * dist, y: cy + Math.sin(rad) * dist };
+}
+
+/** A widened funnel at a river's ocean-mouth end — a filled triangle
+ *  fanning out from the endpoint back toward the meander's own nearest
+ *  waypoint (so it widens INTO the hex along the curve's actual approach
+ *  direction, reading as the river mouth opening onto the sea) rather
+ *  than a variable-width stroke, which SVG can't do without a much
+ *  heavier path-outline approach. */
+function riverMouthHtml(end, nearWaypoint) {
+  const dx = end.x - nearWaypoint.x; const dy = end.y - nearWaypoint.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const px = -dy / len; const py = dx / len;
+  const spread = HEX_SIZE * 0.26;
+  const p1 = { x: end.x + px * spread, y: end.y + py * spread };
+  const p2 = { x: end.x - px * spread, y: end.y - py * spread };
+  const back = { x: end.x - (dx / len) * spread * 1.4, y: end.y - (dy / len) * spread * 1.4 };
+  return `<polygon class="hex-river-mouth" points="${p1.x.toFixed(1)},${p1.y.toFixed(1)} ${back.x.toFixed(1)},${back.y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}" />`;
+}
 
 // Direct follow-up request: pen-and-ink art (geo.iconArt, from
 // hexcrawlIcons.js) replaces the plain emoji glyph when a biome has real
-// crops available; `water`/`ice` (no matching source art) fall back to
-// their emoji glyph, same rendering rule the palette/select still use.
+// crops available. A LATER direct follow-up ("Add a sea button... waves
+// similar to the other geography graphics") added `svgArt` — a
+// hand-authored inline SVG pattern for a biome with no matching source
+// crop at all (raw markup, not a file reference, so no <img> involved);
+// checked before the plain iconArt/glyph fallback. `water`/`ice` (neither
+// svgArt nor iconArt) fall back to their emoji glyph, same rendering rule
+// the palette/select still use.
 function hexGeoGlyphHtml(geo, geoVariant) {
   if (Array.isArray(geo.iconArt) && geo.iconArt.length) {
     const file = geo.iconArt[geoVariant % geo.iconArt.length] || geo.iconArt[0];
     return `<img class="hex-geo-glyph hex-geo-glyph-img" src="./assets/hexcrawl-icons/${esc(file)}" alt="" style="width:${HEX_GEO_GLYPH_SIZE.toFixed(1)}px;height:${HEX_GEO_GLYPH_SIZE.toFixed(1)}px">`;
   }
+  if (geo.svgArt) {
+    return `<svg class="hex-geo-glyph hex-geo-glyph-svg" width="${HEX_GEO_GLYPH_SIZE.toFixed(1)}" height="${HEX_GEO_GLYPH_SIZE.toFixed(1)}" viewBox="-32 -32 64 64">${geo.svgArt}</svg>`;
+  }
   return `<span class="hex-geo-glyph" style="font-size:${HEX_GEO_GLYPH_SIZE.toFixed(1)}px">${geo.glyph}</span>`;
+}
+
+// Direct follow-up request: "Use a dropdown to select Geography,
+// Encounters and Overlays instead of a list of buttons. Default to
+// 'Select' and when one of the options is selected, it is considered
+// active for applying to hexes. Include the icon as part of the text in
+// the dropdown if able." A plain <option> can only ever hold text, so
+// this always uses `glyph` (every catalog entry has one, even the ones
+// with a real iconArt/svgArt for their whole-hex Geography paint) rather
+// than the pen-and-ink art those entries render on the map itself.
+function hexcrawlOptionsHtml(items, armedLayer, armed) {
+  return items.map((i) => `<option value="${esc(i.key)}" ${armed && armed.layer === armedLayer && armed.key === i.key ? 'selected' : ''}>${i.glyph} ${esc(i.label)}</option>`).join('');
 }
 
 function hexcrawlPalette(ui) {
   const armed = ui.hexcrawlPlacingIcon;
-  const geoChips = HEXCRAWL_GEOGRAPHY_ICONS.map((i) => `
-    <button type="button" class="chip sm ${armed && armed.layer === 'geography' && armed.key === i.key ? 'active' : ''}" data-hexcrawl-arm-geography="${esc(i.key)}" title="${esc(i.label)}">${i.glyph} ${esc(i.label)}</button>`).join('');
-  const threatChips = HEXCRAWL_THREAT_ICONS.map((i) => `
-    <button type="button" class="chip sm ${armed && armed.layer === 'threat' && armed.key === i.key ? 'active' : ''}" data-hexcrawl-arm-threat="${esc(i.key)}" title="${esc(i.label)}">${i.glyph} ${esc(i.label)}</button>`).join('');
+  const geoArmed = armed && armed.layer === 'geography';
+  const threatArmed = armed && armed.layer === 'threat';
+  const overlayArmed = armed && (armed.layer === 'river' || armed.layer === 'lake');
+  // Direct follow-up request: "Change the 'Threats' to 'Encounters'... The
+  // user adds encounters by clicking the encounter icon and then the hex,
+  // not the corner it would be placed. The encounter icon will populate
+  // the first open corner starting with the top right and going
+  // clockwise" — corners are no longer a manual pick-a-slot target.
+  // Direct follow-up request: River/Lake — an overlay pair independent of
+  // Geography (which can still be repainted underneath either without
+  // disturbing them). River is armed the same way as Geography/Encounters
+  // but placed via the hex's 6 EDGES (data-hex-edge, shell.js), not the
+  // hex body or its corners; Lake places/removes with a plain hex click
+  // like Geography does.
+  // Direct follow-up request: "Put Geography, Encounters and Overlays as
+  // side-by-side columns with vertical lines between to separate them.
+  // Move the guidance in () to a mouse over tooltip" — each category's own
+  // usage guidance now lives only in that label's own title attribute.
+  // LATER direct follow-up request: "The Encounters dropdown should be a
+  // Locations list and not encounters. There can be many encounters at a
+  // location" — this column is user-facing "Locations" from here on
+  // (label text + tooltip only); the underlying catalog (HEXCRAWL_THREAT_
+  // ICONS, unchanged per that same request — a Monster Lair or hazard site
+  // is itself a place on the map, same as a Town or Keep) and the
+  // corner-links-to-a-Conflict-entity mechanism are both unchanged, since
+  // a single map corner (one place) can host several distinct encounters
+  // over time as separate Conflict entities related to it.
   return `
-    <div class="hexcrawl-palette-row"><span class="dim small">Geography (click a hex to paint)</span>${geoChips}</div>
-    <div class="hexcrawl-palette-row"><span class="dim small">Threats (click one of a hex's 6 corners)</span>${threatChips}</div>`;
+    <div class="hexcrawl-palette-col">
+      <span class="dim small" title="Select a Geography, then click a hex to paint it">Geography</span>
+      <select data-hexcrawl-select-geography>
+        <option value="" ${!geoArmed ? 'selected' : ''}>Select</option>
+        ${hexcrawlOptionsHtml(HEXCRAWL_GEOGRAPHY_ICONS, 'geography', armed)}
+      </select>
+    </div>
+    <div class="hexcrawl-palette-col">
+      <span class="dim small" title="Select a Location, then click a hex — fills the next open corner, clockwise from top-right. With a Location armed, clicking an already-filled corner instead prompts to remove it.">Locations</span>
+      <select data-hexcrawl-select-threat>
+        <option value="" ${!threatArmed ? 'selected' : ''}>Select</option>
+        ${hexcrawlOptionsHtml(HEXCRAWL_THREAT_ICONS, 'threat', armed)}
+      </select>
+    </div>
+    <div class="hexcrawl-palette-col">
+      <span class="dim small" title="River: click one border, then another, to draw a segment between them; keeps going into the next hex, and clicking an existing line prompts to remove it. Lake: click a hex to add one, or again for a new shape; remove from the Hex Detail panel.">Overlays</span>
+      <select data-hexcrawl-select-overlay>
+        <option value="" ${!overlayArmed ? 'selected' : ''}>Select</option>
+        <option value="river" ${armed && armed.layer === 'river' ? 'selected' : ''}>🏞️ River</option>
+        <option value="lake" ${armed && armed.layer === 'lake' ? 'selected' : ''}>🫧 Lake</option>
+      </select>
+    </div>`;
 }
 
 function hexcrawlGrid(doc, mapId, ui) {
   const range = ui.hexcrawlRange || { qMin: -8, qMax: 8, rMin: -8, rMax: 8 };
+  const riverToolArmed = !!(ui.hexcrawlPlacingIcon && ui.hexcrawlPlacingIcon.layer === 'river');
+  const threatToolArmed = !!(ui.hexcrawlPlacingIcon && ui.hexcrawlPlacingIcon.layer === 'threat');
   const cells = [];
   for (let r = range.rMin; r <= range.rMax; r++) {
     for (let q = range.qMin; q <= range.qMax; q++) {
@@ -4438,9 +4822,16 @@ function hexcrawlGrid(doc, mapId, ui) {
       const geo = hex.geography ? findHexcrawlGeography(hex.geography) : null;
       const loc = hex.locationEntityId ? getEntity(doc, hex.locationEntityId) : null;
       const locThumb = loc && loc.thumbnailId ? getGalleryImage(doc, loc.thumbnailId) : null;
+      // Direct follow-up request: a Location's own picked locationTypeIcon
+      // (entityLocationTypeIconPickerHtml, 5LFB-only) renders here as a
+      // fallback UNDER a real Gallery thumbnail but ABOVE the plain
+      // initial-letter fallback.
+      const locTypeIcon = loc && !locThumb && loc.locationTypeIcon ? findLocationTypeIcon(loc.locationTypeIcon) : null;
       const centerHtml = loc
         ? `<button type="button" class="hex-center hex-center-filled" data-hex-center="${esc(mapId)}::${q}::${r}" title="${esc(loc.name || 'Unnamed')}">
-            ${locThumb ? `<img class="hex-center-img" src="${esc(locThumb.dataUrl)}" alt="">` : `<span class="hex-center-fallback">${esc((loc.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`}
+            ${locThumb ? `<img class="hex-center-img" src="${esc(locThumb.dataUrl)}" alt="">`
+              : locTypeIcon ? `<span class="hex-center-type-icon" title="${esc(locTypeIcon.label)}">${locTypeIcon.glyph}</span>`
+              : `<span class="hex-center-fallback">${esc((loc.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`}
           </button>`
         : `<button type="button" class="hex-center hex-center-empty" data-hex-center="${esc(mapId)}::${q}::${r}" title="Link a Location">＋</button>`;
       // .hex-vertex buttons are DOM siblings of .hex-cell (see the CSS
@@ -4451,7 +4842,49 @@ function hexcrawlGrid(doc, mapId, ui) {
         const threatKey = hex.threats[i];
         const t = threatKey ? findHexcrawlThreat(threatKey) : null;
         const vx = (center.x + p.x).toFixed(1); const vy = (center.y + p.y).toFixed(1);
-        return `<button type="button" class="hex-vertex ${t ? 'hex-vertex-filled' : ''}" data-hex-vertex="${esc(mapId)}::${q}::${r}::${i}" style="left:${vx}px;top:${vy}px" title="${t ? esc(t.label) : 'Empty'}">${t ? t.glyph : ''}</button>`;
+        // Direct follow-up request: "Revise the encounter buttons/icons to
+        // add a clickable link to each encounter and map it to a Conflict
+        // entity record (or option to add a new one) similar to how
+        // Location works" — a filled corner now opens (or offers to link)
+        // a Conflict entity, same posture as the hex CENTER's own Location
+        // link; removal moved to the Hex Detail panel's own "✕ Clear" per
+        // row (same split Lake already uses: map click only ever adds/
+        // links, Hex Detail is where you remove).
+        const linkedConflictId = t ? hex.vertexConflicts[i] : null;
+        const linkedConflict = linkedConflictId ? getEntity(doc, linkedConflictId) : null;
+        const title = !t ? '' : threatToolArmed ? `${esc(t.label)} — click to remove`
+          : linkedConflict ? `${esc(t.label)} — ${esc(linkedConflict.name || 'Unnamed')} (click to open)` : `${esc(t.label)} — click to link a Conflict`;
+        return `<button type="button" class="hex-vertex ${t ? 'hex-vertex-filled' : ''}" data-hex-vertex="${esc(mapId)}::${q}::${r}::${i}" style="left:${vx}px;top:${vy}px" title="${title}">${t ? t.glyph : ''}</button>`;
+      }).join('');
+      // Direct follow-up request (river feature): "clicking one side/
+      // border of the hex and then another." Edge buttons are DOM
+      // siblings of .hex-cell too, same world-space positioning
+      // convention as .hex-vertex above, but at each edge's own midpoint
+      // (hexEdgeMidpoints) instead of a corner — no inset needed (unlike
+      // vertices, they don't need to dodge the clip-path'd corner cut-off,
+      // since an edge midpoint already sits well inside the shape).
+      const riverStart = ui.hexcrawlRiverStart;
+      const edgeHtml = hexEdgeMidpoints(HEX_SIZE).map((p, i) => {
+        const ex = (center.x + p.x).toFixed(1); const ey = (center.y + p.y).toFixed(1);
+        // Direct bug report: "when clicking a river end point and then
+        // clicking another edge, no river is inserted." Root cause: every
+        // border is a physical edge of TWO hexes, and this loop renders
+        // it TWICE — once from each side — perfectly overlapping on
+        // screen. An earlier fix that picked ONE "canonical" owner per
+        // border broke a DIFFERENT way: it could split a single hex's 6
+        // borders across different owning hexes independently, so two
+        // clicks the GM intended as "two edges of the SAME hex" could
+        // resolve to two DIFFERENT unrelated hexes. The real fix: each
+        // button now carries BOTH hexes that physical border could mean
+        // (itself, q,r,i — and its neighbor across that edge, via
+        // edgeNeighbor) instead of picking a winner. shell.js's
+        // placeRiverEdgeClick resolves the ACTUAL target hex by finding
+        // whichever hex is common between the two clicks' own candidate
+        // pairs, so it's correct regardless of which of the two
+        // overlapping buttons the browser happens to hit.
+        const nb = edgeNeighbor(q, r, i);
+        const isPendingStart = riverStart && riverStart.candidates && riverStart.candidates.some((c) => (c.q === q && c.r === r && c.edge === i) || (c.q === nb.q && c.r === nb.r && c.edge === nb.edge));
+        return `<button type="button" class="hex-edge ${isPendingStart ? 'hex-edge-pending' : ''}" data-hex-edge="${esc(mapId)}::${q}::${r}::${i}::${nb.q}::${nb.r}::${nb.edge}" style="left:${ex}px;top:${ey}px" title="${isPendingStart ? 'River starts here — click another border to finish this segment' : ''}"></button>`;
       }).join('');
       const cellLeft = (center.x - HEX_W / 2).toFixed(1); const cellTop = (center.y - HEX_H / 2).toFixed(1);
       const active = ui.hexcrawlSelectedHex && ui.hexcrawlSelectedHex.q === q && ui.hexcrawlSelectedHex.r === r;
@@ -4461,15 +4894,35 @@ function hexcrawlGrid(doc, mapId, ui) {
       // div below), and the actual clip-path'd click target (kept for
       // correct hex-shaped hit-testing — a click on this div's own
       // transparent, clipped-away rectangle corners never fires at all).
+      // The Lake circle and River paths (direct follow-up request) render
+      // in this SAME svg, in LOCAL box-space (HEX_EDGE_MIDPOINTS_LOCAL,
+      // not world-space) — above the Geography polygon fill, below the
+      // actual .hex-cell click target/center icon that follow, same
+      // "overlay independent of the terrain underneath" layering the
+      // request itself describes.
+      const shapeCx = HEX_W / 2; const shapeCy = HEX_H / 2;
+      // Direct bug report: "the river anchor / selector is not working
+      // consistently" — root cause was DOM order: .hex-edge buttons used
+      // to render BEFORE .hex-cell, so .hex-cell (painted on top,
+      // covering almost the whole hex via its own clip-path) silently
+      // swallowed most edge clicks before they ever reached the button
+      // underneath. Edges now render AFTER .hex-cell, same position in
+      // the stacking order as .hex-vertex, which never had this problem.
+      // The river hit-path svg (hexRiverHitSvgHtml) has the identical
+      // requirement and moves for the identical reason.
       cells.push(`
         <svg class="hex-shape" style="left:${cellLeft}px;top:${cellTop}px" width="${HEX_W.toFixed(1)}" height="${HEX_H.toFixed(1)}">
           <polygon points="${HEX_SVG_POINTS}" fill="${geo ? geo.color : 'var(--hex-default-fill)'}" class="hex-shape-outline ${active ? 'active' : ''}" />
+          ${hexLakeSvgHtml(hex, shapeCx, shapeCy)}
+          ${hexRiverSvgHtml(doc, mapId, q, r, hex, shapeCx, shapeCy)}
         </svg>
         <div class="hex-cell" style="left:${cellLeft}px;top:${cellTop}px;width:${HEX_W.toFixed(1)}px;height:${HEX_H.toFixed(1)}px;clip-path:${HEX_CLIP_PATH}"
              data-hex-select="${esc(mapId)}::${q}::${r}">
           ${geo ? hexGeoGlyphHtml(geo, hex.geoVariant) : ''}
           ${centerHtml}
         </div>
+        ${riverToolArmed ? `<svg class="hex-shape hex-river-hit-layer" style="left:${cellLeft}px;top:${cellTop}px" width="${HEX_W.toFixed(1)}" height="${HEX_H.toFixed(1)}">${hexRiverHitSvgHtml(doc, mapId, q, r, hex, shapeCx, shapeCy, riverToolArmed)}</svg>` : ''}
+        ${edgeHtml}
         ${vertexHtml}`);
     }
   }
@@ -4481,11 +4934,23 @@ function hexDetailPanel(doc, mapId, ui) {
   if (!sel) return '';
   const hex = getHex(doc, mapId, sel.q, sel.r);
   const loc = hex.locationEntityId ? getEntity(doc, hex.locationEntityId) : null;
-  const threatRows = hex.threats.map((threatKey, i) => {
+  // Rows shown in ENCOUNTER_VERTEX_ORDER's own narrative sequence (top-right,
+  // clockwise — "the sequence the encounters are experienced in the hex,"
+  // direct follow-up request), not raw array index order, even though the
+  // clear button still addresses the real vertex index underneath.
+  // Direct follow-up request: "add a clickable link to each encounter and
+  // map it to a Conflict entity record... similar to how Location works"
+  // — the linked Conflict (if any) shows as a real chip here too, same
+  // discoverability the Location row above already has, alongside the
+  // vertex button's own click-to-open on the map itself.
+  const threatRows = ENCOUNTER_VERTEX_ORDER.map((i, seq) => {
+    const threatKey = hex.threats[i];
     const t = threatKey ? findHexcrawlThreat(threatKey) : null;
+    const linkedConflict = t && hex.vertexConflicts[i] ? getEntity(doc, hex.vertexConflicts[i]) : null;
     return `<div class="hex-detail-threat-row">
-      <span class="dim small">Corner ${i + 1}</span>
+      <span class="dim small">Location ${seq + 1}</span>
       <span>${t ? `${t.glyph} ${esc(t.label)}` : '—'}</span>
+      ${linkedConflict ? `<button type="button" class="chip sm" data-open-entity="${esc(linkedConflict.id)}">${esc(linkedConflict.name || 'Unnamed')}</button>` : ''}
       ${t ? `<button type="button" class="icon-btn" data-hex-detail-threat-clear="${esc(mapId)}::${sel.q}::${sel.r}::${i}" title="Clear">✕</button>` : ''}
     </div>`;
   }).join('');
@@ -4506,7 +4971,17 @@ function hexDetailPanel(doc, mapId, ui) {
               <button type="button" class="icon-btn" data-hex-detail-location-clear="${esc(mapId)}::${sel.q}::${sel.r}" title="Unlink">✕</button></div>`
           : `<button type="button" class="btn ghost sm" data-hex-detail-location-pick="${esc(mapId)}::${sel.q}::${sel.r}">＋ Link Location</button>`}
       </div>
-      <div class="field-label">Threats (6 corners)${threatRows}</div>
+      <div class="field-label">Locations (6 corners)${threatRows}</div>
+      <div class="field-label">Lake
+        ${hex.lake
+          ? `<button type="button" class="btn ghost sm" data-hex-detail-lake-clear="${esc(mapId)}::${sel.q}::${sel.r}">Remove Lake</button>`
+          : `<button type="button" class="btn ghost sm" data-hex-detail-lake-add="${esc(mapId)}::${sel.q}::${sel.r}">＋ Add Lake</button>`}
+      </div>
+      <div class="field-label">Rivers (${hex.rivers.length} segment${hex.rivers.length === 1 ? '' : 's'})
+        ${hex.rivers.length
+          ? `<button type="button" class="btn ghost sm" data-hex-detail-rivers-clear="${esc(mapId)}::${sel.q}::${sel.r}">Clear rivers on this hex</button>`
+          : '<span class="dim small">None yet — arm the River tool and click two of this hex\'s borders.</span>'}
+      </div>
       <label class="field-label">Notes
         <textarea rows="3" data-hex-detail-notes="${esc(mapId)}::${sel.q}::${sel.r}" placeholder="Notes…">${esc(hex.notes || '')}</textarea>
       </label>
@@ -4518,8 +4993,14 @@ function hexcrawl(doc, ui = {}) {
   const maps = listHexMaps(doc);
   const active = getActiveHexMap(doc);
 
-  const head = `${sectionHeadRow('h3', 'Hexcrawl', helpKey)}
-    ${helpBody(helpKey, "Pick a Geography or Threat icon below, then click a hex (Geography) or one of its 6 corners (Threats) to paint it. Click a hex's center to link a Location entity — click it again to open that entity. Click anywhere else on a hex to see/edit its details below the map. Scroll to pan, wheel to zoom.", ui)}
+  // Direct follow-up request: "remove the subtitle 'Hexcrawl' below the
+  // section header" — this panel's own h3 used to repeat the drawer
+  // chrome's own <h2 data-drawer-title> ("Hexcrawl"), reading as a
+  // pointless duplicate (unlike Battlemap's own equivalent title, which
+  // says something the drawer chrome doesn't: "Planetfall Grid
+  // Battlemap"). Keeps just the help toggle.
+  const head = `<div class="section-head-row"><span class="entity-chip-row">${helpToggle(helpKey)}</span></div>
+    ${helpBody(helpKey, "Pick a Geography or Location icon below, then click a hex to paint it — a Location icon fills the next open corner automatically and offers to link (or create) a Conflict entity for the encounter that happens there, since one place can see many encounters over time. River: click one border, then another, to draw a segment between them; it keeps going into the next hex, and clicking an existing river line prompts to remove it. Lake: click a hex to add one, or click again for a new shape — rivers can connect to it from any border; remove one from the Hex Detail panel. Click a hex's center to link a Location entity — click it again to open that entity. Click anywhere else on a hex to see/edit its details below the map. Scroll to pan, wheel to zoom.", ui)}
     <div class="battlemap-tabs">
       ${maps.map((m) => `<button type="button" class="btn ghost sm ${active && active.id === m.id ? 'active' : ''}" data-hexcrawl-select="${esc(m.id)}">${esc(m.name)}</button>`).join('')}
       <button type="button" class="chip sm" data-hexcrawl-add>＋ New Map</button>
@@ -4530,7 +5011,8 @@ function hexcrawl(doc, ui = {}) {
   const cam = ui.hexcrawlCamera || { scale: 1, x: 0, y: 0 };
   return `${head}
     <div class="battlemap-toolbar">
-      <input class="battlemap-name-input" data-hexcrawl-rename="${esc(active.id)}" value="${esc(active.name)}" placeholder="Map name">
+      <span class="hexcrawl-map-name">${esc(active.name)}</span>
+      <button type="button" class="icon-btn" data-hexcrawl-rename-open="${esc(active.id)}" title="Rename map">✎</button>
       <button type="button" class="icon-btn" data-hexcrawl-remove="${esc(active.id)}" title="Delete this map" aria-label="Delete map">✕</button>
       <span class="battlemap-camera-controls">
         <button type="button" class="icon-btn" data-hexcrawl-camera-zoom="out" title="Zoom out">－</button>

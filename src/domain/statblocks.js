@@ -261,6 +261,26 @@ export function removeStatblockGroup(entity, groupIndex) {
   return entity;
 }
 
+/** Direct follow-up request: "Add an up & down arrow... so it can be
+ *  reordered" — swaps a group with its immediate neighbor in the RAW
+ *  array, bounds-checked no-op past either end (same convention as
+ *  moveCrewTaskInList/moveCombatTrackerEntry elsewhere in this app).
+ *  sortStatblockGroups' own kind-rank grouping (character, then npc/
+ *  Bestiary, then vehicle) still governs which TIER a group displays in —
+ *  this only changes relative order WITHIN a tier, since Array.prototype
+ *  .sort is a stable sort and preserves whatever order this leaves things
+ *  in for two same-rank groups. */
+export function moveStatblockGroup(entity, groupIndex, direction) {
+  if (!entity || !Array.isArray(entity.statblocks)) return entity;
+  const groups = entity.statblocks;
+  const target = groupIndex + (direction === 'up' ? -1 : 1);
+  if (groupIndex < 0 || groupIndex >= groups.length || target < 0 || target >= groups.length) return entity;
+  const tmp = groups[groupIndex];
+  groups[groupIndex] = groups[target];
+  groups[target] = tmp;
+  return entity;
+}
+
 /** Sort order for displaying an entity's statblock groups: character sheets
  *  first (in Settings' ruleset registration order), then Bestiary/NPC groups
  *  (in Settings' template order), then vehicle. Returns `{group, index}`
