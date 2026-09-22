@@ -1503,6 +1503,16 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .hex-river-hit-layer { pointer-events: none; }
 .hex-river-hit { fill: none; stroke: transparent; stroke-width: 14; stroke-linecap: round; pointer-events: stroke; cursor: pointer; }
 .hex-river-hit:hover { stroke: rgba(255,255,255,0.25); }
+/* Direct follow-up request: "Create a road overlay that duplicates the
+   river functionality using a brown line for a road that connects to
+   locations, not lakes or oceans" — same layering/hit-test posture as
+   .hex-river/.hex-river-hit(-layer) just above, brown instead of blue, no
+   .hex-river-mouth equivalent (roads never widen at an ocean, they only
+   ever end at a border or a hex's own Location). */
+.hex-road { fill: none; stroke: #8a5a2b; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.hex-road-hit-layer { pointer-events: none; }
+.hex-road-hit { fill: none; stroke: transparent; stroke-width: 14; stroke-linecap: round; pointer-events: stroke; cursor: pointer; }
+.hex-road-hit:hover { stroke: rgba(255,255,255,0.25); }
 
 /* World Tracker (requirements/PLANETFALL_world_tracker.md) — a fixed,
    small integer grid, so plain CSS grid + flat buttons is enough; no
@@ -2720,13 +2730,19 @@ input[type="number"] { -moz-appearance: textfield; }
    follow-up request) — visually distinguished from a plain existing-entity
    candidate below it, so rolling up a brand new creature never reads as
    picking one already named that. */
-.entity-picker-row-create { color: var(--accent-strong); font-weight: 600; border-bottom: 1px solid var(--border); margin-bottom: 0.2rem; padding-bottom: 0.6rem; }
+.entity-picker-row-create { color: var(--accent-strong); font-weight: 600; }
 /* Direct follow-up request: "remove link to this [entity type]" — the
    Hexcrawl pickers' own escape hatch for backing out of a placed-but-
    unlinked map icon, styled like .entity-picker-row-create's own standout
    treatment but in the danger color instead of the accent, so it doesn't
-   get mistaken for another candidate in the list. */
-.entity-picker-row-remove { color: var(--danger); border-top: 1px solid var(--border); margin-top: 0.2rem; padding-top: 0.6rem; }
+   get mistaken for another candidate in the list. LATER direct follow-up
+   request: "move the 'X remove link to [entity type]' to the same row as
+   the 'Create new [entity type]'" — .entity-picker-row-pair (below) is
+   what puts them side by side; the divider that used to live on each
+   button's own border now lives on the pair wrapper instead. */
+.entity-picker-row-remove { color: var(--danger); }
+.entity-picker-row-pair { display: flex; gap: var(--sp-2); border-bottom: 1px solid var(--border); margin-bottom: 0.2rem; padding-bottom: 0.6rem; }
+.entity-picker-row-pair .entity-picker-row { flex: 1 1 0; width: auto; text-align: center; }
 
 /* Turn Step widget (Colony) + Step Text row (design/adr/rules-profiles-
    multi-campaign.md) */

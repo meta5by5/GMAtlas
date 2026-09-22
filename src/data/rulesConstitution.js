@@ -172,6 +172,25 @@ export function providerLabel(id) {
   return p ? p.label : id;
 }
 
+/** The genrePackId belonging to whichever RULES_PROVIDERS entry's own
+ *  `rulesetId` matches (e.g. 'fiveleagues' -> the 'fiveleagues' Game
+ *  System entry's genrePackId, 'fantasy') — null if no entry claims that
+ *  ruleset id. Direct follow-up report: "The scifi oracles should not be
+ *  visible to the fantasy (generic) genre and vice versa. I can see all
+ *  the scifi oracles in the current campaign linked to Five Leagues
+ *  ruleset" — root cause was that Settings' "Default ruleset" and "Genre
+ *  Pack" dropdowns write two fully independent profile.ruleset fields
+ *  (statRuleset/genrePack); picking a ruleset never touched genrePack, so
+ *  an old/default genrePack value could easily linger. shell.js's own
+ *  data-settings-stat-ruleset handler uses this to keep them in sync by
+ *  default going forward — a GM can still override Genre Pack afterward
+ *  for a deliberate mismatch, since this only fires on a ruleset CHANGE,
+ *  not on every render. */
+export function genrePackIdForRuleset(rulesetId) {
+  const entry = Object.values(RULES_PROVIDERS).find((p) => p.rulesetId === rulesetId);
+  return entry ? entry.genrePackId : null;
+}
+
 /** The GM's chosen provider for a gameplay area — `settings.
  *  rulesProviderChoices[areaId]` if explicitly set, else that area's own
  *  first-listed provider (preserves current behavior for a campaign that

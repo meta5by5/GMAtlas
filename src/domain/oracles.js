@@ -272,14 +272,23 @@ function buildOracleNode(node, path) {
 }
 
 /** The full tree, top-level keys folded into ORACLE_GROUPS categories (any
- *  key not listed in a category lands under an automatic "Other" bucket). */
+ *  key not listed in a category lands under an automatic "Other" bucket).
+ *  A `children` entry is normally a plain string (used as both the real
+ *  data key AND the displayed label) but may instead be a `{key, label}`
+ *  object when a genre pack (data/oracleGroups.js's ORACLE_GROUPS_FANTASY)
+ *  wants to rename what's SHOWN without touching the real key anything
+ *  else (roll dispatch, search, code that looks a table up by its stable
+ *  name) still keys off. */
 export function buildGroupedOracleTree(tables, groups = ORACLE_GROUPS) {
   const used = new Set();
   const categories = groups.map((g) => {
-    const children = g.children.filter((k) => tables[k] && typeof tables[k] === 'object').map((k) => {
-      used.add(k);
-      return { kind: 'group', label: k, path: [k], children: buildOracleNode(tables[k], [k]) };
-    });
+    const children = g.children
+      .map((c) => (typeof c === 'string' ? { key: c, label: c } : c))
+      .filter((c) => tables[c.key] && typeof tables[c.key] === 'object')
+      .map((c) => {
+        used.add(c.key);
+        return { kind: 'group', label: c.label, path: [c.key], children: buildOracleNode(tables[c.key], [c.key]) };
+      });
     return { kind: 'category', label: g.label, children };
   }).filter((g) => g.children.length);
 

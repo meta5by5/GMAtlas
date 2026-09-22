@@ -53,6 +53,7 @@ import {
   setHexGeography, setHexLocation, clearHexLocation, setHexThreat, clearHexThreat, setHexNotes,
   axialToPixel, pixelToAxial, HEX_SIZE, nextOpenThreatVertex,
   addHexRiverSegment, clearHexRivers, removeHexRiverSegment, setHexLake, edgeNeighbor,
+  addHexRoadSegment, clearHexRoads, removeHexRoadSegment,
   setHexVertexConflict, clearHexVertexConflict,
 } from '../domain/hexcrawls.js';
 import { findHexcrawlThreat } from '../data/hexcrawlIcons.js';
@@ -107,6 +108,7 @@ import { roll3d } from './diceBox3d.js';
 import { renderSearchPanel } from './searchPanel.js';
 import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
 import { isModuleVisible, setModuleEnabled, setStoryboardPosition, updateProfileRuleset, applyProfileDraft, resolvePositionContentId } from '../domain/rulesProfiles.js';
+import { genrePackIdForRuleset } from '../data/rulesConstitution.js';
 import { DRAWER_META, drawerMeta } from './drawerMeta.js';
 import { moveTurnStepInList, updateTurnStepText, setTurnStepShowCrewTasks, loadDefaultIntoTurnStepList, renameTurnStepList, deleteTurnStepList, addTurnStepGroup, renameTurnStepGroup, addTurnStepToGroup, moveTurnStepToGroup, setTurnStepBranchTo } from '../domain/turnStepLists.js';
 import { getCurrentTurnStep, advanceTurnStep, retreatTurnStep, startNextColonyCampaignTurn, startNextStarshipCampaignTurn, startNextWarbandCampaignTurn } from '../domain/turnSteps.js';
@@ -462,8 +464,8 @@ let battlemapCamera = { scale: 1, x: 0, y: 0 };
 let battlemapPan = null; // { world, startClientX, startClientY, startX, startY } while a drag-pan is in progress
 // Hexcrawl — same ephemeral camera/pan/armed-icon shape as Battlemap's own
 // above, generalized to a real-pixel (not 0-1-fraction) unbounded plane.
-// hexcrawlPlacingIcon is { layer: 'geography'|'threat'|'river'|'lake', key }
-// or null ('river'/'lake' carry no key — there's only one of each tool).
+// hexcrawlPlacingIcon is { layer: 'geography'|'threat'|'river'|'lake'|'road', key }
+// or null ('river'/'lake'/'road' carry no key — there's only one of each tool).
 let hexcrawlPlacingIcon = null;
 let hexcrawlCamera = { scale: 1, x: 0, y: 0 };
 let hexcrawlPan = null;
@@ -490,6 +492,14 @@ let hexcrawlSuppressNextClick = false;
 // anything — see placeRiverEdgeClick's own doc comment. Cleared whenever
 // the River tool itself is disarmed/re-armed, or a map switch happens.
 let hexcrawlRiverStart = null;
+// Direct follow-up request: "Create a road overlay that duplicates the
+// river functionality using a brown line for a road that connects to
+// locations, not lakes or oceans" — same shape/lifecycle as
+// hexcrawlRiverStart just above, for the Road tool's own in-progress
+// segment; River and Road are mutually exclusive armed tools (only one
+// hexcrawlPlacingIcon at a time), so at most one of these two is ever
+// non-null.
+let hexcrawlRoadStart = null;
 // Which hex's own detail panel is currently shown below the canvas (null
 // = none) — same "click a cell, see/edit it below" shape as World
 // Tracker's own worldTrackerSelectedSector.
@@ -1746,6 +1756,12 @@ function onClick(ev) {
     if (!window.confirm('Clear every river segment on this hex? This cannot be undone.')) return;
     return store.update((d) => clearHexRivers(d, mapId, Number(q), Number(r)));
   }
+  const hexDetailRoadsClear = hit('[data-hex-detail-roads-clear]');
+  if (hexDetailRoadsClear) {
+    const [mapId, q, r] = hexDetailRoadsClear.dataset.hexDetailRoadsClear.split('::');
+    if (!window.confirm('Clear every road segment on this hex? This cannot be undone.')) return;
+    return store.update((d) => clearHexRoads(d, mapId, Number(q), Number(r)));
+  }
   const hexDetailLocationPick = hit('[data-hex-detail-location-pick]');
   if (hexDetailLocationPick) {
     const [mapId, q, r] = hexDetailLocationPick.dataset.hexDetailLocationPick.split('::');
@@ -1780,6 +1796,15 @@ function onClick(ev) {
     const [mapId, q, r, index] = hexRiverEl.dataset.hexRiver.split('::');
     if (!window.confirm('Remove this river segment?')) return;
     return store.update((d) => removeHexRiverSegment(d, mapId, Number(q), Number(r), Number(index)));
+  }
+  // Same gesture, Road's own tool — direct follow-up request: "duplicates
+  // the river functionality." Only exists in the DOM while the Road tool
+  // is armed (hexcrawlGrid's own roadToolArmed check).
+  const hexRoadEl = hit('[data-hex-road]');
+  if (hexRoadEl) {
+    const [mapId, q, r, index] = hexRoadEl.dataset.hexRoad.split('::');
+    if (!window.confirm('Remove this road segment?')) return;
+    return store.update((d) => removeHexRoadSegment(d, mapId, Number(q), Number(r), Number(index)));
   }
 
   // A hex's 6 corners are no longer a manual PLACEMENT target (direct
@@ -1822,15 +1847,17 @@ function onClick(ev) {
     if (inp) { inp.value = ''; inp.focus(); }
     return;
   }
-  // A hex's 6 edges (direct follow-up request, river feature) — only ever
-  // meaningful while the River tool is armed; see placeRiverEdgeClick's
-  // own doc comment for the full two-click-plus-auto-continue flow.
+  // A hex's 6 edges (direct follow-up request, river feature; LATER direct
+  // follow-up request: "a road overlay that duplicates the river
+  // functionality") — only ever meaningful while the River or Road tool is
+  // armed; see placeRiverEdgeClick/placeRoadEdgeClick's own doc comments
+  // for the full two-click-plus-auto-continue flow each shares.
   const hexEdgeEl = hit('[data-hex-edge]');
   if (hexEdgeEl) {
-    if (!hexcrawlPlacingIcon || hexcrawlPlacingIcon.layer !== 'river') return;
+    if (!hexcrawlPlacingIcon || (hexcrawlPlacingIcon.layer !== 'river' && hexcrawlPlacingIcon.layer !== 'road')) return;
     const [mapId, q1, r1, e1, q2, r2, e2] = hexEdgeEl.dataset.hexEdge.split('::');
     const candidates = [{ q: Number(q1), r: Number(r1), edge: Number(e1) }, { q: Number(q2), r: Number(r2), edge: Number(e2) }];
-    return placeRiverEdgeClick(mapId, candidates);
+    return hexcrawlPlacingIcon.layer === 'road' ? placeRoadEdgeClick(mapId, candidates) : placeRiverEdgeClick(mapId, candidates);
   }
   // A hex's own center: an armed Geography or Lake icon still paints/places
   // via a click here (center is just another point inside the cell while
@@ -1898,7 +1925,7 @@ function onClick(ev) {
   }
   const hexSelect = hit('[data-hexcrawl-select]');
   if (hexSelect) {
-    hexcrawlCamera = { scale: 1, x: 0, y: 0 }; hexcrawlSelectedHex = null; hexcrawlPlacingIcon = null; hexcrawlRiverStart = null;
+    hexcrawlCamera = { scale: 1, x: 0, y: 0 }; hexcrawlSelectedHex = null; hexcrawlPlacingIcon = null; hexcrawlRiverStart = null; hexcrawlRoadStart = null;
     return store.update((d) => setActiveHexMap(d, hexSelect.dataset.hexcrawlSelect));
   }
   const hexCameraReset = hit('[data-hexcrawl-camera-reset]');
@@ -4775,13 +4802,13 @@ function onChange(ev) {
   const hexSelectThreat = t.closest('[data-hexcrawl-select-threat]');
   if (hexSelectThreat) {
     hexcrawlPlacingIcon = t.value ? { layer: 'threat', key: t.value } : null;
-    hexcrawlRiverStart = null;
+    hexcrawlRiverStart = null; hexcrawlRoadStart = null;
     return renderDrawerBody();
   }
   const hexSelectOverlay = t.closest('[data-hexcrawl-select-overlay]');
   if (hexSelectOverlay) {
     hexcrawlPlacingIcon = t.value ? { layer: t.value } : null;
-    hexcrawlRiverStart = null;
+    hexcrawlRiverStart = null; hexcrawlRoadStart = null;
     return renderDrawerBody();
   }
   const hexDetailGeo = t.closest('[data-hex-detail-geography]');
@@ -5398,7 +5425,23 @@ function onChange(ev) {
   if (t.closest('[data-settings-stat-ruleset]')) {
     const profileId = currentEditingProfileId();
     const draft = getProfileDraft(profileId);
-    if (draft) setProfileDraft(profileId, updateProfileRuleset(draft, { statRuleset: t.value }));
+    // Direct follow-up report: "The scifi oracles should not be visible to
+    // the fantasy (generic) genre and vice versa. I can see all the scifi
+    // oracles in the current campaign linked to Five Leagues ruleset."
+    // Genre Pack and Default ruleset used to be two fully independent
+    // fields — picking a ruleset here never touched genrePack, so it could
+    // easily stay pointed at whatever pack was active before. Now defaults
+    // Genre Pack to this ruleset's own declared match (genrePackIdForRuleset,
+    // rulesConstitution.js) at the same time, same values the seeded
+    // "Five Leagues (Storyboard)"/"D&D 5e (Storyboard)" profiles already
+    // set together — a GM can still pick a different Genre Pack afterward
+    // for a deliberate mismatch, since this only fires on a ruleset change.
+    if (draft) {
+      const patch = { statRuleset: t.value };
+      const matchedPack = genrePackIdForRuleset(t.value);
+      if (matchedPack) patch.genrePack = matchedPack;
+      setProfileDraft(profileId, updateProfileRuleset(draft, patch));
+    }
     return render();
   }
   if (t.closest('[data-settings-party-headline-fields]')) {
@@ -6709,6 +6752,46 @@ function placeRiverEdgeClick(mapId, candidates) {
   return renderDrawerBody();
 }
 
+/** Direct follow-up request: "Create a road overlay that duplicates the
+ *  river functionality using a brown line for a road that connects to
+ *  locations, not lakes or oceans." Mirrors placeRiverEdgeClick above
+ *  line for line — the only substitutions are hexcrawlRoadStart for
+ *  hexcrawlRiverStart, addHexRoadSegment for addHexRiverSegment, and
+ *  "this candidate hex has a linked Location" (locationEntityId) in place
+ *  of "this candidate hex has a lake," with the 'location' sentinel
+ *  standing in for 'lake'. See placeRiverEdgeClick's own doc comment for
+ *  the full two-click-plus-auto-continue flow this shares. */
+function placeRoadEdgeClick(mapId, candidates) {
+  const locationCandidate = candidates.find((c) => getHex(store.get(), mapId, c.q, c.r).locationEntityId);
+  const start = hexcrawlRoadStart;
+  if (start) {
+    for (const s of start.candidates) {
+      const c = candidates.find((x) => x.q === s.q && x.r === s.r);
+      if (!c) continue;
+      if (c.edge === s.edge) { hexcrawlRoadStart = null; return renderDrawerBody(); }
+      store.update((d) => addHexRoadSegment(d, mapId, s.q, s.r, s.edge, c.edge));
+      const nb = edgeNeighbor(s.q, s.r, c.edge);
+      const nbHex = getHex(store.get(), mapId, nb.q, nb.r);
+      if (nbHex.locationEntityId) {
+        store.update((d) => addHexRoadSegment(d, mapId, nb.q, nb.r, nb.edge, 'location'));
+        hexcrawlRoadStart = null;
+      } else {
+        hexcrawlRoadStart = { mapId, candidates: [{ q: s.q, r: s.r, edge: c.edge }, { q: nb.q, r: nb.r, edge: nb.edge }] };
+      }
+      return renderDrawerBody();
+    }
+    // No common hex with the pending start — abandon it, fall through to
+    // treat this click as a fresh first click instead.
+  }
+  if (locationCandidate) {
+    store.update((d) => addHexRoadSegment(d, mapId, locationCandidate.q, locationCandidate.r, locationCandidate.edge, 'location'));
+    hexcrawlRoadStart = null;
+    return renderDrawerBody();
+  }
+  hexcrawlRoadStart = { mapId, candidates };
+  return renderDrawerBody();
+}
+
 /** Same cursor-anchored rescale math as zoomBattlemapCamera — clamped to
  *  [0.35, 3] rather than Battlemap's [0.5, 6]: at HEX_SIZE=44px (drawers/
  *  index.js), scale 1 shows roughly a 10-hex-wide view in a typical drawer
@@ -7280,7 +7363,7 @@ function commitInlinePrompt() {
   } else if (kind === 'battlemap-add') {
     store.update((d) => createBattlemap(d, value).campaign);
   } else if (kind === 'hexcrawl-add') {
-    hexcrawlCamera = { scale: 1, x: 0, y: 0 }; hexcrawlSelectedHex = null; hexcrawlPlacingIcon = null; hexcrawlRiverStart = null;
+    hexcrawlCamera = { scale: 1, x: 0, y: 0 }; hexcrawlSelectedHex = null; hexcrawlPlacingIcon = null; hexcrawlRiverStart = null; hexcrawlRoadStart = null;
     store.update((d) => createHexMap(d, value).campaign);
   } else if (kind === 'hexcrawl-rename') {
     store.update((d) => renameHexMap(d, meta.id, value));
@@ -8239,16 +8322,18 @@ function renderEntityPickerOverlay() {
   // Location entity, links it to this hex, and opens the Entity Editor —
   // mirrors the WHERE System section's own "create a new #system Location"
   // flow (data-where-add-location) almost exactly.
-  const createLocationBtn = entityPicker.entityType === 'hexcrawl-location'
-    ? `<button type="button" class="entity-picker-row entity-picker-row-create" data-hexcrawl-location-create>🗺️ Create New Location</button>`
-    : '';
   // Direct follow-up request: "Include a 'remove link to this [entity
   // type]' like this similarly for all other entity selection lists on the
-  // hexmap" — same row style as the create button above, one per hexmap
-  // picker type; data-hexcrawl-location-unlink/-vertex-conflict-unlink's
-  // own click handlers (above) do the actual clearing.
-  const unlinkLocationBtn = entityPicker.entityType === 'hexcrawl-location'
-    ? `<button type="button" class="entity-picker-row entity-picker-row-remove" data-hexcrawl-location-unlink>✕ Remove link to this Location</button>`
+  // hexmap," THEN a follow-up on that: "move the 'X remove link to [entity
+  // type]' to the same row as the 'Create new [entity type]'" — paired
+  // side by side in one .entity-picker-row-pair (cockpit.css) instead of
+  // two stacked full-width rows; data-hexcrawl-location-unlink's own click
+  // handler (above) does the actual clearing.
+  const createLocationBtn = entityPicker.entityType === 'hexcrawl-location'
+    ? `<div class="entity-picker-row-pair">
+        <button type="button" class="entity-picker-row entity-picker-row-create" data-hexcrawl-location-create>🗺️ Create New Location</button>
+        <button type="button" class="entity-picker-row entity-picker-row-remove" data-hexcrawl-location-unlink>✕ Remove link</button>
+      </div>`
     : '';
   // Direct follow-up request: "add a clickable link to each encounter and
   // map it to a Conflict entity record (or option to add a new one)" —
@@ -8257,16 +8342,17 @@ function renderEntityPickerOverlay() {
   // protected tag") needs data-hexcrawl-vertex-conflict-create's own click
   // handler to tag the new Conflict with the encounter's own label, which
   // the generic flow has no hook for.
-  const createConflictBtn = entityPicker.entityType === 'hexcrawl-vertex-conflict'
-    ? `<button type="button" class="entity-picker-row entity-picker-row-create" data-hexcrawl-vertex-conflict-create>⚔️ Create New Conflict</button>`
-    : '';
   // Direct follow-up request: "add a 'remove link to conflict' option to
   // the conflict list similar to 'add conflict' if clicking on a populated
-  // conflict icon that is not tied to a conflict entity yet" — lets the GM
-  // back out of a placed-but-unlinked Encounter icon right from this same
-  // list instead of re-arming the Locations tool or opening Hex Detail.
-  const unlinkConflictBtn = entityPicker.entityType === 'hexcrawl-vertex-conflict'
-    ? `<button type="button" class="entity-picker-row entity-picker-row-remove" data-hexcrawl-vertex-conflict-unlink>✕ Remove link to Conflict</button>`
+  // conflict icon that is not tied to a conflict entity yet," THEN a
+  // follow-up: "move the 'X remove link to [entity type]' to the same row
+  // as the 'Create new [entity type]'" — paired side by side, same
+  // .entity-picker-row-pair treatment as the Location picker just above.
+  const createConflictBtn = entityPicker.entityType === 'hexcrawl-vertex-conflict'
+    ? `<div class="entity-picker-row-pair">
+        <button type="button" class="entity-picker-row entity-picker-row-create" data-hexcrawl-vertex-conflict-create>⚔️ Create New Conflict</button>
+        <button type="button" class="entity-picker-row entity-picker-row-remove" data-hexcrawl-vertex-conflict-unlink>✕ Remove link</button>
+      </div>`
     : '';
   // Direct follow-up request: "for any entity search list (to select an
   // item, location, asset, etc) include a button to add an entity of that
@@ -8279,7 +8365,7 @@ function renderEntityPickerOverlay() {
   const createGenericBtn = createGenericType
     ? `<button type="button" class="entity-picker-row entity-picker-row-create" data-entity-picker-create>＋ Create New ${escapeHtml(entityTypeLabel(createGenericType, store.get().settings.genrePack))}</button>`
     : '';
-  resultsEl.innerHTML = createLifeformBtn + createLocationBtn + createConflictBtn + createGenericBtn + unlinkLocationBtn + unlinkConflictBtn + (candidates.length
+  resultsEl.innerHTML = createLifeformBtn + createLocationBtn + createConflictBtn + createGenericBtn + (candidates.length
     ? candidates.map((n) => `<button type="button" class="entity-picker-row" data-entity-picker-select="${escapeHtml(n.id)}">${escapeHtml(n.name || 'Unnamed')}</button>`).join('')
     : `<p class="dim small">${escapeHtml(emptyMessage)}</p>`);
 }
@@ -8706,7 +8792,7 @@ function buildDrawerUi() {
     journalEditOpen, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
-    hexcrawlPlacingIcon, hexcrawlCamera, hexcrawlSelectedHex, hexcrawlRange, hexcrawlRiverStart,
+    hexcrawlPlacingIcon, hexcrawlCamera, hexcrawlSelectedHex, hexcrawlRange, hexcrawlRiverStart, hexcrawlRoadStart,
     contentPackFlags, contentPackImporting, hostileLocationsImporting, exportIncludeAttachments, exportAttachmentsPreview,
     worldTrackerTab, worldTrackerSelectedSector, worldTrackerMigrateOpen,
     expandedTurnStepGroups, editingTurnStepListId, turnStepListsCollapsed, turnStepMoveEditOpen, turnStepBranchEditOpen, crewTaskSelectedId, crewTaskSelectedMemberId, colonyPanelTab,

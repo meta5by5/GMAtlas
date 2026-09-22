@@ -2992,6 +2992,7 @@ test('moveGuideDoc reparents a doc, appended after the new parent\'s existing ch
 
 // --- oracle grouped/collapsible tree -----------------------------------------
 import { buildGroupedOracleTree, filterOracleTree } from '../src/domain/oracles.js';
+import { ORACLE_GROUPS_FANTASY } from '../src/data/oracleGroups.js';
 
 test('buildGroupedOracleTree buckets every top-level table under a category, including leftovers under Other', () => {
   const tree = buildGroupedOracleTree(SCENE_TABLES);
@@ -3015,6 +3016,37 @@ test('filterOracleTree matches a composite generator\'s label via GROUP_ALIASES 
   const filtered = filterOracleTree(tree, 'creature concept');
   const hasXenobestiary = filtered.some((cat) => cat.children.some((g) => g.label === 'Xenobestiary'));
   assert.ok(hasXenobestiary);
+});
+
+// Direct follow-up request: "adjust the sci-fi genre to fantasy equivalents
+// for oracle section header and subheader descriptions such that 'space
+// operations', 'trade & cargo' and 'creatures & xeno'" [read as fantasy
+// equivalents].
+test('buildGroupedOracleTree accepts a {key,label} child entry — the real data key still drives lookup/roll path, only the displayed label changes', () => {
+  const tables = { 'Trade & Cargo': { 'Cargo Problem': ['a'] } };
+  const groups = [{ label: 'Test Group', children: [{ key: 'Trade & Cargo', label: 'Trade & Caravans' }] }];
+  const tree = buildGroupedOracleTree(tables, groups);
+  const group = tree[0].children[0];
+  assert.equal(group.label, 'Trade & Caravans', 'displayed label uses the override');
+  assert.deepEqual(group.path, ['Trade & Cargo'], 'the real path/key used for roll dispatch is untouched');
+});
+
+test('ORACLE_GROUPS_FANTASY (the fantasy pack\'s own genre-appropriate grouping) covers every FANTASY_FULL_TABLES category with no leftovers, and renames the sci-fi-coded group headers/subheader the report called out', () => {
+  const tree = buildGroupedOracleTree(FANTASY_FULL_TABLES, ORACLE_GROUPS_FANTASY);
+  assert.ok(!tree.some((cat) => cat.label === '📦 Other'), 'no fantasy category falls through to the automatic Other bucket');
+  const allLabels = new Set();
+  for (const cat of tree) for (const group of cat.children) allLabels.add(group.label);
+  assert.equal(allLabels.size, Object.keys(FANTASY_FULL_TABLES).length, 'every fantasy category is grouped exactly once');
+
+  const catLabels = tree.map((cat) => cat.label);
+  assert.ok(!catLabels.includes('🚀 Space Operations'), '"Space Operations" section header no longer shown for the fantasy pack');
+  assert.ok(!catLabels.includes('👹 Creatures & Xeno'), '"Creatures & Xeno" section header no longer shown for the fantasy pack');
+  assert.ok(catLabels.some((l) => l.includes('Roads') || l.includes('Trade')), 'a fantasy-flavored equivalent section header exists for the old Space Operations group');
+  assert.ok(catLabels.some((l) => l.includes('Bestiary')), 'a fantasy-flavored equivalent section header exists for the old Creatures & Xeno group');
+
+  const tradeGroup = tree.flatMap((cat) => cat.children).find((g) => g.path && g.path[0] === 'Trade & Cargo');
+  assert.ok(tradeGroup, 'the Trade & Cargo table group is still reachable by its real, stable key');
+  assert.notEqual(tradeGroup.label, 'Trade & Cargo', '"Trade & Cargo" subheader itself reads as a fantasy equivalent, not the sci-fi original');
 });
 
 // --- docs/adr/0016: Oracle tags + entity-field links -----------------------
@@ -4086,7 +4118,21 @@ test('formatSessionRecap renders a readable plain-text block', () => {
 });
 
 // --- Rules Constitution (data reference, requirements/initial design inputs/gameplay-goals.md) ---
-import { RULES_PROVIDERS, GAME_SYSTEMS, GAMEPLAY_AREAS, providerLabel, resolveProviderChoice, resolveActiveProviderChoice, isGameSystemActivated } from '../src/data/rulesConstitution.js';
+import { RULES_PROVIDERS, GAME_SYSTEMS, GAMEPLAY_AREAS, providerLabel, resolveProviderChoice, resolveActiveProviderChoice, isGameSystemActivated, genrePackIdForRuleset } from '../src/data/rulesConstitution.js';
+
+// Direct follow-up report: "The scifi oracles should not be visible to the
+// fantasy (generic) genre and vice versa. I can see all the scifi oracles
+// in the current campaign linked to Five Leagues ruleset" — Settings' own
+// "Default ruleset" and "Genre Pack" dropdowns wrote two fully independent
+// profile.ruleset fields, so picking a ruleset never touched genrePack.
+test('genrePackIdForRuleset resolves a ruleset id to its Game System\'s own declared genrePackId, and null for an unmatched one', () => {
+  assert.equal(genrePackIdForRuleset('fiveleagues'), 'fantasy');
+  assert.equal(genrePackIdForRuleset('dnd5e'), 'dnd5e');
+  assert.equal(genrePackIdForRuleset('starforged'), 'sci-fi-generic');
+  assert.equal(genrePackIdForRuleset('5pfh'), 'sci-fi-generic');
+  assert.equal(genrePackIdForRuleset('traveller'), 'sci-fi-generic');
+  assert.equal(genrePackIdForRuleset('not-a-real-ruleset'), null);
+});
 
 test('every provider referenced in GAMEPLAY_AREAS is a registered RULES_PROVIDERS entry', () => {
   const ids = new Set(Object.keys(RULES_PROVIDERS));
@@ -4270,7 +4316,7 @@ test('a fresh campaign has no Activity set, and patchContext can set one', () =>
 
 // --- Phase 9: genre packs (data/genrePacks.js) ------------------------------
 import { GENRE_PACKS, findGenrePack } from '../src/data/genrePacks.js';
-import { FANTASY_TABLES } from '../src/data/tables-fantasy.js';
+import { FANTASY_FULL_TABLES } from '../src/data/tables-fantasy-full.js';
 
 test('every genre pack carries the load-bearing categories copilot.js/generateNpc reference by exact path', () => {
   for (const pack of GENRE_PACKS) {
@@ -4293,6 +4339,45 @@ test('findGenrePack resolves a known id and falls back to sci-fi-generic (the de
   assert.equal(findGenrePack('fantasy').id, 'fantasy');
   assert.equal(findGenrePack('nonexistent').id, 'sci-fi-generic');
   assert.equal(findGenrePack(undefined).id, 'sci-fi-generic');
+});
+
+// Direct follow-up request, confirmed via AskUserQuestion: reflavor EVERY
+// SCENE_TABLES category — including sci-fi-specific ones (Starships,
+// Xenobestiary, Androids & AI, ...) — rather than skipping them, which
+// means several category NAMES themselves are deliberately renamed to fit
+// a fantasy setting (Starships -> "Vessels & Caravans", Xenobestiary ->
+// "Bestiary", Androids & AI -> "Golems & Constructs", etc.), same
+// "Starships -> Caravans/Ships" example the confirming question itself
+// used. So this checks structural parity by COUNT (same number of
+// categories, and — recursively, since a category like Districts nests a
+// second object layer of its own sub-tables rather than a plain array —
+// the same total number of actual oracle tables and none left empty),
+// not by exact category name, which would be the wrong bar given the
+// renaming was requested on purpose.
+function countTables(tables) {
+  let count = 0;
+  for (const key of Object.keys(tables)) {
+    const val = tables[key];
+    if (Array.isArray(val)) count += 1;
+    else count += countTables(val);
+  }
+  return count;
+}
+function everyArrayNonEmpty(tables) {
+  for (const key of Object.keys(tables)) {
+    const val = tables[key];
+    if (Array.isArray(val)) { if (val.length === 0) return false; }
+    else if (!everyArrayNonEmpty(val)) return false;
+  }
+  return true;
+}
+test('the "fantasy" pack (direct follow-up request: "make a fantasy equivalent duplicate of all oracles," THEN a follow-up report: "the fantasy oracles are not connected to the fantasy genre as seen in... the Five Leagues profile that is tied to the Fantasy genre" — the full set now backs this pack directly, not a separate never-selected one) structurally mirrors SCENE_TABLES\'s full breadth — same number of categories and tables, every table non-empty', () => {
+  const fantasyPack = findGenrePack('fantasy');
+  assert.equal(fantasyPack.id, 'fantasy');
+  assert.equal(fantasyPack.tables, FANTASY_FULL_TABLES, 'the fantasy pack\'s own tables ARE the full set — not a separate, unreachable pack');
+  assert.equal(Object.keys(FANTASY_FULL_TABLES).length, Object.keys(SCENE_TABLES).length, 'same number of top-level categories as SCENE_TABLES');
+  assert.equal(countTables(FANTASY_FULL_TABLES), countTables(SCENE_TABLES), 'same total number of individual oracle tables as SCENE_TABLES');
+  assert.ok(everyArrayNonEmpty(FANTASY_FULL_TABLES), 'every table in the fantasy pack has at least one entry — nothing left as an empty stub');
 });
 
 test('findGenrePack permanently aliases the old "hostile" pack id to "sci-fi-generic" (Phase A audit, A4 — Hostile is now a Game System, not its own Genre Pack, but any already-stored/exported "hostile" genrePack value must keep resolving to exactly the same oracle content forever)', () => {
@@ -4328,7 +4413,7 @@ test('generateNpc rolls a coherent NPC from a non-default genre pack', () => {
   const { campaign: next, id } = generateNpc(camp, { rng: makeRng(7) });
   const npc = getEntity(next, id);
   assert.ok(npc.name && npc.name !== 'Unnamed');
-  assert.ok(FANTASY_TABLES.Characters.Name.includes(npc.name));
+  assert.ok(FANTASY_FULL_TABLES.Characters.Name.includes(npc.name));
   assert.ok(npc.overview.length > 0);
 });
 
@@ -5391,6 +5476,7 @@ import {
   getHex, listTouchedHexes, setHexGeography, setHexLocation, clearHexLocation, setHexThreat, clearHexThreat,
   setHexNotes, axialToPixel, hexVertexPoints, pixelToAxial, HEX_SIZE, nextOpenThreatVertex, ENCOUNTER_VERTEX_ORDER,
   addHexRiverSegment, clearHexRivers, removeHexRiverSegment, setHexLake, hexEdgeMidpoints, edgeNeighbor, EDGE_NEIGHBOR_OFFSETS,
+  addHexRoadSegment, clearHexRoads, removeHexRoadSegment,
   setHexVertexConflict, clearHexVertexConflict,
 } from '../src/domain/hexcrawls.js';
 
@@ -5630,6 +5716,63 @@ test('rivers/lake read as present-but-empty on a hex touched before either featu
   // missing array (this is what would break without touchHex's own backfill).
   const mutated = addHexRiverSegment(camp, mapId, 2, 2, 0, 1);
   assert.equal(getHex(mutated, mapId, 2, 2).rivers.length, 1);
+});
+
+// Direct follow-up request: "Create a road overlay that duplicates the
+// river functionality using a brown line for a road that connects to
+// locations, not lakes or oceans" — roads mirror rivers' own storage shape
+// exactly (see the tests just above), just with a 'location' sentinel
+// instead of 'lake'.
+test('addHexRoadSegment/clearHexRoads — a hex accumulates independent segments, each with a stable random seed, cleared as a whole per hex', () => {
+  let camp = defaultCampaign();
+  let mapId; ({ campaign: camp, id: mapId } = createHexMap(camp, 'Map'));
+  assert.deepEqual(getHex(camp, mapId, 0, 0).roads, []);
+
+  camp = addHexRoadSegment(camp, mapId, 0, 0, 0, 3);
+  camp = addHexRoadSegment(camp, mapId, 0, 0, 1, 'location');
+  const roads = getHex(camp, mapId, 0, 0).roads;
+  assert.equal(roads.length, 2);
+  assert.deepEqual([roads[0].from, roads[0].to], [0, 3]);
+  assert.deepEqual([roads[1].from, roads[1].to], [1, 'location']);
+  assert.ok(typeof roads[0].seed === 'number' && roads[0].seed >= 0 && roads[0].seed < 1, 'each segment gets its own stable 0-1 seed');
+  assert.notEqual(roads[0].seed, roads[1].seed, 'two segments get independently-rolled seeds (astronomically unlikely to collide)');
+
+  camp = clearHexRoads(camp, mapId, 0, 0);
+  assert.deepEqual(getHex(camp, mapId, 0, 0).roads, []);
+});
+
+test('removeHexRoadSegment removes just the one segment by index, bounds-checked no-op out of range', () => {
+  let camp = defaultCampaign();
+  let mapId; ({ campaign: camp, id: mapId } = createHexMap(camp, 'Map'));
+  camp = addHexRoadSegment(camp, mapId, 0, 0, 0, 3);
+  camp = addHexRoadSegment(camp, mapId, 0, 0, 1, 4);
+  camp = addHexRoadSegment(camp, mapId, 0, 0, 2, 'location');
+
+  camp = removeHexRoadSegment(camp, mapId, 0, 0, 1);
+  const roads = getHex(camp, mapId, 0, 0).roads;
+  assert.equal(roads.length, 2);
+  assert.deepEqual([roads[0].from, roads[0].to], [0, 3], 'segment before the removed index is untouched');
+  assert.deepEqual([roads[1].from, roads[1].to], [2, 'location'], 'segment after the removed index shifts down, still intact');
+
+  const before = getHexMap(camp, mapId).hexes;
+  camp = removeHexRoadSegment(camp, mapId, 0, 0, 5);
+  assert.deepEqual(getHexMap(camp, mapId).hexes, before, 'out-of-range index is untouched');
+  camp = removeHexRoadSegment(camp, mapId, 0, 0, -1);
+  assert.deepEqual(getHexMap(camp, mapId).hexes, before, 'negative index is untouched');
+});
+
+test('roads read as present-but-empty on a hex touched before the feature existed (schema backfill, getHex AND the mutators\' own touchHex)', () => {
+  let camp = defaultCampaign();
+  let mapId; ({ campaign: camp, id: mapId } = createHexMap(camp, 'Map'));
+  camp = setHexGeography(camp, mapId, 2, 2, 'forest');
+  const map = getHexMap(camp, mapId);
+  delete map.hexes['2,2'].roads;
+
+  const read = getHex(camp, mapId, 2, 2);
+  assert.deepEqual(read.roads, []);
+
+  const mutated = addHexRoadSegment(camp, mapId, 2, 2, 0, 1);
+  assert.equal(getHex(mutated, mapId, 2, 2).roads.length, 1);
 });
 
 test('multiple named hex maps coexist independently — painting one never affects another (mirrors Battlemap\'s own multi-map isolation)', () => {

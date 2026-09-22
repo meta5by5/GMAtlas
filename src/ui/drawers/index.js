@@ -7,7 +7,7 @@ import {
   hasOracleOverride, getOracleTags, isOracleTagLocked, listOracleTagVocabulary,
   filterOracleTreeByTags,
 } from '../../domain/oracles.js';
-import { ORACLE_TABLE_SOURCES } from '../../data/oracleGroups.js';
+import { ORACLE_TABLE_SOURCES, ORACLE_GROUPS_FANTASY } from '../../data/oracleGroups.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import {
   listEntities, filterEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, entityTypeLabel, listTagVocabulary, listEntityTagVocabulary,
@@ -1915,8 +1915,14 @@ function journalEntryRow(doc, e, ui) {
 function oracle(doc, ui) {
   const filter = ui.oracleFilter || '';
   const tagFilter = ui.oracleTagFilter || null;
-  const tables = tablesWithOverrides(doc.oracles && doc.oracles.overrides, doc.settings && doc.settings.genrePack);
-  const tree = buildGroupedOracleTree(tables);
+  const genrePack = doc.settings && doc.settings.genrePack;
+  const tables = tablesWithOverrides(doc.oracles && doc.oracles.overrides, genrePack);
+  // Direct follow-up request: "adjust the sci-fi genre to fantasy
+  // equivalents for oracle section header and subheader descriptions" —
+  // the fantasy pack gets its own genre-appropriate grouping/labeling
+  // (ORACLE_GROUPS_FANTASY, data/oracleGroups.js) instead of the default,
+  // sci-fi-worded ORACLE_GROUPS every other pack still uses.
+  const tree = buildGroupedOracleTree(tables, genrePack === 'fantasy' ? ORACLE_GROUPS_FANTASY : undefined);
   // A field's 🔮 link (docs/adr/0016-oracle-tags-and-field-links.md) sets
   // oracleTagFilter instead of the free-text oracleFilter — the two modes
   // are mutually exclusive (typing in the search box clears the tag
@@ -4587,6 +4593,48 @@ function hexLakeSvgHtml(hex, cx, cy) {
   return `<path class="hex-lake" d="${smoothClosedPathD(hexLakeBlobPoints(cx, cy, hex.lake))}" />`;
 }
 
+// --- Roads (direct follow-up request: "Create a road overlay that
+// duplicates the river functionality using a brown line for a road that
+// connects to locations, not lakes or oceans") -----------------------------
+// Mirrors riverSegmentGeometry/hexRiverSvgHtml/hexRiverHitSvgHtml below
+// almost exactly — the only real differences are the sentinel ('location'
+// instead of 'lake', resolving to the hex's own fixed center point rather
+// than an offset lake blob) and the total absence of an ocean-mouth-style
+// widening (roads never target Ocean geography the way rivers do).
+
+function roadSegmentGeometry(hex, cx, cy) {
+  const endPoint = (end) => (end === 'location' ? (hex.locationEntityId ? { x: cx, y: cy } : null) : HEX_EDGE_MIDPOINTS_LOCAL[end]);
+  return (hex.roads || []).map((seg, index) => {
+    const a = endPoint(seg.from); const b = endPoint(seg.to);
+    if (!a || !b) return null;
+    const pts = riverMeanderPoints(a, b, seg.seed);
+    return { index, d: smoothPathD(pts) };
+  }).filter(Boolean);
+}
+
+/** Renders every road segment on this hex — narrow brown meandering
+ *  strokes between two edge midpoints (or an edge and the hex's own
+ *  center, when `to`/`from` is the 'location' sentinel and a Location is
+ *  actually linked here — same "stays connected wherever the target ends
+ *  up, stops rendering until it exists again" posture hexLakeSvgHtml/
+ *  riverSegmentGeometry already use for 'lake'). Purely decorative
+ *  (pointer-events:none via CSS) — see hexRoadHitSvgHtml for the actual
+ *  clickable layer. */
+function hexRoadSvgHtml(hex, cx, cy) {
+  return roadSegmentGeometry(hex, cx, cy).map((s) => `<path class="hex-road" d="${s.d}" />`).join('');
+}
+
+/** Same "arm the Road tool to make existing lines clickable, click one to
+ *  prompt removal" posture as hexRiverHitSvgHtml — see its own doc comment
+ *  for why this needs a separate on-top svg rather than reusing the
+ *  decorative one. */
+function hexRoadHitSvgHtml(hex, cx, cy, armed, mapId, q, r) {
+  if (!armed) return '';
+  const segs = roadSegmentGeometry(hex, cx, cy);
+  if (!segs.length) return '';
+  return segs.map((s) => `<path class="hex-road-hit" d="${s.d}" data-hex-road="${esc(mapId)}::${q}::${r}::${s.index}" />`).join('');
+}
+
 // A cheap deterministic 0-1 pseudo-random hash (no dependency, no state) —
 // river meander points (below) need SEVERAL independent-looking random
 // values derived from one stored seed (domain/hexcrawls.js), not just one.
@@ -4760,7 +4808,7 @@ function hexcrawlPalette(ui) {
   const armed = ui.hexcrawlPlacingIcon;
   const geoArmed = armed && armed.layer === 'geography';
   const threatArmed = armed && armed.layer === 'threat';
-  const overlayArmed = armed && (armed.layer === 'river' || armed.layer === 'lake');
+  const overlayArmed = armed && (armed.layer === 'river' || armed.layer === 'lake' || armed.layer === 'road');
   // Direct follow-up request: "Change the 'Threats' to 'Encounters'... The
   // user adds encounters by clicking the encounter icon and then the hex,
   // not the corner it would be placed. The encounter icon will populate
@@ -4801,11 +4849,12 @@ function hexcrawlPalette(ui) {
       </select>
     </div>
     <div class="hexcrawl-palette-col">
-      <span class="dim small" title="River: click one border, then another, to draw a segment between them; keeps going into the next hex, and clicking an existing line prompts to remove it. Lake: click a hex to add one, or again for a new shape; remove from the Hex Detail panel.">Overlays</span>
+      <span class="dim small" title="River: click one border, then another, to draw a segment between them; keeps going into the next hex, and clicking an existing line prompts to remove it. Lake: click a hex to add one, or again for a new shape; remove from the Hex Detail panel. Road: same as River, but connects to a hex's own Location instead of a lake or the ocean.">Overlays</span>
       <select data-hexcrawl-select-overlay>
         <option value="" ${!overlayArmed ? 'selected' : ''}>Select</option>
         <option value="river" ${armed && armed.layer === 'river' ? 'selected' : ''}>🏞️ River</option>
         <option value="lake" ${armed && armed.layer === 'lake' ? 'selected' : ''}>🫧 Lake</option>
+        <option value="road" ${armed && armed.layer === 'road' ? 'selected' : ''}>🛣️ Road</option>
       </select>
     </div>`;
 }
@@ -4813,6 +4862,7 @@ function hexcrawlPalette(ui) {
 function hexcrawlGrid(doc, mapId, ui) {
   const range = ui.hexcrawlRange || { qMin: -8, qMax: 8, rMin: -8, rMax: 8 };
   const riverToolArmed = !!(ui.hexcrawlPlacingIcon && ui.hexcrawlPlacingIcon.layer === 'river');
+  const roadToolArmed = !!(ui.hexcrawlPlacingIcon && ui.hexcrawlPlacingIcon.layer === 'road');
   const threatToolArmed = !!(ui.hexcrawlPlacingIcon && ui.hexcrawlPlacingIcon.layer === 'threat');
   const cells = [];
   for (let r = range.rMin; r <= range.rMax; r++) {
@@ -4864,6 +4914,13 @@ function hexcrawlGrid(doc, mapId, ui) {
       // vertices, they don't need to dodge the clip-path'd corner cut-off,
       // since an edge midpoint already sits well inside the shape).
       const riverStart = ui.hexcrawlRiverStart;
+      // Direct follow-up request (road feature): "duplicates the river
+      // functionality" — River and Road are mutually exclusive armed
+      // tools (hexcrawlPlacingIcon carries only one layer at a time), so
+      // at most one of riverStart/roadStart is ever non-null; the pending-
+      // start highlight/title below checks whichever applies.
+      const roadStart = ui.hexcrawlRoadStart;
+      const pendingStart = riverStart || roadStart;
       const edgeHtml = hexEdgeMidpoints(HEX_SIZE).map((p, i) => {
         const ex = (center.x + p.x).toFixed(1); const ey = (center.y + p.y).toFixed(1);
         // Direct bug report: "when clicking a river end point and then
@@ -4883,8 +4940,9 @@ function hexcrawlGrid(doc, mapId, ui) {
         // pairs, so it's correct regardless of which of the two
         // overlapping buttons the browser happens to hit.
         const nb = edgeNeighbor(q, r, i);
-        const isPendingStart = riverStart && riverStart.candidates && riverStart.candidates.some((c) => (c.q === q && c.r === r && c.edge === i) || (c.q === nb.q && c.r === nb.r && c.edge === nb.edge));
-        return `<button type="button" class="hex-edge ${isPendingStart ? 'hex-edge-pending' : ''}" data-hex-edge="${esc(mapId)}::${q}::${r}::${i}::${nb.q}::${nb.r}::${nb.edge}" style="left:${ex}px;top:${ey}px" title="${isPendingStart ? 'River starts here — click another border to finish this segment' : ''}"></button>`;
+        const isPendingStart = pendingStart && pendingStart.candidates && pendingStart.candidates.some((c) => (c.q === q && c.r === r && c.edge === i) || (c.q === nb.q && c.r === nb.r && c.edge === nb.edge));
+        const pendingLabel = roadStart ? 'Road' : 'River';
+        return `<button type="button" class="hex-edge ${isPendingStart ? 'hex-edge-pending' : ''}" data-hex-edge="${esc(mapId)}::${q}::${r}::${i}::${nb.q}::${nb.r}::${nb.edge}" style="left:${ex}px;top:${ey}px" title="${isPendingStart ? `${pendingLabel} starts here — click another border to finish this segment` : ''}"></button>`;
       }).join('');
       const cellLeft = (center.x - HEX_W / 2).toFixed(1); const cellTop = (center.y - HEX_H / 2).toFixed(1);
       const active = ui.hexcrawlSelectedHex && ui.hexcrawlSelectedHex.q === q && ui.hexcrawlSelectedHex.r === r;
@@ -4915,6 +4973,7 @@ function hexcrawlGrid(doc, mapId, ui) {
           <polygon points="${HEX_SVG_POINTS}" fill="${geo ? geo.color : 'var(--hex-default-fill)'}" class="hex-shape-outline ${active ? 'active' : ''}" />
           ${hexLakeSvgHtml(hex, shapeCx, shapeCy)}
           ${hexRiverSvgHtml(doc, mapId, q, r, hex, shapeCx, shapeCy)}
+          ${hexRoadSvgHtml(hex, shapeCx, shapeCy)}
         </svg>
         <div class="hex-cell" style="left:${cellLeft}px;top:${cellTop}px;width:${HEX_W.toFixed(1)}px;height:${HEX_H.toFixed(1)}px;clip-path:${HEX_CLIP_PATH}"
              data-hex-select="${esc(mapId)}::${q}::${r}">
@@ -4922,6 +4981,7 @@ function hexcrawlGrid(doc, mapId, ui) {
           ${centerHtml}
         </div>
         ${riverToolArmed ? `<svg class="hex-shape hex-river-hit-layer" style="left:${cellLeft}px;top:${cellTop}px" width="${HEX_W.toFixed(1)}" height="${HEX_H.toFixed(1)}">${hexRiverHitSvgHtml(doc, mapId, q, r, hex, shapeCx, shapeCy, riverToolArmed)}</svg>` : ''}
+        ${roadToolArmed ? `<svg class="hex-shape hex-road-hit-layer" style="left:${cellLeft}px;top:${cellTop}px" width="${HEX_W.toFixed(1)}" height="${HEX_H.toFixed(1)}">${hexRoadHitSvgHtml(hex, shapeCx, shapeCy, roadToolArmed, mapId, q, r)}</svg>` : ''}
         ${edgeHtml}
         ${vertexHtml}`);
     }
@@ -4982,6 +5042,11 @@ function hexDetailPanel(doc, mapId, ui) {
           ? `<button type="button" class="btn ghost sm" data-hex-detail-rivers-clear="${esc(mapId)}::${sel.q}::${sel.r}">Clear rivers on this hex</button>`
           : '<span class="dim small">None yet — arm the River tool and click two of this hex\'s borders.</span>'}
       </div>
+      <div class="field-label">Roads (${hex.roads.length} segment${hex.roads.length === 1 ? '' : 's'})
+        ${hex.roads.length
+          ? `<button type="button" class="btn ghost sm" data-hex-detail-roads-clear="${esc(mapId)}::${sel.q}::${sel.r}">Clear roads on this hex</button>`
+          : '<span class="dim small">None yet — arm the Road tool and click two of this hex\'s borders.</span>'}
+      </div>
       <label class="field-label">Notes
         <textarea rows="3" data-hex-detail-notes="${esc(mapId)}::${sel.q}::${sel.r}" placeholder="Notes…">${esc(hex.notes || '')}</textarea>
       </label>
@@ -5000,7 +5065,7 @@ function hexcrawl(doc, ui = {}) {
   // says something the drawer chrome doesn't: "Planetfall Grid
   // Battlemap"). Keeps just the help toggle.
   const head = `<div class="section-head-row"><span class="entity-chip-row">${helpToggle(helpKey)}</span></div>
-    ${helpBody(helpKey, "Pick a Geography or Location icon below, then click a hex to paint it — a Location icon fills the next open corner automatically and offers to link (or create) a Conflict entity for the encounter that happens there, since one place can see many encounters over time. River: click one border, then another, to draw a segment between them; it keeps going into the next hex, and clicking an existing river line prompts to remove it. Lake: click a hex to add one, or click again for a new shape — rivers can connect to it from any border; remove one from the Hex Detail panel. Click a hex's center to link a Location entity — click it again to open that entity. Click anywhere else on a hex to see/edit its details below the map. Scroll to pan, wheel to zoom.", ui)}
+    ${helpBody(helpKey, "Pick a Geography or Location icon below, then click a hex to paint it — a Location icon fills the next open corner automatically and offers to link (or create) a Conflict entity for the encounter that happens there, since one place can see many encounters over time. River: click one border, then another, to draw a segment between them; it keeps going into the next hex, and clicking an existing river line prompts to remove it. Lake: click a hex to add one, or click again for a new shape — rivers can connect to it from any border; remove one from the Hex Detail panel. Road: works just like River, but connects to a hex's own linked Location instead of a lake or the ocean. Click a hex's center to link a Location entity — click it again to open that entity. Click anywhere else on a hex to see/edit its details below the map. Scroll to pan, wheel to zoom.", ui)}
     <div class="battlemap-tabs">
       ${maps.map((m) => `<button type="button" class="btn ghost sm ${active && active.id === m.id ? 'active' : ''}" data-hexcrawl-select="${esc(m.id)}">${esc(m.name)}</button>`).join('')}
       <button type="button" class="chip sm" data-hexcrawl-add>＋ New Map</button>

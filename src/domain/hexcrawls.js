@@ -47,6 +47,16 @@ function defaultHex() {
     // setHexLake's own doc comment for what those mean.
     rivers: [],
     lake: null,
+    // Direct follow-up request: "Create a road overlay that duplicates the
+    // river functionality using a brown line for a road that connects to
+    // locations, not lakes or oceans" — same shape/posture as `rivers`
+    // above (an array of `{ from, to, seed }` segments, `from`/`to` each
+    // an edge index 0-5 or a sentinel), just with 'location' standing in
+    // for 'lake' as the one non-edge endpoint a segment can target — a
+    // road connects into THIS hex's own linked Location (hex center)
+    // instead of a lake, and has no ocean-mouth-widening equivalent since
+    // roads never target Ocean geography the way rivers do.
+    roads: [],
     // Direct follow-up request: "Revise the encounter buttons/icons to add
     // a clickable link to each encounter and map it to a Conflict entity
     // record (or option to add a new one) similar to how Location works"
@@ -122,7 +132,7 @@ export function getHex(campaign, mapId, q, r) {
   // have been created — backfilled defensively here (same additive-lazy
   // posture as the rest of this file) so an old hex record reads with
   // both fields present rather than undefined.
-  return rec ? { rivers: [], lake: null, vertexConflicts: [null, null, null, null, null, null], ...rec, q, r } : { ...defaultHex(), q, r };
+  return rec ? { rivers: [], lake: null, vertexConflicts: [null, null, null, null, null, null], roads: [], ...rec, q, r } : { ...defaultHex(), q, r };
 }
 
 /** Every hex actually touched (present in the sparse map) so far, each
@@ -145,6 +155,7 @@ function touchHex(map, q, r) {
     if (!Array.isArray(map.hexes[k].rivers)) map.hexes[k].rivers = [];
     if (map.hexes[k].lake === undefined) map.hexes[k].lake = null;
     if (!Array.isArray(map.hexes[k].vertexConflicts)) map.hexes[k].vertexConflicts = [null, null, null, null, null, null];
+    if (!Array.isArray(map.hexes[k].roads)) map.hexes[k].roads = [];
   }
   return map.hexes[k];
 }
@@ -304,6 +315,46 @@ export function removeHexRiverSegment(campaign, mapId, q, r, index) {
   if (!m) return next;
   const hex = touchHex(m, q, r);
   if (index >= 0 && index < hex.rivers.length) hex.rivers.splice(index, 1);
+  return next;
+}
+
+// --- Roads (direct follow-up request: "duplicates the river functionality
+// using a brown line for a road that connects to locations, not lakes or
+// oceans") ----------------------------------------------------------------
+// Same per-hex-segment shape/posture as rivers just above; the only real
+// difference lives in drawers/index.js's rendering (brown stroke, 'location'
+// sentinel resolves to the hex's own center point instead of an offset lake
+// blob, no ocean-mouth funnel) and shell.js's placement flow (auto-connects
+// on reaching a hex with a linked Location instead of one with a lake).
+
+/** Adds one road segment to a hex — `from`/`to` are each either an edge
+ *  index (0-5) or the string 'location'. Mirrors addHexRiverSegment
+ *  exactly; see its own doc comment for the general shape. */
+export function addHexRoadSegment(campaign, mapId, q, r, from, to) {
+  const next = clone(campaign);
+  const m = ensure(next).maps.find((x) => x.id === mapId);
+  if (!m || from == null || to == null) return next;
+  touchHex(m, q, r).roads.push({ from, to, seed: Math.random() });
+  return next;
+}
+
+/** Removes every road segment on this ONE hex — mirrors clearHexRivers. */
+export function clearHexRoads(campaign, mapId, q, r) {
+  const next = clone(campaign);
+  const m = ensure(next).maps.find((x) => x.id === mapId);
+  if (!m) return next;
+  touchHex(m, q, r).roads = [];
+  return next;
+}
+
+/** Removes just ONE road segment by its plain array index — mirrors
+ *  removeHexRiverSegment. */
+export function removeHexRoadSegment(campaign, mapId, q, r, index) {
+  const next = clone(campaign);
+  const m = ensure(next).maps.find((x) => x.id === mapId);
+  if (!m) return next;
+  const hex = touchHex(m, q, r);
+  if (index >= 0 && index < hex.roads.length) hex.roads.splice(index, 1);
   return next;
 }
 

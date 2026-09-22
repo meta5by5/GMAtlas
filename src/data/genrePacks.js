@@ -10,8 +10,8 @@
 
 import { SCENE_TABLES } from './tables.js';
 import { CYBERPUNK_TABLES } from './tables-cyberpunk.js';
-import { FANTASY_TABLES } from './tables-fantasy.js';
 import { DND5E_TABLES } from './tables-dnd5e.js';
+import { FANTASY_FULL_TABLES } from './tables-fantasy-full.js';
 
 // Phase A audit (A4): "the Hostile (sci-fi, default) Genre Pack becomes
 // the Hostile Game System (not renamed as a pack — restructured as a
@@ -38,21 +38,40 @@ export const GENRE_PACKS = [
   { id: 'cyberpunk', label: 'Cyberpunk / Shadowrun', tables: CYBERPUNK_TABLES, gameSystemIds: [] },
   // Relabeled from "Fantasy (D&D-style)" (direct request: a Five Leagues
   // from the Borderlands Game System "in the 'Fantasy (generic)' genre") —
-  // this pack's own tables (FANTASY_TABLES) were always generic fantasy
-  // content, not D&D-specific; D&D 5e's OWN flavor got its own dedicated
-  // fork (tables-dnd5e.js, the 'dnd5e' pack below) specifically so it
-  // could diverge from this one, which is why this pack was free to become
   // Five Leagues' own umbrella pack the same way 'sci-fi-generic' is
   // Hostile's (Phase A audit) — a real Game System living inside a shared
   // generic pack, not a new pack/oracle-table fork of its own.
-  { id: 'fantasy', label: 'Fantasy (generic)', tables: FANTASY_TABLES, gameSystemIds: ['fiveleagues'] },
+  //
+  // LATER direct follow-up request: "make a fantasy equivalent duplicate
+  // of all oracles that is tied to the fantasy genres." First landed as a
+  // brand-new SEPARATE pack (data/tables-fantasy-full.js) per an explicit
+  // "new separate file/pack" choice at the time — but that left THIS pack,
+  // the one an actual Five Leagues campaign's Rules Profile is tied to,
+  // still on its old, much smaller 11-category table set, which is exactly
+  // what a direct follow-up report caught: "the fantasy oracles are not
+  // connected to the fantasy genre as seen in the test campaign profile
+  // connected to the Five Leagues profile that is tied to the Fantasy
+  // genre." Fixed by pointing THIS pack's own `tables` at the full set —
+  // tables-fantasy-full.js is now the one and only fantasy oracle content,
+  // reachable the same way it always was (genrePack: 'fantasy'), so a
+  // Five Leagues campaign gets the full set with no re-selection needed.
+  // The original, smaller tables-fantasy.js is retired (its best original
+  // entries — Core Oracles, Characters, several Missions/Location Themes/
+  // Scenario Framing/Environmental Hazards tables — were merged into
+  // tables-fantasy-full.js first, since they were genuinely better-
+  // written fantasy prose than that same category's first pass there);
+  // the standalone 'fantasy-full' pack id is retired too, folded into this
+  // one rather than kept as a second, now-redundant, easy-to-pick-wrong
+  // option.
+  { id: 'fantasy', label: 'Fantasy (generic)', tables: FANTASY_FULL_TABLES, gameSystemIds: ['fiveleagues'] },
   // Direct request: "associating all of this to the 'Fantasy (D&D-style)'
   // genre pack... everything including the oracles must be independent or
   // a copy allocated to this version so it can be customized to D&D game
-  // system" — forked from FANTASY_TABLES as its starting content
-  // (tables-dnd5e.js), its own file/export/id from this point on so
-  // customizing it (directly, or per-campaign via oracles.overrides) never
-  // touches the original 'fantasy' pack or anything else using it.
+  // system" — forked from the (since-retired) tables-fantasy.js as its
+  // starting content (tables-dnd5e.js), its own file/export/id from this
+  // point on so customizing it (directly, or per-campaign via
+  // oracles.overrides) never touches the 'fantasy' pack above or anything
+  // else using it.
   { id: 'dnd5e', label: 'D&D 5e', tables: DND5E_TABLES, gameSystemIds: ['dnd5e'] },
 ];
 
