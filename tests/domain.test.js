@@ -6283,6 +6283,7 @@ test('incrementCampaignMilestones/decrementCampaignMilestones clamp to the fixed
 // --- Content Packs (ad-hoc Entities/Guide/Journal transfer between campaigns) --
 import { exportContentPack, importContentPack } from '../src/domain/contentPack.js';
 import { CONTENT_PACKS_MANIFEST } from '../src/data/contentPacksManifest.js';
+import { HEXCRAWL_GEOGRAPHY_ICONS } from '../src/data/hexcrawlIcons.js';
 
 test('exportContentPack only includes sections whose flag is true, strips thumbnailId from entities', () => {
   let camp = defaultCampaign();
@@ -6471,6 +6472,28 @@ test('the D&D 5e SRD Monsters content pack is registered in the manifest with a 
   assert.ok(fs.existsSync(path.join(__dirname, '..', entry.file)), `${entry.file} exists on disk`);
   assert.match(entry.description, /Creative Commons Attribution 4\.0 International License/);
   assert.match(entry.description, /System Reference Document 5\.2\.1/);
+});
+
+// Direct follow-up request: "create three more variants than exist for
+// more variety of map icons in addition to assets\hexcrawl-icons that
+// models the style of this template assets\map-icons2.jpg" (3 -> 6 per
+// biome), THEN a follow-up: "add to the existing map icons... by parsing
+// five variants of each biome from the template assets\map-icons3.jpg"
+// (6 -> 11 per biome) — every filename listed needs to actually exist on
+// disk (a manual asset-authoring step, unlike everything else in this
+// catalog which is plain data).
+test('every HEXCRAWL_GEOGRAPHY_ICONS entry with iconArt now lists 11 variants, each a real file under assets/hexcrawl-icons/', () => {
+  const withArt = HEXCRAWL_GEOGRAPHY_ICONS.filter((g) => Array.isArray(g.iconArt));
+  assert.ok(withArt.length >= 6, 'at least the 6 original pen-and-ink biomes still carry iconArt');
+  for (const geo of withArt) {
+    assert.equal(geo.iconArt.length, 11, `${geo.key}: expected 11 variants, got ${geo.iconArt.length}`);
+    assert.equal(new Set(geo.iconArt).size, 11, `${geo.key}: all 11 filenames should be distinct`);
+    for (const file of geo.iconArt) {
+      const full = path.join(__dirname, '..', 'assets', 'hexcrawl-icons', file);
+      assert.ok(fs.existsSync(full), `${geo.key}: ${file} exists on disk`);
+      assert.ok(fs.statSync(full).size > 0, `${geo.key}: ${file} is not an empty file`);
+    }
+  }
 });
 
 // --- docs/adr/0031: SWN Faction Turn Engine --------------------------------
