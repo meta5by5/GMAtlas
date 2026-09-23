@@ -20,7 +20,7 @@ import { pick, tablesWithOverrides } from './oracles.js';
  *  itself. */
 export function generateConflictSeed(campaign, { rng = Math.random } = {}) {
   const tables = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides, campaign.settings && campaign.settings.genrePack);
-  const group = (tables && tables['Faction Conflict']) || {};
+  const group = (tables && tables['Faction Encounter']) || {};
   const rootCauseTable = group['Root Cause Category'] || [];
   const gapTable = group['Cause Gap Flavor'] || [];
   const casualtyTable = group['Third-Party Casualty'] || [];

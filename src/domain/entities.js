@@ -42,7 +42,15 @@ import { entityTagSeedsFor, locationTagSeedsFor } from '../data/entityTagSeeds.j
 // creature/beast doesn't read as a "Non-Player Character" in Cast/Graph/
 // Search.
 export const ENTITY_TYPES = ['npc', 'location', 'faction', 'asset', 'lore', 'item', 'conflict', 'lifeform'];
-export const TYPE_LABEL = { npc: 'NPC', location: 'Location', faction: 'Faction', asset: 'Asset', lore: 'Lore', item: 'Item', conflict: 'Conflict', lifeform: 'Lifeform' };
+// Direct follow-up request: "revise all references to conflict entity type
+// to Encounter" — display-only, same posture as lifeform's own genre-aware
+// relabel just below (the stored `type: 'conflict'` value, every internal
+// identifier that reads it, and the unrelated Faction Conflict oracle
+// table group/"Conflict"/"Conflict Architecture" narrative-oracle
+// categories are untouched here — see entityTypeLabel's own callers for
+// the literal "Conflict" UI strings that needed their own individual edits
+// since they don't route through this map).
+export const TYPE_LABEL = { npc: 'NPC', location: 'Location', faction: 'Faction', asset: 'Asset', lore: 'Lore', item: 'Item', conflict: 'Encounter', lifeform: 'Lifeform' };
 
 /** Direct follow-up request: "For all Fantasy (generic) genres, change any
  *  reference to 'Lifeform' as an entity type to 'Monster'" (later renamed

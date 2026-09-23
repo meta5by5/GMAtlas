@@ -1727,7 +1727,7 @@ export const FANTASY_FULL_TABLES = {
       "the exit route is now someone else's territory", "watch coverage is denser than briefed"
     ]
   },
-  "Faction Conflict": {
+  "Faction Encounter": {
     "Root Cause Category": [
       "control of a mountain pass, trade lane, or border zone", "water rights, an ore vein, a fuel depot, or arable land",
       "two claimants to the same charter or inheritance", "a religious or ideological schism within a formerly unified group",

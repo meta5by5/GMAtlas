@@ -287,11 +287,11 @@ function renderConflictsSection(doc) {
   const rows = conflicts.map((c) => {
     const track = getConflictEscalationTrack(doc, c.id);
     return `<div class="thread-row">
-      <span class="thread-name">${factionNameLink(c.id, c.name || 'Unnamed conflict')} <span class="dim small">— ${esc(CONFLICT_STATUS_LABEL_SHORT[c.status] || c.status)}${track ? `, escalation ${track.filled}/${track.segments}` : ''}</span></span>
+      <span class="thread-name">${factionNameLink(c.id, c.name || 'Unnamed encounter')} <span class="dim small">— ${esc(CONFLICT_STATUS_LABEL_SHORT[c.status] || c.status)}${track ? `, escalation ${track.filled}/${track.segments}` : ''}</span></span>
     </div>`;
   }).join('');
   return `<div class="faction-roster">
-    <h3>Conflicts</h3>
+    <h3>Encounters</h3>
     ${rows}
   </div>`;
 }
@@ -346,7 +346,7 @@ function conflictEscalationSuggestionsHtml(suggestions) {
       </span>
     </div>`).join('');
   return `<div class="faction-events-review">
-    <h3>This may affect a tracked conflict</h3>
+    <h3>This may affect a tracked encounter</h3>
     ${rows}
   </div>`;
 }

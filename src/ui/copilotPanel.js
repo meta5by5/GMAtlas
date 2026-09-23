@@ -74,7 +74,7 @@ function storyOptionsBlock(doc, ui, { limit = 8 } = {}) {
     <div class="copilot-card">
       <h3>Story Options</h3>
       <p class="dim small">Who/where/why, combined — check one to weave it into the Navigator's scene summary.</p>
-      ${options.length ? rows : '<p class="dim small">Nothing to suggest yet — mention someone in WHO, set a Location in WHERE, or open a Conflict/Thread/Foreshadowing entry.</p>'}
+      ${options.length ? rows : '<p class="dim small">Nothing to suggest yet — mention someone in WHO, set a Location in WHERE, or open an Encounter/Thread/Foreshadowing entry.</p>'}
     </div>`;
 }
 

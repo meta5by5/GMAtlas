@@ -1162,7 +1162,7 @@ test('opening a document tab at a page anchors the resolved src with #page=N', (
 });
 
 // --- entities + auto-linking (Phase 3A) -----------------------------------
-import { createEntity, updateEntity, removeEntity, addRelationship, removeRelationship, findByName, parseMentions, linkMentions, listEntities, filterEntities, addEntityTag, removeEntityTag, listTagVocabulary, entityTypeLabel } from '../src/domain/entities.js';
+import { createEntity, updateEntity, removeEntity, addRelationship, removeRelationship, findByName, parseMentions, linkMentions, listEntities, filterEntities, addEntityTag, removeEntityTag, listTagVocabulary, entityTypeLabel, TYPE_LABEL, ENTITY_TYPES } from '../src/domain/entities.js';
 import { addNote, editContextText, editNote, addContextEntity, removeContextEntity, updateSceneField } from '../src/domain/session.js';
 
 test('editNote updates an existing journal entry in place and re-links mentions', () => {
@@ -5273,6 +5273,22 @@ test('entityTypeLabel reads "Bestiary" for the lifeform type only under the Fant
   assert.equal(entityTypeLabel('not-a-real-type', 'fantasy'), 'not-a-real-type', 'falls back to the raw type id, same as TYPE_LABEL[type] || type');
 });
 
+// Direct follow-up request: "revise all references to conflict entity type
+// to Encounter" — display-only (TYPE_LABEL.conflict), same posture as
+// lifeform's own genre-aware relabel just above; the stored `type:
+// 'conflict'` value, every internal identifier that reads it, and the
+// unrelated "Conflict"/"Conflict Architecture" narrative-oracle categories
+// are untouched — see the "Faction Encounter" oracle table group rename
+// (generateConflictSeed's own test, below) for the one other renamed
+// user-facing surface this same request touched.
+test('entityTypeLabel (and the plain TYPE_LABEL map it wraps) reads "Encounter" for the conflict type, under every genre pack — the stored type value itself is untouched', () => {
+  assert.equal(TYPE_LABEL.conflict, 'Encounter');
+  assert.equal(entityTypeLabel('conflict', 'sci-fi-generic'), 'Encounter');
+  assert.equal(entityTypeLabel('conflict', 'fantasy'), 'Encounter');
+  assert.equal(entityTypeLabel('conflict', undefined), 'Encounter');
+  assert.ok(ENTITY_TYPES.includes('conflict'), 'the stored type id itself stays "conflict"');
+});
+
 test('filterEntities\' search matches a lifeform entity by "bestiary" under the Fantasy (generic) Genre Pack, not just its literal "Lifeform" label — the search haystack is genre-aware too', () => {
   let camp = defaultCampaign();
   camp = { ...camp, settings: { ...camp.settings, genrePack: 'fantasy' } };
@@ -8285,7 +8301,7 @@ test('information asymmetry: update creates-or-patches in one function, reveal m
   assert.equal(getEntity(camp, id).informationAsymmetry, null);
 });
 
-test('generateConflictSeed rolls from the "Faction Conflict" oracle table group and returns plain strings only — never touches the campaign itself', () => {
+test('generateConflictSeed rolls from the "Faction Encounter" oracle table group and returns plain strings only — never touches the campaign itself', () => {
   const camp = defaultCampaign();
   const before = JSON.stringify(camp);
   const seed = generateConflictSeed(camp, { rng: makeRng(3) });

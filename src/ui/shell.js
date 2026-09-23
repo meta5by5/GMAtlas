@@ -56,7 +56,7 @@ import {
   addHexRoadSegment, clearHexRoads, removeHexRoadSegment,
   setHexVertexConflict, clearHexVertexConflict,
 } from '../domain/hexcrawls.js';
-import { findHexcrawlThreat } from '../data/hexcrawlIcons.js';
+import { findHexcrawlThreat, HEXCRAWL_THREAT_ICONS } from '../data/hexcrawlIcons.js';
 import { generateCreatureConcept, formatCreatureConcept, generateSiteConcept, formatSiteConcept, generateAdventureSeed, formatAdventureSeed } from '../domain/worldbuilding.js';
 import {
   addDocument, updateDocument, removeDocument, getDocument, addDocumentTag, removeDocumentTag, renameDocument,
@@ -483,6 +483,21 @@ let hexcrawlPan = null;
 // click, armed tool or not.
 let hexcrawlPanMoved = false;
 let hexcrawlSuppressNextClick = false;
+// Direct follow-up request: "remove a lake by prompting to remove after a
+// double click on the lake." A NATIVE 'dblclick' event turned out unreliable
+// here: a plain single click on a hex's own body (data-hex-select/-center)
+// almost always re-renders the drawer body when nothing is armed (opens/
+// updates the Hex Detail panel, or — for a center click on a linked
+// Location — navigates away to the Entity Editor entirely), which replaces
+// the DOM node the FIRST click of a would-be double-click landed on; most
+// browsers require both clicks to land on the same element to ever fire
+// 'dblclick' at all, so it silently never fired once the hex had already
+// been re-rendered out from under the gesture. Tracked here manually
+// instead — same hex, within a short window — checked as its own branch
+// before the normal single-click handling below, so it can intercept
+// before that handling's own re-render/navigation ever runs.
+let hexcrawlLastClickKey = null;
+let hexcrawlLastClickAt = 0;
 // Direct follow-up request (river feature) — the pending first edge of an
 // in-progress river segment: { mapId, q, r, edge } or null. Set by the
 // FIRST data-hex-edge click while the River tool is armed; the SECOND
@@ -1785,6 +1800,34 @@ function onClick(ev) {
   }
   hexcrawlSuppressNextClick = false;
 
+  // Direct follow-up request: "remove a lake by prompting to remove after a
+  // double click on the lake" — manually tracked (see hexcrawlLastClickKey's
+  // own doc comment for why a native 'dblclick' event doesn't reliably fire
+  // here). Checked, and intercepts, BEFORE the normal single-click handling
+  // for a hex's body/center below — otherwise the first of the two clicks
+  // would already have opened Hex Detail (or navigated to the Entity
+  // Editor, for a Location-linked center) before this ever got a chance to
+  // recognize the second click as completing a double-click. A hex with no
+  // lake, or two clicks too far apart/on different hexes, falls through to
+  // ordinary single-click handling exactly as before.
+  const hexDblTarget = ev.target.closest('[data-hex-select], [data-hex-center]');
+  if (hexDblTarget) {
+    const raw = hexDblTarget.dataset.hexSelect || hexDblTarget.dataset.hexCenter;
+    const now = Date.now();
+    const isDoubleClick = raw === hexcrawlLastClickKey && (now - hexcrawlLastClickAt) < 500;
+    hexcrawlLastClickKey = isDoubleClick ? null : raw;
+    hexcrawlLastClickAt = now;
+    if (isDoubleClick) {
+      const [mapId, q, r] = raw.split('::');
+      const qn = Number(q); const rn = Number(r);
+      const hex = getHex(store.get(), mapId, qn, rn);
+      if (hex.lake && window.confirm('Remove this lake? Any river segments already connected to it stay on their hexes, but stop showing a lake endpoint until one exists here again.')) {
+        store.update((d) => setHexLake(d, mapId, qn, rn, false));
+      }
+      return;
+    }
+  }
+
   // Direct follow-up request: "when the river icon is selected, any river
   // lines already placed should be selectable and clicking a line should
   // prompt to remove it." Checked before data-hex-edge/data-hex-select
@@ -1813,19 +1856,24 @@ function onClick(ev) {
   // encounter icon and then the hex, not the corner it would be placed" —
   // see data-hex-center/data-hex-select's own Encounter branches below for
   // the actual placement flow). An empty corner is a pure no-op regardless
-  // of what's armed. A FILLED corner (a LATER direct follow-up: "add a
-  // clickable link to each encounter and map it to a Conflict entity
-  // record... similar to how Location works") opens its already-linked
-  // Conflict, or offers to link/create one. Removal (LATER direct follow-
-  // up: "clicking an existing, populated conflict icon should open that
-  // conflict entity but there needs to be a way to disassociate it from
-  // the hex and remove the icon reference in the hex") reuses the exact
-  // same arm-then-click-the-existing-thing-to-remove-it gesture River
-  // already established just above (window.confirm, same wording style):
-  // with the Locations/corner tool armed, clicking an already-filled
-  // corner prompts to clear it instead of opening it — the Hex Detail
-  // panel's own "✕ Clear" per row still works too, this is just a second,
-  // faster path straight from the map.
+  // of what's armed. Removal reuses the exact same arm-then-click-the-
+  // existing-thing-to-remove-it gesture River already established just
+  // above (window.confirm, same wording style): with the Locations/corner
+  // tool armed, clicking an already-filled corner prompts to clear it
+  // instead of opening it — the Hex Detail panel's own "✕ Clear" per row
+  // still works too, this is just a second, faster path straight from the
+  // map.
+  //
+  // LATER direct follow-up request: a filled corner used to jump straight
+  // to its linked Conflict when one existed, with no way to reach delete/
+  // create/relink from that same click — now it ALWAYS opens the entity
+  // picker instead (same one an unlinked corner already opened), which
+  // renders itself differently depending on link state (renderEntityPickerOverlay,
+  // shell.js, further down): linked shows "📂 Open this Encounter" next to
+  // "✕ Remove link", unlinked shows "⚔️ Create New Conflict" — either way
+  // the full candidate list of OTHER Conflict entities stays selectable,
+  // and picking one REPLACES whatever was linked before (commitEntityPickerPick's
+  // 'hexcrawl-vertex-conflict' branch just overwrites, no exclusion needed).
   const hexVertexEl = hit('[data-hex-vertex]');
   if (hexVertexEl) {
     const [mapId, q, r, i] = hexVertexEl.dataset.hexVertex.split('::');
@@ -1833,13 +1881,8 @@ function onClick(ev) {
     const hex = getHex(store.get(), mapId, qn, rn);
     if (!hex.threats[vi]) return;
     if (hexcrawlPlacingIcon && hexcrawlPlacingIcon.layer === 'threat') {
-      if (!window.confirm('Remove this encounter and unlink its Conflict?')) return;
+      if (!window.confirm('Remove this encounter icon and unlink its Encounter entity?')) return;
       return store.update((d) => clearHexVertexConflict(clearHexThreat(d, mapId, qn, rn, vi), mapId, qn, rn, vi));
-    }
-    const linkedId = hex.vertexConflicts[vi];
-    if (linkedId) {
-      openDrawerTab('entity-detail');
-      return store.update((d) => setActiveEntity(d, linkedId));
     }
     entityPicker = { entityType: 'hexcrawl-vertex-conflict', mode: 'hexcrawl-vertex-conflict', scope: { mapId, q: qn, r: rn, vertexIndex: vi }, query: '' };
     renderEntityPickerOverlay();
@@ -1960,6 +2003,20 @@ function onClick(ev) {
   if (hexRemove) {
     if (window.confirm('Delete this hex map? This cannot be undone.')) store.update((d) => deleteHexMap(d, hexRemove.dataset.hexcrawlRemove));
     return;
+  }
+  // Direct follow-up request: "Create a new selectable button '+ Encounter'
+  // that can be toggled that will add new conflict entities to the hex up
+  // to the maximum" — arms the same 'threat' layer the Locations dropdown
+  // itself uses, with the catalog's own generic 'unknown' key, so a click
+  // anywhere on a hex places it via the exact same placeArmedEncounter path
+  // (next open corner, 6-max toast, auto-opens the Conflict picker). A
+  // second click while already armed with this exact key un-arms it —
+  // same toggle semantics as re-picking "Select" in the dropdown.
+  if (hit('[data-hexcrawl-arm-quick-encounter]')) {
+    hexcrawlPlacingIcon = (hexcrawlPlacingIcon && hexcrawlPlacingIcon.layer === 'threat' && hexcrawlPlacingIcon.key === 'unknown')
+      ? null : { layer: 'threat', key: 'unknown' };
+    hexcrawlRiverStart = null; hexcrawlRoadStart = null;
+    return renderDrawerBody();
   }
 
   // --- entities ---
@@ -3973,15 +4030,31 @@ function onClick(ev) {
     }
     return;
   }
+  // LATER direct follow-up request: a filled corner's picker now shows
+  // "📂 Open this Encounter" in place of "⚔️ Create New Conflict" whenever
+  // it's already linked (renderEntityPickerOverlay's own conflictLinkedEntity
+  // check) — this is that button's own click handler, same jump-to-the-
+  // entity behavior the corner click itself used to do directly before the
+  // picker started opening unconditionally.
+  if (hit('[data-hexcrawl-vertex-conflict-open]')) {
+    const picker = entityPicker;
+    entityPicker = null;
+    renderEntityPickerOverlay();
+    if (!picker || !picker.scope) return;
+    const { mapId, q, r, vertexIndex } = picker.scope;
+    const linkedId = getHex(store.get(), mapId, q, r).vertexConflicts[vertexIndex];
+    if (!linkedId) return;
+    openDrawerTab('entity-detail');
+    return store.update((d) => setActiveEntity(d, linkedId));
+  }
   // Direct follow-up request: "add a 'remove link to conflict' option to
   // the conflict list similar to 'add conflict' if clicking on a populated
-  // conflict icon that is not tied to a conflict entity yet." This picker
-  // only ever opens for a corner that already has an Encounter icon placed
-  // but no Conflict linked yet (a linked corner opens straight to its
-  // Conflict instead, no picker involved) — so "remove" here means
-  // clearing that placed-but-unlinked icon itself, same pair of fields
-  // (clearHexThreat + clearHexVertexConflict) the map's own arm-then-
-  // click-to-remove gesture and Hex Detail's "✕ Clear" already use.
+  // conflict icon that is not tied to a conflict entity yet." Clearing
+  // means removing the placed Encounter icon itself AND any Conflict it's
+  // linked to, same pair of fields (clearHexThreat + clearHexVertexConflict)
+  // the map's own arm-then-click-to-remove gesture and Hex Detail's own
+  // "✕ Clear" already use — works the same whether or not this corner
+  // currently has a link.
   if (hit('[data-hexcrawl-vertex-conflict-unlink]')) {
     const picker = entityPicker;
     entityPicker = null;
@@ -8025,13 +8098,30 @@ function commitEntityPickerPick(picker, id) {
     return store.update((d) => setHexLocation(d, mapId, q, r, id));
   }
   if (picker.entityType === 'hexcrawl-vertex-conflict') {
-    // Linking an EXISTING Conflict — unlike data-hexcrawl-vertex-conflict-
-    // create just above, this never adds the encounter-type tag: that's
-    // specifically for a brand-new Conflict created FOR this encounter,
-    // not an existing one the GM is choosing to reuse (which may already
+    // Linking an EXISTING Encounter — unlike data-hexcrawl-vertex-conflict-
+    // create just above, this never ADDS the encounter-type tag: that's
+    // specifically for a brand-new Encounter created FOR this corner, not
+    // an existing one the GM is choosing to reuse (which may already
     // represent several other encounters, each with a different type).
+    // Direct follow-up request: "update the encounter icon in the hex if
+    // a different encounter is selected and assigned" — if the newly-
+    // picked entity already carries one of HEXCRAWL_THREAT_ICONS' own
+    // labels as a tag (e.g. it was originally created FOR some OTHER
+    // corner via that same auto-tagging flow), the corner's own icon
+    // updates to match what's actually now linked here, so the map glyph
+    // never silently disagrees with the entity it points to. An entity
+    // with no such tag (hand-created in Cast, or one whose type tag was
+    // since removed) leaves the corner's existing icon alone rather than
+    // guessing or resetting it to Unknown.
     const { mapId, q, r, vertexIndex } = picker.scope || {};
-    return store.update((d) => setHexVertexConflict(d, mapId, q, r, vertexIndex, id));
+    const pickedEntity = getEntity(store.get(), id);
+    const pickedTags = new Set((pickedEntity && pickedEntity.tags || []).map((t) => String(t).toLowerCase()));
+    const matchedThreat = HEXCRAWL_THREAT_ICONS.find((t) => pickedTags.has(t.label.toLowerCase()));
+    return store.update((d) => {
+      let next = setHexVertexConflict(d, mapId, q, r, vertexIndex, id);
+      if (matchedThreat) next = setHexThreat(next, mapId, q, r, vertexIndex, matchedThreat.key);
+      return next;
+    });
   }
   if (picker.entityType === 'party-vehicle' || picker.entityType === 'party-item' || picker.entityType === 'party-asset') {
     // Party's Shared Assets — unlike WHO's own 'asset' mode above, this
@@ -8221,7 +8311,7 @@ function renderEntityPickerOverlay() {
     // follow-up request.
     const attachedIds = new Set((doc.context.what && doc.context.what.entityIds) || []);
     candidates = listEntities(doc, ['conflict']).filter((c) => !attachedIds.has(c.id));
-    emptyMessage = 'No available Conflicts — add one in Cast first.';
+    emptyMessage = 'No available Encounters — add one in Cast first.';
   } else if (entityPicker.entityType === 'colony-encounter') {
     // Colony's Lifeform Encounters row thumbnail/header dice roller — every
     // #lifeform entity (listLifeformEncounters also catches legacy
@@ -8263,10 +8353,18 @@ function renderEntityPickerOverlay() {
     emptyMessage = 'No available Location entities — every one is already linked elsewhere on this map, or add one in Cast first.';
   } else if (entityPicker.entityType === 'hexcrawl-vertex-conflict') {
     // A hex corner's own Encounter (direct follow-up request) — every
-    // Conflict entity, no exclusion (unlike Location, the same Conflict
-    // can reasonably represent more than one Encounter across a map).
-    candidates = listEntities(doc, ['conflict']);
-    emptyMessage = 'No Conflict entities yet — create one below.';
+    // Conflict entity linked elsewhere stays listed (unlike Location, the
+    // same Conflict can reasonably represent more than one Encounter
+    // across a map); only THIS vertex's own current link is excluded
+    // (LATER direct follow-up request: "Keep the list of other unassigned
+    // conflict entity records in the list that would then replace the
+    // assigned conflict with the new one") — picking it again would be a
+    // redundant no-op, and it's already reachable via "📂 Open this
+    // Encounter" above.
+    const scope = entityPicker.scope || {};
+    const currentLinkedId = scope.mapId ? getHex(doc, scope.mapId, scope.q, scope.r).vertexConflicts[scope.vertexIndex] : null;
+    candidates = listEntities(doc, ['conflict']).filter((c) => c.id !== currentLinkedId);
+    emptyMessage = 'No Encounter entities yet — create one below.';
   } else if (entityPicker.entityType === 'where-faction-link') {
     // WHO's Factions active nearby "+" (direct follow-up request) —
     // excludes whatever's already showing there (region presence, an
@@ -8348,9 +8446,24 @@ function renderEntityPickerOverlay() {
   // follow-up: "move the 'X remove link to [entity type]' to the same row
   // as the 'Create new [entity type]'" — paired side by side, same
   // .entity-picker-row-pair treatment as the Location picker just above.
+  // LATER direct follow-up request: a filled+LINKED corner now opens this
+  // same picker too (previously it jumped straight to the entity) — so
+  // when the vertex this picker was opened for already has a link, the
+  // primary action shown here "substitutes 'create [entity type]' with
+  // 'open this encounter'" (the user's own words) — the create button
+  // doesn't make sense as the PRIMARY action once something already
+  // exists here; a GM who wants a genuinely fresh Conflict instead can
+  // still pick a different one from the candidate list below (any pick
+  // replaces the link — commitEntityPickerPick's own 'hexcrawl-vertex-
+  // conflict' branch just overwrites) or create one via the generic flow.
+  const conflictScope = entityPicker.entityType === 'hexcrawl-vertex-conflict' ? entityPicker.scope : null;
+  const conflictLinkedId = conflictScope ? (getHex(store.get(), conflictScope.mapId, conflictScope.q, conflictScope.r).vertexConflicts[conflictScope.vertexIndex] || null) : null;
+  const conflictLinkedEntity = conflictLinkedId ? getEntity(store.get(), conflictLinkedId) : null;
   const createConflictBtn = entityPicker.entityType === 'hexcrawl-vertex-conflict'
     ? `<div class="entity-picker-row-pair">
-        <button type="button" class="entity-picker-row entity-picker-row-create" data-hexcrawl-vertex-conflict-create>⚔️ Create New Conflict</button>
+        ${conflictLinkedEntity
+          ? `<button type="button" class="entity-picker-row entity-picker-row-create" data-hexcrawl-vertex-conflict-open>📂 Open this Encounter</button>`
+          : `<button type="button" class="entity-picker-row entity-picker-row-create" data-hexcrawl-vertex-conflict-create>⚔️ Create New Encounter</button>`}
         <button type="button" class="entity-picker-row entity-picker-row-remove" data-hexcrawl-vertex-conflict-unlink>✕ Remove link</button>
       </div>`
     : '';

@@ -647,7 +647,7 @@ function conflictSection(doc, e, ui) {
       ${depthOpen ? conflictDepthHtml(doc, e, ui, involvedFactions) : ''}`;
   return `
     <div class="faction-card">
-      ${partySectionHeaderHtml(conflictKey, 'Conflict', conflictCollapsed)}
+      ${partySectionHeaderHtml(conflictKey, 'Encounter', conflictCollapsed)}
       ${conflictCollapsed ? '' : conflictBodyHtml}
     </div>`;
 }
@@ -4809,6 +4809,18 @@ function hexcrawlPalette(ui) {
   const geoArmed = armed && armed.layer === 'geography';
   const threatArmed = armed && armed.layer === 'threat';
   const overlayArmed = armed && (armed.layer === 'river' || armed.layer === 'lake' || armed.layer === 'road');
+  // Direct follow-up request: "Create a new selectable button '+ Encounter'
+  // that can be toggled that will add new conflict entities to the hex up
+  // to the maximum" — a one-click shortcut alongside the Locations
+  // dropdown for when the GM doesn't want to pick a specific type first;
+  // arms the same 'threat' layer as the dropdown, just with the existing
+  // generic 'unknown' HEXCRAWL_THREAT_ICONS key instead of a chosen one,
+  // so it reuses placeArmedEncounter's own next-open-corner/6-max/auto-
+  // open-the-Conflict-picker behavior with no new domain code. Resets the
+  // dropdown's own "Select" state back to true (armed.key !== any real
+  // option), same mutual-exclusivity every other palette control already
+  // has.
+  const quickEncounterArmed = armed && armed.layer === 'threat' && armed.key === 'unknown';
   // Direct follow-up request: "Change the 'Threats' to 'Encounters'... The
   // user adds encounters by clicking the encounter icon and then the hex,
   // not the corner it would be placed. The encounter icon will populate
@@ -4847,6 +4859,7 @@ function hexcrawlPalette(ui) {
         <option value="" ${!threatArmed ? 'selected' : ''}>Select</option>
         ${hexcrawlOptionsHtml(HEXCRAWL_THREAT_ICONS, 'threat', armed)}
       </select>
+      <button type="button" class="btn ghost sm ${quickEncounterArmed ? 'active' : ''}" data-hexcrawl-arm-quick-encounter title="Add an encounter of unknown type without picking one from the list above — click again to un-arm. Same fill-the-next-open-corner placement as the dropdown; pick its actual type/flavor later from the Encounter entity it links to.">${quickEncounterArmed ? '✓ ' : '+ '}Encounter</button>
     </div>
     <div class="hexcrawl-palette-col">
       <span class="dim small" title="River: click one border, then another, to draw a segment between them; keeps going into the next hex, and clicking an existing line prompts to remove it. Lake: click a hex to add one, or again for a new shape; remove from the Hex Detail panel. Road: same as River, but connects to a hex's own Location instead of a lake or the ocean.">Overlays</span>
@@ -4903,7 +4916,7 @@ function hexcrawlGrid(doc, mapId, ui) {
         const linkedConflictId = t ? hex.vertexConflicts[i] : null;
         const linkedConflict = linkedConflictId ? getEntity(doc, linkedConflictId) : null;
         const title = !t ? '' : threatToolArmed ? `${esc(t.label)} — click to remove`
-          : linkedConflict ? `${esc(t.label)} — ${esc(linkedConflict.name || 'Unnamed')} (click to open)` : `${esc(t.label)} — click to link a Conflict`;
+          : linkedConflict ? `${esc(t.label)} — ${esc(linkedConflict.name || 'Unnamed')} (click to open)` : `${esc(t.label)} — click to link an Encounter`;
         return `<button type="button" class="hex-vertex ${t ? 'hex-vertex-filled' : ''}" data-hex-vertex="${esc(mapId)}::${q}::${r}::${i}" style="left:${vx}px;top:${vy}px" title="${title}">${t ? t.glyph : ''}</button>`;
       }).join('');
       // Direct follow-up request (river feature): "clicking one side/

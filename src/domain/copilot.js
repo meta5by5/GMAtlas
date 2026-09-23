@@ -272,7 +272,7 @@ export function buildStoryOptions(campaign, { limit = 6 } = {}) {
 
   for (const c of ctx.conflictsHere) {
     const gap = c.causeGapHook || (c.statedCause && c.rootCause ? `${c.statedCause} vs. ${c.rootCause}` : '');
-    options.push({ id: `conflict-${c.id}`, label: `${c.name || 'Unnamed conflict'} — the gap`, detail: gap || 'What people say is happening vs. what actually is.', source: 'conflict', entityId: c.id, weight: 7, oracleGroup: 'Faction Conflict', oracleTable: 'Starter Session Hook' });
+    options.push({ id: `conflict-${c.id}`, label: `${c.name || 'Unnamed encounter'} — the gap`, detail: gap || 'What people say is happening vs. what actually is.', source: 'conflict', entityId: c.id, weight: 7, oracleGroup: 'Faction Encounter', oracleTable: 'Starter Session Hook' });
   }
 
   for (const fs of ctx.foreshadowing) {

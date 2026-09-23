@@ -2257,7 +2257,12 @@ Object.assign(SCENE_TABLES, {
   // spec sketched) — validated against GM-community sentiment that a
   // faction/conflict tool earns adoption by being a single low-friction
   // roll a GM can accept as-is or edit, not a multi-table wizard.
-  "Faction Conflict": {
+  // Direct follow-up request: "revise all references to conflict entity
+  // type to Encounter" — this table group's own key/display name (the
+  // Faction Conflict feature's supplying content, consumed by
+  // domain/factionConflicts.js's generateConflictSeed) renamed to match;
+  // see data/oracleGroups.js's own children list for the matching update.
+  "Faction Encounter": {
     "Root Cause Category": [
       "control of a jump point, trade lane, or border zone", "water rights, an ore vein, a fuel depot, or arable land",
       "two claimants to the same charter or inheritance", "a religious or ideological schism within a formerly unified group",

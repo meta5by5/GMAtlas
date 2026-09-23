@@ -1316,6 +1316,11 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    selected option's own text width (which would make it visibly resize
    every time the selection changes). */
 .hexcrawl-palette-col select { width: 100%; }
+/* Direct follow-up request: "a new selectable button '+ Encounter' that
+   can be toggled" — same armed-state indicator every other palette
+   control already gets from its own selected <option>, just for a plain
+   <button> instead of a <select>. */
+.hexcrawl-palette-col .btn.active { color: var(--accent); border-color: var(--accent); }
 /* min-height 690px ~= 10 hex rows tall at HEX_SIZE=44 (domain/hexcrawls.js
    — row spacing 1.5*HEX_SIZE=66px, so 9 row-steps + one full hex height:
    66*9 + 2*44 = 682px, rounded up a bit) — direct follow-up request:
@@ -1450,16 +1455,21 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .hex-center-type-icon { font-size: 1.7rem; line-height: 1; }
 /* Direct follow-up request: "make the circles in the corners not visible"
    — invisible at rest (no fill/border/glyph chrome), still a real
-   clickable hit target at full size; a faint hover hint keeps the 6 slots
-   discoverable without cluttering an empty hex. .hex-vertex-filled (a
-   placed Threat) is always fully visible regardless of hover. */
+   clickable hit target at full size. LATER direct follow-up request: "The
+   corner circles for encounter/conflicts should not be visible during a
+   mouseover without being populated with an icon for a conflict" — the
+   earlier faint hover hint for an EMPTY corner is removed entirely (an
+   empty corner was never a manual placement target anyway — see
+   data-hex-vertex's own doc comment in shell.js — so a hover hint there
+   only suggested a click would do something, when it wouldn't).
+   .hex-vertex-filled (a placed Encounter) stays fully visible regardless
+   of hover, unaffected by this. */
 .hex-vertex {
   position: absolute; transform: translate(-50%, -50%);
   width: 1.1rem; height: 1.1rem; min-width: 0; border-radius: 50%; padding: 0;
   display: flex; align-items: center; justify-content: center; font-size: 0.7rem;
   background: transparent; border: none; opacity: 0;
 }
-.hex-vertex:hover { opacity: 0.6; background: var(--bg-raised); border: 1px solid var(--border); }
 .hex-vertex-filled { opacity: 1; background: var(--tier3-bg); border: 1px solid var(--border-strong); }
 .hex-vertex-filled:hover { opacity: 1; }
 .hex-detail-panel { margin-top: var(--sp-2); }

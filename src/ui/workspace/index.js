@@ -581,7 +581,7 @@ function whereLocationHierarchyBlock(doc, ui) {
 // (data-entity-picker-open="what-conflict", shell.js) filtered to Conflict
 // entities instead of a bespoke picker.
 function whatHeaderExtra() {
-  return `<button type="button" class="icon-btn" data-entity-picker-open="what-conflict" title="Attach a Conflict">＋</button>`;
+  return `<button type="button" class="icon-btn" data-entity-picker-open="what-conflict" title="Attach an Encounter">＋</button>`;
 }
 
 // A Conflict chip attached to WHAT (context.what.entityIds — the exact
@@ -915,7 +915,7 @@ function activeConflictLocationPicker(doc) {
   const locations = (doc.entities.items || []).filter((e) => e.type === 'location');
   return `
     <div class="workspace-mini-section">
-      <label class="field-label">${esc(active.name || 'This conflict')} — Location (contested zone)
+      <label class="field-label">${esc(active.name || 'This encounter')} — Location (contested zone)
         <select data-entity-field="locationId">
           <option value="">— unset —</option>
           ${locations.map((l) => `<option value="${esc(l.id)}" ${active.locationId === l.id ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
@@ -995,10 +995,10 @@ function locationConflictsBlock(doc) {
   if (!conflicts.length) return '';
   const statusLabel = Object.fromEntries(CONFLICT_STATUS_OPTIONS);
   const rows = conflicts.map((c) => `<div class="thread-row">
-      <span class="thread-name"><button type="button" class="entity-chip" data-open-entity="${esc(c.id)}">${esc(c.name || 'Unnamed conflict')}</button> <span class="dim small">— ${esc(statusLabel[c.status] || c.status)}</span></span>
+      <span class="thread-name"><button type="button" class="entity-chip" data-open-entity="${esc(c.id)}">${esc(c.name || 'Unnamed encounter')}</button> <span class="dim small">— ${esc(statusLabel[c.status] || c.status)}</span></span>
     </div>`).join('');
   return `<div class="threads">
-    <div class="threads-head"><h3>Conflicts here</h3></div>
+    <div class="threads-head"><h3>Encounters here</h3></div>
     ${rows}
   </div>`;
 }
