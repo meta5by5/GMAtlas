@@ -48,6 +48,8 @@ import { listBattlemaps, getActiveBattlemap } from '../../domain/battlemaps.js';
 import { BATTLEMAP_ICONS, findBattlemapIcon } from '../../data/battlemapIcons.js';
 import { listHexMaps, getActiveHexMap, getHex, axialToPixel, hexVertexPoints, HEX_SIZE, ENCOUNTER_VERTEX_ORDER, hexEdgeMidpoints, edgeNeighbor } from '../../domain/hexcrawls.js';
 import { HEXCRAWL_GEOGRAPHY_ICONS, findHexcrawlGeography, HEXCRAWL_THREAT_ICONS, findHexcrawlThreat } from '../../data/hexcrawlIcons.js';
+import { listDungeonMaps, getActiveDungeonMap, getDungeonTile, computeDungeonAppendCells, computeMergeRectangle, DUNGEON_GRID_SIZE } from '../../domain/dungeonCrawls.js';
+import { DUNGEON_CRAWL_ARCHETYPES, ALL_DUNGEON_CRAWL_ARCHETYPES, findDungeonCrawlArchetype, DUNGEON_CRAWL_PACKS, findDungeonCrawlPack, DUNGEON_ROOM_FALLBACK_PALETTE } from '../../data/dungeonCrawlTiles.js';
 import { findLocationTypeIcon } from '../../data/locationTypeIcons.js';
 import { getSector, listTouchedSectors, adjacentSectors, deriveSectorIcon, generateMissionHooks, gridSizeOf, countInvestigationSites, MAX_INVESTIGATION_SITES, worldTrackerAttentionItems } from '../../domain/worldTracker.js';
 import { WORLD_TRACKER_ICONS, findWorldTrackerIcon } from '../../data/worldTrackerIcons.js';
@@ -128,6 +130,7 @@ export function renderDrawer(id, doc, ui = {}) {
     case 'gallery': return gallery(doc, ui);
     case 'battlemap': return battlemap(doc, ui);
     case 'hexcrawl': return hexcrawl(doc, ui);
+    case 'dungeoncrawl': return dungeoncrawl(doc, ui);
     case 'world-tracker': return worldTracker(doc, ui);
     default: return `<p class="ws-placeholder">Drawer “${esc(id)}”.</p>`;
   }
@@ -5105,6 +5108,306 @@ function hexcrawl(doc, ui = {}) {
       </div>
     </div>
     ${hexDetailPanel(doc, active.id, ui)}`;
+}
+
+// --- Dungeon Crawl (direct follow-up request: a 6x6 tile-grid randomizer
+// matching FlexTale's FlexCrawl Toolkit, built from the real owned PDF +
+// sample tile images under requirements/FlexTale/ — see data/
+// dungeonCrawlTiles.js's own doc comment for sourcing detail and
+// domain/dungeonCrawls.js's for the grid/rotation math) -------------------
+// Distinct from both battlemap() (freeform 0-1 fractional canvas) and
+// hexcrawl() (unbounded pan/zoom hex grid) above: a FIXED 6x6 square grid
+// that fits on screen outright, same "no camera needed" posture as
+// worldTrackerGrid just below. Built one Tile at a time from an empty
+// board via three ephemeral (not persisted) UI states read off `ui`:
+// `dungeonCrawlPending` ({mapId,x,y,archetypeKey,rotation} — a Tile picked
+// but not yet committed, shown with its 4 corner-rotate buttons + a center
+// commit button) and `dungeonCrawlSelected` ({mapId,x,y} — a committed
+// Tile whose details are open below the grid).
+function dungeoncrawl(doc, ui = {}) {
+  const helpKey = 'dungeoncrawl-intro';
+  const maps = listDungeonMaps(doc);
+  const active = getActiveDungeonMap(doc);
+  const head = `<div class="section-head-row"><span class="entity-chip-row">${helpToggle(helpKey)}</span></div>
+    ${helpBody(helpKey, 'Click the glowing + to place the next Tile — the very first one is always an Entrance; every one after that picks a random Tile from the current pack and shows it pending. Touch any of its 4 corners to rotate it 90°, then click its center to commit. Double-click (or long-press on mobile) an already-placed Tile to reopen it for re-rotating. Click a placed Tile once to see a bigger, zoomable view of it below the grid — handy for reading secret-door and encounter-zone markings. "Merge Tiles" lets you select two or more already-placed, adjacent Tiles forming a rectangle and combine them into one bigger Room. The Pack dropdown re-skins every placed Tile at once without changing the map layout.', ui)}
+    <div class="battlemap-tabs">
+      ${maps.map((m) => `<button type="button" class="btn ghost sm ${active && active.id === m.id ? 'active' : ''}" data-dungeoncrawl-select="${esc(m.id)}">${esc(m.name)}</button>`).join('')}
+      <button type="button" class="chip sm" data-dungeoncrawl-add>＋ New Map</button>
+    </div>`;
+
+  if (!active) return `${head}<p class="ws-placeholder">No Dungeon Crawl maps yet — create one to get started.</p>`;
+
+  const pack = findDungeonCrawlPack(active.pack);
+  const packOptions = DUNGEON_CRAWL_PACKS.map((p) => `<option value="${esc(p.key)}" ${p.key === pack.key ? 'selected' : ''}>${esc(p.label)}</option>`).join('');
+  const mergeMode = !!ui.dungeonCrawlMergeMode;
+  const mergeSelection = ui.dungeonCrawlMergeSelection || new Set();
+  const mergeRect = mergeMode ? computeMergeRectangle([...mergeSelection].map((k) => { const [x, y] = k.split(',').map(Number); return { x, y }; })) : null;
+  return `${head}
+    <div class="battlemap-toolbar">
+      <span class="hexcrawl-map-name">${esc(active.name)}</span>
+      <button type="button" class="icon-btn" data-dungeoncrawl-rename-open="${esc(active.id)}" title="Rename map">✎</button>
+      <button type="button" class="icon-btn" data-dungeoncrawl-remove="${esc(active.id)}" title="Delete this map" aria-label="Delete map">✕</button>
+      <select data-dungeoncrawl-pack="${esc(active.id)}" title="Re-skin every placed Tile with a different pack">${packOptions}</select>
+      <button type="button" class="btn ghost sm ${mergeMode ? 'active' : ''}" data-dungeoncrawl-merge-toggle title="Select two or more adjacent placed Tiles forming a rectangle and combine them into one bigger Room">${mergeMode ? '✓ ' : '⬜ '}Merge Tiles</button>
+      ${mergeMode && mergeRect ? `<button type="button" class="btn sm" data-dungeoncrawl-merge-commit="${esc(active.id)}">✓ Merge ${mergeSelection.size} Tiles into a Room</button>` : ''}
+      ${mergeMode ? `<button type="button" class="btn ghost sm" data-dungeoncrawl-merge-cancel>✕ Cancel</button>` : ''}
+    </div>
+    ${mergeMode ? `<p class="dim small">${mergeSelection.size === 0 ? 'Click two or more adjacent, already-placed Tiles to select them.' : mergeRect ? `${mergeSelection.size} Tiles selected — forms a valid ${mergeRect.w}×${mergeRect.h} rectangle.` : `${mergeSelection.size} Tiles selected — must form a solid rectangle with no gaps before they can be merged.`}</p>` : ''}
+    <div class="dungeoncrawl-grid">${dungeoncrawlCells(doc, active, ui)}</div>
+    ${dungeoncrawlTileDetail(doc, active, ui)}`;
+}
+
+function dungeoncrawlCells(doc, map, ui) {
+  const pending = ui.dungeonCrawlPending && ui.dungeonCrawlPending.mapId === map.id ? ui.dungeonCrawlPending : null;
+  const appendCells = pending ? [] : computeDungeonAppendCells(map, ALL_DUNGEON_CRAWL_ARCHETYPES);
+  const appendSet = new Set(appendCells.map((c) => `${c.x},${c.y}`));
+  const pack = findDungeonCrawlPack(map.pack);
+  const selected = ui.dungeonCrawlSelected && ui.dungeonCrawlSelected.mapId === map.id ? ui.dungeonCrawlSelected : null;
+  const mergeMode = !!ui.dungeonCrawlMergeMode;
+  const mergeSelection = ui.dungeonCrawlMergeSelection || new Set();
+  let out = '';
+  for (let y = 0; y < DUNGEON_GRID_SIZE; y++) {
+    for (let x = 0; x < DUNGEON_GRID_SIZE; x++) {
+      const k = `${x},${y}`;
+      const isPending = pending && pending.x === x && pending.y === y;
+      const tile = getDungeonTile(doc, map.id, x, y);
+      // A cell covered by a merged Room (domain/dungeonCrawls.js's
+      // mergeDungeonTilesIntoRoom) renders ONCE, at its own top-left
+      // (anchor) corner, spanning the Room's full footprint via plain CSS
+      // Grid column/row spans — every OTHER cell it covers is skipped
+      // entirely (not even an empty placeholder), and CSS Grid's own
+      // auto-placement algorithm flows the rest of the board around that
+      // span correctly on its own.
+      if (tile && tile.room) {
+        if (tile.room.x !== x || tile.room.y !== y) continue; // not the anchor — already covered by it
+        const isSel = selected && selected.x === x && selected.y === y;
+        out += `<button type="button" class="dungeoncrawl-cell filled dc-room ${isSel ? 'sel' : ''}" style="grid-column:span ${tile.room.w};grid-row:span ${tile.room.h};aspect-ratio:${tile.room.w}/${tile.room.h};" data-dungeoncrawl-cell="${map.id},${x},${y}" title="Room (${tile.room.w}×${tile.room.h})">
+          ${dungeonBigRoomArtHtml(pack)}
+        </button>`;
+        continue;
+      }
+      if (isPending) {
+        const arch = findDungeonCrawlArchetype(pending.archetypeKey);
+        out += `<div class="dungeoncrawl-cell pending" data-dungeoncrawl-cell="${map.id},${x},${y}">
+          ${dungeonTileArtHtml(arch, pack, pending.rotation)}
+          <button type="button" class="dc-corner dc-corner-tl" data-dungeoncrawl-rotate="${map.id},${x},${y}" title="Rotate 90°" aria-label="Rotate"></button>
+          <button type="button" class="dc-corner dc-corner-tr" data-dungeoncrawl-rotate="${map.id},${x},${y}" title="Rotate 90°" aria-label="Rotate"></button>
+          <button type="button" class="dc-corner dc-corner-bl" data-dungeoncrawl-rotate="${map.id},${x},${y}" title="Rotate 90°" aria-label="Rotate"></button>
+          <button type="button" class="dc-corner dc-corner-br" data-dungeoncrawl-rotate="${map.id},${x},${y}" title="Rotate 90°" aria-label="Rotate"></button>
+          <button type="button" class="dc-commit" data-dungeoncrawl-commit="${map.id},${x},${y}" title="Commit this Tile" aria-label="Commit">✓</button>
+          <button type="button" class="dc-reroll" data-dungeoncrawl-reroll="${map.id},${x},${y}" title="Pick a different random Tile" aria-label="Reroll">🎲</button>
+          <button type="button" class="dc-cancel" data-dungeoncrawl-cancel="${map.id},${x},${y}" title="Cancel" aria-label="Cancel">✕</button>
+        </div>`;
+      } else if (tile) {
+        const arch = findDungeonCrawlArchetype(tile.archetypeKey);
+        const isSel = selected && selected.x === x && selected.y === y;
+        const isMergeSel = mergeMode && mergeSelection.has(k);
+        const title = arch ? `${arch.label}${arch.stairs ? ' (Stairs Down)' : ''}` : '';
+        out += `<button type="button" class="dungeoncrawl-cell filled ${isSel ? 'sel' : ''} ${isMergeSel ? 'merge-sel' : ''}" data-dungeoncrawl-cell="${map.id},${x},${y}" title="${esc(title)}">
+          ${arch ? dungeonTileArtHtml(arch, pack, tile.rotation) : ''}
+        </button>`;
+      } else if (appendSet.has(k) && !mergeMode) {
+        out += `<button type="button" class="dungeoncrawl-cell append" data-dungeoncrawl-append="${map.id},${x},${y}" title="Place the next Tile here">＋</button>`;
+      } else {
+        out += `<div class="dungeoncrawl-cell empty"></div>`;
+      }
+    }
+  }
+  return out;
+}
+
+/** Renders one Tile's art, rotated, sized to fill its parent (the small
+ *  grid cell's own absolute-inset:0 layering, see .dungeoncrawl-tile-art)
+ *  — an <img> for the `dungeon` pack's real extracted Player-side photo
+ *  art, or a generated inline <svg> for the two procedural packs (`cave`/
+ *  `forest`) — see data/dungeonCrawlTiles.js's own doc comment for why
+ *  those two have no real source art to extract from. The Entrance
+ *  Archetype (data/dungeonCrawlTiles.js's DUNGEON_CRAWL_ENTRANCE_ARCHETYPE)
+ *  always renders procedurally regardless of pack — nothing in the real
+ *  book defines one, so there's no photo art for it to use even under the
+ *  `dungeon` pack. Either way the WHOLE element is rotated via a plain CSS
+ *  transform, mirroring the book's own "physically rotate the printed
+ *  square card" model (p.51) exactly. */
+function dungeonTileArtHtml(archetype, pack, rotation) {
+  if (!archetype) return '';
+  const rot = Number(rotation) || 0;
+  if (archetype.entrance) {
+    return `<div class="dungeoncrawl-tile-art" style="transform:rotate(${rot}deg)">${dungeonEntranceSvg(pack)}</div>`;
+  }
+  if (pack.kind === 'image') {
+    return `<img class="dungeoncrawl-tile-art" src="./${pack.imageDir}/${esc(archetype.key)}.png" alt="${esc(archetype.label)}" style="transform:rotate(${rot}deg)">`;
+  }
+  return `<div class="dungeoncrawl-tile-art" style="transform:rotate(${rot}deg)">${dungeonProceduralTileSvg(archetype, pack)}</div>`;
+}
+
+/** The big, zoomable Tile Detail view's own art — direct follow-up
+ *  request: "allow zoom capability to read markings like secret doors and
+ *  color coded encounter zones." For the `dungeon` pack this swaps in the
+ *  real Full/GM-side image (pack.imageFullDir, much higher resolution than
+ *  the small grid art) instead of the Player-side one, since that's the
+ *  version that actually carries those markings; the two procedural packs
+ *  have no separate "full" asset at all (their SVG is already generated
+ *  fresh and scales to any size with zero quality loss), so they just
+ *  reuse the exact same render as the small grid cell. Sized to fill
+ *  whatever box the caller gives it (no absolute positioning, unlike
+ *  dungeonTileArtHtml above) since the Tile Detail panel controls its own
+ *  zoom level via a plain CSS width percentage on the PARENT element. */
+function dungeonTileDetailArtHtml(archetype, pack, rotation) {
+  if (!archetype) return '';
+  const rot = Number(rotation) || 0;
+  if (archetype.entrance) {
+    return `<div class="dc-detail-art-inner" style="transform:rotate(${rot}deg)">${dungeonEntranceSvg(pack)}</div>`;
+  }
+  if (pack.kind === 'image') {
+    const dir = pack.imageFullDir || pack.imageDir;
+    const ext = pack.imageFullDir ? 'jpg' : 'png';
+    return `<img class="dc-detail-art-inner" src="./${dir}/${esc(archetype.key)}.${ext}" alt="${esc(archetype.label)}" style="transform:rotate(${rot}deg)">`;
+  }
+  return `<div class="dc-detail-art-inner" style="transform:rotate(${rot}deg)">${dungeonProceduralTileSvg(archetype, pack)}</div>`;
+}
+
+// Generic edges/chamber/stairs -> SVG renderer shared by BOTH procedural
+// packs (`cave`/`forest`) — only `pack.palette`'s three colors differ
+// between them, so re-skinning a map between them (or even back to
+// `dungeon`) never touches a placed Tile's own stored layout.
+function dungeonProceduralTileSvg(archetype, pack) {
+  const { edges, chamber, stairs } = archetype;
+  const { floor, wall, decor } = pack.palette;
+  const half = chamber ? 34 : 15;
+  const lo = 50 - half; const hi = 50 + half;
+  const armPath = (dir) => {
+    if (dir === 'N') return `M${lo},${lo} L${hi},${lo} L${hi},0 L${lo},0 Z`;
+    if (dir === 'S') return `M${lo},${hi} L${hi},${hi} L${hi},100 L${lo},100 Z`;
+    if (dir === 'E') return `M${hi},${lo} L100,${lo} L100,${hi} L${hi},${hi} Z`;
+    return `M${lo},${lo} L0,${lo} L0,${hi} L${lo},${hi} Z`; // W
+  };
+  let arms = '';
+  for (const dir of ['N', 'E', 'S', 'W']) { if (edges[dir]) arms += `<path d="${armPath(dir)}" fill="${floor}"/>`; }
+  const dot = (cx, cy) => `<circle cx="${cx}" cy="${cy}" r="4.5" fill="${decor}"/>`;
+  const decorDots = dot(10, 10) + dot(90, 10) + dot(10, 90) + dot(90, 90);
+  const stairsMark = stairs
+    ? `<g stroke="${wall}" stroke-width="2.2" stroke-linecap="round"><line x1="38" y1="42" x2="62" y2="42"/><line x1="40" y1="48" x2="60" y2="48"/><line x1="42" y1="54" x2="58" y2="54"/><line x1="44" y1="60" x2="56" y2="60"/></g>`
+    : '';
+  return `<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
+    <rect x="0" y="0" width="100" height="100" fill="${wall}"/>
+    <path d="M${lo},${lo} L${hi},${lo} L${hi},${hi} L${lo},${hi} Z" fill="${floor}"/>
+    ${arms}${decorDots}${stairsMark}
+  </svg>`;
+}
+
+// The Entrance Archetype's own art (data/dungeonCrawlTiles.js's
+// DUNGEON_CRAWL_ENTRANCE_ARCHETYPE) — direct follow-up request: "start the
+// first tile with an entrance such as a door, cave, or stairs." Reuses the
+// same floor/wall palette every procedural Tile does (`pack.palette`, or
+// DUNGEON_ROOM_FALLBACK_PALETTE for the `dungeon` pack, which has no
+// `palette` of its own since it normally uses real photo art instead), but
+// always draws its own icon rather than delegating to
+// dungeonProceduralTileSvg — the icon itself is pack-specific (a stone
+// doorway/cave mouth/flight of steps, one per pack, matching the user's own
+// 3 named examples) rather than driven by edges/chamber/stairs flags the
+// way an ordinary Archetype's art is.
+function dungeonEntranceSvg(pack) {
+  const palette = pack.palette || DUNGEON_ROOM_FALLBACK_PALETTE;
+  const { floor, wall } = palette;
+  const half = 15; const lo = 50 - half; const hi = 50 + half;
+  const westArm = `M${lo},${lo} L0,${lo} L0,${hi} L${lo},${hi} Z`;
+  return `<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
+    <rect x="0" y="0" width="100" height="100" fill="${wall}"/>
+    <path d="M${lo},${lo} L${hi},${lo} L${hi},${hi} L${lo},${hi} Z" fill="${floor}"/>
+    <path d="${westArm}" fill="${floor}"/>
+    ${dungeonEntranceIconSvg(pack.key, wall, floor)}
+  </svg>`;
+}
+
+function dungeonEntranceIconSvg(packKey, wall, floor) {
+  if (packKey === 'cave') {
+    // A jagged, irregular cave-mouth opening.
+    return `<path d="M35,30 Q40,15 50,18 Q60,14 66,28 Q72,40 62,46 Q50,52 40,45 Q30,40 35,30 Z" fill="${floor}" stroke="${wall}" stroke-width="2"/>`;
+  }
+  if (packKey === 'forest') {
+    // A short flight of steps up to the surface/clearing.
+    return `<g fill="none" stroke="${wall}" stroke-width="2.6" stroke-linecap="round">
+      <line x1="30" y1="58" x2="48" y2="58"/>
+      <line x1="38" y1="48" x2="56" y2="48"/>
+      <line x1="46" y1="38" x2="64" y2="38"/>
+      <line x1="54" y1="28" x2="72" y2="28"/>
+    </g>`;
+  }
+  // `dungeon` (and the fallback for any future pack) — a simple arched
+  // stone doorway.
+  return `<path d="M38,58 L38,32 Q38,16 50,16 Q62,16 62,32 L62,58" fill="none" stroke="${wall}" stroke-width="3.2"/>
+    <line x1="50" y1="18" x2="50" y2="58" stroke="${wall}" stroke-width="1.6"/>`;
+}
+
+// A merged multi-Tile Room's own art (domain/dungeonCrawls.js's
+// mergeDungeonTilesIntoRoom) — direct follow-up request: "replace them
+// with a larger tile that gives a bigger room." There's no real source art
+// for an arbitrarily-sized merged footprint (every real Archetype image is
+// exactly one Tile square), so this always renders as a plain floor-
+// colored rectangle with corner decoration, regardless of which pack is
+// active — `dungeon` falls back to DUNGEON_ROOM_FALLBACK_PALETTE since it
+// has no `palette` of its own. Deliberately simple/undetailed (no wall
+// openings drawn) since a merged Room no longer corresponds to any one
+// Archetype's own connector layout — its TRUE outer openings still work
+// for Tile-append purposes (domain/dungeonCrawls.js's own doc comment
+// explains why), they're just not re-drawn here.
+function dungeonBigRoomArtHtml(pack) {
+  const { floor, wall, decor } = pack.palette || DUNGEON_ROOM_FALLBACK_PALETTE;
+  const dot = (cx, cy) => `<circle cx="${cx}" cy="${cy}" r="3" fill="${decor}"/>`;
+  return `<div class="dungeoncrawl-tile-art dc-room-art">
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+      <rect x="0" y="0" width="100" height="100" fill="${wall}"/>
+      <rect x="4" y="4" width="92" height="92" rx="2" fill="${floor}"/>
+      ${dot(10, 10)}${dot(90, 10)}${dot(10, 90)}${dot(90, 90)}
+    </svg>
+  </div>`;
+}
+
+function dungeoncrawlTileDetail(doc, map, ui) {
+  const sel = ui.dungeonCrawlSelected && ui.dungeonCrawlSelected.mapId === map.id ? ui.dungeonCrawlSelected : null;
+  if (!sel) return '';
+  const tile = getDungeonTile(doc, map.id, sel.x, sel.y);
+  if (!tile) return '';
+  const pack = findDungeonCrawlPack(map.pack);
+  // A merged Room has no single Archetype/rotation to show — a distinct,
+  // simpler detail branch: notes (reusing the anchor cell's own `notes`
+  // field as the whole Room's shared notes) plus Un-merge/Remove instead
+  // of Rotate/Remove.
+  if (tile.room) {
+    return `<div class="settings-group dungeoncrawl-tile-detail">
+      <h3>Room (${tile.room.w}×${tile.room.h}) at (${sel.x},${sel.y})</h3>
+      <div class="dc-detail-viewport"><div class="dc-detail-art" style="width:100%;">${dungeonBigRoomArtHtml(pack)}</div></div>
+      <label class="field-label">Notes</label>
+      <textarea class="oracle-field-textarea" rows="2" data-dungeoncrawl-tile-notes="${map.id},${sel.x},${sel.y}" placeholder="Secrets, traps, encounters here…">${esc(tile.notes || '')}</textarea>
+      <div class="btn-col">
+        <button type="button" class="btn ghost sm" data-dungeoncrawl-unmerge-room="${map.id},${sel.x},${sel.y}">↩ Un-merge back into individual Tiles</button>
+        <button type="button" class="btn ghost sm" data-dungeoncrawl-remove-room="${map.id},${sel.x},${sel.y}">✕ Remove this Room</button>
+      </div>
+    </div>`;
+  }
+  const arch = findDungeonCrawlArchetype(tile.archetypeKey);
+  const zoom = Math.max(1, Math.min(4, Number(ui.dungeonCrawlDetailZoom) || 1));
+  return `<div class="settings-group dungeoncrawl-tile-detail">
+    <h3>Tile (${sel.x},${sel.y}) — ${esc(arch ? arch.label : 'Unknown')}</h3>
+    <div class="dc-detail-viewport">
+      <div class="dc-detail-art" style="width:${zoom * 100}%;">
+        ${arch ? dungeonTileDetailArtHtml(arch, pack, tile.rotation) : ''}
+      </div>
+    </div>
+    <div class="dc-detail-zoom-controls">
+      <button type="button" class="icon-btn" data-dc-detail-zoom="out" title="Zoom out">－</button>
+      <span class="dim small">${Math.round(zoom * 100)}%</span>
+      <button type="button" class="icon-btn" data-dc-detail-zoom="in" title="Zoom in">＋</button>
+      <button type="button" class="icon-btn" data-dc-detail-zoom-reset title="Reset zoom">⟲</button>
+    </div>
+    <p class="dim small">Rotation: ${tile.rotation}°${arch && arch.stairs ? ' · Stairs Down' : ''}${arch && arch.chamber ? ' · Chamber' : ''}${arch && arch.entrance ? ' · Entrance' : ''}</p>
+    <label class="field-label">Notes</label>
+    <textarea class="oracle-field-textarea" rows="2" data-dungeoncrawl-tile-notes="${map.id},${sel.x},${sel.y}" placeholder="Secrets, traps, encounters here…">${esc(tile.notes || '')}</textarea>
+    <div class="btn-col">
+      <button type="button" class="btn ghost sm" data-dungeoncrawl-reactivate="${map.id},${sel.x},${sel.y}">↻ Re-rotate this Tile</button>
+      <button type="button" class="btn ghost sm" data-dungeoncrawl-remove-tile="${map.id},${sel.x},${sel.y}">✕ Remove this Tile</button>
+    </div>
+  </div>`;
 }
 
 // --- World Tracker (requirements/PLANETFALL_world_tracker.md) -------------

@@ -56,6 +56,13 @@ import {
   addHexRoadSegment, clearHexRoads, removeHexRoadSegment,
   setHexVertexConflict, clearHexVertexConflict,
 } from '../domain/hexcrawls.js';
+import {
+  listDungeonMaps, getDungeonMap, getActiveDungeonMap, createDungeonMap, renameDungeonMap, deleteDungeonMap,
+  setActiveDungeonMap, setDungeonMapPack, getDungeonTile, placeDungeonTile, removeDungeonTile, setDungeonTileNotes,
+  computeDungeonAppendCells, pickRandomDungeonArchetype, pickRandomDungeonRotation,
+  mergeDungeonTilesIntoRoom, unmergeDungeonRoom, removeDungeonRoom,
+} from '../domain/dungeonCrawls.js';
+import { DUNGEON_CRAWL_ARCHETYPES, DUNGEON_CRAWL_ENTRANCE_ARCHETYPE } from '../data/dungeonCrawlTiles.js';
 import { findHexcrawlThreat, HEXCRAWL_THREAT_ICONS } from '../data/hexcrawlIcons.js';
 import { generateCreatureConcept, formatCreatureConcept, generateSiteConcept, formatSiteConcept, generateAdventureSeed, formatAdventureSeed } from '../domain/worldbuilding.js';
 import {
@@ -152,7 +159,7 @@ function isPhoneWidth() { return window.innerWidth <= PHONE_BREAKPOINT; }
 // avoid) meaning "toggle the .mc-copilot aside open/closed"; its button's
 // own glyph/label follow whatever content the Advisor position currently
 // holds (see computeVisibleEdgeOrder's render loop).
-const EDGE_ORDER = ['guide', 'oracle', 'cast', 'faction-events', 'trade', 'documents', 'gallery', 'battlemap', 'hexcrawl', 'graph', 'advisor-toggle'];
+const EDGE_ORDER = ['guide', 'oracle', 'cast', 'faction-events', 'trade', 'documents', 'gallery', 'battlemap', 'hexcrawl', 'dungeoncrawl', 'graph', 'advisor-toggle'];
 // The header's own small drawer-tab group, right-aligned in .header-actions
 // — same data-drawer-open routing as the edge nav (onClick's [data-drawer-
 // open] branch has no idea which container a button lives in), rendered by
@@ -527,6 +534,56 @@ let hexcrawlSelectedHex = null;
 // hex space "unbounded" in practice without ever rendering more hexes
 // than are actually near the viewport.
 let hexcrawlRange = { qMin: -8, qMax: 8, rMin: -8, rMax: 8 };
+
+// --- Dungeon Crawl (ephemeral UI state only — nothing here is persisted;
+// the committed grid itself lives in campaign.dungeonCrawls) ---------------
+// A Tile picked (by an append-handle click, or by reactivating an already-
+// placed cell) but not yet committed: { mapId, x, y, archetypeKey, rotation }
+// or null. Shown with 4 corner-rotate buttons + a center commit button
+// (drawers/index.js's dungeoncrawlCells) — while this is set, every OTHER
+// cell's own append-handle is hidden (only one pending placement at a time,
+// simplest possible model matching the direct follow-up request's own
+// "touch a corner... rotate... click center to commit" single-tile flow).
+let dungeonCrawlPending = null;
+// Which cell's own detail panel is shown below the grid (null = none) —
+// same "click a cell, see/edit it below" shape as hexcrawlSelectedHex.
+let dungeonCrawlSelected = null;
+// Direct follow-up request: "allow zoom capability to read markings like
+// secret doors and color coded encounter zones" — the Tile Detail panel's
+// own zoom level (1 = 100%, up to 4 = 400%), reset to 1 whenever a new
+// cell is selected so a GM doesn't land on a stale zoom level from the
+// last Tile they looked at.
+let dungeonCrawlDetailZoom = 1;
+// Direct follow-up request: "Allow selection of multiple adjacent tiles
+// and replace them with a larger tile that gives a bigger room." While
+// armed, clicking an already-placed, not-already-merged Tile toggles its
+// "x,y" key in/out of dungeonCrawlMergeSelection instead of the normal
+// select/double-click-reactivate behavior — both ephemeral, reset on
+// toggling Merge mode off, merging, or switching maps.
+let dungeonCrawlMergeMode = false;
+let dungeonCrawlMergeSelection = new Set();
+// Manual click-timing tracking for the double-click-to-reactivate gesture
+// on an already-placed Tile — same reasoning as hexcrawlLastClickKey/
+// hexcrawlLastClickAt above: a single click on a filled cell can select it
+// (re-rendering the Tile Detail panel), which can swap out the DOM node a
+// native `dblclick` would need both clicks to land on, so the native event
+// is unreliable here for the same structural reason it was for Hexcrawl's
+// lake removal.
+let dungeonCrawlLastClickKey = null;
+let dungeonCrawlLastClickAt = 0;
+// Long-press-to-reactivate on mobile (no hover, so no dblclick-adjacent
+// gesture exists there at all) — a real touch-gesture equivalent per
+// CLAUDE.md's "exactly one delegated listener per event type" rule, wired
+// into the SAME single delegated touchstart/touchend handlers every other
+// touch gesture in this file already uses (onTouchStart/onTouchEnd below),
+// not a new listener. `dungeonCrawlLongPressTimer` is the pending
+// setTimeout id; `dungeonCrawlLongPressTarget` is the "mapId,x,y" key the
+// timer is armed for, so a touchend/touchmove that lands somewhere else
+// (or arrives before the timer fires) can tell it's stale and ignore it.
+let dungeonCrawlLongPressTimer = null;
+let dungeonCrawlLongPressTarget = null;
+let dungeonCrawlLongPressStart = null;
+
 // World Tracker (requirements/PLANETFALL_world_tracker.md) — ephemeral UI
 // only, same click-based internal-tab-strip shape as Settings' own
 // settingsTab/SETTINGS_TABS below. worldTrackerSelectedSector is which
@@ -2016,6 +2073,208 @@ function onClick(ev) {
     hexcrawlPlacingIcon = (hexcrawlPlacingIcon && hexcrawlPlacingIcon.layer === 'threat' && hexcrawlPlacingIcon.key === 'unknown')
       ? null : { layer: 'threat', key: 'unknown' };
     hexcrawlRiverStart = null; hexcrawlRoadStart = null;
+    return renderDrawerBody();
+  }
+
+  // --- Dungeon Crawl -------------------------------------------------------
+  const dcSelectMap = hit('[data-dungeoncrawl-select]');
+  if (dcSelectMap) {
+    dungeonCrawlPending = null; dungeonCrawlSelected = null; dungeonCrawlMergeMode = false; dungeonCrawlMergeSelection = new Set(); dungeonCrawlDetailZoom = 1;
+    return store.update((d) => setActiveDungeonMap(d, dcSelectMap.dataset.dungeoncrawlSelect));
+  }
+  const dcAdd = hit('[data-dungeoncrawl-add]');
+  if (dcAdd) {
+    openInlinePrompt('dungeoncrawl-add', { label: 'Map name', placeholder: 'e.g. The Sunken Crypt', anchorRect: dcAdd.getBoundingClientRect() });
+    return;
+  }
+  const dcRenameOpen = hit('[data-dungeoncrawl-rename-open]');
+  if (dcRenameOpen) {
+    const id = dcRenameOpen.dataset.dungeoncrawlRenameOpen;
+    const current = getDungeonMap(store.get(), id);
+    return openInlinePrompt('dungeoncrawl-rename', { label: 'Map name', value: current ? current.name : '', meta: { id }, anchorRect: dcRenameOpen.getBoundingClientRect() });
+  }
+  const dcRemove = hit('[data-dungeoncrawl-remove]');
+  if (dcRemove) {
+    if (window.confirm('Delete this Dungeon Crawl map? This cannot be undone.')) {
+      dungeonCrawlPending = null; dungeonCrawlSelected = null; dungeonCrawlMergeMode = false; dungeonCrawlMergeSelection = new Set();
+      store.update((d) => deleteDungeonMap(d, dcRemove.dataset.dungeoncrawlRemove));
+    }
+    return;
+  }
+  const dcPackMergeToggle = hit('[data-dungeoncrawl-merge-toggle]');
+  if (dcPackMergeToggle) {
+    dungeonCrawlMergeMode = !dungeonCrawlMergeMode;
+    dungeonCrawlMergeSelection = new Set();
+    dungeonCrawlPending = null; dungeonCrawlSelected = null;
+    return renderDrawerBody();
+  }
+  const dcMergeCancel = hit('[data-dungeoncrawl-merge-cancel]');
+  if (dcMergeCancel) {
+    dungeonCrawlMergeMode = false; dungeonCrawlMergeSelection = new Set();
+    return renderDrawerBody();
+  }
+  // Direct follow-up request: "Allow selection of multiple adjacent tiles
+  // and replace them with a larger tile that gives a bigger room."
+  // computeMergeRectangle is the SAME pure validator mergeDungeonTilesInto
+  // Room itself uses, so this button only ever appears (drawers/index.js)
+  // when the merge will actually succeed.
+  const dcMergeCommit = hit('[data-dungeoncrawl-merge-commit]');
+  if (dcMergeCommit) {
+    const mapId = dcMergeCommit.dataset.dungeoncrawlMergeCommit;
+    const cells = [...dungeonCrawlMergeSelection].map((k) => { const [x, y] = k.split(',').map(Number); return { x, y }; });
+    dungeonCrawlMergeMode = false; dungeonCrawlMergeSelection = new Set();
+    return store.update((d) => mergeDungeonTilesIntoRoom(d, mapId, cells));
+  }
+  // Direct follow-up request: "have handles at each edge to append the next
+  // tile for an emergent discovery experience" — clicking an empty cell's
+  // own "+" (only rendered where computeDungeonAppendCells says a Tile can
+  // legally connect there, drawers/index.js) picks a random Archetype +
+  // random initial rotation and opens the placement/rotate-then-commit flow
+  // below, rather than placing it outright — matches the direct follow-up's
+  // own "initial placement step with a rotating option" requirement.
+  // Direct follow-up request: "start the first tile with an entrance such
+  // as a door, cave, or stairs" — the very first Tile ever placed on an
+  // empty map (the only time computeDungeonAppendCells offers the fixed
+  // DUNGEON_START_CELL instead of a real Tile's own open edge) always
+  // forces the Entrance Archetype rather than a random pick.
+  const dcAppend = hit('[data-dungeoncrawl-append]');
+  if (dcAppend) {
+    const [mapId, x, y] = dcAppend.dataset.dungeoncrawlAppend.split(',');
+    const map = getDungeonMap(store.get(), mapId);
+    const isFirstTile = map && Object.keys(map.tiles).length === 0;
+    dungeonCrawlPending = {
+      mapId, x: Number(x), y: Number(y),
+      archetypeKey: isFirstTile ? DUNGEON_CRAWL_ENTRANCE_ARCHETYPE.key : pickRandomDungeonArchetype(DUNGEON_CRAWL_ARCHETYPES),
+      rotation: pickRandomDungeonRotation(),
+    };
+    dungeonCrawlSelected = null;
+    return renderDrawerBody();
+  }
+  // Direct follow-up request: "allow user to touch a corner and have the
+  // tile rotate 90 degrees in that direction" — all 4 corner zones rotate
+  // the SAME way (clockwise); a square tile's physical rotation direction
+  // is single-valued regardless of which corner a thumb happens to land
+  // near, so this just maximizes where a touch can land rather than
+  // encoding 4 different rotation targets.
+  const dcRotate = hit('[data-dungeoncrawl-rotate]');
+  if (dcRotate) {
+    const [mapId, x, y] = dcRotate.dataset.dungeoncrawlRotate.split(',');
+    if (dungeonCrawlPending && dungeonCrawlPending.mapId === mapId && dungeonCrawlPending.x === Number(x) && dungeonCrawlPending.y === Number(y)) {
+      dungeonCrawlPending = { ...dungeonCrawlPending, rotation: (dungeonCrawlPending.rotation + 90) % 360 };
+      return renderDrawerBody();
+    }
+    return;
+  }
+  const dcReroll = hit('[data-dungeoncrawl-reroll]');
+  if (dcReroll) {
+    const [mapId, x, y] = dcReroll.dataset.dungeoncrawlReroll.split(',');
+    if (dungeonCrawlPending && dungeonCrawlPending.mapId === mapId && dungeonCrawlPending.x === Number(x) && dungeonCrawlPending.y === Number(y)) {
+      dungeonCrawlPending = { ...dungeonCrawlPending, archetypeKey: pickRandomDungeonArchetype(DUNGEON_CRAWL_ARCHETYPES), rotation: pickRandomDungeonRotation() };
+      return renderDrawerBody();
+    }
+    return;
+  }
+  // Direct follow-up request: "click on the center of the tile to commit
+  // the selection."
+  const dcCommit = hit('[data-dungeoncrawl-commit]');
+  if (dcCommit) {
+    const [mapId, x, y] = dcCommit.dataset.dungeoncrawlCommit.split(',');
+    if (dungeonCrawlPending && dungeonCrawlPending.mapId === mapId && dungeonCrawlPending.x === Number(x) && dungeonCrawlPending.y === Number(y)) {
+      const { archetypeKey, rotation } = dungeonCrawlPending;
+      dungeonCrawlPending = null;
+      return store.update((d) => placeDungeonTile(d, mapId, Number(x), Number(y), archetypeKey, rotation));
+    }
+    return;
+  }
+  const dcCancel = hit('[data-dungeoncrawl-cancel]');
+  if (dcCancel) { dungeonCrawlPending = null; return renderDrawerBody(); }
+  // Direct follow-up request: "double clicking (or long press on mobile)
+  // should reactivate the placement option" — pre-fills the pending state
+  // from the Tile ALREADY there (not a fresh random pick) so the GM resumes
+  // rotating the same Tile rather than getting a new one. Reachable either
+  // from the Tile Detail panel's explicit button, or via dcCell's own
+  // double-click detection / the touch long-press handlers below.
+  const dcReactivate = hit('[data-dungeoncrawl-reactivate]');
+  if (dcReactivate) {
+    const [mapId, x, y] = dcReactivate.dataset.dungeoncrawlReactivate.split(',');
+    const tile = getDungeonTile(store.get(), mapId, Number(x), Number(y));
+    if (!tile || tile.room) return; // a merged Room has no single rotation to reactivate
+    dungeonCrawlPending = { mapId, x: Number(x), y: Number(y), archetypeKey: tile.archetypeKey, rotation: tile.rotation };
+    dungeonCrawlSelected = null;
+    return renderDrawerBody();
+  }
+  const dcRemoveTile = hit('[data-dungeoncrawl-remove-tile]');
+  if (dcRemoveTile) {
+    const [mapId, x, y] = dcRemoveTile.dataset.dungeoncrawlRemoveTile.split(',');
+    if (window.confirm('Remove this Tile? Neighboring Tiles stop showing an append handle on this side until a new Tile is placed here.')) {
+      dungeonCrawlSelected = null;
+      store.update((d) => removeDungeonTile(d, mapId, Number(x), Number(y)));
+    }
+    return;
+  }
+  const dcUnmergeRoom = hit('[data-dungeoncrawl-unmerge-room]');
+  if (dcUnmergeRoom) {
+    const [mapId, x, y] = dcUnmergeRoom.dataset.dungeoncrawlUnmergeRoom.split(',');
+    return store.update((d) => unmergeDungeonRoom(d, mapId, Number(x), Number(y)));
+  }
+  const dcRemoveRoom = hit('[data-dungeoncrawl-remove-room]');
+  if (dcRemoveRoom) {
+    const [mapId, x, y] = dcRemoveRoom.dataset.dungeoncrawlRemoveRoom.split(',');
+    if (window.confirm('Remove this entire Room (every Tile it covers)? This cannot be undone.')) {
+      dungeonCrawlSelected = null;
+      store.update((d) => removeDungeonRoom(d, mapId, Number(x), Number(y)));
+    }
+    return;
+  }
+  const dcDetailZoom = hit('[data-dc-detail-zoom]');
+  if (dcDetailZoom) {
+    const dir = dcDetailZoom.dataset.dcDetailZoom;
+    dungeonCrawlDetailZoom = Math.max(1, Math.min(4, (Number(dungeonCrawlDetailZoom) || 1) + (dir === 'in' ? 0.5 : -0.5)));
+    return renderDrawerBody();
+  }
+  const dcDetailZoomReset = hit('[data-dc-detail-zoom-reset]');
+  if (dcDetailZoomReset) { dungeonCrawlDetailZoom = 1; return renderDrawerBody(); }
+  // The Tile itself (checked after the more specific pending/detail-panel
+  // targets above). While Merge mode is armed, a click toggles the cell
+  // in/out of the pending merge selection instead of selecting/reactivating
+  // it (direct follow-up request: "Allow selection of multiple adjacent
+  // tiles"). Otherwise: a plain click opens/updates the Tile Detail panel
+  // below the grid (resetting its zoom level back to 100% for whichever
+  // Tile/Room is now shown); a second click within 500ms (manual timing,
+  // same reasoning as hexcrawlLastClickKey above) reactivates placement
+  // instead (never for a merged Room — see dcReactivate's own guard above,
+  // mirrored here so a double-click on a Room just re-selects it).
+  const dcCell = hit('[data-dungeoncrawl-cell]');
+  if (dcCell) {
+    const raw = dcCell.dataset.dungeoncrawlCell;
+    if (dungeonCrawlPending) return; // the pending overlay's own buttons handle everything here
+    const [mapId, x, y] = raw.split(',');
+    const tile = getDungeonTile(store.get(), mapId, Number(x), Number(y));
+    if (!tile) return;
+    if (dungeonCrawlMergeMode) {
+      if (tile.room) return; // an already-merged Room can't be folded into another merge
+      // Plain "x,y" (not the full "mapId,x,y" `raw`) — matches the key
+      // shape drawers/index.js's dungeoncrawlCells reads from this same
+      // Set when deciding whether to add the .merge-sel highlight class,
+      // and what the merge-commit handler below expects to split back
+      // into {x,y} pairs.
+      const posKey = `${x},${y}`;
+      const next = new Set(dungeonCrawlMergeSelection);
+      if (next.has(posKey)) next.delete(posKey); else next.add(posKey);
+      dungeonCrawlMergeSelection = next;
+      return renderDrawerBody();
+    }
+    const now = Date.now();
+    const isDoubleClick = !tile.room && raw === dungeonCrawlLastClickKey && (now - dungeonCrawlLastClickAt) < 500;
+    dungeonCrawlLastClickKey = isDoubleClick ? null : raw;
+    dungeonCrawlLastClickAt = now;
+    if (isDoubleClick) {
+      dungeonCrawlPending = { mapId, x: Number(x), y: Number(y), archetypeKey: tile.archetypeKey, rotation: tile.rotation };
+      dungeonCrawlSelected = null;
+      return renderDrawerBody();
+    }
+    dungeonCrawlSelected = { mapId, x: Number(x), y: Number(y) };
+    dungeonCrawlDetailZoom = 1;
     return renderDrawerBody();
   }
 
@@ -4894,6 +5153,16 @@ function onChange(ev) {
     const [mapId, q, r] = hexDetailNotes.dataset.hexDetailNotes.split('::');
     return store.update((d) => setHexNotes(d, mapId, Number(q), Number(r), t.value));
   }
+  // --- Dungeon Crawl ---
+  const dcPackSelect = t.closest('[data-dungeoncrawl-pack]');
+  if (dcPackSelect) {
+    return store.update((d) => setDungeonMapPack(d, dcPackSelect.dataset.dungeoncrawlPack, t.value));
+  }
+  const dcTileNotes = t.closest('[data-dungeoncrawl-tile-notes]');
+  if (dcTileNotes) {
+    const [mapId, x, y] = dcTileNotes.dataset.dungeoncrawlTileNotes.split(',');
+    return store.update((d) => setDungeonTileNotes(d, mapId, Number(x), Number(y), t.value));
+  }
   // Scene Details fields that feed "Suggest oracles" (direct follow-up
   // request: re-draw "every time... the [Scene Details] changes") push a
   // new history entry right after the field itself commits — only the 5
@@ -7018,6 +7287,30 @@ let touchDrag = null;
 
 function onTouchStart(ev) {
   const t = ev.target;
+  // Direct follow-up request: "double clicking (or long press on mobile)
+  // should reactivate the placement option" — independent of the drag
+  // system below (a long press here is never a drag), so it's checked
+  // first and never returns, letting the existing drag-source checks run
+  // normally afterward (none of them match a Dungeon Crawl cell anyway).
+  const dcLongPressSrc = t.closest('[data-dungeoncrawl-cell]');
+  if (dcLongPressSrc && !dungeonCrawlPending && !dungeonCrawlMergeMode) {
+    const key = dcLongPressSrc.dataset.dungeoncrawlCell;
+    const touch0 = ev.touches[0];
+    dungeonCrawlLongPressTarget = key;
+    dungeonCrawlLongPressStart = { x: touch0.clientX, y: touch0.clientY };
+    clearTimeout(dungeonCrawlLongPressTimer);
+    dungeonCrawlLongPressTimer = setTimeout(() => {
+      dungeonCrawlLongPressTimer = null;
+      if (dungeonCrawlLongPressTarget !== key) return;
+      dungeonCrawlLongPressTarget = null;
+      const [mapId, x, y] = key.split(',');
+      const tile = getDungeonTile(store.get(), mapId, Number(x), Number(y));
+      if (!tile || tile.room) return; // a merged Room has no single rotation to reactivate
+      dungeonCrawlPending = { mapId, x: Number(x), y: Number(y), archetypeKey: tile.archetypeKey, rotation: tile.rotation };
+      dungeonCrawlSelected = null;
+      renderDrawerBody();
+    }, 500);
+  }
   const guideSrc = t.closest('[data-drag-guide-node]');
   const actorSrc = !guideSrc && t.closest('[data-drag-actor]');
   // Combat Initiative Tracker's own row-reorder handle (direct follow-up
@@ -7069,6 +7362,13 @@ function updateTouchDragHover(under) {
 }
 
 function onTouchMove(ev) {
+  if (dungeonCrawlLongPressTimer && ev.touches[0] && dungeonCrawlLongPressStart) {
+    const touch = ev.touches[0];
+    if (Math.hypot(touch.clientX - dungeonCrawlLongPressStart.x, touch.clientY - dungeonCrawlLongPressStart.y) >= TOUCH_DRAG_THRESHOLD) {
+      clearTimeout(dungeonCrawlLongPressTimer);
+      dungeonCrawlLongPressTimer = null; dungeonCrawlLongPressTarget = null; dungeonCrawlLongPressStart = null;
+    }
+  }
   if (!touchDrag) return;
   const touch = ev.touches[0];
   const dx = touch.clientX - touchDrag.startX, dy = touch.clientY - touchDrag.startY;
@@ -7106,6 +7406,7 @@ function onTouchMove(ev) {
 }
 
 function onTouchEnd() {
+  if (dungeonCrawlLongPressTimer) { clearTimeout(dungeonCrawlLongPressTimer); dungeonCrawlLongPressTimer = null; dungeonCrawlLongPressTarget = null; dungeonCrawlLongPressStart = null; }
   if (!touchDrag) return;
   const drag = touchDrag;
   touchDrag = null;
@@ -7440,6 +7741,11 @@ function commitInlinePrompt() {
     store.update((d) => createHexMap(d, value).campaign);
   } else if (kind === 'hexcrawl-rename') {
     store.update((d) => renameHexMap(d, meta.id, value));
+  } else if (kind === 'dungeoncrawl-add') {
+    dungeonCrawlPending = null; dungeonCrawlSelected = null; dungeonCrawlMergeMode = false; dungeonCrawlMergeSelection = new Set();
+    store.update((d) => createDungeonMap(d, value, 'dungeon').campaign);
+  } else if (kind === 'dungeoncrawl-rename') {
+    store.update((d) => renameDungeonMap(d, meta.id, value));
   } else if (kind === 'battlemap-icon-note') {
     store.update((d) => updateBattlemapIcon(d, meta.mapId, meta.iconId, { note: value }));
   } else if (kind === 'sector-corner-label') {
@@ -8906,6 +9212,7 @@ function buildDrawerUi() {
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
     hexcrawlPlacingIcon, hexcrawlCamera, hexcrawlSelectedHex, hexcrawlRange, hexcrawlRiverStart, hexcrawlRoadStart,
+    dungeonCrawlPending, dungeonCrawlSelected, dungeonCrawlDetailZoom, dungeonCrawlMergeMode, dungeonCrawlMergeSelection,
     contentPackFlags, contentPackImporting, hostileLocationsImporting, exportIncludeAttachments, exportAttachmentsPreview,
     worldTrackerTab, worldTrackerSelectedSector, worldTrackerMigrateOpen,
     expandedTurnStepGroups, editingTurnStepListId, turnStepListsCollapsed, turnStepMoveEditOpen, turnStepBranchEditOpen, crewTaskSelectedId, crewTaskSelectedMemberId, colonyPanelTab,

@@ -5823,6 +5823,300 @@ test('hexVertexPoints returns exactly 6 points, all equidistant from the hex cen
   }
 });
 
+// --- Dungeon Crawl (FlexTale's FlexCrawl Toolkit, requirements/FlexTale/) --
+import {
+  listDungeonMaps, getDungeonMap, getActiveDungeonMap, createDungeonMap, renameDungeonMap, deleteDungeonMap,
+  setActiveDungeonMap, setDungeonMapPack, getDungeonTile, placeDungeonTile, removeDungeonTile, setDungeonTileNotes,
+  inDungeonBounds, rotateEdges, computeDungeonAppendCells, pickRandomDungeonArchetype, pickRandomDungeonRotation,
+  computeMergeRectangle, mergeDungeonTilesIntoRoom, unmergeDungeonRoom, removeDungeonRoom,
+  DUNGEON_GRID_SIZE, DUNGEON_START_CELL,
+} from '../src/domain/dungeonCrawls.js';
+import {
+  DUNGEON_CRAWL_ARCHETYPES, ALL_DUNGEON_CRAWL_ARCHETYPES, findDungeonCrawlArchetype, DUNGEON_CRAWL_PACKS, findDungeonCrawlPack,
+  DUNGEON_CRAWL_ENTRANCE_ARCHETYPE, DUNGEON_ROOM_FALLBACK_PALETTE,
+} from '../src/data/dungeonCrawlTiles.js';
+
+test('a fresh campaign has no Dungeon Crawl maps; createDungeonMap adds one, names it, defaults to the dungeon pack, and makes it active', () => {
+  let camp = defaultCampaign();
+  assert.deepEqual(listDungeonMaps(camp), []);
+  assert.equal(getActiveDungeonMap(camp), null);
+  let id; ({ campaign: camp, id } = createDungeonMap(camp, 'The Sunken Crypt'));
+  assert.equal(listDungeonMaps(camp).length, 1);
+  const m = getDungeonMap(camp, id);
+  assert.equal(m.name, 'The Sunken Crypt');
+  assert.equal(m.pack, 'dungeon');
+  assert.deepEqual(m.tiles, {});
+  assert.equal(getActiveDungeonMap(camp).id, id);
+});
+
+test('createDungeonMap falls back to "New Map" for a blank name, and respects an explicit pack', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createDungeonMap(camp, '   ', 'cave'));
+  assert.equal(getDungeonMap(camp, id).name, 'New Map');
+  assert.equal(getDungeonMap(camp, id).pack, 'cave');
+});
+
+test('getActiveDungeonMap falls back to the first map when activeId is unset/stale, and to null with no maps', () => {
+  let camp = defaultCampaign();
+  let id1; ({ campaign: camp, id: id1 } = createDungeonMap(camp, 'Map One'));
+  let id2; ({ campaign: camp, id: id2 } = createDungeonMap(camp, 'Map Two'));
+  assert.equal(getActiveDungeonMap(camp).id, id2);
+  camp = deleteDungeonMap(camp, id2);
+  assert.equal(getActiveDungeonMap(camp).id, id1);
+  camp = deleteDungeonMap(camp, id1);
+  assert.equal(getActiveDungeonMap(camp), null);
+});
+
+test('renameDungeonMap ignores a blank name; deleteDungeonMap drops the map and re-targets activeId; setActiveDungeonMap no-ops on an unknown id', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createDungeonMap(camp, 'Original Name'));
+  camp = renameDungeonMap(camp, id, 'Renamed');
+  assert.equal(getDungeonMap(camp, id).name, 'Renamed');
+  camp = renameDungeonMap(camp, id, '   ');
+  assert.equal(getDungeonMap(camp, id).name, 'Renamed');
+  camp = setActiveDungeonMap(camp, 'not-a-real-id');
+  assert.equal(getActiveDungeonMap(camp).id, id);
+  camp = deleteDungeonMap(camp, id);
+  assert.equal(getDungeonMap(camp, id), null);
+  assert.equal(getActiveDungeonMap(camp), null);
+});
+
+test('setDungeonMapPack re-skins the map without touching any placed Tile', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createDungeonMap(camp, 'Map'));
+  camp = placeDungeonTile(camp, id, 2, 2, 'straight-hall', 0);
+  camp = setDungeonMapPack(camp, id, 'forest');
+  assert.equal(getDungeonMap(camp, id).pack, 'forest');
+  assert.equal(getDungeonTile(camp, id, 2, 2).archetypeKey, 'straight-hall');
+});
+
+test('getDungeonTile returns null for an untouched cell (no synthesized default, unlike Hexcrawl\'s getHex) and the real record once placed', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createDungeonMap(camp, 'Map'));
+  assert.equal(getDungeonTile(camp, id, 0, 0), null);
+  camp = placeDungeonTile(camp, id, 0, 0, 'dead-end', 90);
+  const t = getDungeonTile(camp, id, 0, 0);
+  assert.equal(t.archetypeKey, 'dead-end');
+  assert.equal(t.rotation, 90);
+  assert.equal(t.notes, '');
+});
+
+test('placeDungeonTile no-ops out of bounds or on an unknown archetype key, and normalizes rotation to the nearest 0/90/180/270', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createDungeonMap(camp, 'Map'));
+  const before = camp;
+  camp = placeDungeonTile(camp, id, -1, 0, 'straight-hall', 0);
+  assert.deepEqual(getDungeonMap(camp, id).tiles, {});
+  camp = placeDungeonTile(camp, id, 0, 0, 'not-a-real-archetype', 0);
+  assert.deepEqual(getDungeonMap(camp, id).tiles, {});
+  camp = placeDungeonTile(camp, id, 0, 0, 'straight-hall', 475); // rounds to 480 -> wraps to 120 -> nearest 90-multiple is 90... just assert it's one of the 4
+  assert.ok([0, 90, 180, 270].includes(getDungeonTile(camp, id, 0, 0).rotation));
+  assert.notEqual(camp, before);
+});
+
+test('re-committing an already-placed cell (the reactivate-placement flow) preserves that cell\'s own notes', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createDungeonMap(camp, 'Map'));
+  camp = placeDungeonTile(camp, id, 1, 1, 'l-bend', 0);
+  camp = setDungeonTileNotes(camp, id, 1, 1, 'A rusted portcullis blocks the east passage.');
+  camp = placeDungeonTile(camp, id, 1, 1, 'l-bend', 90); // re-rotated, same archetype
+  const t = getDungeonTile(camp, id, 1, 1);
+  assert.equal(t.rotation, 90);
+  assert.equal(t.notes, 'A rusted portcullis blocks the east passage.');
+});
+
+test('removeDungeonTile clears just the one cell', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createDungeonMap(camp, 'Map'));
+  camp = placeDungeonTile(camp, id, 3, 3, 'four-way', 0);
+  camp = removeDungeonTile(camp, id, 3, 3);
+  assert.equal(getDungeonTile(camp, id, 3, 3), null);
+});
+
+test('inDungeonBounds matches the real 6x6 DUNGEON_GRID_SIZE', () => {
+  assert.equal(DUNGEON_GRID_SIZE, 6);
+  assert.ok(inDungeonBounds(0, 0));
+  assert.ok(inDungeonBounds(5, 5));
+  assert.ok(!inDungeonBounds(6, 0));
+  assert.ok(!inDungeonBounds(0, -1));
+  assert.ok(!inDungeonBounds(2.5, 2));
+});
+
+test('every Archetype in the catalog has a complete N/E/S/W edges object', () => {
+  for (const a of DUNGEON_CRAWL_ARCHETYPES) {
+    for (const dir of ['N', 'E', 'S', 'W']) assert.equal(typeof a.edges[dir], 'boolean', `${a.key}.edges.${dir}`);
+  }
+  assert.equal(findDungeonCrawlArchetype('four-way').edges.N, true);
+  assert.equal(findDungeonCrawlArchetype('not-a-real-key'), null);
+});
+
+test('findDungeonCrawlPack falls back to the first pack (dungeon) for an unknown key; dungeon pack is image-kind, cave/forest are procedural', () => {
+  assert.equal(findDungeonCrawlPack('not-a-real-pack').key, 'dungeon');
+  assert.equal(findDungeonCrawlPack('dungeon').kind, 'image');
+  assert.equal(findDungeonCrawlPack('cave').kind, 'procedural');
+  assert.equal(findDungeonCrawlPack('forest').kind, 'procedural');
+  assert.equal(DUNGEON_CRAWL_PACKS.length, 3);
+});
+
+test('rotateEdges cyclically shifts N/E/S/W clockwise per 90-degree step, and wraps/rounds any input to one of the 4 cardinal steps', () => {
+  const lBend = findDungeonCrawlArchetype('l-bend').edges; // {N:true,E:false,S:false,W:true}
+  assert.deepEqual(rotateEdges(lBend, 0), { N: true, E: false, S: false, W: true });
+  assert.deepEqual(rotateEdges(lBend, 90), { N: true, E: true, S: false, W: false });
+  assert.deepEqual(rotateEdges(lBend, 180), { N: false, E: true, S: true, W: false });
+  assert.deepEqual(rotateEdges(lBend, 270), { N: false, E: false, S: true, W: true });
+  // A full turn (360) is the same as no rotation at all.
+  assert.deepEqual(rotateEdges(lBend, 360), rotateEdges(lBend, 0));
+  // Four-Way is rotationally symmetric — every rotation reads identically.
+  const fourWay = findDungeonCrawlArchetype('four-way').edges;
+  assert.deepEqual(rotateEdges(fourWay, 90), fourWay);
+});
+
+test('computeDungeonAppendCells offers only DUNGEON_START_CELL on an empty map, then exactly the in-bounds, empty, edge-connected neighbors of what\'s placed so far', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createDungeonMap(camp, 'Map'));
+  let map = getDungeonMap(camp, id);
+  assert.deepEqual(computeDungeonAppendCells(map, DUNGEON_CRAWL_ARCHETYPES), [{ x: DUNGEON_START_CELL.x, y: DUNGEON_START_CELL.y }]);
+
+  // Straight Hall (edges W/E) at the start cell, unrotated -> only its
+  // West and East in-bounds neighbors should be offered, never North/South.
+  camp = placeDungeonTile(camp, id, DUNGEON_START_CELL.x, DUNGEON_START_CELL.y, 'straight-hall', 0);
+  map = getDungeonMap(camp, id);
+  const cells = computeDungeonAppendCells(map, DUNGEON_CRAWL_ARCHETYPES);
+  const key = (c) => `${c.x},${c.y}`;
+  assert.deepEqual(new Set(cells.map(key)), new Set([
+    `${DUNGEON_START_CELL.x - 1},${DUNGEON_START_CELL.y}`,
+    `${DUNGEON_START_CELL.x + 1},${DUNGEON_START_CELL.y}`,
+  ]));
+
+  // Filling one of those neighbors with a Dead End (only W open) facing
+  // back toward the start cell removes it from the candidate set again
+  // (no edge open toward any OTHER empty neighbor) without disturbing the
+  // other still-open side.
+  camp = placeDungeonTile(camp, id, DUNGEON_START_CELL.x + 1, DUNGEON_START_CELL.y, 'dead-end', 0);
+  map = getDungeonMap(camp, id);
+  const cells2 = computeDungeonAppendCells(map, DUNGEON_CRAWL_ARCHETYPES);
+  assert.deepEqual(new Set(cells2.map(key)), new Set([`${DUNGEON_START_CELL.x - 1},${DUNGEON_START_CELL.y}`]));
+});
+
+test('computeDungeonAppendCells never offers an out-of-bounds cell even when a Tile sits flush against the grid edge', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createDungeonMap(camp, 'Map'));
+  camp = placeDungeonTile(camp, id, 0, 0, 'four-way', 0); // all 4 edges "open," but N and W fall off the grid
+  const cells = computeDungeonAppendCells(getDungeonMap(camp, id), DUNGEON_CRAWL_ARCHETYPES);
+  const key = (c) => `${c.x},${c.y}`;
+  assert.deepEqual(new Set(cells.map(key)), new Set(['1,0', '0,1']));
+});
+
+test('pickRandomDungeonArchetype/pickRandomDungeonRotation are seedable via an injected rng, same posture as oracles.js\'s makeRng', () => {
+  const alwaysZero = () => 0;
+  const alwaysNearOne = () => 0.9999;
+  assert.equal(pickRandomDungeonArchetype(DUNGEON_CRAWL_ARCHETYPES, alwaysZero), DUNGEON_CRAWL_ARCHETYPES[0].key);
+  assert.equal(pickRandomDungeonArchetype(DUNGEON_CRAWL_ARCHETYPES, alwaysNearOne), DUNGEON_CRAWL_ARCHETYPES[DUNGEON_CRAWL_ARCHETYPES.length - 1].key);
+  assert.equal(pickRandomDungeonRotation(alwaysZero), 0);
+  assert.equal(pickRandomDungeonRotation(alwaysNearOne), 270);
+});
+
+test('the Entrance Archetype is reachable via findDungeonCrawlArchetype but excluded from the normal random-pick catalog — direct follow-up request: "start the first tile with an entrance"', () => {
+  assert.equal(findDungeonCrawlArchetype('entrance'), DUNGEON_CRAWL_ENTRANCE_ARCHETYPE);
+  assert.equal(DUNGEON_CRAWL_ENTRANCE_ARCHETYPE.edges.W, true);
+  assert.equal(DUNGEON_CRAWL_ARCHETYPES.some((a) => a.key === 'entrance'), false);
+  assert.equal(ALL_DUNGEON_CRAWL_ARCHETYPES.some((a) => a.key === 'entrance'), true);
+  assert.equal(DUNGEON_ROOM_FALLBACK_PALETTE.floor && typeof DUNGEON_ROOM_FALLBACK_PALETTE.floor, 'string');
+});
+
+test('computeDungeonAppendCells resolves a placed Entrance Tile\'s own edge ONLY when given a catalog that actually includes it (ALL_DUNGEON_CRAWL_ARCHETYPES) — a caller that passes just the plain DUNGEON_CRAWL_ARCHETYPES (no Entrance) silently finds no opening from it at all, a real regression this test guards against', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createDungeonMap(camp, 'Map'));
+  camp = placeDungeonTile(camp, id, DUNGEON_START_CELL.x, DUNGEON_START_CELL.y, 'entrance', 0);
+  const map = getDungeonMap(camp, id);
+  const withEntrance = computeDungeonAppendCells(map, ALL_DUNGEON_CRAWL_ARCHETYPES);
+  assert.deepEqual(new Set(withEntrance.map((c) => `${c.x},${c.y}`)), new Set([`${DUNGEON_START_CELL.x - 1},${DUNGEON_START_CELL.y}`]));
+  const withoutEntrance = computeDungeonAppendCells(map, DUNGEON_CRAWL_ARCHETYPES);
+  assert.deepEqual(withoutEntrance, []);
+});
+
+// --- Dungeon Crawl: merging multiple Tiles into one bigger Room (direct
+// follow-up request: "Allow selection of multiple adjacent tiles and
+// replace them with a larger tile that gives a bigger room") -------------
+test('computeMergeRectangle accepts only a solid axis-aligned rectangle of 2+ cells, rejecting gaps, L-shapes, and fewer than 2 cells', () => {
+  assert.deepEqual(computeMergeRectangle([{ x: 1, y: 1 }, { x: 2, y: 1 }]), { x: 1, y: 1, w: 2, h: 1 });
+  assert.deepEqual(computeMergeRectangle([{ x: 1, y: 1 }, { x: 1, y: 2 }, { x: 2, y: 1 }, { x: 2, y: 2 }]), { x: 1, y: 1, w: 2, h: 2 });
+  assert.equal(computeMergeRectangle([{ x: 1, y: 1 }]), null); // only 1 cell
+  assert.equal(computeMergeRectangle([]), null);
+  assert.equal(computeMergeRectangle([{ x: 1, y: 1 }, { x: 2, y: 2 }]), null); // diagonal, not adjacent/rectangular
+  // An L-shape: 3 cells whose bounding box is 2x2 (needs 4) — a hole.
+  assert.equal(computeMergeRectangle([{ x: 1, y: 1 }, { x: 2, y: 1 }, { x: 1, y: 2 }]), null);
+});
+
+test('mergeDungeonTilesIntoRoom tags every covered cell with the SAME room object, preserving each cell\'s own archetypeKey/rotation/notes untouched, and is a no-op on an invalid rectangle or a selection including an empty cell', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createDungeonMap(camp, 'Map'));
+  camp = placeDungeonTile(camp, id, 1, 1, 'straight-hall', 0);
+  camp = setDungeonTileNotes(camp, id, 1, 1, 'A rune-carved archway.');
+  camp = placeDungeonTile(camp, id, 2, 1, 'dead-end', 90);
+  const before = camp;
+  camp = mergeDungeonTilesIntoRoom(camp, id, [{ x: 1, y: 1 }, { x: 2, y: 1 }]);
+  const t1 = getDungeonTile(camp, id, 1, 1);
+  const t2 = getDungeonTile(camp, id, 2, 1);
+  assert.ok(t1.room && t2.room);
+  assert.equal(t1.room.id, t2.room.id); // same shared room object
+  assert.deepEqual(t1.room, { id: t1.room.id, x: 1, y: 1, w: 2, h: 1 });
+  // Underlying per-cell data untouched.
+  assert.equal(t1.archetypeKey, 'straight-hall');
+  assert.equal(t1.rotation, 0);
+  assert.equal(t1.notes, 'A rune-carved archway.');
+  assert.equal(t2.archetypeKey, 'dead-end');
+  assert.equal(t2.rotation, 90);
+  // No-ops: an empty cell in the selection, or a non-rectangular selection.
+  const noop1 = mergeDungeonTilesIntoRoom(before, id, [{ x: 1, y: 1 }, { x: 3, y: 1 }]); // (3,1) is empty
+  assert.equal(getDungeonTile(noop1, id, 1, 1).room, undefined);
+  const noop2 = mergeDungeonTilesIntoRoom(before, id, [{ x: 1, y: 1 }]); // only 1 cell
+  assert.equal(getDungeonTile(noop2, id, 1, 1).room, undefined);
+});
+
+test('computeDungeonAppendCells still finds a merged Room\'s TRUE outer openings (each covered cell\'s own edges are unaffected by merging), and never proposes a cell already covered by the room', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createDungeonMap(camp, 'Map'));
+  // Two Straight Halls side by side (both open W/E) — merging them keeps
+  // both the far-west and far-east openings available to append into,
+  // while the shared internal seam between them is never offered (it's
+  // already covered by the room itself).
+  camp = placeDungeonTile(camp, id, 1, 1, 'straight-hall', 0);
+  camp = placeDungeonTile(camp, id, 2, 1, 'straight-hall', 0);
+  camp = mergeDungeonTilesIntoRoom(camp, id, [{ x: 1, y: 1 }, { x: 2, y: 1 }]);
+  const map = getDungeonMap(camp, id);
+  const cells = computeDungeonAppendCells(map, DUNGEON_CRAWL_ARCHETYPES);
+  const key = (c) => `${c.x},${c.y}`;
+  assert.deepEqual(new Set(cells.map(key)), new Set(['0,1', '3,1']));
+});
+
+test('unmergeDungeonRoom drops the shared room tag from every covered cell, restoring each cell\'s own original Tile with no data loss; removeDungeonRoom deletes every covered cell outright; both no-op on a cell that isn\'t part of a Room', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createDungeonMap(camp, 'Map'));
+  camp = placeDungeonTile(camp, id, 0, 0, 'four-way', 0);
+  camp = placeDungeonTile(camp, id, 1, 0, 'four-way', 90);
+  camp = mergeDungeonTilesIntoRoom(camp, id, [{ x: 0, y: 0 }, { x: 1, y: 0 }]);
+  const merged = camp;
+
+  const unmerged = unmergeDungeonRoom(merged, id, 0, 0);
+  assert.equal(getDungeonTile(unmerged, id, 0, 0).room, undefined);
+  assert.equal(getDungeonTile(unmerged, id, 1, 0).room, undefined);
+  assert.equal(getDungeonTile(unmerged, id, 0, 0).archetypeKey, 'four-way');
+  assert.equal(getDungeonTile(unmerged, id, 1, 0).rotation, 90);
+  // No-op: (0,0) here is a fresh map with no room at all.
+  let camp2 = defaultCampaign();
+  let id2; ({ campaign: camp2, id: id2 } = createDungeonMap(camp2, 'Map2'));
+  camp2 = placeDungeonTile(camp2, id2, 0, 0, 'dead-end', 0);
+  const untouched = unmergeDungeonRoom(camp2, id2, 0, 0);
+  assert.equal(getDungeonTile(untouched, id2, 0, 0).archetypeKey, 'dead-end');
+
+  const removed = removeDungeonRoom(merged, id, 1, 0); // any covered cell works, not just the anchor
+  assert.equal(getDungeonTile(removed, id, 0, 0), null);
+  assert.equal(getDungeonTile(removed, id, 1, 0), null);
+  const removedNoop = removeDungeonRoom(camp2, id2, 0, 0);
+  assert.equal(getDungeonTile(removedNoop, id2, 0, 0).archetypeKey, 'dead-end'); // untouched, no room there
+});
+
 // --- World Tracker (requirements/PLANETFALL_world_tracker.md) -------------
 import {
   getSector, listTouchedSectors, revealSector, surveySector, harvestSectorResource,

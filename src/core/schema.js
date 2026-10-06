@@ -15,7 +15,7 @@ export const SCHEMA_VERSION = 1;
 // Modules a Rules Profile can hide entirely (design/adr/rules-profiles-
 // multi-campaign.md). Party is deliberately NOT here — it stays always-
 // reachable regardless of profile, same as Guide/Oracle/Cast/Journal/etc.
-export const GATEABLE_MODULES = ['colony', 'world-tracker', 'trade', 'battlemap', 'hexcrawl', 'graph', 'faction-events'];
+export const GATEABLE_MODULES = ['colony', 'world-tracker', 'trade', 'battlemap', 'hexcrawl', 'dungeoncrawl', 'graph', 'faction-events'];
 
 // The canonical WHO / WHERE / WHAT / WHY / HOW context — a first-class stored
 // model, not something re-derived on every render (that was a v0.53 weakness).
@@ -165,6 +165,31 @@ export function defaultCampaign(now = new Date().toISOString()) {
     // additive-lazy-init posture as everywhere else here, and genuinely
     // unbounded (no gridSize cap the way worldTracker has one).
     hexcrawls: { maps: [], activeId: null },
+
+    // Dungeon Crawl — a bounded 6x6 square-tile grid built one FlexCrawl-
+    // style tile at a time (direct follow-up request: "a 6x6 tile grid
+    // randomizer with equivalents to all the tile packs, biome variations
+    // and theme packs for FlexTale's Flexcrawl," built from the real,
+    // owned FlexTale FlexCrawl Toolkit PDF + sample tile images in
+    // requirements/FlexTale/ — same "faithful to an owned sourcebook"
+    // posture as Five Leagues from the Borderlands/D&D 5e SRD, not an
+    // "inspired by" placeholder). Distinct from Hexcrawl above: FIXED-size
+    // (no unbounded pan/zoom — see domain/dungeonCrawls.js's
+    // DUNGEON_GRID_SIZE) and built by appending one square Tile at a time
+    // from an empty board, not painted freely. Same named-maps-with-
+    // activeId shape as battlemaps/hexcrawls; each map's own `tiles` is a
+    // SPARSE map keyed "x,y" (plain grid column/row, 0-5) — a cell with no
+    // entry simply has no Tile placed there yet (unlike a hex's own
+    // getHex, there is no synthesized default — see domain/
+    // dungeonCrawls.js's getDungeonTile, which returns null rather than a
+    // default record). `pack` is the one Theme Pack skin applied to every
+    // Tile on this map (data/dungeonCrawlTiles.js's DUNGEON_CRAWL_PACKS;
+    // the book's own suggested default Tile-selection approach is "Within
+    // Theme," i.e. keep one map visually cohesive) — changeable at any
+    // time from the map header, which simply re-skins every already-
+    // placed Tile (the archetype layout/connectivity never changes, only
+    // its art).
+    dungeonCrawls: { maps: [], activeId: null },
 
     // Party-wide resource trackers not tied to any one entity (credits,
     // custom clocks, timers) — the Party tab's member roster is instead a

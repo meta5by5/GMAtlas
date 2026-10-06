@@ -37,6 +37,7 @@ export const DRAWERS = [
   { id: 'gallery', glyph: '🖼', label: 'Gallery' },
   { id: 'battlemap', glyph: '🗺', label: 'Battlemap' },
   { id: 'hexcrawl', glyph: '⬡', label: 'Hexcrawl' },
+  { id: 'dungeoncrawl', glyph: '🧱', label: 'Dungeon Crawl' },
   { id: 'graph', glyph: '🔗', label: 'Graph' },
   { id: 'settings', glyph: '⚙', label: 'Settings' },
 ];
