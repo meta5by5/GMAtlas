@@ -48,8 +48,12 @@ import { listBattlemaps, getActiveBattlemap } from '../../domain/battlemaps.js';
 import { BATTLEMAP_ICONS, findBattlemapIcon } from '../../data/battlemapIcons.js';
 import { listHexMaps, getActiveHexMap, getHex, axialToPixel, hexVertexPoints, HEX_SIZE, ENCOUNTER_VERTEX_ORDER, hexEdgeMidpoints, edgeNeighbor } from '../../domain/hexcrawls.js';
 import { HEXCRAWL_GEOGRAPHY_ICONS, findHexcrawlGeography, HEXCRAWL_THREAT_ICONS, findHexcrawlThreat } from '../../data/hexcrawlIcons.js';
-import { listDungeonMaps, getActiveDungeonMap, getDungeonTile, computeDungeonAppendCells, computeMergeRectangle, DUNGEON_GRID_SIZE } from '../../domain/dungeonCrawls.js';
+import {
+  listDungeonMaps, getActiveDungeonMap, getDungeonTile, computeDungeonAppendCells, computeMergeRectangle,
+  listDungeonFloors, floorLabel, DUNGEON_GRID_SIZE,
+} from '../../domain/dungeonCrawls.js';
 import { DUNGEON_CRAWL_ARCHETYPES, ALL_DUNGEON_CRAWL_ARCHETYPES, findDungeonCrawlArchetype, DUNGEON_CRAWL_PACKS, findDungeonCrawlPack, DUNGEON_ROOM_FALLBACK_PALETTE } from '../../data/dungeonCrawlTiles.js';
+import { DUNGEON_DRESSING_ICONS, findDungeonDressingIcon, DUNGEON_TILE_GRID_SIZE } from '../../data/dungeonCrawlDressing.js';
 import { findLocationTypeIcon } from '../../data/locationTypeIcons.js';
 import { getSector, listTouchedSectors, adjacentSectors, deriveSectorIcon, generateMissionHooks, gridSizeOf, countInvestigationSites, MAX_INVESTIGATION_SITES, worldTrackerAttentionItems } from '../../domain/worldTracker.js';
 import { WORLD_TRACKER_ICONS, findWorldTrackerIcon } from '../../data/worldTrackerIcons.js';
@@ -3360,22 +3364,23 @@ function party(doc, ui = {}) {
   const sharedAssetVehicleThumbs = (party_.sharedAssetIds || []).map((id) => sharedAssetVehicleThumb(doc, id)).join('');
 
   // Direct follow-up request: "by default, the section headers for [Campaign
-  // and Party] should all be collapsed" — Party Roster previously started
-  // open on its own; now every Party section shares the same collapsed-by-
-  // default baseline (still per-section toggleable, and the panel title's
-  // own collapse-all/expand-all still works the same way).
-  const rosterCollapsed = isPartySectionCollapsed(ui, 'roster', true);
+  // and Party] should all be collapsed" — every OTHER Party section shares
+  // this collapsed-by-default baseline (still per-section toggleable, and
+  // the panel title's own collapse-all/expand-all still works the same
+  // way). Party Roster itself is no longer one of them — direct follow-up
+  // request: "removing the Party Roster subheader to always show party
+  // members" — its own "+ Add NPC" button and explanatory copy both moved
+  // up into the drawer chrome's own title row instead (shell.js's
+  // headExtraForDrawer('party'), a single "＋" icon button whose tooltip
+  // now carries that copy).
   const trackersCollapsed = isPartySectionCollapsed(ui, 'trackers', true);
   const sharedAssetsCollapsed = isPartySectionCollapsed(ui, 'sharedAssets', true);
   const sharedGearCollapsed = isPartySectionCollapsed(ui, 'sharedGear', true);
 
   return `
-    ${partySectionHeaderHtml('roster', 'Party Roster', rosterCollapsed, '<button class="chip" data-party-add-character>＋ Add NPC</button>')}
-    ${rosterCollapsed ? '' : `
-    <p class="dim small">NPC entities tagged <code>#character</code> — tag an NPC in the Cast drawer to add one you already made, or add one here.</p>
     <div class="party-member-list">
       ${memberCards || '<p class="ws-placeholder">No party members yet. Add one above, or tag an existing NPC #character in Cast.</p>'}
-    </div>`}
+    </div>
     ${partyStarshipSectionHtml(doc, ui)}
     ${partySectionHeaderHtml('trackers', 'Party Trackers', trackersCollapsed, `${ui.partyTrackerAddOpen ? '' : '<button class="icon-btn" data-party-tracker-add-toggle title="Add tracker">＋</button>'}<button class="icon-btn" data-party-trackers-edit-toggle title="${trackersEditOpen ? 'Done editing' : 'Edit trackers (rename, remove)'}">${trackersEditOpen ? '💾' : '✎'}</button>`)}
     ${trackersCollapsed ? '' : `
@@ -5129,7 +5134,7 @@ function dungeoncrawl(doc, ui = {}) {
   const maps = listDungeonMaps(doc);
   const active = getActiveDungeonMap(doc);
   const head = `<div class="section-head-row"><span class="entity-chip-row">${helpToggle(helpKey)}</span></div>
-    ${helpBody(helpKey, 'Click the glowing + to place the next Tile — the very first one is always an Entrance; every one after that picks a random Tile from the current pack and shows it pending. Touch any of its 4 corners to rotate it 90°, then click its center to commit. Double-click (or long-press on mobile) an already-placed Tile to reopen it for re-rotating. Click a placed Tile once to see a bigger, zoomable view of it below the grid — handy for reading secret-door and encounter-zone markings. "Merge Tiles" lets you select two or more already-placed, adjacent Tiles forming a rectangle and combine them into one bigger Room. The Pack dropdown re-skins every placed Tile at once without changing the map layout.', ui)}
+    ${helpBody(helpKey, 'Click the glowing + to place the next Tile — the very first one is always an Entrance; every one after that picks a random Tile from the current pack and shows it pending. Touch any of its 4 corners to rotate it 90°, then click its center to commit. Double-click (or long-press on mobile) an already-placed Tile to reopen it for re-rotating. Click a placed Tile once to see a bigger, zoomable view of it below the grid — handy for reading secret-door and encounter-zone markings. "Merge Tiles" lets you select two or more already-placed, adjacent Tiles forming a rectangle and combine them into one bigger Room. The Pack dropdown re-skins every placed Tile at once without changing the map layout. "Link Location" ties this map to a real Cast Location (or creates a new one). A Stairs Down Tile\'s own detail panel can create — and later jump back to — a linked floor below it; once a dungeon has more than one floor, a Floor dropdown appears to switch between them. The Dressing dropdown arms a door/secret door/portcullis/stairs/pillar/tree trunk/chest/campfire marker — click a placed Tile (small grid or the big view below) to drop it on that Tile\'s own invisible 12x12 grid (each square = 5\', the book\'s own real Tile scale); click a placed marker to remove it.', ui)}
     <div class="battlemap-tabs">
       ${maps.map((m) => `<button type="button" class="btn ghost sm ${active && active.id === m.id ? 'active' : ''}" data-dungeoncrawl-select="${esc(m.id)}">${esc(m.name)}</button>`).join('')}
       <button type="button" class="chip sm" data-dungeoncrawl-add>＋ New Map</button>
@@ -5142,17 +5147,40 @@ function dungeoncrawl(doc, ui = {}) {
   const mergeMode = !!ui.dungeonCrawlMergeMode;
   const mergeSelection = ui.dungeonCrawlMergeSelection || new Set();
   const mergeRect = mergeMode ? computeMergeRectangle([...mergeSelection].map((k) => { const [x, y] = k.split(',').map(Number); return { x, y }; })) : null;
+  // Direct follow-up request: "link map records to a location using the
+  // look up feature... allow multiple map grids as different floors
+  // related to the same map that you can select from a drop down." The
+  // Floor dropdown only appears once this map actually HAS siblings —
+  // a brand-new, never-floor-split map shows no dropdown at all rather
+  // than a pointless single-option one.
+  const linkedLocation = active.locationEntityId ? getEntity(doc, active.locationEntityId) : null;
+  const floors = listDungeonFloors(doc, active.floorGroupId);
+  const floorRow = floors.length > 1
+    ? `<select data-dungeoncrawl-floor-select="${esc(active.id)}" title="Switch floor — same dungeon, a different level of it">
+        ${floors.map((f) => `<option value="${esc(f.id)}" ${f.id === active.id ? 'selected' : ''}>${esc(floorLabel(f.floorIndex))}</option>`).join('')}
+      </select>`
+    : '';
+  const armedDressing = ui.dungeonCrawlArmedDressing || '';
+  const dressingOptions = DUNGEON_DRESSING_ICONS.map((d) => `<option value="${esc(d.key)}" ${d.key === armedDressing ? 'selected' : ''}>${d.glyph} ${esc(d.label)}</option>`).join('');
   return `${head}
     <div class="battlemap-toolbar">
       <span class="hexcrawl-map-name">${esc(active.name)}</span>
       <button type="button" class="icon-btn" data-dungeoncrawl-rename-open="${esc(active.id)}" title="Rename map">✎</button>
       <button type="button" class="icon-btn" data-dungeoncrawl-remove="${esc(active.id)}" title="Delete this map" aria-label="Delete map">✕</button>
       <select data-dungeoncrawl-pack="${esc(active.id)}" title="Re-skin every placed Tile with a different pack">${packOptions}</select>
+      ${floorRow}
+      <button type="button" class="btn ghost sm" data-dungeoncrawl-location-link="${esc(active.id)}" title="${linkedLocation ? 'Change the linked Location' : 'Link this map to a Cast Location (or create one)'}">📍 ${linkedLocation ? esc(linkedLocation.name || 'Unnamed') : 'Link Location'}</button>
+      ${linkedLocation ? `<button type="button" class="icon-btn" data-dungeoncrawl-location-unlink="${esc(active.id)}" title="Unlink Location">✕</button>` : ''}
+      <select data-dungeoncrawl-dressing-arm title="Pick a dungeon-dressing object, then click a placed Tile to drop it on its 12x12 grid">
+        <option value="">＋ Dressing…</option>
+        ${dressingOptions}
+      </select>
       <button type="button" class="btn ghost sm ${mergeMode ? 'active' : ''}" data-dungeoncrawl-merge-toggle title="Select two or more adjacent placed Tiles forming a rectangle and combine them into one bigger Room">${mergeMode ? '✓ ' : '⬜ '}Merge Tiles</button>
       ${mergeMode && mergeRect ? `<button type="button" class="btn sm" data-dungeoncrawl-merge-commit="${esc(active.id)}">✓ Merge ${mergeSelection.size} Tiles into a Room</button>` : ''}
       ${mergeMode ? `<button type="button" class="btn ghost sm" data-dungeoncrawl-merge-cancel>✕ Cancel</button>` : ''}
     </div>
     ${mergeMode ? `<p class="dim small">${mergeSelection.size === 0 ? 'Click two or more adjacent, already-placed Tiles to select them.' : mergeRect ? `${mergeSelection.size} Tiles selected — forms a valid ${mergeRect.w}×${mergeRect.h} rectangle.` : `${mergeSelection.size} Tiles selected — must form a solid rectangle with no gaps before they can be merged.`}</p>` : ''}
+    ${armedDressing ? `<p class="dim small">Click anywhere on a placed Tile (small grid or the big view below) to drop a ${esc((findDungeonDressingIcon(armedDressing) || {}).label || armedDressing)} there — it snaps to the nearest 5' square. Click a placed dressing icon to remove it.</p>` : ''}
     <div class="dungeoncrawl-grid">${dungeoncrawlCells(doc, active, ui)}</div>
     ${dungeoncrawlTileDetail(doc, active, ui)}`;
 }
@@ -5203,9 +5231,16 @@ function dungeoncrawlCells(doc, map, ui) {
         const isSel = selected && selected.x === x && selected.y === y;
         const isMergeSel = mergeMode && mergeSelection.has(k);
         const title = arch ? `${arch.label}${arch.stairs ? ' (Stairs Down)' : ''}` : '';
-        out += `<button type="button" class="dungeoncrawl-cell filled ${isSel ? 'sel' : ''} ${isMergeSel ? 'merge-sel' : ''}" data-dungeoncrawl-cell="${map.id},${x},${y}" title="${esc(title)}">
+        // A plain <div> (not <button>, like every OTHER filled cell here)
+        // — direct follow-up request's dressing icons each need their own
+        // nested, independently-clickable remove button (dungeon
+        // DressingOverlayHtml below), and a <button> can't legally contain
+        // another <button>. role="button"/tabindex keep it keyboard-
+        // reachable despite not being a real button element.
+        out += `<div class="dungeoncrawl-cell filled ${isSel ? 'sel' : ''} ${isMergeSel ? 'merge-sel' : ''}" role="button" tabindex="0" data-dungeoncrawl-cell="${map.id},${x},${y}" title="${esc(title)}">
           ${arch ? dungeonTileArtHtml(arch, pack, tile.rotation) : ''}
-        </button>`;
+          ${dungeonDressingOverlayHtml(tile, map.id, x, y)}
+        </div>`;
       } else if (appendSet.has(k) && !mergeMode) {
         out += `<button type="button" class="dungeoncrawl-cell append" data-dungeoncrawl-append="${map.id},${x},${y}" title="Place the next Tile here">＋</button>`;
       } else {
@@ -5264,6 +5299,34 @@ function dungeonTileDetailArtHtml(archetype, pack, rotation) {
     return `<img class="dc-detail-art-inner" src="./${dir}/${esc(archetype.key)}.${ext}" alt="${esc(archetype.label)}" style="transform:rotate(${rot}deg)">`;
   }
   return `<div class="dc-detail-art-inner" style="transform:rotate(${rot}deg)">${dungeonProceduralTileSvg(archetype, pack)}</div>`;
+}
+
+// Direct follow-up request: "have an invisible 1" grid overlay to each tile
+// that will allow graphic objects to snap to the grid... doors, secret
+// doors, porcullis, stairs up or down, pillars, tree trunks, chests,
+// campfires... This would also be seen on the enlarged image in the lower
+// section below the map." Renders every dressing object already placed on
+// this Tile (tile.dressing, domain/dungeonCrawls.js) as a small glyph
+// absolutely-positioned by percentage (gx/gy out of data/
+// dungeonCrawlDressing.js's DUNGEON_TILE_GRID_SIZE) — percentage, not a
+// pixel offset, is what makes the EXACT SAME markup/data read correctly at
+// both the tiny grid cell's own size AND the Tile Detail panel's big
+// zoomed view, no separate "detail view" variant needed. Each one is its
+// own small button (data-dungeoncrawl-dressing-remove) so clicking it
+// removes it — shell.js's placement click handlers (both the small grid's
+// dcCell and the big view's own data-dungeoncrawl-detail-place) are
+// checked AFTER this more specific target, so clicking an existing icon
+// never also places a new one underneath it.
+function dungeonDressingOverlayHtml(tile, mapId, x, y) {
+  const items = (tile && Array.isArray(tile.dressing)) ? tile.dressing : [];
+  if (!items.length) return '';
+  return items.map((d) => {
+    const icon = findDungeonDressingIcon(d.iconKey);
+    if (!icon) return '';
+    const leftPct = ((d.gx + 0.5) / DUNGEON_TILE_GRID_SIZE) * 100;
+    const topPct = ((d.gy + 0.5) / DUNGEON_TILE_GRID_SIZE) * 100;
+    return `<button type="button" class="dc-dressing-icon${icon.secret ? ' secret' : ''}" style="left:${leftPct.toFixed(2)}%;top:${topPct.toFixed(2)}%;" data-dungeoncrawl-dressing-remove="${mapId},${x},${y},${esc(d.id)}" title="${esc(icon.label)} — click to remove">${icon.glyph}</button>`;
+  }).join('');
 }
 
 // Generic edges/chamber/stairs -> SVG renderer shared by BOTH procedural
@@ -5387,11 +5450,24 @@ function dungeoncrawlTileDetail(doc, map, ui) {
   }
   const arch = findDungeonCrawlArchetype(tile.archetypeKey);
   const zoom = Math.max(1, Math.min(4, Number(ui.dungeonCrawlDetailZoom) || 1));
+  // Direct follow-up request: "allow multiple map grids as different
+  // floors... create on the fly when selecting yes when promoted after
+  // clicking on a tile that has a down staircase" — only a Stairs Down
+  // Tile gets this row at all; already-linked just navigates (switches the
+  // active map), unlinked offers to create one (the actual confirm prompt
+  // + creation is shell.js's data-dungeoncrawl-create-floor handler, kept
+  // out of this pure render function).
+  const floorBtn = arch && arch.stairs
+    ? tile.linkedFloorMapId
+      ? `<button type="button" class="btn ghost sm" data-dungeoncrawl-goto-floor="${esc(tile.linkedFloorMapId)}">⬇ Go to Floor Below</button>`
+      : `<button type="button" class="btn ghost sm" data-dungeoncrawl-create-floor="${map.id},${sel.x},${sel.y}">⬇ Create Floor Below</button>`
+    : '';
   return `<div class="settings-group dungeoncrawl-tile-detail">
     <h3>Tile (${sel.x},${sel.y}) — ${esc(arch ? arch.label : 'Unknown')}</h3>
     <div class="dc-detail-viewport">
-      <div class="dc-detail-art" style="width:${zoom * 100}%;">
+      <div class="dc-detail-art" data-dungeoncrawl-detail-place="${map.id},${sel.x},${sel.y}" style="width:${zoom * 100}%;">
         ${arch ? dungeonTileDetailArtHtml(arch, pack, tile.rotation) : ''}
+        ${dungeonDressingOverlayHtml(tile, map.id, sel.x, sel.y)}
       </div>
     </div>
     <div class="dc-detail-zoom-controls">
@@ -5404,6 +5480,7 @@ function dungeoncrawlTileDetail(doc, map, ui) {
     <label class="field-label">Notes</label>
     <textarea class="oracle-field-textarea" rows="2" data-dungeoncrawl-tile-notes="${map.id},${sel.x},${sel.y}" placeholder="Secrets, traps, encounters here…">${esc(tile.notes || '')}</textarea>
     <div class="btn-col">
+      ${floorBtn}
       <button type="button" class="btn ghost sm" data-dungeoncrawl-reactivate="${map.id},${sel.x},${sel.y}">↻ Re-rotate this Tile</button>
       <button type="button" class="btn ghost sm" data-dungeoncrawl-remove-tile="${map.id},${sel.x},${sel.y}">✕ Remove this Tile</button>
     </div>

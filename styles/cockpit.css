@@ -1594,10 +1594,38 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
   border: 1px solid var(--border); border-radius: var(--radius-sm);
   background: var(--bg-inset); margin-bottom: var(--sp-2);
 }
-.dc-detail-art { aspect-ratio: 1; margin: 0 auto; }
+.dc-detail-art { position: relative; aspect-ratio: 1; margin: 0 auto; }
 .dc-detail-art-inner { width: 100%; height: 100%; display: block; }
 .dc-detail-art-inner svg { width: 100%; height: 100%; display: block; }
 .dc-detail-zoom-controls { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+/* Direct follow-up request: "have an invisible 1" grid overlay to each
+   tile that will allow graphic objects to snap to the grid... doors,
+   secret doors, porcullis, stairs up or down, pillars, tree trunks,
+   chests, campfires... This would also be seen on the enlarged image in
+   the lower section below the map." One shared rule for BOTH the small
+   grid cell's own dressing icons and the big Tile Detail view's — left/top
+   are set inline per-icon as percentages (data/dungeonCrawlDressing.js's
+   gx/gy out of DUNGEON_TILE_GRID_SIZE), so the same markup reads correctly
+   at either size with no separate "zoomed" variant. `%` font-size keeps
+   each glyph proportioned to whatever box it's actually rendered in
+   (tiny at the small grid, bigger once zoomed in the detail view) rather
+   than a fixed px size that would look oversized on the small grid or
+   undersized once zoomed in. */
+.dc-dressing-icon {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 50%; height: 50%; max-width: 22px; max-height: 22px;
+  font-size: 65%; line-height: 1; padding: 0; border: none; background: transparent;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  filter: drop-shadow(0 0 2px rgba(0,0,0,0.9));
+}
+.dc-detail-viewport .dc-dressing-icon { max-width: none; max-height: none; width: 7%; height: 7%; font-size: 1.4rem; }
+.dc-dressing-icon.secret { outline: 1px dashed var(--accent); outline-offset: 2px; border-radius: 50%; }
+.dc-dressing-icon.secret::after {
+  content: '?'; position: absolute; top: -0.4em; right: -0.4em;
+  font-size: 0.6em; font-weight: bold; color: var(--accent);
+  background: var(--bg); border-radius: 50%; width: 1.2em; height: 1.2em;
+  display: flex; align-items: center; justify-content: center; line-height: 1;
+}
 /* Direct follow-up request: "Allow selection of multiple adjacent tiles
    and replace them with a larger tile that gives a bigger room." A
    selected-for-merge Tile gets a dashed accent outline (distinct from the

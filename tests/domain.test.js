@@ -2407,7 +2407,7 @@ test('formatDicePoolRollText/formatDicePoolRollCopyText render each die\'s own r
 });
 
 // --- party (Party tab: #character roster + free trackers) ------------------
-import { listPartyMembers, addPartyTracker, updatePartyTracker, stepPartyTracker, setPartyTrackerValue, removePartyTracker, listPartyTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity, setGaugeTrackerValue, gaugeWindow, ensurePartyStarforgedTrackers, listPartyHeadlineTracks, addPartyRelationship, removePartyRelationship, updatePartyRelationshipLabel, updatePartyRelationshipType, updatePartyRelationshipStrength, setPartyStarship, clearPartyStarship } from '../src/domain/party.js';
+import { listPartyMembers, addPartyTracker, updatePartyTracker, stepPartyTracker, setPartyTrackerValue, removePartyTracker, listPartyTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity, reconcilePartySharedAssetVehicleTag, setGaugeTrackerValue, gaugeWindow, ensurePartyStarforgedTrackers, listPartyHeadlineTracks, addPartyRelationship, removePartyRelationship, updatePartyRelationshipLabel, updatePartyRelationshipType, updatePartyRelationshipStrength, setPartyStarship, clearPartyStarship } from '../src/domain/party.js';
 
 test('listPartyMembers returns only npc entities tagged #character', () => {
   let camp = defaultCampaign();
@@ -2610,6 +2610,31 @@ test('addPartySharedAssetEntity links a real Asset entity (deduped, distinct fro
   assert.deepEqual(camp.party.sharedAssets, ['Spare oxygen tanks']);
   camp = removePartySharedAssetEntity(camp, 'ent_rover');
   assert.deepEqual(camp.party.sharedAssetIds, []);
+});
+
+test('reconcilePartySharedAssetVehicleTag unlinks a Shared Asset entity the instant it\'s ALSO tagged #vehicle — direct follow-up request: "If an Asset is added to the party and then changed to \'vehicle\'... rescan the party shared assets and notify the user it will be removed since it changed asset type" — and is a no-op both when the entity isn\'t linked at all, and when it\'s linked but still has no #vehicle tag', () => {
+  let camp = defaultCampaign();
+  let assetId; ({ campaign: camp, id: assetId } = createEntity(camp, { type: 'asset', name: 'Field Generator' }));
+  camp = addPartySharedAssetEntity(camp, assetId);
+
+  // Still a plain (non-vehicle) linked Asset — no-op.
+  let r = reconcilePartySharedAssetVehicleTag(camp, assetId);
+  assert.equal(r.removed, false);
+  assert.deepEqual(r.campaign.party.sharedAssetIds, [assetId]);
+
+  // Retagged #vehicle while still linked — unlinks it, reports removed:true.
+  camp = addEntityTag(camp, assetId, 'vehicle');
+  r = reconcilePartySharedAssetVehicleTag(camp, assetId);
+  assert.equal(r.removed, true);
+  assert.deepEqual(r.campaign.party.sharedAssetIds, []);
+  camp = r.campaign;
+
+  // No-op: a #vehicle-tagged entity that was never linked in the first place.
+  let vehicleId; ({ campaign: camp, id: vehicleId } = createEntity(camp, { type: 'asset', name: 'Rover' }));
+  camp = addEntityTag(camp, vehicleId, 'vehicle');
+  r = reconcilePartySharedAssetVehicleTag(camp, vehicleId);
+  assert.equal(r.removed, false);
+  assert.deepEqual(camp.party.sharedAssetIds, []); // unchanged
 });
 
 test('Party Relationships (direct follow-up request: "treats the Party as an entity for the mapping purposes") — add/remove/update round-trip, one-directional, at most one edge per target, NOT mirrored onto the target entity\'s own relationships', () => {
@@ -5829,12 +5854,15 @@ import {
   setActiveDungeonMap, setDungeonMapPack, getDungeonTile, placeDungeonTile, removeDungeonTile, setDungeonTileNotes,
   inDungeonBounds, rotateEdges, computeDungeonAppendCells, pickRandomDungeonArchetype, pickRandomDungeonRotation,
   computeMergeRectangle, mergeDungeonTilesIntoRoom, unmergeDungeonRoom, removeDungeonRoom,
+  setDungeonMapLocation, clearDungeonMapLocation, listDungeonFloors, floorLabel, createDungeonFloorBelowStairs,
+  addDungeonTileDressing, removeDungeonTileDressing,
   DUNGEON_GRID_SIZE, DUNGEON_START_CELL,
 } from '../src/domain/dungeonCrawls.js';
 import {
   DUNGEON_CRAWL_ARCHETYPES, ALL_DUNGEON_CRAWL_ARCHETYPES, findDungeonCrawlArchetype, DUNGEON_CRAWL_PACKS, findDungeonCrawlPack,
   DUNGEON_CRAWL_ENTRANCE_ARCHETYPE, DUNGEON_ROOM_FALLBACK_PALETTE,
 } from '../src/data/dungeonCrawlTiles.js';
+import { DUNGEON_DRESSING_ICONS, findDungeonDressingIcon, DUNGEON_TILE_GRID_SIZE } from '../src/data/dungeonCrawlDressing.js';
 
 test('a fresh campaign has no Dungeon Crawl maps; createDungeonMap adds one, names it, defaults to the dungeon pack, and makes it active', () => {
   let camp = defaultCampaign();
@@ -6115,6 +6143,140 @@ test('unmergeDungeonRoom drops the shared room tag from every covered cell, rest
   assert.equal(getDungeonTile(removed, id, 1, 0), null);
   const removedNoop = removeDungeonRoom(camp2, id2, 0, 0);
   assert.equal(getDungeonTile(removedNoop, id2, 0, 0).archetypeKey, 'dead-end'); // untouched, no room there
+});
+
+// --- Dungeon Crawl: Location link + multi-floor dungeons (direct follow-up
+// request: "link map records to a location using the look up feature with
+// create a location if needed... allow multiple map grids as different
+// floors related to the same map that you can select from a drop down and
+// create on the fly when selecting yes when promoted after clicking on a
+// tile that has a down staircase") -----------------------------------------
+test('a fresh map starts unlinked, in its own 1-member floor group; setDungeonMapLocation/clearDungeonMapLocation are plain no-op-safe writes', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createDungeonMap(camp, 'Map'));
+  const m = getDungeonMap(camp, id);
+  assert.equal(m.locationEntityId, null);
+  assert.equal(m.floorGroupId, id);
+  assert.equal(m.floorIndex, 0);
+  assert.deepEqual(listDungeonFloors(camp, m.floorGroupId).map((x) => x.id), [id]);
+  camp = setDungeonMapLocation(camp, id, 'loc_123');
+  assert.equal(getDungeonMap(camp, id).locationEntityId, 'loc_123');
+  camp = clearDungeonMapLocation(camp, id);
+  assert.equal(getDungeonMap(camp, id).locationEntityId, null);
+  // No-ops on an unknown map id.
+  const before = camp;
+  camp = setDungeonMapLocation(camp, 'not-a-real-id', 'loc_999');
+  assert.deepEqual(listDungeonMaps(camp).map((x) => x.locationEntityId), listDungeonMaps(before).map((x) => x.locationEntityId));
+});
+
+test('floorLabel: 0 is "Ground Floor", positive is "Floor N", negative is "B-N" (basement, building-directory convention)', () => {
+  assert.equal(floorLabel(0), 'Ground Floor');
+  assert.equal(floorLabel(1), 'Floor 1');
+  assert.equal(floorLabel(3), 'Floor 3');
+  assert.equal(floorLabel(-1), 'B1');
+  assert.equal(floorLabel(-2), 'B2');
+});
+
+test('createDungeonFloorBelowStairs creates a new floor one level down from a Stairs Down Tile, inheriting pack/locationEntityId and sharing floorGroupId, links the originating Tile\'s linkedFloorMapId, is idempotent on a repeat call, and no-ops on a non-existent map/Tile', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createDungeonMap(camp, 'The Sunken Crypt', 'cave'));
+  camp = setDungeonMapLocation(camp, id, 'loc_crypt');
+  camp = placeDungeonTile(camp, id, 3, 3, 'stairs-down', 0);
+
+  let r1 = createDungeonFloorBelowStairs(camp, id, 3, 3);
+  camp = r1.campaign;
+  const floorId = r1.id;
+  assert.ok(floorId);
+  const floor = getDungeonMap(camp, floorId);
+  assert.equal(floor.floorIndex, -1);
+  assert.equal(floor.floorGroupId, id);
+  assert.equal(floor.pack, 'cave');
+  assert.equal(floor.locationEntityId, 'loc_crypt');
+  assert.equal(floor.name, 'The Sunken Crypt — B1');
+  assert.equal(getDungeonTile(camp, id, 3, 3).linkedFloorMapId, floorId);
+  assert.deepEqual(listDungeonFloors(camp, id).map((x) => x.id), [id, floorId]); // Ground Floor first, B1 last
+
+  // Idempotent: calling again on the SAME Tile returns the SAME floor id, no duplicate map created.
+  const mapCountBefore = listDungeonMaps(camp).length;
+  const r2 = createDungeonFloorBelowStairs(camp, id, 3, 3);
+  assert.equal(r2.id, floorId);
+  assert.equal(listDungeonMaps(r2.campaign).length, mapCountBefore);
+
+  // No-op: unknown map, or a cell with no Tile.
+  const noopMap = createDungeonFloorBelowStairs(camp, 'not-a-real-id', 3, 3);
+  assert.equal(noopMap.id, null);
+  const noopCell = createDungeonFloorBelowStairs(camp, id, 0, 0);
+  assert.equal(noopCell.id, null);
+});
+
+test('placeDungeonTile preserves notes/dressing across a reroll to a DIFFERENT Archetype, but only carries linkedFloorMapId over when the NEW Archetype is also a Stairs Down type', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createDungeonMap(camp, 'Map'));
+  camp = placeDungeonTile(camp, id, 2, 2, 'stairs-down', 0);
+  camp = setDungeonTileNotes(camp, id, 2, 2, 'A spiral staircase descends into darkness.');
+  camp = addDungeonTileDressing(camp, id, 2, 2, 'stairs-down', 6, 6);
+  let r = createDungeonFloorBelowStairs(camp, id, 2, 2);
+  camp = r.campaign;
+  assert.ok(getDungeonTile(camp, id, 2, 2).linkedFloorMapId);
+
+  // Reroll to a DIFFERENT Stairs Down placement (still stairs) — the floor link survives.
+  camp = placeDungeonTile(camp, id, 2, 2, 'stairs-down', 180);
+  let t = getDungeonTile(camp, id, 2, 2);
+  assert.equal(t.notes, 'A spiral staircase descends into darkness.');
+  assert.equal(t.dressing.length, 1);
+  assert.equal(t.linkedFloorMapId, r.id);
+
+  // Reroll to a non-stairs Archetype — notes/dressing survive, but the floor link is dropped (orphaned otherwise).
+  camp = placeDungeonTile(camp, id, 2, 2, 'four-way', 0);
+  t = getDungeonTile(camp, id, 2, 2);
+  assert.equal(t.notes, 'A spiral staircase descends into darkness.');
+  assert.equal(t.dressing.length, 1);
+  assert.equal(t.linkedFloorMapId, null);
+});
+
+// --- Dungeon Crawl: grid-snap dressing objects (direct follow-up request:
+// "treat each tile as 12"x12"... an invisible 1" grid overlay... doors,
+// secret doors, porcullis, stairs up or down, pillars, tree trunks, chests,
+// campfires") ----------------------------------------------------------
+test('every DUNGEON_DRESSING_ICONS entry has a key/label/glyph; findDungeonDressingIcon resolves by key or returns null; DUNGEON_TILE_GRID_SIZE is the real 12x12 scale', () => {
+  assert.equal(DUNGEON_TILE_GRID_SIZE, 12);
+  for (const d of DUNGEON_DRESSING_ICONS) {
+    assert.equal(typeof d.key, 'string');
+    assert.equal(typeof d.label, 'string');
+    assert.equal(typeof d.glyph, 'string');
+  }
+  assert.equal(findDungeonDressingIcon('door').key, 'door');
+  assert.equal(findDungeonDressingIcon('secret-door').secret, true);
+  assert.equal(findDungeonDressingIcon('not-a-real-key'), null);
+});
+
+test('addDungeonTileDressing/removeDungeonTileDressing add and remove by id, no-op on an untouched cell or an out-of-grid gx/gy, and a Tile can hold more than one dressing object', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createDungeonMap(camp, 'Map'));
+  camp = placeDungeonTile(camp, id, 1, 1, 'straight-chamber', 0);
+  camp = addDungeonTileDressing(camp, id, 1, 1, 'chest', 2, 3);
+  camp = addDungeonTileDressing(camp, id, 1, 1, 'campfire', 6, 6);
+  const t = getDungeonTile(camp, id, 1, 1);
+  assert.equal(t.dressing.length, 2);
+  assert.deepEqual(t.dressing[0], { id: t.dressing[0].id, iconKey: 'chest', gx: 2, gy: 3 });
+
+  // No-op: no Tile at that cell yet.
+  camp = addDungeonTileDressing(camp, id, 4, 4, 'door', 0, 0);
+  assert.equal(getDungeonTile(camp, id, 4, 4), null);
+  // No-op: out-of-grid gx/gy (DUNGEON_TILE_GRID_SIZE is 12, so 0-11 valid).
+  camp = addDungeonTileDressing(camp, id, 1, 1, 'door', 12, 0);
+  assert.equal(getDungeonTile(camp, id, 1, 1).dressing.length, 2); // unchanged
+  camp = addDungeonTileDressing(camp, id, 1, 1, 'door', -1, 0);
+  assert.equal(getDungeonTile(camp, id, 1, 1).dressing.length, 2); // unchanged
+
+  const chestId = getDungeonTile(camp, id, 1, 1).dressing[0].id;
+  camp = removeDungeonTileDressing(camp, id, 1, 1, chestId);
+  const after = getDungeonTile(camp, id, 1, 1).dressing;
+  assert.equal(after.length, 1);
+  assert.equal(after[0].iconKey, 'campfire');
+  // No-op on an unknown dressing id.
+  camp = removeDungeonTileDressing(camp, id, 1, 1, 'not-a-real-id');
+  assert.equal(getDungeonTile(camp, id, 1, 1).dressing.length, 1);
 });
 
 // --- World Tracker (requirements/PLANETFALL_world_tracker.md) -------------

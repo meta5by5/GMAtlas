@@ -9,6 +9,7 @@
 // hexcrawls.js's getHex has one (getDungeonTile below returns null).
 
 import { DUNGEON_CRAWL_ARCHETYPES, findDungeonCrawlArchetype } from '../data/dungeonCrawlTiles.js';
+import { DUNGEON_TILE_GRID_SIZE } from '../data/dungeonCrawlDressing.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 
@@ -61,6 +62,18 @@ export function createDungeonMap(campaign, name, pack) {
     createdAt: new Date().toISOString(),
     pack: pack || 'dungeon',
     tiles: {},
+    // Direct follow-up request: "link map records to a location... allow
+    // multiple map grids as different floors related to the same map."
+    // `locationEntityId` is this map's own linked Cast Location (null =
+    // unlinked), same "store the id, resolve the real entity at render
+    // time" posture as Hexcrawl's own hex-center Location link. A brand
+    // new map is its OWN floor group (floorGroupId: itself, floorIndex: 0)
+    // — createDungeonFloorBelowStairs below is what actually grows a group
+    // past one map, sharing this same floorGroupId across every floor of
+    // one dungeon.
+    locationEntityId: null,
+    floorGroupId: id,
+    floorIndex: 0,
   });
   d.activeId = id;
   return { campaign: next, id };
@@ -98,6 +111,93 @@ export function setDungeonMapPack(campaign, mapId, pack) {
   return next;
 }
 
+// --- Location link + multi-floor dungeons -----------------------------------
+// Direct follow-up request: "link map records to a location using the look
+// up feature with create a location if needed... allow multiple map grids
+// as different floors related to the same map that you can select from a
+// drop down and create on the fly when selecting yes when promoted after
+// clicking on a tile that has a down staircase." The actual lookup/create-
+// a-Location UI reuses the existing entityPicker overlay (shell.js's
+// 'dungeoncrawl-location' entityType, same "search existing, or Create New"
+// shape every other picker already has) — these two functions are just the
+// plain link/unlink write, same posture as hexcrawls.js's setHexLocation/
+// clearHexLocation.
+
+export function setDungeonMapLocation(campaign, mapId, entityId) {
+  const next = clone(campaign);
+  const m = ensure(next).maps.find((x) => x.id === mapId);
+  if (m && entityId) m.locationEntityId = entityId;
+  return next;
+}
+
+export function clearDungeonMapLocation(campaign, mapId) {
+  const next = clone(campaign);
+  const m = ensure(next).maps.find((x) => x.id === mapId);
+  if (m) m.locationEntityId = null;
+  return next;
+}
+
+/** Every map sharing one `floorGroupId` ("floors of the same dungeon"),
+ *  deepest basement last — real-world building-directory order (any
+ *  above-ground floors first, Ground Floor, then B1/B2/...), matching
+ *  floorLabel's own naming below. A brand-new map (createDungeonMap) is
+ *  always alone in its own group until createDungeonFloorBelowStairs (or a
+ *  future "add floor above") grows it. */
+export function listDungeonFloors(campaign, floorGroupId) {
+  return listDungeonMaps(campaign)
+    .filter((m) => m.floorGroupId === floorGroupId)
+    .sort((a, b) => b.floorIndex - a.floorIndex);
+}
+
+/** Ground Floor (0), Floor N (positive, above ground), or B-N (negative,
+ *  below ground — "B1"/"B2"/...) — real building-directory convention, not
+ *  invented for this app. Pure formatting only; a floor's actual identity
+ *  is still its own map id, never this label. */
+export function floorLabel(floorIndex) {
+  const n = Number(floorIndex) || 0;
+  if (n === 0) return 'Ground Floor';
+  if (n > 0) return `Floor ${n}`;
+  return `B${-n}`;
+}
+
+/** The "create on the fly when selecting yes" flow (direct follow-up
+ *  request) — called when a GM confirms creating a new floor BELOW the one
+ *  they're on, from a specific Stairs Down Tile. Idempotent: if that exact
+ *  Tile already has a linked floor (`linkedFloorMapId`), returns it instead
+ *  of creating a duplicate (so a GM re-opening the same stairs Tile's
+ *  detail panel later just navigates back to the same floor, never spawns
+ *  a second one) — same defensive "a floor already exists at that index"
+ *  fallback the own-tile check would otherwise need. The new floor inherits
+ *  its parent's `pack` (visual consistency within one dungeon) and
+ *  `locationEntityId` (same real place, just another level of it) and
+ *  shares the parent's `floorGroupId` so listDungeonFloors finds it
+ *  immediately. No-op (a null `id`) if the map or that exact Tile doesn't
+ *  exist. */
+export function createDungeonFloorBelowStairs(campaign, mapId, x, y) {
+  const next = clone(campaign);
+  const d = ensure(next);
+  const parent = d.maps.find((m) => m.id === mapId);
+  const tile = parent && parent.tiles[key(x, y)];
+  if (!parent || !tile) return { campaign: next, id: null };
+  if (tile.linkedFloorMapId) return { campaign: next, id: tile.linkedFloorMapId };
+  const newIndex = (parent.floorIndex || 0) - 1;
+  const already = d.maps.find((m) => m.floorGroupId === parent.floorGroupId && m.floorIndex === newIndex);
+  if (already) { tile.linkedFloorMapId = already.id; return { campaign: next, id: already.id }; }
+  const id = newId('dun');
+  d.maps.push({
+    id,
+    name: `${parent.name} — ${floorLabel(newIndex)}`,
+    createdAt: new Date().toISOString(),
+    pack: parent.pack,
+    tiles: {},
+    locationEntityId: parent.locationEntityId,
+    floorGroupId: parent.floorGroupId,
+    floorIndex: newIndex,
+  });
+  tile.linkedFloorMapId = id;
+  return { campaign: next, id };
+}
+
 // --- Per-cell read/write ----------------------------------------------------
 
 export function inDungeonBounds(x, y) {
@@ -121,16 +221,30 @@ function normalizeRotation(rotation) {
 /** Commits a Tile into one cell — used both for a brand-new cell (the
  *  initial placement flow) and for RE-committing an already-placed cell
  *  (the double-click/long-press "reactivate placement" flow, shell.js) —
- *  overwrites whatever was there, preserving that cell's own `notes` since
- *  reactivating a Tile to fix its rotation shouldn't lose a GM's notes on
- *  it. No-op if the archetype key is unknown, or the cell is out of
- *  bounds. */
+ *  overwrites whatever was there, preserving that cell's own `notes` and
+ *  `dressing` (direct follow-up request's grid-snap decorations) since
+ *  reactivating a Tile to fix its rotation — or even rerolling it to a
+ *  different Archetype — shouldn't lose a GM's own annotations/placed
+ *  objects there. `linkedFloorMapId` (the "create a floor on the fly from
+ *  a Stairs Down Tile" link) is narrower: only carried over if the NEW
+ *  Archetype is ALSO a Stairs Down type (`arch.stairs`) — rerolling a
+ *  staircase into, say, a Four-Way makes the old floor link semantically
+ *  orphaned, so it's dropped rather than silently kept pointing at a floor
+ *  this cell no longer represents. No-op if the archetype key is unknown,
+ *  or the cell is out of bounds. */
 export function placeDungeonTile(campaign, mapId, x, y, archetypeKey, rotation) {
   const next = clone(campaign);
   const m = ensure(next).maps.find((mm) => mm.id === mapId);
-  if (!m || !inDungeonBounds(x, y) || !findDungeonCrawlArchetype(archetypeKey)) return next;
+  const arch = findDungeonCrawlArchetype(archetypeKey);
+  if (!m || !inDungeonBounds(x, y) || !arch) return next;
   const existing = m.tiles[key(x, y)];
-  m.tiles[key(x, y)] = { archetypeKey, rotation: normalizeRotation(rotation), notes: (existing && existing.notes) || '' };
+  m.tiles[key(x, y)] = {
+    archetypeKey,
+    rotation: normalizeRotation(rotation),
+    notes: (existing && existing.notes) || '',
+    dressing: (existing && Array.isArray(existing.dressing)) ? existing.dressing : [],
+    linkedFloorMapId: (existing && arch.stairs) ? (existing.linkedFloorMapId || null) : null,
+  };
   return next;
 }
 
@@ -146,6 +260,42 @@ export function setDungeonTileNotes(campaign, mapId, x, y, notes) {
   const m = ensure(next).maps.find((mm) => mm.id === mapId);
   const t = m && m.tiles[key(x, y)];
   if (t) t.notes = String(notes || '');
+  return next;
+}
+
+// --- Dungeon dressing (direct follow-up request: "treat each tile as
+// 12"x12"... an invisible 1" grid overlay... graphic objects to snap to the
+// grid... doors, secret doors, porcullis, stairs up or down, pillars, tree
+// trunks, chests, campfires") ------------------------------------------------
+// A placed instance lives on the Tile it decorates (`tile.dressing`, a
+// plain array — a Tile can hold any number of dressing objects, same
+// "owns everything about itself" posture as a Hexcrawl hex's own rivers/
+// roads arrays), each `{id, iconKey, gx, gy}` — gx/gy (data/
+// dungeonCrawlDressing.js's DUNGEON_TILE_GRID_SIZE, 0-11) are which of the
+// 12x12 grid's own cells it's centered in, never a pixel/fractional
+// position, so it reads correctly at the small grid cell's size AND the
+// Tile Detail panel's big zoomed view from the exact same stored data.
+
+/** Adds one dressing object to a Tile at grid cell (gx,gy) — no-op if the
+ *  Tile doesn't exist yet, or (gx,gy) falls outside the 12x12 grid. */
+export function addDungeonTileDressing(campaign, mapId, x, y, iconKey, gx, gy) {
+  const next = clone(campaign);
+  const m = ensure(next).maps.find((mm) => mm.id === mapId);
+  const tile = m && m.tiles[key(x, y)];
+  if (!tile || !iconKey) return next;
+  if (!Number.isInteger(gx) || !Number.isInteger(gy) || gx < 0 || gx >= DUNGEON_TILE_GRID_SIZE || gy < 0 || gy >= DUNGEON_TILE_GRID_SIZE) return next;
+  if (!Array.isArray(tile.dressing)) tile.dressing = [];
+  tile.dressing.push({ id: newId('dr'), iconKey, gx, gy });
+  return next;
+}
+
+/** Removes one dressing object by its own id — no-op if the Tile or that
+ *  particular dressing object doesn't exist. */
+export function removeDungeonTileDressing(campaign, mapId, x, y, dressingId) {
+  const next = clone(campaign);
+  const m = ensure(next).maps.find((mm) => mm.id === mapId);
+  const tile = m && m.tiles[key(x, y)];
+  if (tile && Array.isArray(tile.dressing)) tile.dressing = tile.dressing.filter((dd) => dd.id !== dressingId);
   return next;
 }
 

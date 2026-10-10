@@ -285,6 +285,28 @@ export function removePartySharedAssetEntity(campaign, entityId) {
   return next;
 }
 
+/** Direct follow-up request: "If an Asset is added to the party and then
+ *  changed to 'vehicle' (but was originally added as just an Asset), then
+ *  rescan the party shared assets and notify the user it will be removed
+ *  since it changed asset type." Called from the Entity Editor's own tag-
+ *  input commit (shell.js) right after a tag is added — a no-op unless
+ *  `entityId` is BOTH currently linked in Shared Assets AND now tagged
+ *  #vehicle (the "+Vehicle" create flow itself tags #vehicle BEFORE
+ *  linking the entity here, so it never trips this; only a RETROACTIVE
+ *  retag of an already-linked, previously-non-vehicle entity does).
+ *  Returns `{ campaign, removed }` rather than just the campaign — shell.js
+ *  uses `removed` to decide whether to toast the GM, without having to
+ *  separately re-diff sharedAssetIds itself. */
+export function reconcilePartySharedAssetVehicleTag(campaign, entityId) {
+  const party = campaign.party || {};
+  const linked = (party.sharedAssetIds || []).includes(entityId);
+  if (!linked) return { campaign, removed: false };
+  const entity = getEntity(campaign, entityId);
+  const isVehicle = !!(entity && (entity.tags || []).includes('vehicle'));
+  if (!isVehicle) return { campaign, removed: false };
+  return { campaign: removePartySharedAssetEntity(campaign, entityId), removed: true };
+}
+
 // --- Party Relationships (direct follow-up request: "add a Relationships
 // section similar to how used on Entity Editor. This treats the Party as
 // an entity for the mapping purposes") ---------------------------------

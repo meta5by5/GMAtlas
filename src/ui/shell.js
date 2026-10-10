@@ -61,8 +61,11 @@ import {
   setActiveDungeonMap, setDungeonMapPack, getDungeonTile, placeDungeonTile, removeDungeonTile, setDungeonTileNotes,
   computeDungeonAppendCells, pickRandomDungeonArchetype, pickRandomDungeonRotation,
   mergeDungeonTilesIntoRoom, unmergeDungeonRoom, removeDungeonRoom,
+  setDungeonMapLocation, clearDungeonMapLocation, createDungeonFloorBelowStairs,
+  addDungeonTileDressing, removeDungeonTileDressing,
 } from '../domain/dungeonCrawls.js';
 import { DUNGEON_CRAWL_ARCHETYPES, DUNGEON_CRAWL_ENTRANCE_ARCHETYPE } from '../data/dungeonCrawlTiles.js';
+import { DUNGEON_TILE_GRID_SIZE } from '../data/dungeonCrawlDressing.js';
 import { findHexcrawlThreat, HEXCRAWL_THREAT_ICONS } from '../data/hexcrawlIcons.js';
 import { generateCreatureConcept, formatCreatureConcept, generateSiteConcept, formatSiteConcept, generateAdventureSeed, formatAdventureSeed } from '../domain/worldbuilding.js';
 import {
@@ -71,7 +74,7 @@ import {
   listReferenceDocuments, renameRefDocument, addRefDocumentTag, removeRefDocumentTag, hideRefDocument, listDocuments,
   sanitizeExternalLinkUrl, mergeRefOverrides, referencedBlobKeys,
 } from '../domain/documents.js';
-import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue, setGaugeTrackerValue, ensurePartyStarforgedTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity, listPartyMembers, addPartyRelationship, removePartyRelationship, updatePartyRelationshipLabel, updatePartyRelationshipType, updatePartyRelationshipStrength, setPartyStarship, clearPartyStarship } from '../domain/party.js';
+import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue, setGaugeTrackerValue, ensurePartyStarforgedTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity, reconcilePartySharedAssetVehicleTag, listPartyMembers, addPartyRelationship, removePartyRelationship, updatePartyRelationshipLabel, updatePartyRelationshipType, updatePartyRelationshipStrength, setPartyStarship, clearPartyStarship } from '../domain/party.js';
 import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, updateColonyEncounter, detachColonyEncounterEntity, listColonyEncounters, advanceCampaignTurnWithAccrual, formatTurnAdvanceNote, incrementCampaignMilestones, decrementCampaignMilestones, syncCrewRosterWithParty, createGeneratedLifeform, listLifeformEncounters } from '../domain/colony.js';
 import { resolveLifeformEncounterSlot } from '../domain/lifeforms.js';
 import {
@@ -562,6 +565,16 @@ let dungeonCrawlDetailZoom = 1;
 // toggling Merge mode off, merging, or switching maps.
 let dungeonCrawlMergeMode = false;
 let dungeonCrawlMergeSelection = new Set();
+// Direct follow-up request: "have an invisible 1" grid overlay to each
+// tile that will allow graphic objects to snap to the grid... available
+// through a dropdown that activates it and can be placed on the tile" —
+// which dressing icon (data/dungeonCrawlDressing.js's DUNGEON_DRESSING_
+// ICONS key) is currently armed, or '' for none. Mutually exclusive with
+// Merge mode in spirit (both interpret a Tile click differently) though
+// nothing enforces that explicitly — arming one doesn't auto-disarm the
+// other since a GM toggling Merge mode off always clears its own
+// selection anyway, and the dressing-click branch is checked first.
+let dungeonCrawlArmedDressing = '';
 // Manual click-timing tracking for the double-click-to-reactivate gesture
 // on an already-placed Tile — same reasoning as hexcrawlLastClickKey/
 // hexcrawlLastClickAt above: a single click on a filled cell can select it
@@ -850,7 +863,10 @@ const CAMPAIGN_SECTION_KEYS = [
   { key: 'warbandCampaignGuide', defaultCollapsed: true },
 ];
 const PARTY_SECTION_KEYS = [
-  { key: 'roster', defaultCollapsed: true },
+  // 'roster' removed (direct follow-up request: "removing the Party Roster
+  // subheader to always show party members") — the member list no longer
+  // has its own collapsible section at all, so it's no longer part of the
+  // Party title's collapse-all/expand-all sweep either.
   { key: 'starship', defaultCollapsed: true },
   { key: 'relationships', defaultCollapsed: true },
   { key: 'trackers', defaultCollapsed: true },
@@ -2079,7 +2095,7 @@ function onClick(ev) {
   // --- Dungeon Crawl -------------------------------------------------------
   const dcSelectMap = hit('[data-dungeoncrawl-select]');
   if (dcSelectMap) {
-    dungeonCrawlPending = null; dungeonCrawlSelected = null; dungeonCrawlMergeMode = false; dungeonCrawlMergeSelection = new Set(); dungeonCrawlDetailZoom = 1;
+    dungeonCrawlPending = null; dungeonCrawlSelected = null; dungeonCrawlMergeMode = false; dungeonCrawlMergeSelection = new Set(); dungeonCrawlDetailZoom = 1; dungeonCrawlArmedDressing = '';
     return store.update((d) => setActiveDungeonMap(d, dcSelectMap.dataset.dungeoncrawlSelect));
   }
   const dcAdd = hit('[data-dungeoncrawl-add]');
@@ -2096,22 +2112,107 @@ function onClick(ev) {
   const dcRemove = hit('[data-dungeoncrawl-remove]');
   if (dcRemove) {
     if (window.confirm('Delete this Dungeon Crawl map? This cannot be undone.')) {
-      dungeonCrawlPending = null; dungeonCrawlSelected = null; dungeonCrawlMergeMode = false; dungeonCrawlMergeSelection = new Set();
+      dungeonCrawlPending = null; dungeonCrawlSelected = null; dungeonCrawlMergeMode = false; dungeonCrawlMergeSelection = new Set(); dungeonCrawlArmedDressing = '';
       store.update((d) => deleteDungeonMap(d, dcRemove.dataset.dungeoncrawlRemove));
     }
     return;
+  }
+  // Direct follow-up request: "link map records to a location using the
+  // look up feature with create a location if needed" — opens the SAME
+  // entityPicker overlay every other "lookup, or create a new one" flow in
+  // this app uses (mirrors Hexcrawl's own hex-center Location link almost
+  // exactly), scoped to this one map rather than a specific hex/vertex.
+  // Picking an existing Location calls commitEntityPickerPick's own
+  // 'dungeoncrawl-location' branch below; "Create New Location" uses the
+  // generic data-entity-picker-create mechanism (ENTITY_PICKER_CREATE_TYPE)
+  // since a blank Location needs no bespoke creation step the way e.g. a
+  // Lifeform's stat roll does — the SAME commit branch runs either way, so
+  // a freshly-created Location is linked to this map in the same action
+  // that created it, satisfying the follow-up's own "when creating the
+  // location, also... link the two."
+  const dcLocationLink = hit('[data-dungeoncrawl-location-link]');
+  if (dcLocationLink) {
+    const mapId = dcLocationLink.dataset.dungeoncrawlLocationLink;
+    entityPicker = { entityType: 'dungeoncrawl-location', mode: 'dungeoncrawl-location', scope: { mapId }, query: '' };
+    renderEntityPickerOverlay();
+    const inp = root.querySelector('[data-entity-picker-query]');
+    if (inp) { inp.value = ''; inp.focus(); }
+    return;
+  }
+  const dcLocationUnlink = hit('[data-dungeoncrawl-location-unlink]');
+  if (dcLocationUnlink) {
+    return store.update((d) => clearDungeonMapLocation(d, dcLocationUnlink.dataset.dungeoncrawlLocationUnlink));
+  }
+  // Direct follow-up request: "allow multiple map grids as different
+  // floors... create on the fly when selecting yes when promoted after
+  // clicking on a tile that has a down staircase" — the actual "prompted"
+  // confirm lives here (Tile Detail panel's own button, drawers/index.js),
+  // not hijacking the plain select-click gesture every other Tile already
+  // uses, so re-opening an already-explored Stairs Down Tile's detail
+  // panel never repeats this prompt. createDungeonFloorBelowStairs is
+  // idempotent — a repeat click (or a second GM session reopening this
+  // same map) just re-navigates to the SAME floor rather than spawning a
+  // duplicate one.
+  const dcCreateFloor = hit('[data-dungeoncrawl-create-floor]');
+  if (dcCreateFloor) {
+    const [mapId, x, y] = dcCreateFloor.dataset.dungeoncrawlCreateFloor.split(',');
+    if (!window.confirm('This Tile has a staircase down. Create a new floor below and link it here?')) return;
+    let newFloorId = null;
+    store.update((d) => {
+      const r = createDungeonFloorBelowStairs(d, mapId, Number(x), Number(y));
+      newFloorId = r.id;
+      return r.campaign;
+    });
+    if (newFloorId) {
+      dungeonCrawlSelected = null; dungeonCrawlDetailZoom = 1;
+      store.update((d) => setActiveDungeonMap(d, newFloorId));
+    }
+    return;
+  }
+  const dcGotoFloor = hit('[data-dungeoncrawl-goto-floor]');
+  if (dcGotoFloor) {
+    dungeonCrawlSelected = null; dungeonCrawlDetailZoom = 1;
+    return store.update((d) => setActiveDungeonMap(d, dcGotoFloor.dataset.dungeoncrawlGotoFloor));
   }
   const dcPackMergeToggle = hit('[data-dungeoncrawl-merge-toggle]');
   if (dcPackMergeToggle) {
     dungeonCrawlMergeMode = !dungeonCrawlMergeMode;
     dungeonCrawlMergeSelection = new Set();
-    dungeonCrawlPending = null; dungeonCrawlSelected = null;
+    dungeonCrawlPending = null; dungeonCrawlSelected = null; dungeonCrawlArmedDressing = '';
     return renderDrawerBody();
   }
   const dcMergeCancel = hit('[data-dungeoncrawl-merge-cancel]');
   if (dcMergeCancel) {
     dungeonCrawlMergeMode = false; dungeonCrawlMergeSelection = new Set();
     return renderDrawerBody();
+  }
+  // Direct follow-up request: "typical dungeon map graphics for doors,
+  // secret doors, porcullis, stairs up or down, pillars, tree trunks,
+  // chests, campfires, etc. Those should be available through a dropdown
+  // that activates it and can be placed on the tile" — removing an
+  // already-placed dressing icon is checked here, BEFORE the general
+  // placement targets below (data-dungeoncrawl-cell / data-dungeoncrawl-
+  // detail-place), since it's a more specific nested target within them.
+  const dcDressingRemove = hit('[data-dungeoncrawl-dressing-remove]');
+  if (dcDressingRemove) {
+    const [mapId, x, y, dressingId] = dcDressingRemove.dataset.dungeoncrawlDressingRemove.split(',');
+    return store.update((d) => removeDungeonTileDressing(d, mapId, Number(x), Number(y), dressingId));
+  }
+  // Direct follow-up request: "This would also be seen on the enlarged
+  // image in the lower section below the map" — placing a dressing icon
+  // from the BIG Tile Detail view (as opposed to the small grid cell,
+  // handled inside dcCell below) — same grid-snap math, just measured
+  // against this element's own (possibly zoomed) rendered size, which
+  // works unmodified at any zoom level since the click position is always
+  // read as a 0-1 FRACTION of whatever size the element currently renders
+  // at, not an absolute pixel count.
+  const dcDetailPlace = hit('[data-dungeoncrawl-detail-place]');
+  if (dcDetailPlace && dungeonCrawlArmedDressing) {
+    const [mapId, x, y] = dcDetailPlace.dataset.dungeoncrawlDetailPlace.split(',');
+    const rect = dcDetailPlace.getBoundingClientRect();
+    const gx = Math.max(0, Math.min(DUNGEON_TILE_GRID_SIZE - 1, Math.floor(((ev.clientX - rect.left) / rect.width) * DUNGEON_TILE_GRID_SIZE)));
+    const gy = Math.max(0, Math.min(DUNGEON_TILE_GRID_SIZE - 1, Math.floor(((ev.clientY - rect.top) / rect.height) * DUNGEON_TILE_GRID_SIZE)));
+    return store.update((d) => addDungeonTileDressing(d, mapId, Number(x), Number(y), dungeonCrawlArmedDressing, gx, gy));
   }
   // Direct follow-up request: "Allow selection of multiple adjacent tiles
   // and replace them with a larger tile that gives a bigger room."
@@ -2251,6 +2352,21 @@ function onClick(ev) {
     const [mapId, x, y] = raw.split(',');
     const tile = getDungeonTile(store.get(), mapId, Number(x), Number(y));
     if (!tile) return;
+    // Direct follow-up request: "have an invisible 1" grid overlay to each
+    // tile that will allow graphic objects to snap to the grid... available
+    // through a dropdown that activates it and can be placed on the tile."
+    // Checked before Merge mode/select — while a dressing icon is armed, a
+    // click anywhere on an (non-Room) Tile drops it at the nearest of the
+    // Tile's own 12x12 grid cells, computed from the click's position as a
+    // 0-1 fraction of the Tile's own currently-rendered box (resolution/
+    // zoom-independent — the exact same math dcDetailPlace above uses for
+    // the big view).
+    if (dungeonCrawlArmedDressing && !tile.room) {
+      const rect = dcCell.getBoundingClientRect();
+      const gx = Math.max(0, Math.min(DUNGEON_TILE_GRID_SIZE - 1, Math.floor(((ev.clientX - rect.left) / rect.width) * DUNGEON_TILE_GRID_SIZE)));
+      const gy = Math.max(0, Math.min(DUNGEON_TILE_GRID_SIZE - 1, Math.floor(((ev.clientY - rect.top) / rect.height) * DUNGEON_TILE_GRID_SIZE)));
+      return store.update((d) => addDungeonTileDressing(d, mapId, Number(x), Number(y), dungeonCrawlArmedDressing, gx, gy));
+    }
     if (dungeonCrawlMergeMode) {
       if (tile.room) return; // an already-merged Room can't be folded into another merge
       // Plain "x,y" (not the full "mapId,x,y" `raw`) — matches the key
@@ -4398,7 +4514,14 @@ function onClick(ev) {
     store.update((d) => {
       const created = createEntity(d, { type: createType, name: '' });
       newId = created.id;
-      return created.campaign;
+      // Direct follow-up request: "When adding a new vehicle, preassign a
+      // tag of 'vehicle'." — party-vehicle's own candidate list (renderEntity
+      // PickerOverlay below) only ever shows #vehicle-tagged Asset entities,
+      // so a freshly-created one needs this tag immediately, or it would
+      // silently fail to appear as "already linked" there despite being
+      // linked via sharedAssetIds (commitEntityPickerPick, below) a moment
+      // later in this same action.
+      return picker.entityType === 'party-vehicle' ? addEntityTag(created.campaign, newId, 'vehicle') : created.campaign;
     });
     if (newId) commitEntityPickerPick(picker, newId);
     openDrawerTab('entity-detail');
@@ -5158,6 +5281,26 @@ function onChange(ev) {
   if (dcPackSelect) {
     return store.update((d) => setDungeonMapPack(d, dcPackSelect.dataset.dungeoncrawlPack, t.value));
   }
+  // Direct follow-up request: "allow multiple map grids as different floors
+  // related to the same map that you can select from a drop down" — a
+  // floor IS an ordinary Dungeon Crawl map underneath, so switching one is
+  // just setActiveDungeonMap, same as the top map-switcher tabs.
+  const dcFloorSelect = t.closest('[data-dungeoncrawl-floor-select]');
+  if (dcFloorSelect) {
+    dungeonCrawlPending = null; dungeonCrawlSelected = null; dungeonCrawlMergeMode = false; dungeonCrawlMergeSelection = new Set(); dungeonCrawlDetailZoom = 1; dungeonCrawlArmedDressing = '';
+    return store.update((d) => setActiveDungeonMap(d, t.value));
+  }
+  // Direct follow-up request: "available through a dropdown that activates
+  // it and can be placed on the tile" — picking a blank option disarms
+  // (mirrors Hexcrawl's own Geography/Threat/Overlay select-to-arm
+  // pattern); arming one also disarms Merge mode so a Tile click only ever
+  // does ONE of the two things at a time.
+  const dcDressingArm = t.closest('[data-dungeoncrawl-dressing-arm]');
+  if (dcDressingArm) {
+    dungeonCrawlArmedDressing = t.value || '';
+    if (dungeonCrawlArmedDressing) { dungeonCrawlMergeMode = false; dungeonCrawlMergeSelection = new Set(); }
+    return renderDrawerBody();
+  }
   const dcTileNotes = t.closest('[data-dungeoncrawl-tile-notes]');
   if (dcTileNotes) {
     const [mapId, x, y] = dcTileNotes.dataset.dungeoncrawlTileNotes.split(',');
@@ -5237,11 +5380,31 @@ function onChange(ev) {
     // when the tag was previously removed (see the protected-tag confirm
     // below) — a plain no-op if there was nothing archived.
     if (value) {
-      return store.update((d) => {
+      // Direct follow-up request: "If an Asset is added to the party and
+      // then changed to 'vehicle' (but was originally added as just an
+      // Asset), then rescan the party shared assets and notify the user it
+      // will be removed since it changed asset type." Tagging an entity
+      // #vehicle HERE (the Entity Editor's own tag input, used to retag an
+      // entity already sitting in Cast — as opposed to "+Vehicle"'s own
+      // create flow above, which tags #vehicle BEFORE linking it into
+      // sharedAssetIds, so it never trips this) while that entity is
+      // already linked in Party's Shared Assets means it no longer belongs
+      // in that generic roster — same "+Asset" vs "+Vehicle" mutually-
+      // exclusive-candidate-pool rule renderEntityPickerOverlay already
+      // enforces going forward, just applied retroactively here.
+      let becameOrphanedVehicle = false;
+      store.update((d) => {
         let next = syncCrewRosterWithParty(addEntityTag(d, active, value));
         if (value.toLowerCase() === 'character') next = setCharacterStatblocksArchived(next, active, false);
+        if (value.toLowerCase() === 'vehicle') {
+          const r = reconcilePartySharedAssetVehicleTag(next, active);
+          next = r.campaign;
+          becameOrphanedVehicle = r.removed;
+        }
         return next;
       });
+      if (becameOrphanedVehicle) toast('Tagged #vehicle — removed from Shared Assets (it changed asset type; use "+ Vehicle" there to re-add it)');
+      return;
     }
     return;
   }
@@ -7742,8 +7905,25 @@ function commitInlinePrompt() {
   } else if (kind === 'hexcrawl-rename') {
     store.update((d) => renameHexMap(d, meta.id, value));
   } else if (kind === 'dungeoncrawl-add') {
-    dungeonCrawlPending = null; dungeonCrawlSelected = null; dungeonCrawlMergeMode = false; dungeonCrawlMergeSelection = new Set();
-    store.update((d) => createDungeonMap(d, value, 'dungeon').campaign);
+    dungeonCrawlPending = null; dungeonCrawlSelected = null; dungeonCrawlMergeMode = false; dungeonCrawlMergeSelection = new Set(); dungeonCrawlArmedDressing = '';
+    let newMapId = null;
+    store.update((d) => {
+      const r = createDungeonMap(d, value, 'dungeon');
+      newMapId = r.id;
+      return r.campaign;
+    });
+    // Direct follow-up request: "When creating the location, also create
+    // the map record and link the two" — offering the Location lookup
+    // right after naming a brand-new map, rather than making the GM find
+    // the toolbar's own "Link Location" button afterward, so both halves
+    // of "create the map, link it to a Location (new or existing)" happen
+    // in one continuous flow. entityPicker's own Cancel/✕ lets a GM leave
+    // it unlinked (same as skipping Hexcrawl's own hex-center Location
+    // picker) — this is an offer, not a requirement.
+    if (newMapId) {
+      entityPicker = { entityType: 'dungeoncrawl-location', mode: 'dungeoncrawl-location', scope: { mapId: newMapId }, query: '' };
+      renderEntityPickerOverlay();
+    }
   } else if (kind === 'dungeoncrawl-rename') {
     store.update((d) => renameDungeonMap(d, meta.id, value));
   } else if (kind === 'battlemap-icon-note') {
@@ -8403,6 +8583,10 @@ function commitEntityPickerPick(picker, id) {
     const { mapId, q, r } = picker.scope || {};
     return store.update((d) => setHexLocation(d, mapId, q, r, id));
   }
+  if (picker.entityType === 'dungeoncrawl-location') {
+    const { mapId } = picker.scope || {};
+    return store.update((d) => setDungeonMapLocation(d, mapId, id));
+  }
   if (picker.entityType === 'hexcrawl-vertex-conflict') {
     // Linking an EXISTING Encounter — unlike data-hexcrawl-vertex-conflict-
     // create just above, this never ADDS the encounter-type tag: that's
@@ -8524,6 +8708,7 @@ const ENTITY_PICKER_CREATE_TYPE = {
   asset: 'asset',
   'location-current': 'location',
   system: 'location',
+  'dungeoncrawl-location': 'location',
 };
 function entityPickerCreateType(picker) {
   if (!picker) return null;
@@ -8657,6 +8842,16 @@ function renderEntityPickerOverlay() {
       .map(([, h]) => h.locationEntityId).filter(Boolean));
     candidates = listEntities(doc, ['location']).filter((l) => !linkedIds.has(l.id));
     emptyMessage = 'No available Location entities — every one is already linked elsewhere on this map, or add one in Cast first.';
+  } else if (entityPicker.entityType === 'dungeoncrawl-location') {
+    // Direct follow-up request: "link map records to a location using the
+    // look up feature with create a location if needed" — unlike Hexcrawl
+    // above, a Location is NOT excluded just because some OTHER Dungeon
+    // Crawl map already links it: multiple floors of one dungeon are
+    // EXPECTED to share the exact same Location (createDungeonFloorBelow
+    // Stairs, domain/dungeonCrawls.js, copies the parent's own
+    // locationEntityId onto every new floor automatically).
+    candidates = listEntities(doc, ['location']);
+    emptyMessage = 'No Location entities yet — create one below.';
   } else if (entityPicker.entityType === 'hexcrawl-vertex-conflict') {
     // A hex corner's own Encounter (direct follow-up request) — every
     // Conflict entity linked elsewhere stays listed (unlike Location, the
@@ -8781,8 +8976,13 @@ function renderEntityPickerOverlay() {
   // and runs it through commitEntityPickerPick, same wiring a normal pick
   // gets.
   const createGenericType = entityPickerCreateType(entityPicker);
+  // Direct follow-up request: "+Vehicle... described as 'Create New Asset
+  // (Vehicle)'" — distinguishes it from "+Asset"'s own plain "Create New
+  // Asset" (both create the same `asset` entity type, so the label is the
+  // only thing that would otherwise tell them apart in this list).
+  const createGenericLabel = entityTypeLabel(createGenericType, store.get().settings.genrePack) + (entityPicker.entityType === 'party-vehicle' ? ' (Vehicle)' : '');
   const createGenericBtn = createGenericType
-    ? `<button type="button" class="entity-picker-row entity-picker-row-create" data-entity-picker-create>＋ Create New ${escapeHtml(entityTypeLabel(createGenericType, store.get().settings.genrePack))}</button>`
+    ? `<button type="button" class="entity-picker-row entity-picker-row-create" data-entity-picker-create>＋ Create New ${escapeHtml(createGenericLabel)}</button>`
     : '';
   resultsEl.innerHTML = createLifeformBtn + createLocationBtn + createConflictBtn + createGenericBtn + (candidates.length
     ? candidates.map((n) => `<button type="button" class="entity-picker-row" data-entity-picker-select="${escapeHtml(n.id)}">${escapeHtml(n.name || 'Unnamed')}</button>`).join('')
@@ -9186,6 +9386,18 @@ function castGenerateSelectHtml() {
 }
 function headExtraForDrawer(id) {
   if (id === 'cast') return castGenerateSelectHtml();
+  // Direct follow-up request: "Move + Add NPC to the same row as the
+  // 'Party' header and replace it with just a '+'. Move the text 'NPC
+  // entities tagged #character...' into a tooltip on the same row as the
+  // 'party' header." — same data-party-add-character handler Party Roster's
+  // own button used (drawers/index.js no longer renders one at all now
+  // that the Party Roster subheader itself is gone), just relocated to the
+  // drawer chrome's own title row and reduced to an icon-only button, with
+  // the explanatory copy that used to sit below it as a <p> now carried as
+  // this button's own title tooltip instead.
+  if (id === 'party') {
+    return `<button class="icon-btn" data-party-add-character title="Add NPC — NPC entities tagged #character. Tag an NPC in the Cast drawer to add one you already made, or add one here.">＋</button>`;
+  }
   // Guide/Documents' top-of-drawer intro tips have no in-content header of
   // their own to sit next to (unlike a Settings group's <h3> or Documents'
   // own "Reference Library" <h4>, both wrapped directly where they're
@@ -9212,7 +9424,7 @@ function buildDrawerUi() {
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
     hexcrawlPlacingIcon, hexcrawlCamera, hexcrawlSelectedHex, hexcrawlRange, hexcrawlRiverStart, hexcrawlRoadStart,
-    dungeonCrawlPending, dungeonCrawlSelected, dungeonCrawlDetailZoom, dungeonCrawlMergeMode, dungeonCrawlMergeSelection,
+    dungeonCrawlPending, dungeonCrawlSelected, dungeonCrawlDetailZoom, dungeonCrawlMergeMode, dungeonCrawlMergeSelection, dungeonCrawlArmedDressing,
     contentPackFlags, contentPackImporting, hostileLocationsImporting, exportIncludeAttachments, exportAttachmentsPreview,
     worldTrackerTab, worldTrackerSelectedSector, worldTrackerMigrateOpen,
     expandedTurnStepGroups, editingTurnStepListId, turnStepListsCollapsed, turnStepMoveEditOpen, turnStepBranchEditOpen, crewTaskSelectedId, crewTaskSelectedMemberId, colonyPanelTab,
