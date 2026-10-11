@@ -10,6 +10,7 @@ import {
   ensureAutoStatblock, addStatblockGroup, removeStatblockGroup, moveStatblockGroup, setStatblockField, addStatblockField, removeStatblockField,
   toggleStatblockFieldTrack, setStatblockTrackValue, toggleStatblockFieldAttribute, setStatblockAttributeValue,
   addStatblockWeapon, updateStatblockWeapon, removeStatblockWeapon, setStatblockGear,
+  addStatblockItem, updateStatblockItem, removeStatblockItem,
   addStatblockAttack, updateStatblockAttack, removeStatblockAttack,
 } from './statblocks.js';
 import { economyTypesForModel } from '../data/economyTypes.js';
@@ -1339,6 +1340,29 @@ export function setEntityStatblockGear(campaign, id, groupIndex, text) {
   const next = clone(campaign);
   const e = getEntity(next, id);
   if (e) setStatblockGear(e, groupIndex, text);
+  return next;
+}
+
+// Five Leagues character sheet Items table (direct follow-up request) —
+// campaign-level wrappers mirroring the weapon table's own three above.
+export function addEntityStatblockItem(campaign, id, groupIndex) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (e) addStatblockItem(e, groupIndex);
+  return next;
+}
+
+export function updateEntityStatblockItem(campaign, id, groupIndex, itemIndex, patch) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (e) updateStatblockItem(e, groupIndex, itemIndex, patch);
+  return next;
+}
+
+export function removeEntityStatblockItem(campaign, id, groupIndex, itemIndex) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (e) removeStatblockItem(e, groupIndex, itemIndex);
   return next;
 }
 

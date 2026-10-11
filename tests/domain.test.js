@@ -1324,6 +1324,289 @@ test('listTagVocabulary swaps a Location\'s seeds for Five Leagues from the Bord
   assert.ok(!vocab.includes('Village'), 'generic fantasy location seed replaced, not merged, once Five Leagues is active');
 });
 
+// --- Five Leagues from the Borderlands: Character Origins (racial tracking
+// + modifiers) and the Melee Exchange/Hits combat resolution (direct
+// follow-up request: "Include racial tracking and apply NPC modifiers for
+// the 5LFB ruleset. Upgrade the combat mechanics to use the 5LFB combat
+// rules and require the selection of an opponent in the combat tracker
+// when performing the combat challenge dice roles which would use the
+// stats of the opponent.") -----------------------------------------------
+import { FIVE_LEAGUES_ORIGINS, findFiveLeaguesOrigin, FIVE_LEAGUES_ORIGIN_TABLE, originForD100 } from '../src/data/fiveLeaguesOrigins.js';
+import { findFiveLeaguesGroupIndex, getFiveLeaguesStat, setEntityFiveLeaguesOrigin } from '../src/domain/fiveLeagues.js';
+import {
+  rollFiveLeaguesExchange, formatFiveLeaguesExchangeText, formatFiveLeaguesExchangeCopyText,
+  rollFiveLeaguesHit, formatFiveLeaguesHitText, formatFiveLeaguesHitCopyText, FIVE_LEAGUES_HIT_OUTCOME_LABEL,
+} from '../src/domain/dice.js';
+
+test('FIVE_LEAGUES_ORIGINS has all 6 real Character Origins (p.15-19), each with a background/skillExpertise/traits; findFiveLeaguesOrigin resolves by key or returns null', () => {
+  const keys = FIVE_LEAGUES_ORIGINS.map((o) => o.key).sort();
+  assert.deepEqual(keys, ['duskling', 'feral', 'feyblood', 'halfling', 'human', 'preen'].sort());
+  for (const o of FIVE_LEAGUES_ORIGINS) {
+    assert.equal(typeof o.background, 'string');
+    assert.equal(typeof o.skillExpertise, 'string');
+    assert.ok(Array.isArray(o.traits) && o.traits.length >= 1, `${o.key} has at least 1 trait`);
+  }
+  assert.equal(findFiveLeaguesOrigin('human').label, 'Human');
+  assert.equal(findFiveLeaguesOrigin('not-a-real-key'), null);
+  // The two origins with a concrete numeric modifier (p.18) — everything
+  // else is reference-only (data/fiveLeaguesOrigins.js's own doc comment
+  // explains why).
+  assert.equal(findFiveLeaguesOrigin('human').willMaxOverride, null);
+  assert.equal(findFiveLeaguesOrigin('feyblood').luckMaxOverride, 0);
+  for (const o of FIVE_LEAGUES_ORIGINS) {
+    if (o.key !== 'human') assert.equal(o.willMaxOverride, 1, `${o.key} capped at 1 Will (only Human is "Driven")`);
+  }
+});
+
+test('the Character Origin Table (p.15, D100) covers 1-100 with no gaps/overlaps; originForD100 resolves a roll to the right origin and clamps out-of-range input', () => {
+  const sorted = [...FIVE_LEAGUES_ORIGIN_TABLE].sort((a, b) => a.min - b.min);
+  assert.equal(sorted[0].min, 1);
+  assert.equal(sorted[sorted.length - 1].max, 100);
+  for (let i = 1; i < sorted.length; i++) assert.equal(sorted[i].min, sorted[i - 1].max + 1, 'no gap/overlap between origin ranges');
+  assert.equal(originForD100(1), 'human');
+  assert.equal(originForD100(40), 'human');
+  assert.equal(originForD100(41), 'feyblood');
+  assert.equal(originForD100(100), 'feral');
+  assert.equal(originForD100(0), 'human'); // clamped
+  assert.equal(originForD100(999), 'feral'); // clamped
+});
+
+test('findFiveLeaguesGroupIndex/getFiveLeaguesStat find (or fail to find) an entity\'s own 5LFB Character Sheet and read a named stat off it', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Sellsword' }));
+  // A fresh NPC auto-gets a default Bestiary ('npc'-kind) statblock
+  // (ensureAutoStatblock, statblocks.js) — NOT a 'character'-kind one, so
+  // findFiveLeaguesGroupIndex (which only ever matches 'character' groups)
+  // still correctly reads as "no 5LFB sheet" despite a statblock existing.
+  assert.equal(findFiveLeaguesGroupIndex(findByName(camp, 'Sellsword')), -1, 'no CHARACTER statblock yet');
+  assert.equal(getFiveLeaguesStat(findByName(camp, 'Sellsword'), 'Combat Skill'), 0, 'reads as 0, not a throw, with no sheet');
+
+  camp = addEntityStatblockGroup(camp, id, 'character', 'starforged'); // a DIFFERENT ruleset's sheet
+  assert.equal(findFiveLeaguesGroupIndex(findByName(camp, 'Sellsword')), -1, 'a non-5LFB character sheet does not count');
+
+  camp = addEntityStatblockGroup(camp, id, 'character', 'fiveleagues');
+  const gi = findFiveLeaguesGroupIndex(findByName(camp, 'Sellsword'));
+  assert.ok(gi > 0, 'found the 5LFB group, somewhere after the auto Bestiary + starforged ones');
+  assert.equal(getFiveLeaguesStat(findByName(camp, 'Sellsword'), 'Combat Skill'), 0); // template default
+  assert.equal(getFiveLeaguesStat(findByName(camp, 'Sellsword'), 'combat skill'), 0, 'case-insensitive key match');
+  assert.equal(getFiveLeaguesStat(findByName(camp, 'Sellsword'), 'Not A Real Stat'), 0);
+
+  camp = setEntityStatblockField(camp, id, gi, 2, { value: 2 }); // field 2 = Combat Skill (Agility, Speed, Combat Skill, ...)
+  assert.equal(getFiveLeaguesStat(findByName(camp, 'Sellsword'), 'Combat Skill'), 2);
+});
+
+test('setEntityFiveLeaguesOrigin applies Human\'s uncapped Will and Fey-blood\'s blocked Luck directly to the entity\'s own 5LFB tracks, clamps an existing value down to a new lower max, restores defaults when cleared, and is a no-op on the statblock side (but still sets the field) for an entity with no 5LFB sheet', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Wanderer' }));
+  camp = addEntityStatblockGroup(camp, id, 'character', 'fiveleagues');
+
+  // Non-Human (e.g. Duskling): Will capped at 1; Luck stays at the normal default (3).
+  camp = setEntityFiveLeaguesOrigin(camp, id, 'duskling');
+  let e = findByName(camp, 'Wanderer');
+  assert.equal(e.fiveLeaguesOrigin, 'duskling');
+  const gi = findFiveLeaguesGroupIndex(e);
+  let willField = e.statblocks[gi].fields.find((f) => f.key === 'Will');
+  let luckField = e.statblocks[gi].fields.find((f) => f.key === 'Luck');
+  assert.equal(willField.max, 1);
+  assert.equal(willField.value, 1, 'template default (1) already <= new max, unchanged');
+  assert.equal(luckField.max, 3);
+
+  // Fey-blood: Luck blocked entirely (max 0), existing value clamped down to 0.
+  camp = setEntityFiveLeaguesOrigin(camp, id, 'feyblood');
+  e = findByName(camp, 'Wanderer');
+  luckField = e.statblocks[gi].fields.find((f) => f.key === 'Luck');
+  assert.equal(luckField.max, 0);
+  assert.equal(luckField.value, 0, 'clamped down from the template default (1)');
+
+  // Human: Will uncapped (back to the template default, 3) — bump Will up first to prove it's not re-clamped.
+  const willIdx = e.statblocks[gi].fields.findIndex((f) => f.key === 'Will');
+  camp = setEntityStatblockField(camp, id, gi, willIdx, { value: 3 });
+  camp = setEntityFiveLeaguesOrigin(camp, id, 'human');
+  e = findByName(camp, 'Wanderer');
+  willField = e.statblocks[gi].fields.find((f) => f.key === 'Will');
+  assert.equal(willField.max, 3);
+  assert.equal(willField.value, 3, 'not clamped — Human\'s own max accommodates it');
+
+  // Clearing the Origin restores both tracks to their normal default max.
+  camp = setEntityFiveLeaguesOrigin(camp, id, null);
+  e = findByName(camp, 'Wanderer');
+  assert.equal(e.fiveLeaguesOrigin, null);
+  willField = e.statblocks[gi].fields.find((f) => f.key === 'Will');
+  luckField = e.statblocks[gi].fields.find((f) => f.key === 'Luck');
+  assert.equal(willField.max, 3);
+  assert.equal(luckField.max, 3);
+
+  // An entity with no 5LFB sheet at all: the Origin field itself is still
+  // set (so picking one later doesn't lose the choice), nothing throws.
+  let camp2 = defaultCampaign();
+  let id2; ({ campaign: camp2, id: id2 } = createEntity(camp2, { type: 'npc', name: 'Sheetless' }));
+  camp2 = setEntityFiveLeaguesOrigin(camp2, id2, 'halfling');
+  assert.equal(findByName(camp2, 'Sheetless').fiveLeaguesOrigin, 'halfling');
+});
+
+test('rollFiveLeaguesExchange (p.41): D6 + Combat Skill for each side, higher total wins, a tie is a draw — verified with fixed dice for attacker-wins/defender-wins/draw, and that situational `adds` (e.g. a Combat Bonus) apply', () => {
+  let r = rollFiveLeaguesExchange(1, 0, { dice: { attackerDie: 4, defenderDie: 3 } }); // 5 vs 3
+  assert.equal(r.attackerTotal, 5); assert.equal(r.defenderTotal, 3); assert.equal(r.winner, 'attacker');
+
+  r = rollFiveLeaguesExchange(0, 1, { dice: { attackerDie: 3, defenderDie: 4 } }); // 3 vs 5
+  assert.equal(r.winner, 'defender');
+
+  r = rollFiveLeaguesExchange(1, 1, { dice: { attackerDie: 3, defenderDie: 3 } }); // 4 vs 4
+  assert.equal(r.winner, 'draw');
+
+  // +1 Combat Bonus (p.44) turns a loss into a win.
+  r = rollFiveLeaguesExchange(0, 1, { attackerAdds: 1, dice: { attackerDie: 4, defenderDie: 4 } }); // 4+1=5 vs 4+1=5... use a clean case
+  r = rollFiveLeaguesExchange(0, 2, { attackerAdds: 1, dice: { attackerDie: 4, defenderDie: 3 } }); // attacker 4+0+1=5, defender 3+2=5 -> draw
+  assert.equal(r.attackerTotal, 5); assert.equal(r.defenderTotal, 5); assert.equal(r.winner, 'draw');
+
+  assert.match(formatFiveLeaguesExchangeText('Jorn', 'Bandit', rollFiveLeaguesExchange(1, 0, { dice: { attackerDie: 4, defenderDie: 3 } })), /Jorn wins the exchange/);
+  assert.match(formatFiveLeaguesExchangeCopyText('Jorn', 'Bandit', rollFiveLeaguesExchange(1, 1, { dice: { attackerDie: 3, defenderDie: 3 } })), /DRAW/);
+});
+
+test('rollFiveLeaguesHit (pp.43-44): Armor 0 skips straight to Toughness; an Armor tie Stuns without a Toughness roll; a low Armor roll fails outright; a natural 1 on Toughness always Stuns regardless of bonus; otherwise Casualty (over Toughness) or Wounded & Stunned (at or under)', () => {
+  // Armor 0 — skipped entirely, straight to Toughness.
+  let r = rollFiveLeaguesHit({ armor: 0, toughness: 3 }, { dice: { toughnessDie: 5 } });
+  assert.equal(r.armorResult, 'skipped');
+  assert.equal(r.outcome, 'casualty'); // 5 > 3
+
+  // Armor roll exactly equal to target Armor — Stunned, no Toughness roll at all.
+  r = rollFiveLeaguesHit({ armor: 2, toughness: 3 }, { dice: { armorDie: 2, toughnessDie: 6 } });
+  assert.equal(r.armorTotal, 2); assert.equal(r.armorResult, 'stunned');
+  assert.equal(r.outcome, 'stunned');
+  assert.equal(r.toughnessDie, null, 'never rolled');
+
+  // Armor roll below target Armor — attack fails outright, no effect.
+  r = rollFiveLeaguesHit({ armor: 4, toughness: 3 }, { dice: { armorDie: 2 } });
+  assert.equal(r.armorResult, 'failed');
+  assert.equal(r.outcome, 'no-effect');
+
+  // Armor penetrated (total > armor), then natural 1 on Toughness — Stunned regardless of bonus.
+  r = rollFiveLeaguesHit({ armor: 1, toughness: 3 }, { armorBonus: 1, toughnessBonus: 5, dice: { armorDie: 3, toughnessDie: 1 } });
+  assert.equal(r.armorResult, 'penetrated');
+  assert.equal(r.outcome, 'stunned');
+
+  // Armor penetrated, Toughness roll (2-6) at or below Toughness — Wounded & Stunned.
+  r = rollFiveLeaguesHit({ armor: 1, toughness: 4 }, { dice: { armorDie: 3, toughnessDie: 2 } });
+  assert.equal(r.outcome, 'wounded-stunned');
+
+  // Armor penetrated, Toughness roll exceeds Toughness — Casualty.
+  r = rollFiveLeaguesHit({ armor: 1, toughness: 2 }, { dice: { armorDie: 3, toughnessDie: 6 } });
+  assert.equal(r.outcome, 'casualty');
+
+  assert.equal(FIVE_LEAGUES_HIT_OUTCOME_LABEL[r.outcome], 'Casualty');
+  assert.match(formatFiveLeaguesHitText('Bandit', r), /Casualty/);
+  assert.match(formatFiveLeaguesHitCopyText(r), /CASUALTY/);
+});
+
+// --- Combat Tracker "Combat Options" (direct follow-up request: "Factor
+// in armor and all other combat conditions listed in the basic...
+// ruleset... Prompt with questions for optional attributes or abilities
+// or buffs... to be applied. then complete the challenge roll and
+// present the winner result.") ------------------------------------------
+import { resolveFiveLeaguesHitEligibility } from '../src/domain/dice.js';
+import { entityHasFiveLeaguesCounterAttack, entityHasFiveLeaguesParry } from '../src/domain/fiveLeagues.js';
+
+test('rollFiveLeaguesExchange: Fight Defensively\'s attackerAdvantage rolls twice and keeps the higher, reporting both rolls; omitting it (every pre-existing call) is completely unaffected', () => {
+  let r = rollFiveLeaguesExchange(0, 0, { attackerAdvantage: true, dice: {}, rng: (() => { let calls = [0.0, 0.8]; let i = 0; return () => calls[i++]; })() });
+  // rng 0.0 -> die 1, rng 0.8 -> die 5 (Math.floor(0.8*6)+1=5); kept = 5.
+  assert.deepEqual(r.attackerDieRolls, [1, 5]);
+  assert.equal(r.attackerDie, 5);
+
+  r = rollFiveLeaguesExchange(1, 0, { dice: { attackerDie: 4, defenderDie: 3 } });
+  assert.equal(r.attackerDieRolls, null, 'no advantage requested -> null, same as before this feature existed');
+
+  // An explicit dice.attackerDie override always short-circuits, even with advantage requested (deterministic-test posture).
+  r = rollFiveLeaguesExchange(0, 0, { attackerAdvantage: true, dice: { attackerDie: 6 } });
+  assert.equal(r.attackerDie, 6);
+  assert.equal(r.attackerDieRolls, null);
+});
+
+test('resolveFiveLeaguesHitEligibility (pp.41-43): by default only an Attacker\'s win strikes a Hit; a Defender\'s win needs Counter Attack or Fight Furiously; Fight Defensively/Evasively suppress a Hit on an Attacker win; Parry only ever protects the Defender, and only on their own natural 1', () => {
+  // Draw -> never.
+  assert.deepEqual(resolveFiveLeaguesHitEligibility({ winner: 'draw' }), { hitPossible: false, parried: false });
+
+  // Attacker wins, Simply Fight -> Hit.
+  assert.deepEqual(resolveFiveLeaguesHitEligibility({ winner: 'attacker', tactic: 'fight' }), { hitPossible: true, parried: false });
+
+  // Attacker wins, but chose Defensively/Evasively -> no Hit either way.
+  assert.deepEqual(resolveFiveLeaguesHitEligibility({ winner: 'attacker', tactic: 'defensively' }), { hitPossible: false, parried: false });
+  assert.deepEqual(resolveFiveLeaguesHitEligibility({ winner: 'attacker', tactic: 'evasively' }), { hitPossible: false, parried: false });
+
+  // Attacker wins, Defender has Parry AND their own die was a natural 1 -> parried, no Hit.
+  assert.deepEqual(resolveFiveLeaguesHitEligibility({ winner: 'attacker', tactic: 'fight', defenderHasParry: true, defenderDieIsNaturalOne: true }), { hitPossible: false, parried: true });
+  // Parry present but the die wasn't a natural 1 -> no protection, Hit proceeds.
+  assert.deepEqual(resolveFiveLeaguesHitEligibility({ winner: 'attacker', tactic: 'fight', defenderHasParry: true, defenderDieIsNaturalOne: false }), { hitPossible: true, parried: false });
+
+  // Defender wins, no Counter Attack, not Furious -> the real default: no Hit at all ("avoids harm").
+  assert.deepEqual(resolveFiveLeaguesHitEligibility({ winner: 'defender', tactic: 'fight' }), { hitPossible: false, parried: false });
+  // Defender wins, Counter Attack available -> Hit (against the Attacker).
+  assert.deepEqual(resolveFiveLeaguesHitEligibility({ winner: 'defender', tactic: 'fight', defenderHasCounterAttack: true }), { hitPossible: true, parried: false });
+  // Defender wins, Attacker chose Furiously -> forced Hit regardless of Counter Attack.
+  assert.deepEqual(resolveFiveLeaguesHitEligibility({ winner: 'defender', tactic: 'furiously', defenderHasCounterAttack: false }), { hitPossible: true, parried: false });
+  // Parry never applies to a Hit landing on the Attacker (Parry only ever protects the Defender role).
+  assert.deepEqual(resolveFiveLeaguesHitEligibility({ winner: 'defender', tactic: 'furiously', defenderHasParry: true, defenderDieIsNaturalOne: true }), { hitPossible: true, parried: false });
+});
+
+test('entityHasFiveLeaguesCounterAttack/entityHasFiveLeaguesParry are courtesy auto-detect helpers off an entity\'s own Weapons table and Shield flag — a War Spear (picked from the catalog) grants Counter Attack outright, a Shield grants Parry, and a plain unarmed entity has neither', () => {
+  let { camp, id, gi, name } = makeFiveLeaguesTestEntity();
+  assert.equal(entityHasFiveLeaguesCounterAttack(findByName(camp, name)), false);
+  assert.equal(entityHasFiveLeaguesParry(findByName(camp, name)), false);
+
+  camp = addEntityStatblockWeapon(camp, id, gi);
+  camp = applyFiveLeaguesWeaponCatalogPick(camp, id, gi, 0, 'warSpear');
+  let e = findByName(camp, name);
+  assert.equal(e.statblocks[gi].weapons[0].traits, 'Counter Attack', 'War Spear\'s own real ability now actually appears in the Traits text');
+  assert.equal(entityHasFiveLeaguesCounterAttack(e), true);
+  assert.equal(entityHasFiveLeaguesParry(e), false, 'War Spear grants Counter Attack, not Parry');
+
+  camp = setEntityFiveLeaguesArmorFlag(camp, id, 'shield', true);
+  e = findByName(camp, name);
+  assert.equal(entityHasFiveLeaguesParry(e), true, 'a Shield grants Parry (p.62)');
+
+  camp = addEntityStatblockWeapon(camp, id, gi);
+  camp = updateEntityStatblockWeapon(camp, id, gi, 1, { name: 'Fencing sword', traits: 'Parry' });
+  e = findByName(camp, name);
+  assert.equal(entityHasFiveLeaguesParry(e), true, 'a hand-typed Parry trait on any weapon is also detected');
+});
+
+// --- Ranged Attacks (direct follow-up request: "during a ranged combat
+// attack, prompt the user for range details per rules on p.39 regarding
+// distance and cover. Do the challenge method for melee attacks.") -----
+import {
+  rollFiveLeaguesRangedAttack, formatFiveLeaguesRangedAttackText, formatFiveLeaguesRangedAttackCopyText,
+  FIVE_LEAGUES_RANGED_BANDS, findFiveLeaguesRangedBand,
+} from '../src/domain/dice.js';
+
+test('FIVE_LEAGUES_RANGED_BANDS is the complete real 3-row table (p.39) — no 4th "within 6\\" and in Cover" row exists in the book', () => {
+  assert.deepEqual(FIVE_LEAGUES_RANGED_BANDS.map((b) => b.targetNumber), [3, 5, 6]);
+  assert.equal(findFiveLeaguesRangedBand('range-cover').targetNumber, 6);
+  assert.equal(findFiveLeaguesRangedBand('nope'), null);
+});
+
+test('rollFiveLeaguesRangedAttack (p.39): a single D6 + Combat Skill (only while stationary) vs the target number; a natural 1 is always a miss regardless of any bonus', () => {
+  // 4 + 2 = 6, meets a 5+ target -> Hit.
+  let r = rollFiveLeaguesRangedAttack(2, 5, { dice: { die: 4 } });
+  assert.deepEqual(r, { die: 4, skill: 2, adds: 0, total: 6, targetNumber: 5, naturalOne: false, hit: true });
+
+  // 2 + 2 = 4, below a 5+ target -> Miss.
+  r = rollFiveLeaguesRangedAttack(2, 5, { dice: { die: 2 } });
+  assert.equal(r.hit, false);
+
+  // Not stationary -> Combat Skill is not added at all (p.39: "If the shooter is stationary, add their Combat Skill").
+  r = rollFiveLeaguesRangedAttack(4, 3, { stationary: false, dice: { die: 3 } });
+  assert.equal(r.skill, 0);
+  assert.equal(r.total, 3);
+
+  // A natural 1 is ALWAYS a miss, even with a huge Combat Skill/adds that would otherwise clear any target number.
+  r = rollFiveLeaguesRangedAttack(10, 3, { adds: 5, dice: { die: 1 } });
+  assert.equal(r.naturalOne, true);
+  assert.equal(r.hit, false, 'natural 1 overrides even a total that would otherwise hit');
+  assert.equal(r.total, 16, 'the total is still reported accurately; only the hit/miss verdict is overridden');
+
+  assert.match(formatFiveLeaguesRangedAttackText('Scout', rollFiveLeaguesRangedAttack(2, 3, { dice: { die: 4 } })), /Hit!/);
+  assert.match(formatFiveLeaguesRangedAttackCopyText('Scout', rollFiveLeaguesRangedAttack(2, 3, { dice: { die: 1 } })), /MISS \(NATURAL 1\)/);
+});
+
 import { findRuleset } from '../src/data/rulesets.js';
 import { mapDnd5ePdfFieldsToCharacterSheet } from '../src/domain/dnd5eImport.js';
 import { applyDnd5ePdfImport } from '../src/domain/entities.js';
@@ -4044,6 +4327,16 @@ test('the "fiveleagues-lifeform" Bestiary template maps 1:1 onto the core rulebo
   assert.equal(mp.rollMethod, 'none');
   const rewardRating = tpl.fields.find((f) => f.key === 'Reward Rating');
   assert.equal(rewardRating.kind, 'text', 'a flat printed number (Slayer\'s Rewards, p.182-183), not something rolled');
+});
+
+test('a freshly-created "fiveleagues-lifeform" statblock\'s MP track genuinely starts at max 0 (real bug, found while building the Bestiary restyle: `f.max || DEFAULT_TRACK_MAX` treated the template\'s own explicit `max: 0` as unset and silently replaced it with 5)', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Grunt' }));
+  camp = addEntityStatblockGroup(camp, id, 'npc', 'fiveleagues-lifeform');
+  const group = findByName(camp, 'Grunt').statblocks.find((g) => g.templateId === 'fiveleagues-lifeform');
+  const mp = group.fields.find((f) => f.key === 'MP');
+  assert.equal(mp.max, 0, 'MP starts at max 0 for an ordinary (non-Aberration) creature, not the generic track default of 5');
+  assert.equal(mp.value, 0);
 });
 
 test('a NPC entity can add a Bestiary template by id, alongside its existing group', () => {
@@ -9802,4 +10095,318 @@ test('setEntitlement writes just the one targeted systemId into appConfig.entitl
 
   const reopened = setEntitlement(withPlanetfallToo, 'swn', true);
   assert.equal(canAccessGameSystem(reopened, 'swn'), true, 're-entitling (true) after a false is honored, not stuck once denied');
+});
+
+// --- Five Leagues Character Sheet: Character Type / Skills / Background /
+// Armor / Items / Weapon catalog / Spells (direct follow-up request:
+// "update the character sheet for 5lfb to track character type, skills,
+// origins, background, armor, gear storage in self, backpack or stash,
+// weapon traits, and spells... per the ruleset") -------------------------
+import {
+  FIVE_LEAGUES_CHARACTER_TYPES, findFiveLeaguesCharacterType,
+  FIVE_LEAGUES_SKILLS, findFiveLeaguesSkill,
+  FIVE_LEAGUES_BACKGROUNDS, findFiveLeaguesBackground, availableFiveLeaguesBackgrounds,
+  FIVE_LEAGUES_ARMOR_TYPES, findFiveLeaguesArmorType, FIVE_LEAGUES_ARMOR_TRAITS, findFiveLeaguesArmorTrait,
+  FIVE_LEAGUES_WEAPON_TRAITS, findFiveLeaguesWeaponTrait, FIVE_LEAGUES_WEAPON_CATALOG, findFiveLeaguesWeapon,
+  FIVE_LEAGUES_GEAR_LOCATIONS, findFiveLeaguesGearLocation, FIVE_LEAGUES_ITEM_CATALOG, findFiveLeaguesItem,
+} from '../src/data/fiveLeaguesCharacter.js';
+import { FIVE_LEAGUES_SPELLS, findFiveLeaguesSpell } from '../src/data/fiveLeaguesSpells.js';
+import {
+  setEntityFiveLeaguesCharacterType, setEntityFiveLeaguesBackground, toggleEntityFiveLeaguesSkill,
+  setEntityFiveLeaguesArmorBody, setEntityFiveLeaguesArmorFlag, toggleEntityFiveLeaguesArmorImprovement,
+  toggleEntityFiveLeaguesSpell, applyFiveLeaguesWeaponCatalogPick, addFiveLeaguesItemFromCatalog,
+} from '../src/domain/fiveLeagues.js';
+import { addEntityStatblockItem, updateEntityStatblockItem, removeEntityStatblockItem } from '../src/domain/entities.js';
+
+test('FIVE_LEAGUES_CHARACTER_TYPES covers all 6 real Character Types (p.14), each with lookup and real rule text', () => {
+  const keys = FIVE_LEAGUES_CHARACTER_TYPES.map((t) => t.key);
+  assert.deepEqual(keys, ['hero', 'avatar', 'mystic', 'follower', 'friend', 'enemy']);
+  for (const t of FIVE_LEAGUES_CHARACTER_TYPES) {
+    assert.ok(t.text && t.text.length > 10, `${t.key} has real rule text`);
+    assert.equal(findFiveLeaguesCharacterType(t.key).key, t.key);
+  }
+  assert.equal(findFiveLeaguesCharacterType('nonexistent'), null);
+});
+
+test('FIVE_LEAGUES_SKILLS covers all 12 real Skills (p.23 Skills Table), each with a lookup and a real Uses description', () => {
+  assert.equal(FIVE_LEAGUES_SKILLS.length, 12);
+  for (const s of FIVE_LEAGUES_SKILLS) {
+    assert.ok(s.uses && s.uses.length > 5, `${s.key} has Uses text`);
+    assert.equal(findFiveLeaguesSkill(s.key).key, s.key);
+  }
+  assert.equal(findFiveLeaguesSkill('nope'), null);
+});
+
+test('availableFiveLeaguesBackgrounds (pp.19-23) resolves the real Origin restrictions, Mystic character type overrides everything, and an unset Origin allows every non-Mystic background', () => {
+  assert.deepEqual(availableFiveLeaguesBackgrounds('human', ''), ['frontier', 'noble', 'townsfolk', 'zealot'], 'Human may select from 4 backgrounds');
+  assert.deepEqual(availableFiveLeaguesBackgrounds('halfling', ''), ['frontier'], 'Halfling must take Frontier');
+  assert.deepEqual(availableFiveLeaguesBackgrounds('preen', ''), ['townsfolk'], 'Preen must take Townsfolk');
+  assert.deepEqual(availableFiveLeaguesBackgrounds('feyblood', ''), ['outsider'], 'Fey-blood must take Outsider');
+  assert.deepEqual(availableFiveLeaguesBackgrounds('duskling', ''), ['outsider']);
+  assert.deepEqual(availableFiveLeaguesBackgrounds('feral', ''), ['outsider']);
+  // Mystic character type forces Mystic background regardless of Origin.
+  assert.deepEqual(availableFiveLeaguesBackgrounds('human', 'mystic'), ['mystic']);
+  assert.deepEqual(availableFiveLeaguesBackgrounds('feral', 'mystic'), ['mystic']);
+  // No Origin picked yet -> every non-Mystic background is offered.
+  assert.deepEqual(availableFiveLeaguesBackgrounds('', ''), ['frontier', 'noble', 'outsider', 'townsfolk', 'zealot']);
+  assert.equal(findFiveLeaguesBackground('noble').allowedOrigins.includes('human'), true);
+  assert.equal(findFiveLeaguesBackground('nope'), null);
+});
+
+test('FIVE_LEAGUES_ARMOR_TYPES/ARMOR_TRAITS, WEAPON_TRAITS/WEAPON_CATALOG, GEAR_LOCATIONS, and ITEM_CATALOG all resolve real content via their own find helpers', () => {
+  assert.equal(FIVE_LEAGUES_ARMOR_TYPES.length, 5);
+  assert.equal(findFiveLeaguesArmorType('full').armor, 3);
+  assert.equal(findFiveLeaguesArmorType('unarmored').armor, 0);
+  assert.equal(findFiveLeaguesArmorType('nope'), null);
+  assert.equal(FIVE_LEAGUES_ARMOR_TRAITS.length, 2);
+  assert.equal(findFiveLeaguesArmorTrait('feySteel').key, 'feySteel');
+
+  assert.equal(FIVE_LEAGUES_WEAPON_TRAITS.length, 8);
+  assert.equal(findFiveLeaguesWeaponTrait('parry').key, 'parry');
+  assert.equal(findFiveLeaguesWeaponTrait('nope'), null);
+
+  assert.equal(FIVE_LEAGUES_WEAPON_CATALOG.length, 13);
+  const crossbow = findFiveLeaguesWeapon('crossbow');
+  assert.equal(crossbow.type, 'ranged');
+  assert.equal(crossbow.range, '24"');
+  assert.deepEqual(crossbow.traits, ['bulky', 'limitedAmmunition']);
+  assert.equal(findFiveLeaguesWeapon('nope'), null);
+
+  assert.equal(FIVE_LEAGUES_GEAR_LOCATIONS.length, 3);
+  assert.deepEqual(FIVE_LEAGUES_GEAR_LOCATIONS.map((l) => l.key), ['self', 'backpack', 'stash']);
+  assert.equal(findFiveLeaguesGearLocation('stash').key, 'stash');
+
+  assert.ok(FIVE_LEAGUES_ITEM_CATALOG.length > 25, 'a substantial real Assorted Items catalog');
+  const bandages = findFiveLeaguesItem('bandages');
+  assert.ok(bandages.storageMarks.includes('B'));
+  assert.equal(findFiveLeaguesItem('nope'), null);
+});
+
+test('FIVE_LEAGUES_SPELLS covers the full real Spell Table (pp.47-50, D100 01-100), each with Incantation/Target/Effect/Duration, and the 4 real Simple spells are flagged', () => {
+  assert.equal(FIVE_LEAGUES_SPELLS.length, 34);
+  for (const s of FIVE_LEAGUES_SPELLS) {
+    assert.ok(s.incantation && s.target && s.effect && s.duration, `${s.key} has a full real entry`);
+    assert.equal(findFiveLeaguesSpell(s.key).key, s.key);
+  }
+  const simpleKeys = FIVE_LEAGUES_SPELLS.filter((s) => s.simple).map((s) => s.key).sort();
+  assert.deepEqual(simpleKeys, ['compel', 'fortune', 'illuminate', 'manipulate']);
+  assert.equal(findFiveLeaguesSpell('heal').effect, 'Remove a Wound.');
+  assert.equal(findFiveLeaguesSpell('nope'), null);
+});
+
+// --- Bestiary 'fiveleagues-lifeform' restyle (direct follow-up request:
+// "...include the Traits or Aberrant [Aberration] Traits as separate
+// lines... make it a tooltip link to show the definition of the
+// trait.") --------------------------------------------------------------
+import { FIVE_LEAGUES_ENEMY_TRAITS, FIVE_LEAGUES_ABERRATION_TRAITS, findFiveLeaguesEnemyTrait } from '../src/data/fiveLeaguesEnemyTraits.js';
+import { formatFiveLeaguesOvercome } from '../src/domain/fiveLeagues.js';
+
+test('FIVE_LEAGUES_ENEMY_TRAITS/FIVE_LEAGUES_ABERRATION_TRAITS are the complete real catalogs (pp.152-153, 184-185), and findFiveLeaguesEnemyTrait resolves a GM-typed name from either one (case/whitespace-insensitive), or null for an unrecognized trait', () => {
+  assert.equal(FIVE_LEAGUES_ENEMY_TRAITS.length, 22);
+  assert.equal(FIVE_LEAGUES_ABERRATION_TRAITS.length, 15);
+  for (const t of [...FIVE_LEAGUES_ENEMY_TRAITS, ...FIVE_LEAGUES_ABERRATION_TRAITS]) {
+    assert.ok(t.text && t.text.length > 10, `${t.key} has real definition text`);
+  }
+  assert.equal(findFiveLeaguesEnemyTrait('Undead').key, 'undead', 'resolves a Universal Enemy Trait');
+  assert.equal(findFiveLeaguesEnemyTrait('  venom  ').key, 'venom', 'resolves an Aberration Trait, trimmed/case-insensitive');
+  assert.equal(findFiveLeaguesEnemyTrait('COUNTER ATTACK').key, 'counterAttack');
+  assert.equal(findFiveLeaguesEnemyTrait('Shiftling'), null, 'a Compendium-only or homebrew trait this app does not catalog resolves to null, not a throw');
+  assert.equal(findFiveLeaguesEnemyTrait(''), null);
+});
+
+test('formatFiveLeaguesOvercome: the real "+x / +y" sign convention (p.43) for a single Overcome Armor/Toughness number', () => {
+  assert.equal(formatFiveLeaguesOvercome(0), '+0');
+  assert.equal(formatFiveLeaguesOvercome(3), '+3');
+  assert.equal(formatFiveLeaguesOvercome(-1), '-1');
+  assert.equal(formatFiveLeaguesOvercome('2'), '+2', 'coerces a string input');
+  assert.equal(formatFiveLeaguesOvercome(undefined), '+0');
+});
+
+function makeFiveLeaguesTestEntity(name = 'Testling') {
+  let camp = defaultCampaign();
+  let id;
+  ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name }));
+  camp = addEntityStatblockGroup(camp, id, 'character', 'fiveleagues');
+  const gi = findFiveLeaguesGroupIndex(findByName(camp, name));
+  return { camp, id, gi, name };
+}
+
+test('setEntityFiveLeaguesCharacterType sets the type, forces Background to Mystic when set to mystic, and clears a now-stale Mystic Background when moved away from it', () => {
+  let { camp, id, name } = makeFiveLeaguesTestEntity();
+  camp = setEntityFiveLeaguesCharacterType(camp, id, 'hero');
+  assert.equal(findByName(camp, name).fiveLeaguesCharacterType, 'hero');
+  assert.equal(findByName(camp, name).fiveLeaguesBackground || null, null, 'picking Hero does not touch Background');
+
+  camp = setEntityFiveLeaguesBackground(camp, id, 'noble');
+  camp = setEntityFiveLeaguesCharacterType(camp, id, 'mystic');
+  assert.equal(findByName(camp, name).fiveLeaguesCharacterType, 'mystic');
+  assert.equal(findByName(camp, name).fiveLeaguesBackground, 'mystic', 'Mystic forces Background to mystic, overwriting Noble');
+
+  camp = setEntityFiveLeaguesCharacterType(camp, id, 'follower');
+  assert.equal(findByName(camp, name).fiveLeaguesBackground, null, 'moving away from Mystic clears the now-stale forced Background');
+
+  camp = setEntityFiveLeaguesCharacterType(camp, id, '');
+  assert.equal(findByName(camp, name).fiveLeaguesCharacterType, null, 'an empty value clears the type entirely');
+});
+
+test('setEntityFiveLeaguesBackground is a plain setter independent of toggleEntityFiveLeaguesSkill\'s own list toggling', () => {
+  let { camp, id, name } = makeFiveLeaguesTestEntity();
+  camp = setEntityFiveLeaguesBackground(camp, id, 'frontier');
+  assert.equal(findByName(camp, name).fiveLeaguesBackground, 'frontier');
+  camp = setEntityFiveLeaguesBackground(camp, id, '');
+  assert.equal(findByName(camp, name).fiveLeaguesBackground, null);
+
+  camp = toggleEntityFiveLeaguesSkill(camp, id, 'wits');
+  camp = toggleEntityFiveLeaguesSkill(camp, id, 'scouting');
+  assert.deepEqual(findByName(camp, name).fiveLeaguesSkills, ['wits', 'scouting']);
+  camp = toggleEntityFiveLeaguesSkill(camp, id, 'wits');
+  assert.deepEqual(findByName(camp, name).fiveLeaguesSkills, ['scouting'], 'toggling again removes it');
+});
+
+test('setEntityFiveLeaguesArmorBody syncs the Character Sheet\'s own numeric Armor stat field (p.62), and Shield/Helmet/improvements stay reference-only booleans/list', () => {
+  let { camp, id, gi, name } = makeFiveLeaguesTestEntity();
+  camp = setEntityFiveLeaguesArmorBody(camp, id, 'full');
+  let e = findByName(camp, name);
+  assert.equal(e.fiveLeaguesArmor.bodyType, 'full');
+  assert.equal(getFiveLeaguesStat(e, 'Armor'), 3, 'Full armor syncs the Armor stat to 3');
+
+  camp = setEntityFiveLeaguesArmorBody(camp, id, 'light');
+  assert.equal(getFiveLeaguesStat(findByName(camp, name), 'Armor'), 1, 'switching to Light re-syncs it down to 1');
+
+  camp = setEntityFiveLeaguesArmorBody(camp, id, '');
+  assert.equal(getFiveLeaguesStat(findByName(camp, name), 'Armor'), 0, 'clearing Body Armor resets the stat to 0');
+
+  camp = setEntityFiveLeaguesArmorFlag(camp, id, 'shield', true);
+  camp = setEntityFiveLeaguesArmorFlag(camp, id, 'helmet', true);
+  e = findByName(camp, name);
+  assert.equal(e.fiveLeaguesArmor.shield, true);
+  assert.equal(e.fiveLeaguesArmor.helmet, true);
+  assert.equal(getFiveLeaguesStat(e, 'Armor'), 0, 'Shield/Helmet never get folded into the flat Armor stat');
+
+  camp = toggleEntityFiveLeaguesArmorImprovement(camp, id, 'fine');
+  assert.deepEqual(findByName(camp, name).fiveLeaguesArmor.improvements, ['fine']);
+  camp = toggleEntityFiveLeaguesArmorImprovement(camp, id, 'fine');
+  assert.deepEqual(findByName(camp, name).fiveLeaguesArmor.improvements, []);
+});
+
+test('toggleEntityFiveLeaguesSpell toggles a known spell on/off, independent of Character Type (the UI section gates visibility, not the mutator)', () => {
+  let { camp, id, name } = makeFiveLeaguesTestEntity();
+  camp = toggleEntityFiveLeaguesSpell(camp, id, 'heal');
+  camp = toggleEntityFiveLeaguesSpell(camp, id, 'barrier');
+  assert.deepEqual(findByName(camp, name).fiveLeaguesSpells, ['heal', 'barrier']);
+  camp = toggleEntityFiveLeaguesSpell(camp, id, 'heal');
+  assert.deepEqual(findByName(camp, name).fiveLeaguesSpells, ['barrier']);
+});
+
+test('applyFiveLeaguesWeaponCatalogPick fills a Weapons-table row\'s Name/Range/Damage/Traits from the real catalog and defaults its Location to self', () => {
+  let { camp, id, gi, name } = makeFiveLeaguesTestEntity();
+  camp = addEntityStatblockWeapon(camp, id, gi);
+  camp = applyFiveLeaguesWeaponCatalogPick(camp, id, gi, 0, 'crossbow');
+  const w = findByName(camp, name).statblocks[gi].weapons[0];
+  assert.equal(w.name, 'Crossbow');
+  assert.equal(w.range, '24"');
+  assert.equal(w.damage, '+1 / +0');
+  assert.equal(w.traits, 'Bulky, Limited Ammunition');
+  assert.equal(w.location, 'self');
+
+  // A no-op on an unknown catalog key or an out-of-range weaponIndex.
+  const before = findByName(camp, name).statblocks[gi].weapons[0];
+  camp = applyFiveLeaguesWeaponCatalogPick(camp, id, gi, 0, 'not-a-real-weapon');
+  assert.deepEqual(findByName(camp, name).statblocks[gi].weapons[0], before);
+  camp = applyFiveLeaguesWeaponCatalogPick(camp, id, gi, 5, 'warhammer');
+  assert.equal(findByName(camp, name).statblocks[gi].weapons.length, 1, 'no new row is created out of thin air');
+});
+
+test('addFiveLeaguesItemFromCatalog pushes a prefilled Items-table row (name + real rule text, Location defaulted to self), and the row stays plain-array-index addressable like the Weapons table', () => {
+  let { camp, id, gi, name } = makeFiveLeaguesTestEntity();
+  camp = addFiveLeaguesItemFromCatalog(camp, id, gi, 'bandages');
+  let items = findByName(camp, name).statblocks[gi].items;
+  assert.equal(items.length, 1);
+  assert.equal(items[0].name, 'Bandages');
+  assert.equal(items[0].location, 'self');
+  assert.ok(items[0].notes.includes('negate the effects of 1 Wound'));
+
+  camp = addEntityStatblockItem(camp, id, gi);
+  assert.equal(findByName(camp, name).statblocks[gi].items.length, 2, 'the plain "+ Custom Item" path still works alongside the catalog path');
+
+  camp = updateEntityStatblockItem(camp, id, gi, 1, { name: 'Spare Partial Armor', location: 'stash' });
+  items = findByName(camp, name).statblocks[gi].items;
+  assert.equal(items[1].name, 'Spare Partial Armor');
+  assert.equal(items[1].location, 'stash');
+
+  camp = removeEntityStatblockItem(camp, id, gi, 0);
+  items = findByName(camp, name).statblocks[gi].items;
+  assert.equal(items.length, 1);
+  assert.equal(items[0].name, 'Spare Partial Armor', 'the remaining row shifted down by plain array index, same as the Weapons table');
+});
+
+// --- Combat Tracker: Attacker's weapon/spell choice (direct follow-up
+// request: "when selecting the attacker, determine if they have more
+// than one weapon or spell capability and prompt which is being used in
+// the attack. use the attributes of the weapon in the attack role, if
+// applicable.") ----------------------------------------------------------
+import {
+  parseFiveLeaguesWeaponDamage, listFiveLeaguesSelfWeapons, setEntityFiveLeaguesActiveWeapon,
+  getFiveLeaguesActiveWeapon, isFiveLeaguesWeaponRanged,
+} from '../src/domain/fiveLeagues.js';
+
+test('parseFiveLeaguesWeaponDamage reads the real Overcome Armor/Toughness profile out of a Weapon row\'s free-text "damage" field, tolerating hand-typed garbage', () => {
+  assert.deepEqual(parseFiveLeaguesWeaponDamage('+1 / +0'), { overcomeArmor: 1, overcomeToughness: 0 });
+  assert.deepEqual(parseFiveLeaguesWeaponDamage('-1 / +0'), { overcomeArmor: -1, overcomeToughness: 0 });
+  assert.deepEqual(parseFiveLeaguesWeaponDamage('+0/+1'), { overcomeArmor: 0, overcomeToughness: 1 }, 'tolerates missing spaces');
+  assert.deepEqual(parseFiveLeaguesWeaponDamage(''), { overcomeArmor: 0, overcomeToughness: 0 });
+  assert.deepEqual(parseFiveLeaguesWeaponDamage('Rusty, barely usable'), { overcomeArmor: 0, overcomeToughness: 0 }, 'unparseable hand-typed text falls back to 0/0 rather than throwing');
+});
+
+test('listFiveLeaguesSelfWeapons only lists Weapons-table rows whose Location is self (worn/carried), excluding backpack/stash, and defaults a row with no Location at all to self', () => {
+  let { camp, id, gi, name } = makeFiveLeaguesTestEntity();
+  assert.deepEqual(listFiveLeaguesSelfWeapons(findByName(camp, name)), [], 'no weapons at all -> empty list');
+
+  camp = addEntityStatblockWeapon(camp, id, gi);
+  camp = applyFiveLeaguesWeaponCatalogPick(camp, id, gi, 0, 'crossbow'); // defaults to location: 'self'
+  camp = addEntityStatblockWeapon(camp, id, gi);
+  camp = updateEntityStatblockWeapon(camp, id, gi, 1, { name: 'Spare Dagger', location: 'backpack' });
+  camp = addEntityStatblockWeapon(camp, id, gi);
+  camp = updateEntityStatblockWeapon(camp, id, gi, 2, { name: 'Stashed Spear' }); // no location field at all
+
+  const self = listFiveLeaguesSelfWeapons(findByName(camp, name));
+  assert.equal(self.length, 2, 'the backpack weapon is excluded');
+  assert.deepEqual(self.map((s) => s.index), [0, 2], 'real array indices are preserved, not re-numbered');
+  assert.equal(self[1].weapon.name, 'Stashed Spear', 'a row with no Location field at all defaults to self');
+});
+
+test('setEntityFiveLeaguesActiveWeapon/getFiveLeaguesActiveWeapon: a plain index into the real Weapons table, null/invalid resolves to unarmed (no throw)', () => {
+  let { camp, id, gi, name } = makeFiveLeaguesTestEntity();
+  assert.equal(getFiveLeaguesActiveWeapon(findByName(camp, name)), null, 'no active weapon set -> unarmed');
+
+  camp = addEntityStatblockWeapon(camp, id, gi);
+  camp = applyFiveLeaguesWeaponCatalogPick(camp, id, gi, 0, 'warhammer');
+  camp = setEntityFiveLeaguesActiveWeapon(camp, id, 0);
+  let active = getFiveLeaguesActiveWeapon(findByName(camp, name));
+  assert.equal(active.name, 'Warhammer');
+
+  // Clearing it (empty string, as a <select>'s own "Unarmed" option sends) resolves back to null.
+  camp = setEntityFiveLeaguesActiveWeapon(camp, id, '');
+  assert.equal(getFiveLeaguesActiveWeapon(findByName(camp, name)), null);
+
+  // An out-of-range index (e.g. the weapon was since removed) never throws.
+  camp = setEntityFiveLeaguesActiveWeapon(camp, id, 7);
+  assert.equal(getFiveLeaguesActiveWeapon(findByName(camp, name)), null);
+});
+
+test('isFiveLeaguesWeaponRanged (p.39 vs pp.40-44): a catalog-filled ranged weapon\'s own real tabletop range ("18\"") reads as ranged, a catalog-filled melee weapon\'s literal "Melee" range text reads as melee, a hand-typed numeric range reads as ranged, no weapon at all (unarmed) is melee', () => {
+  assert.equal(isFiveLeaguesWeaponRanged(null), false, 'unarmed -> melee');
+  assert.equal(isFiveLeaguesWeaponRanged({ name: 'Longbow', range: '24"' }), true);
+  assert.equal(isFiveLeaguesWeaponRanged({ name: 'Standard weapon', range: 'Melee' }), false);
+  assert.equal(isFiveLeaguesWeaponRanged({ name: 'Custom bow', range: '18' }), true, 'hand-typed numeric range still reads as ranged');
+  assert.equal(isFiveLeaguesWeaponRanged({ name: 'Custom sword', range: '' }), false, 'blank range -> melee');
+
+  let { camp, id, gi, name } = makeFiveLeaguesTestEntity();
+  camp = addEntityStatblockWeapon(camp, id, gi);
+  camp = applyFiveLeaguesWeaponCatalogPick(camp, id, gi, 0, 'selfBow');
+  camp = addEntityStatblockWeapon(camp, id, gi);
+  camp = applyFiveLeaguesWeaponCatalogPick(camp, id, gi, 1, 'bastardSword');
+  const weapons = findByName(camp, name).statblocks[gi].weapons;
+  assert.equal(isFiveLeaguesWeaponRanged(weapons[0]), true, 'Self bow (filled from the real catalog) reads as ranged');
+  assert.equal(isFiveLeaguesWeaponRanged(weapons[1]), false, 'Bastard sword (filled from the real catalog) reads as melee');
 });

@@ -54,6 +54,18 @@ import {
 } from '../../domain/dungeonCrawls.js';
 import { DUNGEON_CRAWL_ARCHETYPES, ALL_DUNGEON_CRAWL_ARCHETYPES, findDungeonCrawlArchetype, DUNGEON_CRAWL_PACKS, findDungeonCrawlPack, DUNGEON_ROOM_FALLBACK_PALETTE } from '../../data/dungeonCrawlTiles.js';
 import { DUNGEON_DRESSING_ICONS, findDungeonDressingIcon, DUNGEON_TILE_GRID_SIZE } from '../../data/dungeonCrawlDressing.js';
+import { FIVE_LEAGUES_ORIGINS, findFiveLeaguesOrigin } from '../../data/fiveLeaguesOrigins.js';
+import {
+  FIVE_LEAGUES_CHARACTER_TYPES, findFiveLeaguesCharacterType,
+  FIVE_LEAGUES_SKILLS,
+  FIVE_LEAGUES_BACKGROUNDS, findFiveLeaguesBackground, availableFiveLeaguesBackgrounds,
+  FIVE_LEAGUES_ARMOR_TYPES, findFiveLeaguesArmorType, FIVE_LEAGUES_ARMOR_TRAITS,
+  FIVE_LEAGUES_WEAPON_TRAITS, FIVE_LEAGUES_WEAPON_CATALOG,
+  FIVE_LEAGUES_GEAR_LOCATIONS, FIVE_LEAGUES_ITEM_CATALOG,
+} from '../../data/fiveLeaguesCharacter.js';
+import { FIVE_LEAGUES_SPELLS } from '../../data/fiveLeaguesSpells.js';
+import { listFiveLeaguesSelfWeapons, parseFiveLeaguesWeaponDamage } from '../../domain/fiveLeagues.js';
+import { findFiveLeaguesEnemyTrait } from '../../data/fiveLeaguesEnemyTraits.js';
 import { findLocationTypeIcon } from '../../data/locationTypeIcons.js';
 import { getSector, listTouchedSectors, adjacentSectors, deriveSectorIcon, generateMissionHooks, gridSizeOf, countInvestigationSites, MAX_INVESTIGATION_SITES, worldTrackerAttentionItems } from '../../domain/worldTracker.js';
 import { WORLD_TRACKER_ICONS, findWorldTrackerIcon } from '../../data/worldTrackerIcons.js';
@@ -430,6 +442,7 @@ function inspector(doc, e, ui) {
       ${e.type === 'npc' && !isPartyCharacter ? `<button class="icon-btn" data-deepen-npc="${esc(e.id)}" title="Roll a Stereotype/Want/Complication and add it to this NPC's Overview">🎲 Deepen</button>` : ''}
       <button class="icon-btn" data-entity-del="${esc(e.id)}" title="Delete entity">🗑</button>
     </div>
+    ${isFiveLeaguesAberrationEntity(e) ? '<p class="fiveleagues-enemy-subtitle">Aberration</p>' : ''}
     <div class="inspector-photo-row">
       ${entityPhotoHtml(doc, e)}
       <div class="inspector-photo-fields">
@@ -1458,6 +1471,7 @@ function statblockGroupLabel(group, doc) {
 
 function statblockGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
   if (group.kind === 'character') return characterSheetGroupBlock(e, group, gi, doc, ui, opts);
+  if (group.templateId === 'fiveleagues-lifeform') return fiveLeaguesEnemyStatblockHtml(e, group, gi, doc, ui, opts);
   const key = `${e.id}::${gi}`;
   // Direct follow-up request: "Default the character sheet section to be
   // open, but all other sections to be collapsed when the entity record is
@@ -1511,6 +1525,192 @@ function statblockGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
     ${rest.length ? `<div class="character-sheet-resources">${rest.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}
     ${usesHalfRow ? `<div class="statblock-half-row">${halfRowFields.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}`}
   </div>`;
+}
+
+// Direct follow-up request: "update the bestiary 5lfb statblock to
+// rename 'combat skill' to 'combat' and 'toughness' to 'tough' and
+// convert to same '+1' format as 'tough' on character sheet for 5lfb,
+// and format 'damage' use a '+0/+0' format... those fields must be
+// narrow to fit on one row in this sequence: Speed, Combat, Damage,
+// Tough, and Armor. The[n] show Num as a number field with the +/-
+// format followed by the 'Ranged' field the width of the rest of the
+// panel. Below that, include the Traits or Aber[r]ant [Aberration]
+// Traits as separate lines where the title is in bold just like in the
+// rulebook... With each trait, make it a tooltip link to show the
+// definition of the trait. Put the description in the Overview field.
+// If the entity is an 'Aber[r]ation' put a small subtitle under the name
+// stating 'Aberration' and only then include the MP and Reward Rating
+// fields." A bespoke renderer for the 'fiveleagues-lifeform' Bestiary
+// template specifically (statblockGroupBlock's own dispatch above),
+// rather than extending the generic one — this template's own real-
+// rulebook column layout (p.152) doesn't fit the generic attribute-row/
+// resource-row split at all.
+//
+// Every field below is looked up BY NAME via statblockFieldByKey, trying
+// the new short key first and falling back to the original long one —
+// this app's ~121-entity core/Compendium Bestiary content packs (already
+// imported into real campaigns) were built under the ORIGINAL key names
+// ('Combat Skill', 'Toughness', 'Num.') and are never retroactively
+// renamed (this app's own "migration never drops data" rule, and
+// renaming a template never touches an already-created entity's own
+// field array anyway) — both old and newly-created entities render
+// identically here. The single-number pills (Tough/Num) read/write the
+// field's raw `value` directly through the SAME generic attribute-value
+// setter attrRow already uses (data-statblock-attr-val), regardless of
+// whether that field's own stored `kind` happens to be 'attribute' (new)
+// or 'track'/'text' (old) — this bespoke view never delegates to
+// attrRow/trackRow/textRow's own kind-dispatch, so the stored kind simply
+// doesn't matter to it.
+function statblockFieldByKey(group, ...keys) {
+  const fields = group.fields || [];
+  for (const key of keys) {
+    const idx = fields.findIndex((f) => String(f.key || '').toLowerCase() === key.toLowerCase());
+    if (idx !== -1) return { f: fields[idx], fi: idx };
+  }
+  return null;
+}
+
+// True once the entity has ANY 'fiveleagues-lifeform' Bestiary group
+// whose MP field has a non-zero max — the real rulebook's own Aberration
+// Table entries are exactly the subset of this template that was ever
+// given a real Monster Points pool at all (p.182-186); an ordinary Enemy
+// Table creature's MP field stays at its template default (max: 0). No
+// separate "is this an Aberration" tag/flag needed — this is already a
+// stable, content-driven signal that works for every already-imported
+// entity without any migration.
+function isFiveLeaguesAberrationEntity(e) {
+  const groups = (e && e.statblocks) || [];
+  return groups.some((g) => {
+    if (g.templateId !== 'fiveleagues-lifeform') return false;
+    const mp = statblockFieldByKey(g, 'MP');
+    return !!(mp && Number(mp.f.max) > 0);
+  });
+}
+
+// A plain signed-number pill (e.g. "+3"), independent of the field's own
+// stored `kind` — see this section's own doc comment above.
+function fiveLeaguesEnemySignedPillHtml(label, found, gi, opts) {
+  if (!found) return '';
+  const { f, fi } = found;
+  const key = opts.entityId ? `${opts.entityId}::${gi}::${fi}` : `${gi}::${fi}`;
+  const value = Number(f.value) || 0;
+  return `<div class="statblock-row attr-row attr-row-compact">
+    <span class="statblock-key" title="Not rollable">${esc(label)}</span>
+    <input type="text" inputmode="numeric" class="attr-val-input" data-statblock-attr-val="${key}" value="${esc(formatAttrValue(value, 'sign'))}" aria-label="${esc(label)} value">
+  </div>`;
+}
+
+// Direct follow-up request: "format 'damage' use a '+0/+0' format using
+// two numbers with appended '+' and '/' separator to look the same as
+// the handbook" — two small number inputs (Overcome Armor / Overcome
+// Toughness, p.43) that combine into that exact real string on edit
+// (shell.js's own data-fiveleagues-enemy-damage-part change handler),
+// written back through the plain generic value setter every text field
+// already uses (data-statblock-val) — the field itself stays `kind:
+// 'text'` in storage the whole time, same free-text shape a Weapon row's
+// own `damage` column already uses, just edited through two separate
+// boxes instead of one.
+function fiveLeaguesEnemyDamagePillHtml(found, gi, opts) {
+  if (!found) return '';
+  const { f, fi } = found;
+  const key = opts.entityId ? `${opts.entityId}::${gi}::${fi}` : `${gi}::${fi}`;
+  const { overcomeArmor, overcomeToughness } = parseFiveLeaguesWeaponDamage(f.value);
+  return `<div class="statblock-row attr-row attr-row-compact fiveleagues-enemy-damage">
+    <span class="statblock-key">Damage</span>
+    <span class="fiveleagues-enemy-damage-inputs" data-fiveleagues-enemy-damage-key="${key}">
+      <input type="number" class="attr-val-input" data-fiveleagues-enemy-damage-part="armor" value="${overcomeArmor}" title="Overcome Armor" aria-label="Damage, Overcome Armor">
+      <span class="fiveleagues-enemy-damage-sep">/</span>
+      <input type="number" class="attr-val-input" data-fiveleagues-enemy-damage-part="toughness" value="${overcomeToughness}" title="Overcome Toughness" aria-label="Damage, Overcome Toughness">
+    </span>
+  </div>`;
+}
+
+// A full-width free-text field (Ranged) — same markup/binding as
+// textRow's own non-compact shape, just inlined here since this bespoke
+// layout needs it to flex-grow alongside the narrow Num pill on the same
+// row rather than stack as its own full block.
+function fiveLeaguesEnemyWideTextFieldHtml(label, found, gi, opts) {
+  if (!found) return '';
+  const { f, fi } = found;
+  const key = opts.entityId ? `${opts.entityId}::${gi}::${fi}` : `${gi}::${fi}`;
+  return `<div class="statblock-row text-row fiveleagues-enemy-wide-field">
+    <span class="statblock-key">${esc(label)}</span>
+    <input class="statblock-val" data-statblock-val="${key}" value="${esc(f.value)}" placeholder="${esc(label)}">
+  </div>`;
+}
+
+function fiveLeaguesEnemyStatblockHtml(e, group, gi, doc, ui = {}, opts = {}) {
+  const key = `${e.id}::${gi}`;
+  const collapsed = !(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
+  const speed = statblockFieldByKey(group, 'Speed');
+  const combat = statblockFieldByKey(group, 'Combat', 'Combat Skill');
+  const damage = statblockFieldByKey(group, 'Damage');
+  const tough = statblockFieldByKey(group, 'Tough', 'Toughness');
+  const armor = statblockFieldByKey(group, 'Armor');
+  const num = statblockFieldByKey(group, 'Num', 'Num.');
+  const ranged = statblockFieldByKey(group, 'Ranged');
+  const mp = statblockFieldByKey(group, 'MP');
+  const rewardRating = statblockFieldByKey(group, 'Reward Rating');
+  const traits = statblockFieldByKey(group, 'Traits');
+  const isAberration = !!(mp && Number(mp.f.max) > 0);
+  // Direct follow-up request: "include the Traits or Aberrant [Aberration]
+  // Traits as separate lines where the title is in bold just like in the
+  // rulebook... make it a tooltip link to show the definition of the
+  // trait" — the field itself stays one free-text, comma-separated
+  // string to type into (matching the book's own "Traits: X, Y, Z" stat-
+  // block convention), rendered as a read-only preview of bold-titled
+  // lines below the input; findFiveLeaguesEnemyTrait searches BOTH the
+  // Universal Enemy Traits and Aberration Traits catalogs together, so
+  // nothing here needs to branch on isAberration — an unrecognized name
+  // (a homebrew trait, a typo, a Compendium-only one this app doesn't
+  // catalog) still renders as a plain bold line with no tooltip.
+  const traitNames = traits ? String(traits.f.value || '').split(',').map((s) => s.trim()).filter(Boolean) : [];
+  const traitsListHtml = traitNames.length ? `<div class="fiveleagues-enemy-traits-list">
+    ${traitNames.map((name) => {
+      const def = findFiveLeaguesEnemyTrait(name);
+      return `<p class="fiveleagues-enemy-trait-line"><b class="fiveleagues-enemy-trait-name" ${def ? `title="${esc(def.text)}"` : ''}>${esc(name)}</b></p>`;
+    }).join('')}
+  </div>` : '';
+  return `<div class="statblock-block fiveleagues-enemy-block">
+    <div class="statblock-head">
+      <button class="icon-btn statblock-collapse-toggle" data-statblock-group-toggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button>
+      <h4>${statblockGroupLabel(group, doc)}</h4>
+      ${statblockMoveButtonsHtml(gi)}
+      <button class="icon-btn" data-statblock-remove-group="${gi}" title="Remove this statblock">🗑</button>
+    </div>
+    ${collapsed ? '' : `
+    <div class="character-sheet-stats">
+      ${fiveLeaguesEnemyAttrPillHtml(speed, gi, opts)}
+      ${fiveLeaguesEnemySignedPillHtml('Combat', combat, gi, opts)}
+      ${fiveLeaguesEnemyDamagePillHtml(damage, gi, opts)}
+      ${fiveLeaguesEnemySignedPillHtml('Tough', tough, gi, opts)}
+      ${fiveLeaguesEnemyAttrPillHtml(armor, gi, opts)}
+    </div>
+    <div class="fiveleagues-enemy-num-ranged-row">
+      ${fiveLeaguesEnemySignedPillHtml('Num', num, gi, opts)}
+      ${fiveLeaguesEnemyWideTextFieldHtml('Ranged', ranged, gi, opts)}
+    </div>
+    ${isAberration ? `<div class="character-sheet-resources fiveleagues-enemy-aberration-stats">
+      ${mp ? statblockFieldRow(mp.f, gi, mp.fi, { ...opts, compact: true }) : ''}
+      ${rewardRating ? statblockFieldRow(rewardRating.f, gi, rewardRating.fi, { ...opts, compact: true }) : ''}
+    </div>` : ''}
+    <div class="fiveleagues-enemy-traits">
+      <label class="field-label">Traits
+        ${traits ? `<input class="statblock-val" data-statblock-val="${opts.entityId ? `${opts.entityId}::` : ''}${gi}::${traits.fi}" value="${esc(traits.f.value)}" placeholder="Comma-separated, e.g. Undead, Counter Attack">` : ''}
+      </label>
+      ${traitsListHtml}
+    </div>`}
+  </div>`;
+}
+// Calls the SAME attrRow() the Character Sheet's own compact stat row
+// uses, directly — Speed/Armor/MP are already `kind:'attribute'` in both
+// old and new data (this template's own 'Speed'/'Armor' keys were never
+// renamed), so there's no reason to duplicate that rendering here; a
+// thin null-guard wrapper since a GM-customized template (Settings) could
+// have removed one of these fields entirely.
+function fiveLeaguesEnemyAttrPillHtml(found, gi, opts) {
+  if (!found) return '';
+  return attrRow(found.f, gi, found.fi, { ...opts, compact: true });
 }
 
 function templateLabel(templateId, settings) {
@@ -1588,15 +1788,16 @@ function characterSheetGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
         const sectionCollapsed = isPartySectionCollapsed(ui, sectionKey, false);
         return `
           ${partySectionHeaderHtml(sectionKey, sec.label, sectionCollapsed)}
-          ${sectionCollapsed ? '' : `<div class="character-sheet-resources">${fields.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>`}`;
+          ${sectionCollapsed ? '' : `<div class="character-sheet-resources">${fields.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true, ruleset: group.ruleset })).join('')}</div>`}`;
       }).join('') + (group.ruleset === 'dnd5e' ? characterSheetAttacksHtml(group, gi) : '')
     : (() => {
         const stats = indexed.filter(({ f }) => f.group === 'stat');
         const resources = indexed.filter(({ f }) => f.group !== 'stat');
         return `
-          ${stats.length ? `<div class="character-sheet-stats">${stats.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}
-          ${resources.length ? `<div class="character-sheet-resources">${resources.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}
-          ${['5pfh', 'fiveleagues'].includes(group.ruleset) ? characterSheetWeaponsAndGearHtml(group, gi) : ''}`;
+          ${stats.length ? `<div class="character-sheet-stats">${stats.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true, ruleset: group.ruleset })).join('')}</div>` : ''}
+          ${resources.length ? `<div class="character-sheet-resources">${resources.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true, ruleset: group.ruleset })).join('')}</div>` : ''}
+          ${['5pfh', 'fiveleagues'].includes(group.ruleset) ? characterSheetWeaponsAndGearHtml(group, gi) : ''}
+          ${group.ruleset === 'fiveleagues' ? fiveLeaguesCharacterSheetExtrasHtml(e, group, gi, ui) : ''}`;
       })();
   // D&D 5e PDF character-sheet import (direct request, phase 4) — only
   // offered on a dnd5e Character Sheet group; a real file input hidden
@@ -1671,27 +1872,284 @@ function characterSheetAttacksHtml(group, gi) {
 // convention statblock fields already use.
 function characterSheetWeaponsAndGearHtml(group, gi) {
   const weapons = group.weapons || [];
+  // Five Leagues-only enhancements (direct follow-up request: "track...
+  // weapon traits... per the ruleset") — a quick-fill Catalog column
+  // (applyFiveLeaguesWeaponCatalogPick, shell.js) and a Location column
+  // (self/backpack/stash, reusing this same row's existing free-text
+  // `traits` field's generic data-statblock-weapon-field handler for
+  // Location too, just a new key on the same patch shape). 5PFH's own
+  // weapon table is completely unchanged — neither column renders there.
+  const isFiveLeagues = group.ruleset === 'fiveleagues';
+  const catalogOptions = isFiveLeagues
+    ? FIVE_LEAGUES_WEAPON_CATALOG.map((w) => `<option value="${esc(w.key)}">${esc(w.label)}</option>`).join('')
+    : '';
+  const traitsListId = `five-leagues-weapon-traits-${gi}`;
   const weaponRows = weapons.map((w, wi) => `
     <tr>
+      ${isFiveLeagues ? `<td><select data-fiveleagues-weapon-catalog-pick="${gi}::${wi}"><option value="">Catalog…</option>${catalogOptions}</select></td>` : ''}
       <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::name" value="${esc(w.name)}" placeholder="Weapon"></td>
       <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::range" value="${esc(w.range)}" placeholder="Range"></td>
       <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::shots" value="${esc(w.shots)}" placeholder="Shots"></td>
       <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::damage" value="${esc(w.damage)}" placeholder="Damage"></td>
-      <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::traits" value="${esc(w.traits)}" placeholder="Traits"></td>
+      <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::traits" value="${esc(w.traits)}" placeholder="Traits" ${isFiveLeagues ? `list="${traitsListId}"` : ''}></td>
+      ${isFiveLeagues ? `<td><select data-statblock-weapon-field="${gi}::${wi}::location">${FIVE_LEAGUES_GEAR_LOCATIONS.map((l) => `<option value="${esc(l.key)}" ${(w.location || 'self') === l.key ? 'selected' : ''}>${esc(l.label)}</option>`).join('')}</select></td>` : ''}
       <td class="statblock-weapon-remove-cell"><button type="button" class="icon-btn statblock-weapon-remove-btn" data-statblock-weapon-remove="${gi}::${wi}" title="Remove weapon">🗑</button></td>
     </tr>`).join('');
   return `
     <div class="statblock-weapons">
       <h4>Weapons</h4>
       <table class="statblock-weapon-table">
-        <thead><tr><th class="statblock-weapon-col-name">Weapon</th><th>Range</th><th>Shots</th><th>Damage</th><th class="statblock-weapon-col-traits">Traits</th><th></th></tr></thead>
+        <thead><tr>
+          ${isFiveLeagues ? '<th></th>' : ''}
+          <th class="statblock-weapon-col-name">Weapon</th><th>Range</th><th>Shots</th><th>Damage</th><th class="statblock-weapon-col-traits">Traits</th>
+          ${isFiveLeagues ? '<th>Location</th>' : ''}
+          <th></th></tr></thead>
         <tbody>${weaponRows}</tbody>
       </table>
+      ${isFiveLeagues ? `<datalist id="${traitsListId}">${FIVE_LEAGUES_WEAPON_TRAITS.map((t) => `<option value="${esc(t.label)}">`).join('')}</datalist>` : ''}
       <button type="button" class="btn ghost sm" data-statblock-weapon-add="${gi}">＋ Weapon</button>
     </div>
     <label class="field-label statblock-gear-field">Gear
       <textarea rows="2" data-statblock-gear="${gi}" placeholder="Gear…">${esc(group.gear || '')}</textarea>
     </label>`;
+}
+
+// Direct follow-up request: "update the character sheet for 5lfb to track
+// character type, skills, origins, background, armor, gear storage in
+// self, backpack or stash, weapon traits, and spells (hidden if a spell
+// casting class is not selected for that character or NPC) per the
+// ruleset." One function per tracked thing, concatenated by this wrapper
+// in the order they appear on the sheet; `ui` threads through for the
+// Character Type/Origin info-toggle (below) and the Items table's
+// per-row Notes toggle (fiveLeaguesItemsSectionHtml).
+function fiveLeaguesCharacterSheetExtrasHtml(e, group, gi, ui) {
+  return `
+    ${fiveLeaguesTypeAndOriginRowHtml(e, ui)}
+    ${fiveLeaguesBackgroundSectionHtml(e)}
+    ${fiveLeaguesSkillsSectionHtml(e)}
+    ${fiveLeaguesArmorSectionHtml(e)}
+    ${fiveLeaguesItemsSectionHtml(group, gi, e, ui)}
+    ${fiveLeaguesSpellsSectionHtml(e)}`;
+}
+
+// Direct follow-up request: "The descriptive text for 'character type' and
+// 'origin' should be hidden and connected to a question mark tool tip that
+// has a different presentation than usual by expanding/collapsing where
+// the text exists right now (instead to the usual floating tool tip
+// display since it would be too small to see all the text). Also move
+// those two fields to the same row and have just one set of text viewable
+// at a time for each tooltip." Character Type (p.14) and Origin (data/
+// fiveLeaguesOrigins.js, pp.15-19) now share one row; each select gets a
+// small "?" button instead of always-visible description text underneath
+// it — clicking one expands an in-place panel (never a floating hover
+// tooltip — the real trait text is far too long to fit one) right where
+// that text used to sit. `ui.fiveLeaguesInfoOpen` is a single ephemeral
+// value, not a per-field Set, so opening one's panel always closes the
+// other's — "just one set of text viewable at a time." Picking Mystic
+// (Character Type) is what unhides the Spells section far below (p.45)
+// and forces Background to Mystic (see that section's own comment).
+function fiveLeaguesTypeAndOriginRowHtml(e, ui) {
+  const openKey = (ui && ui.fiveLeaguesInfoOpen) || null;
+
+  const currentType = e.fiveLeaguesCharacterType || '';
+  const type = currentType ? findFiveLeaguesCharacterType(currentType) : null;
+  const typeOptions = FIVE_LEAGUES_CHARACTER_TYPES.map((t) => `<option value="${esc(t.key)}" ${t.key === currentType ? 'selected' : ''}>${esc(t.label)}</option>`).join('');
+  const typeInfoKey = `${e.id}::characterType`;
+
+  const currentOrigin = e.fiveLeaguesOrigin || '';
+  const origin = currentOrigin ? findFiveLeaguesOrigin(currentOrigin) : null;
+  const originOptions = FIVE_LEAGUES_ORIGINS.map((o) => `<option value="${esc(o.key)}" ${o.key === currentOrigin ? 'selected' : ''}>${esc(o.label)}</option>`).join('');
+  const originInfoKey = `${e.id}::origin`;
+
+  const typePanel = type ? `<p class="dim small">${esc(type.text)}</p>` : '';
+  const originPanel = origin ? `
+    <p class="dim small">Background: ${esc(origin.background)} · Skill expertise: +1 [${esc(origin.skillExpertise)}] Proficiency Tests</p>
+    <ul class="five-leagues-origin-traits">
+      ${origin.traits.map((t) => `<li><b>${esc(t.name)}</b> — ${esc(t.text)}</li>`).join('')}
+    </ul>` : '';
+
+  return `<div class="five-leagues-type-origin-row">
+    <label class="field-label">Character Type
+      <span class="five-leagues-info-row">
+        <select data-entity-five-leagues-character-type="${esc(e.id)}">
+          <option value="">— None —</option>
+          ${typeOptions}
+        </select>
+        <button type="button" class="icon-btn five-leagues-info-toggle ${openKey === typeInfoKey ? 'open' : ''}" data-fiveleagues-info-toggle="${esc(typeInfoKey)}" title="About this Character Type" ${type ? '' : 'disabled'}>?</button>
+      </span>
+    </label>
+    <label class="field-label">Origin
+      <span class="five-leagues-info-row">
+        <select data-entity-five-leagues-origin="${esc(e.id)}">
+          <option value="">— None —</option>
+          ${originOptions}
+        </select>
+        <button type="button" class="icon-btn five-leagues-info-toggle ${openKey === originInfoKey ? 'open' : ''}" data-fiveleagues-info-toggle="${esc(originInfoKey)}" title="About this Origin" ${origin ? '' : 'disabled'}>?</button>
+      </span>
+    </label>
+  </div>
+  ${openKey === typeInfoKey && typePanel ? `<div class="five-leagues-info-panel">${typePanel}</div>` : ''}
+  ${openKey === originInfoKey && originPanel ? `<div class="five-leagues-info-panel">${originPanel}</div>` : ''}`;
+}
+
+// Backgrounds (pp.19-23) — which ones are selectable depends on both the
+// entity's Origin (above) and Character Type (above-above): a Mystic
+// character type forces/locks this to 'mystic' outright (p.21), otherwise
+// the options are whatever availableFiveLeaguesBackgrounds (data/
+// fiveLeaguesCharacter.js) says this Origin allows or requires.
+function fiveLeaguesBackgroundSectionHtml(e) {
+  const originKey = e.fiveLeaguesOrigin || '';
+  const typeKey = e.fiveLeaguesCharacterType || '';
+  const forced = typeKey === 'mystic';
+  const allowedKeys = availableFiveLeaguesBackgrounds(originKey, typeKey);
+  const current = e.fiveLeaguesBackground || '';
+  const options = allowedKeys.map((key) => {
+    const bg = findFiveLeaguesBackground(key);
+    return bg ? `<option value="${esc(bg.key)}" ${bg.key === current ? 'selected' : ''}>${esc(bg.label)}</option>` : '';
+  }).join('');
+  const bg = current ? findFiveLeaguesBackground(current) : null;
+  return `<div class="five-leagues-background">
+    <label class="field-label">Background
+      <select data-entity-five-leagues-background="${esc(e.id)}" ${forced ? 'disabled' : ''}>
+        <option value="">— None —</option>
+        ${options}
+      </select>
+    </label>
+    ${forced ? `<p class="dim small">Mystics must select the Mystic background, regardless of origin (p.21).</p>` : ''}
+    ${bg && !forced ? `<p class="dim small">${esc(bg.text)}</p>` : ''}
+  </div>`;
+}
+
+// The 12 named Skills (p.23) — a plain has/doesn't checklist (see data/
+// fiveLeaguesCharacter.js's own doc comment on why the real +2 Proficiency
+// Test bonus isn't automated here); each checkbox's tooltip is the Skill's
+// own "Uses" text from the real Skills Table.
+function fiveLeaguesSkillsSectionHtml(e) {
+  const known = Array.isArray(e.fiveLeaguesSkills) ? e.fiveLeaguesSkills : [];
+  const boxes = FIVE_LEAGUES_SKILLS.map((s) => `
+    <label class="five-leagues-chip" title="${esc(s.uses)}">
+      <input type="checkbox" data-entity-five-leagues-skill="${esc(e.id)}::${esc(s.key)}" ${known.includes(s.key) ? 'checked' : ''}>
+      ${esc(s.label)}
+    </label>`).join('');
+  // Direct follow-up request: "Move the text '(+2 on a relevant
+  // Proficiency Test, p.52)' to a tooltip" — a plain hover tooltip is fine
+  // here (unlike Character Type/Origin's own expand/collapse panel above),
+  // since this text is short enough to fit a floating tooltip.
+  return `<div class="five-leagues-skills">
+    <p class="field-label">Skills <span class="five-leagues-hint" title="+2 on a relevant Proficiency Test, p.52">ⓘ</span></p>
+    <div class="five-leagues-chip-list">${boxes}</div>
+  </div>`;
+}
+
+// Body Armor (p.62) — the <select> drives the Character Sheet's own
+// numeric Armor stat field directly (domain/fiveLeagues.js's
+// setEntityFiveLeaguesArmorBody); Shield/Helmet are reference-only
+// booleans (their real benefit is situational — see that same function's
+// doc comment); Fine/Fey Steel are optional Improved Armor traits.
+function fiveLeaguesArmorSectionHtml(e) {
+  const armor = e.fiveLeaguesArmor || {};
+  const currentBody = armor.bodyType || '';
+  const bodyOptions = FIVE_LEAGUES_ARMOR_TYPES.map((a) => `<option value="${esc(a.key)}" ${a.key === currentBody ? 'selected' : ''}>${esc(a.label)} (Armor ${a.armor})</option>`).join('');
+  const bodyInfo = currentBody ? findFiveLeaguesArmorType(currentBody) : null;
+  const improvements = Array.isArray(armor.improvements) ? armor.improvements : [];
+  const improvementChips = FIVE_LEAGUES_ARMOR_TRAITS.map((t) => `
+    <label class="five-leagues-chip" title="${esc(t.text)}">
+      <input type="checkbox" data-entity-five-leagues-armor-improvement="${esc(e.id)}::${esc(t.key)}" ${improvements.includes(t.key) ? 'checked' : ''}>
+      ${esc(t.label)}
+    </label>`).join('');
+  return `<div class="five-leagues-armor">
+    <label class="field-label">Body Armor
+      <select data-entity-five-leagues-armor-body="${esc(e.id)}">
+        <option value="">— None selected —</option>
+        ${bodyOptions}
+      </select>
+    </label>
+    ${bodyInfo && bodyInfo.note ? `<p class="dim small">${esc(bodyInfo.note)}</p>` : ''}
+    <div class="five-leagues-chip-list">
+      <label class="five-leagues-chip" title="Characters with a shield receive +1 to Armor against ranged attacks, and may Parry against melee strikes — situational, so not folded into the Armor stat above.">
+        <input type="checkbox" data-entity-five-leagues-armor-flag="${esc(e.id)}::shield" ${armor.shield ? 'checked' : ''}> Shield
+      </label>
+      <label class="five-leagues-chip" title="If a character wearing a helmet rolls a double on the post-game Injury Table, they are knocked out instead of suffering the Injury — the helmet is Damaged either way.">
+        <input type="checkbox" data-entity-five-leagues-armor-flag="${esc(e.id)}::helmet" ${armor.helmet ? 'checked' : ''}> Helmet
+      </label>
+      ${improvementChips}
+    </div>
+  </div>`;
+}
+
+// Items table (pp.63-65) — a sibling to the Weapons table above for
+// non-weapon gear, same Location tracking (self/backpack/stash, p.59).
+// group.items is created by domain/statblocks.js's own makeStatblock for
+// every fresh fiveleagues sheet, but an OLDER entity's sheet (created
+// before this feature existed) may not have it yet — `|| []` covers that
+// the same way characterSheetWeaponsAndGearHtml's own `group.weapons`
+// already does.
+//
+// Direct follow-up request: "because the Party panel width is limited, the
+// item 'notes' field should be an icon that opens/collapses the notes
+// field on a second line" — the always-visible Notes <input> column is
+// now a 📝 toggle button (data-fiveleagues-item-notes-toggle, keyed
+// `${e.id}::${gi}::${ii}`, `ui.fiveLeaguesItemNotesOpen` — a Set, several
+// rows can be open at once, unlike the single-value Character Type/Origin
+// toggle above); its own title previews the existing text even collapsed,
+// and a filled-but-collapsed row's icon gets a visual accent (`.has-
+// notes`) so a GM never loses track of which rows actually have notes. A
+// second <tr> (colspan across every column) holds the real textarea only
+// while that row's toggle is open.
+function fiveLeaguesItemsSectionHtml(group, gi, e, ui) {
+  const items = group.items || [];
+  const openNotes = (ui && ui.fiveLeaguesItemNotesOpen) || new Set();
+  const rows = items.map((it, ii) => {
+    const notesKey = `${e.id}::${gi}::${ii}`;
+    const isOpen = openNotes.has(notesKey);
+    const hasNotes = !!(it.notes && String(it.notes).trim());
+    const notesRow = isOpen ? `
+    <tr class="five-leagues-item-notes-row">
+      <td colspan="4"><textarea rows="2" data-statblock-item-field="${gi}::${ii}::notes" placeholder="Notes…">${esc(it.notes)}</textarea></td>
+    </tr>` : '';
+    return `
+    <tr>
+      <td><input type="text" data-statblock-item-field="${gi}::${ii}::name" value="${esc(it.name)}" placeholder="Item"></td>
+      <td><select data-statblock-item-field="${gi}::${ii}::location">${FIVE_LEAGUES_GEAR_LOCATIONS.map((l) => `<option value="${esc(l.key)}" ${(it.location || 'self') === l.key ? 'selected' : ''}>${esc(l.label)}</option>`).join('')}</select></td>
+      <td class="five-leagues-item-notes-cell"><button type="button" class="icon-btn five-leagues-item-notes-toggle ${hasNotes ? 'has-notes' : ''}" data-fiveleagues-item-notes-toggle="${esc(notesKey)}" title="${hasNotes ? esc(it.notes) : 'Notes'}">📝</button></td>
+      <td class="statblock-weapon-remove-cell"><button type="button" class="icon-btn statblock-weapon-remove-btn" data-statblock-item-remove="${gi}::${ii}" title="Remove item">🗑</button></td>
+    </tr>${notesRow}`;
+  }).join('');
+  const catalogOptions = FIVE_LEAGUES_ITEM_CATALOG.map((it) => `<option value="${esc(it.key)}">${esc(it.label)}</option>`).join('');
+  return `<div class="statblock-weapons five-leagues-items">
+    <h4>Items <span class="dim small">(Backpack holds 8, shared across the whole warband; Stash is unlimited, kept at a settlement — p.59)</span></h4>
+    <table class="statblock-weapon-table">
+      <thead><tr><th class="statblock-weapon-col-name">Item</th><th>Location</th><th>Notes</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="five-leagues-item-add-row">
+      <select data-fiveleagues-item-catalog-add="${gi}" title="Add from Items catalog…">
+        <option value="">+ Add from Items catalog…</option>
+        ${catalogOptions}
+      </select>
+      <button type="button" class="btn ghost sm" data-statblock-item-add="${gi}">＋ Custom Item</button>
+    </div>
+  </div>`;
+}
+
+// Spells (pp.45-50) — hidden entirely unless Character Type is 'mystic'
+// (p.45: "A Mystic is a spell-casting character"), the literal "hidden if
+// a spell casting class is not selected" from the request. A known spell's
+// own real Incantation/Target/Duration shows inline; its full Effect text
+// is the row's tooltip so the list stays scannable.
+function fiveLeaguesSpellsSectionHtml(e) {
+  if ((e.fiveLeaguesCharacterType || '') !== 'mystic') return '';
+  const known = Array.isArray(e.fiveLeaguesSpells) ? e.fiveLeaguesSpells : [];
+  const rows = FIVE_LEAGUES_SPELLS.map((s) => `
+    <label class="five-leagues-spell-row" title="${esc(s.effect)}">
+      <input type="checkbox" data-entity-five-leagues-spell="${esc(e.id)}::${esc(s.key)}" ${known.includes(s.key) ? 'checked' : ''}>
+      <span class="five-leagues-spell-name">${esc(s.label)}${s.simple ? ' *' : ''}</span>
+      <span class="dim small">Incant. ${esc(s.incantation)} · ${esc(s.target)} · ${esc(s.duration)}</span>
+    </label>`).join('');
+  return `<div class="five-leagues-spells">
+    <p class="field-label">Known Spells <span class="dim small">(Mystics only, p.45-50 · * = Simple, no Strand cost on a success)</span></p>
+    <div class="five-leagues-spell-list">${rows}</div>
+  </div>`;
 }
 
 // A field's kind decides which widget it gets: attribute (a rollable
@@ -1701,7 +2159,12 @@ function characterSheetWeaponsAndGearHtml(group, gi) {
 // scale (trackRow); anything else → plain text (textRow).
 function statblockFieldRow(f, gi, fi, opts) {
   if (f.attribute) return attrRow(f, gi, fi, opts);
-  if (f.track) return trackRow(f, gi, fi, opts);
+  // Direct follow-up request: "Change Will, XP and Luck to number fields
+  // instead of trackers" — scoped to the Five Leagues ruleset specifically
+  // (its characterTemplate's only tracks ARE Will/Luck/XP, p.53), not a
+  // general change to every other ruleset's own tracks (Starforged
+  // Momentum, 5PFH HP, ...), which keep the usual click-to-set box row.
+  if (f.track) return (opts.ruleset === 'fiveleagues') ? numberFieldRow(f, gi, fi, opts) : trackRow(f, gi, fi, opts);
   return textRow(f, gi, fi, opts);
 }
 
@@ -1783,6 +2246,30 @@ function trackRow(f, gi, fi, opts = {}) {
     </div>`;
 }
 
+// Direct follow-up request: "Change Will, XP and Luck to number fields
+// instead of trackers" — a plain, directly-editable numeric <input> (no
+// click-to-set boxes) with the field's own `max` shown as a "/ N" suffix
+// when it has one, bound through the same generic data-statblock-val
+// handler every plain text field already uses (it just assigns whatever
+// string is typed to `.value`, with no attribute/track-specific
+// assumptions — getFiveLeaguesStat's own Number(...)||0 read handles the
+// rest). Only ever reached for the fiveleagues ruleset (see
+// statblockFieldRow above); every other ruleset's own tracks are
+// unaffected.
+function numberFieldRow(f, gi, fi, opts = {}) {
+  const key = opts.entityId ? `${opts.entityId}::${gi}::${fi}` : `${gi}::${fi}`;
+  const value = Number(f.value) || 0;
+  const hasMax = f.max != null && f.max !== '';
+  return `
+    <div class="statblock-row number-row ${opts.compact ? 'number-row-compact' : ''}">
+      <span class="statblock-key">${esc(f.key)}</span>
+      <span class="number-row-input-wrap">
+        <input type="number" inputmode="numeric" class="attr-val-input" data-statblock-val="${key}" value="${value}" min="0" ${hasMax ? `max="${esc(f.max)}"` : ''} aria-label="${esc(f.key)} value">
+        ${hasMax ? `<span class="dim small number-row-max">/ ${esc(f.max)}</span>` : ''}
+      </span>
+    </div>`;
+}
+
 // A rollable stat/modifier (Edge, Combat, Speed, ...): a directly-editable,
 // numerically-validated value — not +/- steppers, not a 1-5 click-to-set
 // meter (that's for depleting resources, see trackRow). The LABEL itself is
@@ -1795,15 +2282,27 @@ function trackRow(f, gi, fi, opts = {}) {
 // still purely cosmetic: setStatblockAttributeValue strips any non-digit/
 // non-minus characters back out, so the stored value and any dice roll stay
 // numeric-only regardless of what's displayed.
+// Direct follow-up request: "shorten the stat field descriptions for
+// 'combat skill' to 'combat' and 'toughness' to 'tough' to keep all six
+// statblock fields on one line" — display-only, scoped to the compact
+// Five Leagues stat row specifically; the field's own `key` (what every
+// lookup — getFiveLeaguesStat, the combat dice rolls — actually reads) is
+// never touched.
+function fiveLeaguesCompactStatLabel(key) {
+  if (key === 'Combat Skill') return 'Combat';
+  if (key === 'Toughness') return 'Tough';
+  return key;
+}
 function attrRow(f, gi, fi, opts = {}) {
   const value = Number(f.value) || 0;
   const format = f.format || 'sign';
   const method = f.rollMethod || 'none';
   const rollable = method !== 'none';
   const key = opts.entityId ? `${opts.entityId}::${gi}::${fi}` : `${gi}::${fi}`;
+  const displayKey = (opts.compact && opts.ruleset === 'fiveleagues') ? fiveLeaguesCompactStatLabel(f.key) : f.key;
   const label = rollable
-    ? `<button type="button" class="statblock-key statblock-key-roll" data-statblock-roll-label="${key}" title="${esc(rollMethodTitle(method, value, f.target))}">${esc(f.key)}</button>`
-    : `<span class="statblock-key" title="Not rollable">${esc(f.key)}</span>`;
+    ? `<button type="button" class="statblock-key statblock-key-roll" data-statblock-roll-label="${key}" title="${esc(rollMethodTitle(method, value, f.target))}">${esc(displayKey)}</button>`
+    : `<span class="statblock-key" title="Not rollable">${esc(displayKey)}</span>`;
   return `
     <div class="statblock-row attr-row ${opts.compact ? 'attr-row-compact' : ''}">
       ${label}
@@ -2996,7 +3495,7 @@ function templateFieldRow(systemId, f, i, count) {
 // expansion is ever open at a time app-wide (ui.expandedPartyStatField, a
 // single nullable key, not a Set), so picking a different track field
 // swaps the open one instead of stacking a second below it.
-function partyMemberStatblocks(e, doc, ui) {
+function partyMemberStatblocks(e, doc, ui, opts = {}) {
   const sorted = sortStatblockGroups(e.statblocks, doc.settings);
   const openKey = (ui && ui.expandedPartyStatField) || null;
   return sorted.map(({ group, index: gi }) => {
@@ -3004,13 +3503,18 @@ function partyMemberStatblocks(e, doc, ui) {
     const attrs = fields.filter(({ f }) => f.attribute);
     const tracks = fields.filter(({ f }) => f.track);
     const other = fields.filter(({ f }) => !f.attribute && !f.track);
-    const attrPills = attrs.map(({ f, fi }) => partyStatPill(f, e.id, gi, fi)).join('');
-    const trackPills = tracks.map(({ f, fi }) => partyStatPill(f, e.id, gi, fi, { expanded: openKey === `${e.id}::${gi}::${fi}` })).join('');
-    const otherPills = other.map(({ f, fi }) => partyStatPill(f, e.id, gi, fi)).join('');
+    const pillOpts = { compact: opts.compact, ruleset: group.ruleset };
+    const attrPills = attrs.map(({ f, fi }) => partyStatPill(f, e.id, gi, fi, pillOpts)).join('');
+    const trackPills = tracks.map(({ f, fi }) => partyStatPill(f, e.id, gi, fi, { ...pillOpts, expanded: openKey === `${e.id}::${gi}::${fi}` })).join('');
+    const otherPills = other.map(({ f, fi }) => partyStatPill(f, e.id, gi, fi, pillOpts)).join('');
     const openTrack = tracks.find(({ fi }) => openKey === `${e.id}::${gi}::${fi}`);
     if (!attrPills && !trackPills && !otherPills) return '';
+    // Direct follow-up request: "Remove the title of the statblock in the
+    // combat tracker (to save space)" — opts.compact (set only by the
+    // Combat Tracker's own call site) drops the group label entirely; the
+    // Party Roster's own expanded card (opts.compact unset) is unaffected.
     return `<div class="party-stat-group">
-      <div class="party-stat-group-label">${esc(statblockGroupLabel(group, doc))}</div>
+      ${opts.compact ? '' : `<div class="party-stat-group-label">${esc(statblockGroupLabel(group, doc))}</div>`}
       ${attrPills ? `<div class="party-stat-pills">${attrPills}</div>` : ''}
       ${trackPills ? `<div class="party-stat-pills">${trackPills}</div>` : ''}
       ${otherPills ? `<div class="party-stat-pills">${otherPills}</div>` : ''}
@@ -3038,6 +3542,16 @@ function partyStatPill(f, entityId, gi, fi, opts = {}) {
   const value = f.attribute ? esc(formatAttrValue(Number(f.value) || 0, f.format || 'sign'))
     : f.track ? esc(String(Number(f.value) || 0))
     : esc(f.value || '—');
+  // Direct follow-up request: "narrow the statblock displayed in the
+  // combat tracker for five leagues statblock by renaming 'combat skill'
+  // to 'combat' and 'toughtness' to 'tough'... so all six blocks are on
+  // the same row" — same fiveLeaguesCompactStatLabel helper the Entity
+  // Editor's own compact stat row (attrRow) already uses, reused here for
+  // the Combat Tracker's card (opts.compact, set only by its own call
+  // site in shell.js's renderCombatTrackerPanel — the Party Roster's own
+  // expanded card is unaffected, still shows the real field name). The
+  // full name still shows in the title tooltip either way.
+  const displayKey = (opts.compact && opts.ruleset === 'fiveleagues') ? fiveLeaguesCompactStatLabel(f.key) : f.key;
   if (f.track) {
     // Direct follow-up request: a tracker (Health/Spirit/Supply — longer
     // names) reads as one row (label beside its value, wide as needed)
@@ -3048,7 +3562,7 @@ function partyStatPill(f, entityId, gi, fi, opts = {}) {
     // track modifier for the row layout/width.
     const cls = `party-stat-pill party-stat-pill-track${opts.expanded ? ' party-stat-pill-expanded' : ''}`;
     return `<button type="button" class="${cls}" data-party-stat-toggle="${key}" title="${esc(f.key)}: click to ${opts.expanded ? 'hide' : 'show'} the tracker">
-      <span class="party-stat-pill-label">${esc(f.key)}</span>
+      <span class="party-stat-pill-label">${esc(displayKey)}</span>
       <span class="party-stat-pill-value">${value}</span>
     </button>`;
   }
@@ -3056,12 +3570,12 @@ function partyStatPill(f, entityId, gi, fi, opts = {}) {
   const rollable = f.attribute && method !== 'none';
   if (rollable) {
     return `<button type="button" class="party-stat-pill" data-party-stat-roll="${key}" title="Roll ${esc(f.key)}">
-      <span class="party-stat-pill-label">${esc(f.key)}</span>
+      <span class="party-stat-pill-label">${esc(displayKey)}</span>
       <span class="party-stat-pill-value">${value}</span>
     </button>`;
   }
   return `<span class="party-stat-pill party-stat-pill-static" title="${esc(f.key)} — not rollable">
-    <span class="party-stat-pill-label">${esc(f.key)}</span>
+    <span class="party-stat-pill-label">${esc(displayKey)}</span>
     <span class="party-stat-pill-value">${value}</span>
   </span>`;
 }
@@ -3309,7 +3823,7 @@ function partyRelationshipsSectionHtml(doc, ui) {
     </div>` : '<p class="dim small">Add an entity in Cast first.</p>'}`}`;
 }
 
-export function partyMemberCard(e, doc, ui) {
+export function partyMemberCard(e, doc, ui, opts = {}) {
   const open = (ui.expandedPartyMembers || new Set()).has(e.id);
   return `
     <div class="party-member-card">
@@ -3319,8 +3833,36 @@ export function partyMemberCard(e, doc, ui) {
         ${partyMemberHeadlineCounters(doc, e)}
         <button class="icon-btn" data-open-entity="${esc(e.id)}" title="Open in entity editor" aria-label="Open in entity editor">↗</button>
       </div>
-      ${open ? partyMemberStatblocks(e, doc, ui) : ''}
+      ${open ? partyMemberStatblocks(e, doc, ui, opts) : ''}
     </div>`;
+}
+
+// Direct follow-up request: "the weapon selection is important... Display
+// in the statblock box in the combat tracker the active weapon selected.
+// have this be a link to select from a list of possible weapons in the
+// entity's worn gear (not backpack or stash). the selection will become
+// the active weapon used to determine ranged/melee rules." Rendered by
+// the Combat Tracker's own row (shell.js's renderCombatTrackerPanel,
+// right inside the same .combat-tracker-card-wrap partyMemberCard above
+// renders into, so it visually reads as part of "the statblock box")
+// for EVERY row, not just the current Attacker — a persisted, always-
+// visible/changeable property of the character, not a per-roll question.
+// listFiveLeaguesSelfWeapons (domain/fiveLeagues.js) already excludes
+// Backpack/Stash entirely, so every option here is legal to pick; "—
+// Unarmed —" is always offered too, since fighting bare-handed is a real,
+// valid choice (p.60's own Unarmed profile), not an error state.
+export function fiveLeaguesActiveWeaponSelectHtml(entity, entryId) {
+  const selfWeapons = listFiveLeaguesSelfWeapons(entity);
+  const activeIdx = entity.fiveLeaguesActiveWeaponIndex;
+  const options = selfWeapons.map(({ index, weapon }) => `<option value="${index}" ${index === activeIdx ? 'selected' : ''}>${esc(weapon.name || `Weapon ${index + 1}`)}</option>`).join('');
+  return `<div class="combat-tracker-active-weapon">
+    <label class="field-label sm">Weapon
+      <select data-combat-tracker-active-weapon="${esc(entryId)}">
+        <option value="">— Unarmed —</option>
+        ${options}
+      </select>
+    </label>
+  </div>`;
 }
 
 // Party drawer's own collapsible section headers (direct follow-up
@@ -5244,7 +5786,20 @@ function dungeoncrawlCells(doc, map, ui) {
       } else if (appendSet.has(k) && !mergeMode) {
         out += `<button type="button" class="dungeoncrawl-cell append" data-dungeoncrawl-append="${map.id},${x},${y}" title="Place the next Tile here">＋</button>`;
       } else {
-        out += `<div class="dungeoncrawl-cell empty"></div>`;
+        // Direct follow-up request: "allow an unused cell in dungeon crawl
+        // to be selected from a double click or long press on mobile to
+        // add another tile where an entrance is not automatically
+        // apparent in the case of a secret door being revealed through
+        // gameplay and now there might be an adjacent chamber or tunnel."
+        // computeDungeonAppendCells only ever offers the "+" handle next
+        // to an already-OPEN edge (appendSet above) — a cell behind a
+        // Tile's own CLOSED edge (exactly the secret-door case) has no
+        // other way in at all without this. A single click/tap still does
+        // nothing here (the shared dcCell handler, shell.js, only reacts
+        // to the SAME double-click/long-press gesture the reactivate-a-
+        // placed-Tile flow already uses), so an ordinary empty cell stays
+        // inert until the GM deliberately double-clicks/long-presses it.
+        out += `<div class="dungeoncrawl-cell empty" role="button" tabindex="0" data-dungeoncrawl-cell="${map.id},${x},${y}" title="Double-click (or long-press on mobile) to place a Tile here — e.g. a passage revealed by a secret door"></div>`;
       }
     }
   }

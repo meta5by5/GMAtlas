@@ -21,11 +21,17 @@ import {
   rollCustomDice, parseDiceNotation, formatCustomDiceRollText, formatCustomDiceRollCopyText,
   rollDicePool, formatDicePoolRollText, formatDicePoolRollCopyText, rollD100,
   rollD20, formatD20RollText, formatD20RollCopyText, rollD20Score, formatD20ScoreRollText, formatD20ScoreRollCopyText,
+  rollFiveLeaguesExchange, formatFiveLeaguesExchangeText, formatFiveLeaguesExchangeCopyText,
+  rollFiveLeaguesHit, formatFiveLeaguesHitText, formatFiveLeaguesHitCopyText, FIVE_LEAGUES_HIT_OUTCOME_LABEL,
+  resolveFiveLeaguesHitEligibility,
+  rollFiveLeaguesRangedAttack, formatFiveLeaguesRangedAttackText, formatFiveLeaguesRangedAttackCopyText,
+  FIVE_LEAGUES_RANGED_BANDS, findFiveLeaguesRangedBand,
 } from '../domain/dice.js';
 import {
   createEntity, updateEntity, addEntityTag, removeEntityTag, removeEntity, filterEntities, setActiveEntity, addRelationship, removeRelationship,
   getEntity, addEntityStatblockGroup, removeEntityStatblockGroup, moveEntityStatblockGroup, setCharacterStatblocksArchived, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
   addEntityStatblockWeapon, updateEntityStatblockWeapon, removeEntityStatblockWeapon, setEntityStatblockGear,
+  addEntityStatblockItem, updateEntityStatblockItem, removeEntityStatblockItem,
   addEntityStatblockAttack, updateEntityStatblockAttack, removeEntityStatblockAttack, applyDnd5ePdfImport,
   setEntityStatblockTrackValue, setEntityStatblockAttributeValue, updateRelationshipLabel, updateRelationshipType, updateRelationshipStrength,
   listEntities, ENTITY_TYPES, TYPE_LABEL, entityTypeLabel, setFactionStat, addFactionAsset, removeFactionAsset, createItemFromCatalog,
@@ -110,9 +116,18 @@ import { addTemplateSystem, addTemplateField, updateTemplateField, removeTemplat
 import { universalSearch } from '../domain/search.js';
 import { positionCardHtml, composerBodyHtml, navigatorBodyHtml } from './workspace/index.js';
 import { renderCopilot } from './copilotPanel.js';
-import { renderDrawer, formatBytes, helpToggle, partyMemberCard, isProtectedEntityTag } from './drawers/index.js';
+import { renderDrawer, formatBytes, helpToggle, partyMemberCard, isProtectedEntityTag, fiveLeaguesActiveWeaponSelectHtml } from './drawers/index.js';
 import { listCombatTrackerEntries, addCombatTrackerEntity, removeCombatTrackerEntry, moveCombatTrackerEntry, clearCombatTracker, getCombatTrackerActiveEntryId, setCombatTrackerActiveEntry, addAllPartyMembersToCombatTracker } from '../domain/combatTracker.js';
 import { hasCharacterTag } from '../domain/statblocks.js';
+import {
+  setEntityFiveLeaguesOrigin, getFiveLeaguesStat,
+  setEntityFiveLeaguesCharacterType, setEntityFiveLeaguesBackground, toggleEntityFiveLeaguesSkill,
+  setEntityFiveLeaguesArmorBody, setEntityFiveLeaguesArmorFlag, toggleEntityFiveLeaguesArmorImprovement,
+  toggleEntityFiveLeaguesSpell, applyFiveLeaguesWeaponCatalogPick, addFiveLeaguesItemFromCatalog,
+  entityHasFiveLeaguesCounterAttack, entityHasFiveLeaguesParry,
+  setEntityFiveLeaguesActiveWeapon, getFiveLeaguesActiveWeapon, isFiveLeaguesWeaponRanged, parseFiveLeaguesWeaponDamage,
+  formatFiveLeaguesOvercome,
+} from '../domain/fiveLeagues.js';
 import { renderFactionEvents } from './drawers/factionEvents.js';
 import { roll3d } from './diceBox3d.js';
 import { renderSearchPanel } from './searchPanel.js';
@@ -691,6 +706,51 @@ let graphView = { scale: 1, x: 0, y: 0 };
 let graphPan = null; // { svg, startClientX, startClientY, startX, startY } while a mouse-drag pan is in progress
 let statblockAddOpen = false; // ephemeral — collapses the "+ Add a statblock" chip row behind a gear icon
 let collapsedStatblockGroups = new Set(); // ephemeral — keyed `${entityId}::${groupIndex}`, which statblock group blocks are collapsed
+// Direct follow-up request: Five Leagues Character Sheet — the Character
+// Type/Origin "?" info toggle is a SINGLE value (not a Set), keyed
+// `${entityId}::characterType` or `${entityId}::origin`, so opening one's
+// in-place description panel always closes the other's ("just one set of
+// text viewable at a time"); the Items table's own per-row Notes toggle
+// is a Set (several rows may be expanded at once), keyed
+// `${entityId}::${groupIndex}::${itemIndex}`.
+let fiveLeaguesInfoOpen = null;
+let fiveLeaguesItemNotesOpen = new Set();
+// Direct follow-up request: "select the attacker NPC first which is
+// highlighted in red and then select the defender highlighted in blue.
+// then select attack button roll using the 5lfb rules" — replaces the
+// Combat Tracker's old entityPicker-overlay-based opponent selection for
+// the fiveleagues ruleset specifically; ephemeral (not persisted — unlike
+// the general-purpose, every-ruleset activeEntryId in domain/
+// combatTracker.js, which this leaves completely untouched).
+let combatAttackerEntryId = null;
+let combatDefenderEntryId = null;
+// Direct follow-up request: "Factor in armor and all other combat
+// conditions listed in the basic... ruleset... Prompt with questions for
+// optional attributes or abilities or buffs that have limited uses for
+// consideration to be applied. then complete the challenge roll and
+// present the winner result." tactic is Attacker-only (this app's single-
+// exchange Combat Tracker never collects the Defender's own tactic —
+// Fight Furiously is explicitly attacker-only per the real rules anyway,
+// p.40, and a multi-exchange melee's role-swapping that the OTHER two
+// tactics otherwise care about doesn't apply to a one-shot roll).
+// counterAttack auto-initializes from entityHasFiveLeaguesCounterAttack
+// the moment a Defender is picked (always GM-overridable afterward,
+// since Counter Attack's real sources also include untrackable terrain);
+// defenderStunned/attackerStunned default unticked — this app has no
+// persisted per-combatant Stun state to auto-detect from, so the GM
+// confirms it each time instead (p.44's own Combat Bonus rule).
+// rangedBand (direct follow-up request: "during a ranged combat attack,
+// prompt the user for range details per rules on p.39 regarding distance
+// and cover") only ever matters when the Attacker's own active weapon
+// (domain/fiveLeagues.js's getFiveLeaguesActiveWeapon, a PERSISTED
+// per-entity choice — see that function's own doc comment — not an
+// ephemeral one like everything else here) resolves to a ranged one;
+// defaults to the closest/easiest band, the GM narrows it down before
+// rolling.
+function defaultCombatOptions() {
+  return { tactic: 'fight', furiousBonusStat: 'armor', counterAttack: false, defenderStunned: false, attackerStunned: false, rangedBand: 'close' };
+}
+let combatOptions = defaultCombatOptions();
 let recapOpen = false; // ephemeral — collapses the "Previously on..." session recap panel
 let searchOpen = false; // ephemeral — Universal Search overlay
 let searchQuery = '';
@@ -1499,9 +1559,118 @@ function onClick(ev) {
   // own ✕ is still the only way to close it.
   if (hit('[data-combat-tracker-open-btn]')) return openCombatTracker();
   if (hit('[data-combat-tracker-close]')) return closeCombatTracker();
-  if (hit('[data-combat-tracker-clear]')) return store.update((d) => clearCombatTracker(d));
+  if (hit('[data-combat-tracker-clear]')) {
+    combatAttackerEntryId = null; combatDefenderEntryId = null;
+    combatOptions = defaultCombatOptions();
+    return store.update((d) => clearCombatTracker(d));
+  }
   const combatTrackerRemove = hit('[data-combat-tracker-remove]');
-  if (combatTrackerRemove) return store.update((d) => removeCombatTrackerEntry(d, combatTrackerRemove.dataset.combatTrackerRemove));
+  if (combatTrackerRemove) {
+    const removedId = combatTrackerRemove.dataset.combatTrackerRemove;
+    if (removedId === combatAttackerEntryId) {
+      combatAttackerEntryId = null; combatDefenderEntryId = null;
+      combatOptions = defaultCombatOptions();
+    } else if (removedId === combatDefenderEntryId) {
+      combatDefenderEntryId = null;
+      combatOptions = { ...combatOptions, counterAttack: false };
+    }
+    return store.update((d) => removeCombatTrackerEntry(d, removedId));
+  }
+  // Direct follow-up request: "select the attacker NPC first which is
+  // highlighted in red and then select the defender highlighted in blue.
+  // then select attack button roll using the 5lfb rules to determine
+  // winner" — attacker/defender are picked by clicking rows directly in
+  // the tracker (see the data-combat-tracker-row-toggle handler below),
+  // so by the time this button is clickable both are already known; no
+  // overlay/picker is opened here at all. A later follow-up ("the weapon
+  // selection is important... the selection will become the active
+  // weapon used to determine ranged/melee rules... Do the challenge
+  // method for melee attacks") branches this into two completely
+  // different real mechanics based on the Attacker's own PERSISTED
+  // active weapon (getFiveLeaguesActiveWeapon — set via the Combat
+  // Tracker's own per-row "Weapon" <select>, not asked about here): a
+  // ranged weapon rolls the single-D6 Ranged Attack (p.39); anything else
+  // (including no weapon at all — Unarmed) rolls the Melee Exchange
+  // (pp.40-44) exactly as before.
+  if (hit('[data-combat-tracker-attack]')) {
+    const doc = store.get();
+    if (!combatAttackerEntryId || !combatDefenderEntryId) return;
+    const entries = listCombatTrackerEntries(doc);
+    const attackerEntry = entries.find((en) => en.id === combatAttackerEntryId);
+    const defenderEntry = entries.find((en) => en.id === combatDefenderEntryId);
+    const attacker = attackerEntry ? getEntity(doc, attackerEntry.entityId) : null;
+    const defender = defenderEntry ? getEntity(doc, defenderEntry.entityId) : null;
+    if (!attacker || !defender) return;
+    const attackerLabel = attacker.name || 'Attacker';
+    const defenderLabel = defender.name || 'Defender';
+    const activeWeapon = getFiveLeaguesActiveWeapon(attacker);
+    const weaponLabel = activeWeapon ? (activeWeapon.name || 'Weapon') : 'Unarmed';
+    const { overcomeArmor: weaponOvercomeArmor, overcomeToughness: weaponOvercomeToughness } = activeWeapon
+      ? parseFiveLeaguesWeaponDamage(activeWeapon.damage)
+      : { overcomeArmor: -1, overcomeToughness: -1 }; // Unarmed, p.60: Melee -1/-1
+    if (isFiveLeaguesWeaponRanged(activeWeapon)) {
+      // Direct follow-up request: "during a ranged combat attack, prompt
+      // the user for range details per rules on p.39 regarding distance
+      // and cover" — combatOptions.rangedBand (the inline form rendered
+      // once both are picked, see renderCombatTrackerPanel) is the GM's
+      // own judgment call on distance/cover; this app has no positional
+      // model to derive it automatically. "If the shooter is stationary,
+      // add their Combat Skill" — always assumed true (no movement
+      // tracking either; disclosed in domain/dice.js's own doc comment).
+      const band = findFiveLeaguesRangedBand(combatOptions.rangedBand) || FIVE_LEAGUES_RANGED_BANDS[0];
+      const r = rollFiveLeaguesRangedAttack(getFiveLeaguesStat(attacker, 'Combat Skill'), band.targetNumber);
+      store.update((d) => logRoll(d, formatFiveLeaguesRangedAttackText(attackerLabel, r)));
+      diceRollResult = {
+        label: `${attackerLabel} (${weaponLabel}) → ${defenderLabel}`,
+        method: 'fiveleagues-ranged', r,
+        meta: {
+          attackerLabel, defenderLabel, weaponLabel,
+          defenderArmor: getFiveLeaguesStat(defender, 'Armor'), defenderToughness: getFiveLeaguesStat(defender, 'Toughness'),
+          weaponOvercomeArmor, weaponOvercomeToughness,
+          bandLabel: band.label,
+          limitedAmmunition: activeWeapon ? /limited ammunition/i.test(String(activeWeapon.traits || '')) : false,
+        },
+      };
+      return renderDiceRollOverlay();
+    }
+    // Direct follow-up request: "Factor in armor and all other combat
+    // conditions listed in the basic... ruleset... prompt with questions
+    // for optional attributes or abilities or buffs... to be applied.
+    // then complete the challenge roll and present the winner result." —
+    // combatOptions carries every GM-confirmed answer into this one
+    // roll: a +1 Combat Bonus for whichever side's opponent is Stunned
+    // (p.44), Fight Defensively's own "roll twice, pick best" die
+    // mechanic (p.40), and whether the Defender has Counter Attack
+    // available at all (checked below, after the roll, against the real
+    // default-only-an-Attacker's-win-strikes-a-Hit rule, p.41).
+    const { tactic, counterAttack: defenderHasCounterAttack } = combatOptions;
+    const r = rollFiveLeaguesExchange(getFiveLeaguesStat(attacker, 'Combat Skill'), getFiveLeaguesStat(defender, 'Combat Skill'), {
+      attackerAdds: combatOptions.defenderStunned ? 1 : 0,
+      defenderAdds: combatOptions.attackerStunned ? 1 : 0,
+      attackerAdvantage: tactic === 'defensively',
+    });
+    const eligibility = resolveFiveLeaguesHitEligibility({
+      winner: r.winner, tactic, defenderHasCounterAttack,
+      defenderHasParry: entityHasFiveLeaguesParry(defender),
+      defenderDieIsNaturalOne: r.defenderDie === 1,
+    });
+    store.update((d) => logRoll(d, formatFiveLeaguesExchangeText(attackerLabel, defenderLabel, r)));
+    diceRollResult = {
+      label: `${attackerLabel} (${weaponLabel}) vs ${defenderLabel}`,
+      method: 'fiveleagues-exchange', r,
+      meta: {
+        attackerLabel, defenderLabel,
+        attackerArmor: getFiveLeaguesStat(attacker, 'Armor'), attackerToughness: getFiveLeaguesStat(attacker, 'Toughness'),
+        defenderArmor: getFiveLeaguesStat(defender, 'Armor'), defenderToughness: getFiveLeaguesStat(defender, 'Toughness'),
+        attackerActionLabel: weaponLabel,
+        attackerOvercomeArmor: weaponOvercomeArmor,
+        attackerOvercomeToughness: weaponOvercomeToughness,
+        tactic, furiousBonusStat: combatOptions.furiousBonusStat,
+        hitPossible: eligibility.hitPossible, parried: eligibility.parried,
+      },
+    };
+    return renderDiceRollOverlay();
+  }
   const sidesBtn = hit('[data-dice-roller-sides]');
   if (sidesBtn) { diceRollerPool.push({ sides: Number(sidesBtn.dataset.diceRollerSides), modifier: 0 }); return renderDiceRollerPanel(); }
   // Clicking a pool chip SELECTS/highlights it (single-select, toggle off on
@@ -1545,6 +1714,64 @@ function onClick(ev) {
     const { label } = diceRollResult;
     store.update((d) => addNote(d, `${label}\n${diceRollCopyText(diceRollResult)}`, 'Roll'));
     return toast('Added to Journal');
+  }
+  // Direct follow-up request: "Upgrade the combat mechanics to use the
+  // 5LFB combat rules" — the Melee Exchange card's own follow-up "Roll
+  // Hit" button (diceRollCardHtml), resolving Overcome Armor/Toughness
+  // (p.43-44) against whichever combatant LOST the exchange, using the
+  // Armor/Toughness this same Combat Challenge already read off both
+  // entities (diceRollResult.meta) when the exchange itself was rolled —
+  // replaces the card in place with the Hit's own result.
+  if (hit('[data-dice-roll-combat-hit]')) {
+    if (!diceRollResult || !diceRollResult.meta) return;
+    const { method, r, meta } = diceRollResult;
+    if (method === 'fiveleagues-ranged') {
+      // Direct follow-up request: "during a ranged combat attack, prompt
+      // the user for range details per rules on p.39" — a ranged attack
+      // only ever targets the Defender (there's no "winner strikes back"
+      // reciprocity the way a Melee Exchange has), so this is much
+      // simpler than the melee branch below: a miss (including the
+      // always-a-miss natural 1, p.39) means no Hit roll at all.
+      if (!r.hit) return;
+      const target = { armor: meta.defenderArmor, toughness: meta.defenderToughness };
+      const hitR = rollFiveLeaguesHit(target, { armorBonus: meta.weaponOvercomeArmor || 0, toughnessBonus: meta.weaponOvercomeToughness || 0 });
+      store.update((d) => logRoll(d, formatFiveLeaguesHitText(meta.defenderLabel, hitR)));
+      diceRollResult = { label: `Hit vs ${meta.defenderLabel}`, method: 'fiveleagues-hit', r: hitR, meta };
+      return renderDiceRollOverlay();
+    }
+    if (method !== 'fiveleagues-exchange') return;
+    // Direct follow-up request: "Factor in armor and all other combat
+    // conditions... to ensure all attacker and defender abilities are
+    // being considered" — a draw, or a Defender's win with no Counter
+    // Attack/Fight Furiously in play, strikes no Hit at all by default
+    // (p.41); meta.hitPossible already reflects this (computed when
+    // Attack was clicked, from resolveFiveLeaguesHitEligibility) — the
+    // card itself doesn't render this button at all in that state, but
+    // this guard covers a stale click from before the last render, same
+    // posture as the Attack button's own no-op guard above.
+    if (r.winner === 'draw' || !meta.hitPossible) return;
+    const loserIsDefender = r.winner === 'attacker';
+    const target = loserIsDefender
+      ? { armor: meta.defenderArmor, toughness: meta.defenderToughness }
+      : { armor: meta.attackerArmor, toughness: meta.attackerToughness };
+    const loserLabel = loserIsDefender ? meta.defenderLabel : meta.attackerLabel;
+    // Direct follow-up request: "use the attributes of the weapon in the
+    // attack role, if applicable" — only when the Attacker is the one who
+    // actually landed the Hit (loserIsDefender); this flow never collected
+    // the Defender's own weapon choice, so a Defender who won the
+    // Exchange instead falls back to no bonus (0/0) rather than
+    // misattributing the Attacker's weapon to them. Fight Furiously adds
+    // its own +1 to whichever Overcome stat the GM picked (p.40,
+    // "cumulative with any weapon bonus") — but only on this same
+    // Attacker-landed-the-Hit side, since Furiously is the Attacker's own
+    // tactic.
+    const furiousBonus = (loserIsDefender && meta.tactic === 'furiously') ? 1 : 0;
+    const armorBonus = loserIsDefender ? (meta.attackerOvercomeArmor || 0) + (meta.furiousBonusStat === 'armor' ? furiousBonus : 0) : 0;
+    const toughnessBonus = loserIsDefender ? (meta.attackerOvercomeToughness || 0) + (meta.furiousBonusStat === 'toughness' ? furiousBonus : 0) : 0;
+    const hitR = rollFiveLeaguesHit(target, { armorBonus, toughnessBonus });
+    store.update((d) => logRoll(d, formatFiveLeaguesHitText(loserLabel, hitR)));
+    diceRollResult = { label: `Hit vs ${loserLabel}`, method: 'fiveleagues-hit', r: hitR, meta };
+    return renderDiceRollOverlay();
   }
   const searchResult = hit('[data-search-result]');
   if (searchResult) {
@@ -2351,7 +2578,34 @@ function onClick(ev) {
     if (dungeonCrawlPending) return; // the pending overlay's own buttons handle everything here
     const [mapId, x, y] = raw.split(',');
     const tile = getDungeonTile(store.get(), mapId, Number(x), Number(y));
-    if (!tile) return;
+    if (!tile) {
+      // Direct follow-up request: "allow an unused cell in dungeon crawl
+      // to be selected from a double click or long press on mobile to add
+      // another tile where an entrance is not automatically apparent...
+      // (secret door... adjacent chamber or tunnel)" — a plain single
+      // click on a genuinely empty, non-append cell still does nothing
+      // (the normal "+" handle already covers every ordinary case); only
+      // a second click within 500ms (same manual-timing detection as the
+      // placed-Tile reactivate gesture below — raw is unique per cell, so
+      // this never collides with that one's own tracking) starts a fresh
+      // Tile placement here, exactly like clicking "+" would.
+      const now = Date.now();
+      const isDoubleClick = raw === dungeonCrawlLastClickKey && (now - dungeonCrawlLastClickAt) < 500;
+      dungeonCrawlLastClickKey = isDoubleClick ? null : raw;
+      dungeonCrawlLastClickAt = now;
+      if (isDoubleClick) {
+        const map = getDungeonMap(store.get(), mapId);
+        const isFirstTile = map && Object.keys(map.tiles).length === 0;
+        dungeonCrawlPending = {
+          mapId, x: Number(x), y: Number(y),
+          archetypeKey: isFirstTile ? DUNGEON_CRAWL_ENTRANCE_ARCHETYPE.key : pickRandomDungeonArchetype(DUNGEON_CRAWL_ARCHETYPES),
+          rotation: pickRandomDungeonRotation(),
+        };
+        dungeonCrawlSelected = null;
+        return renderDrawerBody();
+      }
+      return;
+    }
     // Direct follow-up request: "have an invisible 1" grid overlay to each
     // tile that will allow graphic objects to snap to the grid... available
     // through a dropdown that activates it and can be placed on the tile."
@@ -2676,6 +2930,20 @@ function onClick(ev) {
     const active = store.get().entities.activeId;
     return store.update((d) => removeEntityStatblockWeapon(d, active, gi, wi));
   }
+  // Five Leagues character sheet Items table (direct follow-up request) —
+  // same plain array-index addressing as the Weapons table just above.
+  const sbItemAdd = hit('[data-statblock-item-add]');
+  if (sbItemAdd) {
+    const gi = Number(sbItemAdd.dataset.statblockItemAdd);
+    const active = store.get().entities.activeId;
+    return store.update((d) => addEntityStatblockItem(d, active, gi));
+  }
+  const sbItemRemove = hit('[data-statblock-item-remove]');
+  if (sbItemRemove) {
+    const [gi, ii] = sbItemRemove.dataset.statblockItemRemove.split('::').map(Number);
+    const active = store.get().entities.activeId;
+    return store.update((d) => removeEntityStatblockItem(d, active, gi, ii));
+  }
   // D&D 5e character sheet Attacks table (direct request) — same plain
   // array-index addressing as 5PFH's weapon table just above.
   const sbAttackAdd = hit('[data-statblock-attack-add]');
@@ -2789,6 +3057,24 @@ function onClick(ev) {
   if (sbGroupToggle) {
     const key = sbGroupToggle.dataset.statblockGroupToggle;
     if (collapsedStatblockGroups.has(key)) collapsedStatblockGroups.delete(key); else collapsedStatblockGroups.add(key);
+    return renderDrawerBody();
+  }
+  // Five Leagues Character Sheet: Character Type/Origin "?" info toggle —
+  // a single ephemeral value, so clicking either one just overwrites it
+  // (closing the other if it was open); clicking the already-open one
+  // closes it instead of reopening.
+  const fiveLeaguesInfoToggle = hit('[data-fiveleagues-info-toggle]');
+  if (fiveLeaguesInfoToggle) {
+    const key = fiveLeaguesInfoToggle.dataset.fiveleaguesInfoToggle;
+    fiveLeaguesInfoOpen = (fiveLeaguesInfoOpen === key) ? null : key;
+    return renderDrawerBody();
+  }
+  // Five Leagues Character Sheet: Items table Notes toggle — a Set, so
+  // several rows can be expanded at once, unlike the info toggle above.
+  const fiveLeaguesItemNotesToggle = hit('[data-fiveleagues-item-notes-toggle]');
+  if (fiveLeaguesItemNotesToggle) {
+    const key = fiveLeaguesItemNotesToggle.dataset.fiveleaguesItemNotesToggle;
+    if (fiveLeaguesItemNotesOpen.has(key)) fiveLeaguesItemNotesOpen.delete(key); else fiveLeaguesItemNotesOpen.add(key);
     return renderDrawerBody();
   }
   // "View in Character Sheet" on a read-only Bond value (see rel-bond-value
@@ -3006,16 +3292,51 @@ function onClick(ev) {
     renderCombatTrackerPanel();
     return renderDrawerBody();
   }
-  // Combat Initiative Tracker's own "active combatant" highlight (direct
-  // follow-up request: "click-to-highlight a record") — checked AFTER
-  // every more specific control a row can contain (open-entity, the name-
-  // toggle's own expand, the remove ✕ above) so this only ever fires for a
-  // click on the row's own background, never stealing one of theirs.
-  // Clicking the already-active row clears the highlight; clicking a
-  // different one moves it there instead (setCombatTrackerActiveEntry's
-  // own toggle logic) — only ever one active combatant at a time.
+  // Combat Initiative Tracker's own row click — checked AFTER every more
+  // specific control a row can contain (open-entity, the name-toggle's
+  // own expand, the remove ✕ above) so this only ever fires for a click
+  // on the row's own background, never stealing one of theirs. Under
+  // every OTHER ruleset this is still the plain "active combatant"
+  // highlight (direct follow-up request: "click-to-highlight a record") —
+  // setCombatTrackerActiveEntry's own toggle logic, only one at a time.
+  // Direct follow-up request (fiveleagues only): "select the attacker NPC
+  // first which is highlighted in red and then select the defender
+  // highlighted in blue" — replaces that same click with a two-step
+  // Attacker-then-Defender pick instead: clicking the current Attacker or
+  // Defender row again deselects it (Attacker also clears Defender, since
+  // a Defender without an Attacker can't roll anything); clicking a THIRD
+  // row once both are already set restarts the pick with it as the new
+  // Attacker. Which weapon the Attacker is using is no longer decided
+  // here at all — it's their own PERSISTED active weapon (domain/
+  // fiveLeagues.js's getFiveLeaguesActiveWeapon, set via each row's own
+  // "Weapon" <select>, data-combat-tracker-active-weapon below).
   const combatTrackerRowToggle = hit('[data-combat-tracker-row-toggle]');
-  if (combatTrackerRowToggle) return store.update((d) => setCombatTrackerActiveEntry(d, combatTrackerRowToggle.dataset.combatTrackerRowToggle));
+  if (combatTrackerRowToggle) {
+    const doc = store.get();
+    const entryId = combatTrackerRowToggle.dataset.combatTrackerRowToggle;
+    if ((doc.settings && doc.settings.statRuleset) !== 'fiveleagues') {
+      return store.update((d) => setCombatTrackerActiveEntry(d, entryId));
+    }
+    if (entryId === combatAttackerEntryId) {
+      combatAttackerEntryId = null; combatDefenderEntryId = null;
+      combatOptions = defaultCombatOptions();
+    } else if (entryId === combatDefenderEntryId) {
+      combatDefenderEntryId = null;
+      combatOptions = { ...combatOptions, counterAttack: false };
+    } else if (!combatAttackerEntryId) {
+      combatAttackerEntryId = entryId;
+    } else if (!combatDefenderEntryId) {
+      combatDefenderEntryId = entryId;
+      const defenderEntry = listCombatTrackerEntries(doc).find((en) => en.id === entryId);
+      const defenderEntity = defenderEntry ? getEntity(doc, defenderEntry.entityId) : null;
+      combatOptions = { ...combatOptions, counterAttack: entityHasFiveLeaguesCounterAttack(defenderEntity) };
+    } else {
+      combatAttackerEntryId = entryId;
+      combatDefenderEntryId = null;
+      combatOptions = defaultCombatOptions();
+    }
+    return renderCombatTrackerPanel();
+  }
   // "+ Add NPC" (UX batch, same quick-create+tag shape Colony's own
   // add-character below uses) — a blank NPC, tagged #character so it
   // immediately satisfies listPartyMembers' existing filter.
@@ -5477,6 +5798,155 @@ function onChange(ev) {
     return;
   }
 
+  // Direct follow-up request: "Include racial tracking and apply NPC
+  // modifiers for the 5LFB ruleset" — picking an Origin (or the blank "—
+  // None —" option to clear it) both sets the entity's own fiveLeaguesOrigin
+  // field AND applies the one concrete numeric consequence of it (Human's
+  // uncapped Will / Fey-blood's blocked Luck) to this same Character
+  // Sheet's own Luck/Will tracks in the same store.update (domain/
+  // fiveLeagues.js's setEntityFiveLeaguesOrigin).
+  const originSelect = t.closest('[data-entity-five-leagues-origin]');
+  if (originSelect) {
+    return store.update((d) => setEntityFiveLeaguesOrigin(d, originSelect.dataset.entityFiveLeaguesOrigin, t.value));
+  }
+  // Direct follow-up request: "update the character sheet for 5lfb to
+  // track character type, skills, origins, background, armor, gear
+  // storage in self, backpack or stash, weapon traits, and spells... per
+  // the ruleset" — one change-handler branch per new control, all keyed
+  // directly off the explicit entity id embedded in their own data
+  // attribute (same convention as the Origin select just above), not the
+  // "active entity" convention the Weapon/Item table fields below use.
+  const charTypeSelect = t.closest('[data-entity-five-leagues-character-type]');
+  if (charTypeSelect) {
+    return store.update((d) => setEntityFiveLeaguesCharacterType(d, charTypeSelect.dataset.entityFiveLeaguesCharacterType, t.value));
+  }
+  const backgroundSelect = t.closest('[data-entity-five-leagues-background]');
+  if (backgroundSelect) {
+    return store.update((d) => setEntityFiveLeaguesBackground(d, backgroundSelect.dataset.entityFiveLeaguesBackground, t.value));
+  }
+  const skillCheckbox = t.closest('[data-entity-five-leagues-skill]');
+  if (skillCheckbox) {
+    const [entityId, skillKey] = skillCheckbox.dataset.entityFiveLeaguesSkill.split('::');
+    return store.update((d) => toggleEntityFiveLeaguesSkill(d, entityId, skillKey));
+  }
+  const armorBodySelect = t.closest('[data-entity-five-leagues-armor-body]');
+  if (armorBodySelect) {
+    return store.update((d) => setEntityFiveLeaguesArmorBody(d, armorBodySelect.dataset.entityFiveLeaguesArmorBody, t.value));
+  }
+  const armorFlag = t.closest('[data-entity-five-leagues-armor-flag]');
+  if (armorFlag) {
+    const [entityId, flag] = armorFlag.dataset.entityFiveLeaguesArmorFlag.split('::');
+    return store.update((d) => setEntityFiveLeaguesArmorFlag(d, entityId, flag, t.checked));
+  }
+  const armorImprovement = t.closest('[data-entity-five-leagues-armor-improvement]');
+  if (armorImprovement) {
+    const [entityId, key] = armorImprovement.dataset.entityFiveLeaguesArmorImprovement.split('::');
+    return store.update((d) => toggleEntityFiveLeaguesArmorImprovement(d, entityId, key));
+  }
+  const spellCheckbox = t.closest('[data-entity-five-leagues-spell]');
+  if (spellCheckbox) {
+    const [entityId, spellKey] = spellCheckbox.dataset.entityFiveLeaguesSpell.split('::');
+    return store.update((d) => toggleEntityFiveLeaguesSpell(d, entityId, spellKey));
+  }
+  // Direct follow-up request: "the weapon selection is important...
+  // Display in the statblock box in the combat tracker the active weapon
+  // selected. have this be a link to select from a list of possible
+  // weapons in the entity's worn gear (not backpack or stash). the
+  // selection will become the active weapon used to determine ranged/
+  // melee rules." — this <select> renders for EVERY row (drawers/
+  // index.js's fiveLeaguesActiveWeaponSelectHtml), not just the current
+  // Attacker's; the choice is PERSISTED on the entity itself (unlike
+  // combatAttackerEntryId/combatDefenderEntryId/combatOptions, all
+  // ephemeral), so it's a real store.update(), not just a re-render.
+  const activeWeaponSelect = t.closest('[data-combat-tracker-active-weapon]');
+  if (activeWeaponSelect) {
+    const entryId = activeWeaponSelect.dataset.combatTrackerActiveWeapon;
+    const doc = store.get();
+    const entry = listCombatTrackerEntries(doc).find((en) => en.id === entryId);
+    if (!entry) return;
+    return store.update((d) => setEntityFiveLeaguesActiveWeapon(d, entry.entityId, t.value));
+  }
+  // Direct follow-up request: "during a ranged combat attack, prompt the
+  // user for range details per rules on p.39 regarding distance and
+  // cover" — only ever rendered (renderCombatTrackerPanel) when the
+  // Attacker's own active weapon resolves to ranged; ephemeral, same as
+  // the rest of combatOptions.
+  const rangedBandSelect = t.closest('[data-combat-tracker-ranged-band]');
+  if (rangedBandSelect) {
+    combatOptions = { ...combatOptions, rangedBand: t.value };
+    return renderCombatTrackerPanel();
+  }
+  // Direct follow-up request: "Factor in armor and all other combat
+  // conditions listed in the basic... ruleset... Prompt with questions
+  // for optional attributes or abilities or buffs... to be applied" — the
+  // inline "Combat Options" form (renderCombatTrackerPanel) rendered once
+  // both Attacker and Defender are picked; every field here just patches
+  // the one ephemeral combatOptions object, read by the Attack button's
+  // own click handler above.
+  const tacticSelect = t.closest('[data-combat-tracker-tactic]');
+  if (tacticSelect) {
+    // "This tactic [Fight Furiously] is not selectable if the enemy can
+    // Counter Attack" (p.40) — the <option> itself is disabled in that
+    // state (see renderCombatTrackerPanel), so a real browser never
+    // actually sends this value, but a defensive fallback to 'fight'
+    // costs nothing.
+    const tactic = (t.value === 'furiously' && combatOptions.counterAttack) ? 'fight' : t.value;
+    combatOptions = { ...combatOptions, tactic };
+    return renderCombatTrackerPanel();
+  }
+  const furiousStatSelect = t.closest('[data-combat-tracker-furious-stat]');
+  if (furiousStatSelect) {
+    combatOptions = { ...combatOptions, furiousBonusStat: t.value };
+    return renderCombatTrackerPanel();
+  }
+  const counterAttackCheckbox = t.closest('[data-combat-tracker-counter-attack]');
+  if (counterAttackCheckbox) {
+    // Ticking Counter Attack while Fight Furiously is selected reverts
+    // the tactic back to Simply Fight, mirroring the same real
+    // restriction the tactic <select>'s own disabled option enforces.
+    const nextTactic = (t.checked && combatOptions.tactic === 'furiously') ? 'fight' : combatOptions.tactic;
+    combatOptions = { ...combatOptions, counterAttack: t.checked, tactic: nextTactic };
+    return renderCombatTrackerPanel();
+  }
+  const defenderStunnedCheckbox = t.closest('[data-combat-tracker-defender-stunned]');
+  if (defenderStunnedCheckbox) {
+    combatOptions = { ...combatOptions, defenderStunned: t.checked };
+    return renderCombatTrackerPanel();
+  }
+  const attackerStunnedCheckbox = t.closest('[data-combat-tracker-attacker-stunned]');
+  if (attackerStunnedCheckbox) {
+    combatOptions = { ...combatOptions, attackerStunned: t.checked };
+    return renderCombatTrackerPanel();
+  }
+  // Items table field edits (self/backpack/stash Location included — it's
+  // just another key on the same generic patch) — "active entity"
+  // addressing, same convention the Weapon table's own data-statblock-
+  // weapon-field handler below uses, since this table only ever renders
+  // inside the currently-open Entity Editor.
+  const itemField = t.closest('[data-statblock-item-field]');
+  if (itemField) {
+    const [gi, ii, key] = itemField.dataset.statblockItemField.split('::');
+    const active = store.get().entities.activeId;
+    return store.update((d) => updateEntityStatblockItem(d, active, Number(gi), Number(ii), { [key]: t.value }));
+  }
+  // Weapon/Item catalog quick-fill pickers — selecting an option applies
+  // it immediately (no separate "Add" click needed); the picker itself
+  // isn't backed by any stored value, so the re-render after store.update
+  // naturally puts it back to its own placeholder option.
+  const weaponCatalogPick = t.closest('[data-fiveleagues-weapon-catalog-pick]');
+  if (weaponCatalogPick) {
+    const [gi, wi] = weaponCatalogPick.dataset.fiveleaguesWeaponCatalogPick.split('::');
+    const active = store.get().entities.activeId;
+    if (t.value) return store.update((d) => applyFiveLeaguesWeaponCatalogPick(d, active, Number(gi), Number(wi), t.value));
+    return;
+  }
+  const itemCatalogAdd = t.closest('[data-fiveleagues-item-catalog-add]');
+  if (itemCatalogAdd) {
+    const gi = Number(itemCatalogAdd.dataset.fiveleaguesItemCatalogAdd);
+    const active = store.get().entities.activeId;
+    if (t.value) return store.update((d) => addFiveLeaguesItemFromCatalog(d, active, gi, t.value));
+    return;
+  }
   const ef = t.closest('[data-entity-field]');
   if (ef) {
     const active = store.get().entities.activeId;
@@ -5752,6 +6222,25 @@ function onChange(ev) {
   if (sval) {
     const { entityId, gi, fi } = parseStatblockKey(sval.dataset.statblockVal);
     return store.update((d) => setEntityStatblockField(d, entityId, gi, fi, { value: t.value }));
+  }
+  // Direct follow-up request: "format 'damage' use a '+0/+0' format
+  // using two numbers with appended '+' and '/' separator to look the
+  // same as the handbook" — the Bestiary 'fiveleagues-lifeform'
+  // template's own Damage field (drawers/index.js's
+  // fiveLeaguesEnemyDamagePillHtml) edits as two separate number inputs;
+  // this reads BOTH (not just the one that fired the change) and writes
+  // the combined "+X / +Y" string back through the same generic plain-
+  // value setter every text field already uses — the field itself stays
+  // one free-text string in storage the whole time.
+  const damagePart = t.closest('[data-fiveleagues-enemy-damage-part]');
+  if (damagePart) {
+    const wrap = damagePart.closest('[data-fiveleagues-enemy-damage-key]');
+    if (!wrap) return;
+    const armorInput = wrap.querySelector('[data-fiveleagues-enemy-damage-part="armor"]');
+    const toughnessInput = wrap.querySelector('[data-fiveleagues-enemy-damage-part="toughness"]');
+    const combined = `${formatFiveLeaguesOvercome(armorInput.value)} / ${formatFiveLeaguesOvercome(toughnessInput.value)}`;
+    const { entityId, gi, fi } = parseStatblockKey(wrap.dataset.fiveleaguesEnemyDamageKey);
+    return store.update((d) => setEntityStatblockField(d, entityId, gi, fi, { value: combined }));
   }
   const sWeaponField = t.closest('[data-statblock-weapon-field]');
   if (sWeaponField) {
@@ -7468,8 +7957,23 @@ function onTouchStart(ev) {
       dungeonCrawlLongPressTarget = null;
       const [mapId, x, y] = key.split(',');
       const tile = getDungeonTile(store.get(), mapId, Number(x), Number(y));
-      if (!tile || tile.room) return; // a merged Room has no single rotation to reactivate
-      dungeonCrawlPending = { mapId, x: Number(x), y: Number(y), archetypeKey: tile.archetypeKey, rotation: tile.rotation };
+      if (tile && tile.room) return; // a merged Room has no single rotation to reactivate
+      if (tile) {
+        dungeonCrawlPending = { mapId, x: Number(x), y: Number(y), archetypeKey: tile.archetypeKey, rotation: tile.rotation };
+      } else {
+        // Direct follow-up request: "allow an unused cell in dungeon crawl
+        // to be selected from a double click or long press on mobile to
+        // add another tile where an entrance is not automatically
+        // apparent..." — long-pressing a genuinely empty cell starts a
+        // fresh Tile placement there, same as the "+" append handle.
+        const map = getDungeonMap(store.get(), mapId);
+        const isFirstTile = map && Object.keys(map.tiles).length === 0;
+        dungeonCrawlPending = {
+          mapId, x: Number(x), y: Number(y),
+          archetypeKey: isFirstTile ? DUNGEON_CRAWL_ENTRANCE_ARCHETYPE.key : pickRandomDungeonArchetype(DUNGEON_CRAWL_ARCHETYPES),
+          rotation: pickRandomDungeonRotation(),
+        };
+      }
       dungeonCrawlSelected = null;
       renderDrawerBody();
     }, 500);
@@ -9007,7 +9511,7 @@ function renderDiceRollOverlay() {
   overlay.dataset.open = String(!!diceRollResult);
   const card = overlay.querySelector('[data-dice-roll-card]');
   if (!card) return;
-  card.innerHTML = diceRollResult ? diceRollCardHtml(diceRollResult.label, diceRollResult.method, diceRollResult.r) : '';
+  card.innerHTML = diceRollResult ? diceRollCardHtml(diceRollResult.label, diceRollResult.method, diceRollResult.r, diceRollResult.meta) : '';
 }
 
 // D&D 5e PDF import's review step (direct request, phase 4) — a readable
@@ -9152,29 +9656,136 @@ function renderCombatTrackerPanel() {
   const ui = buildDrawerUi();
   const entries = listCombatTrackerEntries(doc);
   const activeEntryId = getCombatTrackerActiveEntryId(doc);
+  // Direct follow-up request: "change the 'Challenge' button to 'attack'
+  // in combat tracker (while keeping the swords icon), select the
+  // attacker NPC first which is highlighted in red and then select the
+  // defender highlighted in blue. then select attack button roll using
+  // the 5lfb rules to determine winner." — ruleset-gated (same "sandbox
+  // for one ruleset at a time" posture every other ruleset-specific
+  // control in this app already follows); under every OTHER ruleset, row
+  // clicks are still the plain "active combatant" turn-pointer, untouched
+  // (see the data-combat-tracker-row-toggle handler). combatAttacker-
+  // EntryId/combatDefenderEntryId are ephemeral module-level state (shell.js,
+  // not persisted the way activeEntryId is) — only ever meaningful while
+  // this ruleset is active.
+  const isFiveLeagues = (doc.settings && doc.settings.statRuleset) === 'fiveleagues';
+  const attackerEntry = isFiveLeagues ? entries.find((en) => en.id === combatAttackerEntryId) : null;
+  const attackerEntity = attackerEntry ? getEntity(doc, attackerEntry.entityId) : null;
+  // Direct follow-up request: "the weapon selection is important...
+  // therefore... the selection will become the active weapon used to
+  // determine ranged/melee rules... Do the challenge method for melee
+  // attacks" — the Attacker's own PERSISTED active weapon (set via each
+  // row's own "Weapon" <select> below, not a per-attack prompt) decides
+  // which of the two real, completely different mechanics the Combat
+  // Options form below offers: no weapon or a melee one still gets the
+  // existing Tactic/Counter Attack/Stunned form; a ranged one instead
+  // gets the new Range/Cover band picker (p.39).
+  const attackerActiveWeapon = attackerEntity ? getFiveLeaguesActiveWeapon(attackerEntity) : null;
+  const attackerIsRanged = isFiveLeaguesWeaponRanged(attackerActiveWeapon);
+  const canAttack = isFiveLeagues && !!combatAttackerEntryId && !!combatDefenderEntryId;
+  const attackTitle = !combatAttackerEntryId ? 'Click a row to select the Attacker first'
+    : !combatDefenderEntryId ? 'Click another row to select the Defender'
+    : attackerIsRanged ? 'Roll a 5LFB Ranged Attack at the Defender'
+    : 'Roll a 5LFB Melee Exchange between the Attacker and Defender';
   const rows = entries.map((entry) => {
     const entity = getEntity(doc, entry.entityId);
     if (!entity) return '';
-    const isActive = entry.id === activeEntryId;
+    let rowClass = ''; let title;
+    if (isFiveLeagues) {
+      if (entry.id === combatAttackerEntryId) { rowClass = 'combat-attacker'; title = 'Attacker — click to deselect'; }
+      else if (entry.id === combatDefenderEntryId) { rowClass = 'combat-defender'; title = 'Defender — click to deselect'; }
+      else if (!combatAttackerEntryId) title = 'Click to select as the Attacker';
+      else if (!combatDefenderEntryId) title = 'Click to select as the Defender';
+      else title = 'Click to start a new Attack with this as the Attacker';
+    } else {
+      const isActive = entry.id === activeEntryId;
+      rowClass = isActive ? 'active' : '';
+      title = isActive ? 'Click to clear the active combatant' : 'Click to mark as the active combatant';
+    }
+    // Direct follow-up request: "Display in the statblock box in the
+    // combat tracker the active weapon selected... a link to select from
+    // a list" — every row, not just the Attacker's (it's a property of
+    // the character, always visible/changeable, not a per-roll choice);
+    // nested inside the SAME card-wrap partyMemberCard renders into, so
+    // it visually reads as part of "the statblock box."
     return `
-      <div class="combat-tracker-row ${isActive ? 'active' : ''}" data-drop-combat-tracker-entry="${escapeHtml(entry.id)}" data-combat-tracker-row-toggle="${escapeHtml(entry.id)}" title="${isActive ? 'Click to clear the active combatant' : 'Click to mark as the active combatant'}">
+      <div class="combat-tracker-row ${rowClass}" data-drop-combat-tracker-entry="${escapeHtml(entry.id)}" data-combat-tracker-row-toggle="${escapeHtml(entry.id)}" title="${title}">
         <span class="combat-tracker-handle" draggable="true" data-drag-combat-tracker-entry="${escapeHtml(entry.id)}" title="Drag to reorder">⠿</span>
-        <div class="combat-tracker-card-wrap">${partyMemberCard(entity, doc, ui)}</div>
+        <div class="combat-tracker-card-wrap">
+          ${partyMemberCard(entity, doc, ui, { compact: true })}
+          ${isFiveLeagues ? fiveLeaguesActiveWeaponSelectHtml(entity, entry.id) : ''}
+        </div>
         <button type="button" class="icon-btn" data-combat-tracker-remove="${escapeHtml(entry.id)}" title="Remove from tracker">✕</button>
       </div>`;
   }).join('');
+  // Direct follow-up request: "Factor in armor and all other combat
+  // conditions listed in the basic... ruleset... Prompt with questions
+  // for optional attributes or abilities or buffs that have limited uses
+  // for consideration to be applied. then complete the challenge roll and
+  // present the winner result" (melee) — "during a ranged combat attack,
+  // prompt the user for range details per rules on p.39 regarding
+  // distance and cover" (ranged). Rendered once both Attacker and
+  // Defender are picked, branching entirely on attackerIsRanged above —
+  // Tactics/Counter Attack are melee-only real rules (pp.40-44), the
+  // Range/Cover bands are ranged-only (p.39); Parry (p.42) is never
+  // prompted for either (objectively determined by equipment + the roll
+  // itself, resolveFiveLeaguesHitEligibility, domain/dice.js).
+  let optionsHtml = '';
+  if (isFiveLeagues && combatAttackerEntryId && combatDefenderEntryId) {
+    if (attackerIsRanged) {
+      const bandOpts = FIVE_LEAGUES_RANGED_BANDS.map((b) => `<option value="${b.key}" ${combatOptions.rangedBand === b.key ? 'selected' : ''}>${escapeHtml(b.label)} (${b.targetNumber}+)</option>`).join('');
+      optionsHtml = `
+      <div class="combat-tracker-options">
+        <p class="field-label sm combat-tracker-options-head">Combat Options <span class="five-leagues-hint" title="Ranged Attacks, p.39 — distance/cover is always your own judgment call; this app has no positional model to derive it automatically.">ⓘ</span></p>
+        <label class="field-label sm">Range / Cover
+          <select data-combat-tracker-ranged-band>${bandOpts}</select>
+        </label>
+      </div>`;
+    } else {
+      optionsHtml = `
+      <div class="combat-tracker-options">
+        <p class="field-label sm combat-tracker-options-head">Combat Options <span class="five-leagues-hint" title="Tactics, p.40; Combat Bonus from a Stunned opponent, p.44; Counter Attack, pp.41-42 — terrain-based sources this app can't detect are always yours to confirm.">ⓘ</span></p>
+        <label class="field-label sm">Tactic (Attacker)
+          <select data-combat-tracker-tactic>
+            <option value="fight" ${combatOptions.tactic === 'fight' ? 'selected' : ''}>Simply Fight</option>
+            <option value="defensively" ${combatOptions.tactic === 'defensively' ? 'selected' : ''}>Fight Defensively (win = no Hit)</option>
+            <option value="evasively" ${combatOptions.tactic === 'evasively' ? 'selected' : ''}>Fight Evasively (win = no Hit)</option>
+            <option value="furiously" ${combatOptions.tactic === 'furiously' ? 'selected' : ''} ${combatOptions.counterAttack ? 'disabled' : ''}>Fight Furiously (+1 on win, forced Hit on loss)</option>
+          </select>
+        </label>
+        ${combatOptions.tactic === 'furiously' ? `
+        <label class="field-label sm">Furiously: +1 to
+          <select data-combat-tracker-furious-stat>
+            <option value="armor" ${combatOptions.furiousBonusStat === 'armor' ? 'selected' : ''}>Overcome Armor</option>
+            <option value="toughness" ${combatOptions.furiousBonusStat === 'toughness' ? 'selected' : ''}>Overcome Toughness</option>
+          </select>
+        </label>` : ''}
+        <label class="combat-tracker-option-check" title="Normally only an Attacker's win strikes a Hit — this lets the Defender's own win strike one too (p.41-42).">
+          <input type="checkbox" data-combat-tracker-counter-attack ${combatOptions.counterAttack ? 'checked' : ''}> Defender can Counter Attack
+        </label>
+        <label class="combat-tracker-option-check" title="+1 Combat Bonus to the Attacker (p.44).">
+          <input type="checkbox" data-combat-tracker-defender-stunned ${combatOptions.defenderStunned ? 'checked' : ''}> Defender is Stunned
+        </label>
+        <label class="combat-tracker-option-check" title="+1 Combat Bonus to the Defender (p.44).">
+          <input type="checkbox" data-combat-tracker-attacker-stunned ${combatOptions.attackerStunned ? 'checked' : ''}> Attacker is Stunned
+        </label>
+      </div>`;
+    }
+  }
   panel.innerHTML = `
     <div class="combat-tracker-head">
       <h3>Combat Tracker</h3>
       <span class="entity-chip-row">
         <button type="button" class="icon-btn" data-entity-picker-open="combat-tracker" title="Add a Character, NPC, or Lifeform">＋</button>
+        ${isFiveLeagues ? `<button type="button" class="btn ghost sm" data-combat-tracker-attack ${canAttack ? '' : 'disabled'} title="${escapeHtml(attackTitle)}">⚔ Attack</button>` : ''}
         <button type="button" class="btn ghost sm" data-combat-tracker-clear ${entries.length ? '' : 'disabled'}>Clear</button>
         <button type="button" class="icon-btn" data-combat-tracker-close aria-label="Close">✕</button>
       </span>
     </div>
     <div class="combat-tracker-list">
       ${rows || '<p class="dim small">Drag an entity thumbnail here, or onto the dice icon, to add it.</p>'}
-    </div>`;
+    </div>
+    ${optionsHtml}`;
 }
 function openCombatTracker() {
   combatTrackerOpen = true;
@@ -9267,13 +9878,16 @@ function diePipsIcon(n) {
 // Shared by the dice roll window's copy (⧉) and "add to Journal" buttons —
 // both want the exact same plain-text rendering of the result, just sent
 // to a different place.
-function diceRollCopyText({ label, method, r }) {
+function diceRollCopyText({ label, method, r, meta }) {
   if (method === 'flat') return formatFlatRollCopyText(r);
   if (method === 'traveller') return formatTravellerRollCopyText(r);
   if (method === 'custom') return formatCustomDiceRollCopyText(label, r);
   if (method === 'pool') return formatDicePoolRollCopyText(label, r);
   if (method === 'd20') return formatD20RollCopyText(r);
   if (method === 'd20-score') return formatD20ScoreRollCopyText(r);
+  if (method === 'fiveleagues-exchange') return formatFiveLeaguesExchangeCopyText((meta || {}).attackerLabel || 'Attacker', (meta || {}).defenderLabel || 'Defender', r);
+  if (method === 'fiveleagues-ranged') return formatFiveLeaguesRangedAttackCopyText((meta || {}).attackerLabel || 'Attacker', r);
+  if (method === 'fiveleagues-hit') return formatFiveLeaguesHitCopyText(r);
   return formatRollCopyText(r);
 }
 
@@ -9288,10 +9902,94 @@ const JOURNAL_ADD_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="
 const DICE_DIAMOND_ICON = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2 L22 12 L12 22 L2 12 Z"/></svg>';
 const DICE_TARGET_ICON = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg>';
 
-function diceRollCardHtml(label, method, r) {
+function diceRollCardHtml(label, method, r, meta) {
   const addsPart = r.adds ? ` + ${r.adds}` : '';
   let rows, outcomeLabel, outcomeClass;
-  if (method === 'flat' || method === 'traveller') {
+  let extraActionBtn = '';
+  if (method === 'fiveleagues-exchange') {
+    // Direct follow-up request: "Upgrade the combat mechanics to use the
+    // 5LFB combat rules" — the Melee Exchange (p.41): both combatants'
+    // D6 + Combat Skill rolls shown side by side, higher wins.
+    const aAdds = r.attackerAdds ? ` + ${r.attackerAdds}` : '';
+    const dAdds = r.defenderAdds ? ` + ${r.defenderAdds}` : '';
+    // Fight Defensively (p.40: "rolls twice and picks the best roll") —
+    // r.attackerDieRolls is only ever set when that tactic was actually
+    // used (domain/dice.js's rollFiveLeaguesExchange), so this shows both
+    // rolls with the kept one called out; every other tactic/Simply Fight
+    // shows the single die exactly as before.
+    const attackerDieText = r.attackerDieRolls
+      ? `${r.attackerDieRolls[0]}, ${r.attackerDieRolls[1]} (kept ${r.attackerDie})`
+      : `${r.attackerDie}`;
+    rows = [
+      { icon: diePipsIcon(r.attackerDie), label: (meta || {}).attackerLabel || 'Attacker', text: `${attackerDieText} + ${r.attackerSkill}${aAdds} = ${r.attackerTotal}` },
+      { icon: diePipsIcon(r.defenderDie), label: (meta || {}).defenderLabel || 'Defender', text: `${r.defenderDie} + ${r.defenderSkill}${dAdds} = ${r.defenderTotal}` },
+    ];
+    // Direct follow-up request: "Factor in armor and all other combat
+    // conditions... to ensure all attacker and defender abilities are
+    // being considered and applied" — by the real default rule (p.41),
+    // only an Attacker's win strikes a Hit at all; a Defender's win just
+    // "avoids harm" with nothing further UNLESS Counter Attack/Fight
+    // Furiously says otherwise (meta.hitPossible, resolved when Attack
+    // was clicked via resolveFiveLeaguesHitEligibility) — and Parry can
+    // still negate even a legitimate Attacker-win Hit outright
+    // (meta.parried). The 🩸 Roll Hit button only ever appears when a Hit
+    // is both possible AND not already parried — whether a possible Hit
+    // actually gets rolled is still the GM's own follow-up action, same
+    // "not an automatic chain" posture as before.
+    const meta2 = meta || {};
+    if (r.winner === 'draw') {
+      outcomeLabel = 'Draw — Defender Retreats';
+      outcomeClass = 'neutral';
+    } else if (meta2.parried) {
+      outcomeLabel = `${r.winner === 'attacker' ? meta2.attackerLabel : meta2.defenderLabel} Wins — Parried!`;
+      outcomeClass = 'neutral';
+    } else if (!meta2.hitPossible) {
+      outcomeLabel = `${meta2.defenderLabel || 'Defender'} Avoids Harm — No Hit`;
+      outcomeClass = 'neutral';
+    } else {
+      outcomeLabel = `${r.winner === 'attacker' ? meta2.attackerLabel : meta2.defenderLabel} Wins the Exchange`;
+      outcomeClass = r.winner === 'attacker' ? 'success' : 'fail';
+    }
+    if (r.winner !== 'draw' && meta && meta.hitPossible && !meta.parried) {
+      extraActionBtn = `<button class="icon-btn" data-dice-roll-combat-hit title="Roll the Hit (Overcome Armor/Toughness) against the loser">🩸</button>`;
+    }
+  } else if (method === 'fiveleagues-ranged') {
+    // Direct follow-up request: "during a ranged combat attack, prompt
+    // the user for range details per rules on p.39 regarding distance
+    // and cover." A single D6 roll (never opposed, unlike the Melee
+    // Exchange above) — "A roll of natural 1 is always a miss" regardless
+    // of any bonus; a miss (including that natural 1) has no Roll Hit
+    // follow-up at all, since "a missed shot goes nowhere" (p.39).
+    const meta3 = meta || {};
+    const addsPart2 = r.adds ? ` + ${r.adds}` : '';
+    rows = [
+      { icon: diePipsIcon(r.die), label: meta3.attackerLabel || 'Attacker', text: `${r.die} + ${r.skill}${addsPart2} = ${r.total} vs ${r.targetNumber}+` },
+    ];
+    if (meta3.bandLabel) rows.push({ icon: DICE_TARGET_ICON, label: 'Range', text: meta3.bandLabel });
+    // p.39: "If a weapon is indicated as having Limited Ammunition, a
+    // roll to Hit of a natural 1 means that it is out of ammunition,
+    // unless this is the first shot with it in the current battle" — not
+    // tracked numerically (no per-battle shot count exists), surfaced as
+    // reference text on the natural-1 outcome itself.
+    outcomeLabel = r.naturalOne
+      ? (meta3.limitedAmmunition ? 'Miss (Natural 1 — Out of Ammo unless first shot)' : 'Miss (Natural 1)')
+      : r.hit ? 'Hit!' : 'Miss';
+    outcomeClass = r.naturalOne ? 'fail' : r.hit ? 'success' : 'fail';
+    if (r.hit) {
+      extraActionBtn = `<button class="icon-btn" data-dice-roll-combat-hit title="Roll the Hit (Overcome Armor/Toughness) against the target">🩸</button>`;
+    }
+  } else if (method === 'fiveleagues-hit') {
+    rows = [];
+    rows.push(r.armorResult === 'skipped'
+      ? { icon: DICE_DIAMOND_ICON, label: 'Armor', text: 'Armor 0 — skipped' }
+      : { icon: diePipsIcon(r.armorDie), label: 'Armor', text: `${r.armorDie} + ${r.armorBonus} = ${r.armorTotal} vs Armor ${r.armor}` });
+    if (r.toughnessDie != null) {
+      const tText = r.toughnessDie === 1 ? `natural 1 vs Toughness ${r.toughness}` : `${r.toughnessDie} + ${r.toughnessBonus} = ${r.toughnessTotal} vs Toughness ${r.toughness}`;
+      rows.push({ icon: diePipsIcon(r.toughnessDie), label: 'Toughness', text: tText });
+    }
+    outcomeLabel = FIVE_LEAGUES_HIT_OUTCOME_LABEL[r.outcome];
+    outcomeClass = r.outcome === 'casualty' ? 'fail' : r.outcome === 'no-effect' ? 'neutral' : 'weak-hit';
+  } else if (method === 'flat' || method === 'traveller') {
     const diceIcon = method === 'traveller'
       ? `<span class="dice-face-pair">${diePipsIcon(r.die1)}${diePipsIcon(r.die2)}</span>`
       : diePipsIcon(r.die);
@@ -9346,6 +10044,7 @@ function diceRollCardHtml(label, method, r) {
     <div class="dice-roll-head">
       <h3 class="dice-roll-label">${escapeHtml(label)}</h3>
       <div class="dice-roll-head-actions">
+        ${extraActionBtn}
         <button class="icon-btn" data-dice-roll-copy title="Copy result">⧉</button>
         <button class="icon-btn" data-dice-roll-journal title="Add to Journal">${JOURNAL_ADD_ICON}</button>
         <button class="icon-btn" data-dice-roll-close aria-label="Close">✕</button>
@@ -9414,6 +10113,7 @@ function headExtraForDrawer(id) {
 function buildDrawerUi() {
   return {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
+    fiveLeaguesInfoOpen, fiveLeaguesItemNotesOpen,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
     enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, journalActionsOpen, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, expandedWhatConflicts,
     advisorOracleResults, advisorDrafts, advisorConsequenceDraw, sceneSummaryOverride,
@@ -9509,6 +10209,33 @@ function replaceWorkspacePreservingScroll(el, html) {
 // entry.
 function renderActiveDrawerHtml(doc) {
   if (!activeDrawer) return '';
+  // Direct bug report: a drawer panel going fully blank (e.g. reported on
+  // a real mobile device) with no way to recover — this function's own
+  // result is a single template-literal return value per drawer, so ANY
+  // thrown exception anywhere inside one drawer's render aborts the WHOLE
+  // thing with nothing returned at all, not even its own head/toolbar.
+  // guarded() (below) already turns a thrown exception into a visible
+  // toast for every CLICK-driven call path, but this same function is
+  // ALSO reached from store.subscribe(render) on every document change —
+  // including the very first render after store.load() resolves on boot
+  // — a path guarded() never wraps at all, so a throw there used to be
+  // fully silent (logged to the console only, which "most GMs never
+  // open" per guarded()'s own comment) and left whatever was already in
+  // the drawer body (often nothing, on a fresh boot) permanently stuck.
+  // This one try/catch covers every call path at once, turning a mystery
+  // blank panel into a visible, reportable error message instead.
+  try {
+    return renderActiveDrawerHtmlUnguarded(doc);
+  } catch (err) {
+    console.error('Drawer render failed:', err);
+    return `<div class="drawer-render-error">
+      <p><b>This panel failed to render.</b></p>
+      <p class="dim small">${escapeHtml((err && err.message) || 'Unknown error')}</p>
+      <p class="dim small">Try switching to another tab and back, or reloading the page. If this keeps happening, please report the message above.</p>
+    </div>`;
+  }
+}
+function renderActiveDrawerHtmlUnguarded(doc) {
   if (activeDrawer === 'faction-events') {
     return renderFactionEvents(doc, { factionEventsDrafts, factionEventsFactionFilterId, factionEventsLocationFilterId, factionEventsStepFactionId, factionRoundHistoryOpen, conflictEscalationSuggestions });
   }

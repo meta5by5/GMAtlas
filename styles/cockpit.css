@@ -294,6 +294,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .faction-events-dock-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); margin-bottom: var(--sp-2); }
 .faction-events-dock-row h3 { margin: 0; font-size: 1rem; }
+/* A drawer whose render threw (direct bug report: a panel going blank
+   with no way to recover) — renderActiveDrawerHtml's own catch block,
+   shell.js. Danger-tinted so it reads as a real error, not another empty
+   state. */
+.drawer-render-error { border: 1px solid var(--danger); border-radius: var(--radius-sm); padding: var(--sp-4); }
+.drawer-render-error p:first-child { color: var(--danger); margin-top: 0; }
 .ws-placeholder {
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-sm);
@@ -1537,7 +1543,11 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
   background: var(--bg-inset); padding: 0; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
 }
-.dungeoncrawl-cell.empty { border-style: dashed; opacity: 0.35; }
+/* Direct follow-up request: "allow an unused cell in dungeon crawl to be
+   selected from a double click or long press... to add another tile" —
+   cursor:pointer now that an empty cell is a genuine (if secondary,
+   double-click-gated) interaction target, same as .filled below. */
+.dungeoncrawl-cell.empty { border-style: dashed; opacity: 0.35; cursor: pointer; }
 .dungeoncrawl-cell.filled { cursor: pointer; }
 .dungeoncrawl-cell.filled.sel { outline: 2px solid var(--accent); outline-offset: -2px; }
 .dungeoncrawl-cell.append {
@@ -2160,6 +2170,19 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .track-row-compact .track-widget { flex-wrap: nowrap; min-width: 0; }
 .track-row-compact .track-boxes { flex-wrap: nowrap; overflow-x: auto; }
 .track-row-compact .track-box { width: 18px; height: 18px; font-size: 0.62rem; flex: 0 0 auto; }
+/* Direct follow-up request: "Change Will, XP and Luck to number fields
+   instead of trackers" — same bordered-pill family as track-row-compact
+   just above, swapping the click-to-set box row for a narrow number
+   <input> plus a "/ max" suffix. */
+.number-row-compact {
+  display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); flex: 0 0 auto;
+  width: fit-content; max-width: 100%; min-width: 0; margin-bottom: 0; padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset);
+}
+.number-row-compact .statblock-key { font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.68rem; white-space: nowrap; line-height: 1.2; }
+.number-row-input-wrap { display: flex; align-items: center; gap: 0.2em; }
+.number-row-compact .attr-val-input { width: 2.6em; text-align: center; padding: 0.1rem 0.2rem; font-size: 0.85rem; }
+.number-row-max { white-space: nowrap; }
 /* Plain text/value field's own compact pill (direct follow-up request —
    textRow had no compact variant before; every statblock field now gets
    one). Same family as track-row-compact/attr-row-compact: content-sized
@@ -2195,6 +2218,62 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .statblock-weapon-remove-btn { padding-left: 0.15rem; padding-right: 0.15rem; }
 .statblock-gear-field { margin-top: var(--sp-3); }
 .statblock-gear-field textarea { width: 100%; }
+/* Direct follow-up request: "update the character sheet for 5lfb to track
+   character type, skills, origins, background, armor, gear storage in
+   self, backpack or stash, weapon traits, and spells... per the ruleset" —
+   same vertical rhythm for every section; .five-leagues-chip/-chip-list is
+   shared by Skills and the Armor flags/improvements (a checkbox wrapped in
+   a labeled pill, wrapping flex row). .five-leagues-origin-traits is the
+   Origin info panel's own trait list (see .five-leagues-info-panel below). */
+.five-leagues-type-origin-row, .five-leagues-background, .five-leagues-skills,
+.five-leagues-armor, .five-leagues-items, .five-leagues-spells { margin-top: var(--sp-3); }
+.five-leagues-background select, .five-leagues-armor select { width: 100%; }
+.five-leagues-origin-traits { margin: var(--sp-2) 0 0; padding-left: 1.1em; font-size: 0.82rem; color: var(--text-dim); }
+.five-leagues-origin-traits li { margin-bottom: var(--sp-1); }
+.five-leagues-chip-list { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
+.five-leagues-chip { display: inline-flex; align-items: center; gap: 0.3em; padding: 0.2rem 0.5rem; border: 1px solid var(--border); border-radius: 999px; font-size: 0.82rem; cursor: pointer; }
+/* Direct follow-up request: "Narrow the '+ Add from Items catalog...'
+   dropdown and move '+ Custom Item' button to the same row" — nowrap (was
+   wrap) plus a capped select width (was a 10rem MINIMUM pushing the button
+   onto its own line in a narrow drawer) with ellipsis for the now-truncated
+   closed-box text; the open dropdown list itself still shows every option
+   in full. */
+.five-leagues-item-add-row { display: flex; gap: var(--sp-2); margin-top: var(--sp-2); flex-wrap: nowrap; align-items: center; }
+.five-leagues-item-add-row select { flex: 1 1 auto; min-width: 0; max-width: 60%; text-overflow: ellipsis; }
+.five-leagues-item-add-row button { flex: 0 0 auto; white-space: nowrap; }
+/* Direct follow-up request: "the item 'notes' field should be an icon that
+   opens/collapses the notes field on a second line" — the toggle button
+   sits in the table's own Notes column; .has-notes accents it so a
+   collapsed-but-filled row is still visually distinct from an empty one.
+   The expanded textarea's own row spans every column. */
+.five-leagues-item-notes-cell { text-align: center; }
+.five-leagues-item-notes-toggle.has-notes { color: var(--accent-strong); }
+.five-leagues-item-notes-row textarea { width: 100%; box-sizing: border-box; }
+.five-leagues-spell-list { display: flex; flex-direction: column; gap: var(--sp-1); margin-top: var(--sp-2); max-height: 16rem; overflow-y: auto; }
+.five-leagues-spell-row { display: flex; align-items: baseline; gap: var(--sp-2); font-size: 0.85rem; cursor: pointer; }
+.five-leagues-spell-name { font-weight: 600; min-width: 6rem; }
+/* Direct follow-up request: "Move the text '(+2 on a relevant Proficiency
+   Test, p.52)' to a tooltip" — a plain hover tooltip (short text, unlike
+   the expand/collapse panel below). */
+.five-leagues-hint { cursor: help; color: var(--text-dim); font-size: 0.85em; }
+/* Direct follow-up request: "move those two fields to the same row... The
+   descriptive text for 'character type' and 'origin' should be hidden and
+   connected to a question mark tool tip that... expand[s]/collapse[s]
+   where the text exists right now (instead [of] the usual floating tool
+   tip display since it would be too small to see all the text)." Two
+   field-labels side by side (wraps on a genuinely narrow drawer, same
+   flex-wrap posture as .character-sheet-stats); each select's own "?"
+   sits right beside it; the expand panel renders BELOW the whole row,
+   not inside either label, so whichever one is open reads full-width. */
+.five-leagues-type-origin-row { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+.five-leagues-type-origin-row .field-label { flex: 1 1 10rem; min-width: 0; }
+.five-leagues-info-row { display: flex; align-items: center; gap: var(--sp-1); }
+.five-leagues-info-row select { flex: 1 1 auto; min-width: 0; }
+.five-leagues-info-toggle { flex: 0 0 auto; width: 1.6rem; height: 1.6rem; border-radius: 50%; border: 1px solid var(--border); font-weight: 700; }
+.five-leagues-info-toggle.open { background: var(--accent); color: var(--bg-main); border-color: var(--accent); }
+.five-leagues-info-toggle:disabled { opacity: 0.4; cursor: default; }
+.five-leagues-info-panel { margin-top: var(--sp-2); padding: var(--sp-2); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset); }
+.five-leagues-info-panel p { margin: 0; }
 
 /* Compact attribute pill (Edge/Heart/... stat row atop a character sheet) —
    same bordered-pill language as .track-row-compact, single-number spinner
@@ -2338,9 +2417,22 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    of what's currently open; the panel itself is the only thing that
    captures clicks, the dimmed backdrop is decorative (closing happens via
    the ✕ button or toggling the header button again, not a backdrop click,
-   to avoid the delegated click handler's closest() matching descendants). */
+   to avoid the delegated click handler's closest() matching descendants).
+   Direct bug report: "when displaying the combat tracker and selecting a
+   NPC that causes the NPC selection window to pop up, it must pop up on
+   top" — this overlay is also reused for every entity-picker popup (the
+   Combat Tracker's own "+ Add NPC", Location linking, Vehicle creation,
+   ...), but its z-index (30) sat BELOW .floating-tools-stack's 55 (the
+   Dice Roller/Combat Tracker panels' own fixed-position container), so a
+   picker opened from inside either of those panels rendered behind them
+   instead of on top — the comment above was already the intent, the
+   number just didn't back it up. Raised past every floating-tools-stack
+   descendant (including .dice-roll-card's own 60) so it's reachable
+   regardless of what else is open; still below Settings' menu (70) and
+   the top-level import/export blocker (90), which must stay above
+   everything including this. */
 .mc-search-overlay {
-  position: fixed; inset: 0; z-index: 30;
+  position: fixed; inset: 0; z-index: 65;
   background: rgba(0, 0, 0, 0.35);
   display: flex; justify-content: center;
   padding-top: 8vh;
@@ -2388,7 +2480,23 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .floating-tools-stack {
   position: fixed; top: var(--sp-3); right: var(--sp-3); z-index: 55;
   display: flex; flex-direction: column; align-items: flex-end; gap: var(--sp-2);
-  max-height: calc(100vh - 2 * var(--sp-3)); overflow-y: auto; overflow-x: visible;
+  /* Direct bug report: "make sure the dice results box is fully in view
+     on mobile devices where the bottom can be overlapped with the URL
+     field" — 100vh is the LARGEST possible viewport (as if the browser's
+     own address bar/toolbar were hidden), not the actually-visible one;
+     on a real mobile device where that chrome is showing, a max-height
+     computed off 100vh lets this container (and the dice-roll-card flex
+     child docked inside it) extend past the real visible area, with the
+     overlapping browser chrome covering whatever fell past the edge.
+     100dvh (dynamic viewport height) tracks the TRUE visible viewport as
+     that chrome shows/hides; the plain vh line stays first as the
+     fallback for a browser old enough not to understand dvh at all (that
+     whole second declaration is simply invalid there and dropped,
+     leaving the first one in effect — the standard dvh/vh fallback
+     pattern, not a progressive override). */
+  max-height: calc(100vh - 2 * var(--sp-3));
+  max-height: calc(100dvh - 2 * var(--sp-3));
+  overflow-y: auto; overflow-x: visible;
   /* Real bug, direct report ("party/campaign/world/journal/settings don't
      respond to click, but Search and the campaign switcher do"): .dice-
      roll-overlay below keeps its full width: min(26rem, 92vw) even while
@@ -2563,12 +2671,75 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    highlight a record") — only one row at a time; click the row's own
    background (not one of its buttons/the card itself) to set or clear it. */
 .combat-tracker-row.active { background: var(--tier2-bg); outline: 2px solid var(--accent-strong); }
+/* Direct follow-up request: "select the attacker NPC first which is
+   highlighted in red and then select the defender highlighted in blue"
+   (5LFB ruleset only — every other ruleset keeps the plain .active
+   highlight just above). Reuses --danger (red) and --accent-strong (the
+   app's existing blue-tinted accent) rather than inventing new tokens. */
+.combat-tracker-row.combat-attacker { background: rgba(248, 113, 113, 0.14); outline: 2px solid var(--danger); }
+.combat-tracker-row.combat-defender { background: rgba(56, 189, 248, 0.14); outline: 2px solid var(--accent-strong); }
+/* The Attacker's own weapon/spell picker (direct follow-up request: "when
+   selecting the attacker, determine if they have more than one weapon or
+   spell capability and prompt which is being used in the attack") — a
+   sibling block right under that row, not nested inside its flex layout. */
+.combat-tracker-action-picker { margin: 0 0 var(--sp-2) 1.8rem; }
+.combat-tracker-action-picker select { width: 100%; max-width: 16rem; }
+/* Direct follow-up request: "Factor in armor and all other combat
+   conditions... Prompt with questions for optional attributes or
+   abilities or buffs... to be applied" — the Tactic/Counter Attack/
+   Stunned form shown once both Attacker and Defender are picked. */
+.combat-tracker-options { margin-top: var(--sp-3); padding-top: var(--sp-2); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: var(--sp-2); }
+.combat-tracker-options-head { margin: 0; }
+.combat-tracker-options select { width: 100%; max-width: 16rem; }
+.combat-tracker-option-check { display: flex; align-items: center; gap: 0.4em; font-size: 0.85rem; cursor: pointer; }
 /* Left-aligned drag handle (direct request) — only THIS element carries
    draggable, not the whole row, so expanding/opening the card underneath
    still works as a plain click. */
 .combat-tracker-handle { flex: 0 0 auto; padding-top: 0.5rem; cursor: grab; color: var(--text-dim); user-select: none; }
 .combat-tracker-handle:active { cursor: grabbing; }
 .combat-tracker-card-wrap { flex: 1 1 auto; min-width: 0; }
+/* Direct follow-up request: "Display in the statblock box in the combat
+   tracker the active weapon selected. have this be a link to select from
+   a list of possible weapons in the entity's worn gear" — a plain
+   <select>, same "a link to pick one of several things" idiom every
+   other inline picker in this app already uses (the weapon catalog
+   quick-fill, the Items-table catalog add, ...); nested right under
+   partyMemberCard's own output inside the same card-wrap, so it reads as
+   part of the statblock box rather than a separate control below it. */
+.combat-tracker-active-weapon { margin-top: var(--sp-1); }
+.combat-tracker-active-weapon select { width: 100%; max-width: 14rem; font-size: 0.78rem; }
+/* Direct follow-up request: "update the bestiary 5lfb statblock to...
+   those fields must be narrow to fit on one row in this sequence:
+   Speed, Combat, Damage, Tough, and Armor." The row itself reuses
+   .character-sheet-stats (already a wrap-to-fit flex row of compact
+   pills — the Character Sheet's own stat row uses it too); only the
+   Damage pill's own two-number-plus-slash layout and the Num+Ranged
+   row's "Ranged fills the rest of the panel" behavior need new rules. */
+.fiveleagues-enemy-damage .fiveleagues-enemy-damage-inputs { display: flex; align-items: center; gap: 0.2rem; }
+.fiveleagues-enemy-damage-inputs input { width: 2.6rem; text-align: center; padding: 0.1rem; }
+.fiveleagues-enemy-damage-sep { color: var(--text-dim); font-weight: 700; }
+.fiveleagues-enemy-num-ranged-row { display: flex; align-items: flex-end; gap: var(--sp-2); margin-top: var(--sp-2); }
+.fiveleagues-enemy-num-ranged-row .fiveleagues-enemy-wide-field { flex: 1 1 auto; min-width: 0; }
+.fiveleagues-enemy-wide-field { display: flex; flex-direction: column; gap: 2px; }
+.fiveleagues-enemy-wide-field .statblock-key { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); }
+.fiveleagues-enemy-wide-field input { width: 100%; }
+.fiveleagues-enemy-aberration-stats { margin-top: var(--sp-2); }
+/* "If the entity is an 'Aberration' put a small subtitle under the
+   name stating 'Aberration'" — isFiveLeaguesAberrationEntity, drawers/
+   index.js's entityDetail, right below .inspector-head. */
+.fiveleagues-enemy-subtitle { margin: -0.2rem 0 var(--sp-2); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-strong); }
+/* "include the Traits or Aberrant [Aberration] Traits as separate lines
+   where the title is in bold just like in the rulebook... make it a
+   tooltip link to show the definition of the trait" — a hover-title
+   tooltip on each bold name (cursor:help signals it, same affordance
+   the Skills/Options "ⓘ" hints elsewhere already use); an unrecognized
+   trait name (findFiveLeaguesEnemyTrait returned null) just has no
+   title attribute at all, reading as inert bold text instead of a
+   broken link. */
+.fiveleagues-enemy-traits { margin-top: var(--sp-3); }
+.fiveleagues-enemy-traits-list { margin-top: var(--sp-2); display: flex; flex-direction: column; gap: 0.2rem; }
+.fiveleagues-enemy-trait-line { margin: 0; font-size: 0.82rem; }
+.fiveleagues-enemy-trait-name { cursor: help; border-bottom: 1px dotted var(--text-dim); }
 
 /* Full-size image lightbox (direct follow-up request) — a centered,
    backdrop-dimmed modal (same visual language as .mc-search-overlay)
@@ -2708,6 +2879,19 @@ button.party-stat-pill:hover { border-color: var(--accent); }
 .party-stat-pill-track .party-stat-pill-label { white-space: nowrap; text-align: left; }
 .party-stat-pill-label { font-size: 0.56rem; letter-spacing: 0.03em; color: var(--text-dim); text-transform: uppercase; text-align: center; line-height: 1.1; white-space: normal; }
 .party-stat-pill-value { font-size: 0.85rem; font-weight: 700; color: var(--accent); }
+/* Direct follow-up request: "reduce padding and space between statblocks
+   so all six blocks are on the same row" — scoped to the Combat Tracker's
+   own card wrapper only (the Party Roster's own expanded card keeps the
+   normal, larger pill size above); combined with the shortened "Combat"/
+   "Tough" labels (partyStatPill, drawers/index.js) this is what actually
+   lets Agility/Speed/Combat/Tough/Armor/Casting fit one row in the
+   narrower space a tracker row leaves (handle + remove button also take
+   width there). */
+.combat-tracker-card-wrap .party-stat-group { margin-bottom: 0.25rem; }
+.combat-tracker-card-wrap .party-stat-pills { gap: 0.2rem; }
+.combat-tracker-card-wrap .party-stat-pill { width: 2.05rem; min-height: 2.05rem; padding: 0.05rem; }
+.combat-tracker-card-wrap .party-stat-pill-label { font-size: 0.48rem; }
+.combat-tracker-card-wrap .party-stat-pill-value { font-size: 0.7rem; }
 /* A toggled-open track pill's full box-row view (partyStatTrackExpansion,
    drawers/index.js) — "the tracker for that one tracker is displayed in
    the next row." One shared column below the tracks row so several open

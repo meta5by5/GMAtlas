@@ -285,3 +285,211 @@ export function formatTravellerRollCopyText(r) {
   const addsPart = r.adds ? ` + ${r.adds}` : '';
   return `\tRoll: ${r.die1} + ${r.die2}${addsPart} = ${r.total}\n\tTarget: ${r.target}\n${r.outcomeLabel.toUpperCase()}`;
 }
+
+/**
+ * Five Leagues from the Borderlands' Melee Combat "Resolve Exchange" step
+ * (assets/docs/5LFB/five-leagues-from-the-borderlands-3e.pdf p.41, read
+ * directly) — direct follow-up request: "Upgrade the combat mechanics to
+ * use the 5LFB combat rules and require the selection of an opponent in
+ * the combat tracker when performing the combat challenge dice roles which
+ * would use the stats of the opponent." Both combatants roll D6 + their own
+ * Combat Skill (+ any situational `adds`, e.g. a +1 Combat Bonus from an
+ * ally within 1" or a Stunned opponent, p.44 — the GM applies these as a
+ * plain modifier rather than this function trying to detect adjacency/
+ * Stun state, which this app has no tabletop-position model for); higher
+ * total wins the exchange and strikes the Hit (rollFiveLeaguesHit below
+ * resolves what that Hit actually does), a draw ends the melee with the
+ * defender retreating and nobody struck.
+ */
+export function rollFiveLeaguesExchange(attackerSkill = 0, defenderSkill = 0, { attackerAdds = 0, defenderAdds = 0, attackerAdvantage = false, rng = Math.random, dice = {} } = {}) {
+  // Direct follow-up request: "Factor in armor and all other combat
+  // conditions... prompt with questions for optional attributes or
+  // abilities or buffs" — Fight Defensively (p.40: "The character rolls
+  // twice and picks the best roll") is the one Tactic that changes the
+  // die mechanic itself rather than just adding a flat bonus; Fight
+  // Evasively/Furiously/Simply Fight all "roll normally." attackerAdvantage
+  // only ever applies to the Attacker (Fight Defensively's own real
+  // restriction is just "the character," but this app's Combat Tracker
+  // only ever collects the Attacker's tactic — see shell.js's own scope
+  // note on why). attackerDieRolls is null unless advantage was actually
+  // used, so existing callers/tests that never pass it see no change.
+  let attackerDie; let attackerDieRolls = null;
+  if (dice.attackerDie != null) {
+    attackerDie = dice.attackerDie;
+  } else if (attackerAdvantage) {
+    const roll1 = rollDie(6, rng);
+    const roll2 = rollDie(6, rng);
+    attackerDieRolls = [roll1, roll2];
+    attackerDie = Math.max(roll1, roll2);
+  } else {
+    attackerDie = rollDie(6, rng);
+  }
+  const defenderDie = dice.defenderDie ?? rollDie(6, rng);
+  const aSkill = Number(attackerSkill) || 0;
+  const dSkill = Number(defenderSkill) || 0;
+  const aAdds = Number(attackerAdds) || 0;
+  const dAdds = Number(defenderAdds) || 0;
+  const attackerTotal = attackerDie + aSkill + aAdds;
+  const defenderTotal = defenderDie + dSkill + dAdds;
+  const winner = attackerTotal > defenderTotal ? 'attacker' : attackerTotal < defenderTotal ? 'defender' : 'draw';
+  return {
+    attackerDie, attackerDieRolls, attackerSkill: aSkill, attackerAdds: aAdds, attackerTotal,
+    defenderDie, defenderSkill: dSkill, defenderAdds: dAdds, defenderTotal,
+    winner,
+  };
+}
+
+// Direct follow-up request: "Factor in armor and all other combat
+// conditions listed in the basic... ruleset... Prompt with questions for
+// optional attributes or abilities or buffs that have limited uses for
+// consideration to be applied." Resolves whether a Hit is even possible
+// this exchange, and whether it's negated by Parry — a pure decision
+// table off the real rules (pp.41-43), re-read closely while building
+// this: by DEFAULT only an ATTACKER's win strikes a Hit ("If the Defender
+// has the higher score, they avoid harm" — no Hit at all, just a role
+// swap for the next exchange of a real multi-exchange melee this app
+// doesn't simulate). Counter Attack is the one thing that lets a
+// DEFENDER's win also strike a Hit; Fight Furiously forces a Hit against
+// the Attacker on a loss UNCONDITIONALLY (even without Counter Attack);
+// Fight Defensively/Evasively instead suppress a Hit on an Attacker win
+// ("If they win, they inflict no Hits"). Parry (p.42) only ever protects
+// whoever holds the DEFENDER role, and only when THEIR OWN exchange die
+// (not the total) came up a natural 1 — it can never apply to a Hit
+// landing on the Attacker (Counter Attack/Furious-loss), since the
+// Attacker is never "defending" in this app's single-exchange model.
+export function resolveFiveLeaguesHitEligibility({ winner, tactic = 'fight', defenderHasCounterAttack = false, defenderHasParry = false, defenderDieIsNaturalOne = false } = {}) {
+  if (winner === 'draw') return { hitPossible: false, parried: false };
+  if (winner === 'attacker') {
+    if (tactic === 'defensively' || tactic === 'evasively') return { hitPossible: false, parried: false };
+    if (defenderHasParry && defenderDieIsNaturalOne) return { hitPossible: false, parried: true };
+    return { hitPossible: true, parried: false };
+  }
+  // winner === 'defender'
+  if (tactic === 'furiously') return { hitPossible: true, parried: false };
+  if (defenderHasCounterAttack) return { hitPossible: true, parried: false };
+  return { hitPossible: false, parried: false };
+}
+
+// Direct follow-up request: "during a ranged combat attack, prompt the
+// user for range details per rules on p.39 regarding distance and
+// cover... Do the challenge method for melee attacks." Ranged Attacks
+// (p.39, read directly) are a completely different, SIMPLER mechanic
+// than the Melee Exchange above — a single D6 roll (never opposed), with
+// the target number set entirely by distance/cover, not an Overcome-style
+// bonus: "Within 6\" and in the open: 3+", "Within weapon range and in
+// the open: 5+", "Within weapon range and concealed or behind Cover: 6+"
+// — these 3 bands are the complete real table (there is no 4th "within
+// 6\" and in Cover" row; the book's own table only ever lists these
+// three). "If the shooter is stationary, add their Combat Skill to the
+// roll" — this app has no movement/positioning model to know whether the
+// Attacker actually moved this round, so `stationary` always defaults
+// true (the common case); "A roll of natural 1 is always a miss"
+// regardless of any bonus.
+export const FIVE_LEAGUES_RANGED_BANDS = [
+  { key: 'close', label: 'Within 6", in the open', targetNumber: 3 },
+  { key: 'range-open', label: 'Within weapon range, in the open', targetNumber: 5 },
+  { key: 'range-cover', label: 'Within weapon range, concealed or behind Cover', targetNumber: 6 },
+];
+export function findFiveLeaguesRangedBand(key) {
+  return FIVE_LEAGUES_RANGED_BANDS.find((b) => b.key === key) || null;
+}
+
+export function rollFiveLeaguesRangedAttack(combatSkill = 0, targetNumber = 3, { stationary = true, adds = 0, rng = Math.random, dice = {} } = {}) {
+  const die = dice.die ?? rollDie(6, rng);
+  const skill = stationary ? (Number(combatSkill) || 0) : 0;
+  const bonusAdds = Number(adds) || 0;
+  const total = die + skill + bonusAdds;
+  const naturalOne = die === 1;
+  const hit = !naturalOne && total >= targetNumber;
+  return { die, skill, adds: bonusAdds, total, targetNumber, naturalOne, hit };
+}
+
+/** Render a Ranged Attack result as one journal/toast-friendly line. */
+export function formatFiveLeaguesRangedAttackText(attackerLabel, r) {
+  const addsPart = r.adds ? ` + ${r.adds}` : '';
+  const outcome = r.naturalOne ? 'Miss (natural 1)' : r.hit ? 'Hit!' : 'Miss';
+  return `🏹 ${attackerLabel}: ${r.die} + ${r.skill}${addsPart} = ${r.total} vs ${r.targetNumber}+ → ${outcome}`;
+}
+
+/** Multi-line copy text for the dice roll window, same shape as every
+ *  other format*RollCopyText above. */
+export function formatFiveLeaguesRangedAttackCopyText(attackerLabel, r) {
+  const addsPart = r.adds ? ` + ${r.adds}` : '';
+  const outcome = r.naturalOne ? 'MISS (NATURAL 1)' : r.hit ? 'HIT' : 'MISS';
+  return `\t${attackerLabel}: ${r.die} + ${r.skill}${addsPart} = ${r.total} (needed ${r.targetNumber}+)\n${outcome}`;
+}
+
+/** Render a Melee Exchange result as one journal/toast-friendly line. */
+export function formatFiveLeaguesExchangeText(attackerLabel, defenderLabel, r) {
+  const aAdds = r.attackerAdds ? ` + ${r.attackerAdds}` : '';
+  const dAdds = r.defenderAdds ? ` + ${r.defenderAdds}` : '';
+  const winText = r.winner === 'draw' ? 'Draw — defender retreats, melee ends' : `${r.winner === 'attacker' ? attackerLabel : defenderLabel} wins the exchange`;
+  return `⚔ ${attackerLabel} ${r.attackerDie}+${r.attackerSkill}${aAdds}=${r.attackerTotal} vs ${defenderLabel} ${r.defenderDie}+${r.defenderSkill}${dAdds}=${r.defenderTotal} → ${winText}`;
+}
+
+/** Multi-line copy text for the dice roll window, same shape as every other
+ *  format*RollCopyText above. */
+export function formatFiveLeaguesExchangeCopyText(attackerLabel, defenderLabel, r) {
+  const aAdds = r.attackerAdds ? ` + ${r.attackerAdds}` : '';
+  const dAdds = r.defenderAdds ? ` + ${r.defenderAdds}` : '';
+  const winText = r.winner === 'draw' ? 'DRAW — DEFENDER RETREATS' : `${(r.winner === 'attacker' ? attackerLabel : defenderLabel).toUpperCase()} WINS`;
+  return `\t${attackerLabel} (Attacker): ${r.attackerDie} + ${r.attackerSkill}${aAdds} = ${r.attackerTotal}\n\t${defenderLabel} (Defender): ${r.defenderDie} + ${r.defenderSkill}${dAdds} = ${r.defenderTotal}\n${winText}`;
+}
+
+/**
+ * Five Leagues from the Borderlands' "Hits" resolution (p.43-44, read
+ * directly) — Step 1 rolls to Overcome the target's Armor (skipped
+ * entirely if their Armor is 0, per the book's own exception), Step 2
+ * (only reached if Step 1 penetrates, or was skipped) rolls to Overcome
+ * their Toughness. `target` is `{armor, toughness}`; `armorBonus`/
+ * `toughnessBonus` are the attack's own "+x / +y" bonus (p.43) — a weapon
+ * trait or tactic choice, again a plain GM-supplied modifier rather than
+ * something this function derives on its own.
+ * Outcomes: 'no-effect' (armor roll too low — attack fails outright),
+ * 'stunned' (armor roll exactly equal — Stunned, attack still fails; OR a
+ * natural 1 on the Toughness roll, regardless of bonus), 'wounded-stunned'
+ * (Toughness roll — natural 2-6 plus bonus — at or below Toughness), or
+ * 'casualty' (that same roll exceeds Toughness — removed from play).
+ */
+export function rollFiveLeaguesHit(target = {}, { armorBonus = 0, toughnessBonus = 0, rng = Math.random, dice = {} } = {}) {
+  const armor = Number(target.armor) || 0;
+  const toughness = Number(target.toughness) || 0;
+  const aBonus = Number(armorBonus) || 0;
+  const tBonus = Number(toughnessBonus) || 0;
+  let armorDie = null; let armorTotal = null; let armorResult = 'skipped';
+  if (armor > 0) {
+    armorDie = dice.armorDie ?? rollDie(6, rng);
+    armorTotal = armorDie + aBonus;
+    armorResult = armorTotal > armor ? 'penetrated' : armorTotal === armor ? 'stunned' : 'failed';
+    if (armorResult !== 'penetrated') {
+      return {
+        armor, armorDie, armorBonus: aBonus, armorTotal, armorResult,
+        toughness, toughnessDie: null, toughnessBonus: tBonus, toughnessTotal: null,
+        outcome: armorResult === 'stunned' ? 'stunned' : 'no-effect',
+      };
+    }
+  }
+  const toughnessDie = dice.toughnessDie ?? rollDie(6, rng);
+  const naturalOne = toughnessDie === 1;
+  const toughnessTotal = naturalOne ? toughnessDie : toughnessDie + tBonus;
+  const outcome = naturalOne ? 'stunned' : toughnessTotal > toughness ? 'casualty' : 'wounded-stunned';
+  return { armor, armorDie, armorBonus: aBonus, armorTotal, armorResult, toughness, toughnessDie, toughnessBonus: tBonus, toughnessTotal, outcome };
+}
+
+export const FIVE_LEAGUES_HIT_OUTCOME_LABEL = { 'no-effect': 'No Effect', stunned: 'Stunned', 'wounded-stunned': 'Wounded & Stunned', casualty: 'Casualty' };
+
+/** Render a Hit resolution result as one journal/toast-friendly line. */
+export function formatFiveLeaguesHitText(label, r) {
+  const armorPart = r.armorResult === 'skipped' ? 'Armor 0 (skipped)' : `${r.armorDie}+${r.armorBonus}=${r.armorTotal} vs Armor ${r.armor}`;
+  const toughnessPart = r.toughnessDie == null ? '' : r.toughnessDie === 1
+    ? ` · natural 1 vs Toughness ${r.toughness}`
+    : ` · ${r.toughnessDie}+${r.toughnessBonus}=${r.toughnessTotal} vs Toughness ${r.toughness}`;
+  return `🩸 ${label}: ${armorPart}${toughnessPart} → ${FIVE_LEAGUES_HIT_OUTCOME_LABEL[r.outcome]}`;
+}
+
+/** Multi-line copy text for the dice roll window. */
+export function formatFiveLeaguesHitCopyText(r) {
+  const armorPart = r.armorResult === 'skipped' ? 'Armor 0 — skipped' : `${r.armorDie} + ${r.armorBonus} = ${r.armorTotal} (Armor ${r.armor})`;
+  const toughnessPart = r.toughnessDie == null ? '' : `\n\tOvercome Toughness: ${r.toughnessDie}${r.toughnessDie === 1 ? ' (natural 1)' : ` + ${r.toughnessBonus} = ${r.toughnessTotal}`} (Toughness ${r.toughness})`;
+  return `\tOvercome Armor: ${armorPart}${toughnessPart}\n${FIVE_LEAGUES_HIT_OUTCOME_LABEL[r.outcome].toUpperCase()}`;
+}

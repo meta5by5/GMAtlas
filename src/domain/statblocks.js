@@ -78,7 +78,21 @@ export function listStatblockTemplateIds(settings) {
 
 function templateFieldToStatblockField(f) {
   if (f.kind === 'track') {
-    const max = f.max || DEFAULT_TRACK_MAX;
+    // Real bug, found while building the Bestiary 'fiveleagues-lifeform'
+    // restyle (direct follow-up request): `f.max || DEFAULT_TRACK_MAX`
+    // treats an explicitly-authored `max: 0` (data/statblockTemplates.js's
+    // own MP field — correctly 0 for every ordinary, non-Aberration Enemy
+    // Table creature) as "not specified," silently replacing it with the
+    // default track size (5) instead. A freshly-created 'fiveleagues-
+    // lifeform' statblock (via Settings' own "+ Add statblock" flow) would
+    // get MP max 5 from the moment it's created — wrongly reading as a
+    // real Aberration (isFiveLeaguesAberrationEntity, drawers/index.js)
+    // before a GM ever touched it. Already-imported content (the ~121-
+    // entity Bestiary content packs, built by a separate script that never
+    // ran through this function) was never affected. Explicit null/
+    // undefined check instead of falsy-coercion fixes it for every other
+    // ruleset's own zero-max track fields too, not just this one.
+    const max = f.max != null ? f.max : DEFAULT_TRACK_MAX;
     const field = { key: f.key, value: clamp(Number(f.value) || 0, 0, max), max, track: true, rollMethod: f.rollMethod || 'none' };
     if (field.rollMethod === 'flat') field.target = f.target || 6;
     if (field.rollMethod === 'traveller') field.target = f.target || 8;
@@ -174,10 +188,17 @@ export function makeStatblock(kind, rulesetId, templateId, settings) {
     // Five Leagues from the Borderlands (data/rulesets.js) reuses this same
     // weapons-table/gear mechanism verbatim rather than a parallel table —
     // its own Weapon/Gear character-sheet layout fits the same Weapon/
-    // Range/Shots/Damage/Traits columns fine, and `gear` doubles as its
-    // free-text Skills list (see rulesets.js's own note on why Skills
-    // can't be a stats[]/tracks[] field).
+    // Range/Shots/Damage/Traits columns fine; `gear` is plain overflow
+    // notes (its own earlier reuse as a free-text Skills list was retired
+    // once Skills got a real structured checklist — see
+    // data/fiveLeaguesCharacter.js).
     if (['5pfh', 'fiveleagues'].includes(ruleset.id)) { group.weapons = []; group.gear = ''; }
+    // Five Leagues' own Items table (direct follow-up request: "track...
+    // gear storage in self, backpack or stash") — a second, sibling list to
+    // Weapons above for non-weapon gear (potions, tools, assorted items),
+    // same plain-array-index addressing. 5PFH has no equivalent concept, so
+    // this is fiveleagues-only, unlike the weapons table it sits beside.
+    if (ruleset.id === 'fiveleagues') { group.items = []; }
     // D&D 5e's own Attacks table (direct request) — same shape/mechanism as
     // 5PFH's weapons table above, just its own ruleset-gated field
     // (name/hit/damageType/notes instead of name/range/shots/damage/
@@ -374,6 +395,34 @@ export function removeStatblockWeapon(entity, groupIndex, weaponIndex) {
 export function setStatblockGear(entity, groupIndex, text) {
   const g = entity && entity.statblocks && entity.statblocks[groupIndex];
   if (g) g.gear = String(text || '');
+  return entity;
+}
+
+// --- Five Leagues character sheet: Items table (direct follow-up request)
+// ----------------------------------------------------------------------
+// group.items is an array of {name, location, notes} rows, same plain-
+// array-index addressing (itemIndex) as group.weapons above — a sibling
+// list for non-weapon gear, where `location` is one of the real Equipment
+// Storage options (data/fiveLeaguesCharacter.js's FIVE_LEAGUES_GEAR_
+// LOCATIONS: self/backpack/stash).
+export function addStatblockItem(entity, groupIndex) {
+  const g = entity && entity.statblocks && entity.statblocks[groupIndex];
+  if (!g) return entity;
+  if (!Array.isArray(g.items)) g.items = [];
+  g.items.push({ name: '', location: 'self', notes: '' });
+  return entity;
+}
+
+export function updateStatblockItem(entity, groupIndex, itemIndex, patch) {
+  const g = entity && entity.statblocks && entity.statblocks[groupIndex];
+  const it = g && Array.isArray(g.items) && g.items[itemIndex];
+  if (it) Object.assign(it, patch);
+  return entity;
+}
+
+export function removeStatblockItem(entity, groupIndex, itemIndex) {
+  const g = entity && entity.statblocks && entity.statblocks[groupIndex];
+  if (g && Array.isArray(g.items)) g.items.splice(itemIndex, 1);
   return entity;
 }
 
