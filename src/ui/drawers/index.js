@@ -5548,7 +5548,11 @@ function hexcrawlPalette(ui) {
 }
 
 function hexcrawlGrid(doc, mapId, ui) {
-  const range = ui.hexcrawlRange || { qMin: -8, qMax: 8, rMin: -8, rMax: 8 };
+  // Direct bug report (bisected to Firefox for Android specifically —
+  // same code/data renders fine in Chrome) — shell.js's own hexcrawlRange
+  // module-level default doc comment has the full story on why this
+  // fallback shrank from a 17x17 (289-hex) default to 11x11 (121).
+  const range = ui.hexcrawlRange || { qMin: -5, qMax: 5, rMin: -5, rMax: 5 };
   const riverToolArmed = !!(ui.hexcrawlPlacingIcon && ui.hexcrawlPlacingIcon.layer === 'river');
   const roadToolArmed = !!(ui.hexcrawlPlacingIcon && ui.hexcrawlPlacingIcon.layer === 'road');
   const threatToolArmed = !!(ui.hexcrawlPlacingIcon && ui.hexcrawlPlacingIcon.layer === 'threat');

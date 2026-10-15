@@ -233,6 +233,26 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .workspace-card h2 { margin: 0 var(--sp-6) 10px 0; font-size: 1.2rem; flex: 0 0 auto; }
 .workspace-card .lead { color: var(--text-dim); margin: 0 var(--sp-6) var(--sp-4) 0; flex: 0 0 auto; }
+/* Direct bug report: "Hexcrawl fails to load... when you make it a
+   selected position on the Storyboard" — reproduces on Chrome too (ruled
+   out via a real-bundle smoke test that the underlying render is correct:
+   full, well-formed Hexcrawl content, including .hexcrawl-viewport,
+   genuinely exists inside this exact card's own DOM, every time), so this
+   is a real CSS layout issue in the Storyboard card chain itself, not a
+   logic bug. .workspace-card-body's own `min-height: 0` (needed so it CAN
+   shrink below its content size — the whole point of giving Composer and
+   Navigator their own independent scrollbars instead of one shared
+   position:sticky, see this file's own doc comment above) is the exact
+   same "flex item allowed to collapse" shape that turned out to be the
+   real culprit for Hexcrawl's OTHER blank-panel reports (the drawer
+   body's own :has()-driven flex-fill, since removed outright). A floor
+   here can't be removed the same way without reintroducing THAT original
+   sticky-position bug, so instead: a safety-net min-height, well below
+   any genuine Composer/Navigator content's own natural height, that
+   guarantees this card can never collapse to zero/near-zero regardless
+   of how the surrounding CSS Grid stretch + nested flex-column chain
+   actually resolves on a given browser. */
+.workspace-card { min-height: 240px; }
 .workspace-card-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 /* Direct follow-up request ("reduce the margin space between scroll bar
    and text") — narrowed from a full --sp-6 gutter to --sp-3, still enough

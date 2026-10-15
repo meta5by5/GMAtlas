@@ -9406,6 +9406,20 @@ test('renameProfile only renames the targeted profile; setStoryboardPosition onl
   assert.equal(withPosition.storyboardPositions.navigator, 'narrative', 'other slots untouched');
 });
 
+test('setStoryboardPosition: assigning a gateable module to a slot also force-enables that module (direct bug report: Hexcrawl rendered blank in a Storyboard position whenever its own moduleEnabled checkbox was still off)', () => {
+  let profile = defaultRulesProfile('P');
+  profile = setModuleEnabled(profile, 'hexcrawl', false);
+  assert.equal(profile.moduleEnabled.hexcrawl, false);
+  const withPosition = setStoryboardPosition(profile, 'composer', 'hexcrawl');
+  assert.equal(withPosition.storyboardPositions.composer, 'hexcrawl');
+  assert.equal(withPosition.moduleEnabled.hexcrawl, true, 'assigning it to a position also ticks its enabled checkbox');
+  // A non-gateable content id (a built-in: dashboard/narrative/copilot) isn't
+  // in GATEABLE_MODULES at all — assigning it must not touch moduleEnabled.
+  const other = setModuleEnabled(defaultRulesProfile('Q'), 'trade', false);
+  const withBuiltin = setStoryboardPosition(other, 'navigator', 'narrative');
+  assert.equal(withBuiltin.moduleEnabled.trade, false, 'an unrelated module\'s own setting is untouched');
+});
+
 test('isModuleVisible: GATEABLE_MODULES ids follow moduleEnabled, everything else (Party, Guide, ...) is always visible regardless of profile', () => {
   let profile = defaultRulesProfile('P');
   assert.equal(isModuleVisible(profile, 'colony'), true);

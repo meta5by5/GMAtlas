@@ -34,9 +34,20 @@ export function setModuleEnabled(profile, moduleId, enabled) {
   return { ...profile, moduleEnabled: { ...profile.moduleEnabled, [moduleId]: !!enabled }, updatedAt: new Date().toISOString() };
 }
 
+/** Direct bug report: assigning a gateable module (e.g. Hexcrawl) to a
+ *  Storyboard position rendered blank whenever that module's own "enabled"
+ *  checkbox was still off, since renderPositionContent's isModuleVisible
+ *  gate checks moduleEnabled regardless of storyboardPositions — a GM could
+ *  pick it from the position dropdown without the UI ever prompting them to
+ *  also flip its checkbox. Assigning a module to a position now also force-
+ *  enables it, same as ticking the checkbox by hand; a built-in content id
+ *  (dashboard/narrative/copilot) isn't in GATEABLE_MODULES so this is a
+ *  no-op for the default slot contents. */
 export function setStoryboardPosition(profile, slot, contentId) {
   if (!['composer', 'navigator', 'advisor'].includes(slot)) return profile;
-  return { ...profile, storyboardPositions: { ...profile.storyboardPositions, [slot]: contentId }, updatedAt: new Date().toISOString() };
+  const next = { ...profile, storyboardPositions: { ...profile.storyboardPositions, [slot]: contentId }, updatedAt: new Date().toISOString() };
+  if (GATEABLE_MODULES.includes(contentId)) next.moduleEnabled = { ...next.moduleEnabled, [contentId]: true };
+  return next;
 }
 
 // The three Storyboard SLOT names (composer/navigator/advisor — fixed,

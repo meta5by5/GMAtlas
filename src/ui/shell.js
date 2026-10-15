@@ -545,13 +545,36 @@ let hexcrawlRoadStart = null;
 // Tracker's own worldTrackerSelectedSector.
 let hexcrawlSelectedHex = null;
 // The axial (q,r) window of hexes actually rendered into the DOM right
-// now — starts at a generous default and only ever GROWS (never shrinks,
-// so a hex a GM already painted never disappears mid-session), extended
-// by ensureHexcrawlRangeCoversViewport() once a pan/zoom gesture settles
-// and the camera has moved near its current edge. This is what makes the
-// hex space "unbounded" in practice without ever rendering more hexes
-// than are actually near the viewport.
-let hexcrawlRange = { qMin: -8, qMax: 8, rMin: -8, rMax: 8 };
+// now — starts at a default and only ever GROWS (never shrinks, so a hex
+// a GM already painted never disappears mid-session), extended by
+// ensureHexcrawlRangeCoversViewport() once a pan/zoom gesture settles and
+// the camera has moved near its current edge. This is what makes the hex
+// space "unbounded" in practice without ever rendering more hexes than
+// are actually near the viewport.
+//
+// Direct bug report ("Hexcrawl does not render on mobile"), eventually
+// bisected (after 3 CSS-based fix attempts failed) to Firefox for
+// Android specifically — the SAME real device/campaign/URL renders fine
+// in Chrome. That rules out a JS logic or data bug outright (identical
+// code, identical data) and points squarely at a rendering/performance
+// difference between the two engines. Each hex cell (drawers/index.js's
+// hexcrawlGrid) is genuinely heavy: one inline <svg>, one clip-path'd
+// div, up to 6 vertex buttons, up to 6 edge buttons, and a center button
+// — the OLD default below (-8..8, a 17x17 = 289-hex initial view) meant
+// potentially 4000+ DOM nodes with clip-path/SVG painting on the very
+// first open, before any interaction at all. That's exactly the kind of
+// workload documented to overwhelm a mobile GPU compositor (many
+// simultaneously clip-path'd/SVG elements each forced onto their own
+// layer) on Gecko/GeckoView specifically, while Chrome's Blink engine
+// tends to handle it without issue — plausible even though it can't be
+// directly verified in this working environment (no real mobile browser
+// or compositor available here). Shrunk to a much lighter initial
+// footprint (11x11 = 121 hexes, down ~58%) — ensureHexcrawlRangeCoversViewport
+// (already hardened with its own try/catch + bounds-checking) grows this
+// on demand as the GM actually pans/zooms, so the "unbounded, explorable"
+// design goal is unaffected; only how much renders BEFORE any
+// interaction changes.
+let hexcrawlRange = { qMin: -5, qMax: 5, rMin: -5, rMax: 5 };
 
 // --- Dungeon Crawl (ephemeral UI state only — nothing here is persisted;
 // the committed grid itself lives in campaign.dungeonCrawls) ---------------
