@@ -6,7 +6,7 @@
 import { applyShift } from './context.js';
 import { generateScene, recomposeSceneText, ensureNpcSceneState, NPC_SCENE_FIELD_ORACLE_PATH } from './scenes.js';
 import { tablesWithOverrides, rollTable, rollGroup, formatRoll, pick, getTable, currentTableEntries, updateOracleEntry, oraclePathsWithAnyTag, getOracleTags } from './oracles.js';
-import { linkMentions, parseMentions, createEntity, updateEntity, getEntity, LOCATION_SENSORY_ORACLE_PATH } from './entities.js';
+import { linkMentions, parseMentions, createEntity, updateEntity, getEntity, LOCATION_SENSORY_ORACLE_PATH, LOCATION_FANTASY_FIELD_ORACLE_PATH } from './entities.js';
 import { linkDocumentMentions, parseDocumentMentions, resolvedDocumentMentionNames } from './documents.js';
 import { SUGGESTION_LENSES, findLens, lensOracleCategories } from '../data/suggestionLenses.js';
 import { oracleLinkTagsFor, INTENT_ORACLE_TAGS } from '../data/entityFieldOracleLinks.js';
@@ -325,9 +325,14 @@ export function applyStoryShift(campaign, shiftName, payload, { rng = Math.rando
  *  die roll BEFORE calling this (rollOracle itself runs synchronously
  *  inside store.update, so it can't await dice-box directly) and passes
  *  the result in here; omitted, rolls against Math.random as always. */
-export function rollOracle(campaign, path, { group = false, toJournal = true, index, indexes } = {}) {
+export function rollOracle(campaign, path, { group = false, toJournal = true, index, indexes, genrePack } = {}) {
   const next = clone(campaign);
-  const tables = tablesWithOverrides(next.oracles?.overrides, next.settings?.genrePack);
+  // Real bug, found building the fantasy Location fields — see
+  // oracles.js's currentTableEntries doc comment for the full story.
+  // `genrePack`, when given (shell.js's call sites pass store.get().
+  // settings.genrePack — the active-profile-overlaid value), overrides
+  // the raw document's own stale settings.genrePack.
+  const tables = tablesWithOverrides(next.oracles?.overrides, genrePack || next.settings?.genrePack);
   const roll = group ? rollGroup(tables, path, Math.random, { indexes }) : rollTable(tables, path, Math.random, { index });
   const text = formatRoll(roll);
 
@@ -443,12 +448,12 @@ export function updateSceneField(campaign, sceneId, field, value) {
  *  No-ops (returns campaign unchanged) if the scene doesn't exist, `field`
  *  isn't one of the five, or the mapped table has no entries (e.g. a
  *  non-default genre pack that hasn't authored these tables yet). */
-export function rollNpcSceneField(campaign, sceneId, npcId, field, { rng = Math.random } = {}) {
+export function rollNpcSceneField(campaign, sceneId, npcId, field, { rng = Math.random, genrePack } = {}) {
   const next = clone(campaign);
   const scene = (next.scenes || []).find((s) => s.id === sceneId);
   const path = NPC_SCENE_FIELD_ORACLE_PATH[field];
   if (!scene || !path) return next;
-  const entries = currentTableEntries(next, path);
+  const entries = currentTableEntries(next, path, genrePack);
   if (!entries.length) return next;
   const index = Math.floor(rng() * entries.length);
   const state = ensureNpcSceneState(scene, npcId);
@@ -478,12 +483,12 @@ export function editNpcSceneField(campaign, sceneId, npcId, field, value) {
  *  targeting a permanent entity field (entities.js's `sensorySource` side-
  *  channel) instead of scene-scoped state. No-ops on a missing/non-
  *  location entity, an unmapped field, or an empty table. */
-export function rollLocationSensoryField(campaign, locationId, field, { rng = Math.random } = {}) {
+export function rollLocationSensoryField(campaign, locationId, field, { rng = Math.random, genrePack } = {}) {
   const next = clone(campaign);
   const e = getEntity(next, locationId);
   const path = LOCATION_SENSORY_ORACLE_PATH[field];
   if (!e || e.type !== 'location' || !path) return next;
-  const entries = currentTableEntries(next, path);
+  const entries = currentTableEntries(next, path, genrePack);
   if (!entries.length) return next;
   const index = Math.floor(rng() * entries.length);
   e[field] = entries[index];
@@ -508,11 +513,11 @@ const WHERE_DETAIL_ORACLE_PATH = {
  *  fills, same immediate-replace convention rollLocationSensoryField above
  *  already uses for a short single-phrase field). No-ops on an unknown
  *  field or an empty table. */
-export function rollWhereDetailField(campaign, field, { rng = Math.random } = {}) {
+export function rollWhereDetailField(campaign, field, { rng = Math.random, genrePack } = {}) {
   const next = clone(campaign);
   const path = WHERE_DETAIL_ORACLE_PATH[field];
   if (!path) return next;
-  const entries = currentTableEntries(next, path);
+  const entries = currentTableEntries(next, path, genrePack);
   if (!entries.length) return next;
   const index = Math.floor(rng() * entries.length);
   next.context.where[field] = entries[index];
@@ -529,6 +534,50 @@ export function editLocationSensoryField(campaign, locationId, field, value) {
   const clean = String(value || '');
   e[field] = clean;
   const source = e.sensorySource && e.sensorySource[field];
+  if (source && source.path && source.index != null) next = updateOracleEntry(next, source.path, source.index, clean);
+  return next;
+}
+
+/** Roll one of a fantasy Location's 9 oracle-mapped descriptor fields
+ *  (entities.js's LOCATION_FANTASY_FIELD_ORACLE_PATH — Settlement Type,
+ *  Notable Feature, Authority, Current Trouble, Current Project, Local
+ *  Color, Trade & Resources, Realm Type, Danger) from its own mapped
+ *  table — same shape as rollLocationSensoryField above, just a sibling
+ *  map/side-channel (fantasyFieldSource) rather than extending that one,
+ *  since these are a genre-specific set (drawers/index.js's
+ *  fantasyLocationFieldsSection only renders them under the fantasy
+ *  genre pack) rather than every Location's own always-on sensory
+ *  flavor. No-ops on a missing/non-location entity, an unmapped field,
+ *  or an empty table (currentTableEntries already resolves against
+ *  whichever genre pack is actually active, so an unrelated pack simply
+ *  has nothing to roll rather than this throwing). */
+export function rollLocationFantasyField(campaign, locationId, field, { rng = Math.random, genrePack } = {}) {
+  const next = clone(campaign);
+  const e = getEntity(next, locationId);
+  const path = LOCATION_FANTASY_FIELD_ORACLE_PATH[field];
+  if (!e || e.type !== 'location' || !path) return next;
+  const entries = currentTableEntries(next, path, genrePack);
+  if (!entries.length) return next;
+  const index = Math.floor(rng() * entries.length);
+  e[field] = entries[index];
+  if (!e.fantasyFieldSource || typeof e.fantasyFieldSource !== 'object') {
+    e.fantasyFieldSource = Object.fromEntries(Object.keys(LOCATION_FANTASY_FIELD_ORACLE_PATH).map((k) => [k, null]));
+  }
+  e.fantasyFieldSource[field] = { path, index };
+  return next;
+}
+
+/** Edit one of a Location's fantasy descriptor fields directly — writes
+ *  back to the sourcing oracle table entry if the current value came
+ *  from a roll, same "remembered" mechanism as editLocationSensoryField
+ *  above. */
+export function editLocationFantasyField(campaign, locationId, field, value) {
+  let next = clone(campaign);
+  const e = getEntity(next, locationId);
+  if (!e || e.type !== 'location' || !LOCATION_FANTASY_FIELD_ORACLE_PATH[field]) return next;
+  const clean = String(value || '');
+  e[field] = clean;
+  const source = e.fantasyFieldSource && e.fantasyFieldSource[field];
   if (source && source.path && source.index != null) next = updateOracleEntry(next, source.path, source.index, clean);
   return next;
 }

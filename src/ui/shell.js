@@ -6,7 +6,7 @@
 import { store } from '../core/store.js';
 import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
-import { continueStory, restartStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField, rollWhereDetailField, addContextEntity, removeContextEntity } from '../domain/session.js';
+import { continueStory, restartStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField, rollLocationFantasyField, editLocationFantasyField, rollWhereDetailField, addContextEntity, removeContextEntity } from '../domain/session.js';
 import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, addSceneAsset, removeSceneAsset, addSceneLocation, removeSceneLocation, setSceneSystem, addSceneDismissedFaction, removeSceneDismissedFaction, moveSceneActor } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag, tablesWithOverrides, getTable } from '../domain/oracles.js';
@@ -64,13 +64,13 @@ import {
 } from '../domain/hexcrawls.js';
 import {
   listDungeonMaps, getDungeonMap, getActiveDungeonMap, createDungeonMap, renameDungeonMap, deleteDungeonMap,
-  setActiveDungeonMap, setDungeonMapPack, getDungeonTile, placeDungeonTile, removeDungeonTile, setDungeonTileNotes,
+  setActiveDungeonMap, getDungeonTile, placeDungeonTile, removeDungeonTile, setDungeonTileNotes,
   computeDungeonAppendCells, pickRandomDungeonArchetype, pickRandomDungeonRotation,
   mergeDungeonTilesIntoRoom, unmergeDungeonRoom, removeDungeonRoom,
   setDungeonMapLocation, clearDungeonMapLocation, createDungeonFloorBelowStairs,
   addDungeonTileDressing, removeDungeonTileDressing,
 } from '../domain/dungeonCrawls.js';
-import { DUNGEON_CRAWL_ARCHETYPES, DUNGEON_CRAWL_ENTRANCE_ARCHETYPE } from '../data/dungeonCrawlTiles.js';
+import { DUNGEON_CRAWL_ARCHETYPES, DUNGEON_CRAWL_ENTRANCE_ARCHETYPE, DUNGEON_CRAWL_PACKS } from '../data/dungeonCrawlTiles.js';
 import { DUNGEON_TILE_GRID_SIZE } from '../data/dungeonCrawlDressing.js';
 import { findHexcrawlThreat, HEXCRAWL_THREAT_ICONS } from '../data/hexcrawlIcons.js';
 import { generateCreatureConcept, formatCreatureConcept, generateSiteConcept, formatSiteConcept, generateAdventureSeed, formatAdventureSeed } from '../domain/worldbuilding.js';
@@ -125,8 +125,8 @@ import {
   setEntityFiveLeaguesArmorBody, setEntityFiveLeaguesArmorFlag, toggleEntityFiveLeaguesArmorImprovement,
   toggleEntityFiveLeaguesSpell, applyFiveLeaguesWeaponCatalogPick, addFiveLeaguesItemFromCatalog,
   entityHasFiveLeaguesCounterAttack, entityHasFiveLeaguesParry,
-  setEntityFiveLeaguesActiveWeapon, getFiveLeaguesActiveWeapon, isFiveLeaguesWeaponRanged, parseFiveLeaguesWeaponDamage,
-  formatFiveLeaguesOvercome,
+  setEntityFiveLeaguesActiveWeapon,
+  formatFiveLeaguesOvercome, getFiveLeaguesAttackProfile, findFiveLeaguesGroupIndex,
 } from '../domain/fiveLeagues.js';
 import { renderFactionEvents } from './drawers/factionEvents.js';
 import { roll3d } from './diceBox3d.js';
@@ -748,7 +748,7 @@ let combatDefenderEntryId = null;
 // defaults to the closest/easiest band, the GM narrows it down before
 // rolling.
 function defaultCombatOptions() {
-  return { tactic: 'fight', furiousBonusStat: 'armor', counterAttack: false, defenderStunned: false, attackerStunned: false, rangedBand: 'close' };
+  return { tactic: 'fight', furiousBonusStat: 'armor', counterAttack: false, defenderStunned: false, attackerStunned: false, rangedBand: 'close', enemyRangedActive: false };
 }
 let combatOptions = defaultCombatOptions();
 let recapOpen = false; // ephemeral — collapses the "Previously on..." session recap panel
@@ -1603,12 +1603,15 @@ function onClick(ev) {
     if (!attacker || !defender) return;
     const attackerLabel = attacker.name || 'Attacker';
     const defenderLabel = defender.name || 'Defender';
-    const activeWeapon = getFiveLeaguesActiveWeapon(attacker);
-    const weaponLabel = activeWeapon ? (activeWeapon.name || 'Weapon') : 'Unarmed';
-    const { overcomeArmor: weaponOvercomeArmor, overcomeToughness: weaponOvercomeToughness } = activeWeapon
-      ? parseFiveLeaguesWeaponDamage(activeWeapon.damage)
-      : { overcomeArmor: -1, overcomeToughness: -1 }; // Unarmed, p.60: Melee -1/-1
-    if (isFiveLeaguesWeaponRanged(activeWeapon)) {
+    // getFiveLeaguesAttackProfile folds together a Player Character's own
+    // active Weapons-table weapon AND a Bestiary enemy's single Damage
+    // field (p.152 — no Weapons table at all) into one shape, so this
+    // handler doesn't need to know which kind of entity the Attacker is.
+    const attackerProfile = getFiveLeaguesAttackProfile(attacker, { enemyRangedActive: combatOptions.enemyRangedActive });
+    const weaponLabel = attackerProfile.label;
+    const weaponOvercomeArmor = attackerProfile.overcomeArmor;
+    const weaponOvercomeToughness = attackerProfile.overcomeToughness;
+    if (attackerProfile.ranged) {
       // Direct follow-up request: "during a ranged combat attack, prompt
       // the user for range details per rules on p.39 regarding distance
       // and cover" — combatOptions.rangedBand (the inline form rendered
@@ -1628,7 +1631,7 @@ function onClick(ev) {
           defenderArmor: getFiveLeaguesStat(defender, 'Armor'), defenderToughness: getFiveLeaguesStat(defender, 'Toughness'),
           weaponOvercomeArmor, weaponOvercomeToughness,
           bandLabel: band.label,
-          limitedAmmunition: activeWeapon ? /limited ammunition/i.test(String(activeWeapon.traits || '')) : false,
+          limitedAmmunition: attackerProfile.limitedAmmunition,
         },
       };
       return renderDiceRollOverlay();
@@ -1874,7 +1877,11 @@ function onClick(ev) {
     (async () => {
       const forced = await resolveOracleDiceIndex(path);
       let text = '';
-      store.update((d) => { const r = rollOracle(d, path, forced); text = r.text; return r.campaign; });
+      // genrePack: store.get() (overlaid with the active Rules Profile's
+      // own ruleset.genrePack) — real bug, see oracles.js's
+      // currentTableEntries doc comment: the raw doc a store.update()
+      // mutator receives never reflects a profile switch on its own.
+      store.update((d) => { const r = rollOracle(d, path, { ...forced, genrePack: store.get().settings.genrePack }); text = r.text; return r.campaign; });
       toast('🎲 ' + text.split('\n').slice(-1)[0]);
     })();
     return;
@@ -2320,14 +2327,23 @@ function onClick(ev) {
   }
 
   // --- Dungeon Crawl -------------------------------------------------------
-  const dcSelectMap = hit('[data-dungeoncrawl-select]');
-  if (dcSelectMap) {
-    dungeonCrawlPending = null; dungeonCrawlSelected = null; dungeonCrawlMergeMode = false; dungeonCrawlMergeSelection = new Set(); dungeonCrawlDetailZoom = 1; dungeonCrawlArmedDressing = '';
-    return store.update((d) => setActiveDungeonMap(d, dcSelectMap.dataset.dungeoncrawlSelect));
-  }
+  // Direct follow-up request: "Replace the chips showing the maps with a
+  // dropdown" — the map switch itself now lives in the onChange dispatcher
+  // below (data-dungeoncrawl-select is a <select> now, not chip buttons).
   const dcAdd = hit('[data-dungeoncrawl-add]');
   if (dcAdd) {
-    openInlinePrompt('dungeoncrawl-add', { label: 'Map name', placeholder: 'e.g. The Sunken Crypt', anchorRect: dcAdd.getBoundingClientRect() });
+    // Direct follow-up request: "The DC tile format should only be
+    // selectable once when creating the map, after which it is hidden" —
+    // Pack joins Map Name as a second field right here (the ONLY place a
+    // GM ever picks it now; the toolbar's old always-editable Pack
+    // <select> is gone).
+    openInlinePrompt('dungeoncrawl-add', {
+      anchorRect: dcAdd.getBoundingClientRect(),
+      fields: [
+        { key: 'name', label: 'Map name', placeholder: 'e.g. The Sunken Crypt', value: '' },
+        { key: 'pack', label: 'Tile format', type: 'select', value: 'dungeon', options: DUNGEON_CRAWL_PACKS.map((p) => ({ value: p.key, label: p.label })) },
+      ],
+    });
     return;
   }
   const dcRenameOpen = hit('[data-dungeoncrawl-rename-open]');
@@ -2401,6 +2417,19 @@ function onClick(ev) {
     dungeonCrawlSelected = null; dungeonCrawlDetailZoom = 1;
     return store.update((d) => setActiveDungeonMap(d, dcGotoFloor.dataset.dungeoncrawlGotoFloor));
   }
+  // Direct follow-up request: "From the entity record, you should see the
+  // map name listed as a link and clicking the link should navigate to
+  // the map" — the entity-side half of Link Location (drawers/index.js's
+  // dungeonCrawlLinksSection, entityDetail); unlike dcGotoFloor above,
+  // this can be clicked from somewhere the Dungeon Crawl drawer isn't
+  // even open yet (e.g. Cast), so it opens the tab too.
+  const dcOpenMap = hit('[data-open-dungeoncrawl-map]');
+  if (dcOpenMap) {
+    const mapId = dcOpenMap.dataset.openDungeoncrawlMap;
+    dungeonCrawlPending = null; dungeonCrawlSelected = null; dungeonCrawlMergeMode = false; dungeonCrawlMergeSelection = new Set(); dungeonCrawlDetailZoom = 1; dungeonCrawlArmedDressing = '';
+    openDrawerTab('dungeoncrawl');
+    return store.update((d) => setActiveDungeonMap(d, mapId));
+  }
   const dcPackMergeToggle = hit('[data-dungeoncrawl-merge-toggle]');
   if (dcPackMergeToggle) {
     dungeonCrawlMergeMode = !dungeonCrawlMergeMode;
@@ -2420,8 +2449,25 @@ function onClick(ev) {
   // already-placed dressing icon is checked here, BEFORE the general
   // placement targets below (data-dungeoncrawl-cell / data-dungeoncrawl-
   // detail-place), since it's a more specific nested target within them.
+  // Direct follow-up request: "Removing a Dressing icon... must require a
+  // double click and confirm prompt" — a single accidental click (easy to
+  // land, since these are small glyphs packed onto a 12x12 grid) used to
+  // remove one outright with zero recovery. Same manual click-timing
+  // double-click detection the Tile reactivate/empty-cell-placement
+  // gestures already use elsewhere in this file (a "dress:" prefix on the
+  // tracking key keeps it from ever colliding with THOSE cells' own
+  // "mapId,x,y" raw keys, which this dressing id's own comma-joined
+  // string could otherwise coincidentally match) — the actual removal
+  // still only happens if the GM then confirms.
   const dcDressingRemove = hit('[data-dungeoncrawl-dressing-remove]');
   if (dcDressingRemove) {
+    const raw = 'dress:' + dcDressingRemove.dataset.dungeoncrawlDressingRemove;
+    const now = Date.now();
+    const isDoubleClick = raw === dungeonCrawlLastClickKey && (now - dungeonCrawlLastClickAt) < 500;
+    dungeonCrawlLastClickKey = isDoubleClick ? null : raw;
+    dungeonCrawlLastClickAt = now;
+    if (!isDoubleClick) return;
+    if (!window.confirm('Remove this dungeon dressing marker?')) return;
     const [mapId, x, y, dressingId] = dcDressingRemove.dataset.dungeoncrawlDressingRemove.split(',');
     return store.update((d) => removeDungeonTileDressing(d, mapId, Number(x), Number(y), dressingId));
   }
@@ -3035,7 +3081,7 @@ function onClick(ev) {
   // Location's Sights/Smells/Sounds already use, not a jump-to-browse link.
   const whereFieldRoll = hit('[data-where-field-roll]');
   if (whereFieldRoll) {
-    return store.update((d) => rollWhereDetailField(d, whereFieldRoll.dataset.whereFieldRoll));
+    return store.update((d) => rollWhereDetailField(d, whereFieldRoll.dataset.whereFieldRoll, { genrePack: store.get().settings.genrePack }));
   }
   const toolbarToggle = hit('[data-rich-toolbar-toggle]');
   if (toolbarToggle) {
@@ -3104,7 +3150,7 @@ function onClick(ev) {
   if (rollGroupBtn) {
     const path = rollGroupBtn.dataset.rollGroup.split('>');
     let text = '';
-    store.update((d) => { const r = rollOracle(d, path, { group: true }); text = r.text; return r.campaign; });
+    store.update((d) => { const r = rollOracle(d, path, { group: true, genrePack: store.get().settings.genrePack }); text = r.text; return r.campaign; });
     return toast('🎲 ' + text.split('\n').slice(-1)[0]);
   }
 
@@ -3292,13 +3338,29 @@ function onClick(ev) {
     renderCombatTrackerPanel();
     return renderDrawerBody();
   }
+  // Direct follow-up bug report: "weapon selection in combat tracker...
+  // picking one does nothing" — real root cause: a real browser's click
+  // to OPEN the <select> (data-combat-tracker-active-weapon) bubbles up
+  // to this SAME row, same as any other click inside it. Without this
+  // guard, that bubbled click fell through to the row-toggle branch
+  // below, which synchronously tears down and rebuilds the row's own DOM
+  // (renderCombatTrackerPanel) — detaching the ORIGINAL <select> before
+  // the user ever picks an option. The native dropdown stays open against
+  // that now-detached node, so picking an option still fires 'change' on
+  // it, but a detached node is no longer inside `root` — the one place
+  // the delegated 'change' listener is bound — so the choice silently
+  // never reached the store. A plain early return here leaves the select
+  // alone entirely on click, same posture as every other interactive
+  // control nested in this row.
+  if (hit('[data-combat-tracker-active-weapon]')) return;
   // Combat Initiative Tracker's own row click — checked AFTER every more
   // specific control a row can contain (open-entity, the name-toggle's
-  // own expand, the remove ✕ above) so this only ever fires for a click
-  // on the row's own background, never stealing one of theirs. Under
-  // every OTHER ruleset this is still the plain "active combatant"
-  // highlight (direct follow-up request: "click-to-highlight a record") —
-  // setCombatTrackerActiveEntry's own toggle logic, only one at a time.
+  // own expand, the remove ✕, the weapon select above) so this only ever
+  // fires for a click on the row's own background, never stealing one of
+  // theirs. Under every OTHER ruleset this is still the plain "active
+  // combatant" highlight (direct follow-up request: "click-to-highlight a
+  // record") — setCombatTrackerActiveEntry's own toggle logic, only one
+  // at a time.
   // Direct follow-up request (fiveleagues only): "select the attacker NPC
   // first which is highlighted in red and then select the defender
   // highlighted in blue" — replaces that same click with a two-step
@@ -3860,7 +3922,7 @@ function onClick(ev) {
     // record, so re-rolling several times before installing doesn't spam
     // the Journal with rejected drafts.
     let text = '';
-    store.update((d) => { const r = rollOracle(d, ['Augmentation', 'Cyberware Concept'], { toJournal: false }); text = r.text; return r.campaign; });
+    store.update((d) => { const r = rollOracle(d, ['Augmentation', 'Cyberware Concept'], { toJournal: false, genrePack: store.get().settings.genrePack }); text = r.text; return r.campaign; });
     enhancementDraft[id] = text.split('\n').slice(-1)[0];
     return renderDrawerBody();
   }
@@ -4365,7 +4427,7 @@ function onClick(ev) {
     (async () => {
       const forced = await resolveOracleDiceIndex(path);
       let text = '';
-      store.update((d) => { const r = rollOracle(d, path, forced); text = r.text; return r.campaign; });
+      store.update((d) => { const r = rollOracle(d, path, { ...forced, genrePack: store.get().settings.genrePack }); text = r.text; return r.campaign; });
       toast(text || 'Rolled');
     })();
     return;
@@ -4419,7 +4481,7 @@ function onClick(ev) {
     const path = advisorRoll.dataset.advisorOracleRoll.split('>');
     const resultKey = advisorRoll.dataset.advisorResultKey;
     let text = '';
-    store.update((d) => { const r = rollOracle(d, path, { toJournal: false }); text = r.text; return r.campaign; });
+    store.update((d) => { const r = rollOracle(d, path, { toJournal: false, genrePack: store.get().settings.genrePack }); text = r.text; return r.campaign; });
     advisorOracleResults[resultKey] = text;
     return render();
   }
@@ -4519,7 +4581,7 @@ function onClick(ev) {
     const [npcId, field] = sceneNpcRoll.dataset.sceneNpcRoll.split('::');
     const sceneId = currentSceneId();
     if (!sceneId) return;
-    return store.update((d) => rollNpcSceneField(d, sceneId, npcId, field));
+    return store.update((d) => rollNpcSceneField(d, sceneId, npcId, field, { genrePack: store.get().settings.genrePack }));
   }
   // Composer's NPC scene-field popup "roll all" (direct follow-up
   // request): a double-dice button, right-aligned just left of the
@@ -4534,8 +4596,9 @@ function onClick(ev) {
     if (!sceneId) return;
     return store.update((d) => {
       let next = d;
+      const genrePack = store.get().settings.genrePack;
       for (const field of ['disposition', 'motivation', 'threatRank', 'challenges', 'opportunities']) {
-        next = rollNpcSceneField(next, sceneId, npcId, field);
+        next = rollNpcSceneField(next, sceneId, npcId, field, { genrePack });
       }
       return next;
     });
@@ -4886,7 +4949,7 @@ function onClick(ev) {
   const locationSensoryRoll = hit('[data-location-sensory-roll]');
   if (locationSensoryRoll) {
     const [locId, field] = locationSensoryRoll.dataset.locationSensoryRoll.split('::');
-    return store.update((d) => rollLocationSensoryField(d, locId, field));
+    return store.update((d) => rollLocationSensoryField(d, locId, field, { genrePack: store.get().settings.genrePack }));
   }
   // "✕" on a Location Details sensory field (Sights/Smells/Sounds, direct
   // follow-up request) — same clear-in-place shape as the NPC scene-field
@@ -4895,6 +4958,23 @@ function onClick(ev) {
   if (locationSensoryClear) {
     const [locId, field] = locationSensoryClear.dataset.locationSensoryClear.split('::');
     return store.update((d) => editLocationSensoryField(d, locId, field, ''));
+  }
+  // Direct follow-up request: "For all fantasy Location entity types,
+  // create a robust list of location-defining fields that map to
+  // oracles so they can be autopopulated" — drawers/index.js's
+  // fantasyLocationFieldsSection, same roll/clear shape as the sensory
+  // fields just above (a separate data attribute + domain function pair,
+  // not reused, since these are a genre-scoped field set rather than
+  // every Location's own always-on sensory flavor).
+  const locationFantasyRoll = hit('[data-location-fantasy-roll]');
+  if (locationFantasyRoll) {
+    const [locId, field] = locationFantasyRoll.dataset.locationFantasyRoll.split('::');
+    return store.update((d) => rollLocationFantasyField(d, locId, field, { genrePack: store.get().settings.genrePack }));
+  }
+  const locationFantasyClear = hit('[data-location-fantasy-clear]');
+  if (locationFantasyClear) {
+    const [locId, field] = locationFantasyClear.dataset.locationFantasyClear.split('::');
+    return store.update((d) => editLocationFantasyField(d, locId, field, ''));
   }
 
   // Campaigns / Ruleset Profile Editor (design/adr/rules-profiles-multi-
@@ -5505,6 +5585,47 @@ function onDblClick(ev) {
   performFieldRoll(f, `${e.name || 'Unnamed'} — ${f.key || 'Stat'}`);
 }
 
+// Shared by both the free-text tag input and the tag dropdown (direct
+// follow-up request: "the tag field needs a dropdown... for
+// consistency") — exactly what used to live inline in the text input's
+// own handler, factored out so adding a tag has the identical real-world
+// side effects (Crew Roster sync, Character Sheet un-archive, Shared
+// Asset vehicle reconciliation) no matter which control committed it.
+function commitEntityTagValue(value) {
+  const active = store.get().entities.activeId;
+  // Direct follow-up request: tagging an existing NPC #character here
+  // (Party's own documented way to add one you already made) also adds
+  // a Crew Roster row for them.
+  // Re-adding "character" restores any Character Sheet stats archived
+  // when the tag was previously removed (see the protected-tag confirm
+  // elsewhere) — a plain no-op if there was nothing archived.
+  //
+  // Direct follow-up request: "If an Asset is added to the party and
+  // then changed to 'vehicle' (but was originally added as just an
+  // Asset), then rescan the party shared assets and notify the user it
+  // will be removed since it changed asset type." Tagging an entity
+  // #vehicle HERE (the Entity Editor's own tag controls, used to retag an
+  // entity already sitting in Cast — as opposed to "+Vehicle"'s own
+  // create flow above, which tags #vehicle BEFORE linking it into
+  // sharedAssetIds, so it never trips this) while that entity is
+  // already linked in Party's Shared Assets means it no longer belongs
+  // in that generic roster — same "+Asset" vs "+Vehicle" mutually-
+  // exclusive-candidate-pool rule renderEntityPickerOverlay already
+  // enforces going forward, just applied retroactively here.
+  let becameOrphanedVehicle = false;
+  store.update((d) => {
+    let next = syncCrewRosterWithParty(addEntityTag(d, active, value));
+    if (value.toLowerCase() === 'character') next = setCharacterStatblocksArchived(next, active, false);
+    if (value.toLowerCase() === 'vehicle') {
+      const r = reconcilePartySharedAssetVehicleTag(next, active);
+      next = r.campaign;
+      becameOrphanedVehicle = r.removed;
+    }
+    return next;
+  });
+  if (becameOrphanedVehicle) toast('Tagged #vehicle — removed from Shared Assets (it changed asset type; use "+ Vehicle" there to re-add it)');
+}
+
 function onChange(ev) {
   const t = ev.target;
   // Dice roller pool's per-die Modifier field (direct follow-up request) —
@@ -5598,9 +5719,14 @@ function onChange(ev) {
     return store.update((d) => setHexNotes(d, mapId, Number(q), Number(r), t.value));
   }
   // --- Dungeon Crawl ---
-  const dcPackSelect = t.closest('[data-dungeoncrawl-pack]');
-  if (dcPackSelect) {
-    return store.update((d) => setDungeonMapPack(d, dcPackSelect.dataset.dungeoncrawlPack, t.value));
+  // Direct follow-up request: "Replace the chips showing the maps with a
+  // dropdown selecting the active map" — same reset-every-ephemeral-UI-
+  // state posture the old chip buttons' own onClick handler had, just
+  // triggered by 'change' (a <select>'s own event) instead of 'click'.
+  const dcMapSelect = t.closest('[data-dungeoncrawl-select]');
+  if (dcMapSelect) {
+    dungeonCrawlPending = null; dungeonCrawlSelected = null; dungeonCrawlMergeMode = false; dungeonCrawlMergeSelection = new Set(); dungeonCrawlDetailZoom = 1; dungeonCrawlArmedDressing = '';
+    return store.update((d) => setActiveDungeonMap(d, t.value));
   }
   // Direct follow-up request: "allow multiple map grids as different floors
   // related to the same map that you can select from a drop down" — a
@@ -5691,42 +5817,22 @@ function onChange(ev) {
   // datalist suggestion or typing a new tag and blurring both fire 'change'.
   const entTagInput = t.closest('[data-entity-tag-input]');
   if (entTagInput) {
-    const active = store.get().entities.activeId;
     const value = t.value.trim();
     t.value = '';
-    // Direct follow-up request: tagging an existing NPC #character here
-    // (Party's own documented way to add one you already made) also adds
-    // a Crew Roster row for them.
-    // Re-adding "character" restores any Character Sheet stats archived
-    // when the tag was previously removed (see the protected-tag confirm
-    // below) — a plain no-op if there was nothing archived.
-    if (value) {
-      // Direct follow-up request: "If an Asset is added to the party and
-      // then changed to 'vehicle' (but was originally added as just an
-      // Asset), then rescan the party shared assets and notify the user it
-      // will be removed since it changed asset type." Tagging an entity
-      // #vehicle HERE (the Entity Editor's own tag input, used to retag an
-      // entity already sitting in Cast — as opposed to "+Vehicle"'s own
-      // create flow above, which tags #vehicle BEFORE linking it into
-      // sharedAssetIds, so it never trips this) while that entity is
-      // already linked in Party's Shared Assets means it no longer belongs
-      // in that generic roster — same "+Asset" vs "+Vehicle" mutually-
-      // exclusive-candidate-pool rule renderEntityPickerOverlay already
-      // enforces going forward, just applied retroactively here.
-      let becameOrphanedVehicle = false;
-      store.update((d) => {
-        let next = syncCrewRosterWithParty(addEntityTag(d, active, value));
-        if (value.toLowerCase() === 'character') next = setCharacterStatblocksArchived(next, active, false);
-        if (value.toLowerCase() === 'vehicle') {
-          const r = reconcilePartySharedAssetVehicleTag(next, active);
-          next = r.campaign;
-          becameOrphanedVehicle = r.removed;
-        }
-        return next;
-      });
-      if (becameOrphanedVehicle) toast('Tagged #vehicle — removed from Shared Assets (it changed asset type; use "+ Vehicle" there to re-add it)');
-      return;
-    }
+    if (value) commitEntityTagValue(value);
+    return;
+  }
+  // Direct follow-up request: "the tag field needs a dropdown listing the
+  // protected and entity-specific options for consistency" — same
+  // commitEntityTagValue the free-text input above uses (the crew-
+  // roster/character-archive/vehicle-reconcile side effects apply either
+  // way a tag gets added), same "blank placeholder, commit on change,
+  // reset to blank" shape as data-entity-base-add/-tradecode-add.
+  const entTagSelect = t.closest('[data-entity-tag-select]');
+  if (entTagSelect) {
+    const value = t.value;
+    t.value = '';
+    if (value) commitEntityTagValue(value);
     return;
   }
 
@@ -5874,6 +5980,18 @@ function onChange(ev) {
   const rangedBandSelect = t.closest('[data-combat-tracker-ranged-band]');
   if (rangedBandSelect) {
     combatOptions = { ...combatOptions, rangedBand: t.value };
+    return renderCombatTrackerPanel();
+  }
+  // "weapon selection in combat tracker does not select an item from the
+  // list" (direct follow-up bug report) — a Bestiary enemy has no
+  // Weapons table at all (p.152), so there's no weapon list for IT to
+  // pick from; this is the ephemeral, per-exchange substitute (same
+  // posture as every other combatOptions checkbox here) only ever
+  // rendered for such an entity when its own Ranged field says some of
+  // its models carry a ranged weapon.
+  const enemyRangedToggle = t.closest('[data-combat-tracker-enemy-ranged-toggle]');
+  if (enemyRangedToggle) {
+    combatOptions = { ...combatOptions, enemyRangedActive: t.checked };
     return renderCombatTrackerPanel();
   }
   // Direct follow-up request: "Factor in armor and all other combat
@@ -6129,6 +6247,11 @@ function onChange(ev) {
       return store.update((d) => editLocationSensoryField(d, locId, field, t.value));
     }
     return store.update((d) => updateEntity(d, locId, { [field]: t.value }));
+  }
+  const locationFantasyField = t.closest('[data-location-fantasy-field]');
+  if (locationFantasyField) {
+    const [locId, field] = locationFantasyField.dataset.locationFantasyField.split('::');
+    return store.update((d) => editLocationFantasyField(d, locId, field, t.value));
   }
   const factionFaRefit = t.closest('[data-faction-fa-refit]');
   if (factionFaRefit) {
@@ -7823,29 +7946,59 @@ function scheduleHexcrawlRangeCheck() {
  *  already painted never disappears mid-session) and re-render. This is
  *  what makes the hex space reachable-by-scrolling genuinely unbounded
  *  without ever rendering more hexes than are actually near the viewport
- *  at any one time. */
+ *  at any one time.
+ *
+ *  Direct bug report ("Hexcrawl does not render on mobile at all"),
+ *  investigated at length: this function is invoked from
+ *  scheduleHexcrawlRangeCheck's own setTimeout, OUTSIDE renderDrawerBody/
+ *  renderActiveDrawerHtml's own try/catch (which only ever wraps a
+ *  SYNCHRONOUS call reached directly from a click/render pass) — any
+ *  throw in THIS function's own math, before it ever reaches
+ *  renderDrawerBody() at the end, is silently swallowed by the browser's
+ *  own unhandled-timeout-error handling with no visible trace at all,
+ *  not even the usual "This panel failed to render" fallback. Hardened
+ *  with its own try/catch (consistent with every other render-error
+ *  guard in this app) plus explicit Number.isFinite checks on every
+ *  computed bound — a corrupted camera (hexcrawlCamera.scale reaching 0
+ *  would turn screenToHexcrawlWorldPixel's own division into Infinity/
+ *  NaN, however that state was reached) can never silently produce a
+ *  non-finite or absurdly large range and get stored into hexcrawlRange,
+ *  which widening-only growth would otherwise make permanent for the
+ *  rest of the session. */
 function ensureHexcrawlRangeCoversViewport() {
-  const viewport = root.querySelector('.hexcrawl-viewport');
-  if (!viewport) return;
-  const rect = viewport.getBoundingClientRect();
-  if (!rect.width || !rect.height) return;
-  const corners = [
-    screenToHexcrawlWorldPixel(rect, rect.left, rect.top),
-    screenToHexcrawlWorldPixel(rect, rect.right, rect.top),
-    screenToHexcrawlWorldPixel(rect, rect.left, rect.bottom),
-    screenToHexcrawlWorldPixel(rect, rect.right, rect.bottom),
-  ].map((p) => pixelToAxial(p.x, p.y, HEX_SIZE));
-  const PAD = 3;
-  const qMin = Math.min(...corners.map((c) => c.q)) - PAD;
-  const qMax = Math.max(...corners.map((c) => c.q)) + PAD;
-  const rMin = Math.min(...corners.map((c) => c.r)) - PAD;
-  const rMax = Math.max(...corners.map((c) => c.r)) + PAD;
-  if (qMin >= hexcrawlRange.qMin && qMax <= hexcrawlRange.qMax && rMin >= hexcrawlRange.rMin && rMax <= hexcrawlRange.rMax) return;
-  hexcrawlRange = {
-    qMin: Math.min(qMin, hexcrawlRange.qMin), qMax: Math.max(qMax, hexcrawlRange.qMax),
-    rMin: Math.min(rMin, hexcrawlRange.rMin), rMax: Math.max(rMax, hexcrawlRange.rMax),
-  };
-  renderDrawerBody();
+  try {
+    const viewport = root.querySelector('.hexcrawl-viewport');
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    if (!Number.isFinite(hexcrawlCamera.scale) || hexcrawlCamera.scale <= 0) return;
+    const corners = [
+      screenToHexcrawlWorldPixel(rect, rect.left, rect.top),
+      screenToHexcrawlWorldPixel(rect, rect.right, rect.top),
+      screenToHexcrawlWorldPixel(rect, rect.left, rect.bottom),
+      screenToHexcrawlWorldPixel(rect, rect.right, rect.bottom),
+    ].map((p) => pixelToAxial(p.x, p.y, HEX_SIZE));
+    const PAD = 3;
+    const qMin = Math.min(...corners.map((c) => c.q)) - PAD;
+    const qMax = Math.max(...corners.map((c) => c.q)) + PAD;
+    const rMin = Math.min(...corners.map((c) => c.r)) - PAD;
+    const rMax = Math.max(...corners.map((c) => c.r)) + PAD;
+    if (![qMin, qMax, rMin, rMax].every(Number.isFinite)) return;
+    if (qMin >= hexcrawlRange.qMin && qMax <= hexcrawlRange.qMax && rMin >= hexcrawlRange.rMin && rMax <= hexcrawlRange.rMax) return;
+    // A single bad reading should never balloon the (ever-growing, never-
+    // shrinking) rendered window past what any real zoom level could
+    // actually need — caps runaway growth at a generous but finite size.
+    const MAX_SPAN = 200;
+    hexcrawlRange = {
+      qMin: Math.max(Math.min(qMin, hexcrawlRange.qMin), hexcrawlRange.qMax - MAX_SPAN),
+      qMax: Math.min(Math.max(qMax, hexcrawlRange.qMax), hexcrawlRange.qMin + MAX_SPAN),
+      rMin: Math.max(Math.min(rMin, hexcrawlRange.rMin), hexcrawlRange.rMax - MAX_SPAN),
+      rMax: Math.min(Math.max(rMax, hexcrawlRange.rMax), hexcrawlRange.rMin + MAX_SPAN),
+    };
+    renderDrawerBody();
+  } catch (err) {
+    console.error('Hexcrawl range check failed:', err);
+  }
 }
 
 
@@ -8315,12 +8468,28 @@ function openInlinePrompt(kind, { label, placeholder = '', value = '', meta = nu
   renderInlinePrompt(anchorRect);
 }
 
+// Direct follow-up request: "The DC tile format should only be selectable
+// once when creating the map, after which it is hidden" — picking a Pack
+// needed to join the "+ New Map" prompt's own Map Name field as a SECOND
+// field, and unlike every field this generic prompt has ever needed
+// before, it's a closed set of choices (DUNGEON_CRAWL_PACKS), not free
+// text. Extended with an optional `f.type === 'select'` (f.options, each
+// {value,label}) rather than inventing a second, bespoke multi-field form
+// component just for this one case — commitInlinePrompt already reads
+// every field generically via `.value` off whatever carries
+// data-inline-prompt-field, which a <select> provides identically to an
+// <input>, so this is the only place that needed to change.
 function renderInlinePrompt(anchorRect) {
   const el = root && root.querySelector('[data-inline-prompt]');
   if (!el || !inlinePrompt) return;
   const fieldsEl = el.querySelector('[data-inline-prompt-fields]');
-  fieldsEl.innerHTML = inlinePrompt.fields.map((f) => `
-    <label class="inline-prompt-label">${escapeHtml(f.label)}
+  fieldsEl.innerHTML = inlinePrompt.fields.map((f) => f.type === 'select'
+    ? `<label class="inline-prompt-label">${escapeHtml(f.label)}
+      <select class="inline-prompt-input" data-inline-prompt-field="${escapeHtml(f.key)}">
+        ${(f.options || []).map((o) => `<option value="${escapeHtml(o.value)}" ${o.value === f.value ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
+      </select>
+    </label>`
+    : `<label class="inline-prompt-label">${escapeHtml(f.label)}
       <input type="text" class="inline-prompt-input" data-inline-prompt-field="${escapeHtml(f.key)}" value="${escapeHtml(f.value || '')}" placeholder="${escapeHtml(f.placeholder || '')}" autocomplete="off">
     </label>`).join('');
   if (anchorRect) {
@@ -8331,7 +8500,9 @@ function renderInlinePrompt(anchorRect) {
   }
   el.hidden = false;
   const first = fieldsEl.querySelector('[data-inline-prompt-field]');
-  if (first) { first.focus(); first.select(); }
+  // A <select> has no .select() method (text-input-only API) — calling it
+  // unconditionally would throw the moment a prompt's FIRST field is one.
+  if (first) { first.focus(); if (first.select) first.select(); }
 }
 
 function closeInlinePrompt() {
@@ -8412,7 +8583,7 @@ function commitInlinePrompt() {
     dungeonCrawlPending = null; dungeonCrawlSelected = null; dungeonCrawlMergeMode = false; dungeonCrawlMergeSelection = new Set(); dungeonCrawlArmedDressing = '';
     let newMapId = null;
     store.update((d) => {
-      const r = createDungeonMap(d, value, 'dungeon');
+      const r = createDungeonMap(d, values.name, values.pack || 'dungeon');
       newMapId = r.id;
       return r.campaign;
     });
@@ -9679,9 +9850,15 @@ function renderCombatTrackerPanel() {
   // which of the two real, completely different mechanics the Combat
   // Options form below offers: no weapon or a melee one still gets the
   // existing Tactic/Counter Attack/Stunned form; a ranged one instead
-  // gets the new Range/Cover band picker (p.39).
-  const attackerActiveWeapon = attackerEntity ? getFiveLeaguesActiveWeapon(attackerEntity) : null;
-  const attackerIsRanged = isFiveLeaguesWeaponRanged(attackerActiveWeapon);
+  // gets the new Range/Cover band picker (p.39). getFiveLeaguesAttackProfile
+  // (same function the Attack button itself now uses, domain/fiveLeagues.js)
+  // also covers a Bestiary enemy with no Weapons table at all — its own
+  // Ranged field (p.152) drives `hasRangedOption`, and the GM's own
+  // per-exchange "Attacking at range" checkbox (combatOptions.
+  // enemyRangedActive, rendered below) drives `ranged`.
+  const attackerProfile = attackerEntity ? getFiveLeaguesAttackProfile(attackerEntity, { enemyRangedActive: combatOptions.enemyRangedActive }) : null;
+  const attackerIsRanged = !!(attackerProfile && attackerProfile.ranged);
+  const attackerHasEnemyRangedOption = !!(attackerProfile && attackerProfile.hasRangedOption);
   const canAttack = isFiveLeagues && !!combatAttackerEntryId && !!combatDefenderEntryId;
   const attackTitle = !combatAttackerEntryId ? 'Click a row to select the Attacker first'
     : !combatDefenderEntryId ? 'Click another row to select the Defender'
@@ -9713,7 +9890,7 @@ function renderCombatTrackerPanel() {
         <span class="combat-tracker-handle" draggable="true" data-drag-combat-tracker-entry="${escapeHtml(entry.id)}" title="Drag to reorder">⠿</span>
         <div class="combat-tracker-card-wrap">
           ${partyMemberCard(entity, doc, ui, { compact: true })}
-          ${isFiveLeagues ? fiveLeaguesActiveWeaponSelectHtml(entity, entry.id) : ''}
+          ${isFiveLeagues && findFiveLeaguesGroupIndex(entity) !== -1 ? fiveLeaguesActiveWeaponSelectHtml(entity, entry.id) : ''}
         </div>
         <button type="button" class="icon-btn" data-combat-tracker-remove="${escapeHtml(entry.id)}" title="Remove from tracker">✕</button>
       </div>`;
@@ -9732,11 +9909,29 @@ function renderCombatTrackerPanel() {
   // itself, resolveFiveLeaguesHitEligibility, domain/dice.js).
   let optionsHtml = '';
   if (isFiveLeagues && combatAttackerEntryId && combatDefenderEntryId) {
+    // A Bestiary enemy has no Weapons table to pick an "active weapon"
+    // from at all (its own Damage field, p.152, covers every attack) —
+    // direct follow-up bug report: "weapon selection in combat tracker
+    // does not select an item from the list" traced back to this: the
+    // per-row weapon <select> only ever offers "— Unarmed —" for such an
+    // entity (now hidden entirely, see the row-rendering above), and
+    // Combat Skill/Armor/Toughness/Damage were all silently reading 0/
+    // Unarmed underneath it too (fixed in getFiveLeaguesStat/
+    // getFiveLeaguesAttackProfile, domain/fiveLeagues.js). Whether a
+    // ranged-armed model within that enemy group (p.152's own Ranged
+    // column, e.g. "2 slingers") is the one attacking THIS exchange is
+    // the GM's own per-roll call, not a fixed property of the entity —
+    // same ephemeral posture as Tactic/Stunned below, not persisted.
+    const enemyRangedToggleHtml = attackerHasEnemyRangedOption ? `
+        <label class="combat-tracker-option-check" title="This enemy group has some ranged-armed models (p.152's own Ranged column) — tick if THIS exchange is a ranged attack instead of melee.">
+          <input type="checkbox" data-combat-tracker-enemy-ranged-toggle ${combatOptions.enemyRangedActive ? 'checked' : ''}> Attacking at range this exchange
+        </label>` : '';
     if (attackerIsRanged) {
       const bandOpts = FIVE_LEAGUES_RANGED_BANDS.map((b) => `<option value="${b.key}" ${combatOptions.rangedBand === b.key ? 'selected' : ''}>${escapeHtml(b.label)} (${b.targetNumber}+)</option>`).join('');
       optionsHtml = `
       <div class="combat-tracker-options">
         <p class="field-label sm combat-tracker-options-head">Combat Options <span class="five-leagues-hint" title="Ranged Attacks, p.39 — distance/cover is always your own judgment call; this app has no positional model to derive it automatically.">ⓘ</span></p>
+        ${enemyRangedToggleHtml}
         <label class="field-label sm">Range / Cover
           <select data-combat-tracker-ranged-band>${bandOpts}</select>
         </label>
@@ -9745,6 +9940,7 @@ function renderCombatTrackerPanel() {
       optionsHtml = `
       <div class="combat-tracker-options">
         <p class="field-label sm combat-tracker-options-head">Combat Options <span class="five-leagues-hint" title="Tactics, p.40; Combat Bonus from a Stunned opponent, p.44; Counter Attack, pp.41-42 — terrain-based sources this app can't detect are always yours to confirm.">ⓘ</span></p>
+        ${enemyRangedToggleHtml}
         <label class="field-label sm">Tactic (Attacker)
           <select data-combat-tracker-tactic>
             <option value="fight" ${combatOptions.tactic === 'fight' ? 'selected' : ''}>Simply Fight</option>
@@ -10106,6 +10302,11 @@ function headExtraForDrawer(id) {
   // ui.helpOpen the same way every other instance does.
   if (id === 'guide') return helpToggle('guide-intro');
   if (id === 'documents') return helpToggle('documents-intro');
+  // Direct follow-up request: "The tooltip must be on the top row right-
+  // aligned from the title 'Dungeon Crawl'" — same relocation as Guide/
+  // Documents just above: dungeoncrawl()'s own head no longer renders the
+  // toggle itself, just the helpBody() text it reveals.
+  if (id === 'dungeoncrawl') return helpToggle('dungeoncrawl-intro');
   return '';
 }
 

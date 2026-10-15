@@ -167,6 +167,45 @@ export function findDungeonCrawlPack(key) {
   return DUNGEON_CRAWL_PACKS.find((p) => p.key === key) || DUNGEON_CRAWL_PACKS[0];
 }
 
+// Direct follow-up request: "Below the enlarged map tile picture needs to
+// be a key explaining the color and number coding used in the tiles to
+// represent encounter options per FlexTale." Real source: FlexCrawl
+// Toolkit's own "Table 18: Dynamic Content Categories" (p.82) — the SAME
+// book this module's own Archetype/edge data was extracted from
+// (requirements/FlexTale/FlexTale_FlexCrawl_Toolkit.pdf), read directly
+// via `pdftotext -layout` (the table's own column text interleaved
+// slightly oddly in that extraction — each description printed one row
+// below its own category/color — but the category list order, color
+// list order, and description list order all agree with each other once
+// reconciled, and the surrounding prose confirms the same 7-category
+// order independently: "Dynamic content is organized into seven types...
+// Secrets, Obstacles, Traps, Encounters, Rewards, Quests, Exits").
+//
+// What the number inside a colored box means (p.90, "Illustration 11:
+// Dynamic Adventure Content Example" + "Step 1: Determine Content
+// Presence"): each box is ONE of up to six possible LOCATIONS on the Tile
+// for that category's content — a Tile can have up to 6 Secrets, 6
+// Obstacles, etc. To find out if a given piece of content is actually
+// there, the GM rolls a six-sided die; a result matching a box's own
+// printed number says that's where it is. The box existing at all is not
+// a guarantee the content is present — "FlexCrawl Tiles... represent the
+// TOTAL possible set of content that COULD exist... It does NOT mean that
+// each and every one of those pieces of content actually exists" (p.91).
+// Only the `dungeon` (real photographed Theme Pack) pack's own "Full"/
+// GM-side image actually carries these markers — this app's two
+// procedural packs (`cave`/`forest`) are original stylized art with none
+// of this real licensed detail, so the legend is only ever shown
+// alongside that pack (drawers/index.js's dungeoncrawlTileDetail).
+export const FLEXCRAWL_DYNAMIC_CONTENT_CATEGORIES = [
+  { key: 'secrets', label: 'Secrets', color: 'Pink/Purple', swatch: '#c084fc', description: 'Secret passages and rooms.' },
+  { key: 'obstacles', label: 'Obstacles', color: 'Orange', swatch: '#fb923c', description: 'Doors, portcullises, piles of boulders, lava falls, barricades.' },
+  { key: 'traps', label: 'Traps', color: 'Yellow', swatch: '#facc15', description: 'Darts and arrows, poisoned needles, pit traps, revolving walls, gas emissions, crushing blocks.' },
+  { key: 'encounters', label: 'Encounters', color: 'Red', swatch: '#f87171', description: 'Wandering monsters, lairs, ambushes, NPC encounters.' },
+  { key: 'rewards', label: 'Rewards', color: 'Blue/Cyan', swatch: '#38bdf8', description: 'Treasure, maps, keys, renown, information, clues, rumors, temporary boons, insight.' },
+  { key: 'quests', label: 'Quests', color: 'Green', swatch: '#4ade80', description: 'Starting new quests, advancing existing quests, connecting and progressing narratives.' },
+  { key: 'exits', label: 'Exits', color: 'White', swatch: '#f8fafc', description: 'Trapdoors, caches, lairs, hideaways, prisons, basements, descents into new levels.' },
+];
+
 // Fallback floor/wall/decor colors for the one `kind: 'image'` pack
 // (`dungeon`) whenever something needs to render WITHOUT its real photo
 // art — the Entrance icon (always procedural, every pack, see above) and

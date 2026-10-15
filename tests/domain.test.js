@@ -8642,6 +8642,89 @@ test('rollLocationSensoryField/editLocationSensoryField mirror the NPC-field ver
   assert.deepEqual(getEntity(afterNpcRoll, npcId), getEntity(beforeNpcRoll, npcId), 'no-op on a non-location entity');
 });
 
+// --- Fantasy Location descriptor fields (direct follow-up request: "For
+// all fantasy Location entity types, create a robust list of location-
+// defining fields that map to oracles so they can be autopopulated...
+// popular, helpful and story-building") ------------------------------------
+import { rollLocationFantasyField, editLocationFantasyField } from '../src/domain/session.js';
+import { LOCATION_FANTASY_FIELD_ORACLE_PATH } from '../src/domain/entities.js';
+
+test('LOCATION_FANTASY_FIELD_ORACLE_PATH\'s 9 fields each resolve to a REAL, non-empty table in data/tables-fantasy-full.js — not a guessed/typo\'d path', () => {
+  const keys = Object.keys(LOCATION_FANTASY_FIELD_ORACLE_PATH).sort();
+  assert.deepEqual(keys, ['authority', 'currentProject', 'currentTrouble', 'danger', 'localColor', 'notableFeature', 'realmType', 'settlementType', 'tradeResource'].sort());
+  for (const [field, path] of Object.entries(LOCATION_FANTASY_FIELD_ORACLE_PATH)) {
+    const values = path.reduce((acc, k) => (acc && acc[k] != null ? acc[k] : undefined), FANTASY_FULL_TABLES);
+    assert.ok(Array.isArray(values) && values.length > 0, `${field} -> ${path.join(' > ')} resolves to a real, non-empty table`);
+  }
+});
+
+test('a location entity defaults all 9 fantasy descriptor fields to \'\' plus a fantasyFieldSource side-channel (all null) — nothing required to create one', () => {
+  let camp = defaultCampaign();
+  let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Dustmoor' }));
+  const loc = getEntity(camp, locId);
+  for (const field of Object.keys(LOCATION_FANTASY_FIELD_ORACLE_PATH)) {
+    assert.equal(loc[field], '', `${field} defaults to ''`);
+    assert.equal(loc.fantasyFieldSource[field], null, `fantasyFieldSource.${field} defaults to null`);
+  }
+});
+
+test('rollLocationFantasyField/editLocationFantasyField mirror rollLocationSensoryField/editLocationSensoryField exactly, against a fantasy-genre campaign\'s real tables — sourced edits update oracles.overrides, hand-typed edits do not; no-ops on a non-location entity or an unmapped field', () => {
+  let camp = { ...defaultCampaign(), settings: { ...defaultCampaign().settings, genrePack: 'fantasy' } };
+  let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Hollow Reach' }));
+
+  camp = rollLocationFantasyField(camp, locId, 'authority', { rng: makeRng(3) });
+  let loc = getEntity(camp, locId);
+  assert.ok(FANTASY_FULL_TABLES['Settlements'].Authority.includes(loc.authority));
+  assert.deepEqual(loc.fantasyFieldSource.authority.path, ['Settlements', 'Authority']);
+
+  camp = editLocationFantasyField(camp, locId, 'authority', 'a council of three rival merchant houses');
+  assert.equal(getEntity(camp, locId).authority, 'a council of three rival merchant houses');
+  const entries = currentTableEntries(camp, ['Settlements', 'Authority']);
+  assert.equal(entries[loc.fantasyFieldSource.authority.index], 'a council of three rival merchant houses');
+
+  // Hand-typed field (never rolled) — no override written.
+  camp = editLocationFantasyField(camp, locId, 'danger', 'a starving wolf pack driven down from the hills');
+  assert.equal(getEntity(camp, locId).danger, 'a starving wolf pack driven down from the hills');
+  assert.equal(hasOracleOverride(camp, ['Realms', 'Wilderness Peril']), false);
+
+  // No-ops: a non-location entity, an unmapped field.
+  let npcId; ({ campaign: camp, id: npcId } = createEntity(camp, { type: 'npc', name: 'Bystander' }));
+  const beforeNpcRoll = camp;
+  const afterNpcRoll = rollLocationFantasyField(camp, npcId, 'authority', { rng: makeRng(1) });
+  assert.deepEqual(getEntity(afterNpcRoll, npcId), getEntity(beforeNpcRoll, npcId), 'no-op on a non-location entity');
+  assert.deepEqual(rollLocationFantasyField(camp, locId, 'notAField'), camp, 'no-op on an unmapped field');
+});
+
+test('real bug, direct follow-up report: "the random oracle options for the new location fields are loading scifi options" — the active Rules Profile\'s own genre pack (store.get().settings.genrePack at render time) is NOT the same thing as a campaign doc\'s own settings.genrePack (only reliable at render time; store.update()\'s own mutator receives the RAW, un-overlaid doc, whose settings.genrePack is mostly-inert legacy that switching profiles never touches). currentTableEntries\'s new optional 3rd arg (genrePackId) — and every roll* function in session.js now threading an options.genrePack through to it — fixes this: an explicit override always wins over whatever the campaign object\'s own settings.genrePack says, and omitting it falls back to the old behavior unchanged', () => {
+  // The campaign object itself still says sci-fi (simulating the RAW,
+  // un-overlaid doc a store.update() mutator actually receives for a
+  // campaign whose ACTIVE PROFILE has since been switched to fantasy —
+  // setCampaignProfile never updates this field, confirmed directly
+  // against the real store.js).
+  let camp = defaultCampaign();
+  assert.equal(camp.settings.genrePack, 'hostile', 'the schema default (pre-migration legacy value) — findGenrePack\'s own alias still resolves it to sci-fi-generic\'s real tables');
+  let locId; ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Hollow Reach' }));
+
+  // Without the override: resolves against the campaign's OWN (stale)
+  // genrePack, same as before this fix — a sci-fi result.
+  const stale = rollLocationFantasyField(camp, locId, 'settlementType', { rng: makeRng(5) });
+  assert.ok(SCENE_TABLES['Settlements']['Settlement Type'].includes(getEntity(stale, locId).settlementType));
+
+  // WITH the override (what shell.js's own call sites now pass,
+  // store.get().settings.genrePack — the profile-overlaid value):
+  // resolves against the REAL active genre regardless of what the raw
+  // campaign object's own field says.
+  const fixed = rollLocationFantasyField(camp, locId, 'settlementType', { rng: makeRng(5), genrePack: 'fantasy' });
+  assert.ok(FANTASY_FULL_TABLES['Settlements']['Settlement Type'].includes(getEntity(fixed, locId).settlementType));
+
+  // Same override plumbing for rollOracle/rollLocationSensoryField/
+  // rollWhereDetailField/rollNpcSceneField — spot-check one more
+  // (rollOracle, the main Oracle drawer's own roll) to confirm the fix
+  // isn't scoped to just the new fantasy fields.
+  const r = rollOracle(camp, ['Settlements', 'Settlement Type'], { genrePack: 'fantasy', index: 0 });
+  assert.equal(r.roll.result, FANTASY_FULL_TABLES['Settlements']['Settlement Type'][0]);
+});
+
 test('rollWhereDetailField (WHERE\'s Site Description/Immediate Surroundings 🔮, direct follow-up correction — "the value is not added to the text box") rolls from each field\'s own dedicated table and REPLACES context.where\'s field outright; no-ops on an unknown field', () => {
   let camp = defaultCampaign();
   camp = rollWhereDetailField(camp, 'siteDescription', { rng: makeRng(2) });
@@ -10220,6 +10303,107 @@ test('formatFiveLeaguesOvercome: the real "+x / +y" sign convention (p.43) for a
   assert.equal(formatFiveLeaguesOvercome(-1), '-1');
   assert.equal(formatFiveLeaguesOvercome('2'), '+2', 'coerces a string input');
   assert.equal(formatFiveLeaguesOvercome(undefined), '+0');
+});
+
+// --- Combat Tracker + Bestiary enemies (direct follow-up bug report:
+// "weapon selection in combat tracker does not select an item from the
+// list") ------------------------------------------------------------------
+// Real root cause: getFiveLeaguesStat/the Attack button's own weapon
+// lookup ONLY ever read a Player Character's 'character'-kind sheet
+// (findFiveLeaguesGroupIndex) — a Bestiary enemy (p.152, no Weapons table,
+// no Agility/Origin at all) has neither, so EVERY Bestiary enemy added to
+// the Combat Tracker silently rolled with Combat Skill/Armor/Toughness
+// read as 0 and Damage always Unarmed (-1/-1); the weapon <select> itself
+// only ever had "— Unarmed —" to offer, which is what actually surfaced
+// as "does not select an item from the list" (there was nothing else
+// in it). getFiveLeaguesStat/getFiveLeaguesAttackProfile now fall back to
+// a Bestiary 'fiveleagues-lifeform' group when there's no Player
+// Character sheet.
+import { findFiveLeaguesEnemyGroupIndex, getFiveLeaguesAttackProfile } from '../src/domain/fiveLeagues.js';
+
+function makeFiveLeaguesEnemyTestEntity(name = 'Brute') {
+  let camp = defaultCampaign();
+  let id;
+  ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name }));
+  camp = addEntityStatblockGroup(camp, id, 'npc', 'fiveleagues-lifeform');
+  const gi = findFiveLeaguesEnemyGroupIndex(findByName(camp, name));
+  return { camp, id, gi, name };
+}
+
+test('getFiveLeaguesStat falls back to a Bestiary \'fiveleagues-lifeform\' group\'s own Combat Skill/Toughness/Armor when the entity has no Player Character sheet, under either the new short key or the original long one', () => {
+  let { camp, id, gi, name } = makeFiveLeaguesEnemyTestEntity();
+  camp = setEntityStatblockField(camp, id, gi, 2, { value: 3 }); // Combat Skill (field order per data/statblockTemplates.js)
+  camp = setEntityStatblockField(camp, id, gi, 4, { value: 4 }); // Toughness
+  camp = setEntityStatblockField(camp, id, gi, 5, { value: 1 }); // Armor
+  let e = findByName(camp, name);
+  assert.equal(findFiveLeaguesGroupIndex(e), -1, 'genuinely has no Player Character sheet');
+  assert.equal(getFiveLeaguesStat(e, 'Combat Skill'), 3);
+  assert.equal(getFiveLeaguesStat(e, 'Toughness'), 4);
+  assert.equal(getFiveLeaguesStat(e, 'Armor'), 1);
+
+  // Simulate an already-imported, pre-rename entity (the real content-pack
+  // shape, old long key names) — same alias fallback drawers/index.js's
+  // own statblockFieldByKey uses, now mirrored in the domain layer.
+  const legacy = findByName(camp, name);
+  legacy.statblocks[gi].fields[2].key = 'Combat Skill';
+  legacy.statblocks[gi].fields[4].key = 'Toughness';
+  assert.equal(getFiveLeaguesStat(legacy, 'Combat Skill'), 3, 'still resolves under the original long key name');
+  assert.equal(getFiveLeaguesStat(legacy, 'Toughness'), 4);
+
+  assert.equal(getFiveLeaguesStat({ statblocks: [] }, 'Combat Skill'), 0, 'no sheet of either kind -> 0, not a throw');
+});
+
+test('getFiveLeaguesAttackProfile: a Player Character behaves exactly as before (active weapon, or genuinely Unarmed -1/-1); a Bestiary enemy uses its own Damage field instead, with its own Ranged field gating whether a ranged attack is even offered', () => {
+  // Player Character — unchanged existing behavior.
+  let { camp, id, gi, name } = makeFiveLeaguesTestEntity('Sellsword');
+  let profile = getFiveLeaguesAttackProfile(findByName(camp, name));
+  assert.deepEqual(profile, { label: 'Unarmed', overcomeArmor: -1, overcomeToughness: -1, ranged: false, hasRangedOption: false, limitedAmmunition: false });
+
+  camp = addEntityStatblockWeapon(camp, id, gi);
+  camp = updateEntityStatblockWeapon(camp, id, gi, 0, { name: 'Longsword', range: 'Melee', damage: '+1 / +0' });
+  profile = getFiveLeaguesAttackProfile(findByName(camp, name));
+  assert.equal(profile.label, 'Unarmed', 'nothing picked as the active weapon yet -> still Unarmed');
+
+  camp = setEntityFiveLeaguesActiveWeapon(camp, id, 0);
+  profile = getFiveLeaguesAttackProfile(findByName(camp, name));
+  assert.deepEqual(profile, { label: 'Longsword', overcomeArmor: 1, overcomeToughness: 0, ranged: false, hasRangedOption: false, limitedAmmunition: false });
+
+  // Bestiary enemy — the real bug fix: falls back to its own Damage field.
+  let enemy = makeFiveLeaguesEnemyTestEntity('Brute');
+  enemy.camp = setEntityStatblockField(enemy.camp, enemy.id, enemy.gi, 3, { value: '+1 / +0' }); // Damage
+  profile = getFiveLeaguesAttackProfile(findByName(enemy.camp, 'Brute'));
+  assert.deepEqual(profile, { label: 'Melee Attack', overcomeArmor: 1, overcomeToughness: 0, ranged: false, hasRangedOption: false, limitedAmmunition: false }, 'uses its own Damage field, not a hardcoded Unarmed -1/-1');
+
+  // Give it a real Ranged value (p.152's own column, e.g. "2 slingers") — now offered, but still melee until the GM's own ephemeral toggle says otherwise.
+  enemy.camp = setEntityStatblockField(enemy.camp, enemy.id, enemy.gi, 6, { value: '2 slingers' }); // Ranged
+  profile = getFiveLeaguesAttackProfile(findByName(enemy.camp, 'Brute'));
+  assert.equal(profile.hasRangedOption, true);
+  assert.equal(profile.ranged, false, 'the GM has not ticked "Attacking at range this exchange" yet');
+  profile = getFiveLeaguesAttackProfile(findByName(enemy.camp, 'Brute'), { enemyRangedActive: true });
+  assert.equal(profile.ranged, true);
+
+  // "None" (the real template default) never offers the ranged toggle at all.
+  let noRanged = makeFiveLeaguesEnemyTestEntity('Gibbering horde');
+  noRanged.camp = setEntityStatblockField(noRanged.camp, noRanged.id, noRanged.gi, 6, { value: 'None' });
+  assert.equal(getFiveLeaguesAttackProfile(findByName(noRanged.camp, 'Gibbering horde')).hasRangedOption, false);
+
+  assert.deepEqual(getFiveLeaguesAttackProfile({ statblocks: [] }), { label: 'Unarmed', overcomeArmor: -1, overcomeToughness: -1, ranged: false, hasRangedOption: false, limitedAmmunition: false }, 'an entity with no 5LFB sheet of either kind -> plain Unarmed, not a throw');
+});
+
+test('entityHasFiveLeaguesCounterAttack/entityHasFiveLeaguesParry also detect the real Universal Enemy Traits (p.152-153) typed into a Bestiary enemy\'s own Traits field, in addition to the existing Weapons-table/Shield detection for Player Characters', () => {
+  let { camp, id, gi, name } = makeFiveLeaguesEnemyTestEntity('Brute');
+  assert.equal(entityHasFiveLeaguesCounterAttack(findByName(camp, name)), false);
+  assert.equal(entityHasFiveLeaguesParry(findByName(camp, name)), false);
+
+  camp = setEntityStatblockField(camp, id, gi, 9, { value: 'Undead, Counter Attack' }); // Traits
+  let e = findByName(camp, name);
+  assert.equal(entityHasFiveLeaguesCounterAttack(e), true);
+  assert.equal(entityHasFiveLeaguesParry(e), false);
+
+  camp = setEntityStatblockField(camp, id, gi, 9, { value: 'Parry' });
+  e = findByName(camp, name);
+  assert.equal(entityHasFiveLeaguesParry(e), true);
+  assert.equal(entityHasFiveLeaguesCounterAttack(e), false);
 });
 
 function makeFiveLeaguesTestEntity(name = 'Testling') {

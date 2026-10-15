@@ -204,9 +204,31 @@ export function oraclePathsWithAnyTag(campaign, tables, wantedTags) {
 
 /** The entries a table path currently rolls against — the override array if
  *  one exists, else the shipped default. Path is an array, e.g. ['Missions',
- *  'Patron']. */
-export function currentTableEntries(campaign, path) {
-  const tables = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides, campaign.settings && campaign.settings.genrePack);
+ *  'Patron'].
+ *
+ *  `genrePackId`, optional: the active Rules Profile's OWN genrePack
+ *  (store.getActiveProfile()/store.get().settings.genrePack — the
+ *  profile-overlaid value), passed through by every roll* function in
+ *  session.js. Real bug, found while building the fantasy Location
+ *  fields: `campaign.settings.genrePack` ITSELF is only reliable at
+ *  RENDER time (store.get() overlays the active profile's ruleset.*
+ *  fields onto it) — inside a store.update() mutator, `campaign` is the
+ *  RAW, un-overlaid document, whose own `settings.genrePack` is "mostly
+ *  inert legacy" (core/schema.js's own doc comment) that setCampaignProfile
+ *  never touches when a campaign is assigned a different profile. Every
+ *  oracle-table roll triggered via store.update() — which is ALL of them —
+ *  was therefore silently resolving against whichever genre pack the
+ *  campaign document happened to default to (sci-fi-generic, for any
+ *  campaign created after Rules Profiles existed), regardless of which
+ *  profile/genre was actually active, confirmed directly: rolling a
+ *  fantasy-genre field under the Five Leagues profile returned
+ *  "refugee habitat" (SCENE_TABLES' own Settlements>Settlement Type
+ *  entry) instead of "refugee camp" (FANTASY_FULL_TABLES' own). Omitting
+ *  this parameter preserves the exact old (buggy outside a real profile
+ *  context, but still the simplest correct choice for a pure unit test
+ *  that sets genrePack directly on its own fixture campaign) fallback. */
+export function currentTableEntries(campaign, path, genrePackId) {
+  const tables = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides, genrePackId || (campaign.settings && campaign.settings.genrePack));
   const values = getTable(tables, ...path);
   return Array.isArray(values) ? values.slice() : [];
 }

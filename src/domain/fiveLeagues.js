@@ -39,19 +39,65 @@ function findFieldIndex(group, key) {
   return (group.fields || []).findIndex((f) => String(f.key || '').toLowerCase() === k);
 }
 
+/** The index of `entity`'s own Bestiary 'fiveleagues-lifeform' statblock
+ *  group, or -1 — a Bestiary enemy (p.152's Enemy Profile) has no
+ *  Agility/Origin and no Weapons table, but DOES carry Combat Skill/
+ *  Toughness/Armor/Damage under its own (possibly pre-rename, see
+ *  drawers/index.js's statblockFieldByKey) key names — real bug, found
+ *  while diagnosing a report that "weapon selection in combat tracker
+ *  does not select an item from the list": getFiveLeaguesStat/
+ *  getFiveLeaguesAttackProfile below used to ONLY ever look at
+ *  findFiveLeaguesGroupIndex's Player-Character sheet, so every Bestiary
+ *  enemy added to the Combat Tracker silently rolled with Combat
+ *  Skill/Armor/Toughness all read as 0 and Damage always Unarmed (-1/-1)
+ *  — the "pick a weapon" dropdown wasn't just unhelpful for an enemy with
+ *  no Weapons table, the whole Attack roll was wrong underneath it too. */
+export function findFiveLeaguesEnemyGroupIndex(entity) {
+  const groups = (entity && entity.statblocks) || [];
+  return groups.findIndex((g) => g.templateId === 'fiveleagues-lifeform');
+}
+
+// The three stats a Player Character sheet and a Bestiary Enemy Profile
+// both carry, under the Bestiary template's current SHORT key on a
+// freshly-created statblock, or its original long key on an already-
+// imported one (template keys were deliberately never renamed in place —
+// see drawers/index.js's own statblockFieldByKey doc comment for why).
+const FIVE_LEAGUES_ENEMY_STAT_ALIASES = {
+  'combat skill': ['Combat', 'Combat Skill'],
+  'toughness': ['Tough', 'Toughness'],
+  'armor': ['Armor'],
+};
+
+function findFiveLeaguesEnemyFieldIndex(group, key) {
+  const aliases = FIVE_LEAGUES_ENEMY_STAT_ALIASES[String(key).toLowerCase()] || [key];
+  for (const alias of aliases) {
+    const fi = findFieldIndex(group, alias);
+    if (fi !== -1) return fi;
+  }
+  return -1;
+}
+
 /** Reads a named stat/track field's current numeric value off an entity's
- *  own 5LFB character statblock (case-insensitive key match) — 0 if the
- *  entity has no 5LFB sheet, or no field by that name. Used by the Combat
- *  Challenge roll (shell.js) to read Combat Skill/Toughness/Armor off
- *  whichever two entities the GM picked, without the caller needing to
- *  know the statblock's own group/field index shape. */
+ *  own 5LFB character statblock (case-insensitive key match) — falling
+ *  back to a Bestiary 'fiveleagues-lifeform' group (p.152) when the
+ *  entity has no Player-Character sheet, since Combat Skill/Toughness/
+ *  Armor are exactly the three stats both sheets share. 0 if the entity
+ *  has neither, or no field by that name on whichever it has. Used by the
+ *  Combat Challenge roll (shell.js) to read these off whichever two
+ *  entities the GM picked, without the caller needing to know the
+ *  statblock's own group/field index shape OR which of the two 5LFB
+ *  sheet kinds it's reading from. */
 export function getFiveLeaguesStat(entity, key) {
   const gi = findFiveLeaguesGroupIndex(entity);
-  if (gi === -1) return 0;
-  const group = entity.statblocks[gi];
-  const fi = findFieldIndex(group, key);
+  if (gi !== -1) {
+    const fi = findFieldIndex(entity.statblocks[gi], key);
+    if (fi !== -1) return Number(entity.statblocks[gi].fields[fi].value) || 0;
+  }
+  const egi = findFiveLeaguesEnemyGroupIndex(entity);
+  if (egi === -1) return 0;
+  const fi = findFiveLeaguesEnemyFieldIndex(entity.statblocks[egi], key);
   if (fi === -1) return 0;
-  return Number(group.fields[fi].value) || 0;
+  return Number(entity.statblocks[egi].fields[fi].value) || 0;
 }
 
 /** Sets (or, given a falsy originKey, clears) an entity's own Character
@@ -383,12 +429,77 @@ export function isFiveLeaguesWeaponRanged(weaponRow) {
   return /\d/.test(String(weaponRow.range || ''));
 }
 
-function anyFiveLeaguesWeaponTraitTextMatches(entity, needle) {
+/** The Attacker's own real combat profile for an exchange — folds
+ *  together the two different places a 5LFB entity's attack stats can
+ *  live, so the Combat Tracker's Attack button (shell.js) never needs to
+ *  know which kind of entity it's rolling for:
+ *  - A Player Character (has a Weapons table): unchanged from before —
+ *    their own PERSISTED active weapon (getFiveLeaguesActiveWeapon), or
+ *    genuinely Unarmed (-1/-1, p.60) if none is selected.
+ *  - A Bestiary enemy (p.152's Enemy Profile, no Weapons table at all):
+ *    their own single Damage field covers every attack, melee or ranged
+ *    alike — there's no separate "ranged weapon" to pick, so `ranged`
+ *    here is driven by the caller's own `enemyRangedActive` flag (an
+ *    ephemeral, per-exchange GM call — combatOptions.enemyRangedActive,
+ *    shell.js — never persisted on the entity itself: ONE Enemy Profile
+ *    entry can represent a mixed group where only SOME models carry a
+ *    ranged weapon at all, per the Profile's own Ranged column, e.g. "2
+ *    slingers" out of a larger band). `hasRangedOption` tells the caller
+ *    whether that choice is even worth offering for this entity. */
+export function getFiveLeaguesAttackProfile(entity, { enemyRangedActive = false } = {}) {
   const gi = findFiveLeaguesGroupIndex(entity);
-  if (gi === -1) return false;
-  const weapons = (entity.statblocks[gi] && entity.statblocks[gi].weapons) || [];
+  if (gi !== -1) {
+    const weapon = getFiveLeaguesActiveWeapon(entity);
+    const { overcomeArmor, overcomeToughness } = weapon ? parseFiveLeaguesWeaponDamage(weapon.damage) : { overcomeArmor: -1, overcomeToughness: -1 };
+    return {
+      label: weapon ? (weapon.name || 'Weapon') : 'Unarmed',
+      overcomeArmor, overcomeToughness,
+      ranged: isFiveLeaguesWeaponRanged(weapon),
+      hasRangedOption: false,
+      limitedAmmunition: weapon ? /limited ammunition/i.test(String(weapon.traits || '')) : false,
+    };
+  }
+  const egi = findFiveLeaguesEnemyGroupIndex(entity);
+  if (egi === -1) return { label: 'Unarmed', overcomeArmor: -1, overcomeToughness: -1, ranged: false, hasRangedOption: false, limitedAmmunition: false };
+  const group = entity.statblocks[egi];
+  const damageFi = findFieldIndex(group, 'Damage');
+  const { overcomeArmor, overcomeToughness } = damageFi !== -1 ? parseFiveLeaguesWeaponDamage(group.fields[damageFi].value) : { overcomeArmor: 0, overcomeToughness: 0 };
+  const rangedFi = findFieldIndex(group, 'Ranged');
+  const rangedText = rangedFi !== -1 ? String(group.fields[rangedFi].value || '').trim() : '';
+  const hasRangedOption = !!rangedText && !/^(none|-|n\/a)$/i.test(rangedText);
+  const ranged = hasRangedOption && !!enemyRangedActive;
+  return {
+    // Not the entity's own name — the dice-roll card already shows that
+    // separately (e.g. "Brute vs Hero"); repeating it here read as
+    // "Brute (Brute)". A Bestiary enemy has no weapon identity of its
+    // own to display (p.152, one Damage stat covers every attack).
+    label: ranged ? 'Ranged Attack' : 'Melee Attack',
+    overcomeArmor, overcomeToughness,
+    ranged,
+    hasRangedOption,
+    limitedAmmunition: false,
+  };
+}
+
+function anyFiveLeaguesWeaponTraitTextMatches(entity, needle) {
   const re = new RegExp(needle, 'i');
-  return weapons.some((w) => re.test(String(w.traits || '')) || re.test(String(w.name || '')));
+  const gi = findFiveLeaguesGroupIndex(entity);
+  if (gi !== -1) {
+    const weapons = (entity.statblocks[gi] && entity.statblocks[gi].weapons) || [];
+    if (weapons.some((w) => re.test(String(w.traits || '')) || re.test(String(w.name || '')))) return true;
+  }
+  // A Bestiary enemy has no Weapons table, but can carry the same real
+  // trait (p.152's own Counter Attack/Parry Universal Enemy Traits) in
+  // its one free-text Traits field instead (data/fiveLeaguesEnemyTraits.js)
+  // — checked in ADDITION to the Weapons table above, not instead of it,
+  // since an entity could in principle have both a character sheet AND a
+  // Bestiary group attached.
+  const egi = findFiveLeaguesEnemyGroupIndex(entity);
+  if (egi !== -1) {
+    const fi = findFieldIndex(entity.statblocks[egi], 'Traits');
+    if (fi !== -1 && re.test(String(entity.statblocks[egi].fields[fi].value || ''))) return true;
+  }
+  return false;
 }
 
 /** A courtesy auto-detect/pre-tick for the Combat Tracker's own Counter

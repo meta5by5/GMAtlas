@@ -1331,33 +1331,69 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    — row spacing 1.5*HEX_SIZE=66px, so 9 row-steps + one full hex height:
    66*9 + 2*44 = 682px, rounded up a bit) — direct follow-up request:
    "expand the hexcrawl vertical window to show 10 hexes, or extend to the
-   bottom of the browser window, whichever fits best." The :has()-scoped
-   flex-fill rule below (mc-drawer:has(.hexcrawl-viewport)) is the "extend
-   to the bottom" half — it grows past this floor whenever the panel
-   actually has more room; this min-height is what guarantees at least 10
-   rows even on a short window/no-:has() fallback. */
+   bottom of the browser window, whichever fits best."
+
+   This used to also flex-grow to genuinely reach the panel's bottom edge
+   via a `.mc-drawer:has(.hexcrawl-viewport) { display:flex; ... }` rule
+   that turned the fixed-position drawer into a flex column while Hexcrawl
+   was open. Direct bug report, twice, with a screenshot confirming it
+   both times (once with only the try/catch render-error guard in place,
+   once after a first attempt at softening the :has() rule's own
+   `overflow: hidden` to `overflow: auto`): "The hexcrawl does not display
+   on mobile devices at all. There is the title 'Hexcrawl' and a close
+   'x' and that is it" — the ENTIRE body, including the always-first head
+   row ("+ New Map" etc.), went invisible on a real device (Firefox for
+   Android) even with real maps already pinned. A real-bundle headless
+   check already confirmed hexcrawl()'s own render always produces real
+   content and never throws, and sw.js is already network-first (ruling
+   out a stale cache) — so the remaining, only-reproducible-on-an-actual-
+   mobile-browser culprit was this flex-column mechanism itself: SOME
+   combination of a fixed-position ancestor's available height, a nested
+   flex child's min-height:0, and that specific mobile engine's own
+   layout quirks was collapsing the whole body to zero-height, and merely
+   changing overflow:hidden to overflow:auto (the first attempt) wasn't
+   enough to actually restore visibility, only to make a zero-height box
+   scrollable-but-still-empty. Rather than guess at a third CSS patch
+   blind (no mobile device or browser CSS engine available in this
+   working environment to reproduce it directly), the :has()-driven
+   flex-fill mechanism is removed outright — this plain width-based
+   aspect-ratio box (padding-top:60%, floored at the 10-row min-height
+   above) is simple, has no dependency on an ancestor's flex-height
+   arithmetic, and is exactly the fallback every browser was ALREADY
+   using safely whenever :has() wasn't supported at all. Trades away
+   "reaches the exact bottom of a tall window" for "reliably visible on
+   every device" — the right tradeoff after two blank-panel reports. */
 .hexcrawl-viewport {
   position: relative; width: 100%; padding-top: 60%; min-height: 690px; overflow: hidden;
   background-color: var(--bg-inset);
   border: 1px solid var(--border); border-radius: var(--radius-sm);
+  /* Direct bug report, persisting across two prior CSS attempts (the
+     :has()-driven flex-fill mechanism, then its own removal) — confirmed
+     via a real-bundle headless run that JS rendering is correct and the
+     bundler isn't the problem either, so the remaining, untestable-in-
+     this-environment suspect is `touch-action` never being set anywhere
+     in this stylesheet, for ANY pan/zoom surface (Hexcrawl, Battlemap,
+     Graph). Without it, a real mobile browser's DEFAULT behavior for a
+     touch-drag over this element is to hand it to the page's own native
+     scroll/zoom machinery (the nearest scrollable ancestor is
+     .mc-drawer-body, overflow:auto) instead of this app's own custom
+     camera-drag handling (onMouseDown/onMouseMove, which only
+     preventDefault()s on the SYNTHETIC mouse event a touch generates,
+     not the real touch event itself, too late to stop the browser's own
+     gesture recognition from already engaging). Firefox for Android
+     specifically has known compositor (APZ) desync issues with nested
+     overflow:hidden-inside-overflow:auto regions exactly like this one,
+     where a touch-scroll gesture can leave the inner region's own
+     rendered layer blank until an unrelated repaint — real chrome
+     (title/✕, outside this scrolling region) stays visible, only the
+     scrollable body's own content disappears, which matches the report
+     exactly. `touch-action: none` tells the browser outright "don't
+     apply your own touch gesture handling here, this element manages
+     its own" — the standard, well-established fix for custom pan/zoom
+     surfaces nested inside a scrollable page. */
+  touch-action: none;
 }
 .hexcrawl-viewport.placing { cursor: crosshair; }
-/* Direct follow-up request: "make the Hex grid window fill the panel to
-   the bottom... and adjust as the browser is resized" — the plain
-   padding-top aspect-ratio box above sizes off the drawer's WIDTH, not
-   its available height, so it can never reach the panel's own bottom
-   edge nor respond to a vertical resize. :has() lets .mc-drawer (a real,
-   definite-height fixed panel — position:fixed;top;bottom:0) become a
-   flex column ONLY while it's actually showing the Hexcrawl drawer,
-   without touching its shared layout for every other drawer; the
-   viewport then flex-grows to fill whatever vertical space the
-   header/toolbar/palette/detail-panel don't use, genuinely reaching the
-   panel's bottom and re-flowing on every resize. Browsers without :has()
-   support simply keep the width-based aspect-ratio box above instead —
-   graceful degradation, not a hard requirement. */
-.mc-drawer:has(.hexcrawl-viewport) { display: flex; flex-direction: column; overflow: hidden; }
-.mc-drawer:has(.hexcrawl-viewport) .mc-drawer-body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-.mc-drawer:has(.hexcrawl-viewport) .hexcrawl-viewport { flex: 1 1 auto; padding-top: 0; min-height: 690px; }
 .hexcrawl-world { position: absolute; inset: 0; transform-origin: 0 0; cursor: grab; }
 .hexcrawl-world:active { cursor: grabbing; }
 /* --hex-default-fill is the solid color an unpainted hex's own SVG
@@ -1646,6 +1682,42 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    spanning the rest of its footprint — see drawers/index.js's
    dungeoncrawlCells) otherwise looks like any other filled cell. */
 .dungeoncrawl-cell.filled.merge-sel { outline: 2px dashed var(--accent); outline-offset: -2px; }
+/* Direct follow-up request: "an icon showing Merge for merging the
+   tiles" / Merge mode's own active highlight — the icon-only button
+   lives in the SAME .battlemap-toolbar Battlemap/Hexcrawl already use,
+   so this is scoped there rather than a bare, too-broad .icon-btn.active
+   rule (mirrors .wt-sector-detail/.turn-step-row-actions' own identically
+   narrow-scoped .icon-btn.active rules elsewhere in this file). */
+.battlemap-toolbar .icon-btn.active { color: var(--accent-strong); background: var(--tier2-bg); }
+/* Direct follow-up request: "The floor levels dropdown should be an icon
+   of several stacked rectangles representing levels or floors. the
+   dropdown would appear when clicking the icon." The real <select>
+   (data-dungeoncrawl-floor-select, shell.js's own onChange handler,
+   unchanged) sits fully transparent on top of the decorative icon glyph
+   — clicking/tapping anywhere in the icon hits the invisible select and
+   opens its real native dropdown (every OS's own accessible picker, no
+   bespoke popover component needed). */
+.dc-floor-icon { position: relative; display: inline-flex; align-items: center; justify-content: center; }
+.dc-floor-select-native { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+/* Direct follow-up request: "Under the menu and above the map should be
+   the list of linked location chips" — Link Location's own row, same
+   entity-chip-row shape used everywhere else a handful of linked
+   entities need to show as clickable chips. */
+.dc-location-row { margin: var(--sp-2) 0; }
+/* Direct follow-up request: "Below the enlarged map tile picture needs to
+   be a key explaining the color and number coding used in the tiles to
+   represent encounter options per FlexTale." */
+.dc-content-legend { margin: var(--sp-2) 0; }
+.dc-content-legend-rows { display: flex; flex-direction: column; gap: 0.3rem; margin-top: var(--sp-1); }
+.dc-content-legend-row { display: flex; align-items: center; gap: var(--sp-2); }
+.dc-content-legend-swatch {
+  flex: 0 0 auto; width: 1rem; height: 1rem; border-radius: 3px; border: 1px solid var(--border-strong);
+}
+.dc-content-legend-secret {
+  display: flex; align-items: center; justify-content: center; background: var(--bg-inset);
+  font-size: 0.65rem; font-weight: 700; color: var(--text-dim);
+}
+.dc-content-legend-label { flex: 0 0 auto; font-weight: 600; min-width: 5.5rem; }
 
 /* World Tracker (requirements/PLANETFALL_world_tracker.md) — a fixed,
    small integer grid, so plain CSS grid + flat buttons is enough; no
@@ -1963,6 +2035,12 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 /* Label + add-tag input share one row (right-aligned input) to save the
    vertical space a separate label-then-input stack used to cost. */
 .tag-editor-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); margin-bottom: 0.35rem; }
+/* Direct follow-up request: "the tag field needs a dropdown listing the
+   protected and entity-specific options for consistency" — the <select>
+   and the free-text <input> read as one combined "add a tag" control,
+   same visual grouping the Base/Trade-Code add-selects use elsewhere. */
+.tag-editor-add-row { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; justify-content: flex-end; }
+.tag-editor-select { width: 6.5rem; padding: 0.15rem 0.3rem; font-size: 0.65rem; }
 .field-label-static { font-size: 0.7rem; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; }
 /* The "Tags" label is now also the expand/collapse toggle for the chosen-
    tags list below it (direct follow-up request) — reset to plain button

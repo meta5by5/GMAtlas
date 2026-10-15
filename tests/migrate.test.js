@@ -383,3 +383,26 @@ test('migrateDocument backfills turnStepProgress.warband and turnStepSlotAssignm
   assert.equal(migrated.turnStepSlotAssignments.colony, 'list-a');
   assert.equal(migrated.turnStepSlotAssignments.starship, 'list-b');
 });
+
+test('migrateDocument backfills the #World protected tag (direct follow-up request: "add a protected tag for Location types called World that adds those sections and fields to the entity record") onto any pre-existing Location that already has real World Profile/Demographics data, or was #system/#star tagged (which used to auto-show that card on its own) — additively and idempotently; a Location with no such data gets no tag, and a Location that already has #world (any case) is never duplicated', () => {
+  const legacy = defaultCampaign();
+  legacy.entities.items = [
+    { id: 'loc-populated', type: 'location', name: 'Old Earth', tags: [], hex: '0101', zone: '', worldSize: '', atmosphere: '', hydrographics: '', gasGiant: false, starport: '', bases: [], techLevel: '', lawLevel: '', tradeCodes: [], developmentLevel: '', population: '', government: '' },
+    { id: 'loc-star', type: 'location', name: 'Sol', tags: ['star'], hex: '', zone: '', worldSize: '', atmosphere: '', hydrographics: '', gasGiant: false, starport: '', bases: [], techLevel: '', lawLevel: '', tradeCodes: [], developmentLevel: '', population: '', government: '' },
+    { id: 'loc-empty', type: 'location', name: 'Unnamed Rock', tags: [], hex: '', zone: '', worldSize: '', atmosphere: '', hydrographics: '', gasGiant: false, starport: '', bases: [], techLevel: '', lawLevel: '', tradeCodes: [], developmentLevel: '', population: '', government: '' },
+    { id: 'loc-already-tagged', type: 'location', name: 'Frontier Base', tags: ['world'], hex: '', zone: '', worldSize: '0102', atmosphere: '', hydrographics: '', gasGiant: false, starport: '', bases: [], techLevel: '', lawLevel: '', tradeCodes: [], developmentLevel: '', population: '', government: '' },
+    { id: 'npc-ignored', type: 'npc', name: 'Captain Reyes', tags: [], hex: '0101' },
+  ];
+
+  const migrated = migrateDocument(legacy);
+  const byId = (id) => migrated.entities.items.find((e) => e.id === id);
+  assert.deepEqual(byId('loc-populated').tags, ['World'], 'a Location with real UWP data gets #World backfilled');
+  assert.deepEqual(byId('loc-star').tags, ['star', 'World'], 'a #star-tagged Location (used to auto-show the card) also gets #World, keeping its own #star tag');
+  assert.deepEqual(byId('loc-empty').tags, [], 'a Location with no World data at all gets no tag');
+  assert.deepEqual(byId('loc-already-tagged').tags, ['world'], 'already-tagged (any case) is left alone, not duplicated');
+  assert.deepEqual(byId('npc-ignored').tags, [], 'a non-location entity is never touched even if it happens to carry a hex-shaped field');
+
+  // Idempotent — migrating an already-migrated doc again changes nothing further.
+  const migratedTwice = migrateDocument(migrated);
+  assert.deepEqual(migratedTwice.entities.items.map((e) => e.tags), migrated.entities.items.map((e) => e.tags));
+});

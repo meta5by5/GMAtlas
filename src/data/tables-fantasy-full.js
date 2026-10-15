@@ -130,11 +130,27 @@ export const FANTASY_FULL_TABLES = {
       "settlement resupply", "search and rescue"
     ]
   },
+  // Direct follow-up request, after the fields these back went live: "The
+  // random oracle options for the new location fields are loading scifi
+  // options... make a complete set of fantasy oracle options... revise
+  // the oracle options to fantasy equivalents." Realm Type/Wilderness
+  // Peril (Realms) and Settlement Type/First Look/Authority/Settlement
+  // Trouble/Settlement Project (Settlements) were, on inspection, thin
+  // sci-fi reskins left over from an earlier session that built this
+  // pack's full content by adapting the sci-fi SCENE_TABLES wholesale
+  // ("irrigation works malfunction," "heat bloom visible to predators,"
+  // "noble slogans painted over older warnings" read industrial/
+  // frontier-sci-fi, not fantasy) — rewritten here as genuinely fantasy
+  // content, independent of their sci-fi SCENE_TABLES counterparts (which
+  // are untouched — this file's own job is fantasy, not reconciling the
+  // two). Realm Traits/Wilderness Opportunity aren't used by any Location
+  // field (domain/entities.js's LOCATION_FANTASY_FIELD_ORACLE_PATH) and
+  // are left as they were, out of this revision's scope.
   "Realms": {
     "Realm Type": [
-      "barren highland", "thin-soil mining hold", "cold moorland colony", "humid jungle realm",
-      "island archipelago", "blighted marchland", "ice-locked reach", "volcanic furnace vale",
-      "tamed garden realm", "cloud-shrouded peak", "scattered isles", "stable borderland"
+      "barren highland march", "thin-soil mining hold", "cold moorland fiefdom", "humid jungle frontier",
+      "island archipelago realm", "blighted borderland", "ice-locked northern reach", "volcanic furnace vale",
+      "tamed garden demesne", "cloud-shrouded mountain hold", "scattered isles", "stable farming shire"
     ],
     "Realm Traits": [
       "unstable weather windows", "scarce fresh water", "valuable deep-earth minerals",
@@ -143,10 +159,10 @@ export const FANTASY_FULL_TABLES = {
       "seasonal migration hazards"
     ],
     "Wilderness Peril": [
-      "toxic storm front", "sinkhole into old mine caverns", "territorial wild beast",
-      "corrosive fog", "irrigation works malfunction", "armed claim jumpers",
-      "heat bloom visible to predators", "unstable ice shelf", "flooded tunnel network",
-      "watch cordon around a secret site"
+      "sudden hailstorm", "sinkhole into old mine tunnels", "territorial wild beast",
+      "poisonous fog from a cursed bog", "a washed-out ford", "bandits lying in ambush",
+      "wolves drawn by the scent of blood", "an unstable rope bridge", "flooded forest trail",
+      "a watch cordon around a haunted site"
     ],
     "Wilderness Opportunity": [
       "rare mineral vein", "surviving pre-collapse relics", "friendly local guide",
@@ -157,44 +173,44 @@ export const FANTASY_FULL_TABLES = {
   },
   "Settlements": {
     "Settlement Type": [
-      "company town", "mining camp", "scholars' outpost", "irrigation colony",
-      "free trader port", "penal labor camp", "frontier homestead cluster", "river transfer station",
-      "garrison depot", "refugee camp"
+      "walled market town", "riverside trading post", "mountain mining hold", "temple town",
+      "baronial seat", "fishing hamlet", "frontier logging camp", "pilgrims' rest",
+      "caravan waystation", "siege-scarred garrison town"
     ],
     "First Look": [
-      "stacked timber shacks under harsh torchlight",
-      "a single cobbled street filled with red dust",
+      "timber houses leaning over a muddy lane",
+      "a single cobbled street crowded with market stalls",
       "watchmen posted at every gate",
-      "workers moving silently between shifts",
-      "noble slogans painted over older warnings",
-      "a chapel, tavern, and infirmary sharing one hall",
-      "patched wall stones and mismatched thatch",
-      "children watching strangers from shuttered windows",
-      "an unfinished palisade half-buried in grit",
-      "armed guards pretending not to be nervous"
+      "farmers hauling carts in from the fields",
+      "temple bells ringing over the rooftops",
+      "a tavern, shrine, and smithy sharing one square",
+      "patched thatch roofs and mismatched fences",
+      "children chasing geese between the houses",
+      "an unfinished palisade half-buried in mud",
+      "guardsmen pretending not to be nervous"
     ],
     "Authority": [
-      "town reeve", "elected village council", "garrison commander", "guild foreman coalition",
-      "religious founder", "criminal broker", "scholarly warden", "enchanted steward",
+      "town reeve", "elected village council", "garrison captain", "guildmasters' coalition",
+      "temple high priest", "local baron or baroness", "scholarly warden", "hedge wizard steward",
       "sheriff's office", "family patriarch or matriarch"
     ],
     "Settlement Trouble": [
-      "rations are being diverted",
-      "a strike is near violence",
-      "the well is failing",
-      "the official population count is false",
+      "rations are being hoarded by the granary keeper",
+      "a labor dispute is near violence",
+      "the well has run dry",
+      "the official tax count is false",
       "a missing child is blamed on outsiders",
       "the watch has started disappearing people",
-      "the town charter is contested",
-      "a disease is being hidden",
+      "the town charter is contested by a rival claimant",
+      "a plague is being hidden from travelers",
       "two factions control different sections of the wall",
-      "a local taboo blocks the obvious solution"
+      "an old taboo blocks the obvious solution"
     ],
     "Settlement Project": [
-      "expand the palisade", "repair the watch beacon", "open a new mine face",
-      "complete an irrigation tower", "build militia defenses", "restore the infirmary",
-      "install a new well pump", "survey a nearby ruin", "negotiate a trade contract",
-      "purge contamination from the water system"
+      "expand the palisade", "repair the watchtower beacon", "open a new quarry face",
+      "complete an irrigation ditch", "build militia defenses", "restore the temple",
+      "dig a new well", "survey a nearby ruin", "negotiate a trade agreement",
+      "cleanse a curse from the water supply"
     ]
   },
   "Districts": {
@@ -1280,9 +1296,9 @@ export const FANTASY_FULL_TABLES = {
       "security protecting assets instead of people", "children reporting dreams of the same location", "construct labor dispute suppressed", "a prospector strike that the guild wants erased"
     ],
     "Local Color": [
-      "guild slogans painted over older warning signs", "meal tickets used as informal currency", "church bells made from reforged scrap", "miners wearing family charms",
-      "children playing under refinery shadows", "imported trees dying in sealed planters", "public boards showing delayed news", "union graffiti hidden inside maintenance panels",
-      "settlers naming storms like relatives", "constructs standing silently during shift changes", "cargo containers converted into chapels", "old flags bleached by sunlight"
+      "guild slogans painted over older warning signs", "temple tokens used as informal currency", "church bells recast from old armor", "miners wearing family charms for luck",
+      "children playing in the shadow of the keep", "imported trees withering in walled gardens", "town criers shouting stale news", "guild marks scratched into tavern beams",
+      "settlers naming storms like relatives", "old soldiers standing silent at the memorial", "market stalls built from old wagon parts", "faded banners bleached by sun and rain"
     ]
   },
   "Noble Houses & Guilds": {

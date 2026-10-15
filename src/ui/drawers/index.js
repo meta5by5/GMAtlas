@@ -12,7 +12,7 @@ import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import {
   listEntities, filterEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, entityTypeLabel, listTagVocabulary, listEntityTagVocabulary,
   RELATIONSHIP_TYPES, RELATIONSHIP_TYPE_LABEL, isRelationshipFlagged, computeFactionMaxHp,
-  getSystemForLocation, getStarForLocation, getHexZoneForLocation,
+  getSystemForLocation, getStarForLocation, getHexZoneForLocation, LOCATION_FANTASY_FIELD_ORACLE_PATH,
 } from '../../domain/entities.js';
 import { sortStatblockGroups, getStatblockTemplates } from '../../domain/statblocks.js';
 import { listTemplates } from '../../domain/statblockTemplates.js';
@@ -52,7 +52,7 @@ import {
   listDungeonMaps, getActiveDungeonMap, getDungeonTile, computeDungeonAppendCells, computeMergeRectangle,
   listDungeonFloors, floorLabel, DUNGEON_GRID_SIZE,
 } from '../../domain/dungeonCrawls.js';
-import { DUNGEON_CRAWL_ARCHETYPES, ALL_DUNGEON_CRAWL_ARCHETYPES, findDungeonCrawlArchetype, DUNGEON_CRAWL_PACKS, findDungeonCrawlPack, DUNGEON_ROOM_FALLBACK_PALETTE } from '../../data/dungeonCrawlTiles.js';
+import { DUNGEON_CRAWL_ARCHETYPES, ALL_DUNGEON_CRAWL_ARCHETYPES, findDungeonCrawlArchetype, findDungeonCrawlPack, DUNGEON_ROOM_FALLBACK_PALETTE, FLEXCRAWL_DYNAMIC_CONTENT_CATEGORIES } from '../../data/dungeonCrawlTiles.js';
 import { DUNGEON_DRESSING_ICONS, findDungeonDressingIcon, DUNGEON_TILE_GRID_SIZE } from '../../data/dungeonCrawlDressing.js';
 import { FIVE_LEAGUES_ORIGINS, findFiveLeaguesOrigin } from '../../data/fiveLeaguesOrigins.js';
 import {
@@ -470,8 +470,10 @@ function inspector(doc, e, ui) {
     ${npcSection(e)}
     ${factionSection(doc, e, ui)}
     ${conflictSection(doc, e, ui)}
+    ${fantasyLocationFieldsSection(doc, e, ui)}
     ${worldProfileSection(doc, e, ui)}
     ${worldDemographicsSection(doc, e, ui)}
+    ${dungeonCrawlLinksSection(doc, e)}
     ${entityConfigurationSectionHtml(doc, e, ui)}
     ${relBlockHtml}`;
 }
@@ -945,6 +947,59 @@ function factionImpactSummary(provider, impact) {
   return `<p class="dim small">Impact of this turn: ${stat || 'no change'}${lines.length ? ` — ${lines.join('; ')}` : ''}</p>`;
 }
 
+// Direct follow-up request: "For all fantasy Location entity types,
+// create a robust list of location-defining fields that map to oracles
+// so they can be autopopulated. Include fields considered popular,
+// helpful and story-building across most internet TTRPG sources." Nine
+// fields (domain/entities.js's LOCATION_FANTASY_FIELD_ORACLE_PATH), each
+// rolled from — or typed over, with the edit written back to — its own
+// real oracle table (session.js's rollLocationFantasyField/
+// editLocationFantasyField; the mechanism is a direct sibling of the
+// existing Sights/Smells/Sounds sensory fields, same "roll icon + text +
+// clear" row, data/tables-fantasy-full.js's real tables underneath).
+// Gated on the fantasy genre pack alone (every fantasy Location gets
+// these, unlike World Profile's #World-tag opt-in above — a settlement/
+// site descriptor set is relevant to essentially any fantasy Location,
+// not just a special subset of them).
+const FANTASY_LOCATION_FIELD_LABELS = {
+  settlementType: 'Settlement Type',
+  notableFeature: 'Notable Feature',
+  authority: 'Ruling Authority',
+  currentTrouble: 'Current Trouble',
+  currentProject: 'Current Project',
+  localColor: 'Local Color',
+  tradeResource: 'Trade & Resources',
+  realmType: 'Realm Type',
+  danger: 'Danger',
+};
+// Same markup/classes as workspace/index.js's own oracleFieldRow (Sights/
+// Smells/Sounds) — not imported from there (private to that module) —
+// so a fantasy Location's new descriptor rows read as visually identical
+// to the sensory rows every Location already has, just scoped to the
+// Entity Editor instead of the WHERE workspace tab.
+function fantasyOracleFieldRow(label, value, locId, field) {
+  return `<div class="oracle-field-row">
+    <span class="field-label-static">${esc(label)}</span>
+    <button type="button" class="icon-btn" data-location-fantasy-roll="${esc(locId)}::${field}" title="Roll ${esc(label)}">🎲</button>
+    <textarea class="thread-name-input oracle-field-textarea" rows="1" data-location-fantasy-field="${esc(locId)}::${field}" placeholder="—">${esc(value)}</textarea>
+    ${value ? `<button type="button" class="icon-btn" data-location-fantasy-clear="${esc(locId)}::${field}" title="Clear ${esc(label)}">✕</button>` : ''}
+  </div>`;
+}
+function fantasyLocationFieldsSection(doc, e, ui = {}) {
+  if (e.type !== 'location') return '';
+  if ((doc.settings && doc.settings.genrePack) !== 'fantasy') return '';
+  const key = `entityFantasyLocation:${e.id}`;
+  const open = !isPartySectionCollapsed(ui, key, true);
+  return `
+    <div class="faction-card">
+      ${partySectionHeaderHtml(key, 'Location Details', !open)}
+      ${open ? `
+      <p class="dim small">Popular fantasy location-generator fields — roll 🎲 any one from its own real oracle table, or type your own.</p>
+      ${Object.keys(LOCATION_FANTASY_FIELD_ORACLE_PATH).map((field) => fantasyOracleFieldRow(FANTASY_LOCATION_FIELD_LABELS[field], e[field] || '', e.id, field)).join('')}
+      ` : ''}
+    </div>`;
+}
+
 // World Profile (UWP) card (docs/adr/0026-hostile-canon-locations.md,
 // 2026-07-08 third follow-up; System/Star/Hex/Zone reworked per direct
 // follow-up request — "just use the Relationships for setting the
@@ -957,12 +1012,29 @@ function factionImpactSummary(provider, impact) {
 // plain world/room/building), then World Size/Atmosphere/Biome/
 // Hydrographics for everything else. Biome (ADR 0025) lives here too —
 // still the same field feeding domain/trade.js's biomeBiasAt(), only its
-// UI position moved. Renders for any Location entity that has at least
-// one of these fields set, is tagged #system/#star, OR whenever the
-// active genre pack is Hostile (so a GM can start filling one in even
-// before the canon import has run). Collapsed by default
-// (ui.expandedWorldProfile, ephemeral — same Set shape as
-// enhancementsSection's ui.expandedEnhancements).
+// UI position moved. Collapsed by default (ui.expandedWorldProfile,
+// ephemeral — same Set shape as enhancementsSection's own
+// ui.expandedEnhancements).
+//
+// Direct follow-up request: "Associate all the world profile and
+// demographics fields and sections under a Location entity type to the
+// scifi genre and add a protected tag for Location types called World
+// that adds those sections and fields to the entity record." This
+// REPLACES the old "renders whenever this Location has any UWP data set,
+// OR whenever the active frontier-setting provider is Hostile" heuristic
+// — which, since resolveActiveProviderChoice(doc,'frontier-setting')
+// resolves to 'hostile' for every campaign regardless of genre pack
+// (Hostile is its ONLY provider, always activated), actually meant this
+// card rendered collapsed on every Location in every genre, fantasy
+// included. Now gated on BOTH: the genre pack genuinely being sci-fi,
+// AND the Location explicitly carrying the #World protected tag
+// (isLocationWorldTagged below) — a GM deliberately marks a Location as
+// "this is a planet/system/station-scale World," rather than every
+// Location quietly carrying planetary demographics fields it will never
+// use. migrate.js's own backfill adds #World to any Location that
+// already had real UWP/Demographics data (or was #system/#star tagged,
+// which used to auto-show this card on its own) before this shipped, so
+// no existing campaign's already-visible data goes dark.
 //
 // Hex/Zone can be set on EITHER a #system or #star Location, but "only
 // one can be correct and the #star wins out" (direct quote) — a #system's
@@ -975,20 +1047,18 @@ function factionImpactSummary(provider, impact) {
 // Hydrographics/gas-giant are hidden for a #system OR #star Location
 // either way (neither has a surface); worldDemographicsSection below
 // hides itself entirely for the same reason.
+function isScifiGenrePack(doc) {
+  const pack = (doc.settings && doc.settings.genrePack) || 'sci-fi-generic';
+  return pack === 'sci-fi-generic' || pack === 'hostile';
+}
+function isLocationWorldTagged(e) {
+  return Array.isArray(e.tags) && e.tags.some((t) => /^world$/i.test(String(t).trim()));
+}
 function worldProfileSection(doc, e, ui = {}) {
   if (e.type !== 'location') return '';
+  if (!isLocationWorldTagged(e) || !isScifiGenrePack(doc)) return '';
   const isStarTagged = (e.tags || []).includes('star');
   const isSystemTagged = (e.tags || []).includes('system');
-  const hasAny = e.hex || e.zone || e.worldSize || e.atmosphere || e.biome || e.hydrographics || e.gasGiant || isStarTagged || isSystemTagged;
-  // Phase A audit: this used to check genrePack === 'hostile' directly,
-  // back when Hostile WAS the genre pack. Now that Hostile is a Game
-  // System inside the shared 'sci-fi-generic' pack (data/genrePacks.js),
-  // genrePack alone can no longer tell "is Hostile specifically this
-  // campaign's chosen frontier setting" from "any other sci-fi system" —
-  // repointed to the Rules Constitution's own 'frontier-setting' row
-  // (GAMEPLAY_AREAS already lists Hostile as its sole provider), the
-  // first real behavioral use of that row beyond Factions.
-  if (!hasAny && resolveActiveProviderChoice(doc, 'frontier-setting') !== 'hostile') return '';
   // Direct follow-up request: "use the same collapseable format used on
   // the Campaign panel" — converted from its own bespoke ui.expandedWorldProfile
   // Set to the shared mechanism; `open` is kept as the same derived boolean
@@ -1060,11 +1130,8 @@ function worldProfileSection(doc, e, ui = {}) {
 // of its own.
 function worldDemographicsSection(doc, e, ui = {}) {
   if (e.type !== 'location') return '';
+  if (!isLocationWorldTagged(e) || !isScifiGenrePack(doc)) return '';
   if ((e.tags || []).includes('system') || (e.tags || []).includes('star')) return '';
-  const hasAny = e.starport || (e.bases && e.bases.length) || e.techLevel || e.lawLevel ||
-    (e.tradeCodes && e.tradeCodes.length) || e.developmentLevel || e.population || e.government;
-  // Phase A audit: same repoint as worldProfileSection's own identical gate.
-  if (!hasAny && resolveActiveProviderChoice(doc, 'frontier-setting') !== 'hostile') return '';
   // Direct follow-up request: "use the same collapseable format used on
   // the Campaign panel" — same conversion worldProfileSection's own
   // comment above already explains; `open`/default-collapsed behavior
@@ -1128,6 +1195,33 @@ function worldDemographicsSection(doc, e, ui = {}) {
       ${codeSelect('government', 'Government', GOVERNMENTS, e.government)}
       <p class="dim small">Economy biases Trade prices for this Location (Settings → Trade Economy Model has the full dial reference) — leave unset to price as before.</p>
       ` : ''}
+    </div>`;
+}
+
+// Direct follow-up request: "When creating the link, the map should be a
+// link entry in the entity record. From the entity record, you should see
+// the mapname listed as a link and clicking the link should navigate to
+// the map." A Dungeon Crawl map's own locationEntityId (domain/
+// dungeonCrawls.js's setDungeonMapLocation) is a one-way pointer, map ->
+// entity — rather than also storing a redundant back-reference on the
+// entity (another thing to keep in sync, another way migration could
+// drop data), this computes the reverse lookup live at render time, same
+// "single source of truth, derive the other direction" posture
+// getContainingLocation/proximityToLocation already use elsewhere. Shows
+// EVERY map pointing here, not just one — a multi-floor dungeon's
+// several floors all share the same locationEntityId by design
+// (createDungeonFloorBelowStairs), and each is its own real map worth
+// jumping straight to.
+function dungeonCrawlLinksSection(doc, e) {
+  if (e.type !== 'location') return '';
+  const maps = ((doc.dungeonCrawls && doc.dungeonCrawls.maps) || []).filter((m) => m.locationEntityId === e.id);
+  if (!maps.length) return '';
+  return `
+    <div class="faction-card">
+      <span class="field-label-static">Dungeon Maps</span>
+      <span class="entity-chip-row">
+        ${maps.map((m) => `<button type="button" class="entity-chip" data-open-dungeoncrawl-map="${esc(m.id)}" title="Open ${esc(m.name)} in Dungeon Crawl">🗺 ${esc(m.name)}</button>`).join('')}
+      </span>
     </div>`;
 }
 
@@ -1321,14 +1415,41 @@ function entityPhotoHtml(doc, e) {
 // the full .inspector-photo-fields width underneath. Defaults expanded
 // (ui.collapsedEntityTags tracks entities explicitly collapsed, inverse-
 // tracked the same way Overview's own collapse state already is).
+// Direct follow-up request: "the tag field needs a dropdown listing the
+// protected and entity-specific options for consistency" — a real
+// <select> alongside the existing free-text input, same "blank
+// placeholder option, immediately commits on change, resets to blank
+// afterward" convention worldDemographicsSection's own "— add a base —"/
+// "— add a trade code —" selects already use (data-entity-base-add/
+// data-entity-tradecode-add, shell.js) — not a NEW pattern, the SAME one
+// applied here for consistency, per the request's own wording. Lists the
+// exact same vocabulary the datalist already offers (protected tags,
+// this entity type's genre-specific seeds, AND every tag already used on
+// another entity of this type — listTagVocabulary's own existing
+// "own tags excluded" rule means an entity never sees a tag it already
+// has in either control) — a datalist's own browser-native affordance
+// (type to filter, or click the arrow on desktop) stays for typing a
+// brand-new custom tag; the <select> is the reliable, always-fully-
+// visible-on-click alternative for picking a KNOWN one, since datalist
+// support/behavior is inconsistent across browsers and especially mobile.
+// Protected tags (isProtectedEntityTag, below) get a 🔒 prefix in the
+// dropdown's own display label only — the committed value (shell.js's
+// data-entity-tag-select handler) is always the clean tag text.
 function tagEditorHead(doc, e, ui) {
   const expanded = !((ui.collapsedEntityTags || new Set()).has(e.id));
   const vocab = listTagVocabulary(doc, e.type, e.id);
+  const selectOptions = vocab.map((t) => `<option value="${esc(t)}">${isProtectedEntityTag(t) ? '🔒 ' : ''}${esc(t)}</option>`).join('');
   return `
     <div class="tag-editor-head">
       <button type="button" class="field-label-static tag-editor-toggle" data-entity-tags-toggle="${esc(e.id)}" title="${expanded ? 'Hide' : 'Show'} tags">${expanded ? '▾' : '▸'} Tags</button>
-      <input class="doc-tag-input" data-entity-tag-input list="entity-tag-list" placeholder="add tag…">
-      <datalist id="entity-tag-list">${vocab.map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
+      <span class="tag-editor-add-row">
+        <select class="tag-editor-select" data-entity-tag-select="${esc(e.id)}" title="Pick a protected or suggested tag">
+          <option value="" selected disabled>+ Add tag…</option>
+          ${selectOptions}
+        </select>
+        <input class="doc-tag-input" data-entity-tag-input list="entity-tag-list" placeholder="or type a custom tag…">
+        <datalist id="entity-tag-list">${vocab.map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
+      </span>
     </div>`;
 }
 // Direct follow-up request: "for tags that are protected, like character,
@@ -1344,7 +1465,11 @@ function tagEditorHead(doc, e, ui) {
 // HEXCRAWL_THREAT_ICONS rather than duplicated into the fixed list, so a
 // future catalog addition is automatically protected too. Exported so
 // shell.js's tag-remove handler can gate its own confirm the same way.
-const PROTECTED_ENTITY_TAGS = ['character'];
+// 'world' (direct follow-up request) is the newest addition — same
+// "removing it has a real consequence" rationale: it's what shows a
+// Location's World Profile (UWP)/World Demographics cards at all (see
+// isLocationWorldTagged below), not just a descriptive flavor tag.
+const PROTECTED_ENTITY_TAGS = ['character', 'world'];
 export function isProtectedEntityTag(tag) {
   const clean = String(tag || '').toLowerCase();
   if (PROTECTED_ENTITY_TAGS.includes(clean)) return true;
@@ -5671,58 +5796,96 @@ function hexcrawl(doc, ui = {}) {
 // but not yet committed, shown with its 4 corner-rotate buttons + a center
 // commit button) and `dungeonCrawlSelected` ({mapId,x,y} — a committed
 // Tile whose details are open below the grid).
+// Direct follow-up request: "The floor levels dropdown should be an icon
+// of several stacked rectangles representing levels or floors. the
+// dropdown would appear when clicking the icon." A real native <select>
+// is kept underneath (same onChange handler, same data attribute, every
+// OS's own accessible picker) — only its visible presentation changes: an
+// absolutely-positioned, fully transparent <select> sits over a small
+// decorative "stacked rectangles" glyph, so a click/tap anywhere on the
+// icon opens the real dropdown (styles/cockpit.css's .dc-floor-icon).
+function dcFloorStackIconSvg() {
+  return `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false">
+    <rect x="3" y="3.5" width="14" height="5" rx="1.1" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    <rect x="6" y="10" width="14" height="5" rx="1.1" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    <rect x="9" y="16.5" width="14" height="5" rx="1.1" fill="none" stroke="currentColor" stroke-width="1.6"/>
+  </svg>`;
+}
+
 function dungeoncrawl(doc, ui = {}) {
-  const helpKey = 'dungeoncrawl-intro';
   const maps = listDungeonMaps(doc);
   const active = getActiveDungeonMap(doc);
-  const head = `<div class="section-head-row"><span class="entity-chip-row">${helpToggle(helpKey)}</span></div>
-    ${helpBody(helpKey, 'Click the glowing + to place the next Tile — the very first one is always an Entrance; every one after that picks a random Tile from the current pack and shows it pending. Touch any of its 4 corners to rotate it 90°, then click its center to commit. Double-click (or long-press on mobile) an already-placed Tile to reopen it for re-rotating. Click a placed Tile once to see a bigger, zoomable view of it below the grid — handy for reading secret-door and encounter-zone markings. "Merge Tiles" lets you select two or more already-placed, adjacent Tiles forming a rectangle and combine them into one bigger Room. The Pack dropdown re-skins every placed Tile at once without changing the map layout. "Link Location" ties this map to a real Cast Location (or creates a new one). A Stairs Down Tile\'s own detail panel can create — and later jump back to — a linked floor below it; once a dungeon has more than one floor, a Floor dropdown appears to switch between them. The Dressing dropdown arms a door/secret door/portcullis/stairs/pillar/tree trunk/chest/campfire marker — click a placed Tile (small grid or the big view below) to drop it on that Tile\'s own invisible 12x12 grid (each square = 5\', the book\'s own real Tile scale); click a placed marker to remove it.', ui)}
-    <div class="battlemap-tabs">
-      ${maps.map((m) => `<button type="button" class="btn ghost sm ${active && active.id === m.id ? 'active' : ''}" data-dungeoncrawl-select="${esc(m.id)}">${esc(m.name)}</button>`).join('')}
-      <button type="button" class="chip sm" data-dungeoncrawl-add>＋ New Map</button>
-    </div>`;
+  // Direct follow-up request: "The tooltip must be on the top row right-
+  // aligned from the title 'Dungeon Crawl'" — the toggle itself now lives
+  // in shell.js's headExtraForDrawer (same relocation Guide/Documents
+  // already use), right beside the drawer chrome's own title; this is
+  // just the text it reveals, same as those two.
+  const head = helpBody('dungeoncrawl-intro', 'Click the glowing + to place the next Tile — the very first one is always an Entrance; every one after that picks a random Tile from the current pack and shows it pending. Touch any of its 4 corners to rotate it 90°, then click its center to commit. Double-click (or long-press on mobile) an already-placed Tile to reopen it for re-rotating. Click a placed Tile once to see a bigger, zoomable view of it below the grid — handy for reading secret-door and encounter-zone markings. "Merge Tiles" lets you select two or more already-placed, adjacent Tiles forming a rectangle and combine them into one bigger Room. The tile format (Pack) is chosen once, when the map is created, and can\'t be changed afterward. "Link Location" ties this map to a real Cast Location (or creates a new one) — once linked, the Location appears below as a chip; click it to open that entity\'s own record, where this map in turn appears as a link back. A Stairs Down Tile\'s own detail panel can create — and later jump back to — a linked floor below it; once a dungeon has more than one floor, the stacked-rectangles icon opens a Floor switcher. The Dressing dropdown arms a door/secret door/portcullis/stairs/pillar/tree trunk/chest/campfire marker — click a placed Tile (small grid or the big view below) to drop it on that Tile\'s own invisible 12x12 grid (each square = 5\', the book\'s own real Tile scale); DOUBLE-click a placed marker, then confirm, to remove it.', ui);
 
-  if (!active) return `${head}<p class="ws-placeholder">No Dungeon Crawl maps yet — create one to get started.</p>`;
+  if (!maps.length) {
+    return `${head}
+    <div class="battlemap-toolbar">
+      <button type="button" class="btn ghost sm" data-dungeoncrawl-add>＋ New Map</button>
+    </div>
+    <p class="ws-placeholder">No Dungeon Crawl maps yet — create one to get started.</p>`;
+  }
+  if (!active) return head; // unreachable in practice (maps.length>0 implies getActiveDungeonMap resolves one), defensive only
 
-  const pack = findDungeonCrawlPack(active.pack);
-  const packOptions = DUNGEON_CRAWL_PACKS.map((p) => `<option value="${esc(p.key)}" ${p.key === pack.key ? 'selected' : ''}>${esc(p.label)}</option>`).join('');
   const mergeMode = !!ui.dungeonCrawlMergeMode;
   const mergeSelection = ui.dungeonCrawlMergeSelection || new Set();
   const mergeRect = mergeMode ? computeMergeRectangle([...mergeSelection].map((k) => { const [x, y] = k.split(',').map(Number); return { x, y }; })) : null;
   // Direct follow-up request: "link map records to a location using the
   // look up feature... allow multiple map grids as different floors
   // related to the same map that you can select from a drop down." The
-  // Floor dropdown only appears once this map actually HAS siblings —
-  // a brand-new, never-floor-split map shows no dropdown at all rather
-  // than a pointless single-option one.
+  // Floor icon only appears once this map actually HAS siblings — a
+  // brand-new, never-floor-split map shows no switcher at all rather than
+  // a pointless single-option one. Direct follow-up request: "The name of
+  // the floor must be editable" — each floor option now shows that
+  // floor's own real (already freely renamable, via the pencil icon)
+  // name, with its structural Ground Floor/Floor N/B-N label alongside
+  // for orientation, rather than just the generic structural label alone.
   const linkedLocation = active.locationEntityId ? getEntity(doc, active.locationEntityId) : null;
   const floors = listDungeonFloors(doc, active.floorGroupId);
-  const floorRow = floors.length > 1
-    ? `<select data-dungeoncrawl-floor-select="${esc(active.id)}" title="Switch floor — same dungeon, a different level of it">
-        ${floors.map((f) => `<option value="${esc(f.id)}" ${f.id === active.id ? 'selected' : ''}>${esc(floorLabel(f.floorIndex))}</option>`).join('')}
-      </select>`
+  const floorIcon = floors.length > 1
+    ? `<label class="icon-btn dc-floor-icon" title="Switch floor — same dungeon, a different level of it">
+        ${dcFloorStackIconSvg()}
+        <select class="dc-floor-select-native" data-dungeoncrawl-floor-select="${esc(active.id)}">
+          ${floors.map((f) => `<option value="${esc(f.id)}" ${f.id === active.id ? 'selected' : ''}>${esc(f.name)} (${esc(floorLabel(f.floorIndex))})</option>`).join('')}
+        </select>
+      </label>`
     : '';
   const armedDressing = ui.dungeonCrawlArmedDressing || '';
   const dressingOptions = DUNGEON_DRESSING_ICONS.map((d) => `<option value="${esc(d.key)}" ${d.key === armedDressing ? 'selected' : ''}>${d.glyph} ${esc(d.label)}</option>`).join('');
+  // Direct follow-up request: "Replace the chips showing the maps with a
+  // dropdown selecting the active map. Next to the dropdown is a pencil
+  // icon to edit the map name. To the right of that is the Dressing
+  // dropdown and an icon showing Merge for merging the tiles." — those
+  // four, in that exact order; Floor/+New/Delete (not part of that
+  // explicit sequence) trail after Merge rather than breaking it up.
+  const mapOptions = maps.map((m) => `<option value="${esc(m.id)}" ${m.id === active.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
   return `${head}
     <div class="battlemap-toolbar">
-      <span class="hexcrawl-map-name">${esc(active.name)}</span>
+      <select data-dungeoncrawl-select title="Switch map">${mapOptions}</select>
       <button type="button" class="icon-btn" data-dungeoncrawl-rename-open="${esc(active.id)}" title="Rename map">✎</button>
-      <button type="button" class="icon-btn" data-dungeoncrawl-remove="${esc(active.id)}" title="Delete this map" aria-label="Delete map">✕</button>
-      <select data-dungeoncrawl-pack="${esc(active.id)}" title="Re-skin every placed Tile with a different pack">${packOptions}</select>
-      ${floorRow}
-      <button type="button" class="btn ghost sm" data-dungeoncrawl-location-link="${esc(active.id)}" title="${linkedLocation ? 'Change the linked Location' : 'Link this map to a Cast Location (or create one)'}">📍 ${linkedLocation ? esc(linkedLocation.name || 'Unnamed') : 'Link Location'}</button>
-      ${linkedLocation ? `<button type="button" class="icon-btn" data-dungeoncrawl-location-unlink="${esc(active.id)}" title="Unlink Location">✕</button>` : ''}
       <select data-dungeoncrawl-dressing-arm title="Pick a dungeon-dressing object, then click a placed Tile to drop it on its 12x12 grid">
         <option value="">＋ Dressing…</option>
         ${dressingOptions}
       </select>
-      <button type="button" class="btn ghost sm ${mergeMode ? 'active' : ''}" data-dungeoncrawl-merge-toggle title="Select two or more adjacent placed Tiles forming a rectangle and combine them into one bigger Room">${mergeMode ? '✓ ' : '⬜ '}Merge Tiles</button>
+      <button type="button" class="icon-btn ${mergeMode ? 'active' : ''}" data-dungeoncrawl-merge-toggle title="${mergeMode ? 'Merge mode on — select two or more adjacent placed Tiles forming a rectangle, then confirm' : 'Merge Tiles — select two or more adjacent placed Tiles forming a rectangle and combine them into one bigger Room'}">${mergeMode ? '✓' : '⊞'}</button>
+      ${floorIcon}
+      <button type="button" class="icon-btn" data-dungeoncrawl-add title="New Map">＋</button>
+      <button type="button" class="icon-btn" data-dungeoncrawl-remove="${esc(active.id)}" title="Delete this map" aria-label="Delete map">🗑</button>
       ${mergeMode && mergeRect ? `<button type="button" class="btn sm" data-dungeoncrawl-merge-commit="${esc(active.id)}">✓ Merge ${mergeSelection.size} Tiles into a Room</button>` : ''}
       ${mergeMode ? `<button type="button" class="btn ghost sm" data-dungeoncrawl-merge-cancel>✕ Cancel</button>` : ''}
     </div>
+    <div class="entity-chip-row dc-location-row">
+      ${linkedLocation
+        ? `<button type="button" class="entity-chip" data-open-entity="${esc(linkedLocation.id)}" title="Open ${esc(linkedLocation.name || 'Unnamed')}">📍 ${esc(linkedLocation.name || 'Unnamed')}</button>
+           <button type="button" class="icon-btn" data-dungeoncrawl-location-unlink="${esc(active.id)}" title="Unlink Location">✕</button>`
+        : `<button type="button" class="chip sm" data-dungeoncrawl-location-link="${esc(active.id)}" title="Link this map to a Cast Location (or create one)">📍 ＋ Link Location</button>`}
+    </div>
     ${mergeMode ? `<p class="dim small">${mergeSelection.size === 0 ? 'Click two or more adjacent, already-placed Tiles to select them.' : mergeRect ? `${mergeSelection.size} Tiles selected — forms a valid ${mergeRect.w}×${mergeRect.h} rectangle.` : `${mergeSelection.size} Tiles selected — must form a solid rectangle with no gaps before they can be merged.`}</p>` : ''}
-    ${armedDressing ? `<p class="dim small">Click anywhere on a placed Tile (small grid or the big view below) to drop a ${esc((findDungeonDressingIcon(armedDressing) || {}).label || armedDressing)} there — it snaps to the nearest 5' square. Click a placed dressing icon to remove it.</p>` : ''}
+    ${armedDressing ? `<p class="dim small">Click anywhere on a placed Tile (small grid or the big view below) to drop a ${esc((findDungeonDressingIcon(armedDressing) || {}).label || armedDressing)} there — it snaps to the nearest 5' square. Double-click (then confirm) a placed dressing icon to remove it.</p>` : ''}
     <div class="dungeoncrawl-grid">${dungeoncrawlCells(doc, active, ui)}</div>
     ${dungeoncrawlTileDetail(doc, active, ui)}`;
 }
@@ -5880,7 +6043,7 @@ function dungeonDressingOverlayHtml(tile, mapId, x, y) {
     if (!icon) return '';
     const leftPct = ((d.gx + 0.5) / DUNGEON_TILE_GRID_SIZE) * 100;
     const topPct = ((d.gy + 0.5) / DUNGEON_TILE_GRID_SIZE) * 100;
-    return `<button type="button" class="dc-dressing-icon${icon.secret ? ' secret' : ''}" style="left:${leftPct.toFixed(2)}%;top:${topPct.toFixed(2)}%;" data-dungeoncrawl-dressing-remove="${mapId},${x},${y},${esc(d.id)}" title="${esc(icon.label)} — click to remove">${icon.glyph}</button>`;
+    return `<button type="button" class="dc-dressing-icon${icon.secret ? ' secret' : ''}" style="left:${leftPct.toFixed(2)}%;top:${topPct.toFixed(2)}%;" data-dungeoncrawl-dressing-remove="${mapId},${x},${y},${esc(d.id)}" title="${esc(icon.label)} — double-click, then confirm, to remove">${icon.glyph}</button>`;
   }).join('');
 }
 
@@ -5981,6 +6144,35 @@ function dungeonBigRoomArtHtml(pack) {
   </div>`;
 }
 
+// Direct follow-up request: "Below the enlarged map tile picture needs to
+// be a key explaining the color and number coding used in the tiles to
+// represent encounter options per FlexTale." Real source: FlexCrawl
+// Toolkit's own Table 18 (data/dungeonCrawlTiles.js's own doc comment has
+// the full citation/extraction detail). Only the `dungeon` pack's own
+// "Full"/GM-side image actually carries these real color-coded markers —
+// this app's two procedural packs (`cave`/`forest`) are original
+// stylized art with none of that real licensed detail, so the legend
+// only ever renders alongside the pack it's actually true of.
+function dungeonContentLegendHtml(pack) {
+  if (pack.kind !== 'image') return '';
+  return `<div class="dc-content-legend">
+    <p class="field-label sm">Dynamic Content Key <span class="five-leagues-hint" title="FlexCrawl Toolkit, Table 18 (p.82) — each colored box is ONE of up to 6 possible locations for that category's content on this Tile; a box existing doesn't mean that content is actually present, only that it COULD be. To find out, roll a d6 per category you want to check — a result matching a box's own printed number says that's where it is.">ⓘ</span></p>
+    <div class="dc-content-legend-rows">
+      ${FLEXCRAWL_DYNAMIC_CONTENT_CATEGORIES.map((c) => `
+        <div class="dc-content-legend-row">
+          <span class="dc-content-legend-swatch" style="background:${c.swatch}" aria-hidden="true"></span>
+          <span class="dc-content-legend-label">${esc(c.label)}</span>
+          <span class="dim small">${esc(c.description)}</span>
+        </div>`).join('')}
+      <div class="dc-content-legend-row">
+        <span class="dc-content-legend-swatch dc-content-legend-secret" aria-hidden="true">S</span>
+        <span class="dc-content-legend-label">Secret Door</span>
+        <span class="dim small">A door or passage not shown on the Player map — only visible here, on the Full/GM view.</span>
+      </div>
+    </div>
+  </div>`;
+}
+
 function dungeoncrawlTileDetail(doc, map, ui) {
   const sel = ui.dungeonCrawlSelected && ui.dungeonCrawlSelected.mapId === map.id ? ui.dungeonCrawlSelected : null;
   if (!sel) return '';
@@ -6031,6 +6223,7 @@ function dungeoncrawlTileDetail(doc, map, ui) {
       <button type="button" class="icon-btn" data-dc-detail-zoom="in" title="Zoom in">＋</button>
       <button type="button" class="icon-btn" data-dc-detail-zoom-reset title="Reset zoom">⟲</button>
     </div>
+    ${dungeonContentLegendHtml(pack)}
     <p class="dim small">Rotation: ${tile.rotation}°${arch && arch.stairs ? ' · Stairs Down' : ''}${arch && arch.chamber ? ' · Chamber' : ''}${arch && arch.entrance ? ' · Entrance' : ''}</p>
     <label class="field-label">Notes</label>
     <textarea class="oracle-field-textarea" rows="2" data-dungeoncrawl-tile-notes="${map.id},${sel.x},${sel.y}" placeholder="Secrets, traps, encounters here…">${esc(tile.notes || '')}</textarea>

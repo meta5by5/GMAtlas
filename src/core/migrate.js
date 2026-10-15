@@ -249,6 +249,37 @@ export function migrateDocument(doc, now = new Date().toISOString()) {
   // correctly rather than silently losing its oracle flavor.
   if (d.settings && d.settings.genrePack === 'hostile') d.settings.genrePack = 'sci-fi-generic';
 
+  // Direct follow-up request: "add a protected tag for Location types
+  // called World that adds those sections and fields to the entity
+  // record" — World Profile/World Demographics' own render gate
+  // (drawers/index.js) moved from a loose "does this Location have any
+  // UWP data at all" heuristic to an explicit #World tag (plus the
+  // sci-fi genre pack). A campaign that already entered real UWP/
+  // Demographics data (or was #system/#star tagged, which used to
+  // auto-show the card on its own) under the OLD heuristic must not go
+  // dark the instant this ships — backfill the tag onto every such
+  // Location so nothing already-visible becomes invisible. Checked
+  // against the ORIGINAL incoming `doc`'s own field values (its schema-
+  // defaulted twin `d` would read identically here anyway — every one
+  // of these fields defaults to '' /false/[] — but matching doc is this
+  // file's own established convention for "was this genuinely in use
+  // before"). Idempotent — a tag already present (any case/whitespace)
+  // is left alone, never duplicated.
+  if (doc && doc.entities && Array.isArray(doc.entities.items)) {
+    for (const orig of doc.entities.items) {
+      if (!orig || orig.type !== 'location') continue;
+      const hadWorldData = !!(orig.hex || orig.zone || orig.worldSize || orig.atmosphere || orig.biome || orig.hydrographics || orig.gasGiant ||
+        orig.starport || (Array.isArray(orig.bases) && orig.bases.length) || orig.techLevel || orig.lawLevel ||
+        (Array.isArray(orig.tradeCodes) && orig.tradeCodes.length) || orig.developmentLevel || orig.population || orig.government ||
+        (Array.isArray(orig.tags) && orig.tags.some((t) => t === 'system' || t === 'star')));
+      if (!hadWorldData) continue;
+      const e = d.entities.items.find((x) => x.id === orig.id);
+      if (!e) continue;
+      if (!Array.isArray(e.tags)) e.tags = [];
+      if (!e.tags.some((t) => /^world$/i.test(String(t).trim()))) e.tags.push('World');
+    }
+  }
+
   d.schemaVersion = SCHEMA_VERSION;
   d.app = APP_NAME;
   return d;

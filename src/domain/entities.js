@@ -361,6 +361,7 @@ function ensureLocationFields(e) {
   if (e.smells === undefined) e.smells = '';
   if (e.sounds === undefined) e.sounds = '';
   if (!e.sensorySource || typeof e.sensorySource !== 'object') e.sensorySource = { sights: null, smells: null, sounds: null };
+  ensureFantasyLocationFields(e);
   ensureWorldProfileFields(e);
 }
 
@@ -372,6 +373,50 @@ export const LOCATION_SENSORY_ORACLE_PATH = {
   smells: ['Location Themes', 'Smell'],
   sounds: ['Location Themes', 'Sound'],
 };
+
+// Direct follow-up request: "For all fantasy Location entity types, create
+// a robust list of location-defining fields that map to oracles so they
+// can be autopopulated. Include fields considered popular, helpful and
+// story-building across most internet TTRPG sources." A deliberately
+// separate map/field set from LOCATION_SENSORY_ORACLE_PATH above (same
+// shape, same roll/edit mechanism — session.js's rollLocationFantasyField/
+// editLocationFantasyField mirror rollLocationSensoryField/
+// editLocationSensoryField line for line) rather than folding these into
+// it: sights/smells/sounds are genre-agnostic scene flavor available to
+// EVERY Location regardless of genre pack; these 9 are specifically the
+// fantasy-genre settlement/site descriptors drawers/index.js's
+// fantasyLocationFieldsSection only ever renders when
+// doc.settings.genrePack === 'fantasy' — keeping two maps keeps that
+// scoping obvious at the data level too, not just the render gate.
+// Every path resolves against a REAL table already in data/tables-
+// fantasy-full.js (verified directly, not guessed) — the classic set of
+// location-generator fields recurring across Dungeon World fronts, Sly
+// Flourish's Lazy DM prep, Perilous Wilds, and most random-town
+// generators: what kind of place this is, the GM's first read of it, who
+// actually runs it, what's currently wrong here, what it's trying to fix,
+// a flavor/color detail, what it trades in, the wider region's own
+// character, and what makes the area dangerous.
+export const LOCATION_FANTASY_FIELD_ORACLE_PATH = {
+  settlementType: ['Settlements', 'Settlement Type'],
+  notableFeature: ['Settlements', 'First Look'],
+  authority: ['Settlements', 'Authority'],
+  currentTrouble: ['Settlements', 'Settlement Trouble'],
+  currentProject: ['Settlements', 'Settlement Project'],
+  localColor: ['Kingdoms & Settlements', 'Local Color'],
+  tradeResource: ['Trade & Cargo', 'Trade Opportunity'],
+  realmType: ['Realms', 'Realm Type'],
+  danger: ['Realms', 'Wilderness Peril'],
+};
+
+function ensureFantasyLocationFields(e) {
+  if (e.type !== 'location') return;
+  for (const key of Object.keys(LOCATION_FANTASY_FIELD_ORACLE_PATH)) {
+    if (e[key] === undefined) e[key] = '';
+  }
+  if (!e.fantasyFieldSource || typeof e.fantasyFieldSource !== 'object') {
+    e.fantasyFieldSource = Object.fromEntries(Object.keys(LOCATION_FANTASY_FIELD_ORACLE_PATH).map((k) => [k, null]));
+  }
+}
 
 // NPC "current goal" (docs/design/scene-story-integration-plan.md,
 // scoped down from the Scene/Story spec's `npc_scene_goals`): what this

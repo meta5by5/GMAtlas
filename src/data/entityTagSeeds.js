@@ -14,10 +14,19 @@
 // request); 'cyberpunk'/'dnd5e' fall through to no genre-specific seeds
 // (entityTagSeedsFor returns []) rather than guessing unrequested content
 // for them.
+// 'World' (sci-fi location seeds only) is a PROTECTED tag (drawers/
+// index.js's PROTECTED_ENTITY_TAGS) — direct follow-up request:
+// "Associate all the world profile and demographics fields and sections
+// under a Location entity type to the scifi genre and add a protected
+// tag for Location types called World that adds those sections and
+// fields to the entity record." Tagging a Location #World is what shows
+// its World Profile (UWP)/World Demographics cards at all now (gated
+// together with the active genre pack actually being sci-fi) — removing
+// it needs the same confirm-before-remove step 'character' already gets.
 const ENTITY_TAG_SEEDS_BY_GENRE = {
   'sci-fi-generic': {
     npc: ['Pilot', 'Mercenary', 'Corporate', 'Smuggler', 'Android', 'Scientist', 'Soldier', 'Informant'],
-    location: ['Space Station', 'Colony', 'Derelict', 'Frontier Outpost', 'Megacity', 'Asteroid Base'],
+    location: ['World', 'Space Station', 'Colony', 'Derelict', 'Frontier Outpost', 'Megacity', 'Asteroid Base'],
     faction: ['Corporation', 'Syndicate', 'Military', 'Rebel Cell', 'Trade Guild'],
     asset: ['Starship Part', 'Cybernetic', 'Survival Gear', 'Power Cell'],
     item: ['Blaster', 'Datapad', 'Medkit', 'Power Cell'],
