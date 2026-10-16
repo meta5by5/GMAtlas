@@ -1375,6 +1375,241 @@ export const FANTASY_FULL_TABLES = {
       "improvise a weapon from whatever's already in reach"
     ]
   },
+  // Direct follow-up request: "revise the Ironsworn ruleset to use the
+  // actual Ironsworn rules instead of Starforged... create corresponding
+  // oracles that match all the oracles for Ironsworn," read directly from
+  // assets/docs/ironsworn/Ironsworn-Rulebook.pdf (Chapter 6, "Oracles,"
+  // p.165-191) and its supplement assets/docs/ironsworn/ironsworn-delve-
+  // rulebook-spreads.pdf (Chapter 8, "Oracles," p.203-223). Ironsworn's
+  // own SRD text is CC BY-NC-SA 4.0 and its Assets Master Set is CC BY (far
+  // more permissive than any other sourcebook referenced in this app,
+  // which are the user's own purchased, non-open commercial PDFs) — but
+  // this project's own established posture, applied consistently to EVERY
+  // ruleset here including Starforged's own oracle group right above
+  // ("Twist & Gambit Oracles," which is original content in Starforged's
+  // STYLE, not a transcription of its real tables either), is original
+  // re-authored content, never a verbatim transcription of a sourcebook's
+  // actual table text — kept the same way here rather than carving out a
+  // one-off exception just because this particular license would allow
+  // it. Every table below MATCHES the real book's own category name, roll
+  // mechanic (d100, including real range-weighting via Array(n).fill(...)
+  // where the book itself weights unevenly), and rough entry-count/flavor
+  // — only the specific wording is original. Ironlands-specific proper
+  // nouns (the real book's own named regions, named Firstborn races) are
+  // generalized to setting-agnostic equivalents, matching how every other
+  // oracle category in this fantasy pack is already written to work for
+  // any fantasy campaign, not one specific published setting.
+  "Ironsworn Oracles": {
+    "Action": [
+      "Scheme", "Clash", "Weaken", "Begin", "Forge", "Vow", "Avenge", "Guard", "Defeat", "Command",
+      "Break", "Risk", "Yield", "Inspect", "Raid", "Evade", "Assault", "Deflect", "Threaten", "Strike",
+      "Depart", "Preserve", "Manipulate", "Remove", "Eliminate", "Withdraw", "Abandon", "Investigate", "Hold", "Focus",
+      "Uncover", "Breach", "Aid", "Uphold", "Falter", "Suppress", "Hunt", "Share", "Destroy", "Avoid",
+      "Reject", "Demand", "Explore", "Bolster", "Seize", "Mourn", "Reveal", "Gather", "Defy", "Transform",
+    ],
+    "Theme": [
+      "Risk", "Skill", "Price", "Ally", "Battle", "Safety", "Survival", "Weapon", "Wound", "Shelter",
+      "Leader", "Fear", "Time", "Duty", "Secret", "Innocence", "Renown", "Direction", "Death", "Honor",
+      "Labor", "Solution", "Tool", "Balance", "Love", "Barrier", "Creation", "Decay", "Trade", "Bond",
+      "Hope", "Superstition", "Peace", "Deception", "History", "World", "Oath", "Protection", "Nature", "Opinion",
+      "Burden", "Vengeance", "Opportunity", "Faction", "Danger", "Corruption", "Freedom", "Debt", "Hate", "Stranger",
+    ],
+    "Region": [
+      "The Windswept Isles", "The Ragged Shore", "The Deep Wildwood", "The Drowned Lowlands", "The Sheltered Vale",
+      "The Rolling Hinterlands", "The Tempest Uplands", "The Veiled Peaks", "The Shattered Barrens", "The Old Road",
+      "The Forsaken Edge", "Somewhere Unmarked",
+    ],
+    "Location": [
+      "Hideout", "Ruin", "Mine", "Wasteland", "Shrine", "Trail", "Outpost", "Rampart", "Battlefield", "Hovel",
+      "Spring", "Lair", "Stronghold", "Bridge", "Camp", "Cairn", "Caravan", "Falls", "Cave", "Marsh",
+      "Fen", "Gorge", "Road", "Ancient Tree", "Pool", "Field", "Marshland", "Homestead", "Rapids", "Pass",
+    ],
+    "Coastal Waters Location": [
+      "Stranded Fleet", "Drifting Weed-Bed", "Flotsam Field", "Shrine of the Deep", "Sunken Lair",
+      "Shipwreck", "Harbor", "Derelict Ship", "Jagged Rocks", "Hidden Fjord",
+      "River Mouth", "Sheltered Cove", "Open Bay", "Ice Floe", "Lonely Isle",
+    ],
+    "Location Descriptor": [
+      "Towering", "Remote", "Exposed", "Cramped", "Shattered", "Varied", "Rugged", "Shadowed", "Gloomy", "Contested",
+      "Savage", "Fertile", "Blocked", "Timeworn", "Hidden", "Deep", "Depleted", "Foreign", "Elevated", "Restless",
+      "Unstable", "Fragile", "Broken", "Ensnaring", "Looted", "Treacherous", "Pristine", "Strange", "Abandoned", "Deadly",
+    ],
+    "Settlement Name": [
+      "Highmoor", "Brackwater", "Frostwood", "Redcrest", "Grimtree", "Stoneford", "Deepwater", "Whitefall", "Graycliff", "Three Rivers",
+      "Whitebridge", "Lonefort", "Highcairn", "Redhall", "Darkwell", "Timberwall", "Stonetower", "Thornhall", "Cinderhome", "Fallowfield",
+      "Ravencliff", "Bearmark", "Wolfcrag", "Eaglespire",
+    ],
+    "Settlement Name Prefix": [
+      "Bleak-", "Green-", "Wolf-", "Raven-", "Gray-", "Red-", "Axe-", "Great-", "Wood-", "Low-",
+      "White-", "Storm-", "Black-", "Mourn-", "New-", "Stone-", "Grim-", "Lost-", "High-", "Rock-",
+      "Shield-", "Sword-", "Frost-", "Thorn-",
+    ],
+    "Settlement Name Suffix": [
+      "-moor", "-ford", "-crag", "-watch", "-hope", "-wood", "-ridge", "-stone", "-haven", "-fall",
+      "-river", "-field", "-hill", "-bridge", "-mark", "-cairn", "-land", "-hall", "-mount", "-rock",
+      "-brook", "-barrow", "-stead", "-home",
+    ],
+    "Settlement Trouble": [
+      "Outsiders are turned away at the gate", "A dangerous discovery stirs unrest", "Dreadful omens trouble the people", "Disaster has struck without warning",
+      "Old grievances resurface", "A vital object has gone missing", "Someone has been taken captive", "Strange phenomena defy explanation",
+      "A leader's rule is challenged", "A vengeful exile returns", "A rival settlement grows bold", "Nature itself turns hostile",
+      "Someone has vanished without a trace", "Production has ground to a halt", "Unexplained deaths mount", "A crushing debt comes due",
+      "Leadership proves unjust", "Catastrophe strikes by accident", "Secret dealings with the enemy", "Raiders prey on the weak",
+      "A dark history resurfaces", "An innocent stands falsely accused", "Dark magic has left its mark", "Brutal weather isolates the settlement",
+      "Provisions run perilously low", "Sickness spreads unchecked", "Trusted allies turn against each other", "An attack looms on the horizon",
+      "A caravan has gone missing", "A grim secret comes to light",
+    ],
+    "Character Role": [
+      "Outlaw", "Healer", "Raider", "Guide", "Entertainer", "Miner", "Mercenary", "Exile", "Drifter", "Woodsman",
+      "Wanderer", "Zealot", "Priest", "Sailor", "Pilgrim", "Thief", "Seeker", "Forager", "Chief", "Sentinel",
+      "Craftsman", "Tracker", "Herder", "Angler", "Fighter", "Stalker", "Reaver", "Merchant", "Tiller", "Oddity",
+    ],
+    "Character Goal": [
+      "Recover a lost object", "Strike a bargain", "Build a friendship", "Sever a tie", "Learn a hidden truth",
+      "Settle a debt", "Expose a lie", "Harm a rival", "Cure an affliction", "Locate someone missing",
+      "Find a place to belong", "Claim power", "Mend a broken bond", "Craft something new", "Reach a distant place",
+      "Stock up on supplies", "Rise against authority", "Collect what is owed", "Guard a secret", "Spread a belief",
+      "Grow wealthy", "Shield someone dear", "Maintain the old order", "Climb in standing", "Defend a homeland",
+      "Settle a score", "Honor an obligation", "Gain forbidden knowledge", "Prove their worth", "Find forgiveness",
+    ],
+    "Character Descriptor": [
+      "Steady", "Striking", "Withdrawn", "Detached", "Perilous", "Odd", "Jovial", "Scarred", "Cold", "Skilled",
+      "Stingy", "Fearful", "Callous", "Feral", "Bitter", "Shrewd", "Regretful", "Caring", "Charming", "Oblivious",
+      "Harsh", "Wary", "Resourceful", "Weary", "Mighty", "Driven", "Ruthless", "Quiet", "Honest", "Infamous",
+      "Dying", "Secluded", "Gifted", "Broken", "Devoted", "Pious", "Selfish", "Elderly", "Zealous", "Violent",
+    ],
+    "Human Names (Female)": [
+      "Sorreth", "Kaelenna", "Brisha", "Dovenna", "Ashlin", "Maren", "Tyrsa", "Wrenna", "Sibeth", "Oriane",
+      "Falyn", "Juniss", "Haveth", "Corwenna", "Isolde", "Thessaly", "Yolande", "Ravenna", "Sibelle", "Morwyn",
+      "Delaine", "Kestrel", "Amareth", "Brontha",
+    ],
+    "Human Names (Male)": [
+      "Dorrek", "Halvard", "Brennus", "Osric", "Kaelor", "Torvin", "Aldric", "Sorren", "Brakka", "Edrick",
+      "Varrin", "Gorrim", "Lochran", "Maddox", "Thessen", "Wrenlan", "Caldor", "Garreth", "Brynmor", "Ashkan",
+      "Dovren", "Kelden", "Rorik", "Fenwick",
+    ],
+    "Elf Names": [
+      "Ailessa", "Nimrielle", "Thaelor", "Syvanna", "Elurien", "Caedrys", "Ythrael", "Vaelith", "Sireth", "Oransel",
+      "Lythande", "Maevael", "Quenlis", "Ardessil", "Fyreth", "Selwyn", "Tirivel", "Oleandra", "Zephyriel", "Ilvanna",
+      "Caelume", "Dovranel", "Issolde", "Narwenna",
+    ],
+    "Giant Names": [
+      "Hroth", "Bellgard", "Vundor", "Craggan", "Oskeld", "Thunmar", "Grondal", "Varsk", "Hulgrim", "Drommel", "Kastor", "Belrog",
+    ],
+    "Beastfolk Names": [
+      "Vata", "Zora", "Jasna", "Charna", "Tana", "Byna", "Neda", "Keha", "Zhivka", "Kvata", "Staysa", "Evka",
+    ],
+    "Monstrous Names": [
+      "Rattle", "Scratch", "Wallow", "Groak", "Gimble", "Cratch", "Creech", "Shush", "Glush", "Slar", "Gnash", "Stoad",
+    ],
+    "Combat Action": [
+      "Demand their surrender", "Rally your allies", "Call for reinforcements", "Seize the advantage", "Provoke a rash move",
+      "Strike fear into them", "Expose a hidden truth", "Draw attention elsewhere", "Smash their equipment", "Commit to a bold strike",
+      "Brace your defenses", "Prepare your next move", "Use the ground to your advantage", "Exploit a weapon's edge", "Open up an opening",
+      "Land a precise blow", "Land a crushing blow", "Do something wholly unexpected",
+    ],
+    "Mystic Backlash": [
+      "Your working rebounds against you", "Your strength drains away", "A companion suffers for your working", "You ruin something of value",
+      "A horror answers your call", "You collapse into fevered sleep", "Your body bears a lasting mark", "Whispers of doom echo in your mind",
+      "You lose time and memory alike", "Something senses you at once", "You turn against someone close to you", "Your surroundings are damaged by the backlash",
+      "Vital supplies are wasted", "One of your senses fails for a time", "Your connection to magic falters for a day", "The working strikes an unintended target",
+      "A troubling truth is laid bare", "Dark powers make you an offer", "You glimpse a grim vision of what's to come", "A missing component seals this working away",
+      "A strange new fear takes hold", "Creatures nearby turn wild and aggressive", "A memory from your past returns to haunt you", "Sudden sickness grips you",
+    ],
+    "Major Plot Twist": [
+      "It was a diversion all along", "A dark secret comes to light", "A trap springs shut", "An assumption proves false",
+      "A hidden alliance is exposed", "Your actions aid an enemy", "Someone returns when least expected", "A greater threat reveals itself",
+      "You share a goal with your enemy", "A true identity surfaces", "Someone trusted becomes a traitor", "You arrive too late",
+      "The true enemy is unmasked", "The enemy gains new allies", "A fresh danger emerges", "Someone or something disappears",
+      "A relationship's truth comes out", "Two threads turn out to be one", "Unlooked-for powers are revealed",
+    ],
+    // Real ranks/weighting (p.190): 1-20 Troublesome, 21-55 Dangerous,
+    // 56-80 Formidable, 81-93 Extreme, 94-00 Epic — these 5 rank NAMES are
+    // Ironsworn's own core vow/progress-track terminology (like "d20" or
+    // "Advantage" are just functional game terms, not creative prose), so
+    // used verbatim; weighting reproduced via repeated entries (20/35/25/13/7).
+    "Challenge Rank": [
+      ...Array(20).fill("Troublesome"), ...Array(35).fill("Dangerous"), ...Array(25).fill("Formidable"), ...Array(13).fill("Extreme"), ...Array(7).fill("Epic"),
+    ],
+  },
+  // Ironsworn: Delve's own supplemental oracle set (p.203-223) — a second,
+  // separate group (not merged into "Ironsworn Oracles" above) since Delve
+  // is its own optional sourcebook a GM may or may not be using. Scoped to
+  // Delve's most broadly useful categories (Feature, Site Nature,
+  // Character, Monstrosity, Trap, Combat Event) — its Site Name 5-part
+  // nested generator and the 8 individual per-category Threat tables are
+  // left out as a deliberate scope trim (the single Threat Category table
+  // below still covers the "introduce a threat" use case).
+  "Ironsworn Delve Oracles": {
+    "Feature: Aspect": [
+      "Blocked", "Crafted", "Ancient", "Sunken", "Trapped", "Hidden", "Toxic", "Ruined", "Guarded", "Fading",
+      "Marked", "Watched", "Unreachable", "Grim", "Veiled", "Deep", "Spent", "Decaying", "Foul", "Raised",
+      "Shifting", "Wild", "Fragile", "Broken", "Snaring", "Looted", "Perilous", "Natural", "Sacred", "Flooded",
+      "Dense", "Plentiful", "Hidden Away", "Lost", "Deathly", "Unusual", "Forgotten", "Strange", "Mystical", "Dead",
+    ],
+    "Feature: Focus": [
+      "Threshold", "Boundary", "Alarm", "Exit", "Passage", "Crossing", "Trigger", "Snare", "Refuge", "Nature",
+      "Sign", "Shelter", "Trail", "Supplies", "History", "Captive", "Dwelling", "Remains", "Creature", "Den",
+      "Someone", "Enclosure", "Ruins", "Water", "Message", "Shadow", "Doorway", "Weapon", "Entryway", "Light",
+      "Barrier", "Craft", "Vessel", "Knowledge", "Resting Place", "Gear", "Haven", "Danger", "Substance", "Power",
+    ],
+    "Site Nature: Theme": [
+      "Ancient", "Corrupted", "Fortified", "Sacred", "Haunted", "Overrun", "Ravaged", "Untamed", "Forgotten", "Cursed", "Reclaimed", "Forsaken",
+    ],
+    "Site Nature: Domain": [
+      "Barrow", "Cavern", "Frozen Hollow", "Icy Reach", "Mine", "Mountain Pass", "Ruin", "Sea Cave", "Shadowfen", "Stronghold", "Tangled Wood", "Underkeep",
+    ],
+    "Character: Disposition": [
+      "Welcoming", "Friendly", "Cooperative", "Curious", "Indifferent", "Wary", "Needy", "Desperate",
+      "Demanding", "Standoffish", "Threatening", "Hostile", "Guarded", "Suspicious", "Eager", "Resentful",
+    ],
+    "Character: Activity": [
+      "Standing watch", "Protecting something", "Building", "Repairing", "Helping another", "Securing a place", "Learning something", "Sneaking past", "Fleeing danger", "Making an offering",
+      "Tracking a trail", "Escorting someone", "Hiding", "Raiding", "Mingling with others", "Exploring", "Traveling onward", "Lending aid", "Tracking prey", "Evading capture",
+      "Fighting", "Ambushing", "Taking charge", "Watching from afar", "Gathering supplies", "Causing harm", "Inspecting something", "Searching for something", "Summoning aid", "Resting",
+    ],
+    // Real weighting (p.214): 1-5 Tiny, 6-30 Small, 31-65 Medium, 66-94
+    // Large, 95-99 Huge, 00 Titanic.
+    "Monstrosity: Size": [
+      ...Array(5).fill("Tiny"), ...Array(25).fill("Small"), ...Array(35).fill("Medium"), ...Array(29).fill("Large"), ...Array(5).fill("Huge"), ...Array(1).fill("Titanic"),
+    ],
+    "Monstrosity: Primary Form": [
+      "Beast", "Humanlike", "Avian", "Arachnid", "Serpentine", "Wormlike", "Reptilian", "Insectoid", "Amorphous", "Crustacean",
+      "Aquatic", "Tentacled", "Amphibious", "Plantlike", "Incorporeal", "Mineral", "Elemental", "Hybrid", "Draconic", "Fungal",
+    ],
+    "Monstrosity: Characteristics": [
+      "Extra limbs", "Rows of fangs", "Wicked claws", "Strange markings", "Curling horns", "Oversized maw", "Bristling spines", "Long tail", "Segmented body", "Hidden wings",
+      "Barbed stinger", "Many eyes", "Eerie call", "Writhing tentacles", "Pincers", "Faint glow", "Sensory antennae", "Inner jaw", "Hard shell", "Bony ridges",
+      "Corrupted flesh", "Near-transparent skin", "Old scars", "Clutch of eggs", "Rotted flesh", "Desiccated husk", "Second head", "Etched runes", "Oozing hide", "Chitinous plating",
+    ],
+    "Monstrosity: Abilities": [
+      "Keen senses", "Terrifying roar", "Expert climber", "Unnerving cunning", "Blinding speed", "Crushing bite", "Silent stalker", "Dreadful visage", "Great strength", "Perfect camouflage",
+      "Flight", "Venomous", "Strong swimmer", "Grasping limbs", "Mighty leap", "Constricting grip", "Armored hide", "Tunneler", "Noxious stench", "Feeds on fear",
+      "Parasitic", "Senses vibration", "Breathes something foul", "Mimicry", "Changes shape", "Commands lesser beasts", "Echo-sense", "Shocking touch", "Corrosive", "Symbiotic bond",
+      "Hurls projectiles", "Paralyzing touch", "Immune to pain", "Casts dark rites", "Creates illusions", "Reads minds", "Walks between worlds", "Wields weapons", "Commands the elements", "Regenerates",
+    ],
+    "Trap: Event": [
+      "Seals shut", "Conjures something", "Shatters", "Pierces", "Snares", "Encloses", "Ambushes", "Ensnares", "Shifts", "Falters",
+      "Imitates", "Crushes", "Drops", "Conceals", "Lures", "Releases", "Obscures", "Severs", "Smothers", "Collapses",
+    ],
+    "Trap: Component": [
+      "Pit", "Rising water", "Flame", "Hurled projectile", "Narrow passage", "Sudden fall", "Loose debris", "Gripping fear", "Alarm", "Hidden trigger",
+      "Numbing cold", "Rigged weapon", "Encroaching dark", "Rot", "Blocked path", "Carved stone", "Harsh terrain", "Poison", "Binding chains", "Dazzling light",
+    ],
+    "Combat Event: Method": [
+      "Defies", "Breaks off", "Tricks", "Evades", "Shields", "Overwhelms", "Holds fast", "Assists", "Waits", "Aborts",
+      "Blocks", "Collides", "Focuses", "Advances", "Breaches", "Endures", "Assaults", "Covers", "Charges", "Escalates",
+      "Shatters", "Takes aim", "Staggers", "Counters", "Seizes", "Clashes", "Withdraws", "Amplifies", "Batters", "Feints",
+    ],
+    "Combat Event: Target": [
+      "Footing", "Defenses", "Limbs", "Focus", "Edge", "Range", "Resolve", "Instinct", "Weakness", "Opening",
+      "Dread", "Maneuver", "Reach", "Harm", "Finesse", "Weapon", "Surroundings", "Technique", "Surprise", "Pride",
+      "Wound", "Precision", "Companion", "Terrain", "Momentum", "Speed", "Strength", "Supplies", "Courage", "Opportunity",
+    ],
+    "Threat: Category": [
+      "Rising Conflict", "Cursed Place", "Natural Calamity", "Spreading Plague", "Rampaging Beast", "Marauding Horde", "Scheming Power", "Zealous Cult",
+    ],
+  },
   "Bestiary": {
     "Creature Origin": [
       "engineered as a bioweapon that outlived its funding", "evolved in a climate nothing should survive",

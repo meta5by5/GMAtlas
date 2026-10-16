@@ -5,6 +5,7 @@
 // persistence — src/core/store.js is the only caller.
 
 import { defaultCampaign, defaultRulesProfile, GATEABLE_MODULES } from '../core/schema.js';
+import { findGenrePack } from '../data/genrePacks.js';
 
 // --- Rules Profiles --------------------------------------------------------
 
@@ -81,6 +82,27 @@ export function isModuleVisible(profile, moduleId) {
   if (!profile) return true;
   if (!GATEABLE_MODULES.includes(moduleId)) return true;
   return profile.moduleEnabled[moduleId] !== false;
+}
+
+/** Settings restructuring (Rulesets tab): a shared "does this belong to the
+ *  profile's current ruleset" check for Available Packs / Statblock
+ *  Templates / Turn Step Lists — every one of them tags its entries with
+ *  either a Game System id (rulesConstitution.js's RULES_PROVIDERS ids,
+ *  e.g. 'fivepfh'/'fiveleagues'/'dnd5e'/'planetfall') or a Genre Pack id
+ *  directly (for an entry that isn't tied to one specific licensed system,
+ *  e.g. Statblock Templates' 'generic'/'vehicle', tagged 'sci-fi-generic').
+ *  `rulesetTag` null/undefined means "unaligned — always shown" (every
+ *  GM-created custom entry defaults to this, so nothing a GM adds ever
+ *  vanishes). Reuses the same "active profile's Genre Pack's own Game
+ *  Systems" scoping rulesConstitutionSection's own inActivePack logic
+ *  already established, rather than a second ad-hoc scheme. */
+export function matchesProfileRuleset(rulesetTag, profile) {
+  if (rulesetTag == null) return true;
+  if (!profile) return true;
+  const genrePackId = profile.ruleset && profile.ruleset.genrePack;
+  if (rulesetTag === genrePackId) return true;
+  const pack = findGenrePack(genrePackId);
+  return pack.gameSystemIds.includes(rulesetTag);
 }
 
 /** The six ruleset fields store.get() splices onto a campaign doc's

@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-import { SCENE_TABLES, makeRng, rollTable, rollGroup, flattenKeys, getTable, tablesWithOverrides } from '../src/domain/oracles.js';
+import { SCENE_TABLES, makeRng, rollTable, rollGroup, flattenKeys, getTable, tablesWithOverrides, excludeFactionOracleTables } from '../src/domain/oracles.js';
 import { ORACLE_TABLE_SOURCES } from '../src/data/oracleGroups.js';
 import { applyShift, listShifts, contextSummary } from '../src/domain/context.js';
 import { generateScene, recomposeSceneText } from '../src/domain/scenes.js';
@@ -21,7 +21,7 @@ import { parseStatsString } from '../src/domain/statblocks.js';
 import {
   createRulesProfile, renameProfile, updateProfileRuleset, setModuleEnabled, setStoryboardPosition, isModuleVisible, resolveOverlaySettings,
   createCampaign, renameCampaignEntry, setActiveCampaign, reassignCampaignProfile, applyProfileDraft, resolvePositionContentId,
-  backfillDefaultCrewTasks,
+  backfillDefaultCrewTasks, matchesProfileRuleset,
 } from '../src/domain/rulesProfiles.js';
 import { canAccessGameSystem, setEntitlement } from '../src/domain/entitlements.js';
 
@@ -1607,7 +1607,7 @@ test('rollFiveLeaguesRangedAttack (p.39): a single D6 + Combat Skill (only while
   assert.match(formatFiveLeaguesRangedAttackCopyText('Scout', rollFiveLeaguesRangedAttack(2, 3, { dice: { die: 1 } })), /MISS \(NATURAL 1\)/);
 });
 
-import { findRuleset } from '../src/data/rulesets.js';
+import { findRuleset, RULESET_GENRE_PACK_HINTS, RULESETS } from '../src/data/rulesets.js';
 import { mapDnd5ePdfFieldsToCharacterSheet } from '../src/domain/dnd5eImport.js';
 import { applyDnd5ePdfImport } from '../src/domain/entities.js';
 
@@ -1671,9 +1671,10 @@ test('addEntityStatblockGroup builds a Traveller character sheet (original conte
   assert.equal(byKey.STR.target, 8);
   assert.equal(byKey.STR.format, 'sign');
   assert.ok(byKey.Stamina.track && byKey.Stamina.max === 8);
-  // findRuleset has no sourcebook PDF for this one — deliberately absent,
-  // not a broken/guessed path.
-  assert.equal(findRuleset('traveller').doc, null);
+  // Direct follow-up request (Ruleset Guide ToC + "Load" sourcebook
+  // button) found real Traveller 2e PDFs under assets/docs/Traveller/ —
+  // this ruleset's own `doc` is no longer deliberately absent.
+  assert.equal(findRuleset('traveller').doc, 'assets/docs/Traveller/Traveller-2e-Core-Rulebook.pdf');
 });
 
 test('addEntityStatblockGroup builds a D&D 5e character sheet from characterTemplate.sections — real labeled sections, not the flat stats/tracks shape every other ruleset uses', () => {
@@ -2087,7 +2088,7 @@ test('makeStatblock only adds a weapon table + Gear (direct follow-up request) t
 
 test('the fiveleagues character ruleset carries the expected stats/tracks shape (Agility/Speed/Combat Skill/Toughness/Armor/Casting, plus Luck/Will/XP tracks) — mirroring 5PFH\'s own field idiom (its sister game)', () => {
   const fl = findRuleset('fiveleagues');
-  assert.equal(fl.label, 'Five Leagues');
+  assert.equal(fl.label, 'Five Leagues from Borderlands');
   const statKeys = fl.characterTemplate.stats.map((s) => s.key);
   assert.deepEqual(statKeys, ['Agility', 'Speed', 'Combat Skill', 'Toughness', 'Armor', 'Casting']);
   const speed = fl.characterTemplate.stats.find((s) => s.key === 'Speed');
@@ -2098,6 +2099,36 @@ test('the fiveleagues character ruleset carries the expected stats/tracks shape 
   assert.equal(armor.format, 'plain');
   const trackKeys = fl.characterTemplate.tracks.map((t) => t.key);
   assert.deepEqual(trackKeys, ['Luck', 'Will', 'XP']);
+});
+
+test('the ironsworn character ruleset uses the real Ironsworn rules (assets/docs/ironsworn/Ironsworn-Rulebook.pdf), not a Starforged clone — Momentum/Max Momentum/Momentum Reset/Debilities Marked are signed, non-rollable, non-clamped attributes (real range -6..+10 for Momentum, p.13-14), not a 0-5 depleting track like Health/Spirit/Supply', () => {
+  const iron = findRuleset('ironsworn');
+  assert.equal(iron.label, 'Ironsworn');
+  const statKeys = iron.characterTemplate.stats.map((s) => s.key);
+  assert.deepEqual(statKeys, ['Edge', 'Heart', 'Iron', 'Shadow', 'Wits', 'Momentum', 'Max Momentum', 'Momentum Reset', 'Debilities Marked']);
+  const trackKeys = iron.characterTemplate.tracks.map((t) => t.key);
+  assert.deepEqual(trackKeys, ['Health', 'Spirit', 'Supply']);
+  const momentum = iron.characterTemplate.stats.find((s) => s.key === 'Momentum');
+  assert.equal(momentum.value, 2, 'starts at +2 (p.35)');
+  assert.equal(momentum.rollMethod, 'none');
+  assert.equal(momentum.format, 'sign');
+  const maxMomentum = iron.characterTemplate.stats.find((s) => s.key === 'Max Momentum');
+  assert.equal(maxMomentum.value, 10, 'starts at +10 (p.14)');
+
+  // Build a real statblock and confirm Momentum genuinely holds a negative
+  // value (the real minimum is -6, p.13) — a `track` field (Health/Spirit/
+  // Supply) could never do this, since trackRow only ever renders a [0,max]
+  // click-to-set meter; this is exactly why Momentum had to move to `stats`.
+  const group = makeStatblock('character', 'ironsworn');
+  const momentumIndex = group.fields.findIndex((f) => f.key === 'Momentum');
+  const entity = { statblocks: [group] };
+  setStatblockAttributeValue(entity, 0, momentumIndex, '-6');
+  assert.equal(entity.statblocks[0].fields[momentumIndex].value, -6);
+  assert.equal(entity.statblocks[0].fields[momentumIndex].track, undefined, 'Momentum is an attribute field, not a track');
+});
+
+test('RULESET_GENRE_PACK_HINTS (direct bug report: "The new oracle groups for Ironsworn do not show in the Oracle panel. They should show when the default ruleset is Ironsworn") carries the ironsworn -> fantasy mapping that genrePackIdForRuleset itself can\'t, since Ironsworn is deliberately NOT a rulesConstitution.js RULES_PROVIDERS entry', () => {
+  assert.equal(RULESET_GENRE_PACK_HINTS.ironsworn, 'fantasy');
 });
 
 test('addStatblockWeapon/updateStatblockWeapon/removeStatblockWeapon manage the weapon table by plain array index (not a generated id), no-op on a missing group/weapon', () => {
@@ -3298,6 +3329,82 @@ test('moveGuideDoc reparents a doc, appended after the new parent\'s existing ch
   assert.equal(buildGuideTree(unparented).some((n) => n.id === bId), true);
 });
 
+// --- Ruleset Guide ToC + "Load" sourcebook button (direct follow-up
+// request: "Create a guide ToC for each ruleset... store that guide as a
+// default for the ruleset and add it automatically if the ruleset is
+// enabled... If the Guide entry was removed or missing, prompt the user to
+// create one.") -------------------------------------------------------------
+import { ensureRulesetGuideDefault, rulesetGuideDocExists } from '../src/domain/rulesetGuide.js';
+import { canLoadRulesetReference } from '../src/domain/permissions.js';
+import { REFERENCE_LIBRARY_MANIFEST } from '../src/data/referenceLibraryManifest.js';
+import { RULESET_GUIDE_DEFAULTS } from '../src/data/rulesetGuideDefaults.js';
+
+test('ensureRulesetGuideDefault seeds a shared "Game System References" root doc with one child per ruleset, each a bulleted list of real @[title] mentions matching data/rulesetGuideDefaults.js', () => {
+  let camp = defaultCampaign();
+  camp = ensureRulesetGuideDefault(camp, 'ironsworn');
+  const tree = buildGuideTree(camp);
+  const root = tree.find((n) => n.title === 'Game System References');
+  assert.ok(root, 'shared root doc created');
+  const child = root.children.find((n) => n.title === 'Ironsworn');
+  assert.ok(child, 'ruleset child doc created, titled the ruleset\'s own label');
+  for (const sb of RULESET_GUIDE_DEFAULTS.ironsworn) {
+    assert.ok(child.text.includes(`@[${sb.title}]`), `mentions ${sb.title}`);
+  }
+  assert.ok(rulesetGuideDocExists(camp, 'ironsworn'));
+  assert.equal(camp.guide.seededRulesets.includes('ironsworn'), true);
+});
+
+test('ensureRulesetGuideDefault no-ops for a ruleset with no default list (dnd5e\'s own deliberate no-sourcebook posture, or an unrecognized id) and never hijacks the GM\'s currently-active Guide doc', () => {
+  let camp = defaultCampaign();
+  const { campaign: withCustomActive, id: customId } = createGuideDoc(camp, { title: 'My Own Notes' });
+  camp = setActiveGuideId(withCustomActive, customId);
+  const before = camp;
+  assert.equal(ensureRulesetGuideDefault(camp, 'dnd5e'), before, 'dnd5e has no RULESET_GUIDE_DEFAULTS entry — no-op');
+  assert.equal(ensureRulesetGuideDefault(camp, 'not-a-real-ruleset'), before);
+
+  const seeded = ensureRulesetGuideDefault(camp, 'starforged');
+  assert.notEqual(seeded, before);
+  assert.equal(seeded.guide.activeId, customId, 'seeding a default never steals the GM\'s own active Guide doc selection');
+});
+
+test('ensureRulesetGuideDefault only seeds once per campaign per ruleset — a GM\'s own deletion is respected, not silently resurrected — unless force:true (the "Load" button\'s own re-create-on-confirm path)', () => {
+  let camp = defaultCampaign();
+  camp = ensureRulesetGuideDefault(camp, 'ironsworn');
+  const root = buildGuideTree(camp).find((n) => n.title === 'Game System References');
+  const child = root.children.find((n) => n.title === 'Ironsworn');
+
+  // GM deletes the entry — re-ensuring without force must NOT bring it back.
+  const deleted = removeGuideDoc(camp, child.id);
+  assert.equal(rulesetGuideDocExists(deleted, 'ironsworn'), false);
+  const reEnsured = ensureRulesetGuideDefault(deleted, 'ironsworn');
+  assert.equal(reEnsured, deleted, 'already in seededRulesets — stays deleted, no silent resurrection');
+  assert.equal(rulesetGuideDocExists(reEnsured, 'ironsworn'), false);
+
+  // force:true (the Load button's own "yes, recreate it" confirm branch) DOES recreate it.
+  const forced = ensureRulesetGuideDefault(deleted, 'ironsworn', { force: true });
+  assert.equal(rulesetGuideDocExists(forced, 'ironsworn'), true);
+});
+
+test('every RULESETS entry with a non-null `doc` has a real, matching REFERENCE_LIBRARY_MANIFEST entry by file path (regression guard: this exact staleness bug — assets/docs/ reorganized into subfolders without the catalog being updated — is what this feature\'s own research surfaced)', () => {
+  const manifestFiles = new Set(REFERENCE_LIBRARY_MANIFEST.map((e) => e.file));
+  for (const r of RULESETS) {
+    if (r.doc) assert.ok(manifestFiles.has(r.doc), `${r.id}'s doc (${r.doc}) has a REFERENCE_LIBRARY_MANIFEST entry`);
+  }
+});
+
+test('RULESET_GUIDE_DEFAULTS has no dnd5e key (its own doc:null is a deliberate CC-BY-licensing choice, not staleness) and every listed sourcebook\'s title matches a real REFERENCE_LIBRARY_MANIFEST entry', () => {
+  assert.equal('dnd5e' in RULESET_GUIDE_DEFAULTS, false);
+  const manifestTitles = new Set(REFERENCE_LIBRARY_MANIFEST.map((e) => e.title));
+  for (const [rulesetId, sourcebooks] of Object.entries(RULESET_GUIDE_DEFAULTS)) {
+    assert.ok(sourcebooks.length, `${rulesetId} has at least one sourcebook`);
+    for (const sb of sourcebooks) assert.ok(manifestTitles.has(sb.title), `${rulesetId}'s "${sb.title}" matches a real manifest title`);
+  }
+});
+
+test('canLoadRulesetReference (the access-control seam — no real permission system exists yet, ADR 0028) defaults to fully open', () => {
+  assert.equal(canLoadRulesetReference(), true);
+});
+
 // --- oracle grouped/collapsible tree -----------------------------------------
 import { buildGroupedOracleTree, filterOracleTree } from '../src/domain/oracles.js';
 import { ORACLE_GROUPS_FANTASY } from '../src/data/oracleGroups.js';
@@ -4309,10 +4416,30 @@ test('getStatblockTemplates exposes the shipped defaults when settings has no ov
   assert.ok(listStatblockTemplateIds({}).includes('generic'));
 });
 
+test('listTemplates exposes each shipped template\'s `ruleset` tag (Settings restructuring: Rulesets tab filtering) — a Game System id for an obviously-aligned template, the Genre Pack id itself for generic/vehicle, null for a GM-added custom system, and null is preserved (not silently dropped) across an edit to a tagged default', () => {
+  const byId = (list, id) => list.find((t) => t.id === id);
+  const defaults = listTemplates({});
+  assert.equal(byId(defaults, 'starforged').ruleset, 'starforged');
+  assert.equal(byId(defaults, '5pfh').ruleset, 'fivepfh');
+  assert.equal(byId(defaults, 'planetfall-lifeform').ruleset, 'planetfall');
+  assert.equal(byId(defaults, 'dnd5e-lifeform').ruleset, 'dnd5e');
+  assert.equal(byId(defaults, 'fiveleagues-lifeform').ruleset, 'fiveleagues');
+  assert.equal(byId(defaults, 'generic').ruleset, 'sci-fi-generic');
+  assert.equal(byId(defaults, 'vehicle').ruleset, 'sci-fi-generic');
+
+  const withCustom = addTemplateSystem(defaultCampaign(), 'Homebrew', 'Homebrew');
+  assert.equal(byId(listTemplates(withCustom.settings), 'homebrew').ruleset, null, 'a GM-added system is never ruleset-tagged, so it\'s never hidden');
+
+  // Editing a field on a shipped, ruleset-tagged default (e.g. Starforged)
+  // must not silently drop its own ruleset tag once the override exists.
+  const edited = addTemplateField(defaultCampaign(), 'starforged', { key: 'Reputation' });
+  assert.equal(byId(listTemplates(edited.settings), 'starforged').ruleset, 'starforged');
+});
+
 test('the "fiveleagues-lifeform" Bestiary template maps 1:1 onto the core rulebook\'s own Enemy Profile columns (Enemy/Num./Speed/Combat/Damage/Tough./Armor/Ranged, p.152), plus MP/Reward Rating (the Aberration Table\'s own Monster Points mechanic, p.182-183, direct follow-up request) and a free-text Traits field', () => {
   const templates = getStatblockTemplates({});
   const tpl = templates['fiveleagues-lifeform'];
-  assert.equal(tpl.label, 'Five Leagues Enemy');
+  assert.equal(tpl.label, 'Five Leagues from Borderlands Enemy');
   const keys = tpl.fields.map((f) => f.key);
   assert.deepEqual(keys, ['Num.', 'Speed', 'Combat Skill', 'Damage', 'Toughness', 'Armor', 'Ranged', 'MP', 'Reward Rating', 'Traits']);
   const speed = tpl.fields.find((f) => f.key === 'Speed');
@@ -4693,8 +4820,14 @@ test('the "fantasy" pack (direct follow-up request: "make a fantasy equivalent d
   const fantasyPack = findGenrePack('fantasy');
   assert.equal(fantasyPack.id, 'fantasy');
   assert.equal(fantasyPack.tables, FANTASY_FULL_TABLES, 'the fantasy pack\'s own tables ARE the full set — not a separate, unreachable pack');
-  assert.equal(Object.keys(FANTASY_FULL_TABLES).length, Object.keys(SCENE_TABLES).length, 'same number of top-level categories as SCENE_TABLES');
-  assert.equal(countTables(FANTASY_FULL_TABLES), countTables(SCENE_TABLES), 'same total number of individual oracle tables as SCENE_TABLES');
+  // Direct follow-up request ("create corresponding oracles that match all
+  // the oracles for Ironsworn") deliberately broke exact 1:1 parity with
+  // SCENE_TABLES on purpose — "Ironsworn Oracles"/"Ironsworn Delve Oracles"
+  // (23 + 15 = 38 tables) are fantasy-only, since Ironsworn has no sci-fi
+  // equivalent to mirror them into; the +2/+38 below is that known,
+  // disclosed asymmetry, not a regression of the original parity effort.
+  assert.equal(Object.keys(FANTASY_FULL_TABLES).length, Object.keys(SCENE_TABLES).length + 2, 'same top-level categories as SCENE_TABLES, plus the 2 Ironsworn-specific ones (fantasy-only)');
+  assert.equal(countTables(FANTASY_FULL_TABLES), countTables(SCENE_TABLES) + 38, 'same individual oracle tables as SCENE_TABLES, plus the 38 Ironsworn/Delve ones (fantasy-only)');
   assert.ok(everyArrayNonEmpty(FANTASY_FULL_TABLES), 'every table in the fantasy pack has at least one entry — nothing left as an empty stub');
 });
 
@@ -9430,6 +9563,34 @@ test('isModuleVisible: GATEABLE_MODULES ids follow moduleEnabled, everything els
   assert.equal(isModuleVisible(null, 'colony'), true, 'no profile at all never hides anything');
 });
 
+test('matchesProfileRuleset (Settings restructuring: shared filter for Available Packs/Statblock Templates/Turn Step Lists) — null/undefined tag always matches, a Game System id matches only when it\'s in the active Genre Pack\'s own gameSystemIds, a Genre Pack id matches itself directly, and no profile at all never hides anything', () => {
+  const sciFi = { ...defaultRulesProfile('SciFi'), ruleset: { ...defaultRulesProfile('SciFi').ruleset, genrePack: 'sci-fi-generic' } };
+  const fantasy = { ...defaultRulesProfile('Fantasy'), ruleset: { ...defaultRulesProfile('Fantasy').ruleset, genrePack: 'fantasy' } };
+
+  assert.equal(matchesProfileRuleset(null, sciFi), true, 'unaligned/custom entries are never hidden');
+  assert.equal(matchesProfileRuleset(undefined, fantasy), true);
+
+  // Game System id membership (sci-fi-generic's own gameSystemIds list).
+  assert.equal(matchesProfileRuleset('fivepfh', sciFi), true);
+  assert.equal(matchesProfileRuleset('starforged', sciFi), true);
+  assert.equal(matchesProfileRuleset('fiveleagues', sciFi), false, 'Five Leagues is not one of sci-fi-generic\'s own Game Systems');
+  assert.equal(matchesProfileRuleset('fiveleagues', fantasy), true, 'fantasy\'s own gameSystemIds includes fiveleagues');
+  assert.equal(matchesProfileRuleset('fivepfh', fantasy), false);
+
+  // A Genre Pack id directly (Statblock Templates' 'generic'/'vehicle' tag).
+  assert.equal(matchesProfileRuleset('sci-fi-generic', sciFi), true);
+  assert.equal(matchesProfileRuleset('sci-fi-generic', fantasy), false);
+
+  assert.equal(matchesProfileRuleset('fivepfh', null), true, 'no profile at all never hides anything');
+});
+
+test('excludeFactionOracleTables (Settings restructuring: Factions tab\'s "Allow Faction-related Oracles" checkbox) strips exactly the Faction-adjacent table keys (sci-fi and fantasy pack names alike) without touching anything else, pure/non-mutating', () => {
+  const tables = { Factions: {}, 'Corporate Powers': {}, 'Faction Turns': {}, 'Faction Encounter': {}, Characters: {}, Starships: {} };
+  const pruned = excludeFactionOracleTables(tables);
+  assert.deepEqual(Object.keys(pruned).sort(), ['Characters', 'Starships']);
+  assert.ok(tables.Factions, 'the input object itself is untouched (pure, returns a new copy)');
+});
+
 test('resolveOverlaySettings returns exactly the profile\'s ruleset object (the shape store.get() splices onto a campaign doc\'s settings)', () => {
   const profile = defaultRulesProfile('P');
   const overlay = resolveOverlaySettings(profile);
@@ -9826,6 +9987,33 @@ test('backfillTurnStepListInventory ensures the "5PFH", "Planetfall", and "Five 
   const filled = backfillTurnStepListInventory(onlyFivePfh, TURN_STEPS_5PFH, PLANETFALL_TURN_STEPS);
   assert.equal(listTurnStepLists(filled).find((l) => l.name === '5PFH').groups.length, 0, 'existing (empty) 5PFH list untouched, not reseeded');
   assert.equal(listTurnStepLists(filled).find((l) => l.name === 'Planetfall').groups.length, PLANETFALL_TURN_STEPS.length);
+});
+
+test('backfillTurnStepListInventory tags the 3 named seed lists with their Game System `ruleset` (Settings restructuring: Rulesets tab Turn Step filtering) — freshly seeded, backfilled onto a pre-existing untagged list, idempotent, and a GM-created custom list is never tagged', () => {
+  const fresh = backfillTurnStepListInventory(defaultAppConfig(), TURN_STEPS_5PFH, PLANETFALL_TURN_STEPS, TURN_STEPS_FIVE_LEAGUES);
+  const byName = (cfg, name) => listTurnStepLists(cfg).find((l) => l.name === name);
+  assert.equal(byName(fresh, '5PFH').ruleset, 'fivepfh');
+  assert.equal(byName(fresh, 'Planetfall').ruleset, 'planetfall');
+  assert.equal(byName(fresh, 'Five Leagues').ruleset, 'fiveleagues');
+
+  // A pre-existing "5PFH" list from before the `ruleset` field existed
+  // (ruleset: null, same as defaultTurnStepList's own default) gets tagged
+  // on the next backfill pass, without touching its own content.
+  let preExisting = createTurnStepList(defaultAppConfig(), '5PFH').appConfig;
+  preExisting = loadDefaultIntoTurnStepList(preExisting, byName(preExisting, '5PFH').id, TURN_STEPS_5PFH);
+  const tagged = backfillTurnStepListInventory(preExisting, TURN_STEPS_5PFH, PLANETFALL_TURN_STEPS, TURN_STEPS_FIVE_LEAGUES);
+  assert.equal(byName(tagged, '5PFH').ruleset, 'fivepfh');
+  assert.equal(byName(tagged, '5PFH').groups.length, TURN_STEPS_5PFH.length, 'content untouched, only the tag was added');
+
+  // Idempotent once every named list is already tagged.
+  const again = backfillTurnStepListInventory(tagged, TURN_STEPS_5PFH, PLANETFALL_TURN_STEPS, TURN_STEPS_FIVE_LEAGUES);
+  assert.equal(again, tagged);
+
+  // A GM's own custom-named list is never tagged — stays ruleset: null
+  // (always shown, never hidden by the Turn Step sub-tab's filter).
+  let custom = createTurnStepList(defaultAppConfig(), 'My Homebrew Steps').appConfig;
+  custom = backfillTurnStepListInventory(custom, TURN_STEPS_5PFH, PLANETFALL_TURN_STEPS, TURN_STEPS_FIVE_LEAGUES);
+  assert.equal(byName(custom, 'My Homebrew Steps').ruleset, null);
 });
 
 test('fixPlanetfallBranching sets pf6/pf8\'s branchTo (Pre-Battle -> Battle -> Post-Battle, direct follow-up request) on a pre-existing "Planetfall" list only if not already correct, preserves any other edit, and no-ops when there\'s no such list or it\'s already fixed', () => {

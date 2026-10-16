@@ -42,7 +42,7 @@ export const DEFAULT_GEAR_TEMPLATES = {
   // item only fills in the fields that apply to it, same as every other
   // Bestiary-shaped template in this app.
   '5pfh': {
-    label: '5PFH',
+    label: 'Five Parsecs from Home',
     fields: withDefaults([
       { key: 'Range' },
       { key: 'Shots' },

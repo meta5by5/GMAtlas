@@ -47,9 +47,9 @@ export const RULES_PROVIDERS = {
   fivepfh: {
     label: 'Five Parsecs From Home', status: 'integrated', note: 'Character sheets (Phase 4). Also gates the Campaign panel\'s Starship tab (direct follow-up request) — a different kind of gate than SWN\'s own below (a plain feature toggle, not a licensing confirmation), reusing the same mechanism rather than inventing a second one.', rulesetId: '5pfh', genrePackId: 'sci-fi-generic', get dedicatedRulesetId() { return this.rulesetId; },
     requiresActivation: true,
-    activationText: 'Show the Campaign panel\'s Starship tab (base 5PFH game).',
+    activationText: 'Show the Campaign panel\'s Starship tab (base Five Parsecs from Home game).',
   },
-  traveller: { label: 'Traveller', status: 'character ruleset authored (original content)', note: 'No sourcebook exists in assets/docs — confirmed by the 2026-07-03 ruleset library review. The character ruleset (data/rulesets.js) is original content inspired by classic Traveller\'s six characteristics and its 2d6-vs-8 task resolution (domain/dice.js\'s rollTraveller), not a transcription; still no Trade/Vehicle/NPC-generation content of its own beyond what Hostile/SWN already provide for those areas.', rulesetId: 'traveller', genrePackId: 'sci-fi-generic', get dedicatedRulesetId() { return this.rulesetId; } },
+  traveller: { label: 'Traveller', status: 'character ruleset authored (original content)', note: 'Stale as of the 2026-07-03 ruleset library review this note used to cite: real Traveller 2e PDFs now live under assets/docs/Traveller/ (found while mapping assets/docs/\'s real per-game subfolders for the Ruleset Guide ToC + "Load" sourcebook button feature). The character ruleset (data/rulesets.js) remains original content inspired by classic Traveller\'s six characteristics and its 2d6-vs-8 task resolution (domain/dice.js\'s rollTraveller), not a transcription; still no Trade/Vehicle/NPC-generation content of its own beyond what Hostile/SWN already provide for those areas.', rulesetId: 'traveller', genrePackId: 'sci-fi-generic', get dedicatedRulesetId() { return this.rulesetId; } },
   // Direct request (Phase A audit, A4): "the Hostile (sci-fi, default)
   // Genre Pack becomes the Hostile Game System (not renamed as a pack —
   // restructured as a child entity)" — hostile is no longer its own entry
@@ -68,7 +68,7 @@ export const RULES_PROVIDERS = {
     genrePackId: 'sci-fi-generic', dedicatedRulesetId: null,
   },
   planetfall: {
-    label: 'Planetfall (5PFH)', status: 'integrated', note: 'Colony drawer (domain/colony.js). Also gates the Campaign panel\'s Colony tab (direct follow-up request) — see fivepfh\'s own note above for why this reuses the Game System Activation mechanism as a plain feature toggle here.',
+    label: 'Planetfall (Five Parsecs from Home)', status: 'integrated', note: 'Colony drawer (domain/colony.js). Also gates the Campaign panel\'s Colony tab (direct follow-up request) — see fivepfh\'s own note above for why this reuses the Game System Activation mechanism as a plain feature toggle here.',
     requiresActivation: true,
     activationText: "Show the Campaign panel's Colony tab (Planetfall colony sim).",
     genrePackId: 'sci-fi-generic', dedicatedRulesetId: null,

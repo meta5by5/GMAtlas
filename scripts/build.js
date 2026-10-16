@@ -62,15 +62,26 @@ const catalogEntries = REFERENCE_LIBRARY_MANIFEST.map((entry) => {
     src: entry.file,
   };
 });
+// Direct follow-up request (Ruleset Guide ToC + "Load" sourcebook button)
+// surfaced that assets/docs/ was reorganized into per-game subfolders
+// (assets/docs/ironsworn/, assets/docs/Starforged/, ...) at some point —
+// this scan used to be a single readdirSync(DOCS_DIR) (no recursion), so
+// every file inside any subfolder was invisible to this "catch anything
+// not yet catalogued" fallback, not just the ones this change's own
+// catalog additions already cover. { recursive: true } (Node 20.1+, this
+// repo targets 24) walks every subfolder; entries come back as relative
+// path strings using the platform's own separator, normalized to forward
+// slashes to match this app's one path convention everywhere else.
 const extraLocalEntries = existsSync(DOCS_DIR)
-  ? readdirSync(DOCS_DIR)
-      .filter((name) => statSync(join(DOCS_DIR, name)).isFile() && !catalogFiles.has(`assets/docs/${name}`))
-      .map((name) => ({
-        file: `assets/docs/${name}`,
-        title: titleFromFilename(name),
-        ext: extname(name).slice(1).toLowerCase(),
-        sizeBytes: statSync(join(DOCS_DIR, name)).size,
-        src: `assets/docs/${name}`,
+  ? readdirSync(DOCS_DIR, { recursive: true })
+      .map((name) => name.split('\\').join('/'))
+      .filter((rel) => statSync(join(DOCS_DIR, rel)).isFile() && !catalogFiles.has(`assets/docs/${rel}`))
+      .map((rel) => ({
+        file: `assets/docs/${rel}`,
+        title: titleFromFilename(rel.split('/').pop()),
+        ext: extname(rel).slice(1).toLowerCase(),
+        sizeBytes: statSync(join(DOCS_DIR, rel)).size,
+        src: `assets/docs/${rel}`,
       }))
   : [];
 const docsManifest = [...catalogEntries, ...extraLocalEntries].sort((a, b) => a.title.localeCompare(b.title));

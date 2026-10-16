@@ -41,8 +41,18 @@ export function withDefaults(fields) {
 }
 
 export const DEFAULT_STATBLOCK_TEMPLATES = {
+  // `ruleset` (additive — Settings restructuring, Rulesets tab filtering):
+  // a Game System id (rulesConstitution.js's RULES_PROVIDERS, matching
+  // CONTENT_PACKS_MANIFEST's own `ruleset` taxonomy) or a Genre Pack id
+  // directly for a template with no single obvious system (see domain/
+  // rulesProfiles.js's matchesProfileRuleset). `generic`/`vehicle` have no
+  // obvious system alignment — tagged 'sci-fi-generic' (the Genre Pack
+  // itself) per direct instruction ("map it to Default (sci-fi)"). A
+  // GM-added custom system (addTemplateSystem()) gets ruleset: null —
+  // never hidden.
   generic: {
     label: 'Generic (system-agnostic)',
+    ruleset: 'sci-fi-generic',
     fields: withDefaults([
       { key: 'Role', kind: 'text' },
       { key: 'Disposition', kind: 'text' },
@@ -54,6 +64,7 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
   },
   starforged: {
     label: 'Starforged',
+    ruleset: 'starforged',
     fields: withDefaults([
       { key: 'Threat Rank', kind: 'text' },
       { key: 'Disposition', kind: 'text' },
@@ -64,7 +75,8 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
     ]),
   },
   '5pfh': {
-    label: '5PFH',
+    label: 'Five Parsecs from Home',
+    ruleset: 'fivepfh',
     fields: withDefaults([
       { key: 'Threat Type', kind: 'text' },
       { key: 'Toughness', kind: 'track', rollMethod: 'none', max: 5 },
@@ -85,6 +97,7 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
   // editable in Settings like every other template here.
   'planetfall-lifeform': {
     label: 'Planetfall Lifeform',
+    ruleset: 'planetfall',
     fields: withDefaults([
       { key: 'Speed', kind: 'attribute', rollMethod: 'none', format: 'inches' },
       // Direct follow-up request: "change the target number from 6 to 4
@@ -114,7 +127,8 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
   // template rather than reusing 'planetfall-lifeform' under the wrong
   // name for non-Planetfall content.
   '5pfh-lifeform': {
-    label: '5PFH Lifeform / Enemy',
+    label: 'Five Parsecs from Home Lifeform / Enemy',
+    ruleset: 'fivepfh',
     fields: withDefaults([
       { key: 'Speed', kind: 'attribute', rollMethod: 'none', format: 'inches' },
       // Direct follow-up request: "change the target number from 6 to 4
@@ -139,6 +153,7 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
   // during combat, not a fully mechanized every-modifier sheet.
   'dnd5e-lifeform': {
     label: 'D&D 5e Lifeform',
+    ruleset: 'dnd5e',
     fields: withDefaults([
       { key: 'Armor Class', kind: 'text' },
       { key: 'Initiative', kind: 'attribute', rollMethod: 'd20', format: 'sign' },
@@ -192,7 +207,8 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
   // entity, GM's own discretion" posture as D&D 5e's own Legendary Actions
   // field staying blank for a non-legendary creature.
   'fiveleagues-lifeform': {
-    label: 'Five Leagues Enemy',
+    label: 'Five Leagues from Borderlands Enemy',
+    ruleset: 'fiveleagues',
     fields: withDefaults([
       { key: 'Num.', kind: 'text' },
       { key: 'Speed', kind: 'attribute', rollMethod: 'none', format: 'inches' },
@@ -208,6 +224,7 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
   },
   vehicle: {
     label: 'Vehicle',
+    ruleset: 'sci-fi-generic',
     fields: withDefaults([
       { key: 'Hull / Integrity', kind: 'track', rollMethod: 'none', max: 5 },
       { key: 'Speed', kind: 'text' },

@@ -342,12 +342,12 @@ export function wrapLegacyCampaignIntoAppConfig(legacyDoc, now = new Date().toIS
   // install gets both the "5PFH" and "Planetfall" lists out of the box;
   // an already-migrated install gets them via store.js's own
   // backfillTurnStepListInventory instead (domain/turnStepLists.js).
-  const fivePfhList = { ...defaultTurnStepList('5PFH', now), groups: JSON.parse(JSON.stringify(TURN_STEPS_5PFH)) };
-  const planetfallList = { ...defaultTurnStepList('Planetfall', now), groups: JSON.parse(JSON.stringify(PLANETFALL_TURN_STEPS)) };
+  const fivePfhList = { ...defaultTurnStepList('5PFH', now), ruleset: 'fivepfh', groups: JSON.parse(JSON.stringify(TURN_STEPS_5PFH)) };
+  const planetfallList = { ...defaultTurnStepList('Planetfall', now), ruleset: 'planetfall', groups: JSON.parse(JSON.stringify(PLANETFALL_TURN_STEPS)) };
   // The Warband tab (Five Leagues from the Borderlands, its own real 3rd
   // Campaign-panel slot) gets its own seeded list the same way — see
   // store.js's backfillTurnStepListInventory for the already-migrated path.
-  const fiveLeaguesList = { ...defaultTurnStepList('Five Leagues', now), groups: JSON.parse(JSON.stringify(TURN_STEPS_FIVE_LEAGUES)) };
+  const fiveLeaguesList = { ...defaultTurnStepList('Five Leagues', now), ruleset: 'fiveleagues', groups: JSON.parse(JSON.stringify(TURN_STEPS_FIVE_LEAGUES)) };
   // The Campaign panel's Colony tab plays Planetfall, Starship plays base
   // 5PFH (direct follow-up request), Warband plays Five Leagues — real
   // per-campaign state, defaulted here for a first-time install the same

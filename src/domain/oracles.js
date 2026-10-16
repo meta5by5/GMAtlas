@@ -324,6 +324,27 @@ export function buildGroupedOracleTree(tables, groups = ORACLE_GROUPS) {
   return categories;
 }
 
+// Settings -> Factions tab's "Allow Faction-related Oracles" checkbox
+// (doc.settings.factionOraclesEnabled). These are the real top-level table
+// keys (not display labels) for the Factions-adjacent slots across both
+// ORACLE_GROUPS and ORACLE_GROUPS_FANTASY (data/oracleGroups.js) — 'Faction
+// Turns' is the fantasy pack's own name for the sci-fi pack's 'Corporate
+// Powers' slot.
+const FACTION_ORACLE_TABLE_KEYS = ['Factions', 'Corporate Powers', 'Faction Turns', 'Faction Encounter'];
+
+/** Strips the Faction-related table keys out of a genre pack's `tables`
+ *  object before it reaches buildGroupedOracleTree, so they vanish from the
+ *  Oracle drawer's browse tree entirely rather than resurfacing under its
+ *  own "leftover -> Other" fallback. Faction Events/Faction Conflict roll
+ *  from their own tablesWithOverrides() calls directly, never through this
+ *  pruned copy — this only ever affects the browse tree, never the actual
+ *  domain rolls. Pure/non-mutating (returns a new shallow copy). */
+export function excludeFactionOracleTables(tables) {
+  const next = { ...tables };
+  for (const key of FACTION_ORACLE_TABLE_KEYS) delete next[key];
+  return next;
+}
+
 /** Filter the tree by a case-insensitive substring match against group/table
  *  names or (for leaf tables) individual entries. A group whose own name
  *  matches keeps its whole subtree; otherwise only matching descendants

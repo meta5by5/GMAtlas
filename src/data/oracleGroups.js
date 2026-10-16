@@ -40,7 +40,7 @@ export const ORACLE_GROUPS = [
 export const ORACLE_GROUPS_FANTASY = [
   { label: '⭐ Core Solo', children: ['Campaign', 'Core Oracles', 'Core Solo Engine', 'Campaign Intelligence Engine'] },
   { label: '☠ Threats & Conflict', children: ['Conflict', 'Conflict Architecture', 'Danger Situations', 'Fear and Dread', 'Horror Escalation', 'Miscellaneous', 'Faction Encounter'] },
-  { label: '📚 Story Beats', children: ['Plot Engine', 'Story', 'Adventure', 'Adventure Seed', 'Missions', 'Mission Aftermath', 'Mysteries & Coverups', 'Scenario Framing', 'Twist & Gambit Oracles'] },
+  { label: '📚 Story Beats', children: ['Plot Engine', 'Story', 'Adventure', 'Adventure Seed', 'Missions', 'Mission Aftermath', 'Mysteries & Coverups', 'Scenario Framing', 'Twist & Gambit Oracles', 'Ironsworn Oracles', 'Ironsworn Delve Oracles'] },
   { label: '👥 Characters & Society', children: ['Characters', 'Factions', 'Frontier Society', 'Noble Houses & Guilds', 'Faction Turns', 'Enchantment', 'Party & NPCs', 'Law, Marshals & Crime', 'Guards & Soldiers', 'Golems & Constructs'] },
   { label: '🗺️ Locations', children: ['Realms', 'Settlements', 'Districts', 'Location Themes', 'Site Concept', 'Realm & Kingdom Creation', 'Kingdoms & Settlements', 'Settlements and Expeditions', 'Vaults / Ruins', 'Ruined Holds'] },
   { label: '🐎 Roads & Trade', children: ['Vessels & Caravans', 'Road Encounters', 'Keep Operations', { key: 'Trade & Cargo', label: 'Trade & Caravans' }, 'Workshop & Mine Hazards', 'Exploration', 'Environmental Hazards'] },

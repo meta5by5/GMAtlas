@@ -259,16 +259,29 @@ export function fixPlanetfallBranching(appConfig) {
  *  see a fresh one reseeded next boot — the same fragile name-coupling the
  *  old profile-scoped version had, kept for continuity rather than
  *  introducing new provenance tracking here). */
+const NAMED_LIST_RULESET = { '5PFH': 'fivepfh', Planetfall: 'planetfall', 'Five Leagues': 'fiveleagues' };
+
 export function backfillTurnStepListInventory(appConfig, fivepfhGroups, planetfallGroups, fiveLeaguesGroups) {
   const lists = listTurnStepLists(appConfig);
   const has5pfh = lists.some((l) => l.name === '5PFH');
   const hasPlanetfall = lists.some((l) => l.name === 'Planetfall');
   const hasFiveLeagues = lists.some((l) => l.name === 'Five Leagues');
-  if (has5pfh && hasPlanetfall && hasFiveLeagues) return appConfig;
+  // Settings restructuring (Rulesets tab's Turn Step filtering): an
+  // already-migrated install's 3 named seed lists predate the `ruleset`
+  // tag (schema.js's defaultTurnStepList) — backfill it onto any of them
+  // still missing it (idempotent: a GM's own later edit to a list's own
+  // `ruleset` would never be null/undefined again, so this only ever fires
+  // once per list).
+  const needsRulesetTag = lists.some((l) => NAMED_LIST_RULESET[l.name] && l.ruleset == null);
+  if (has5pfh && hasPlanetfall && hasFiveLeagues && !needsRulesetTag) return appConfig;
   const next = clone(appConfig);
   const nextLists = ensureLists(next);
-  if (!has5pfh) nextLists.push({ ...defaultTurnStepList('5PFH'), groups: clone(fivepfhGroups || []) });
-  if (!hasPlanetfall) nextLists.push({ ...defaultTurnStepList('Planetfall'), groups: clone(planetfallGroups || []) });
-  if (!hasFiveLeagues) nextLists.push({ ...defaultTurnStepList('Five Leagues'), groups: clone(fiveLeaguesGroups || []) });
+  if (!has5pfh) nextLists.push({ ...defaultTurnStepList('5PFH'), ruleset: 'fivepfh', groups: clone(fivepfhGroups || []) });
+  if (!hasPlanetfall) nextLists.push({ ...defaultTurnStepList('Planetfall'), ruleset: 'planetfall', groups: clone(planetfallGroups || []) });
+  if (!hasFiveLeagues) nextLists.push({ ...defaultTurnStepList('Five Leagues'), ruleset: 'fiveleagues', groups: clone(fiveLeaguesGroups || []) });
+  for (const l of nextLists) {
+    const tag = NAMED_LIST_RULESET[l.name];
+    if (tag && l.ruleset == null) l.ruleset = tag;
+  }
   return next;
 }

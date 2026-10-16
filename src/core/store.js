@@ -39,6 +39,7 @@ import {
 } from './migrate.js';
 import { createCampaign, renameCampaignEntry, setActiveCampaign, createRulesProfile, reassignCampaignProfile, backfillDefaultCrewTasks, grandfatherCampaignPanelActivation, backfillDnd5eStoryboardProfile, backfillFiveLeaguesStoryboardProfile, backfillGenrePackRename } from '../domain/rulesProfiles.js';
 import { createTurnStepList, hoistLegacyProfileTurnSteps, backfillTurnStepListInventory, fixPlanetfallBranching } from '../domain/turnStepLists.js';
+import { ensureRulesetGuideDefault } from '../domain/rulesetGuide.js';
 import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
 import { PLANETFALL_TURN_STEPS } from '../data/turnStepListPlanetfall.js';
 import { TURN_STEPS_FIVE_LEAGUES } from '../data/turnStepListFiveLeagues.js';
@@ -219,6 +220,21 @@ function createStore() {
     return doc;
   }
 
+  // Ruleset Guide ToC + "Load" sourcebook button (direct follow-up
+  // request): "add it automatically if the ruleset is enabled" — resolves
+  // a campaign's EFFECTIVE Game System Ruleset (the active profile's own
+  // ruleset.statRuleset) from appConfig, for ensureRulesetGuideDefault's
+  // own one-time-per-campaign-per-ruleset seed. Called alongside
+  // backfillCampaignTurnStepSlots at the same call sites, same "idempotent,
+  // cheap no-op once already done" posture (including the same accepted
+  // limitation: a campaign already cached in-session from an earlier visit
+  // isn't re-checked on every switchCampaign call, same as that backfill).
+  function resolveActiveStatRuleset(cfg, campaignId) {
+    const entry = cfg.campaigns.find((c) => c.id === campaignId);
+    const profile = entry && cfg.profiles.find((p) => p.id === entry.profileId);
+    return (profile && profile.ruleset && profile.ruleset.statRuleset) || null;
+  }
+
   async function refreshBackupMeta(campaignId) {
     const database = await db();
     const backup = await idbGet(database, campaignBackupDocKey(campaignId));
@@ -259,6 +275,7 @@ function createStore() {
       let activeDoc = await idbGet(database, campaignDocKey(activeId));
       activeDoc = activeDoc ? migrateDocument(activeDoc) : defaultCampaign();
       activeDoc = backfillCampaignTurnStepSlots(activeDoc);
+      activeDoc = ensureRulesetGuideDefault(activeDoc, resolveActiveStatRuleset(appConfig, activeId));
       docs.set(activeId, activeDoc);
       await refreshBackupMeta(activeId);
       notify();
@@ -351,7 +368,8 @@ function createStore() {
   // campaign you want the import to land in first if that's the goal.
   async function importDocument(rawText) {
     const activeId = appConfig.activeCampaignId;
-    const imported = backfillCampaignTurnStepSlots(importCampaign(safeParse(rawText)));
+    let imported = backfillCampaignTurnStepSlots(importCampaign(safeParse(rawText)));
+    imported = ensureRulesetGuideDefault(imported, resolveActiveStatRuleset(appConfig, activeId));
     imported.meta.id = activeId;
     docs.set(activeId, imported);
     await persistCampaignDoc(activeId, imported, imported);
@@ -365,12 +383,15 @@ function createStore() {
    *  Rules Profile. Does NOT touch any other campaign's data. */
   async function newCampaign({ title, profileId } = {}) {
     const chosenProfileId = profileId || (appConfig.profiles[0] && appConfig.profiles[0].id) || null;
+    const chosenProfile = chosenProfileId && appConfig.profiles.find((p) => p.id === chosenProfileId);
     const created = createCampaign(appConfig, { title, profileId: chosenProfileId });
     appConfig = setActiveCampaign(created.appConfig, created.doc.meta.id);
-    docs.set(created.doc.meta.id, backfillCampaignTurnStepSlots(created.doc));
+    let newDoc = backfillCampaignTurnStepSlots(created.doc);
+    newDoc = ensureRulesetGuideDefault(newDoc, chosenProfile && chosenProfile.ruleset && chosenProfile.ruleset.statRuleset);
+    docs.set(created.doc.meta.id, newDoc);
     const database = await db();
     await idbPut(database, APP_CONFIG_KEY, appConfig);
-    await idbPut(database, campaignDocKey(created.doc.meta.id), created.doc);
+    await idbPut(database, campaignDocKey(created.doc.meta.id), newDoc);
     backupMeta = { exists: false, bytes: 0 };
     notify();
     return get();
@@ -386,6 +407,7 @@ function createStore() {
     if (!target) {
       const raw = await idbGet(database, campaignDocKey(campaignId));
       target = backfillCampaignTurnStepSlots(migrateDocument(raw || defaultCampaign()));
+      target = ensureRulesetGuideDefault(target, resolveActiveStatRuleset(appConfig, campaignId));
       docs.set(campaignId, target);
     }
     appConfig = setActiveCampaign(appConfig, campaignId);

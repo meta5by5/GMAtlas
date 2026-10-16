@@ -134,6 +134,10 @@ import { renderSearchPanel } from './searchPanel.js';
 import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
 import { isModuleVisible, setModuleEnabled, setStoryboardPosition, updateProfileRuleset, applyProfileDraft, resolvePositionContentId } from '../domain/rulesProfiles.js';
 import { genrePackIdForRuleset } from '../data/rulesConstitution.js';
+import { RULESET_GENRE_PACK_HINTS, findRuleset } from '../data/rulesets.js';
+import { rulesetGuideDocExists, ensureRulesetGuideDefault } from '../domain/rulesetGuide.js';
+import { canLoadRulesetReference } from '../domain/permissions.js';
+import { fetchRulesetReferenceBlob } from './rulesetReferenceFetch.js';
 import { DRAWER_META, drawerMeta } from './drawerMeta.js';
 import { moveTurnStepInList, updateTurnStepText, setTurnStepShowCrewTasks, loadDefaultIntoTurnStepList, renameTurnStepList, deleteTurnStepList, addTurnStepGroup, renameTurnStepGroup, addTurnStepToGroup, moveTurnStepToGroup, setTurnStepBranchTo } from '../domain/turnStepLists.js';
 import { getCurrentTurnStep, advanceTurnStep, retreatTurnStep, startNextColonyCampaignTurn, startNextStarshipCampaignTurn, startNextWarbandCampaignTurn } from '../domain/turnSteps.js';
@@ -394,7 +398,10 @@ let campaignSwitcherOpen = false;
 // or opening Settings. Ephemeral — never persisted, so it's back on the
 // next real page load exactly as requested.
 let startupScreenOpen = true;
-let settingsTab = 'general'; // ephemeral — which of the 6 topical Settings tabs is active (UX batch)
+let settingsTab = 'general'; // ephemeral — which Settings tab is active
+// Settings restructuring: which sub-tab the Rulesets tab's own internal
+// tab bar is showing ('profile'/'turn-steps'/'crew-tasks').
+let rulesetsSubTab = 'profile';
 // Ruleset Profile Editor tab (design/adr/rules-profiles-multi-campaign.md) —
 // which profile the ruleset/module/position editor is currently showing;
 // null falls back to the active campaign's own profile
@@ -405,6 +412,11 @@ let settingsSelectedProfileId = null;
 // CLAUDE.md this is its own inline form rather than window.prompt() or the
 // single-field openInlinePrompt.
 let newCampaignDraft = { title: '', profileId: '' };
+// Settings restructuring: whether the Campaigns tab's own "+ New Campaign"
+// form is expanded — "the usual + button to create a new one" (direct
+// instruction), toggle-revealed rather than always-visible, same posture
+// as the Trade Contract/Party Tracker bespoke inline forms CLAUDE.md names.
+let campaignFormOpen = false;
 // Ruleset Profile Editor drafts (direct request: profile edits apply "when
 // the changes are saved," not instantly like the rest of Settings) — one
 // uncommitted draft per profile id touched this session, so switching
@@ -665,6 +677,9 @@ let contentPackFlags = { entities: false, guide: false, journal: false };
 // hostileLocationsImporting's own in-flight-guard role but keyed by id
 // since more than one pack can exist.
 let contentPackImporting = new Set();
+// Rulesets tab's "Load" button — same in-flight-guard role, keyed by
+// ruleset id since each ruleset gets its own button.
+let rulesetReferenceLoading = new Set();
 // Export Campaign JSON's opt-in "Include attached files" checkbox (off by
 // default — a GM transferring devices ticks it on deliberately, everyone
 // else keeps the small plain export). The size preview is computed async
@@ -1510,6 +1525,9 @@ function onClick(ev) {
   }
   const settingsTabBtn = hit('[data-settings-tab]');
   if (settingsTabBtn) { settingsTab = settingsTabBtn.dataset.settingsTab; return renderDrawerBody(); }
+  const rulesetsSubTabBtn = hit('[data-rulesets-subtab]');
+  if (rulesetsSubTabBtn) { rulesetsSubTab = rulesetsSubTabBtn.dataset.rulesetsSubtab; return renderDrawerBody(); }
+  if (hit('[data-campaign-form-toggle]')) { campaignFormOpen = !campaignFormOpen; return render(); }
   // Dice settings tab's quick-pick color swatches (direct follow-up
   // request: "add dice color options including maroon, pink and dark
   // green") — same dice3dColor field the native color input next to them
@@ -4366,6 +4384,41 @@ function onClick(ev) {
       .catch((err) => { hostileLocationsImporting = false; renderDrawerBody(); toast(`Import failed — ${err.message}`); });
     return;
   }
+  // Rulesets tab's "Load" button (direct instruction): fetches the active
+  // ruleset's one primary sourcebook PDF and stores it under the Reference
+  // Library's own blob store, keyed by its real assets/docs/ path exactly
+  // like a matched "Import File(s)" drop already does (documents.js's
+  // listReferenceDocuments reads it live from there — no addDocument() of
+  // its own needed). Then checks whether this ruleset's default Guide ToC
+  // entry still exists; if a GM deleted it (or it was never seeded), asks
+  // before recreating it, rather than silently resurrecting it.
+  const refLoadBtn = hit('[data-ruleset-reference-load]');
+  if (refLoadBtn) {
+    const rulesetId = refLoadBtn.dataset.rulesetReferenceLoad;
+    const ruleset = findRuleset(rulesetId);
+    if (!canLoadRulesetReference() || !ruleset.doc || rulesetReferenceLoading.has(rulesetId)) return;
+    const file = ruleset.doc;
+    rulesetReferenceLoading = new Set(rulesetReferenceLoading).add(rulesetId);
+    renderDrawerBody();
+    fetchRulesetReferenceBlob(file)
+      .then(async (blob) => {
+        await store.putDocBlob(file, blob);
+        if (!rulesetGuideDocExists(store.get(), rulesetId)) {
+          if (window.confirm(`No Guide entry exists yet for "${ruleset.label}" — create one and link this sourcebook to it?`)) {
+            store.update((d) => ensureRulesetGuideDefault(d, rulesetId, { force: true }));
+          }
+        }
+        rulesetReferenceLoading = new Set(rulesetReferenceLoading); rulesetReferenceLoading.delete(rulesetId);
+        renderDrawerBody();
+        toast(`${ruleset.label} PDF loaded into your Doc Library`);
+      })
+      .catch((err) => {
+        rulesetReferenceLoading = new Set(rulesetReferenceLoading); rulesetReferenceLoading.delete(rulesetId);
+        renderDrawerBody();
+        toast(`Load failed — ${err.message}`);
+      });
+    return;
+  }
   if (hit('[data-advance-faction-turns]')) {
     let rumorCount = 0;
     store.update((d) => {
@@ -5043,9 +5096,15 @@ function onClick(ev) {
   if (hit('[data-campaign-create]')) {
     const profiles = store.listProfiles();
     const profileId = newCampaignDraft.profileId || (profiles[0] && profiles[0].id);
+    // Rules Profile is a required field (direct instruction) — in practice
+    // there's always at least one profile to fall back to above, but this
+    // guards the case defensively rather than silently creating a
+    // campaign with no profile assigned at all.
+    if (!profileId) { toast('Create a Rules Profile first'); return; }
     const title = newCampaignDraft.title.trim();
     store.newCampaign({ title: title || undefined, profileId }).then(() => toast('Campaign created'));
     newCampaignDraft = { title: '', profileId: '' };
+    campaignFormOpen = false;
     return;
   }
   if (hit('[data-profile-create]')) {
@@ -6315,6 +6374,10 @@ function onChange(ev) {
     const n = Math.max(0, Number(t.value) || 0);
     return store.update((d) => { d.settings.factionPacing = { ...(d.settings.factionPacing || {}), scenesPerRound: n }; return d; });
   }
+  if (t.closest('[data-faction-oracles-enabled-toggle]')) {
+    const checked = t.checked;
+    return store.update((d) => { d.settings.factionOraclesEnabled = checked; return d; });
+  }
 
   // --- Faction Conflict (Living Faction Engine) — change-triggered
   // fields not covered by the generic data-entity-field handler above. ---
@@ -6578,7 +6641,11 @@ function onChange(ev) {
     // for a deliberate mismatch, since this only fires on a ruleset change.
     if (draft) {
       const patch = { statRuleset: t.value };
-      const matchedPack = genrePackIdForRuleset(t.value);
+      // Ironsworn has no Game System Activation/Rules Constitution entry
+      // (see rulesets.js's RULESET_GENRE_PACK_HINTS comment), so it isn't
+      // covered by genrePackIdForRuleset's own RULES_PROVIDERS lookup —
+      // check this small explicit map too.
+      const matchedPack = genrePackIdForRuleset(t.value) || RULESET_GENRE_PACK_HINTS[t.value];
       if (matchedPack) patch.genrePack = matchedPack;
       setProfileDraft(profileId, updateProfileRuleset(draft, patch));
     }
@@ -6652,7 +6719,13 @@ function onChange(ev) {
   }
   const moduleToggle = t.closest('[data-module-enabled-toggle]');
   if (moduleToggle) {
-    const profileId = currentEditingProfileId();
+    // The Campaigns tab's own checkboxes (Settings restructuring) bake the
+    // active campaign's own profile id directly onto the checkbox at
+    // render time (data-module-profile-id) since that tab's "which profile
+    // to edit" comes from which campaign is selected, not from the
+    // Rulesets tab's own "Displayed for Edit" picker — falls back to that
+    // picker's resolution for the Rulesets tab's own checklist.
+    const profileId = moduleToggle.dataset.moduleProfileId || currentEditingProfileId();
     const moduleId = moduleToggle.dataset.moduleEnabledToggle;
     const draft = getProfileDraft(profileId);
     if (draft) setProfileDraft(profileId, setModuleEnabled(draft, moduleId, t.checked));
@@ -6672,6 +6745,13 @@ function onChange(ev) {
   if (campaignReassignSelect) {
     const campaignId = campaignReassignSelect.dataset.campaignReassignProfile;
     return store.setCampaignProfile(campaignId, t.value).then(() => toast('Campaign profile changed'));
+  }
+  // Settings restructuring: the Campaigns tab's own switcher dropdown —
+  // picking an option switches the active campaign immediately, same
+  // action the old per-row "Switch" button ran (no confirm — that's the
+  // header menu's own switcher's convention, not this tab's).
+  if (t.closest('[data-campaign-switcher-select]')) {
+    return store.switchCampaign(t.value).then(() => toast('Switched campaign'));
   }
 
   if (t.closest('[data-import-campaign]')) {
@@ -9885,8 +9965,8 @@ function renderCombatTrackerPanel() {
   const canAttack = isFiveLeagues && !!combatAttackerEntryId && !!combatDefenderEntryId;
   const attackTitle = !combatAttackerEntryId ? 'Click a row to select the Attacker first'
     : !combatDefenderEntryId ? 'Click another row to select the Defender'
-    : attackerIsRanged ? 'Roll a 5LFB Ranged Attack at the Defender'
-    : 'Roll a 5LFB Melee Exchange between the Attacker and Defender';
+    : attackerIsRanged ? 'Roll a Five Leagues from Borderlands Ranged Attack at the Defender'
+    : 'Roll a Five Leagues from Borderlands Melee Exchange between the Attacker and Defender';
   const rows = entries.map((entry) => {
     const entity = getEntity(doc, entry.entityId);
     if (!entity) return '';
@@ -10344,12 +10424,12 @@ function buildDrawerUi() {
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName, partyTrackersEditOpen, collapsedPartySections,
     tradeLocationId, tradeContractAddOpen,
-    journalEditOpen, graphFilter, helpOpen, settingsMenuOpen, settingsTab, aboutOpen,
+    journalEditOpen, graphFilter, helpOpen, settingsMenuOpen, settingsTab, rulesetsSubTab, campaignFormOpen, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
     hexcrawlPlacingIcon, hexcrawlCamera, hexcrawlSelectedHex, hexcrawlRange, hexcrawlRiverStart, hexcrawlRoadStart,
     dungeonCrawlPending, dungeonCrawlSelected, dungeonCrawlDetailZoom, dungeonCrawlMergeMode, dungeonCrawlMergeSelection, dungeonCrawlArmedDressing,
-    contentPackFlags, contentPackImporting, hostileLocationsImporting, exportIncludeAttachments, exportAttachmentsPreview,
+    contentPackFlags, contentPackImporting, hostileLocationsImporting, rulesetReferenceLoading, exportIncludeAttachments, exportAttachmentsPreview,
     worldTrackerTab, worldTrackerSelectedSector, worldTrackerMigrateOpen,
     expandedTurnStepGroups, editingTurnStepListId, turnStepListsCollapsed, turnStepMoveEditOpen, turnStepBranchEditOpen, crewTaskSelectedId, crewTaskSelectedMemberId, colonyPanelTab,
     // Faction Events' own docked-in-WHERE state (see factionEventsDockedInWhere's
@@ -10368,6 +10448,15 @@ function buildDrawerUi() {
     newCampaignDraft,
     profileDraft: getProfileDraft(currentEditingProfileId()),
     profileDraftDirty: isProfileDraftDirty(currentEditingProfileId()),
+    // Settings restructuring: the Campaigns tab's own module checkboxes
+    // edit the ACTIVE campaign's assigned profile, independently of
+    // whichever profile the Rulesets tab's own "Displayed for Edit" picker
+    // currently shows — a separate draft/dirty pair so toggling one in
+    // Campaigns doesn't require first navigating to Rulesets to pick the
+    // same profile there. Same getProfileDraft/isProfileDraftDirty
+    // functions, just keyed by the active campaign's own profile id.
+    activeProfileDraft: getProfileDraft((store.getActiveProfile() || {}).id),
+    activeProfileDraftDirty: isProfileDraftDirty((store.getActiveProfile() || {}).id),
     showAllGenrePacksInRpe,
     // Phase B (entitlement layer, domain/entitlements.js): just the raw
     // map, not the whole appConfig — mirrors passing activeProfileId

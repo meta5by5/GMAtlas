@@ -38,4 +38,20 @@ export const SOURCEBOOK_INVENTORY = [
   { file: 'assets/docs/Intergalactic Space Trader (IST) 01_PlanetEconomy.pdf', status: 'cited, not yet mined', note: 'Workflow inspiration for the Merchant Rules Lens design (ADR 0004) — planet-scanning/procedural-market concepts, no in-app data authored from it yet.' },
   { file: 'assets/docs/Intergalactic Space Trader (IST) 02 Travel.pdf', status: 'cited, not yet mined', note: 'Same IST inspiration as above (ADR 0004).' },
   { file: 'assets/docs/Intergalactic Space Trader (IST) 03_Trade.pdf', status: 'cited, not yet mined', note: 'Same IST inspiration as above (ADR 0004).' },
+  // Direct follow-up request (Ruleset Guide ToC + "Load" sourcebook button)
+  // surfaced that assets/docs/ was reorganized into per-game subfolders
+  // without this catalog ever being updated — these are genuinely new
+  // entries (ironsworn/5LFB/dnd5e's own subfolders had none at all) plus 3
+  // correctly-pathed duplicates of an existing flat-path entry above (same
+  // PDF, new real location — the old entry is left as-is, simply unused).
+  { file: 'assets/docs/ironsworn/Ironsworn-Rulebook.pdf', status: 'integrated', note: 'The Ironsworn character ruleset (data/rulesets.js) and the "Ironsworn Oracles" group (data/tables-fantasy-full.js) — read directly, stats/tracks/oracles original re-authoring, not a transcription.' },
+  { file: 'assets/docs/ironsworn/ironsworn-delve-rulebook-spreads.pdf', status: 'integrated', note: 'The "Ironsworn Delve Oracles" group (data/tables-fantasy-full.js) — Feature/Site Nature/Character/Monstrosity/Trap/Combat Event categories, original re-authoring.' },
+  { file: 'assets/docs/ironsworn/Ironsworn-Assets-Master-Set.pdf', status: 'cited, not yet mined', note: 'Confirmed the real Companion/Path/Combat Talent/Ritual asset types and its own CC-BY licensing while building the Ironsworn ruleset — no Assets-as-cards system exists in this app yet for any ruleset, so its own content isn\'t mined.' },
+  { file: 'assets/docs/5LFB/five-leagues-from-the-borderlands-3e.pdf', status: 'integrated', note: 'Same content lineage as the existing Five Leagues character ruleset/content packs (data/rulesets.js, data/contentPacksManifest.js) — new correctly-pathed entry for the same already-integrated book.' },
+  { file: 'assets/docs/5LFB/Five Leagues - Compendium_Final_Digital.pdf', status: 'in library, not yet used' },
+  { file: 'assets/docs/5LFB/5LDB Warband Sheet US.pdf', status: 'in library, not yet used' },
+  { file: 'assets/docs/dnd5e/SRD_CC_v5.2.1.pdf', status: 'integrated — default genre source', note: 'The dnd5e character ruleset (data/rulesets.js) and the D&D 5e SRD Monsters A-Z content pack (data/contentPacksManifest.js) — Creative Commons (CC-BY-4.0), a different licensing posture than every purchased-rulebook PDF here (see data/rulesets.js\'s own dnd5e entry comment).' },
+  { file: 'assets/docs/Starforged/Starforged-reference-guide.pdf', status: 'integrated', note: 'Same content lineage as the existing flat-path entry above — new correctly-pathed entry for the same already-integrated book (Gear Catalog research pass, ADR 0012).' },
+  { file: 'assets/docs/5PFH/5PFH-Five-Parsecs-From-Home-v3.pdf', status: 'integrated', note: 'Same content lineage as the existing flat-path entry above — new correctly-pathed entry for the same already-integrated book (character sheets, combat dice model, Trade contract taxonomy).' },
+  { file: 'assets/docs/Traveller/Traveller-2e-Core-Rulebook.pdf', status: 'integrated', note: 'Same content lineage as the existing flat-path entry above — new correctly-pathed entry for the same already-integrated book (Gear Catalog research pass).' },
 ];

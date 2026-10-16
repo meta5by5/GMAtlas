@@ -263,7 +263,18 @@ export function defaultCampaign(now = new Date().toISOString()) {
     // posture as ensureOracles/ensureFactionFields elsewhere in this repo)
     // rather than here, so an old campaign's single `{text}` shape
     // migrates losslessly into the first root doc the first time it's read.
-    guide: { docs: [], activeId: null },
+    guide: {
+      docs: [], activeId: null,
+      // Ruleset ids whose default Guide ToC (data/rulesetGuideDefaults.js,
+      // domain/rulesetGuide.js's ensureRulesetGuideDefault) has already
+      // been auto-seeded at least once for this campaign — a one-time
+      // courtesy, not an enforced invariant: a GM who later deletes that
+      // entry keeps it deleted (never silently resurrected on the next
+      // load/switch), matching the direct instruction "If the Guide entry
+      // was removed or missing, prompt the user to create one" rather than
+      // just re-adding it.
+      seededRulesets: [],
+    },
 
     settings: {
       genre: 'Hostile',  // genre-aware, not genre-locked
@@ -323,6 +334,16 @@ export function defaultCampaign(now = new Date().toISOString()) {
       // scenesPerRound to surface a Co-Pilot nudge. Purely a reminder —
       // never auto-advances a faction turn (Article II).
       factionPacing: { scenesPerRound: 3, scenesSinceLastRound: 0 },
+      // Settings -> Factions tab: whether the Faction/Corporate Powers
+      // (or fantasy's Faction Turns)/Faction Encounter oracle table groups
+      // appear in the Oracle drawer's browse tree at all (domain/oracles.js's
+      // excludeFactionOracleTables). Campaign-scoped (not profile-scoped,
+      // matching factionPacing just above) since it's a per-campaign GM
+      // preference about oracle clutter, not a ruleset capability. Default
+      // true (visible) — only hides the browse tree; Faction Events/Faction
+      // Conflict's own generators roll from these tables directly and are
+      // unaffected either way.
+      factionOraclesEnabled: true,
       // Which track-field names "headline" on a collapsed Party Roster
       // member row as small right-aligned counters (direct request — "GM
       // picks per-ruleset which fields surface"), matched case-insensitively
@@ -443,8 +464,15 @@ export function defaultAppConfig() {
 // branchTo }] }] per group, same as the old profile-scoped shape — see
 // domain/turnStepLists.js (definition mutators) and domain/turnSteps.js
 // (play-position functions, now slot-parameterized).
+// `ruleset` (additive, default null) tags a list with a Game System id
+// (rulesConstitution.js's RULES_PROVIDERS ids, e.g. 'fivepfh'/'planetfall'/
+// 'fiveleagues') or a Genre Pack id for an unaligned/generic list — read by
+// domain/rulesProfiles.js's matchesProfileRuleset to filter the Rulesets
+// tab's Turn Step sub-tab list-switcher by the profile currently being
+// edited. null means "always shown, never hidden" (every GM-created custom
+// list defaults to this). migrate.js backfills the 3 seeded lists by name.
 export function defaultTurnStepList(name = 'New List', now = new Date().toISOString()) {
-  return { id: uid('tsl'), name, createdAt: now, updatedAt: now, groups: [] };
+  return { id: uid('tsl'), name, createdAt: now, updatedAt: now, groups: [], ruleset: null };
 }
 
 /** Deep-merge a partial document onto defaults so old/partial docs stay valid. */

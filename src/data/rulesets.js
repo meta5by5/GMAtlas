@@ -13,7 +13,13 @@ export const RULESETS = [
   {
     id: 'starforged',
     label: 'Starforged',
-    doc: 'assets/docs/Starforged-reference-guide.pdf',
+    // Repointed to the real current subfolder location (Ruleset Guide ToC
+    // + "Load" sourcebook button follow-up) — assets/docs/ was reorganized
+    // into per-game subfolders and this stale flat path no longer exists on
+    // disk; see data/referenceLibraryManifest.js's own comment on why the
+    // OLD catalog entry at that stale path is left in place, unused, rather
+    // than repointed in-place.
+    doc: 'assets/docs/Starforged/Starforged-reference-guide.pdf',
     characterTemplate: {
       attributeRollMethod: 'action', // d6 + stat vs 2d10
       attributeFormat: 'sign', // "+3"
@@ -32,10 +38,76 @@ export const RULESETS = [
       ],
     },
   },
+  // Direct follow-up request: "revise the Ironsworn ruleset to use the
+  // actual Ironsworn rules instead of Starforged" — read directly from
+  // assets/docs/ironsworn/Ironsworn-Rulebook.pdf (Chapter 2, "Character
+  // Basics," p.33-38). Starforged DOES inherit Edge/Heart/Iron/Shadow/Wits
+  // and the d6-vs-2d10 Action Roll verbatim from Ironsworn (confirmed
+  // accurate, not a mix-up) — Starforged is the sci-fi adaptation of this
+  // exact system by the same author — but the earlier version of this
+  // entry was a straight clone of 'starforged' above, which missed two
+  // real mechanical differences the rulebook is explicit about:
+  //  - Momentum is NOT a 0-to-max depleting track like Health/Spirit/
+  //    Supply (trackRow, ui/drawers/index.js, only ever renders a [0,max]
+  //    click-to-set meter) — real Momentum ranges from -6 (minimum
+  //    momentum, p.13) to +10 (max momentum, p.14), starting at +2. Moved
+  //    out of `tracks` into `stats` as a signed, non-rollable attribute
+  //    (attrRow's free-text numeric input has no min/max clamp at all, so
+  //    it genuinely holds -6..+10) instead of a track.
+  //  - Max Momentum (+10, reduced by 1 per marked debility) and Momentum
+  //    Reset (+2, down to +1 with one debility, 0 with more than one) are
+  //    each their OWN recorded value on a real Ironsworn character sheet
+  //    (p.35), not derived — added as their own plain-format attributes.
+  //  - Debilities (Conditions: Wounded/Shaken/Unprepared/Encumbered;
+  //    Banes: Maimed/Corrupted; Burdens: Cursed/Tormented — p.36-38) have
+  //    exactly one MECHANICAL effect on the sheet itself (each marked one
+  //    reduces Max Momentum by 1); the WHICH-debility narrative detail
+  //    belongs in the entity's own Notes field (every entity already has
+  //    one), same posture as every other ruleset here not itemizing its
+  //    own narrative-only state on the stat sheet. "Debilities Marked" is
+  //    a plain count so that mechanical effect stays visible and trackable.
+  // This flat stats/tracks shape (not the `sections` shape D&D 5e uses) is
+  // kept deliberately, matching Starforged/5PFH/Five Leagues' own simple
+  // sheet layout rather than introducing a structurally different template
+  // just for Ironsworn.
+  {
+    id: 'ironsworn',
+    label: 'Ironsworn',
+    doc: 'assets/docs/ironsworn/Ironsworn-Rulebook.pdf',
+    characterTemplate: {
+      attributeRollMethod: 'action', // d6 + stat vs 2d10 — Ironsworn's own Action Roll (p.8), inherited unchanged by Starforged
+      attributeFormat: 'sign', // "+3"
+      stats: [
+        // "To start, arrange these bonuses across your five stats in any
+        // order: 3, 2, 2, 1, 1" (p.33) — a player's own chargen choice,
+        // not a fixed-per-stat array; defaulted to 1 each like every other
+        // ruleset's own placeholder starting values here.
+        { key: 'Edge', value: 1 },
+        { key: 'Heart', value: 1 },
+        { key: 'Iron', value: 1 },
+        { key: 'Shadow', value: 1 },
+        { key: 'Wits', value: 1 },
+        { key: 'Momentum', value: 2, rollMethod: 'none', format: 'sign' },
+        { key: 'Max Momentum', value: 10, rollMethod: 'none', format: 'plain' },
+        { key: 'Momentum Reset', value: 2, rollMethod: 'none', format: 'plain' },
+        { key: 'Debilities Marked', value: 0, rollMethod: 'none', format: 'plain' },
+      ],
+      tracks: [
+        // Health/Spirit/Supply: "ranked from 0 to +5... to start, set your
+        // [track] to +5" (p.33-34) — unchanged from Starforged's own
+        // identical ranges (Starforged really did inherit these verbatim).
+        { key: 'Health', value: 5, max: 5 },
+        { key: 'Spirit', value: 5, max: 5 },
+        { key: 'Supply', value: 5, max: 5 },
+      ],
+    },
+  },
   {
     id: '5pfh',
-    label: '5PFH',
-    doc: 'assets/docs/5PFH-Five-Parsecs-From-Home-v3.pdf',
+    label: 'Five Parsecs from Home',
+    // Repointed to the real current subfolder location — see the
+    // 'starforged' entry's own comment above for why.
+    doc: 'assets/docs/5PFH/5PFH-Five-Parsecs-From-Home-v3.pdf',
     characterTemplate: {
       attributeRollMethod: 'flat', // d6 + stat vs target
       attributeTarget: 6,
@@ -59,12 +131,13 @@ export const RULESETS = [
     },
   },
   {
-    // No sourcebook exists in this repo's assets/docs/ (confirmed by the
-    // 2026-07-03 ruleset library review — see rulesConstitution.js's
-    // honesty note) — `doc` is deliberately left unset rather than pointing
-    // at a PDF that isn't here; the Settings drawer shows a plain "no
-    // sourcebook" note instead of a reference link for any ruleset without
-    // one. These stats are original content inspired by classic Traveller's
+    // Stale as of the 2026-07-03 ruleset library review this comment used
+    // to cite: "no sourcebook exists in this repo's assets/docs/" is no
+    // longer true — assets/docs/Traveller/ now has 3 real Traveller 2e
+    // PDFs (Ruleset Guide ToC + "Load" sourcebook button follow-up found
+    // this while mapping assets/docs/'s real per-game subfolders). `doc`
+    // now points at the real core rulebook. These stats remain original
+    // content inspired by classic Traveller's
     // six characteristics, not a transcription: real Traveller stores each
     // as a raw 2-12 score and derives a separate small dice modifier (DM)
     // from it for task checks — using the raw score directly in this app's
@@ -77,7 +150,7 @@ export const RULESETS = [
     // doc comment) — the mechanic this ruleset was added to actually use.
     id: 'traveller',
     label: 'Traveller',
-    doc: null,
+    doc: 'assets/docs/Traveller/Traveller-2e-Core-Rulebook.pdf',
     characterTemplate: {
       attributeRollMethod: 'traveller', // 2d6 + stat vs target
       attributeTarget: 8,
@@ -242,7 +315,7 @@ export const RULESETS = [
   // just to hold one line of text.
   {
     id: 'fiveleagues',
-    label: 'Five Leagues',
+    label: 'Five Leagues from Borderlands',
     doc: 'assets/docs/5LFB/five-leagues-from-the-borderlands-3e.pdf',
     characterTemplate: {
       attributeRollMethod: 'flat', // d6 + stat vs target
@@ -268,6 +341,26 @@ export const RULESETS = [
 export function findRuleset(id) {
   return RULESETS.find((r) => r.id === id) || RULESETS[0];
 }
+
+// Direct bug report: "The new oracle groups for Ironsworn do not show in
+// the Oracle panel. They should show when the default ruleset is
+// Ironsworn." Root cause: shell.js's data-settings-stat-ruleset change
+// handler already auto-syncs Genre Pack to whatever
+// rulesConstitution.js's genrePackIdForRuleset(statRuleset) resolves to
+// (fixing the exact same class of bug for every OTHER ruleset, per that
+// function's own comment) — but Ironsworn is deliberately NOT registered
+// in rulesConstitution.js's RULES_PROVIDERS (it has no Game System
+// Activation/Rules Constitution footprint, by design — see rulesets.js's
+// own `ironsworn` entry comment), so that lookup returns null for it and
+// picking "Ironsworn" from the Game System Ruleset dropdown never flipped
+// Genre Pack to 'fantasy', leaving the Oracle drawer still reading
+// whatever (sci-fi) table set was active before — the Ironsworn Oracle
+// groups live only in FANTASY_FULL_TABLES, so they're not just mis-grouped
+// in that case, they're genuinely absent from the loaded table set.
+// This small, explicit map is the fix, kept OUT of rulesConstitution.js
+// on purpose (no Game System Activation/Licenses footprint for Ironsworn)
+// — shell.js's handler and drawers/index.js's oracle() both consult it.
+export const RULESET_GENRE_PACK_HINTS = { ironsworn: 'fantasy' };
 
 export function rulesetLabel(id) {
   return findRuleset(id).label;

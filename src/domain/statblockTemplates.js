@@ -18,8 +18,8 @@ function ensureOverride(campaign, systemId) {
   if (!campaign.settings.statblockTemplates[systemId]) {
     const merged = getStatblockTemplates(campaign.settings)[systemId];
     campaign.settings.statblockTemplates[systemId] = merged
-      ? { label: merged.label, fields: merged.fields.map((f) => ({ ...f })) }
-      : { label: systemId, fields: [] };
+      ? { label: merged.label, ruleset: merged.ruleset ?? null, fields: merged.fields.map((f) => ({ ...f })) }
+      : { label: systemId, ruleset: null, fields: [] };
   }
   return campaign.settings.statblockTemplates[systemId];
 }
@@ -27,7 +27,7 @@ function ensureOverride(campaign, systemId) {
 /** All templates (system id -> {label, fields}), defaults merged with edits. */
 export function listTemplates(settings) {
   const templates = getStatblockTemplates(settings);
-  return Object.entries(templates).map(([id, t]) => ({ id, label: t.label, fields: t.fields }));
+  return Object.entries(templates).map(([id, t]) => ({ id, label: t.label, ruleset: t.ruleset ?? null, fields: t.fields }));
 }
 
 export function addTemplateSystem(campaign, id, label) {
@@ -35,7 +35,7 @@ export function addTemplateSystem(campaign, id, label) {
   if (!next.settings.statblockTemplates) next.settings.statblockTemplates = {};
   const key = String(id || '').trim().toLowerCase().replace(/\s+/g, '-');
   if (!key || next.settings.statblockTemplates[key]) return next;
-  next.settings.statblockTemplates[key] = { label: label || id, fields: [] };
+  next.settings.statblockTemplates[key] = { label: label || id, ruleset: null, fields: [] };
   return next;
 }
 
