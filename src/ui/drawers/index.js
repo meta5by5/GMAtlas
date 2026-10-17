@@ -123,7 +123,13 @@ const withArticle = (word) => (/^[aeiou]/i.test(word) ? `an ${word}` : `a ${word
 // as if the GM had typed the new value and blurred it — no new per-field
 // wiring needed at any of this helper's call sites, only wrapping the
 // existing <input> markup.
-function numStepper(inputHtml) {
+// Exported for workspace/index.js's Navigator workflow cards (direct
+// follow-up request: "include the Campaign Turn field with the Campaign
+// Workflow addition to Navigator... bundled together wherever deployed")
+// — reused verbatim rather than re-implemented, so the ＋/－ buttons behave
+// identically in both places (same generic [data-num-step] delegated
+// handler already drives every other numStepper in the app).
+export function numStepper(inputHtml) {
   return `<span class="num-stepper">
     ${inputHtml}
     <button type="button" class="icon-btn num-stepper-btn" data-num-step="1" tabindex="-1" title="+1">＋</button>

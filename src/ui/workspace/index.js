@@ -14,12 +14,16 @@ import { getCurrentWhereLocations, factionsInRegion, factionPresenceReasons } fr
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { buildMentionEditorHTML, richToolbarHTML, richToolbarToggleHTML, toolbarCollapsed } from '../mentionEditor.js';
 import { renderFactionEvents } from '../drawers/factionEvents.js';
-import { CONFLICT_STATUS_OPTIONS, helpToggle } from '../drawers/index.js';
+import { CONFLICT_STATUS_OPTIONS, helpToggle, numStepper } from '../drawers/index.js';
+import { getColonyFields } from '../../domain/colony.js';
 import { getGalleryImage } from '../../domain/gallery.js';
 import { openForeshadowing } from '../../domain/foreshadowing.js';
 import { WORLD_FLAG_VALUES, WORLD_FLAG_VALUE_LABEL } from '../../domain/worldFlags.js';
 import { composeNarrativeDraft } from '../../domain/copilot.js';
 import { getNpcSceneState } from '../../domain/scenes.js';
+import { getCurrentTurnStep } from '../../domain/turnSteps.js';
+import { isGameSystemActivated } from '../../data/rulesConstitution.js';
+import { TURN_STEP_ORACLE_LINKS, TURN_STEP_LOCATION_STEPS } from '../../data/turnStepWorkflowMeta.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -755,9 +759,92 @@ export function composerBodyHtml(doc, ui) {
 
 export function navigatorBodyHtml(doc, ui) {
   return `
+    ${navigatorWorkflowBlock(doc, ui)}
     ${narrativeComposerBlock(doc, ui)}
     ${dashboardTrackersBlock(doc)}
   `;
+}
+
+// Direct follow-up request: "Incorporate the campaign workflow
+// functionality of 5LFB and 5PFH currently in Campaign Guide under the
+// Campaign panel into the Navigator as a workflow manager... The Navigator
+// should be the guide for users to step through decisions." Placed FIRST
+// (above Scene Summary) per that framing. Deliberately a DUPLICATE, not a
+// replacement — reuses the Campaign panel's own existing data-attributes
+// for Prev/Next (data-turn-step-next/-prev et al, drawers/index.js's
+// TURN_STEP_NAV_ATTRS) and "Start"/add-to-journal (data-turn-step-start et
+// al) verbatim, so advancing or logging a step from here has the exact
+// same effect as from the Campaign panel — one shared shell.js handler per
+// action, not a second parallel implementation. Each slot renders its own
+// card only when BOTH its Game System is activated (same gate the
+// Campaign panel's own COLONY_PANEL_TABS already uses) AND it actually has
+// a current step (getCurrentTurnStep returns null with no list assigned).
+// turnAttr/turnValue (direct follow-up request: "include the Campaign Turn
+// field with the Campaign Workflow addition to Navigator... bundled
+// together wherever deployed") — Colony's Campaign Turn is a real
+// setColonyField-backed campaign field (same data-colony-field="campaignTurn"
+// attribute the Campaign panel's own campaignTurnRowHtml uses, including
+// shell.js's own "log a Journal entry when it actually changes" behavior
+// on that exact attribute); Starship/Warband are each a simpler
+// party.<slot>CampaignTurn counter with no such logging — both asymmetries
+// are the Campaign panel's own existing behavior, unchanged, just reused
+// verbatim here rather than re-implemented.
+const WORKFLOW_SLOTS = [
+  { slot: 'colony', system: 'planetfall', label: 'Colony', nav: ['data-turn-step-prev', 'data-turn-step-next'], start: 'data-turn-step-start', turnAttr: 'data-colony-field="campaignTurn"', turnValue: (doc) => getColonyFields(doc).campaignTurn },
+  { slot: 'starship', system: 'fivepfh', label: 'Starship', nav: ['data-starship-turn-step-prev', 'data-starship-turn-step-next'], start: 'data-starship-turn-step-start', turnAttr: 'data-starship-campaign-turn', turnValue: (doc) => (doc.party && doc.party.starshipCampaignTurn) || 0 },
+  { slot: 'warband', system: 'fiveleagues', label: 'Warband', nav: ['data-warband-turn-step-prev', 'data-warband-turn-step-next'], start: 'data-warband-turn-step-start', turnAttr: 'data-warband-campaign-turn', turnValue: (doc) => (doc.party && doc.party.warbandCampaignTurn) || 0 },
+];
+
+function navigatorWorkflowStepCard(doc, ui, def) {
+  const current = getCurrentTurnStep(doc, def.slot);
+  if (!isGameSystemActivated(doc, def.system) || !current) return '';
+  const stepId = current.step.id;
+  const [prevAttr, nextAttr] = def.nav;
+  const oracleTags = TURN_STEP_ORACLE_LINKS[stepId];
+  const oracleBtn = oracleTags
+    ? `<button type="button" class="icon-btn icon-mono" data-turnstep-oracle-link="${esc(stepId)}" title="Jump to relevant Oracle table(s): ${oracleTags.map((t) => esc(t)).join(', ')}" aria-label="Jump to relevant Oracle tables">🔮</button>`
+    : '';
+  const mapLink = ui && ui.navigatorStepMapLink && ui.navigatorStepMapLink[def.slot];
+  const mapRow = TURN_STEP_LOCATION_STEPS.has(stepId) ? `
+    <div class="turn-step-map-row">
+      ${mapLink && mapLink.stepId === stepId
+        ? `<button type="button" class="chip sm" data-map-open="map:${esc(mapLink.mapType)}:${esc(mapLink.mapId)}" title="Open ${esc(mapLink.mapName)}">🗺️ ${esc(mapLink.mapName)}</button>
+           <button type="button" class="icon-btn" data-turnstep-map-pick="${esc(def.slot)}::${esc(stepId)}" title="Pick a different map">change</button>`
+        : `<button type="button" class="chip sm" data-turnstep-map-pick="${esc(def.slot)}::${esc(stepId)}">🗺️ Pick or create a map</button>`}
+    </div>` : '';
+  const turnValue = def.turnValue(doc);
+  return `
+    <div class="workflow-step-card">
+      <div class="colony-turn-row">
+        <label class="field-label">Campaign Turn
+          ${numStepper(`<input type="number" ${def.turnAttr} value="${esc(turnValue == null ? 0 : turnValue)}">`)}
+        </label>
+        <label class="field-label">${esc(def.label)} Turn Step
+          <span class="turn-step-nav">
+            <button type="button" class="icon-btn" ${prevAttr} title="Previous Step" ${current.hasPrev ? '' : 'disabled'}>◂</button>
+            <b class="turn-step-current">${esc(current.group.label)} ${current.index + 1}/${current.total}</b>
+            <button type="button" class="icon-btn" ${nextAttr} title="${current.hasNext ? 'Next Step' : 'Start the next Campaign Turn'}">▸</button>
+          </span>
+        </label>
+      </div>
+      <div class="turn-step-text-row">
+        <div class="turn-step-text-body" data-turn-step-text-body>${buildMentionEditorHTML(doc, current.step.text)}</div>
+        ${oracleBtn}
+      </div>
+      ${mapRow}
+      <button type="button" class="btn ghost sm" ${def.start}>＋ Add to Journal</button>
+    </div>`;
+}
+
+function navigatorWorkflowBlock(doc, ui) {
+  const cards = WORKFLOW_SLOTS.map((def) => navigatorWorkflowStepCard(doc, ui, def)).join('');
+  if (!cards) return '';
+  const helpKey = 'nav:workflow';
+  return `<div class="threads navigator-workflow">
+    <div class="threads-head"><h3>Campaign Workflow</h3>${helpToggle(helpKey)}</div>
+    ${wsHelpBody(helpKey, "Steps through the same Campaign Turn + 5PFH/Planetfall/Five Leagues Turn Step sequence as the Campaign panel's own Colony/Starship/Warband tabs — a second, parallel way to walk the same steps, not a replacement; editing either copy of Campaign Turn updates the same value. 🔮 jumps to a suggested Oracle table when one applies; a location-flavored step offers to pick or create a map, whose link travels with the step once you add it to the Journal.", ui)}
+    ${cards}
+  </div>`;
 }
 
 // Threat/Mystery/Stress/Resources/Reputation — moved out of the shared

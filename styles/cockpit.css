@@ -3178,6 +3178,16 @@ input[type="number"] { -moz-appearance: textfield; }
 .turn-step-text-body { flex: 1 1 auto; min-width: 0; }
 .turn-step-text-row .btn { flex: 0 0 auto; }
 
+/* Navigator workflow manager (direct follow-up request: bring the
+   Campaign panel's own Turn Step walkthrough into the Navigator as a
+   second, parallel way to step through it) — .workflow-step-card reuses
+   the Campaign panel's own .turn-step-* classes above for its nav row/
+   current-step label/text row verbatim, plus its own border+spacing
+   since it's not living inside a .colony-fields grid here. */
+.navigator-workflow .workflow-step-card + .workflow-step-card { margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--border); }
+.workflow-step-card .btn { margin-top: var(--sp-2); }
+.turn-step-map-row { display: flex; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-2); }
+
 /* Turn Step Settings tab — each group's reorderable step list. flex-wrap
    (direct follow-up request: "revise the 'Move To' and 'Branches to'
    dropdowns to be right-aligned icons that open a dropdown on the next

@@ -1932,6 +1932,17 @@ test('addNote never spawns a phantom entity for a document mention with a page a
   assert.equal(camp.documents.library.length, 1, 'the document itself is untouched, not duplicated');
 });
 
+test('addNote never spawns a phantom entity for a map mention (Navigator workflow manager\'s own "include the map link with the narrative content") — the mention resolves to the real map instead, same posture as the document case above', () => {
+  let camp = defaultCampaign();
+  const r = createHexMap(camp, 'The Borderlands');
+  camp = r.campaign;
+  camp = addNote(camp, 'Encounter Locations — determined to be a Monster Lair.\n\n🗺️ @[The Borderlands]', 'Turn Step — Adventuring Stage 1/5');
+  assert.equal(listEntities(camp).length, 0, 'no entity created at all — the mention resolves to the hexcrawl map');
+  assert.equal(camp.hexcrawls.maps.length, 1, 'the map itself is untouched, not duplicated');
+  assert.equal((camp.documents && camp.documents.library || []).length, 0, 'no phantom same-titled library note either — linkDocumentMentions must also skip a name that resolves to a map, not just linkMentions');
+  assert.equal(camp.journal.length, 1);
+});
+
 test('editContextText links mentions from the situation field', () => {
   let camp = defaultCampaign();
   camp = editContextText(camp, 'what', 'situation', 'Find @Medic before @Security arrives');
@@ -3545,6 +3556,60 @@ test('every tag entityFieldOracleLinks.js references has at least one seeded tab
 test('oracleLinkTagsFor resolves a known "entityType.field" key and returns null for an unlinked one', () => {
   assert.deepEqual(oracleLinkTagsFor('faction', 'fear'), ['fear']);
   assert.equal(oracleLinkTagsFor('npc', 'name'), null);
+});
+
+// --- Navigator workflow manager: per-step oracle links/location steps ------
+// TURN_STEPS_5PFH/PLANETFALL_TURN_STEPS/TURN_STEPS_FIVE_LEAGUES are already
+// imported further down this file (backfillTurnStepListInventory's own
+// tests).
+import { TURN_STEP_ORACLE_LINKS, TURN_STEP_LOCATION_STEPS } from '../src/data/turnStepWorkflowMeta.js';
+
+function allRealTurnStepIds() {
+  const ids = new Set();
+  for (const list of [TURN_STEPS_5PFH, PLANETFALL_TURN_STEPS, TURN_STEPS_FIVE_LEAGUES]) {
+    for (const group of list) for (const step of group.steps) ids.add(step.id);
+  }
+  return ids;
+}
+
+test('every tag turnStepWorkflowMeta.js references has at least one seeded table (same discipline entityFieldOracleLinks.js\'s own tags are held to) — no step\'s 🔮 link can ever open to an empty filtered view', () => {
+  const seededTags = new Set(Object.values(ORACLE_TAG_SEEDS).flat());
+  for (const [stepId, tags] of Object.entries(TURN_STEP_ORACLE_LINKS)) {
+    for (const tag of tags) assert.ok(seededTags.has(tag), `${stepId} -> "${tag}" should have at least one seeded table`);
+  }
+});
+
+test('every id in TURN_STEP_ORACLE_LINKS/TURN_STEP_LOCATION_STEPS is a real step id in one of the 3 real Turn Step Lists (guards against a typo\'d id silently doing nothing)', () => {
+  const realIds = allRealTurnStepIds();
+  for (const stepId of Object.keys(TURN_STEP_ORACLE_LINKS)) assert.ok(realIds.has(stepId), `${stepId} (TURN_STEP_ORACLE_LINKS) is a real step id`);
+  for (const stepId of TURN_STEP_LOCATION_STEPS) assert.ok(realIds.has(stepId), `${stepId} (TURN_STEP_LOCATION_STEPS) is a real step id`);
+});
+
+// --- Navigator workflow manager: maps as a resolvable @mention target -----
+// createBattlemap/createHexMap/createDungeonMap are already imported by
+// their own dedicated test sections further down this file.
+import { findMapByName, resolvedMapMentionNames } from '../src/domain/mapMentions.js';
+
+test('findMapByName resolves a real map by name (case-insensitive) across all 3 map types, checked in battlemap/hexcrawl/dungeoncrawl order, and returns null for no match', () => {
+  let camp = defaultCampaign();
+  let r = createBattlemap(camp, 'The Bridge'); camp = r.campaign; const bmId = r.id;
+  r = createHexMap(camp, 'The Borderlands'); camp = r.campaign; const hexId = r.id;
+  r = createDungeonMap(camp, 'Sunken Crypt', 'dungeon'); camp = r.campaign; const dunId = r.id;
+
+  assert.deepEqual(findMapByName(camp, 'the bridge'), { tabKey: `map:battlemap:${bmId}`, title: 'The Bridge', mapType: 'battlemap', mapId: bmId });
+  assert.deepEqual(findMapByName(camp, 'THE BORDERLANDS'), { tabKey: `map:hexcrawl:${hexId}`, title: 'The Borderlands', mapType: 'hexcrawl', mapId: hexId });
+  assert.deepEqual(findMapByName(camp, 'Sunken Crypt'), { tabKey: `map:dungeoncrawl:${dunId}`, title: 'Sunken Crypt', mapType: 'dungeoncrawl', mapId: dunId });
+  assert.equal(findMapByName(camp, 'Nonexistent Place'), null);
+});
+
+test('resolvedMapMentionNames finds every @[...] name in text that already resolves to a real map, ignoring an unresolved one, understanding @[Label|Target] and #page suffixes', () => {
+  let camp = defaultCampaign();
+  const r = createHexMap(camp, 'The Borderlands');
+  camp = r.campaign;
+  const text = 'The party travels to @[The Borderlands] via @[See the map|The Borderlands#3], but @[Nowhere Real] is unresolved.';
+  const names = resolvedMapMentionNames(camp, text);
+  assert.ok(names.has('the borderlands'));
+  assert.ok(!names.has('nowhere real'));
 });
 
 test('the Stars Without Number oracle group (Faction Action, World Tag — original content, no sourcebook) rolls correctly and is bucketed under Characters & Society, not Other', () => {

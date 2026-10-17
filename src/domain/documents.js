@@ -268,7 +268,7 @@ export function parseDocumentMentions(text) {
 // reported bug (stray entity-named entries cluttering the Documents drawer).
 // A name that resolves to neither an existing document nor an existing
 // entity still gets auto-created as a document, same as before.
-export function linkDocumentMentions(campaign, text) {
+export function linkDocumentMentions(campaign, text, { skip } = {}) {
   const names = parseDocumentMentions(text);
   if (!names.length) return campaign;
   const next = clone(campaign);
@@ -279,6 +279,13 @@ export function linkDocumentMentions(campaign, text) {
     const key = name.trim().toLowerCase();
     if (byTitle.has(key)) continue;
     if (findByName(next, name)) continue;
+    // Navigator workflow manager (direct follow-up request) — a name that
+    // already resolves to a Battlemap/Hexcrawl/Dungeon Crawl map (checked
+    // by the caller, which already has this Set handy for linkMentions'
+    // own skip option just above) must never spawn a phantom same-titled
+    // document either, same reasoning as the entity/Reference-Library
+    // skips right below.
+    if (skip && skip.has(key)) continue;
     // Also skip a name that already matches a Reference Library doc (a
     // build artifact, never something to "create") — missing this let a
     // phantom same-titled text note get created anyway, which then

@@ -55,7 +55,7 @@ import {
   updateBattlemapIcon, removeBattlemapIcon,
 } from '../domain/battlemaps.js';
 import {
-  getHexMap, getActiveHexMap, getHex, createHexMap, renameHexMap, deleteHexMap, setActiveHexMap,
+  listHexMaps, getHexMap, getActiveHexMap, getHex, createHexMap, renameHexMap, deleteHexMap, setActiveHexMap,
   setHexGeography, setHexLocation, clearHexLocation, setHexThreat, clearHexThreat, setHexNotes,
   axialToPixel, pixelToAxial, HEX_SIZE, nextOpenThreatVertex,
   addHexRiverSegment, clearHexRivers, removeHexRiverSegment, setHexLake, edgeNeighbor,
@@ -133,6 +133,7 @@ import { roll3d } from './diceBox3d.js';
 import { renderSearchPanel } from './searchPanel.js';
 import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
 import { isModuleVisible, setModuleEnabled, setStoryboardPosition, updateProfileRuleset, applyProfileDraft, resolvePositionContentId } from '../domain/rulesProfiles.js';
+import { TURN_STEP_ORACLE_LINKS, TURN_STEP_LOCATION_STEPS } from '../data/turnStepWorkflowMeta.js';
 import { genrePackIdForRuleset } from '../data/rulesConstitution.js';
 import { RULESET_GENRE_PACK_HINTS, findRuleset } from '../data/rulesets.js';
 import { rulesetGuideDocExists, ensureRulesetGuideDefault } from '../domain/rulesetGuide.js';
@@ -295,7 +296,35 @@ function withTurnStepListsOverlay(campaign, mutatorFn) {
   return next;
 }
 function applyTurnStepMutation(slot, mutatorFn) {
+  // Navigator workflow manager: only ever called by a Prev/Next click
+  // (never by "Start"/add-to-journal, which has its own clear — see
+  // logTurnStepToJournal) — clears this slot's ephemeral map link
+  // whenever the current step actually changes, so a map picked for a
+  // step the GM has now moved away from doesn't keep showing "under the
+  // step" for a DIFFERENT step that happens to become current next.
+  if (navigatorStepMapLink[slot]) navigatorStepMapLink = { ...navigatorStepMapLink, [slot]: null };
   return store.update((d) => withTurnStepListsOverlay(d, (c) => mutatorFn(c, slot)));
+}
+// Shared by the Campaign panel's own "▶ Start" buttons (data-turn-step-
+// start et al) AND the Navigator workflow manager's "+ Add to Journal" —
+// deliberately the SAME handler for both (they're the same action from two
+// surfaces, not two separate implementations). Direct instruction: "When a
+// Campaign step involving a location is added to the journal, include the
+// map link with the narrative content" — if navigatorStepMapLink has a map
+// picked for THIS slot's CURRENT step, a real @[Map Name] mention
+// (resolves via domain/mapMentions.js the moment this text is logged) is
+// appended before logging, and the ephemeral link is cleared — it's now
+// baked into the Journal text, nothing left to show "under the step."
+function logTurnStepToJournal(slot) {
+  const current = getCurrentTurnStep(store.get(), slot);
+  if (!current) return;
+  const mapLink = navigatorStepMapLink[slot];
+  const text = (mapLink && mapLink.stepId === current.step.id)
+    ? `${current.step.text}\n\n🗺️ @[${mapLink.mapName}]`
+    : current.step.text;
+  if (mapLink && mapLink.stepId === current.step.id) navigatorStepMapLink = { ...navigatorStepMapLink, [slot]: null };
+  updateAndOpenJournal((d) => addNote(d, text, `Turn Step — ${current.group.label} ${current.index + 1}/${current.total}`));
+  toast('Step logged to Journal');
 }
 
 // Same fallback shape as store.js's own structuredCloneSafe — most runtimes
@@ -816,6 +845,13 @@ let searchQuery = '';
 //   entityType 'system' — mode 'system', scope null — Locations tagged
 //     #system; selecting one calls setSceneSystem (scenes.js).
 let entityPicker = null;
+// Navigator workflow manager (direct follow-up request) — which map is
+// currently linked to each slot's CURRENT step, ephemeral (never
+// persisted — a map link only lives from the moment it's picked until
+// "+ Add to Journal" bakes it into a real @[Map Name] mention in the
+// logged text, or the GM advances past that step). null means no map
+// picked yet for that slot's current step.
+let navigatorStepMapLink = { colony: null, starship: null, warband: null };
 let oracleEditorOpen = new Set(); // ephemeral — which oracle tables' entry editors are expanded
 let oracleTagEditorOpen = new Set(); // ephemeral — which oracle tables' TAG editors are expanded (docs/adr/0016), hidden by default
 let oracleTagFilter = null; // ephemeral — array of tags a field's 🔮 link jumped here with, or null for the ordinary text-filtered view (mutually exclusive with oracleFilter)
@@ -3260,6 +3296,78 @@ function onClick(ev) {
     if (tags) { oracleTagFilter = tags; oracleFilter = ''; openDrawerTab('oracle'); render(); }
     return;
   }
+  // Navigator workflow manager's own per-step 🔮 link (data/
+  // turnStepWorkflowMeta.js's TURN_STEP_ORACLE_LINKS) — identical
+  // open-filtered-Oracle-drawer mechanic as data-oracle-field-link above,
+  // just keyed by step id instead of "entityType.field".
+  const turnStepOracleLink = hit('[data-turnstep-oracle-link]');
+  if (turnStepOracleLink) {
+    const tags = TURN_STEP_ORACLE_LINKS[turnStepOracleLink.dataset.turnstepOracleLink];
+    if (tags) { oracleTagFilter = tags; oracleFilter = ''; openDrawerTab('oracle'); render(); }
+    return;
+  }
+  // Mention-linked Battlemap/Hexcrawl/Dungeon Crawl map (domain/
+  // mapMentions.js) — tabKey is "map:<type>:<id>"; set that map type's own
+  // active map, then open its drawer, mirroring data-doc-open/
+  // data-open-entity's own "resolve then open" shape for the third
+  // mention-resolution branch.
+  const mapOpen = hit('[data-map-open]');
+  if (mapOpen) {
+    const [, mapType, mapId] = mapOpen.dataset.mapOpen.split(':');
+    if (mapType === 'battlemap') store.update((d) => setActiveBattlemap(d, mapId));
+    else if (mapType === 'hexcrawl') store.update((d) => setActiveHexMap(d, mapId));
+    else if (mapType === 'dungeoncrawl') store.update((d) => setActiveDungeonMap(d, mapId));
+    else return;
+    openDrawerTab(mapType);
+    return render();
+  }
+  // Navigator workflow manager's own "🗺️ Pick or create a map" / "change"
+  // button — opens the generic entityPicker overlay with a new
+  // 'turnstep-map' kind (see renderEntityPickerOverlay/commitEntityPickerPick).
+  const turnStepMapPick = hit('[data-turnstep-map-pick]');
+  if (turnStepMapPick) {
+    const [slot, stepId] = turnStepMapPick.dataset.turnstepMapPick.split('::');
+    entityPicker = { entityType: 'turnstep-map', mode: 'turnstep-map', scope: { slot, stepId }, query: '' };
+    renderEntityPickerOverlay();
+    const inp = root.querySelector('[data-entity-picker-query]');
+    if (inp) { inp.value = ''; inp.focus(); }
+    return;
+  }
+  // The turnstep-map picker's own 3 type-choice "Create New" buttons —
+  // close the picker overlay, then open the SAME real "+ New Map"
+  // openInlinePrompt flow each map drawer's own add button already uses,
+  // with meta.turnStepLink carrying the scope forward so
+  // commitInlinePrompt's existing battlemap-add/hexcrawl-add/
+  // dungeoncrawl-add branches can also set navigatorStepMapLink once the
+  // map is actually created (see those branches below).
+  const tsMapCreateBm = hit('[data-turnstep-map-create-battlemap]');
+  if (tsMapCreateBm) {
+    const turnStepLink = entityPicker && entityPicker.scope;
+    entityPicker = null; renderEntityPickerOverlay();
+    openInlinePrompt('battlemap-add', { label: 'Map name', placeholder: 'e.g. Docking Bay 3', meta: { turnStepLink }, anchorRect: tsMapCreateBm.getBoundingClientRect() });
+    return;
+  }
+  const tsMapCreateHex = hit('[data-turnstep-map-create-hexcrawl]');
+  if (tsMapCreateHex) {
+    const turnStepLink = entityPicker && entityPicker.scope;
+    entityPicker = null; renderEntityPickerOverlay();
+    openInlinePrompt('hexcrawl-add', { label: 'Map name', placeholder: 'e.g. The Borderlands', meta: { turnStepLink }, anchorRect: tsMapCreateHex.getBoundingClientRect() });
+    return;
+  }
+  const tsMapCreateDun = hit('[data-turnstep-map-create-dungeoncrawl]');
+  if (tsMapCreateDun) {
+    const turnStepLink = entityPicker && entityPicker.scope;
+    entityPicker = null; renderEntityPickerOverlay();
+    openInlinePrompt('dungeoncrawl-add', {
+      anchorRect: tsMapCreateDun.getBoundingClientRect(),
+      meta: { turnStepLink },
+      fields: [
+        { key: 'name', label: 'Map name', placeholder: 'e.g. The Sunken Crypt', value: '' },
+        { key: 'pack', label: 'Tile format', type: 'select', value: 'dungeon', options: DUNGEON_CRAWL_PACKS.map((p) => ({ value: p.key, label: p.label })) },
+      ],
+    });
+    return;
+  }
 
   // --- Guide tree (docs/adr/0017-multi-doc-guide-tree.md) ------------------
   const guideNodeSelect = hit('[data-guide-node-select]');
@@ -5302,28 +5410,13 @@ function onClick(ev) {
   // own description to the Journal (via addNote, same as any other note —
   // its @[Label|Target] mentions render as real links there too), rather
   // than only toasting an acknowledgment with nothing actually happening.
-  if (hit('[data-turn-step-start]')) {
-    const current = getCurrentTurnStep(store.get(), 'colony');
-    if (!current) return;
-    updateAndOpenJournal((d) => addNote(d, current.step.text, `Turn Step — ${current.group.label} ${current.index + 1}/${current.total}`));
-    return toast('Step logged to Journal');
-  }
+  if (hit('[data-turn-step-start]')) return logTurnStepToJournal('colony');
   // Starship tab's own "Start" (direct follow-up request — its Step Text
   // row mirrors Colony's exactly, slot 'starship').
-  if (hit('[data-starship-turn-step-start]')) {
-    const current = getCurrentTurnStep(store.get(), 'starship');
-    if (!current) return;
-    updateAndOpenJournal((d) => addNote(d, current.step.text, `Turn Step — ${current.group.label} ${current.index + 1}/${current.total}`));
-    return toast('Step logged to Journal');
-  }
+  if (hit('[data-starship-turn-step-start]')) return logTurnStepToJournal('starship');
   // Warband tab's own "Start" (Five Leagues from the Borderlands — its
   // Step Text row mirrors Colony's/Starship's exactly, slot 'warband').
-  if (hit('[data-warband-turn-step-start]')) {
-    const current = getCurrentTurnStep(store.get(), 'warband');
-    if (!current) return;
-    updateAndOpenJournal((d) => addNote(d, current.step.text, `Turn Step — ${current.group.label} ${current.index + 1}/${current.total}`));
-    return toast('Step logged to Journal');
-  }
+  if (hit('[data-warband-turn-step-start]')) return logTurnStepToJournal('warband');
   // Crew Tasks box (Daily Life step 2, direct follow-up request) — picking
   // a task button just records the pick (ephemeral, nothing committed yet);
   // Log is the one action that actually performs it.
@@ -8676,10 +8769,26 @@ function commitInlinePrompt() {
   } else if (kind === 'mention-page') {
     applyMentionPage(meta.mentionEl, value);
   } else if (kind === 'battlemap-add') {
-    store.update((d) => createBattlemap(d, value).campaign);
+    let newId = null;
+    store.update((d) => { const r = createBattlemap(d, value); newId = r.id; return r.campaign; });
+    // Navigator workflow manager (direct instruction: "Add choice to
+    // select from a list or create a new map") — this same "+ New Map"
+    // flow is reused verbatim from the turn-step map picker's own "Create
+    // New Battlemap" button, which threads meta.turnStepLink through;
+    // every OTHER caller of this inline-prompt kind passes no such meta,
+    // so this is a no-op for them.
+    // store.update() above already notified subscribers (render()) BEFORE
+    // this line runs, since navigatorStepMapLink lives outside the
+    // campaign doc notify() fires on — an explicit render() is needed here
+    // too, or the just-picked map link silently wouldn't show until some
+    // unrelated later render (same reasoning as turnsteplist-create's own
+    // deferred-id-plus-render() above).
+    if (meta && meta.turnStepLink && newId) { navigatorStepMapLink = { ...navigatorStepMapLink, [meta.turnStepLink.slot]: { stepId: meta.turnStepLink.stepId, mapType: 'battlemap', mapId: newId, mapName: value.trim() || 'New Map' } }; render(); }
   } else if (kind === 'hexcrawl-add') {
     hexcrawlCamera = { scale: 1, x: 0, y: 0 }; hexcrawlSelectedHex = null; hexcrawlPlacingIcon = null; hexcrawlRiverStart = null; hexcrawlRoadStart = null;
-    store.update((d) => createHexMap(d, value).campaign);
+    let newId = null;
+    store.update((d) => { const r = createHexMap(d, value); newId = r.id; return r.campaign; });
+    if (meta && meta.turnStepLink && newId) { navigatorStepMapLink = { ...navigatorStepMapLink, [meta.turnStepLink.slot]: { stepId: meta.turnStepLink.stepId, mapType: 'hexcrawl', mapId: newId, mapName: value.trim() || 'New Map' } }; render(); }
   } else if (kind === 'hexcrawl-rename') {
     store.update((d) => renameHexMap(d, meta.id, value));
   } else if (kind === 'dungeoncrawl-add') {
@@ -8690,6 +8799,7 @@ function commitInlinePrompt() {
       newMapId = r.id;
       return r.campaign;
     });
+    if (meta && meta.turnStepLink && newMapId) { navigatorStepMapLink = { ...navigatorStepMapLink, [meta.turnStepLink.slot]: { stepId: meta.turnStepLink.stepId, mapType: 'dungeoncrawl', mapId: newMapId, mapName: values.name.trim() || 'New Map' } }; render(); }
     // Direct follow-up request: "When creating the location, also create
     // the map record and link the two" — offering the Location lookup
     // right after naming a brand-new map, rather than making the GM find
@@ -9357,6 +9467,20 @@ function commitEntityPickerPick(picker, id) {
       return next;
     });
   }
+  if (picker.entityType === 'turnstep-map') {
+    // Navigator workflow manager's map picker, existing-map branch — id's
+    // own newId() prefix (bm_/hex_/dun_, each namespace unique) is enough
+    // to know which real map object to fetch; never trusts the synthetic
+    // glyph-prefixed .name renderEntityPickerOverlay's own candidate list
+    // used for display. Purely ephemeral (navigatorStepMapLink is never
+    // persisted) — reassign + re-render directly, no store.update needed.
+    const { slot, stepId } = picker.scope || {};
+    const doc = store.get();
+    const mapType = id.startsWith('bm_') ? 'battlemap' : id.startsWith('hex_') ? 'hexcrawl' : id.startsWith('dun_') ? 'dungeoncrawl' : null;
+    const map = mapType === 'battlemap' ? getBattlemap(doc, id) : mapType === 'hexcrawl' ? getHexMap(doc, id) : mapType === 'dungeoncrawl' ? getDungeonMap(doc, id) : null;
+    if (slot && map) navigatorStepMapLink = { ...navigatorStepMapLink, [slot]: { stepId, mapType, mapId: id, mapName: map.name } };
+    return renderDrawerBody();
+  }
   if (picker.entityType === 'hexcrawl-location') {
     const { mapId, q, r } = picker.scope || {};
     return store.update((d) => setHexLocation(d, mapId, q, r, id));
@@ -9490,7 +9614,7 @@ const ENTITY_PICKER_CREATE_TYPE = {
 };
 function entityPickerCreateType(picker) {
   if (!picker) return null;
-  if (picker.entityType === 'hexcrawl-location' || picker.entityType === 'colony-encounter' || picker.entityType === 'hexcrawl-vertex-conflict') return null;
+  if (picker.entityType === 'hexcrawl-location' || picker.entityType === 'colony-encounter' || picker.entityType === 'hexcrawl-vertex-conflict' || picker.entityType === 'turnstep-map') return null;
   if (Object.prototype.hasOwnProperty.call(ENTITY_PICKER_CREATE_TYPE, picker.entityType)) return ENTITY_PICKER_CREATE_TYPE[picker.entityType];
   // The catch-all NPC-role pickers (protagonist/antagonist/bystander,
   // renderEntityPickerOverlay's own final else branch) all create an npc.
@@ -9669,6 +9793,23 @@ function renderEntityPickerOverlay() {
     const dismissed = new Set(scene ? (scene.dismissedFactionIds || []) : []);
     candidates = listEntities(doc, ['faction']).filter((f) => !seen.has(f.id) || dismissed.has(f.id));
     emptyMessage = 'No other Faction entities yet — add one in Cast first.';
+  } else if (entityPicker.entityType === 'turnstep-map') {
+    // Navigator workflow manager's "🗺️ Pick or create a map" (direct
+    // follow-up request) — every map from whichever of Battlemap/Hexcrawl/
+    // Dungeon Crawl are currently enabled for the active profile (confirmed
+    // via AskUserQuestion: no fixed ruleset-to-map-type convention, the GM
+    // picks each time), mixed into one list. `.name` here is DISPLAY-ONLY
+    // (glyph-prefixed so the GM can tell the three types apart in one
+    // list) — commitEntityPickerPick re-fetches the real map fresh by its
+    // own id prefix (bm_/hex_/dun_, each namespace's own newId() prefix),
+    // never reads this synthetic copy back.
+    const profile = store.getActiveProfile();
+    candidates = [
+      ...(isModuleVisible(profile, 'battlemap') ? listBattlemaps(doc).map((m) => ({ ...m, name: `🗺️ ${m.name}` })) : []),
+      ...(isModuleVisible(profile, 'hexcrawl') ? listHexMaps(doc).map((m) => ({ ...m, name: `⬡ ${m.name}` })) : []),
+      ...(isModuleVisible(profile, 'dungeoncrawl') ? listDungeonMaps(doc).map((m) => ({ ...m, name: `🏰 ${m.name}` })) : []),
+    ];
+    emptyMessage = 'No maps yet — create one below.';
   } else {
     const scenes = doc.scenes || [];
     const scene = scenes[scenes.length - 1];
@@ -9711,6 +9852,26 @@ function renderEntityPickerOverlay() {
         <button type="button" class="entity-picker-row entity-picker-row-create" data-hexcrawl-location-create>🗺️ Create New Location</button>
         <button type="button" class="entity-picker-row entity-picker-row-remove" data-hexcrawl-location-unlink>✕ Remove link</button>
       </div>`
+    : '';
+  // Navigator workflow manager's map picker (direct instruction: "Add
+  // choice to select from a list or create a new map") — unlike every
+  // other picker here, "create new" needs a TYPE choice first (confirmed
+  // via AskUserQuestion: no fixed ruleset-to-map-type convention), so this
+  // is its own bespoke row instead of the generic single-click create —
+  // each button opens the SAME real "+ New Map" flow (data-battlemap-add/
+  // data-hexcrawl-add/data-dungeoncrawl-add's own openInlinePrompt) the
+  // real map drawers already use, just with meta.turnStepLink threaded
+  // through so commitInlinePrompt's existing battlemap-add/hexcrawl-add/
+  // dungeoncrawl-add branches can also set navigatorStepMapLink afterward
+  // (see those branches below) — no second map-creation flow invented.
+  const turnStepMapCreateBtn = entityPicker.entityType === 'turnstep-map'
+    ? (() => {
+        const profile = store.getActiveProfile();
+        const btn = (mod, attr, label) => (isModuleVisible(profile, mod) ? `<button type="button" class="entity-picker-row entity-picker-row-create" ${attr}>${escapeHtml(label)}</button>` : '');
+        return btn('battlemap', 'data-turnstep-map-create-battlemap', '🗺️ Create New Battlemap')
+          + btn('hexcrawl', 'data-turnstep-map-create-hexcrawl', '⬡ Create New Hexcrawl')
+          + btn('dungeoncrawl', 'data-turnstep-map-create-dungeoncrawl', '🏰 Create New Dungeon Crawl');
+      })()
     : '';
   // Direct follow-up request: "add a clickable link to each encounter and
   // map it to a Conflict entity record (or option to add a new one)" —
@@ -9762,7 +9923,7 @@ function renderEntityPickerOverlay() {
   const createGenericBtn = createGenericType
     ? `<button type="button" class="entity-picker-row entity-picker-row-create" data-entity-picker-create>＋ Create New ${escapeHtml(createGenericLabel)}</button>`
     : '';
-  resultsEl.innerHTML = createLifeformBtn + createLocationBtn + createConflictBtn + createGenericBtn + (candidates.length
+  resultsEl.innerHTML = createLifeformBtn + createLocationBtn + createConflictBtn + turnStepMapCreateBtn + createGenericBtn + (candidates.length
     ? candidates.map((n) => `<button type="button" class="entity-picker-row" data-entity-picker-select="${escapeHtml(n.id)}">${escapeHtml(n.name || 'Unnamed')}</button>`).join('')
     : `<p class="dim small">${escapeHtml(emptyMessage)}</p>`);
 }
@@ -10416,7 +10577,7 @@ function headExtraForDrawer(id) {
 // Every ephemeral UI flag a drawer template might read, in one place.
 function buildDrawerUi() {
   return {
-    oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
+    oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, navigatorStepMapLink, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     fiveLeaguesInfoOpen, fiveLeaguesItemNotesOpen,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
     enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, journalActionsOpen, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, expandedWhatConflicts,

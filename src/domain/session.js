@@ -8,6 +8,7 @@ import { generateScene, recomposeSceneText, ensureNpcSceneState, NPC_SCENE_FIELD
 import { tablesWithOverrides, rollTable, rollGroup, formatRoll, pick, getTable, currentTableEntries, updateOracleEntry, oraclePathsWithAnyTag, getOracleTags } from './oracles.js';
 import { linkMentions, parseMentions, createEntity, updateEntity, getEntity, LOCATION_SENSORY_ORACLE_PATH, LOCATION_FANTASY_FIELD_ORACLE_PATH } from './entities.js';
 import { linkDocumentMentions, parseDocumentMentions, resolvedDocumentMentionNames } from './documents.js';
+import { resolvedMapMentionNames } from './mapMentions.js';
 import { SUGGESTION_LENSES, findLens, lensOracleCategories } from '../data/suggestionLenses.js';
 import { oracleLinkTagsFor, INTENT_ORACLE_TAGS } from '../data/entityFieldOracleLinks.js';
 
@@ -352,12 +353,15 @@ export function addNote(campaign, text, source = 'Note') {
   addJournal(next, text, source);
   // A mention that already resolves to a real document (uploaded or
   // Reference Library — e.g. @[Title#12] from the "which page?" prompt)
+  // or a real Battlemap/Hexcrawl/Dungeon Crawl map (Navigator workflow
+  // manager's own "include the map link with the narrative content")
   // must never also spawn a same-named phantom entity; linkMentions has no
-  // idea the document library exists, so this is computed first and passed
-  // in to exclude it explicitly.
+  // idea the document library or any map namespace exists, so both are
+  // computed first and passed in to exclude them explicitly.
   const docNames = resolvedDocumentMentionNames(next, text);
-  if (parseMentions(text).length) next = linkMentions(next, text, { skip: docNames });
-  if (parseDocumentMentions(text).length) next = linkDocumentMentions(next, text);
+  const mapNames = resolvedMapMentionNames(next, text);
+  if (parseMentions(text).length) next = linkMentions(next, text, { skip: new Set([...docNames, ...mapNames]) });
+  if (parseDocumentMentions(text).length) next = linkDocumentMentions(next, text, { skip: mapNames });
   return next;
 }
 
@@ -371,8 +375,9 @@ export function editNote(campaign, id, text) {
   if (!entry) return next;
   entry.text = text;
   const docNames = resolvedDocumentMentionNames(next, text);
-  if (parseMentions(text).length) next = linkMentions(next, text, { skip: docNames });
-  if (parseDocumentMentions(text).length) next = linkDocumentMentions(next, text);
+  const mapNames = resolvedMapMentionNames(next, text);
+  if (parseMentions(text).length) next = linkMentions(next, text, { skip: new Set([...docNames, ...mapNames]) });
+  if (parseDocumentMentions(text).length) next = linkDocumentMentions(next, text, { skip: mapNames });
   return next;
 }
 
@@ -659,10 +664,11 @@ export function deepenNpc(campaign, entityId, { rng = Math.random } = {}) {
 export function editContextText(campaign, key, field, value) {
   let next = patchContext(campaign, key, { [field]: value });
   const docNames = resolvedDocumentMentionNames(next, value);
+  const mapNames = resolvedMapMentionNames(next, value);
   if (parseMentions(value).length) {
     const createType = key === 'where' ? 'location' : 'npc';
-    next = linkMentions(next, value, { createType, skip: docNames });
+    next = linkMentions(next, value, { createType, skip: new Set([...docNames, ...mapNames]) });
   }
-  if (parseDocumentMentions(value).length) next = linkDocumentMentions(next, value);
+  if (parseDocumentMentions(value).length) next = linkDocumentMentions(next, value, { skip: mapNames });
   return next;
 }

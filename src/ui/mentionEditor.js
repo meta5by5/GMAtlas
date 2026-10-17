@@ -28,6 +28,7 @@
 
 import { findDocumentTabByTitle, parseTextBlocks, parseInlineNodes } from '../domain/documents.js';
 import { findByName } from '../domain/entities.js';
+import { findMapByName } from '../domain/mapMentions.js';
 
 function escText(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -46,7 +47,7 @@ function escAttr(s) {
  *  testing) and having one source for the text is what stops it drifting
  *  out of sync with the real behavior again. */
 export function mentionTitle(linked, isDoc) {
-  if (!linked) return 'Not linked to an entity or document';
+  if (!linked) return 'Not linked to an entity, document, or map';
   const base = 'Click to open — arrow-key the cursor in to edit this label.';
   return isDoc ? base + ' Ctrl/Cmd+Click to edit the page.' : base;
 }
@@ -55,12 +56,18 @@ function renderMentionNode(doc, node) {
   const { name, page, label } = node;
   const ent = findByName(doc, name);
   const foundDoc = ent ? null : findDocumentTabByTitle(doc, name);
-  const display = label || (ent ? ent.name : (foundDoc ? foundDoc.title : name)) || name;
+  // Navigator workflow manager (direct follow-up request): a map is a
+  // THIRD, lowest-priority resolution target — checked only once neither
+  // an entity nor a document already matched, so a same-named entity/doc
+  // always wins, unchanged (domain/mapMentions.js's findMapByName).
+  const foundMap = (ent || foundDoc) ? null : findMapByName(doc, name);
+  const display = label || (ent ? ent.name : (foundDoc ? foundDoc.title : (foundMap ? foundMap.title : name))) || name;
   let navAttrs = '';
   let linked = false;
   let isDoc = false;
   if (ent) { navAttrs = `data-open-entity="${escAttr(ent.id)}"`; linked = true; }
   else if (foundDoc && foundDoc.openable) { navAttrs = `data-doc-open="${escAttr(foundDoc.tabKey)}"${page ? ` data-doc-open-page="${page}"` : ''}`; linked = true; isDoc = true; }
+  else if (foundMap) { navAttrs = `data-map-open="${escAttr(foundMap.tabKey)}"`; linked = true; }
   return `<span class="mention-link${linked ? ' mention-link-active' : ''}" data-mention-name="${escAttr(name)}" data-mention-page="${page || ''}" ${navAttrs} title="${escAttr(mentionTitle(linked, isDoc))}">${escText(display)}</span>`;
 }
 
