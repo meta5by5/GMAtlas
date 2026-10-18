@@ -10,7 +10,17 @@
 // are (each stage's last step branches into the next) rather than relying
 // on array order alone — domain/turnSteps.js's play-position engine only
 // ever follows an explicit branchTo or a list's first group.
-const DOC = '5LFB Five Leagues from the Borderlands 3e';
+// Direct bug report: "update all references in Turn Step (i.e. the DOC
+// variable) as necessary to pair the links to the imported file" — this
+// must match data/referenceLibraryManifest.js's own `title` for the real
+// sourcebook EXACTLY (findDocumentTabByTitle/documents.js resolves a
+// mention by title, not by file path), or every @[Core pXX|${DOC}#XX]
+// mention below stays permanently unresolved even after the PDF is
+// imported — which is what made Settings' own "⬇ Load" button look
+// broken: it genuinely does store the blob under the right key, but
+// every Turn Step link pointing at this made-up title could never have
+// found it regardless, since no catalog entry was ever titled that.
+const DOC = 'Five Leagues from the Borderlands (3rd Edition)';
 
 export const TURN_STEPS_FIVE_LEAGUES = [
   {

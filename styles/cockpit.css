@@ -505,6 +505,24 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .drawer-tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .drawer-tab-close { border-radius: 3px; padding: 0 3px; }
 .drawer-tab-close:hover { background: var(--bg-inset); color: var(--text); }
+/* Panel anchoring (direct follow-up request: "Navbar panels in the right
+   section need to have expanding buttons that move the panel to anchor to
+   the left of the navbar window") — same small-icon treatment as the
+   close ✕ right next to it; .active (currently anchored) picks up the
+   accent color so it reads as a toggled-on state, same convention
+   .drawer-tab.active itself already uses. */
+.drawer-tab-anchor { border-radius: 3px; padding: 0 3px; }
+.drawer-tab-anchor:hover { background: var(--bg-inset); color: var(--text); }
+/* The Storyboard card's own un-anchor control (shell.js's
+   renderStoryboardGrid) — sits inline in the <h2> title text, so it needs
+   to be small and vertically centered against the title's own line-height
+   rather than full icon-btn sizing. */
+.storyboard-unanchor { font-size: 0.75em; padding: 0 2px; vertical-align: middle; }
+/* Placeholder shown in the ordinary drawer body for a panel that's
+   currently anchored elsewhere (its real content lives in the Storyboard
+   now) — plain centered text, no special chrome needed since it's a rare,
+   transient state. */
+.anchored-elsewhere-placeholder { padding: var(--sp-6) var(--sp-4); text-align: center; color: var(--text-dim); }
 /* "Close all" — separate from a single tab's own ✕, pinned to the strip's
    right corner outside the scrollable tab list, so it's always reachable
    regardless of how many tabs are open. */
@@ -3187,6 +3205,18 @@ input[type="number"] { -moz-appearance: textfield; }
 .navigator-workflow .workflow-step-card + .workflow-step-card { margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--border); }
 .workflow-step-card .btn { margin-top: var(--sp-2); }
 .turn-step-map-row { display: flex; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-2); }
+/* "Helpful Oracles" (Navigator workflow card, direct follow-up request:
+   "display all relevant oracles that might be helpful for that scene...
+   group them all under a section header 'helpful oracles'") — a compact
+   chip-wrap list, same .chip.sm treatment every other oracle-tag-link
+   chip in this app already uses; the "Supplemental Oracles" sub-label
+   sits between the two chip rows only when a hand-tagged tier exists
+   above it (workspace/index.js omits it when there's nothing to tier
+   against). */
+.turn-step-helpful-oracles { margin: 0 0 var(--sp-2); }
+.turn-step-helpful-oracles-head { font-size: 0.75rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: var(--sp-1); }
+.turn-step-oracle-tier-label { font-size: 0.72rem; color: var(--text-dim); margin: var(--sp-2) 0 var(--sp-1); }
+.turn-step-oracle-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
 
 /* Turn Step Settings tab — each group's reorderable step list. flex-wrap
    (direct follow-up request: "revise the 'Move To' and 'Branches to'

@@ -24,6 +24,7 @@ import { getNpcSceneState } from '../../domain/scenes.js';
 import { getCurrentTurnStep } from '../../domain/turnSteps.js';
 import { isGameSystemActivated } from '../../data/rulesConstitution.js';
 import { TURN_STEP_ORACLE_LINKS, TURN_STEP_LOCATION_STEPS } from '../../data/turnStepWorkflowMeta.js';
+import { tablesWithOverrides, oraclePathsWithAnyTag, excludeFactionOracleTables } from '../../domain/oracles.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -795,6 +796,65 @@ const WORKFLOW_SLOTS = [
   { slot: 'warband', system: 'fiveleagues', label: 'Warband', nav: ['data-warband-turn-step-prev', 'data-warband-turn-step-next'], start: 'data-warband-turn-step-start', turnAttr: 'data-warband-campaign-turn', turnValue: (doc) => (doc.party && doc.party.warbandCampaignTurn) || 0 },
 ];
 
+// "Helpful Oracles" (direct follow-up request: "When a turnstep is active
+// in the Navigator, display all relevant oracles that might be helpful
+// for that scene... show the hand-tagged ones first, then 'supplemental
+// oracles' and group them all under a section header 'helpful oracles'")
+// — a richer elaboration of the step's own 🔮 button: instead of a single
+// icon that jumps to every hand-tagged table at once, this lists each
+// real table BY NAME in two tiers. Hand-tagged: TURN_STEP_ORACLE_LINKS'
+// own per-step tags (data/turnStepWorkflowMeta.js) — exactly what the 🔮
+// button already jumps to, just spelled out table-by-table here.
+// Supplemental: a small, fixed, genre-agnostic "keep the scene moving"
+// tag set (hook/fear/discovery/secret — the same evergreen vocabulary
+// ENTITY_FIELD_ORACLE_LINKS itself leans on most heavily) useful for ANY
+// step, not just ones a specific hand-tag was authored for — so even an
+// un-tagged step still gets a useful list, never an empty section. A
+// table already surfaced as hand-tagged is excluded from the supplemental
+// tier so nothing repeats across the two. Resolution mirrors the Oracle
+// drawer's own (drawers/index.js's oracle()) exactly — same genrePack/
+// Ironsworn fallback, same tablesWithOverrides/excludeFactionOracleTables
+// calls — so "relevant" here always means a table actually reachable in
+// that same drawer, never a stale/hidden one. Clicking any table jumps to
+// the Oracle drawer filtered to the one tag it matched under (new
+// data-oracle-tag-jump, shell.js) — same open-filtered-drawer mechanic as
+// the 🔮 button, just scoped to a single tag instead of the whole list.
+const SUPPLEMENTAL_ORACLE_TAGS = ['hook', 'fear', 'discovery', 'secret'];
+function resolveOracleTagMatches(doc, tables, tags) {
+  const seen = new Set();
+  const out = [];
+  for (const tag of tags) {
+    for (const path of oraclePathsWithAnyTag(doc, tables, [tag])) {
+      const key = path.join('>');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ path, tag });
+    }
+  }
+  return out;
+}
+function oracleMatchChip(m) {
+  const label = m.path[m.path.length - 1];
+  return `<button type="button" class="chip sm" data-oracle-tag-jump="${esc(m.tag)}" title="${esc(m.path.join(' → '))} — tag: ${esc(m.tag)}">${esc(label)}</button>`;
+}
+function helpfulOraclesHtml(doc, stepId) {
+  const genrePack = (doc.settings && doc.settings.statRuleset) === 'ironsworn' ? 'fantasy' : (doc.settings && doc.settings.genrePack);
+  const rawTables = tablesWithOverrides(doc.oracles && doc.oracles.overrides, genrePack);
+  const tables = doc.settings && doc.settings.factionOraclesEnabled === false ? excludeFactionOracleTables(rawTables) : rawTables;
+  const handTags = TURN_STEP_ORACLE_LINKS[stepId] || [];
+  const handMatches = resolveOracleTagMatches(doc, tables, handTags);
+  const handKeys = new Set(handMatches.map((m) => m.path.join('>')));
+  const supplementalTags = SUPPLEMENTAL_ORACLE_TAGS.filter((t) => !handTags.includes(t));
+  const supplementalMatches = resolveOracleTagMatches(doc, tables, supplementalTags).filter((m) => !handKeys.has(m.path.join('>')));
+  if (!handMatches.length && !supplementalMatches.length) return '';
+  return `
+    <div class="turn-step-helpful-oracles">
+      <div class="turn-step-helpful-oracles-head">Helpful Oracles</div>
+      ${handMatches.length ? `<div class="turn-step-oracle-chips">${handMatches.map(oracleMatchChip).join('')}</div>` : ''}
+      ${supplementalMatches.length ? `<div class="turn-step-oracle-tier-label">Supplemental Oracles</div><div class="turn-step-oracle-chips">${supplementalMatches.map(oracleMatchChip).join('')}</div>` : ''}
+    </div>`;
+}
+
 function navigatorWorkflowStepCard(doc, ui, def) {
   const current = getCurrentTurnStep(doc, def.slot);
   if (!isGameSystemActivated(doc, def.system) || !current) return '';
@@ -828,9 +888,24 @@ function navigatorWorkflowStepCard(doc, ui, def) {
         </label>
       </div>
       <div class="turn-step-text-row">
-        <div class="turn-step-text-body" data-turn-step-text-body>${buildMentionEditorHTML(doc, current.step.text)}</div>
+        <!-- Deliberately NOT data-turn-step-text-body (unlike the Campaign
+             panel's own identical-looking widget, drawers/index.js) — that
+             attribute is shell.js's own signal to shrink the doc viewer to
+             Navigator+Advisor only, leaving Composer visible specifically so
+             a GM can read a rules PDF "in tandem with" Colony/Starship/
+             Warband's OWN widget sitting in Composer under that profile.
+             This card lives INSIDE the Navigator itself, so that rationale
+             doesn't apply — a doc opened from here should get the ordinary
+             default placement (fills Composer+Navigator, i.e. left+center),
+             direct follow-up request: "PDF viewer should fill both left and
+             center sections of storyboard when opened from a link from
+             anywhere (journal, navigator, etc.)." Reusing the attribute
+             here was the actual regression: the Navigator's own doc links
+             were silently inheriting the narrower placement. -->
+        <div class="turn-step-text-body">${buildMentionEditorHTML(doc, current.step.text)}</div>
         ${oracleBtn}
       </div>
+      ${helpfulOraclesHtml(doc, stepId)}
       ${mapRow}
       <button type="button" class="btn ghost sm" ${def.start}>＋ Add to Journal</button>
     </div>`;

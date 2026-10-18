@@ -9,7 +9,7 @@ import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { continueStory, restartStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField, rollLocationFantasyField, editLocationFantasyField, rollWhereDetailField, addContextEntity, removeContextEntity } from '../domain/session.js';
 import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, addSceneAsset, removeSceneAsset, addSceneLocation, removeSceneLocation, setSceneSystem, addSceneDismissedFaction, removeSceneDismissedFaction, moveSceneActor } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
-import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag, tablesWithOverrides, getTable } from '../domain/oracles.js';
+import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag } from '../domain/oracles.js';
 import { oracleLinkTagsFor } from '../data/entityFieldOracleLinks.js';
 import { addThread, advanceThread, removeThread, setThreadStatus, setThreadPriority } from '../domain/threads.js';
 import { createExpedition, setExpeditionDial } from '../domain/expeditions.js';
@@ -250,11 +250,23 @@ function renderPositionContent(contentId, doc, ui) {
   if (!isModuleVisible(store.getActiveProfile(), contentId)) return '';
   return renderDrawer(contentId, doc, ui);
 }
+// Panel anchoring (see anchoredPanels' own declaration): an anchored id
+// always wins over the profile's own baseline content for that slot — the
+// LAST anchored entry sits in Navigator (nearest the navbar), the one
+// before it (if a second is anchored) gets pushed to Composer. Each
+// overridden card's title grows a "⇤ Return to tab strip" control so
+// un-anchoring is reachable from right where the content actually is, not
+// just back at its original tab.
 function renderStoryboardGrid(doc, ui, profile) {
-  const composerContentId = resolvePositionContentId(profile, 'composer');
-  const navigatorContentId = resolvePositionContentId(profile, 'navigator');
-  const composerLabel = (drawerMeta(composerContentId) || DRAWER_META.composer).label;
-  const navigatorLabel = (drawerMeta(navigatorContentId) || DRAWER_META.navigator).label;
+  const anchoredComposerId = anchoredPanels.length >= 2 ? anchoredPanels[anchoredPanels.length - 2] : null;
+  const anchoredNavigatorId = anchoredPanels.length >= 1 ? anchoredPanels[anchoredPanels.length - 1] : null;
+  const composerContentId = anchoredComposerId || resolvePositionContentId(profile, 'composer');
+  const navigatorContentId = anchoredNavigatorId || resolvePositionContentId(profile, 'navigator');
+  const titleWithUnanchor = (label, anchoredId) => anchoredId
+    ? `${escapeHtml(label)} <button type="button" class="icon-btn storyboard-unanchor" data-storyboard-unanchor="${escapeHtml(anchoredId)}" title="Return to the tab strip" aria-label="Return to the tab strip">⇤</button>`
+    : escapeHtml(label);
+  const composerLabel = titleWithUnanchor((drawerMeta(composerContentId) || DRAWER_META.composer).label, anchoredComposerId);
+  const navigatorLabel = titleWithUnanchor((drawerMeta(navigatorContentId) || DRAWER_META.navigator).label, anchoredNavigatorId);
   return `<div class="storyboard-grid">${positionCardHtml(composerLabel, renderPositionContent(composerContentId, doc, ui))}${positionCardHtml(navigatorLabel, renderPositionContent(navigatorContentId, doc, ui), 'navigator-card')}</div>`;
 }
 // A Storyboard SLOT id ('composer'/'navigator'/'advisor') resolves through
@@ -407,6 +419,24 @@ let lastRenderedDrawerId = null;
 // only exists once 2+ tabs are open (data-drawer-tabs' own visibility
 // gate) — a single open drawer already has its own ✕ to close outright.
 let drawerCollapsed = false;
+// Panel anchoring (direct follow-up request: "Navbar panels in the right
+// section need to have expanding buttons that move the panel to anchor to
+// the left of the navbar window... Only have two anchored panels at a
+// time where the oldest anchored panel is returned to the navbar panel")
+// — any ordinary drawer-tab panel (Journal/Oracle/Cast/Guide/Hexcrawl/
+// Dungeon Crawl/Graph/Gallery/...) can be "anchored" to temporarily take
+// over the Storyboard's Composer/Navigator columns, overriding whatever
+// the active profile's own baseline content there normally is (which
+// comes right back once nothing anchored remains — "the underlying
+// storyboard panels remain the baseline"). Ephemeral, never persisted,
+// capped at 2: index order is oldest-first — the LAST entry is nearest
+// the navbar (Navigator slot, where a newly-anchored panel always lands),
+// the one before it (if any) is pushed to Composer (further left);
+// anchoring a 3rd shifts the oldest entry off the front, which is what
+// "returns [it] to the navbar panel" — it simply stops being overridden,
+// going back to an ordinary closable/switchable drawer tab. See
+// toggleAnchorPanel()/renderStoryboardGrid()/renderActiveDrawerHtmlUnguarded().
+let anchoredPanels = [];
 let copilotOpen = false;
 let root = null;
 let oracleFilter = '';
@@ -1481,6 +1511,14 @@ function onClick(ev) {
   // on its own.
   const drawerTabClose = hit('[data-drawer-tab-close]');
   if (drawerTabClose) return closeDrawerTab(drawerTabClose.dataset.drawerTabClose);
+  // Same "check the nested icon before the tab button it sits inside"
+  // ordering data-drawer-tab-close already needs just above — the anchor
+  // icon lives inside the same tab button and would otherwise never be
+  // reachable on its own.
+  const drawerTabAnchor = hit('[data-drawer-tab-anchor]');
+  if (drawerTabAnchor) return toggleAnchorPanel(drawerTabAnchor.dataset.drawerTabAnchor);
+  const storyboardUnanchor = hit('[data-storyboard-unanchor]');
+  if (storyboardUnanchor) return toggleAnchorPanel(storyboardUnanchor.dataset.storyboardUnanchor);
   const drawerTab = hit('[data-drawer-tab]');
   if (drawerTab) { activeDrawer = drawerTab.dataset.drawerTab; return render(); }
   // Direct follow-up request: "make the Campaign and Party headers...
@@ -3306,6 +3344,17 @@ function onClick(ev) {
     if (tags) { oracleTagFilter = tags; oracleFilter = ''; openDrawerTab('oracle'); render(); }
     return;
   }
+  // "Helpful Oracles" (Navigator workflow card, workspace/index.js) — same
+  // open-filtered-drawer mechanic as the 🔮 button just above, scoped to
+  // the ONE tag a specific listed table matched under, since each chip
+  // names a real table rather than a whole hand-tagged set at once.
+  const oracleTagJump = hit('[data-oracle-tag-jump]');
+  if (oracleTagJump) {
+    oracleTagFilter = [oracleTagJump.dataset.oracleTagJump];
+    oracleFilter = '';
+    openDrawerTab('oracle');
+    return render();
+  }
   // Mention-linked Battlemap/Hexcrawl/Dungeon Crawl map (domain/
   // mapMentions.js) — tabKey is "map:<type>:<id>"; set that map type's own
   // active map, then open its drawer, mirroring data-doc-open/
@@ -4511,6 +4560,17 @@ function onClick(ev) {
     fetchRulesetReferenceBlob(file)
       .then(async (blob) => {
         await store.putDocBlob(file, blob);
+        // Direct bug report: "the import indicates success, but is not
+        // actually loading the doc into the Docs library" — the blob
+        // itself was always stored correctly, but nothing here ever
+        // refreshed refDocBlobKeys (shell.js), the Documents drawer's own
+        // "which files are actually imported" cache — every other import
+        // path (Import File(s)/Import Library/Documents' own re-open)
+        // already calls this; the Load button was the one gap, so the ☁
+        // "Imported" badge (and the blob itself, as far as that cache's
+        // concerned) could look absent until something else happened to
+        // trigger a refresh.
+        refreshRefDocBlobKeys();
         if (!rulesetGuideDocExists(store.get(), rulesetId)) {
           if (window.confirm(`No Guide entry exists yet for "${ruleset.label}" — create one and link this sourcebook to it?`)) {
             store.update((d) => ensureRulesetGuideDefault(d, rulesetId, { force: true }));
@@ -5521,24 +5581,21 @@ function dice3dThemeOpts() {
   return { theme: (s && s.dice3dTheme) || 'default', themeColor: (s && s.dice3dColor) || undefined };
 }
 
-// Oracle table draws (rollOracle, domain/session.js) run synchronously
-// inside store.update, so a 3D roll — inherently async — has to happen
-// BEFORE that update, resolving a forced `index` rollOracle then just
-// replays deterministically. Only a SINGLE-table roll (not a group roll —
-// data-roll-group, unchanged/out of scope) whose table's length matches a
-// standard die dice-box actually models (4/6/8/10/12/20 — most of this
-// app's own oracle tables are one of these, but plenty aren't) gets the
-// animation; anything else (3D disabled/unavailable, a non-standard table
-// size) resolves {} and rollOracle rolls via Math.random exactly as before.
-const STANDARD_ORACLE_DICE_SIZES = [4, 6, 8, 10, 12, 20];
+// Oracle table draws (rollOracle, domain/session.js) used to play a 3D
+// dice-box animation (mapping the landed face to a table index) whenever
+// the table's length matched a standard die size — direct bug report:
+// "do not actually roll the dice since the user does not experience
+// selection from a list using the results." A statblock field's roll
+// visibly connects a die face to a number that IS the outcome; an Oracle
+// table draw doesn't work that way — the GM sees a die land on, say, "7"
+// with no way to see that this is what picked "Encounter: Ambush" three
+// rows down, so the animation added a pause without adding anything
+// legible. Always resolves {} now (rollOracle rolls via Math.random
+// exactly as it did before this feature existed) — kept as a function
+// (not inlined at its two call sites) in case a future, genuinely
+// legible way to tie a 3D roll to a table pick is worth revisiting.
 async function resolveOracleDiceIndex(path) {
-  if (!dice3dPreferred()) return {};
-  const doc = store.get();
-  const tables = tablesWithOverrides(doc.oracles && doc.oracles.overrides, doc.settings && doc.settings.genrePack);
-  const values = getTable(tables, ...path);
-  if (!Array.isArray(values) || !STANDARD_ORACLE_DICE_SIZES.includes(values.length)) return {};
-  const rolled = await roll3d([`1d${values.length}`], dice3dThemeOpts());
-  return rolled ? { index: rolled[0][0] - 1 } : {};
+  return {};
 }
 
 // Statblock/entity-field roller (double-click or the field's own roll
@@ -7260,8 +7317,56 @@ function updateAndOpenJournal(mutator) {
   return store.update(mutator);
 }
 
+// Toggles `id` (any ordinary drawer-tab id — never a pinned Composer/
+// Navigator/Advisor slot id, which are the anchor DESTINATIONS, not
+// sources) in or out of anchoredPanels — see its own declaration above
+// for the full FIFO/slot-order rule. Reusable from both the tab strip's
+// own anchor icon and the Storyboard card's "⇤ return to tab strip"
+// control, since un-anchoring is symmetric with anchoring here (same
+// toggle, same cleanup).
+function toggleAnchorPanel(id) {
+  if (!id || BUILTIN_POSITION_IDS.includes(id)) return;
+  if (anchoredPanels.includes(id)) {
+    // Un-anchor (the Storyboard card's own "⇤ Return to the tab strip"
+    // control) — direct follow-up request: "it is returned to the
+    // drawer," not just quietly un-flagged while still invisible
+    // somewhere — openDrawerTab() both re-adds it to the navbar menu AND
+    // makes it the active tab, same as opening it fresh.
+    anchoredPanels = anchoredPanels.filter((x) => x !== id);
+    openDrawerTab(id);
+    return render();
+  }
+  // Anchor — direct follow-up request: "remove it from the navbar menu
+  // until the anchored window is closed" — this is a RELOCATION, not a
+  // visual toggle on a tab that stays listed: pulling id out of
+  // openDrawers is what makes it vanish from the tab strip (tabIds, the
+  // render() tab-strip block below, is itself built from openDrawers).
+  anchoredPanels = [...anchoredPanels.filter((x) => x !== id), id];
+  openDrawers = openDrawers.filter((d) => d !== id);
+  if (activeDrawer === id) activeDrawer = openDrawers[openDrawers.length - 1] || null;
+  // Direct follow-up request: "if the drawer ever becomes empty, close it
+  // and return to the default storyboard panel" — same fallback
+  // closeDrawerTab's own identical case already uses just below: the
+  // Advisor pseudo-tab has nothing left to ride along with once the last
+  // real tab is gone.
+  if (!openDrawers.length && activeDrawer === 'advisor') activeDrawer = null;
+  // A 3rd anchor evicts the oldest (anchoredPanels' own declaration) —
+  // "the oldest anchored panel is returned to the navbar panel" at the
+  // same moment, but WITHOUT stealing the GM's current focus the way the
+  // manual un-anchor path above deliberately does (nobody clicked on the
+  // evicted one just now), so it's a quiet openDrawers re-add only, not a
+  // full openDrawerTab() activation.
+  if (anchoredPanels.length > 2) {
+    const [evicted, ...rest] = anchoredPanels;
+    anchoredPanels = rest;
+    if (!openDrawers.includes(evicted)) openDrawers = [...openDrawers, evicted];
+  }
+  render();
+}
+
 function closeDrawerTab(id) {
   openDrawers = openDrawers.filter((d) => d !== id);
+  anchoredPanels = anchoredPanels.filter((d) => d !== id);
   if (activeDrawer === id) activeDrawer = openDrawers[openDrawers.length - 1] || null;
   // The Advisor pseudo-tab only exists riding along with a real pinned
   // drawer (see the tab-strip render in render()) — if the last real
@@ -9294,8 +9399,20 @@ function render() {
       const pending = id === 'advisor' && resolveSlotContentId('advisor', profile) === 'copilot' && hasPendingAdvisorDecision(doc);
       const pinned = PINNED_TAB_IDS.includes(id);
       const close = pinned ? '' : `<span class="drawer-tab-close" data-drawer-tab-close="${id}" aria-label="Close ${m ? m.label : id}">✕</span>`;
+      // Panel anchoring (direct follow-up request) — desktop/tablet only:
+      // at compact widths there's no separate Storyboard area to anchor
+      // INTO (Composer/Navigator are just two more tabs in this same
+      // strip there), so the control would have nothing meaningful to do.
+      // Only ever the "⛶ anchor it" state here — an ALREADY-anchored id
+      // is never in tabIds at all (toggleAnchorPanel removes it from
+      // openDrawers, which is exactly what tabIds is built from, a few
+      // lines up), so this button never needs its own un-anchor state;
+      // that control lives on the Storyboard card itself instead
+      // (renderStoryboardGrid's own data-storyboard-unanchor).
+      const anchorBtn = (pinned || compact) ? '' : `<span class="drawer-tab-anchor" data-drawer-tab-anchor="${id}" title="Anchor over the Storyboard (Composer/Navigator)" aria-label="Anchor panel to the Storyboard">⛶</span>`;
       return `<button class="drawer-tab ${id === activeDrawer ? 'active' : ''} ${pending ? 'pending' : ''}" data-drawer-tab="${id}" title="${m ? m.label : id}${pending ? ' — a decision is waiting' : ''}">
         <span class="glyph">${m ? m.glyph : ''}</span><span class="drawer-tab-label">${m ? m.label : id}${pending ? ' ★' : ''}</span>
+        ${anchorBtn}
         ${close}
       </button>`;
     }).join('')}</div>
@@ -10710,6 +10827,21 @@ function renderActiveDrawerHtml(doc) {
   }
 }
 function renderActiveDrawerHtmlUnguarded(doc) {
+  // Panel anchoring: defensive only — toggleAnchorPanel() removes an
+  // anchored id from openDrawers (and reassigns activeDrawer away from
+  // it) the moment it's anchored, per the direct follow-up request that
+  // it disappear from the navbar entirely rather than stay listed, so
+  // activeDrawer should never legitimately equal an anchored id in normal
+  // operation. Kept as a cheap guard against double-mounting the same
+  // interactive content in two places at once if some future code path
+  // ever sets activeDrawer without going through that function.
+  if (anchoredPanels.includes(activeDrawer)) {
+    const m = drawerMeta(activeDrawer);
+    return `<div class="anchored-elsewhere-placeholder">
+      <p><b>${escapeHtml(m ? m.label : activeDrawer)}</b> is anchored to the Storyboard.</p>
+      <button type="button" class="btn ghost sm" data-storyboard-unanchor="${escapeHtml(activeDrawer)}">⇤ Return to the tab strip</button>
+    </div>`;
+  }
   if (activeDrawer === 'faction-events') {
     return renderFactionEvents(doc, { factionEventsDrafts, factionEventsFactionFilterId, factionEventsLocationFilterId, factionEventsStepFactionId, factionRoundHistoryOpen, conflictEscalationSuggestions });
   }
