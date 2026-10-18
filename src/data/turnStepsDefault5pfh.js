@@ -1,6 +1,6 @@
 // turnStepsDefault5pfh.js — the seed content for a Rules Profile's Turn
 // Step workflow (design/adr/rules-profiles-multi-campaign.md), converted
-// verbatim from the Guide entry "Campaign Turn Sequence" (a GM's own
+// verbatim from the Guide entry "5PFH Campaign Turn Sequence" (a GM's own
 // authored reference doc, not a transcription of the rulebook's actual
 // text — matches this repo's existing copyright posture for authored
 // content). Every `@[Label|Target]` here is this app's own document-
@@ -22,7 +22,7 @@
 // (loadDefaultTurnSteps), then the GM's reordering/text/showCrewTasks
 // edits live only in that clone.
 
-export const TURN_STEPS_= [
+export const TURN_STEPS_5PFH = [
   {
     id: 'daily-life',
     label: 'Daily Life',
