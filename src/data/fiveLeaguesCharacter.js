@@ -55,13 +55,21 @@ export function findFiveLeaguesSkill(key) {
 // below). allowedOrigins lists the Origin keys (data/fiveLeaguesOrigins.js)
 // that may or must take this background; Mystic is left with an empty list
 // since it's selected via character TYPE, never Origin.
+// Mountain/Downworlder (Compendium's own "New Backgrounds" section, p.73-74
+// — direct follow-up request: "update 5LFB origins to expand also to
+// include the origins from Compendium") work exactly like every other
+// background above; added here (not just referenced from the new Origins
+// themselves) so availableFiveLeaguesBackgrounds' existing allowedOrigins
+// matching keeps working unchanged for the new Compendium origins below.
 export const FIVE_LEAGUES_BACKGROUNDS = [
   { key: 'frontier', label: 'Frontier', text: 'Available to Human characters and must be selected by Halflings. They tend to be resourceful and skilled.', allowedOrigins: ['human', 'halfling'] },
   { key: 'mystic', label: 'Mystic', text: 'Must be selected by Mystic characters, regardless of origin. They are determined, but hampered by the intense focus on magic.', allowedOrigins: [] },
   { key: 'noble', label: 'Noble', text: 'Only available to Human characters. They often come well-equipped.', allowedOrigins: ['human'] },
-  { key: 'outsider', label: 'Outsider', text: 'Must be selected by Feral, Duskling, and Fey-blood characters. They tend to be survivors, relying on their own talents over any advantages of birth.', allowedOrigins: ['feral', 'duskling', 'feyblood'] },
-  { key: 'townsfolk', label: 'Townsfolk', text: 'Available to Human characters and must be selected by Preen. They tend to have deep pockets.', allowedOrigins: ['human', 'preen'] },
-  { key: 'zealot', label: 'Zealot', text: 'Only available to Human characters. They are often lucky, as if someone is watching over them.', allowedOrigins: ['human'] },
+  { key: 'outsider', label: 'Outsider', text: 'Must be selected by Feral, Duskling, and Fey-blood characters; also available to (or required for) Elriki, Felid, Kobold, and Winged, and one of three options for Gnawling Renegade. They tend to be survivors, relying on their own talents over any advantages of birth.', allowedOrigins: ['feral', 'duskling', 'feyblood', 'elriki', 'felid', 'kobold', 'winged', 'gnawling'] },
+  { key: 'townsfolk', label: 'Townsfolk', text: 'Available to Human characters and must be selected by Preen; also one of three options for Dwarves. They tend to have deep pockets.', allowedOrigins: ['human', 'preen', 'dwarf'] },
+  { key: 'zealot', label: 'Zealot', text: 'Only available to Human characters; also one of three options for Gnawling Renegade. They are often lucky, as if someone is watching over them.', allowedOrigins: ['human', 'gnawling'] },
+  { key: 'mountain', label: 'Mountain', text: "Covers people who grew up in a rough, mountainous area (Compendium, p.73-74). Must be selected by Skysworn; also available to Dwarf, Duskling, and Human characters, and one of two options for Winged.", allowedOrigins: ['dwarf', 'duskling', 'human', 'skysworn', 'winged'] },
+  { key: 'downworlder', label: 'Downworlder', text: "Covers characters who grew up in an underworld environment (Compendium, p.73). Must be selected by Deep Kin (exclusively); also one of three options each for Dwarf and Gnawling Renegade.", allowedOrigins: ['dwarf', 'deepkin', 'gnawling'] },
 ];
 export function findFiveLeaguesBackground(key) {
   return FIVE_LEAGUES_BACKGROUNDS.find((b) => b.key === key) || null;

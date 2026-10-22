@@ -803,31 +803,16 @@ export function addEntityTag(campaign, id, tag) {
   return next;
 }
 
-/** Direct follow-up request: "for tags that are protected, like character
- *  ... since removing character tag would make the entity an NPC and not
- *  a player/party member, convert the statblock to a regular NPC
- *  statblock and remove the character statblock from view, retaining the
- *  character stats in case it is restored later." A Character Sheet's own
- *  fields (attribute/track rows, possibly `sections`) don't map onto a
- *  Bestiary template's shape at all, so this doesn't attempt a lossy
- *  field-by-field conversion — it just marks the kind:'character' group(s)
- *  `archived` (hiding them from characterSheetSectionHtml, drawers/
- *  index.js) rather than deleting them, so re-adding the tag can restore
- *  the exact same stats via the counterpart call below. */
-export function setCharacterStatblocksArchived(campaign, id, archived) {
-  const next = clone(campaign);
-  const e = getEntity(next, id);
-  if (e && Array.isArray(e.statblocks)) {
-    for (const g of e.statblocks) if (g.kind === 'character') g.archived = archived;
-  }
-  return next;
-}
-
 export function removeEntityTag(campaign, id, tag) {
   const next = clone(campaign);
   const e = getEntity(next, id);
   if (!e) return next;
   e.tags = e.tags.filter((t) => t.toLowerCase() !== String(tag || '').toLowerCase());
+  // Symmetric with addEntityTag's own call just above (direct follow-up
+  // request: swap Bestiary/Character on #character add AND remove, not
+  // just add) — removing #character means ensureAutoStatblock now sees
+  // wantsCharacter:false and swaps back to the Bestiary side.
+  ensureAutoStatblock(e, next.settings);
   return next;
 }
 

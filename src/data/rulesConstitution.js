@@ -138,6 +138,93 @@ export function isGameSystemActivated(campaign, systemId) {
   return !!(campaign && campaign.settings && campaign.settings.gameSystemActivations && campaign.settings.gameSystemActivations[systemId]);
 }
 
+// Supplement Activation (direct follow-up request: "have a checkbox to
+// activate each game system AND SUPPLEMENT so that default rules can be
+// augmented by the supplemental rules") — a second, finer-grained opt-in
+// UNDER a parent Game System, for expansion content that transcribes its
+// own separately-purchased sourcebook (the Compendium volumes) rather than
+// the base rulebook the parent system's own activationText already covers.
+// Reuses the exact SAME `gameSystemActivations` free-form map (no schema
+// change — it's already a sparse id->boolean object, data/schema.js never
+// enumerates its keys), just keyed by the supplement's own id instead of a
+// RULES_PROVIDERS key, so the existing data-game-system-activate click
+// handler (shell.js) needs no changes to drive these too. A supplement has
+// no meaning with its parent system off, so isSupplementActivated also
+// requires the parent — UI additionally disables the checkbox in that
+// state (gameSystemActivationSection, drawers/index.js) rather than
+// relying on this guard alone.
+export const GAME_SYSTEM_SUPPLEMENTS = {
+  fivepfh: [
+    {
+      id: 'fivepfh-compendium',
+      label: 'Five Parsecs from Home: Compendium (Bug Hunt)',
+      activationText: 'Activate the Five Parsecs from Home Compendium (Bug Hunt) — I confirm I own a copy and intend to use this transcribed content (the Compendium Lifeforms & Enemies content pack) for my own personal GM reference, not for redistribution.',
+    },
+  ],
+  fiveleagues: [
+    {
+      id: 'fiveleagues-compendium',
+      label: 'Five Leagues from the Borderlands: Compendium',
+      activationText: 'Activate the Five Leagues Compendium — I confirm I own a copy of the Five Leagues from the Borderlands Compendium and intend to use this transcribed content (its Enemy tables, and its new character Origins) for my own personal GM reference, not for redistribution.',
+    },
+  ],
+};
+
+/** Whether `supplementId` (a GAME_SYSTEM_SUPPLEMENTS entry's own id) is
+ *  usable right now — its parent Game System must ALSO be activated, since
+ *  a supplement only ever augments that system's base rules, never stands
+ *  alone. `parentSystemId` is the RULES_PROVIDERS key the supplement lives
+ *  under (its GAME_SYSTEM_SUPPLEMENTS[parentSystemId] list) — passed
+ *  explicitly rather than re-derived, since a supplement id alone doesn't
+ *  encode which system it belongs to. */
+export function isSupplementActivated(campaign, parentSystemId, supplementId) {
+  if (!isGameSystemActivated(campaign, parentSystemId)) return false;
+  return !!(campaign && campaign.settings && campaign.settings.gameSystemActivations && campaign.settings.gameSystemActivations[supplementId]);
+}
+
+// Direct follow-up request: "Change the term reference of ruleset to
+// Module. On the Licenses tab in Settings, group all checkboxes for a
+// given module under a section header named for the module. group all
+// modules for a game system under the header of the game system (such as
+// Five Parsecs from Home has the Core Rules, Compendium and Planetfall)."
+// A "Module" (the new display term for what Game System Activation gates
+// — a base RULES_PROVIDERS entry's own core rules, OR a
+// GAME_SYSTEM_SUPPLEMENTS entry) is grouped here under whichever real-
+// world product LINE it's published as part of — which isn't always the
+// same as its own standalone RULES_PROVIDERS record. Planetfall has its
+// own distinct Colony-sim mechanics, so it's its own Game System entry
+// (own requiresActivation gate, own Campaign-panel tab), not literally
+// nested under fivepfh's record — but it's still a Five Parsecs from Home
+// product to a GM licensing it, so it's grouped under that SAME family
+// header here. This grouping is intentionally its own small data
+// structure rather than inferred from RULES_PROVIDERS/GAME_SYSTEM_
+// SUPPLEMENTS' own label text (fragile string-parsing) — a data-integrity
+// test (tests/domain.test.js) keeps it in sync, asserting every
+// requiresActivation system and every supplement appears exactly once.
+export const GAME_SYSTEM_FAMILIES = [
+  {
+    label: 'Five Parsecs from Home',
+    modules: [
+      { kind: 'system', id: 'fivepfh', label: 'Core Rules' },
+      { kind: 'supplement', parentId: 'fivepfh', id: 'fivepfh-compendium', label: 'Compendium' },
+      { kind: 'system', id: 'planetfall', label: 'Planetfall' },
+    ],
+  },
+  {
+    label: 'Five Leagues from the Borderlands',
+    modules: [
+      { kind: 'system', id: 'fiveleagues', label: 'Core Rules' },
+      { kind: 'supplement', parentId: 'fiveleagues', id: 'fiveleagues-compendium', label: 'Compendium' },
+    ],
+  },
+  {
+    label: 'Stars Without Number',
+    modules: [
+      { kind: 'system', id: 'swn', label: 'Core Rules' },
+    ],
+  },
+];
+
 // Verbatim from the gameplay-goals.md "Recommended Rules Constitution" table,
 // with the narrative section's fuller provider lists preferred over the
 // table's abbreviations where the two differ (e.g. NPC generation lists all
@@ -199,11 +286,65 @@ export function genrePackIdForRuleset(rulesetId) {
  *  changes app behavior right now (data/factionRulesProviders.js reads the
  *  same `settings.rulesProviderChoices.factions` key directly) — every
  *  other area is a recorded preference only (docs/adr/0032). */
+// data/rulesets.js's own statRuleset ("Module for Profile") id space
+// doesn't always spell a RULES_PROVIDERS id the same way — today's one
+// known mismatch, kept as its own tiny lookup rather than renaming either
+// id space to match the other.
+const STAT_RULESET_TO_PROVIDER_ID = { '5pfh': 'fivepfh' };
+
 export function resolveProviderChoice(settings, areaId) {
   const area = GAMEPLAY_AREAS.find((a) => a.id === areaId);
   if (!area) return null;
   const chosen = settings && settings.rulesProviderChoices && settings.rulesProviderChoices[areaId];
-  return chosen || area.providers[0];
+  if (chosen) return chosen;
+  // Direct follow-up request: "include the assigned 'Module for Profile'
+  // as the default option for each selection" — before falling back to
+  // the first-listed provider (the old, order-dependent default), prefer
+  // the Rules Profile's own Module for Profile (settings.statRuleset) for
+  // any gameplay area it's actually a valid, currently-activated provider
+  // for. Only changes the DEFAULT shown before a GM ever touches that
+  // row's own dropdown; an explicit rulesProviderChoices[areaId] above
+  // always wins regardless, same as before.
+  const rawModule = settings && settings.statRuleset;
+  const moduleProviderId = rawModule && (STAT_RULESET_TO_PROVIDER_ID[rawModule] || rawModule);
+  if (moduleProviderId && area.providers.includes(moduleProviderId) && isGameSystemActivated({ settings }, moduleProviderId)) {
+    return moduleProviderId;
+  }
+  return area.providers[0];
+}
+
+/** Tighter alternative to rulesProfiles.js's matchesProfileRuleset, for
+ *  Available Packs / Statblock Templates (direct follow-up requests:
+ *  "Limit the 'Available Packs'/'Statblock Templates (LifeForm)' options
+ *  to only those that belong to the module of the game system and other
+ *  game system modules that might be enabled in the Rules Constitution").
+ *  matchesProfileRuleset scopes to "anywhere in the same Genre Pack" (still
+ *  used as-is for Turn Step Lists, unaffected by this) — this instead
+ *  scopes to just the profile's own Module for Profile (settings.
+ *  statRuleset) plus whichever OTHER Game Systems are actually assigned to
+ *  some gameplay area here in Rules Constitution (resolveProviderChoice
+ *  per area — the GM's own stated choices, not merely "available in this
+ *  genre pack"). `rulesetTag` null/undefined (a GM's own custom entry, or
+ *  a generic one tagged by Genre Pack id directly) is always shown, same
+ *  "nothing a GM adds ever vanishes" guarantee matchesProfileRuleset
+ *  already established. `settings` here is the pseudo-doc's own
+ *  (profileAsSettingsDoc(doc, draft).settings, drawers/index.js) — already
+ *  the draft being edited, not necessarily the live campaign. */
+export function matchesEnabledModule(rulesetTag, settings) {
+  if (rulesetTag == null) return true;
+  const genrePackId = settings && settings.genrePack;
+  if (rulesetTag === genrePackId) return true;
+  const rawModule = settings && settings.statRuleset;
+  const moduleProviderId = rawModule && (STAT_RULESET_TO_PROVIDER_ID[rawModule] || rawModule);
+  if (rulesetTag === moduleProviderId) return true;
+  // "Other game system modules that MIGHT BE ENABLED" — resolveActiveProviderChoice
+  // (not the plain resolveProviderChoice) so an area's own unset, merely-
+  // positional default (e.g. 'colony-management': ['planetfall'], its only
+  // listed provider) doesn't count as "enabled" when that Game System
+  // hasn't actually been activated (Settings -> Licenses) — only a real,
+  // currently-usable provider choice extends the list.
+  const campaign = { settings };
+  return GAMEPLAY_AREAS.some((area) => resolveActiveProviderChoice(campaign, area.id) === rulesetTag);
 }
 
 // The two ids that both mean "GMAtlas Core" today (see the sagaatlas entry's

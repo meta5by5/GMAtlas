@@ -29,6 +29,7 @@
 import { findDocumentTabByTitle, parseTextBlocks, parseInlineNodes } from '../domain/documents.js';
 import { findByName } from '../domain/entities.js';
 import { findMapByName } from '../domain/mapMentions.js';
+import { findExpectedReferenceDoc } from '../data/referenceLibraryManifest.js';
 
 function escText(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -61,6 +62,17 @@ function renderMentionNode(doc, node) {
   // an entity nor a document already matched, so a same-named entity/doc
   // always wins, unchanged (domain/mapMentions.js's findMapByName).
   const foundMap = (ent || foundDoc) ? null : findMapByName(doc, name);
+  // Direct follow-up request: "If the file doesn't exist for that
+  // filename, prompt the user with the filename expected and instruct to
+  // upload the appropriate file of that filename" — a FOURTH, lowest-
+  // priority check: a name matching no entity/document/map AT ALL might
+  // still be a real, known sourcebook (referenceLibraryManifest.js's own
+  // committed catalog) that just isn't physically present on this install
+  // (e.g. a fresh clone, or a deployment without the PDF bytes) — findDocument
+  // TabByTitle only ever sees what's ACTUALLY on disk right now (DOCS_MANIFEST),
+  // so this is the one case that tells those two states apart instead of
+  // rendering both identically as plain dead text.
+  const expectedDoc = (ent || foundDoc || foundMap) ? null : findExpectedReferenceDoc(name);
   const display = label || (ent ? ent.name : (foundDoc ? foundDoc.title : (foundMap ? foundMap.title : name))) || name;
   let navAttrs = '';
   let linked = false;
@@ -68,6 +80,10 @@ function renderMentionNode(doc, node) {
   if (ent) { navAttrs = `data-open-entity="${escAttr(ent.id)}"`; linked = true; }
   else if (foundDoc && foundDoc.openable) { navAttrs = `data-doc-open="${escAttr(foundDoc.tabKey)}"${page ? ` data-doc-open-page="${page}"` : ''}`; linked = true; isDoc = true; }
   else if (foundMap) { navAttrs = `data-map-open="${escAttr(foundMap.tabKey)}"`; linked = true; }
+  if (expectedDoc) {
+    const fileName = expectedDoc.file.split('/').pop();
+    return `<span class="mention-link mention-link-missing" data-mention-name="${escAttr(name)}" data-mention-page="${page || ''}" data-mention-upload-needed="${escAttr(fileName)}" title="${escAttr(`Expected file missing: "${fileName}" — click for upload instructions.`)}">📤 ${escText(display)}</span>`;
+  }
   return `<span class="mention-link${linked ? ' mention-link-active' : ''}" data-mention-name="${escAttr(name)}" data-mention-page="${page || ''}" ${navAttrs} title="${escAttr(mentionTitle(linked, isDoc))}">${escText(display)}</span>`;
 }
 

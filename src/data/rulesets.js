@@ -106,8 +106,11 @@ export const RULESETS = [
     id: '5pfh',
     label: 'Five Parsecs from Home',
     // Repointed to the real current subfolder location — see the
-    // 'starforged' entry's own comment above for why.
-    doc: 'assets/docs/5PFH/5PFH-Five-Parsecs-From-Home-v3.pdf',
+    // 'starforged' entry's own comment above for why. Direct follow-up
+    // request: the real file was also renamed on disk (no '5PFH-' prefix,
+    // no hyphens) — matches referenceLibraryManifest.js's own corrected
+    // title, 'Five Parsecs From Home v3'.
+    doc: 'assets/docs/5PFH/Five Parsecs From Home v3.pdf',
     characterTemplate: {
       attributeRollMethod: 'flat', // d6 + stat vs target
       attributeTarget: 6,

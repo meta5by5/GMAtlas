@@ -103,3 +103,23 @@ const BESTIARY_TERM = { 'sci-fi-generic': 'LifeForm', hostile: 'LifeForm', cyber
 export function bestiaryTerm(genrePackId) {
   return BESTIARY_TERM[genrePackId] || 'Bestiary';
 }
+
+// Direct follow-up request: "all scifi terms should be genre specific...
+// reference to 'Star' is only for scifi genre. Make all references
+// tailored to genre." WHERE's own System/Star location hierarchy
+// (workspace/index.js's whereLocationHierarchyBlock — a Location's own
+// #system tag, with a related #star-tagged Location as its Star) is
+// sci-fi astronomy vocabulary; a fantasy or D&D 5e GM reads the same
+// parent/child relationship as a Realm and its Ruler instead. Same "swap
+// the LABEL only, the #system/#star tags and underlying mechanism are
+// unchanged" posture as bestiaryTerm just above — confirmed via
+// AskUserQuestion (Realm/Ruler, not Region/Kingdom or hiding the row
+// outright for a non-sci-fi genre).
+const LOCATION_HIERARCHY_TERMS = {
+  fantasy: { system: 'Realm', star: 'Ruler' },
+  dnd5e: { system: 'Realm', star: 'Ruler' },
+};
+const DEFAULT_LOCATION_HIERARCHY_TERMS = { system: 'System', star: 'Star' };
+export function locationHierarchyTerms(genrePackId) {
+  return LOCATION_HIERARCHY_TERMS[genrePackId] || DEFAULT_LOCATION_HIERARCHY_TERMS;
+}

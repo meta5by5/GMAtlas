@@ -101,8 +101,146 @@ export const FIVE_LEAGUES_ORIGINS = [
   },
 ];
 
+// The Compendium's own "New Origins" chapter (Five Leagues from the
+// Borderlands: Compendium, read directly — pp.65-73, the "Paths in the
+// Wilderness" expansion) — direct follow-up request: "update 5LFB origins
+// to expand also to include the origins from Compendium if that is
+// enabled license." Gated behind the 'fiveleagues-compendium' Supplement
+// Activation (data/rulesConstitution.js's GAME_SYSTEM_SUPPLEMENTS) rather
+// than always-on, same ownership-confirmation posture as the base
+// `fiveleagues` system itself — the UI origin picker (drawers/index.js's
+// fiveLeaguesTypeAndOriginRowHtml) only offers these when that supplement
+// is active; findFiveLeaguesOrigin below still resolves them unconditionally
+// so a character who already has one set keeps displaying it correctly
+// even if the supplement is later deactivated.
+//
+// Deliberately excludes this SAME chapter's "Chitters" origin and the
+// Duster/Dustling/Dizhar origin VARIANTS (pp.10-13) — those are specific to
+// recruiting in "The Dust," a separate standalone supplement region with
+// its own chargen caveats (e.g. a Human must additionally choose Outlander-
+// vs-Duster), not a clean drop-in addition to this flat Origin list the way
+// the 8 below are. Not modeled; can be added later as its own thing if
+// asked for.
+//
+// Will/Luck caps: none of these 8 states its own override except Skysworn
+// ("They do not receive the Driven trait" — explicitly denying the one
+// Human-only rule that permits >1 Will — so it gets the SAME willMaxOverride
+// as every other non-Human core origin); none mentions a Luck restriction,
+// so all 8 use the same null/1 shape Duskling/Preen/Halfling/Feral already
+// use above. `skillExpertise` is usually one skill, but Deep Kin's is three
+// at once and Elriki's book text is explicit that they get none at all
+// (`null`) — the UI (drawers/index.js) renders both shapes.
+export const FIVE_LEAGUES_COMPENDIUM_ORIGINS = [
+  {
+    key: 'deepkin',
+    label: 'Deep Kin',
+    background: 'Downworlder (exclusively — cannot select any other background)',
+    skillExpertise: 'Scouting, Crafting, Wits',
+    willMaxOverride: 1,
+    luckMaxOverride: null,
+    traits: [
+      { name: 'Born Below', text: 'When Dashing, may move through any figures in their path, whether friend or foe, for the entire move (not just the Dash segment). No movement penalty underground, and can see in darkness (even magical darkness) out to 9".' },
+      { name: 'Deep Kin Fate', text: 'Cannot learn any skill under any circumstances, during character creation or the campaign — instead receive a Deep Token each time they would, usable at any time to avoid a roll just made on the post-game injury table (even after healing remedies). Multiple Deep Kin in the same warband share one pool of Deep Tokens.' },
+      { name: 'No Magic', text: 'Deep Kin cannot be Mystics under any circumstances.' },
+    ],
+  },
+  {
+    key: 'dwarf',
+    label: 'Dwarf',
+    background: 'Downworlder, Mountain, or Townsfolk (may also be Mystics without changing background)',
+    skillExpertise: 'Pathwise',
+    willMaxOverride: 1,
+    luckMaxOverride: null,
+    traits: [
+      { name: 'Adapted to the Underworld', text: 'Sense all living creatures within 12" — no darkness, fog, or magical effect reduces this (does not detect Undead-trait creatures or constructs). No movement penalty underground or in Delves.' },
+      { name: 'Bitter Fighting', text: 'Any opponent that knocks out a warband member gets a Vengeance marker for the rest of the battle; Dwarves get a Combat Bonus in melee against a Vengeance-marked enemy, but cannot fight defensively or evasively against one.' },
+      { name: 'Stalwart', text: 'Immune to all fear effects, even magical. Cannot be physically moved by magic (even friendly) or pushed/knocked back by any enemy ability, and do not normally retreat during melee — movement-related magical items still work normally.' },
+      { name: 'Deliberate', text: 'Dash move is reduced by 2" (minimum 0").' },
+    ],
+  },
+  {
+    key: 'elriki',
+    label: 'Elriki',
+    background: 'Outsider (exclusively — cannot begin as a Mystic, but may learn during the campaign)',
+    skillExpertise: null,
+    willMaxOverride: 1,
+    luckMaxOverride: null,
+    traits: [
+      { name: 'Swamp Home', text: 'No movement penalty in water or swamp terrain, and endure substantial heat — never affected by Exhaustion.' },
+      { name: 'Awkward Gait', text: 'Dash move is adjusted by -1" compared to normal. Cannot gain a Combat Advantage from nearby allies (though can still provide one to another character).' },
+      { name: 'Forceful Throw', text: 'May throw sharp rocks or wood while moving at full speed, adding Combat Skill to the attack roll; damage is +0/+0 with normal ammunition rules.' },
+    ],
+  },
+  {
+    key: 'felid',
+    label: 'Felid',
+    background: 'Outsider (must take, even if a Mystic)',
+    skillExpertise: 'Wilderness',
+    willMaxOverride: 1,
+    luckMaxOverride: null,
+    traits: [
+      { name: 'Natural Weapons', text: 'Never unarmed in melee combat (razor claws/fangs). Striking an opponent with no allies within 1" deals +0/+1 damage with claws; +0/+0 otherwise.' },
+      { name: 'Stalking', text: 'If at least partially obscured by terrain with no allies within 4", missile attacks (including magical ones using a standard hit roll) only hit on a natural 6, regardless of the attacker\'s Combat Skill.' },
+      { name: 'Curiosity', text: 'If an unexplored/unrevealed token or marker is on the battlefield, a Felid activating in the Fast Actions Phase must move closer to the nearest accessible one (may move around obstacles in the way).' },
+    ],
+  },
+  {
+    key: 'gnawling',
+    label: 'Gnawling Renegade',
+    background: 'Outsider, Downworlder, or Zealot (cannot begin as a Mystic, but may learn during the campaign)',
+    skillExpertise: 'Devotion',
+    willMaxOverride: 1,
+    luckMaxOverride: null,
+    traits: [
+      { name: 'Group Loyalty', text: 'If a Gnawling activates in the Fast Actions Phase without engaging in combat, it provides a Combat Bonus to allies within 2" instead of the usual 1" (the ally must activate after the Gnawling, in either Phase).' },
+      { name: 'Skitter and Crawl', text: 'Not slowed by Difficult terrain or by fighting underground (including Delves). Crosses water features at normal speed but cannot take actions or Dash while in the water.' },
+      { name: 'Enmity', text: 'When fighting another Gnawling in melee, all blows from both combatants deal +0/+1 damage — this does not apply to follow-up effects such as injury rolls or secondary effects.' },
+    ],
+  },
+  {
+    key: 'kobold',
+    label: 'Kobold',
+    background: 'Outsider (may be Mystics, but must then use the Mystic background instead)',
+    skillExpertise: 'Expertise',
+    willMaxOverride: 1,
+    luckMaxOverride: null,
+    traits: [
+      { name: 'Discretion is the Better Part of Being a Kobold', text: 'With no enemies in Line of Sight, may flee the battlefield when selected to act (removed from play as if having moved off a battlefield edge) — even in scenarios requiring a specific location to escape, though this cannot satisfy a scenario victory condition. Any required roll on the Flight in the Dark table is always treated as no effect.' },
+      { name: 'Danger Sense', text: 'When hit, or subjected to a trap/hazard effect, hostile spell, or harmful random event, may roll 1D6 — a 6 avoids the effect completely (follow-up effects still apply normally).' },
+      { name: 'Lacking Strength', text: 'Cannot use warhammers, bastard swords, or longbows, and cannot wear Full or Knight Armor.' },
+    ],
+  },
+  {
+    key: 'skysworn',
+    label: 'Skysworn',
+    background: 'Mountain (exclusively — may be Mystics, but still uses the Mountain background)',
+    skillExpertise: 'Battlewise',
+    willMaxOverride: 1,
+    luckMaxOverride: null,
+    traits: [
+      { name: 'Treated as Human', text: 'Any rule, spell, or ability that singles out human characters applies to Skysworn too — but they do NOT receive the Driven trait (so, unlike Humans, they stay capped at 1 point of Will).' },
+      { name: 'Daring', text: 'When fighting hand to hand against an enemy with a higher base Combat Skill (before modifiers on either side), may add +1 to either the roll against Toughness or Armor per hit inflicted — cumulative with weapon bonuses.' },
+      { name: 'Pragmatic Outlook', text: 'Take a -2 penalty to Devotion and Scholar Proficiency Tests (though training can still raise the final modifier to +0). If targeted by a hostile spell or magical attack, roll 1D6 — on a 6, it is nullified entirely, even for other targets.' },
+      { name: 'Hazy Touch of Winter', text: 'If a Skysworn Mystic fails to cast a spell, they cannot cast again that battle, but may immediately take another full activation (move + act) instead — not if the spell was cancelled by an enemy ability.' },
+    ],
+  },
+  {
+    key: 'winged',
+    label: 'Winged',
+    background: 'Mountain or Outsider (may be Mystics without being required to pick the Mystic background)',
+    skillExpertise: 'Leadership',
+    willMaxOverride: 1,
+    luckMaxOverride: null,
+    traits: [
+      { name: 'Charmed Existence', text: 'If an injury\'s initial recovery time would be 3+ turns, reduce it by one. Never affected by disease of any kind, including magical.' },
+      { name: 'Winged Movement', text: 'Takes no falling/jumping damage from a ledge, and may land anywhere within half the obstacle\'s height below, moving normally from there. When Dashing, may ignore terrain that can be moved over (water, chasms, mud) — not Entangling terrain like ruins or woods, which blocks this entirely. May opt to move normally on the ground instead.' },
+      { name: 'Armor Limitations', text: 'Cannot wear armor (including magical) with a base Armor rating above 1; protective items with no Armor rating are unaffected.' },
+    ],
+  },
+];
+
 export function findFiveLeaguesOrigin(key) {
-  return FIVE_LEAGUES_ORIGINS.find((o) => o.key === key) || null;
+  return FIVE_LEAGUES_ORIGINS.find((o) => o.key === key) || FIVE_LEAGUES_COMPENDIUM_ORIGINS.find((o) => o.key === key) || null;
 }
 
 // Character Origin Table (p.15, D100) — for a GM who wants to randomize an

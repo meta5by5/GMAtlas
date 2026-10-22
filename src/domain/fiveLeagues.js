@@ -12,7 +12,7 @@
 // would use the stats of the opponent").
 
 import { getEntity } from './entities.js';
-import { setStatblockField } from './statblocks.js';
+import { setStatblockField, addStatblockWeapon } from './statblocks.js';
 import { findFiveLeaguesOrigin } from '../data/fiveLeaguesOrigins.js';
 import { findFiveLeaguesArmorType, findFiveLeaguesWeapon, findFiveLeaguesWeaponTrait, findFiveLeaguesItem } from '../data/fiveLeaguesCharacter.js';
 
@@ -278,29 +278,65 @@ export function formatFiveLeaguesOvercome(n) {
   return v >= 0 ? `+${v}` : `${v}`;
 }
 
-/** Quick-fills one Weapons-table row (p.60-61) from the real catalog —
- *  Name/Range/Damage ("Overcome Armor / Overcome Toughness")/Traits, all
- *  still plain free-text fields afterward (updateEntityStatblockWeapon),
- *  so a GM can keep hand-editing anything the catalog can't capture (a
- *  magic weapon's extra line, a renamed heirloom, ...). A no-op if the
- *  row or the catalog key doesn't exist. */
-export function applyFiveLeaguesWeaponCatalogPick(campaign, entityId, groupIndex, weaponIndex, catalogKey) {
-  const next = clone(campaign);
-  const e = getEntity(next, entityId);
-  if (!e) return next;
+// Shared Name/Range/Shots/Damage/Traits fill a real Weapons catalog entry
+// (p.60-61) resolves to — used both when quick-filling an EXISTING row
+// (applyFiveLeaguesWeaponCatalogPick, still used standalone/by other
+// tests) and, direct follow-up request ("remove the 'category' weapon
+// picker and use that selection as part of the '+ Weapon' button... create
+// the weapon record already populated"), when creating a brand NEW row
+// already filled (addFiveLeaguesWeaponFromCatalog below). null for an
+// unknown catalogKey, so either caller can no-op/fall back to a blank row.
+function fiveLeaguesWeaponFieldsFromCatalog(catalogKey) {
   const w = findFiveLeaguesWeapon(catalogKey);
-  if (!w) return next;
-  const g = e.statblocks && e.statblocks[groupIndex];
-  const weapon = g && Array.isArray(g.weapons) && g.weapons[weaponIndex];
-  if (!weapon) return next;
-  Object.assign(weapon, {
+  if (!w) return null;
+  return {
     name: w.label,
     range: w.range || (w.type === 'melee' ? 'Melee' : ''),
     shots: w.traits.includes('limitedAmmunition') ? 'Limited' : '—',
     damage: `${formatFiveLeaguesOvercome(w.overcomeArmor)} / ${formatFiveLeaguesOvercome(w.overcomeToughness)}`,
     traits: w.traits.map((k) => (findFiveLeaguesWeaponTrait(k) || {}).label).filter(Boolean).join(', '),
-  });
-  if (!weapon.location) weapon.location = 'self';
+    location: 'self',
+  };
+}
+
+/** Quick-fills one EXISTING Weapons-table row from the real catalog — all
+ *  fields still plain free-text afterward (updateEntityStatblockWeapon), so
+ *  a GM can keep hand-editing anything the catalog can't capture (a magic
+ *  weapon's extra line, a renamed heirloom, ...). A no-op if the row or the
+ *  catalog key doesn't exist. */
+export function applyFiveLeaguesWeaponCatalogPick(campaign, entityId, groupIndex, weaponIndex, catalogKey) {
+  const next = clone(campaign);
+  const e = getEntity(next, entityId);
+  if (!e) return next;
+  const fields = fiveLeaguesWeaponFieldsFromCatalog(catalogKey);
+  if (!fields) return next;
+  const g = e.statblocks && e.statblocks[groupIndex];
+  const weapon = g && Array.isArray(g.weapons) && g.weapons[weaponIndex];
+  if (!weapon) return next;
+  Object.assign(weapon, fields);
+  return next;
+}
+
+/** Pushes a brand NEW Weapons-table row prefilled from the real catalog —
+ *  same fields applyFiveLeaguesWeaponCatalogPick fills on an existing row,
+ *  just on one just created (addStatblockWeapon). Direct follow-up
+ *  request: the per-row Catalog picker is gone; this is what the "+
+ *  Weapon" add control's own catalog choice now drives instead — pick a
+ *  catalog weapon and the new row lands already populated, same one-step
+ *  shape addFiveLeaguesItemFromCatalog's own sibling already uses for
+ *  Items. An unknown catalogKey still adds a blank row (same "+ Custom
+ *  Weapon" shape) rather than silently doing nothing. A no-op (no row
+ *  added at all) if the entity/group doesn't exist. */
+export function addFiveLeaguesWeaponFromCatalog(campaign, entityId, groupIndex, catalogKey) {
+  const next = clone(campaign);
+  const e = getEntity(next, entityId);
+  if (!e) return next;
+  const g = e.statblocks && e.statblocks[groupIndex];
+  if (!g) return next;
+  addStatblockWeapon(e, groupIndex);
+  const weapon = g.weapons[g.weapons.length - 1];
+  const fields = fiveLeaguesWeaponFieldsFromCatalog(catalogKey);
+  if (fields) Object.assign(weapon, fields);
   return next;
 }
 

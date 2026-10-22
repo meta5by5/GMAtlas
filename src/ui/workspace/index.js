@@ -14,7 +14,7 @@ import { getCurrentWhereLocations, factionsInRegion, factionPresenceReasons } fr
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { buildMentionEditorHTML, richToolbarHTML, richToolbarToggleHTML, toolbarCollapsed } from '../mentionEditor.js';
 import { renderFactionEvents } from '../drawers/factionEvents.js';
-import { CONFLICT_STATUS_OPTIONS, helpToggle, numStepper } from '../drawers/index.js';
+import { CONFLICT_STATUS_OPTIONS, helpToggle, numStepper, contractsSection } from '../drawers/index.js';
 import { getColonyFields } from '../../domain/colony.js';
 import { getGalleryImage } from '../../domain/gallery.js';
 import { openForeshadowing } from '../../domain/foreshadowing.js';
@@ -22,9 +22,11 @@ import { WORLD_FLAG_VALUES, WORLD_FLAG_VALUE_LABEL } from '../../domain/worldFla
 import { composeNarrativeDraft } from '../../domain/copilot.js';
 import { getNpcSceneState } from '../../domain/scenes.js';
 import { getCurrentTurnStep } from '../../domain/turnSteps.js';
-import { isGameSystemActivated } from '../../data/rulesConstitution.js';
+import { isGameSystemActivated, providerLabel } from '../../data/rulesConstitution.js';
+import { listPartyTrackersForRuleset } from '../../domain/party.js';
 import { TURN_STEP_ORACLE_LINKS, TURN_STEP_LOCATION_STEPS } from '../../data/turnStepWorkflowMeta.js';
 import { tablesWithOverrides, oraclePathsWithAnyTag, excludeFactionOracleTables } from '../../domain/oracles.js';
+import { locationHierarchyTerms } from '../../data/genrePacks.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -76,7 +78,21 @@ function dashboardSection(key, title, lead, bodyHtml, doc, ui, headerExtra = '')
     .trim();
   const summary = rawSummary.length > 70 ? `${rawSummary.slice(0, 70)}…` : rawSummary;
   const helpKey = `dash:${key}`;
-  return `<section class="dashboard-section" data-dashboard-section="${esc(key)}">
+  // Direct follow-up request: "Enable drag-drop NPC entities into the
+  // Composer with a prompt to be antagonist, protagonist or bystander" —
+  // WHO's own 3 sub-groups (Protagonists/Antagonists/Bystanders) already
+  // accept a drop directly (data-drop-actor-group, landing in that exact
+  // group, no prompt needed since the target IS the role); this instead
+  // makes the WHOLE "WHO is here" section a SECOND, broader drop target
+  // for when the GM drops onto the section generally rather than one
+  // specific group — shell.js's onDrop checks the specific sub-groups
+  // FIRST, so a drop that actually lands inside one of those still goes
+  // straight there unprompted; only a drop elsewhere in the section
+  // (its header, the gaps between groups, a collapsed section) falls
+  // through to this one, which opens the same role-choice picker step
+  // the header's own "Add NPC" button uses rather than guessing a role.
+  const dropAttr = key === 'who' ? ' data-drop-who' : '';
+  return `<section class="dashboard-section" data-dashboard-section="${esc(key)}"${dropAttr}>
     <div class="section-head-row">
       <button type="button" class="dashboard-section-toggle" data-dashboard-section-toggle="${esc(key)}">${expanded ? '▾' : '▸'} ${esc(title)}</button>
       <span class="entity-chip-row">
@@ -89,23 +105,36 @@ function dashboardSection(key, title, lead, bodyHtml, doc, ui, headerExtra = '')
   </section>`;
 }
 
-// WHO's three top-level "add" actions, as icons right-aligned on the "WHO
-// is here" section header row (direct follow-up request, replacing the
-// old text-chip row inside the body) — passed as dashboardSection's
-// headerExtra so they're reachable even collapsed. "Introduce NPC"
-// (data-who-introduce-npc, shell.js) is unchanged in behavior — its own
-// one-field inline prompt: typing an existing NPC's name (plain text or
-// @Name/@[Name]) adds THAT entity to whichever Actor group its #character
-// tag routes it to; typing a name matching no NPC creates a brand-new one
-// and adds it the same way — "select from list and/or @ mentions," direct
-// quote. "New NPC"/"New Faction" (data-entity-add) now open a blank
-// entity straight into the Entity Editor (direct follow-up request —
-// "start new Entity Editors with the appropriate type") instead of a
-// silent background create-and-toast.
+// WHO's top-level "add" actions, as icons right-aligned on the "WHO is
+// here" section header row (direct follow-up request, replacing the old
+// text-chip row inside the body) — passed as dashboardSection's
+// headerExtra so they're reachable even collapsed. "New Faction"
+// (data-entity-add) opens a blank entity straight into the Entity Editor
+// (direct follow-up request — "start new Entity Editors with the
+// appropriate type") instead of a silent background create-and-toast.
+//
+// History on the NPC "add" button, two linked direct follow-up requests
+// each superseding the last: (1) "Instead of a single NPC area under
+// 'Who is here' in Composer, have rows for protagonist, antagonist and
+// bystander that each have a '+' NPC entity selector" — those three rows
+// and their own per-row "+" pickers already exist (npcSceneGroupsBlock's
+// own `group` closure below, data-entity-picker-open="protagonist"|
+// "antagonist"|"bystander"), so the generic header-level "Introduce NPC"
+// free-text prompt that used to live here (data-who-introduce-npc,
+// typing a name to resolve-or-create) was removed as redundant. (2)
+// "Replace the 'Introduce NPC' on 'WHO is here'... with a list of NPC
+// entities, with the 'create NPC' button like the typical entity picker"
+// — on reflection the header still needs SOME NPC-add control not tied to
+// one specific role (a GM adding someone before deciding protagonist vs.
+// antagonist vs. bystander), so it's back, just as the real entity
+// picker overlay (browsable list + "+ Create New NPC", shell.js's
+// renderEntityPickerOverlay) instead of free text — data-entity-picker-
+// open="who-add-npc" was never actually removed as a MECHANISM (the
+// data-drop-who drag-drop fallback still opens it the same way), just its
+// one remaining button trigger; this restores that trigger here.
 function whoHeaderExtra() {
   return `
-    <button type="button" class="icon-btn" data-who-introduce-npc title="Introduce NPC — select from Cast or type an @mention">🔎＋</button>
-    <button type="button" class="icon-btn" data-entity-add="npc" title="New NPC — opens a blank Entity Editor">🧑＋</button>
+    <button type="button" class="icon-btn" data-entity-picker-open="who-add-npc" title="Add NPC — pick from Cast or create new, then choose a scene role">🧑＋</button>
     <button type="button" class="icon-btn" data-entity-add="faction" title="New Faction — opens a blank Entity Editor">🏛＋</button>`;
 }
 
@@ -293,24 +322,40 @@ function npcSceneDetailBody(doc, ui, scene, npc) {
 // with its own "+" entity picker (data-entity-picker-open="protagonist"|
 // "antagonist"|"bystander", shell.js) filtered to NPCs (Protagonists to
 // #character-tagged NPCs, Antagonists to everyone else, Bystanders to any
-// NPC) and its own remove control on every thumbnail. All three need an
-// active scene to hang per-NPC state on — before the first "Continue
-// Story," there's nothing to track yet.
+// NPC) and its own remove control on every thumbnail.
+// Direct follow-up request (supersedes this function's own immediately-
+// prior redesign, which always showed all three sections even empty):
+// "Only show the protagonist, antagonists and bystanders sections if a
+// record is assigned to that section initially from the entity picker
+// in the title row for 'WHO is here'." A section with zero members now
+// renders NOTHING at all (not even a "(0)" header) — the only way to get
+// the FIRST member into one is the title row's own 🧑＋ picker
+// (data-entity-picker-open="who-add-npc", whoHeaderExtra above), which
+// asks which role afterward; once a section has at least one member, it
+// appears with its own header AND its own per-section "+" (data-entity-
+// picker-open="protagonist"|"antagonist"|"bystander") for adding MORE to
+// that same, already-visible section going forward. The earlier "always
+// show all three, usable before the first scene" fix (auto-starting a
+// scene via commitEntityPickerPick when none exists yet) is unaffected —
+// still applies the same way whichever picker (title row or a now-visible
+// section's own) is used.
 function npcSceneGroupsBlock(doc, ui) {
   const scenes = doc.scenes || [];
-  if (!scenes.length) return '<div class="ws-placeholder">Continue Story (Advisor) to start a scene — NPC roles and scene-specific details track per scene.</div>';
-  const scene = scenes[scenes.length - 1];
+  const scene = scenes[scenes.length - 1] || {};
   const protagonists = (scene.protagonistIds || []).map((id) => getEntity(doc, id)).filter(Boolean);
   const antagonists = (scene.antagonistIds || []).map((id) => getEntity(doc, id)).filter(Boolean);
   const bystanders = (scene.bystanderIds || []).map((id) => getEntity(doc, id)).filter(Boolean);
   const expandedSet = (ui && ui.expandedSceneNpcs) || new Set();
 
-  const group = (key, label, singular, hint, npcs, kind) => collapsibleThumbGroup(ui, {
-    key, label, count: npcs.length, helpKey: key, hint, dropGroup: kind,
-    headerExtra: `<button type="button" class="icon-btn" data-entity-picker-open="${esc(kind)}" title="Add ${esc(singular)}">＋</button>`,
-    body: `${npcs.length ? `<div class="actor-thumb-row">${npcs.map((n) => actorThumb(doc, n, kind, { expandable: true, expanded: expandedSet.has(n.id) })).join('')}</div>` : '<p class="dim small">None yet.</p>'}
+  const group = (key, label, singular, hint, npcs, kind) => {
+    if (!npcs.length) return '';
+    return collapsibleThumbGroup(ui, {
+      key, label, count: npcs.length, helpKey: key, hint, dropGroup: kind,
+      headerExtra: `<button type="button" class="icon-btn" data-entity-picker-open="${esc(kind)}" title="Add ${esc(singular)}">＋</button>`,
+      body: `<div class="actor-thumb-row">${npcs.map((n) => actorThumb(doc, n, kind, { expandable: true, expanded: expandedSet.has(n.id) })).join('')}</div>
       ${npcs.filter((n) => expandedSet.has(n.id)).map((n) => npcSceneDetailBody(doc, ui, scene, n)).join('')}`,
-  });
+    });
+  };
 
   return `
     ${group('who:protagonists', 'Protagonists', 'a Protagonist', "PCs and close allies — pick from NPCs tagged #character, or drag one in from another group.", protagonists, 'protagonist')}
@@ -502,8 +547,14 @@ function whereLocationHierarchyBlock(doc, ui) {
   const primary = whereLocations[0] || null;
   const system = primary ? getSystemForLocation(doc, primary.id) : null;
   const star = primary ? getStarForLocation(doc, primary.id) : null;
+  // Direct follow-up request: "all scifi terms should be genre specific...
+  // reference to 'Star' is only for scifi genre" — System/Star are sci-fi
+  // astronomy vocabulary; a fantasy/D&D 5e campaign reads the same #system/
+  // #star-tagged pair as a Realm and its Ruler instead (locationHierarchyTerms,
+  // data/genrePacks.js — label swap only, the tags/mechanism are unchanged).
+  const terms = locationHierarchyTerms(doc.settings && doc.settings.genrePack);
 
-  // Row 1 (the System section) always renders now, even before any
+  // Row 1 (the System/Realm section) always renders now, even before any
   // scene location exists at all — "New Location" (below) is the one
   // entry point into picking or creating the scene's System, so it has
   // to be reachable from the very first, fully-empty state too, not only
@@ -522,26 +573,27 @@ function whereLocationHierarchyBlock(doc, ui) {
     const photo = img
       ? `<img class="actor-thumb-photo" src="${esc(img.dataUrl)}" alt="">`
       : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((system.name || '?').trim().slice(0, 1).toUpperCase())}</span>`;
+    const noStarLabel = `<span class="dim small">No ${esc(terms.star)} linked</span>`;
     systemRow = `<div class="location-hierarchy-row">
       <div class="location-hierarchy-thumb">
         <button type="button" class="actor-thumb" data-open-entity="${esc(system.id)}" title="${esc(system.name || 'Unnamed')}">${photo}</button>
       </div>
       <div class="location-hierarchy-info">
         <div class="location-hierarchy-system">${esc(system.name || 'Unnamed')}</div>
-        <div class="location-hierarchy-star">${star ? esc(star.name || 'Unnamed') : '<span class="dim small">No Star linked</span>'}</div>
+        <div class="location-hierarchy-star">${star ? esc(star.name || 'Unnamed') : noStarLabel}</div>
         <div class="location-hierarchy-zonehex dim small">${zoneHex || '—'}</div>
       </div>
-      <button type="button" class="icon-btn" data-location-edit-relationships="${esc(primary.id)}" title="Edit System/Star via Relationships (Cast)">🔗</button>
+      <button type="button" class="icon-btn" data-location-edit-relationships="${esc(primary.id)}" title="Edit ${esc(terms.system)}/${esc(terms.star)} via Relationships (Cast)">🔗</button>
     </div>`;
   } else {
     systemRow = `<div class="location-hierarchy-row">
       <div class="actor-thumb-wrap">
         <div class="actor-thumb-circle">
-          <button type="button" class="actor-thumb" data-where-add-location title="Select or create the System">
+          <button type="button" class="actor-thumb" data-where-add-location title="Select or create the ${esc(terms.system)}">
             <span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">＋</span>
           </button>
         </div>
-        <span class="actor-thumb-name">Select System</span>
+        <span class="actor-thumb-name">Select ${esc(terms.system)}</span>
       </div>
     </div>`;
   }
@@ -560,7 +612,7 @@ function whereLocationHierarchyBlock(doc, ui) {
   const locationDetailsGroup = collapsibleThumbGroup(ui, {
     key: 'where:location-details', label: 'Location details', count: entries.length,
     helpKey: 'where:location-details',
-    hint: 'Locations in the current scene, not counting the System above — one per type (picking a second #district or #site replaces the first). Drag a Location entity in from Cast to add it the same way.',
+    hint: `Locations in the current scene, not counting the ${esc(terms.system)} above — one per type (picking a second #district or #site replaces the first). Drag a Location entity in from Cast to add it the same way.`,
     headerExtra: `<button type="button" class="icon-btn" data-entity-picker-open="location-current" title="Add a Location">＋</button>`,
     // Direct follow-up request: "allow drag of entities into sections
     // designed to load and list them... Locations to 'WHERE it happens'"
@@ -760,9 +812,10 @@ export function composerBodyHtml(doc, ui) {
 
 export function navigatorBodyHtml(doc, ui) {
   return `
-    ${navigatorWorkflowBlock(doc, ui)}
     ${narrativeComposerBlock(doc, ui)}
+    ${navigatorWorkflowBlock(doc, ui)}
     ${dashboardTrackersBlock(doc)}
+    ${contractsSection(doc, ui, { collapsible: true })}
   `;
 }
 
@@ -837,6 +890,18 @@ function oracleMatchChip(m) {
   const label = m.path[m.path.length - 1];
   return `<button type="button" class="chip sm" data-oracle-tag-jump="${esc(m.tag)}" title="${esc(m.path.join(' → '))} — tag: ${esc(m.tag)}">${esc(label)}</button>`;
 }
+// Direct follow-up request: "Put a panel-wide box around helpful and
+// supplemental oracles to make it stand out. Do not have a subheader
+// called Supplemental oracles. Just show the oracles provided." Hand-
+// tagged (TURN_STEP_ORACLE_LINKS) and supplemental (SUPPLEMENTAL_ORACLE_TAGS)
+// matches used to render as two visually separate tiers under their own
+// "Supplemental Oracles" sub-label; now merged into one flat, deduplicated
+// chip list under the single "Helpful Oracles" heading — a GM just sees
+// every relevant table, with no distinction for where each one came from.
+// .oracle-links-block itself gets a real bordered/background box
+// (styles/cockpit.css) instead of being a bare margin wrapper, so the
+// whole thing reads as one distinct panel rather than blending into the
+// surrounding card.
 function helpfulOraclesHtml(doc, stepId) {
   const genrePack = (doc.settings && doc.settings.statRuleset) === 'ironsworn' ? 'fantasy' : (doc.settings && doc.settings.genrePack);
   const rawTables = tablesWithOverrides(doc.oracles && doc.oracles.overrides, genrePack);
@@ -846,12 +911,12 @@ function helpfulOraclesHtml(doc, stepId) {
   const handKeys = new Set(handMatches.map((m) => m.path.join('>')));
   const supplementalTags = SUPPLEMENTAL_ORACLE_TAGS.filter((t) => !handTags.includes(t));
   const supplementalMatches = resolveOracleTagMatches(doc, tables, supplementalTags).filter((m) => !handKeys.has(m.path.join('>')));
-  if (!handMatches.length && !supplementalMatches.length) return '';
+  const allMatches = [...handMatches, ...supplementalMatches];
+  if (!allMatches.length) return '';
   return `
-    <div class="turn-step-helpful-oracles">
-      <div class="turn-step-helpful-oracles-head">Helpful Oracles</div>
-      ${handMatches.length ? `<div class="turn-step-oracle-chips">${handMatches.map(oracleMatchChip).join('')}</div>` : ''}
-      ${supplementalMatches.length ? `<div class="turn-step-oracle-tier-label">Supplemental Oracles</div><div class="turn-step-oracle-chips">${supplementalMatches.map(oracleMatchChip).join('')}</div>` : ''}
+    <div class="oracle-links-block">
+      <div class="oracle-links-head">Helpful Oracles</div>
+      <div class="oracle-links-chips">${allMatches.map(oracleMatchChip).join('')}</div>
     </div>`;
 }
 
@@ -911,11 +976,39 @@ function navigatorWorkflowStepCard(doc, ui, def) {
     </div>`;
 }
 
+// Direct follow-up request: "Add section headers listing the ruleset
+// module when showing more than one campaign workflow in navigator...
+// Start those sections collapsed by default when there is more than one
+// campaign workflow. If only one workflow, do not include a section
+// header. Also, put a box around both workflows and shade it slightly
+// differently to stand out from other options." Mirrors
+// dashboardTrackersBlock's own "only label when 2+ actually contribute"
+// convention (providerLabel) for the header text; the collapse toggle
+// reuses collapsibleThumbGroup's shared ui.collapsedActorGroups Set and
+// data-actor-group-toggle attribute directly (shell.js's handler is
+// already fully generic — keyed by whatever string this passes, no new
+// wiring needed) rather than the full collapsibleThumbGroup shell itself,
+// since a workflow group has no roster "count" and doesn't need its own
+// per-group help toggle on top of the block's existing one.
 function navigatorWorkflowBlock(doc, ui) {
-  const cards = WORKFLOW_SLOTS.map((def) => navigatorWorkflowStepCard(doc, ui, def)).join('');
-  if (!cards) return '';
+  const activeDefs = WORKFLOW_SLOTS.filter((def) => isGameSystemActivated(doc, def.system) && getCurrentTurnStep(doc, def.slot));
+  if (!activeDefs.length) return '';
+  const showHeaders = activeDefs.length > 1;
+  const collapsedSet = (ui && ui.collapsedActorGroups) || new Set();
+  const cards = activeDefs.map((def) => {
+    const cardHtml = navigatorWorkflowStepCard(doc, ui, def);
+    if (!showHeaders) return cardHtml;
+    const key = `workflow:${def.system}`;
+    // Default COLLAPSED when 2+ workflows are showing — inverted-Set read,
+    // same shape collapsibleThumbGroup's own defaultCollapsed option uses.
+    const collapsed = !collapsedSet.has(key);
+    return `<div class="workspace-mini-section workflow-group">
+      <button type="button" class="field-label-static actor-group-toggle" data-actor-group-toggle="${esc(key)}">${collapsed ? '▸' : '▾'} ${esc(providerLabel(def.system))}</button>
+      ${collapsed ? '' : cardHtml}
+    </div>`;
+  }).join('');
   const helpKey = 'nav:workflow';
-  return `<div class="threads navigator-workflow">
+  return `<div class="navigator-workflow">
     <div class="threads-head"><h3>Campaign Workflow</h3>${helpToggle(helpKey)}</div>
     ${wsHelpBody(helpKey, "Steps through the same Campaign Turn + 5PFH/Planetfall/Five Leagues Turn Step sequence as the Campaign panel's own Colony/Starship/Warband tabs — a second, parallel way to walk the same steps, not a replacement; editing either copy of Campaign Turn updates the same value. 🔮 jumps to a suggested Oracle table when one applies; a location-flavored step offers to pick or create a map, whose link travels with the step once you add it to the Journal.", ui)}
     ${cards}
@@ -926,8 +1019,11 @@ function navigatorWorkflowBlock(doc, ui) {
 // header (2026-07-23 mockup) to sit directly under the Narrative Composer
 // in the right column, one full-width slider per row (not the 3-up grid
 // the header used) so it reads as a compact tracker stack alongside the
-// draft it's informing, not a separate dashboard region.
-function dashboardTrackersBlock(doc) {
+// draft it's informing, not a separate dashboard region. These five are
+// Starforged's OWN narrative pressure dials (Vow/Progress-style), not a
+// ruleset-agnostic concept — kept as its own function now that
+// dashboardTrackersBlock below gates it to only the Starforged ruleset.
+function starforgedDialsHtml(doc) {
   const c = doc.context.what;
   const mystery = c.mystery == null ? 0 : c.mystery;
   const stress = c.stress == null ? 5 : c.stress;
@@ -943,6 +1039,69 @@ function dashboardTrackersBlock(doc) {
     ${dial('resources', 'Resources', resources)}
     ${dial('reputation', 'Reputation', reputation)}
   </div>`;
+}
+
+// Read-only (Navigator is a second, parallel surface — editing a Party
+// Tracker's value stays exclusively on the Party panel itself) list of
+// another ruleset's own Party Trackers, for dashboardTrackersBlock below.
+function readonlyPartyTrackersHtml(trackers) {
+  return `<div class="dashboard-trackers">
+    ${trackers.map((t) => {
+      const hasMax = (t.kind === 'meter' || t.kind === 'gauge') && t.max != null;
+      // Plain string concatenation rather than a ternary with a
+      // template-literal branch — scripts/build.js's regex-based bundler
+      // doesn't reliably handle a backtick nested inside another
+      // template literal's ${} (see dashboardTrackersBlock's own note).
+      const display = hasMax ? (t.value + ' / ' + t.max) : String(t.value);
+      return `<div class="field-label sm dashboard-tracker dashboard-tracker-readonly">${esc(t.name)} <b class="metric">${esc(display)}</b></div>`;
+    }).join('')}
+  </div>`;
+}
+
+// Direct follow-up request: "The trackers on Navigator are for Starforged
+// and should be filtered to that ruleset and all rulesets activated
+// would have their trackers added to Navigator (separated by section
+// header named for the ruleset if there are more than one active
+// ruleset and more than one ruleset has trackers added to the
+// Navigator. Do not show the ruleset section header if only one
+// ruleset adds trackers to the Navigator." Starforged's own 5 dials
+// (starforgedDialsHtml) now only show when it's the CAMPAIGN'S current
+// statRuleset (they always used to show unconditionally, for any
+// ruleset); any OTHER Game-System-Activated ruleset with trackers of
+// its own already sitting in Party Trackers (listPartyTrackersForRuleset,
+// domain/party.js — a campaign that has switched statRuleset more than
+// once over its life can genuinely carry more than one ruleset's worth
+// at once, since ensureParty*Trackers never removes a prior ruleset's
+// own trackers) gets its own read-only section here too. A ruleset-named
+// header (providerLabel) only renders once 2+ rulesets actually
+// contributed a section — a single contributor needs no label, same as
+// every other "only label when there's something to disambiguate"
+// convention in this app.
+function dashboardTrackersBlock(doc) {
+  const statRuleset = (doc.settings && doc.settings.statRuleset) || 'starforged';
+  const sections = [];
+  if (statRuleset === 'starforged') sections.push({ id: 'starforged', html: starforgedDialsHtml(doc) });
+  for (const id of ['fivepfh', 'swn', 'planetfall', 'fiveleagues']) {
+    if (!isGameSystemActivated(doc, id)) continue;
+    const trackers = listPartyTrackersForRuleset(doc, id);
+    if (!trackers.length) continue;
+    sections.push({ id, html: readonlyPartyTrackersHtml(trackers) });
+  }
+  if (!sections.length) return '';
+  const showHeaders = sections.length > 1;
+  return sections.map((s) => {
+    // Built as a plain variable rather than a nested template literal
+    // inside the outer one below — scripts/build.js's own bundler is
+    // regex-based (see its header comment) and doesn't reliably track
+    // nested-backtick depth; keeping each template literal flat (one
+    // level) avoids tripping it.
+    const headHtml = showHeaders ? `<h5 class="dashboard-trackers-section-head">${esc(providerLabel(s.id))}</h5>` : '';
+    return `
+    <div class="dashboard-trackers-section">
+      ${headHtml}
+      ${s.html}
+    </div>`;
+  }).join('');
 }
 
 // WHERE/WHY's free-text Focus field (rich @mention editor) — WHO used to

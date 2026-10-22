@@ -15,7 +15,7 @@ export const SOURCEBOOK_INVENTORY = [
   { file: 'assets/docs/Starsmith-Expanded-Oracles-May-15-23.pdf', status: 'inspiration only', note: 'Same as above — cited, not yet mined for its own expanded-oracle content.' },
   { file: 'assets/docs/5PFH-Five-Parsecs-From-Home-v3.pdf', status: 'integrated', note: 'Character sheets (Phase 4), combat dice model (domain/dice.js rollFlat), Trade contract taxonomy (ADR 0004).' },
   { file: 'assets/docs/5PFH-3e-Compendium-Includes-Bug-Hunt.pdf', status: 'integrated', note: 'Gear Catalog research pass (ADR 0012, "5PFH core + Compendium").' },
-  { file: 'assets/docs/5PFH Planetfall 1.2.pdf', status: 'integrated', note: 'Colony drawer turn sheet (domain/colony.js), Planetfall Grid Battlemap (ADR 0023).' },
+  { file: 'assets/docs/5PFH/Five Parsecs - Planetfall 1.2.pdf', status: 'integrated', note: 'Colony drawer turn sheet (domain/colony.js), Planetfall Grid Battlemap (ADR 0023).' },
   { file: 'assets/docs/Stars Without Number Revised - Deluxe Edition.pdf', status: 'faction/world/bestiary content authored (original)', note: 'Faction stats/Assets/turn resolution, NPC deepening, Xenobestiary/Site Concept oracle groups (ADR 0010/0011) — original re-implementation of SWN\'s concepts, not a transcription. Sector generation remains future work.' },
   { file: 'assets/docs/CitiesWithoutNumber_Deluxe.pdf', status: 'cybernetics concept borrowed (original)', note: 'Strain/cyberware model (ADR 0011) — not a full CWN content pack, and not a Rules Constitution provider on the strength of one subsystem.' },
   { file: 'assets/docs/Hostile setting.pdf', status: 'integrated — default genre source', note: 'data/tables.js\'s Hostile-flavored oracle content; HOSTILE Canon Locations gazetteer (ADR 0026) extracted from this book\'s own worlds/UWP tables (pp.38-49, 321 pages read in full).' },
@@ -52,6 +52,12 @@ export const SOURCEBOOK_INVENTORY = [
   { file: 'assets/docs/5LFB/5LDB Warband Sheet US.pdf', status: 'in library, not yet used' },
   { file: 'assets/docs/dnd5e/SRD_CC_v5.2.1.pdf', status: 'integrated — default genre source', note: 'The dnd5e character ruleset (data/rulesets.js) and the D&D 5e SRD Monsters A-Z content pack (data/contentPacksManifest.js) — Creative Commons (CC-BY-4.0), a different licensing posture than every purchased-rulebook PDF here (see data/rulesets.js\'s own dnd5e entry comment).' },
   { file: 'assets/docs/Starforged/Starforged-reference-guide.pdf', status: 'integrated', note: 'Same content lineage as the existing flat-path entry above — new correctly-pathed entry for the same already-integrated book (Gear Catalog research pass, ADR 0012).' },
-  { file: 'assets/docs/5PFH/5PFH-Five-Parsecs-From-Home-v3.pdf', status: 'integrated', note: 'Same content lineage as the existing flat-path entry above — new correctly-pathed entry for the same already-integrated book (character sheets, combat dice model, Trade contract taxonomy).' },
+  { file: 'assets/docs/5PFH/Five Parsecs From Home v3.pdf', status: 'integrated', note: 'Same content lineage as the existing flat-path entry above — new correctly-pathed entry for the same already-integrated book (character sheets, combat dice model, Trade contract taxonomy).' },
+  // Direct follow-up request ("rename all... to match the actual
+  // filenames in the /docs subdirectories"): the Compendium's own flat-
+  // path entry above (line 17) is left as-is, same "unused but harmless"
+  // posture as every other flat-path dupe here — this is the real,
+  // correctly-pathed one matching the file's actual on-disk name.
+  { file: 'assets/docs/5PFH/Five Parsecs - Compendium Includes Bug Hunt.pdf', status: 'integrated', note: 'Gear Catalog research pass (ADR 0012, "5PFH core + Compendium") — same content lineage as the existing flat-path entry above.' },
   { file: 'assets/docs/Traveller/Traveller-2e-Core-Rulebook.pdf', status: 'integrated', note: 'Same content lineage as the existing flat-path entry above — new correctly-pathed entry for the same already-integrated book (Gear Catalog research pass).' },
 ];

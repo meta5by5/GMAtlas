@@ -40,7 +40,7 @@ import { RULESETS, findRuleset, STARFORGED_PROGRESS_DIFFICULTIES, findProgressDi
 import { canLoadRulesetReference } from '../../domain/permissions.js';
 import { GEAR_TEMPLATE_SYSTEMS, findGearTemplate } from '../../data/gearTemplates.js';
 import { GEAR_CATALOG, findCatalogItem } from '../../data/gearCatalog.js';
-import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel, resolveProviderChoice, resolveActiveProviderChoice, isGameSystemActivated } from '../../data/rulesConstitution.js';
+import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel, resolveProviderChoice, resolveActiveProviderChoice, isGameSystemActivated, GAME_SYSTEM_SUPPLEMENTS, isSupplementActivated, GAME_SYSTEM_FAMILIES, matchesEnabledModule } from '../../data/rulesConstitution.js';
 import { CONTENT_PACKS_MANIFEST } from '../../data/contentPacksManifest.js';
 import { CSS_TEMPLATES } from '../../data/cssTemplates.js';
 import { SOURCEBOOK_INVENTORY } from '../../data/sourcebookInventory.js';
@@ -55,7 +55,7 @@ import {
 } from '../../domain/dungeonCrawls.js';
 import { DUNGEON_CRAWL_ARCHETYPES, ALL_DUNGEON_CRAWL_ARCHETYPES, findDungeonCrawlArchetype, findDungeonCrawlPack, DUNGEON_ROOM_FALLBACK_PALETTE, FLEXCRAWL_DYNAMIC_CONTENT_CATEGORIES } from '../../data/dungeonCrawlTiles.js';
 import { DUNGEON_DRESSING_ICONS, findDungeonDressingIcon, DUNGEON_TILE_GRID_SIZE } from '../../data/dungeonCrawlDressing.js';
-import { FIVE_LEAGUES_ORIGINS, findFiveLeaguesOrigin } from '../../data/fiveLeaguesOrigins.js';
+import { FIVE_LEAGUES_ORIGINS, FIVE_LEAGUES_COMPENDIUM_ORIGINS, findFiveLeaguesOrigin } from '../../data/fiveLeaguesOrigins.js';
 import {
   FIVE_LEAGUES_CHARACTER_TYPES, findFiveLeaguesCharacterType,
   FIVE_LEAGUES_SKILLS,
@@ -1544,7 +1544,15 @@ function characterSheetSectionHtml(e, doc, ui = {}, opts = {}) {
 // there too, since this reads the live entity.statblocks on every render.
 function nonCharacterStatblockCardsHtml(e, doc, ui = {}, opts = {}) {
   const sorted = sortStatblockGroups(e.statblocks || [], doc.settings);
-  return sorted.filter(({ group }) => group.kind !== 'character')
+  // group.archived (direct follow-up request: "Don't allow both a
+  // bestiary and a character sheet at the same time... swap... if the
+  // Character tag is added/removed") — same hide-don't-delete filter
+  // characterSheetSectionHtml's own !group.archived already uses, now
+  // symmetric: a Bestiary ('npc') group gets archived while #character
+  // is active, so it stays out of view here until the tag is removed and
+  // ensureAutoStatblock swaps it back. Vehicle/Gear groups never carry
+  // this flag at all, so they're unaffected either way.
+  return sorted.filter(({ group }) => group.kind !== 'character' && !group.archived)
     .map(({ group, index }) => statblockGroupBlock(e, group, index, doc, ui, opts)).join('');
 }
 
@@ -1559,7 +1567,12 @@ function statblockAddControlsHtml(e, doc, ui = {}) {
   const groups = e.statblocks || [];
   const sorted = sortStatblockGroups(groups, doc.settings);
   const addChoices = statblockAddChoices(e, groups, doc);
-  const fieldAddRows = sorted.map(({ group, index }) => `
+  // Direct follow-up request (Bestiary/Character swap): an archived group
+  // isn't shown as a card at all (nonCharacterStatblockCardsHtml/
+  // characterSheetSectionHtml's own !archived filters) — offering to add
+  // a Field/Track to it here, where the GM can't even see its current
+  // fields, would be confusing.
+  const fieldAddRows = sorted.filter(({ group }) => !group.archived).map(({ group, index }) => `
     <div class="statblock-add-row">
       <span class="dim small">${statblockGroupLabel(group, doc)}</span>
       <button class="chip" data-statblock-add-field="${index}">＋ Field</button>
@@ -1901,6 +1914,19 @@ function characterSheetGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
   // the character sheet section to be open, but all other sections to be
   // collapsed."
   const collapsed = !!(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
+  // Two linked direct follow-up requests: (1) "Remove the up/down arrows
+  // for the character sheet if there is just one character sheet" —
+  // reordering is only meaningful when there's a second VISIBLE Character
+  // Sheet group to swap places with (an entity carrying two rulesets'
+  // sheets at once, per CLAUDE.md's own documented case). (2) "Do not show
+  // the name of the character sheet if the only character sheet" — the
+  // "Character Sheet · {ruleset}" heading is only useful for telling
+  // several of them apart; with just one, the Statblocks section's own
+  // surrounding label already says what this card is. Both gated on the
+  // SAME count, computed fresh off e.statblocks itself rather than
+  // threaded through opts, so it can't drift out of sync with whatever
+  // characterSheetSectionHtml actually renders.
+  const characterSheetCount = (e.statblocks || []).filter((g) => g.kind === 'character' && !g.archived).length;
   const ruleset = findRuleset(group.ruleset);
   const indexed = group.fields.map((f, fi) => ({ f, fi }));
   // D&D 5e-style (direct request) — group.sections (set by makeStatblock
@@ -1929,7 +1955,7 @@ function characterSheetGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
           ${stats.length ? `<div class="character-sheet-stats">${stats.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true, ruleset: group.ruleset })).join('')}</div>` : ''}
           ${resources.length ? `<div class="character-sheet-resources">${resources.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true, ruleset: group.ruleset })).join('')}</div>` : ''}
           ${['5pfh', 'fiveleagues'].includes(group.ruleset) ? characterSheetWeaponsAndGearHtml(group, gi) : ''}
-          ${group.ruleset === 'fiveleagues' ? fiveLeaguesCharacterSheetExtrasHtml(e, group, gi, ui) : ''}`;
+          ${group.ruleset === 'fiveleagues' ? fiveLeaguesCharacterSheetExtrasHtml(e, group, gi, doc, ui) : ''}`;
       })();
   // D&D 5e PDF character-sheet import (direct request, phase 4) — only
   // offered on a dnd5e Character Sheet group; a real file input hidden
@@ -1942,9 +1968,9 @@ function characterSheetGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
   return `<div class="statblock-block character-sheet" data-statblock-group="${gi}">
     <div class="statblock-head">
       <button class="icon-btn statblock-collapse-toggle" data-statblock-group-toggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button>
-      <h4>Character Sheet · ${esc(ruleset.label)}</h4>
+      ${characterSheetCount > 1 ? `<h4>Character Sheet · ${esc(ruleset.label)}</h4>` : ''}
       ${pdfImportBtn}
-      ${statblockMoveButtonsHtml(gi)}
+      ${characterSheetCount > 1 ? statblockMoveButtonsHtml(gi) : ''}
       <button class="icon-btn" data-statblock-remove-group="${gi}" title="Remove this statblock">🗑</button>
     </div>
     ${collapsed ? '' : bodyHtml}
@@ -1997,34 +2023,76 @@ function characterSheetAttacksHtml(group, gi) {
 // Weapon/Gear shape, p.15/Deep Below Warband Sheet, and reuses this Gear
 // field for its free-text Skills list too — see rulesets.js's own note),
 // matching the Core rulebook's own character sheet layout (Weapon/Range/
-// Shots/Damage/Traits columns, a Gear line below). A real
-// <table> (same pattern Trade's .trade-market-table already uses for
-// editable tabular data — <input>s inside <td>s, not a flex/grid mimic),
-// addressed by plain array index (weaponIndex), not a generated id, same
-// convention statblock fields already use.
+// Shots/Damage/Traits columns, a Gear line below). 5PFH keeps the original
+// single-row <table> (same pattern Trade's .trade-market-table already
+// uses for editable tabular data — <input>s inside <td>s). Five Leagues has
+// two extra columns (Catalog quick-fill, Location) that left no room for
+// readable headers in that same single row, so it gets its own two-row-
+// per-weapon card layout instead (direct follow-up request: "use two rows
+// where Weapon name is wide enough... Move traits and location and the
+// delete icon to a second row"). Both addressed by plain array index
+// (weaponIndex), not a generated id, same convention statblock fields
+// already use.
 function characterSheetWeaponsAndGearHtml(group, gi) {
   const weapons = group.weapons || [];
-  // Five Leagues-only enhancements (direct follow-up request: "track...
-  // weapon traits... per the ruleset") — a quick-fill Catalog column
-  // (applyFiveLeaguesWeaponCatalogPick, shell.js) and a Location column
-  // (self/backpack/stash, reusing this same row's existing free-text
-  // `traits` field's generic data-statblock-weapon-field handler for
-  // Location too, just a new key on the same patch shape). 5PFH's own
-  // weapon table is completely unchanged — neither column renders there.
   const isFiveLeagues = group.ruleset === 'fiveleagues';
-  const catalogOptions = isFiveLeagues
-    ? FIVE_LEAGUES_WEAPON_CATALOG.map((w) => `<option value="${esc(w.key)}">${esc(w.label)}</option>`).join('')
-    : '';
   const traitsListId = `five-leagues-weapon-traits-${gi}`;
+  const gearFieldHtml = `
+    <label class="field-label statblock-gear-field">Gear
+      <textarea rows="2" data-statblock-gear="${gi}" placeholder="Gear…">${esc(group.gear || '')}</textarea>
+    </label>`;
+
+  if (isFiveLeagues) {
+    const weaponCards = weapons.map((w, wi) => `
+      <div class="statblock-weapon-card">
+        <div class="statblock-weapon-row1">
+          <input type="text" class="statblock-weapon-name-input" data-statblock-weapon-field="${gi}::${wi}::name" value="${esc(w.name)}" placeholder="Weapon name">
+          <input type="text" data-statblock-weapon-field="${gi}::${wi}::range" value="${esc(w.range)}" placeholder="Rng">
+          <input type="text" data-statblock-weapon-field="${gi}::${wi}::shots" value="${esc(w.shots)}" placeholder="Shots">
+          <input type="text" data-statblock-weapon-field="${gi}::${wi}::damage" value="${esc(w.damage)}" placeholder="Dmg">
+        </div>
+        <div class="statblock-weapon-row2">
+          <input type="text" data-statblock-weapon-field="${gi}::${wi}::traits" value="${esc(w.traits)}" placeholder="Traits" list="${traitsListId}">
+          <select data-statblock-weapon-field="${gi}::${wi}::location" title="Carried in">${FIVE_LEAGUES_GEAR_LOCATIONS.map((l) => `<option value="${esc(l.key)}" ${(w.location || 'self') === l.key ? 'selected' : ''}>${esc(l.label)}</option>`).join('')}</select>
+          <button type="button" class="icon-btn statblock-weapon-remove-btn" data-statblock-weapon-remove="${gi}::${wi}" title="Remove weapon">🗑</button>
+        </div>
+      </div>`).join('');
+    // Direct follow-up request: "remove the 'category' weapon picker and
+    // use that selection approach as part of the '+ Weapon' button... the
+    // choice of that selection would then create the weapon record
+    // populated with that selected weapon and its stats" — the per-row
+    // Catalog <select> (quick-filling an EXISTING row) is gone; picking a
+    // catalog weapon here instead creates a brand new, already-filled row
+    // (addFiveLeaguesWeaponFromCatalog, shell.js), same "+ Add from
+    // catalog… next to + Custom X" shape the Items table below already
+    // established for its own catalog.
+    const catalogOptions = FIVE_LEAGUES_WEAPON_CATALOG.map((w) => `<option value="${esc(w.key)}">${esc(w.label)}</option>`).join('');
+    return `
+      <div class="statblock-weapons">
+        <h4>Weapons</h4>
+        <div class="statblock-weapon-headrow">
+          <span class="statblock-weapon-name-head">Weapon</span><span>Rng</span><span>Shots</span><span>Dmg</span>
+        </div>
+        <div class="statblock-weapon-list">${weaponCards}</div>
+        <datalist id="${traitsListId}">${FIVE_LEAGUES_WEAPON_TRAITS.map((t) => `<option value="${esc(t.label)}">`).join('')}</datalist>
+        <div class="five-leagues-item-add-row">
+          <select data-fiveleagues-weapon-catalog-add="${gi}" title="Add from Weapons catalog…">
+            <option value="">+ Add from Weapons catalog…</option>
+            ${catalogOptions}
+          </select>
+          <button type="button" class="btn ghost sm" data-statblock-weapon-add="${gi}">＋ Custom Weapon</button>
+        </div>
+      </div>
+      ${gearFieldHtml}`;
+  }
+
   const weaponRows = weapons.map((w, wi) => `
     <tr>
-      ${isFiveLeagues ? `<td><select data-fiveleagues-weapon-catalog-pick="${gi}::${wi}"><option value="">Catalog…</option>${catalogOptions}</select></td>` : ''}
       <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::name" value="${esc(w.name)}" placeholder="Weapon"></td>
       <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::range" value="${esc(w.range)}" placeholder="Range"></td>
       <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::shots" value="${esc(w.shots)}" placeholder="Shots"></td>
       <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::damage" value="${esc(w.damage)}" placeholder="Damage"></td>
-      <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::traits" value="${esc(w.traits)}" placeholder="Traits" ${isFiveLeagues ? `list="${traitsListId}"` : ''}></td>
-      ${isFiveLeagues ? `<td><select data-statblock-weapon-field="${gi}::${wi}::location">${FIVE_LEAGUES_GEAR_LOCATIONS.map((l) => `<option value="${esc(l.key)}" ${(w.location || 'self') === l.key ? 'selected' : ''}>${esc(l.label)}</option>`).join('')}</select></td>` : ''}
+      <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::traits" value="${esc(w.traits)}" placeholder="Traits"></td>
       <td class="statblock-weapon-remove-cell"><button type="button" class="icon-btn statblock-weapon-remove-btn" data-statblock-weapon-remove="${gi}::${wi}" title="Remove weapon">🗑</button></td>
     </tr>`).join('');
   return `
@@ -2032,18 +2100,13 @@ function characterSheetWeaponsAndGearHtml(group, gi) {
       <h4>Weapons</h4>
       <table class="statblock-weapon-table">
         <thead><tr>
-          ${isFiveLeagues ? '<th></th>' : ''}
           <th class="statblock-weapon-col-name">Weapon</th><th>Range</th><th>Shots</th><th>Damage</th><th class="statblock-weapon-col-traits">Traits</th>
-          ${isFiveLeagues ? '<th>Location</th>' : ''}
           <th></th></tr></thead>
         <tbody>${weaponRows}</tbody>
       </table>
-      ${isFiveLeagues ? `<datalist id="${traitsListId}">${FIVE_LEAGUES_WEAPON_TRAITS.map((t) => `<option value="${esc(t.label)}">`).join('')}</datalist>` : ''}
       <button type="button" class="btn ghost sm" data-statblock-weapon-add="${gi}">＋ Weapon</button>
     </div>
-    <label class="field-label statblock-gear-field">Gear
-      <textarea rows="2" data-statblock-gear="${gi}" placeholder="Gear…">${esc(group.gear || '')}</textarea>
-    </label>`;
+    ${gearFieldHtml}`;
 }
 
 // Direct follow-up request: "update the character sheet for 5lfb to track
@@ -2054,9 +2117,9 @@ function characterSheetWeaponsAndGearHtml(group, gi) {
 // in the order they appear on the sheet; `ui` threads through for the
 // Character Type/Origin info-toggle (below) and the Items table's
 // per-row Notes toggle (fiveLeaguesItemsSectionHtml).
-function fiveLeaguesCharacterSheetExtrasHtml(e, group, gi, ui) {
+function fiveLeaguesCharacterSheetExtrasHtml(e, group, gi, doc, ui) {
   return `
-    ${fiveLeaguesTypeAndOriginRowHtml(e, ui)}
+    ${fiveLeaguesTypeAndOriginRowHtml(e, doc, ui)}
     ${fiveLeaguesBackgroundSectionHtml(e)}
     ${fiveLeaguesSkillsSectionHtml(e)}
     ${fiveLeaguesArmorSectionHtml(e)}
@@ -2080,7 +2143,7 @@ function fiveLeaguesCharacterSheetExtrasHtml(e, group, gi, ui) {
 // other's — "just one set of text viewable at a time." Picking Mystic
 // (Character Type) is what unhides the Spells section far below (p.45)
 // and forces Background to Mystic (see that section's own comment).
-function fiveLeaguesTypeAndOriginRowHtml(e, ui) {
+function fiveLeaguesTypeAndOriginRowHtml(e, doc, ui) {
   const openKey = (ui && ui.fiveLeaguesInfoOpen) || null;
 
   const currentType = e.fiveLeaguesCharacterType || '';
@@ -2088,14 +2151,30 @@ function fiveLeaguesTypeAndOriginRowHtml(e, ui) {
   const typeOptions = FIVE_LEAGUES_CHARACTER_TYPES.map((t) => `<option value="${esc(t.key)}" ${t.key === currentType ? 'selected' : ''}>${esc(t.label)}</option>`).join('');
   const typeInfoKey = `${e.id}::characterType`;
 
+  // Direct follow-up request: "update 5LFB origins to expand also to
+  // include the origins from Compendium if that is enabled license" — the
+  // Compendium's own extra Origins (data/fiveLeaguesOrigins.js's
+  // FIVE_LEAGUES_COMPENDIUM_ORIGINS) only appear as SELECTABLE options once
+  // its Supplement Activation checkbox is on (Settings -> Licenses); an
+  // entity that already has one set keeps showing it via findFiveLeaguesOrigin
+  // (which always checks both lists) even if the supplement is later
+  // turned back off.
+  const compendiumActive = isSupplementActivated(doc, 'fiveleagues', 'fiveleagues-compendium');
+  const availableOrigins = compendiumActive ? [...FIVE_LEAGUES_ORIGINS, ...FIVE_LEAGUES_COMPENDIUM_ORIGINS] : FIVE_LEAGUES_ORIGINS;
   const currentOrigin = e.fiveLeaguesOrigin || '';
   const origin = currentOrigin ? findFiveLeaguesOrigin(currentOrigin) : null;
-  const originOptions = FIVE_LEAGUES_ORIGINS.map((o) => `<option value="${esc(o.key)}" ${o.key === currentOrigin ? 'selected' : ''}>${esc(o.label)}</option>`).join('');
+  const originOptions = availableOrigins.map((o) => `<option value="${esc(o.key)}" ${o.key === currentOrigin ? 'selected' : ''}>${esc(o.label)}</option>`).join('');
   const originInfoKey = `${e.id}::origin`;
 
   const typePanel = type ? `<p class="dim small">${esc(type.text)}</p>` : '';
+  // Most origins get a single bracketed skill ("+1 [Speech]"); Deep Kin's
+  // own Compendium text grants +1 to three skills at once, and Elriki's
+  // own text is explicit that it gets no skill bonus at all (skillExpertise
+  // null) — both read naturally off the same free-text field without a
+  // second shape-specific field.
+  const skillExpertiseText = origin && origin.skillExpertise ? ` · Skill expertise: +1 [${esc(origin.skillExpertise)}] Proficiency Tests` : '';
   const originPanel = origin ? `
-    <p class="dim small">Background: ${esc(origin.background)} · Skill expertise: +1 [${esc(origin.skillExpertise)}] Proficiency Tests</p>
+    <p class="dim small">Background: ${esc(origin.background)}${skillExpertiseText}</p>
     <ul class="five-leagues-origin-traits">
       ${origin.traits.map((t) => `<li><b>${esc(t.name)}</b> — ${esc(t.text)}</li>`).join('')}
     </ul>` : '';
@@ -2388,6 +2467,29 @@ function trackRow(f, gi, fi, opts = {}) {
 // rest). Only ever reached for the fiveleagues ruleset (see
 // statblockFieldRow above); every other ruleset's own tracks are
 // unaffected.
+// Direct follow-up request: "change the Luck, Will and XP fields in the
+// 5LFB character sheet to a currency field format" — this app's own
+// established "currency" shape (Party Trackers' currency-kind rows,
+// partyTrackerRow above) is a plain number input plus a separate ＋/－
+// stepper pair, not a bare typed-in box; wrapping this field's existing
+// <input> in numStepper (the same generic helper the Party Tracker Size
+// field and every other "number counter textbox" in the app already uses)
+// gets the identical look/interaction for free — the wrapped input still
+// carries its own data-statblock-val, so the stepper's shared data-num-step
+// click handler (shell.js) nudges it and fires a real change event through
+// the exact same commit path typing a value and blurring already used.
+// Direct follow-up request: "drop the '/' separator and the last number.
+// Just show the label, the textfield and the +-. Also, locate the +-
+// under the textbox." The "/ max" suffix is gone — the field's own `max`
+// attribute is kept on the <input> itself (still clamps typing/stepping,
+// still honors an Origin's willMaxOverride/luckMaxOverride), just no
+// longer shown as separate text. The ＋/－ buttons now stack BELOW the
+// input instead of beside it — styles/cockpit.css's own .number-row-
+// compact .num-stepper override (a 2-column grid: the input spans both
+// columns on row 1, the two buttons auto-place into row 2) does this with
+// zero markup change, so numStepper's own generic 3-child shape (input,
+// ＋, −) stays identical for every OTHER call site (Party Tracker Size,
+// Navigator workflow cards).
 function numberFieldRow(f, gi, fi, opts = {}) {
   const key = opts.entityId ? `${opts.entityId}::${gi}::${fi}` : `${gi}::${fi}`;
   const value = Number(f.value) || 0;
@@ -2396,8 +2498,7 @@ function numberFieldRow(f, gi, fi, opts = {}) {
     <div class="statblock-row number-row ${opts.compact ? 'number-row-compact' : ''}">
       <span class="statblock-key">${esc(f.key)}</span>
       <span class="number-row-input-wrap">
-        <input type="number" inputmode="numeric" class="attr-val-input" data-statblock-val="${key}" value="${value}" min="0" ${hasMax ? `max="${esc(f.max)}"` : ''} aria-label="${esc(f.key)} value">
-        ${hasMax ? `<span class="dim small number-row-max">/ ${esc(f.max)}</span>` : ''}
+        ${numStepper(`<input type="number" inputmode="numeric" class="attr-val-input" data-statblock-val="${key}" value="${value}" min="0" ${hasMax ? `max="${esc(f.max)}"` : ''} aria-label="${esc(f.key)} value">`)}
       </span>
     </div>`;
 }
@@ -2431,12 +2532,22 @@ function attrRow(f, gi, fi, opts = {}) {
   const method = f.rollMethod || 'none';
   const rollable = method !== 'none';
   const key = opts.entityId ? `${opts.entityId}::${gi}::${fi}` : `${gi}::${fi}`;
-  const displayKey = (opts.compact && opts.ruleset === 'fiveleagues') ? fiveLeaguesCompactStatLabel(f.key) : f.key;
+  const compactFiveLeagues = opts.compact && opts.ruleset === 'fiveleagues';
+  const displayKey = compactFiveLeagues ? fiveLeaguesCompactStatLabel(f.key) : f.key;
   const label = rollable
     ? `<button type="button" class="statblock-key statblock-key-roll" data-statblock-roll-label="${key}" title="${esc(rollMethodTitle(method, value, f.target))}">${esc(displayKey)}</button>`
     : `<span class="statblock-key" title="Not rollable">${esc(displayKey)}</span>`;
+  // Direct follow-up request: "narrow the padding around the text and
+  // number of the statblocks for the 5LFB character sheet so that all six
+  // fields fit on one row" — an earlier fix already shortened Combat
+  // Skill/Toughness's own labels for this exact goal, but 6 pills' own
+  // generic .attr-row-compact padding (0.5rem each side) still added up to
+  // more fixed overhead than the row had room for. attr-row-compact-
+  // fiveleagues is a tighter-padding modifier scoped to just this ruleset's
+  // compact stat row — Starforged/5PFH's own compact attribute pills
+  // (Edge/Heart, ...) are unaffected.
   return `
-    <div class="statblock-row attr-row ${opts.compact ? 'attr-row-compact' : ''}">
+    <div class="statblock-row attr-row ${opts.compact ? 'attr-row-compact' : ''} ${compactFiveLeagues ? 'attr-row-compact-fiveleagues' : ''}">
       ${label}
       <input type="text" inputmode="numeric" class="attr-val-input" data-statblock-attr-val="${key}" value="${esc(formatAttrValue(value, format))}" aria-label="${esc(f.key)} value">
     </div>`;
@@ -2501,11 +2612,11 @@ function journal(doc, ui = {}) {
     ${recapOpen ? recapPanel(doc) : ''}
     <div class="drawer-note">
       <span class="field-label-row">${richToolbarToggleHTML('journal:new', toolbarCollapsed(doc, ui, 'journal:new'))}</span>
-      <div class="rich-field">${richToolbarHTML('journal:new', toolbarCollapsed(doc, ui, 'journal:new'), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-journal-input data-placeholder="Add a note, ruling, or clue… (drag an entity here, or type @, to mention it)"></div></div>
+      <div class="rich-field">${richToolbarHTML('journal:new', toolbarCollapsed(doc, ui, 'journal:new'), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-journal-input data-placeholder="Add a note, ruling, or clue… (drag an entity here, or type @, to mention it)">${buildMentionEditorHTML(doc, ui.journalDraftText || '')}</div></div>
       <div class="statblock-head" style="margin-top: var(--sp-3);">
         <button type="button" class="party-section-toggle" data-journal-actions-toggle>${actionsOpen ? '▾' : '▸'} Actions</button>
       </div>
-      ${actionsOpen ? `<div class="drawer-note-actions">
+      <div class="drawer-note-actions" data-journal-actions-body ${actionsOpen ? '' : 'hidden'}>
         <button class="btn" data-journal-add>Add note</button>
         <button class="btn ghost" data-export-journal>Export</button>
         <button class="btn ghost" data-generate-mission title="Roll a job: payout/deadline scaled by the current Threat, plus a complication">🎲 Generate Mission</button>
@@ -2513,7 +2624,7 @@ function journal(doc, ui = {}) {
         <button class="btn ghost" data-generate-creature title="Roll a creature concept: origin, movement, trait, and threat">🎲 Creature Concept</button>
         <button class="btn ghost" data-generate-site title="Roll a site concept: a feature, a danger, and a wonder">🎲 Site Concept</button>
         <button class="btn ghost" data-generate-seed title="Roll an adventure seed: a hook, a twist, and a complication">🎲 Adventure Seed</button>
-      </div>` : ''}
+      </div>
     </div>
     <div class="journal-list">
       ${entries.length ? entries.map((e) => journalEntryRow(doc, e, ui)).join('')
@@ -2589,12 +2700,26 @@ function oracle(doc, ui) {
   const tagBadge = (tagFilter && tagFilter.length)
     ? `<div class="oracle-tag-filter-badge">Filtered by: ${tagFilter.map((t) => esc(t)).join(', ')} <button class="icon-btn" data-oracle-tag-filter-clear title="Clear filter">✕</button></div>`
     : '';
+  // Direct follow-up request: "If an oracle link is selected on the
+  // Navigator panel and the oracle panel is activated, route the output
+  // of the oracles to append to the scene summary on the Navigator" —
+  // ui.oracleRouteToNavigator (shell.js) is only ever true right after a
+  // Navigator-panel 🔮/chip opened this drawer; a visible banner here so
+  // a GM rolling isn't surprised their result landed on Scene Summary
+  // instead of its normal Journal entry. Switching to any other drawer
+  // tab, or closing and reopening this one, clears the flag (shell.js's
+  // openDrawerTab/closeDrawerTab) — this banner disappears right along
+  // with it, same render pass.
+  const routeBanner = ui.oracleRouteToNavigator
+    ? '<div class="oracle-tag-filter-badge oracle-route-banner">🧭 Rolls here append to the Navigator\'s Scene Summary instead of the Journal, until you leave this tab.</div>'
+    : '';
   return `
     <div class="oracle-toolbar">
       <input class="drawer-search" data-oracle-filter value="${esc(filter)}" placeholder="Search oracle tables…">
       <button class="btn ghost sm" data-oracle-collapse-all>Collapse all</button>
     </div>
     ${tagBadge}
+    ${routeBanner}
     <div class="oracle-tree">
       ${rows || '<p class="ws-placeholder">No tables match that search.</p>'}
     </div>`;
@@ -2705,7 +2830,12 @@ const SETTINGS_TABS = [
   { id: 'general', label: 'General' },
   { id: 'dice', label: 'Dice' },
   { id: 'campaigns', label: 'Campaigns' },
-  { id: 'ruleset-profile-editor', label: 'Rulesets' },
+  // Direct follow-up request: "Change the term reference of ruleset to
+  // Module" — tab id kept as-is (ruleset-profile-editor), only the label
+  // changed, same posture as the earlier phase-tracking-field rename note
+  // just below (src/core/buildInfo.js's own precedent: nothing that jumps
+  // here directly by id needs updating when only a display label moves).
+  { id: 'ruleset-profile-editor', label: 'Modules' },
   { id: 'trade-economy', label: 'Trade & Economy' },
   { id: 'factions', label: 'Factions' },
   { id: 'reference-tools', label: 'Reference Tools' },
@@ -2729,19 +2859,6 @@ function settings(doc, ui = {}) {
 
   const sections = {
     general: () => `
-      <div class="settings-group">
-        <h3>Campaign</h3>
-        <label class="field-label">Title
-          <input data-campaign-title-input value="${esc(doc.meta.title)}">
-        </label>
-        <label class="field-label">CSS Style Template
-          <select data-campaign-css-template>${CSS_TEMPLATES.map((t) => `<option value="${esc(t.id)}" ${t.id === (doc.meta.cssTemplate || 'default') ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select>
-        </label>
-        <label class="field-label">Setting
-          <input data-genre-input value="${esc(doc.settings.genre || '')}" placeholder="Hostile, generic sci-fi, …">
-        </label>
-        <p class="dim small">A free-text flavor label — doesn't change any oracle content. See Campaigns for which campaigns exist and which Rules Profile each uses.</p>
-      </div>
       <div class="settings-group">
         ${sectionHeadRow('h3', 'Data Management', 'settings-data')}
         ${helpBody('settings-data', "Everything is stored in this browser. Export a backup or bind a file in a OneDrive-synced folder. Imported documents (Documents drawer's \"Import File(s)\") live in this browser's own local storage, separate from the campaign file itself — check \"Include DOC library\" below to carry them along when moving to another device.", ui)}
@@ -2792,7 +2909,7 @@ function settings(doc, ui = {}) {
     'reference-tools': () => `
       ${mechanicsIndexSection(doc, ui)}
       ${tocSection(doc, ui)}`,
-    licenses: () => licensesSection(ui),
+    licenses: () => licensesSection(doc, ui),
   };
 
   return `${tabBar}${sections[activeTab]()}`;
@@ -2926,10 +3043,32 @@ function campaignsSection(doc, ui) {
       <button class="btn" data-campaign-create>+ Create Campaign</button>
     </div>` : '';
 
+  // Direct follow-up request: "move the campaign references from the
+  // General Settings to the Campaigns tab. This includes the Campaign
+  // header, Title, CSS Style Template, Setting field and the text '...'
+  // which should be moved to a tooltip for the Setting field." Formerly
+  // General's own top "Campaign" settings-group, unchanged apart from
+  // that one paragraph becoming the Setting input's own title="" tooltip
+  // instead of always-visible text underneath it.
+  const campaignMetaGroup = `
+    <div class="settings-group">
+      <h3>Campaign</h3>
+      <label class="field-label">Title
+        <input data-campaign-title-input value="${esc(doc.meta.title)}">
+      </label>
+      <label class="field-label">CSS Style Template
+        <select data-campaign-css-template>${CSS_TEMPLATES.map((t) => `<option value="${esc(t.id)}" ${t.id === (doc.meta.cssTemplate || 'default') ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select>
+      </label>
+      <label class="field-label">Setting
+        <input data-genre-input value="${esc(doc.settings.genre || '')}" placeholder="Hostile, generic sci-fi, …" title="A free-text flavor label — doesn't change any oracle content. See Campaigns for which campaigns exist and which Rules Profile each uses.">
+      </label>
+    </div>`;
+
   return `
+    ${campaignMetaGroup}
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Campaigns', 'settings-campaigns')}
-      ${helpBody('settings-campaigns', "Each campaign is fully independent (its own Cast, Journal, scenes, ...) and is assigned one Rules Profile — change which one with the Profile dropdown at any time; reassigning never touches that campaign's own data, it only changes which ruleset/visible-modules/Storyboard-positions it reads. Edit a profile's own contents in Rulesets.", ui)}
+      ${helpBody('settings-campaigns', "Each campaign is fully independent (its own Cast, Journal, scenes, ...) and is assigned one Rules Profile — change which one with the Profile dropdown at any time; reassigning never touches that campaign's own data, it only changes which module/visible-plugins/Storyboard-positions it reads. Edit a profile's own contents in Modules.", ui)}
       ${campaigns.length ? switcherRow : '<p class="dim small">No campaigns yet.</p>'}
       ${profilePicker}
       ${newCampaignForm}
@@ -2937,15 +3076,21 @@ function campaignsSection(doc, ui) {
     ${campaignModuleChecksSection(ui)}`;
 }
 
-// The ruleset-specific subheader grouping (direct instruction): "Campaign"/
+// The module-specific subheader grouping (direct instruction): "Campaign"/
 // "World" (GATEABLE_MODULES' colony/world-tracker) only for a Five Parsecs
 // From Home profile, "Hexcrawl" only for Five Leagues from Borderlands —
-// checked against the profile's own Game System Ruleset (statRuleset)
+// checked against the profile's own Game System Module (statRuleset)
 // directly (RULESETS ids '5pfh'/'fiveleagues'), not the broader Genre-Pack-
 // level matchesProfileRuleset used for packs/templates/turn-step-lists,
-// since "Ruleset = Five Parsecs From Home" means the specific active
-// ruleset, not just "any sci-fi profile." "Trade"/"Battlemap"/"Graph"/
-// "Faction Events" always show, regardless of ruleset.
+// since "Module = Five Parsecs From Home" means the specific active
+// module, not just "any sci-fi profile." "Trade"/"Battlemap"/"Graph"/
+// "Faction Events" always show, regardless of module. Direct follow-up
+// request ("change the term reference of ruleset to Module... rename
+// 'modules' used presently for trade, battlemap, etc to 'plugins'"): this
+// function/its own data-module-* attributes and GATEABLE_MODULES/
+// moduleEnabled (schema.js) all keep their internal names — only the
+// user-facing labels below changed, same "swap the LABEL only" posture as
+// bestiaryTerm/locationHierarchyTerms.
 function campaignModuleChecksSection(ui) {
   const activeProfile = (ui.profiles || []).find((p) => p.id === ui.activeProfileId);
   const draft = ui.activeProfileDraft;
@@ -2960,10 +3105,10 @@ function campaignModuleChecksSection(ui) {
   ].join('');
   return `
     <div class="settings-group">
-      ${sectionHeadRow('h3', 'Modules', 'settings-campaign-modules')}
-      ${helpBody('settings-campaign-modules', "Which modules this campaign's own assigned profile shows — the same setting as the Rulesets tab's own \"Visible modules\" checklist, just grouped by ruleset here.", ui)}
-      ${rulesetSpecific ? `<h4>Ruleset-specific</h4><div class="module-enable-checks">${rulesetSpecific}</div>` : ''}
-      <h4>General Modules</h4>
+      ${sectionHeadRow('h3', 'Plugins', 'settings-campaign-modules')}
+      ${helpBody('settings-campaign-modules', "Which plugins this campaign's own assigned profile shows — the same setting as the Modules tab's own \"Visible plugins\" checklist, just grouped by module here.", ui)}
+      ${rulesetSpecific ? `<h4>Module-specific</h4><div class="module-enable-checks">${rulesetSpecific}</div>` : ''}
+      <h4>General Plugins</h4>
       <div class="module-enable-checks">${check('trade')}${check('battlemap')}${check('graph')}${check('faction-events')}</div>
       ${profileDraftSaveBar(activeProfile, dirty)}
     </div>`;
@@ -3018,7 +3163,7 @@ function rulesetProfileEditorSection(doc, ui) {
   const profilePicker = `
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Rules Profiles', 'settings-profiles-list', profilePickerHeaderExtra)}
-      ${helpBody('settings-profiles-list', "A Rules Profile bundles which modules are visible, what fills the Storyboard's three positions, and the ruleset (genre pack, stat system, trade economy, Rules Constitution, Game System Activation). Shared across every campaign that picks it.", ui)}
+      ${helpBody('settings-profiles-list', "A Rules Profile bundles which plugins are visible, what fills the Storyboard's three positions, and the module (genre pack, stat system, trade economy, Rules Constitution, Game System Activation). Shared across every campaign that picks it.", ui)}
       <label class="field-label sm">Displayed for Edit
         <select data-profile-select>
           ${profiles.map((p) => `<option value="${esc(p.id)}" ${editingProfile && p.id === editingProfile.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
@@ -3048,9 +3193,9 @@ function rulesetProfileEditorSection(doc, ui) {
   const defaultRulesetId = DEFAULT_RULESET_FOR_GENRE[activeGenrePackId];
   const gameSystemRulesetGroup = `
     <div class="settings-group">
-      ${sectionHeadRow('h3', 'Game System Ruleset', 'settings-statsystem')}
+      ${sectionHeadRow('h3', 'Game System Module', 'settings-statsystem')}
       ${helpBody('settings-statsystem', 'Creates entity stat templates aligned to the chosen rule system.', ui)}
-      <label class="field-label">Ruleset for Profile
+      <label class="field-label">Module for Profile
         <select data-settings-stat-ruleset>
           ${RULESETS.map((r) => `<option value="${r.id}" ${r.id === (draft.ruleset.statRuleset || 'starforged') ? 'selected' : ''}>${esc(r.id === defaultRulesetId ? `Default (${r.label})` : r.label)}</option>`).join('')}
         </select>
@@ -3075,9 +3220,8 @@ function rulesetProfileEditorSection(doc, ui) {
           <p class="dim small">${loadButton} Reference: <a href="${activeRuleset.doc}" target="_blank" rel="noreferrer">${esc(activeRuleset.label)} PDF</a></p>`;
       })()}
       <label class="field-label">Party Roster headline fields
-        <input data-settings-party-headline-fields value="${esc((draft.ruleset.partyHeadlineFields || []).join(', '))}" placeholder="Health, Momentum">
+        <input data-settings-party-headline-fields value="${esc((draft.ruleset.partyHeadlineFields || []).join(', '))}" placeholder="Health, Momentum" title="Comma-separated track-field names (matched case-insensitively) shown as small counters on a collapsed Party Roster member row — differs per module, since a Five Parsecs from Home sheet has no field literally named &quot;Momentum.&quot;">
       </label>
-      <p class="dim small">Comma-separated track-field names (matched case-insensitively) shown as small counters on a collapsed Party Roster member row — differs per ruleset, since a Five Parsecs from Home sheet has no field literally named "Momentum."</p>
     </div>`;
 
   const positionSelect = (slot, label) => {
@@ -3102,14 +3246,14 @@ function rulesetProfileEditorSection(doc, ui) {
     <label class="chip sm"><input type="checkbox" data-module-enabled-toggle="${id}" ${draft.moduleEnabled[id] !== false ? 'checked' : ''}> ${esc((drawerMeta(id) || {}).label || id)}</label>`).join('');
   const modulesGroup = `
     <div class="settings-group">
-      ${sectionHeadRow('h3', 'Visible modules', 'settings-modules')}
-      ${helpBody('settings-modules', 'Modules a campaign on this profile can see. Party and every other module not listed here always stays visible.', ui)}
+      ${sectionHeadRow('h3', 'Visible plugins', 'settings-modules')}
+      ${helpBody('settings-modules', 'Plugins a campaign on this profile can see. Party and every other plugin not listed here always stays visible.', ui)}
       <div class="module-enable-checks">${moduleChecks}</div>
     </div>`;
 
   return `${profilePicker}${saveBar}<hr>${genreGroup}${gameSystemRulesetGroup}${positionsGroup}
-    ${statblockTemplateEditor(pseudoDoc, draft)}
-    ${availablePacksSection(pseudoDoc, draft, ui)}
+    ${statblockTemplateEditor(pseudoDoc)}
+    ${availablePacksSection(pseudoDoc, ui)}
     ${modulesGroup}
     ${tradeEconomyModelSection(pseudoDoc, ui)}
     ${rulesConstitutionSection(pseudoDoc, ui)}
@@ -3166,7 +3310,7 @@ function rulesConstitutionSection(doc, ui) {
   return `
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Rules Constitution', 'settings-rules-constitution')}
-      ${helpBody('settings-rules-constitution', 'Every ruleset is a content provider, not the application — Saga Atlas owns the campaign; each system contributes only what it does best for a given gameplay area. Only the Factions row changes real app behavior today — every other row records your intended provider for a future Rules Lens recommender (Phase 9).', ui)}
+      ${helpBody('settings-rules-constitution', 'Every module is a content provider, not the application — Saga Atlas owns the campaign; each system contributes only what it does best for a given gameplay area. Only the Factions row changes real app behavior today — every other row records your intended provider for a future Rules Lens recommender (Phase 9).', ui)}
       <label class="chip sm"><input type="checkbox" data-rpe-show-all-genre-packs ${showAll ? 'checked' : ''}> Show all Genre Packs</label>
       <p class="dim small">Providers and Game Systems below default to <b>${esc(activePackLabel)}</b> — check the box to see every Genre Pack's own.</p>
       <div class="tablewrap-narrow">
@@ -3176,7 +3320,6 @@ function rulesConstitutionSection(doc, ui) {
         </table>
       </div>
       <ul class="rules-provider-legend">${legend}</ul>
-      ${gameSystemActivationSection(doc, ui)}
     </div>`;
 }
 
@@ -3315,6 +3458,7 @@ function turnStepsSettingsSection(doc, ui) {
       ${lists.length ? `<label class="field-label sm">Editing<select data-turnsteplist-select>${listOptions}</select></label>` : '<p class="dim small">No Turn Step Lists yet.</p>'}
       ${editingList && editingList.name === '5PFH' ? `<button class="btn ghost" data-turnsteplist-load-default="${esc(editingId)}::5pfh">Reload Five Parsecs from Home Default Steps</button>` : ''}
       ${editingList && editingList.name === 'Planetfall' ? `<button class="btn ghost" data-turnsteplist-load-default="${esc(editingId)}::planetfall">Reload Planetfall Default Steps</button>` : ''}
+      ${editingList && editingList.name === 'Five Leagues' ? `<button class="btn ghost" data-turnsteplist-load-default="${esc(editingId)}::fiveleagues">Reload Five Leagues Default Steps</button>` : ''}
       ${editingList ? `<button class="btn ghost" data-turnstepgroup-add="${esc(editingId)}">＋ Category</button>` : ''}
       `}
     </div>
@@ -3341,7 +3485,7 @@ function crewTasksSettingsSection(doc, ui) {
   const editingProfile = profiles.find((p) => p.id === ui.editingProfileId) || profiles[0];
   const draft = ui.profileDraft;
   if (!editingProfile || !draft) {
-    return `<div class="settings-group"><p class="dim small">Select a profile in Rulesets first.</p></div>`;
+    return `<div class="settings-group"><p class="dim small">Select a profile in Modules first.</p></div>`;
   }
   const dirty = !!ui.profileDraftDirty;
   const tasks = (draft.crewTasks && draft.crewTasks.tasks) || [];
@@ -3406,42 +3550,86 @@ function factionsSettingsSection(doc, ui) {
 }
 
 // Game System Activation (docs/adr/0032): a real, owned-sourcebook
-// transcription (SWN's Faction Turn Engine today — the RULES_PROVIDERS
-// entry with `requiresActivation: true`) sits behind an explicit opt-in,
-// since this app also deploys publicly (GitHub Pages), where "personal
-// reference to a book you own" doesn't hold by default. A fresh checkbox
-// list, not folded into the table above, since it's a one-time compliance
-// gate rather than a per-area preference. `isGameSystemActivated` (data/
-// rulesConstitution.js) is the seam a real licensing check would replace
-// this boolean read with later.
+// transcription (SWN's Faction Turn Engine, Five Leagues' Enemy stat
+// blocks — any RULES_PROVIDERS entry with `requiresActivation: true`)
+// sits behind an explicit opt-in, since this app also deploys publicly
+// (GitHub Pages), where "personal reference to a book you own" doesn't
+// hold by default. `isGameSystemActivated` (data/rulesConstitution.js) is
+// the seam a real licensing check would replace this boolean read with
+// later. Direct follow-up request: "Move the Game system activation to
+// the appropriate section on the Licenses tab" — this is fundamentally a
+// licensing acknowledgment ("I confirm I own a copy of X"), not a
+// Rules-Constitution-style per-area preference, so it moved out of
+// rulesConstitutionSection (which still owns the "Show all Genre Packs"
+// toggle it used to scope by) to live here instead, alongside
+// licensesSection's own per-ruleset content-pack breakdown. That section
+// already lists every ruleset's packs unconditionally regardless of the
+// active profile's Genre Pack, so this drops the old genre-pack scoping
+// to match — every gated system always shows here, not just the
+// currently-active pack's.
+// Direct follow-up request: "Change the term reference of ruleset to
+// Module... group all modules for a game system under the header of the
+// game system (such as Five Parsecs from Home has the Core Rules,
+// Compendium and Planetfall)" — rewritten to iterate GAME_SYSTEM_FAMILIES
+// (data/rulesConstitution.js) instead of a flat RULES_PROVIDERS scan: one
+// outer header per real-world product line, each of its Modules (a base
+// Game System's Core Rules, or one of its Supplements) as its own
+// checkbox underneath, same activation/locked/disabled-until-parent logic
+// as before — just regrouped, not reimplemented.
 function gameSystemActivationSection(doc, ui) {
-  const showAll = !!(ui && ui.showAllGenrePacksInRpe);
-  const packId = activeGenrePackId(doc);
-  const allGated = Object.entries(RULES_PROVIDERS).filter(([, p]) => p.requiresActivation);
-  if (!allGated.length) return '';
-  const gated = showAll ? allGated : allGated.filter(([, p]) => p.genrePackId === packId);
-  if (!gated.length) return '';
-  // Phase B entitlement stub (domain/entitlements.js): a Game System this
-  // install isn't entitled to still shows here — visibly LOCKED, not
-  // silently absent, so a GM can see it exists and know why it's gated —
-  // rather than being able to activate it. entitlements defaults fully
-  // open (canAccessGameSystem returns true with no explicit appConfig.
-  // entitlements entry), so this renders identically to before for every
-  // install until something actually sets one.
-  const rows = gated.map(([id, p]) => {
-    if (!canAccessGameSystem({ entitlements: (ui && ui.entitlements) || {} }, id)) {
+  const entitlements = (ui && ui.entitlements) || {};
+  const families = GAME_SYSTEM_FAMILIES.map((family) => {
+    const moduleRows = family.modules.map((m) => {
+      if (m.kind === 'system') {
+        const p = RULES_PROVIDERS[m.id];
+        if (!p) return '';
+        // Phase B entitlement stub (domain/entitlements.js): a Game System
+        // this install isn't entitled to still shows here — visibly
+        // LOCKED, not silently absent, so a GM can see it exists and know
+        // why it's gated — rather than being able to activate it.
+        // entitlements defaults fully open (canAccessGameSystem returns
+        // true with no explicit appConfig.entitlements entry), so this
+        // renders identically to before for every install until something
+        // actually sets one.
+        if (!canAccessGameSystem({ entitlements }, m.id)) {
+          return `
+          <p class="dim small game-system-locked"><input type="checkbox" disabled>
+            🔒 <b>${esc(m.label)}</b> — not available on this install.</p>`;
+        }
+        const active = isGameSystemActivated(doc, m.id);
+        return `
+        <p><label><input type="checkbox" data-game-system-activate="${esc(m.id)}" ${active ? 'checked' : ''}>
+          <b>${esc(m.label)}</b> — <span class="dim small">${esc(p.activationText || `Activate ${p.label} content.`)}</span></label></p>`;
+      }
+      // Direct follow-up request: "have a checkbox to activate each game
+      // system AND SUPPLEMENT so that default rules can be augmented by
+      // supplemental rules" — a Supplement module writes into the same
+      // gameSystemActivations map under its own id (data-game-system-
+      // activate is already generic — no new click handler needed).
+      // Disabled (not merely unchecked) while its parent module is off,
+      // since a supplement has no meaning without its base rules active.
+      const s = (GAME_SYSTEM_SUPPLEMENTS[m.parentId] || []).find((x) => x.id === m.id);
+      if (!s) return '';
+      const parentActive = isGameSystemActivated(doc, m.parentId);
+      const active = isSupplementActivated(doc, m.parentId, m.id);
       return `
-      <p class="dim small game-system-locked"><input type="checkbox" disabled>
-        🔒 <b>${esc(p.label)}</b> — not available on this install.</p>`;
-    }
+      <p class="game-system-supplement-row"><label><input type="checkbox" data-game-system-activate="${esc(m.id)}" ${active ? 'checked' : ''} ${parentActive ? '' : 'disabled'}>
+        <b>${esc(m.label)}</b> — <span class="dim small">${esc(s.activationText || `Activate ${s.label} content.`)}</span></label></p>`;
+    }).join('');
+    if (!moduleRows) return '';
     return `
-    <p><label><input type="checkbox" data-game-system-activate="${esc(id)}" ${isGameSystemActivated(doc, id) ? 'checked' : ''}>
-      <span class="dim small">${esc(p.activationText || `Activate ${p.label} content.`)}</span></label></p>`;
+    <div class="game-system-family">
+      <h4>${esc(family.label)}</h4>
+      ${moduleRows}
+    </div>`;
   }).join('');
+  if (!families) return '';
   return `
     <div class="settings-group">
-      <h4>Game System Activation</h4>
-      ${rows}
+      ${sectionHeadRow('h3', 'Game System Activation', 'settings-game-system-activation')}
+      ${helpBody('settings-game-system-activation', 'A real, owned-sourcebook transcription (SWN\'s Faction Turn Engine, Five Leagues\' Enemy stat blocks) sits behind this explicit opt-in — check the box for any module whose purchased book you own and intend to reference personally. Also controls whether that module\'s own Campaign-panel tab and Navigator workflow card are reachable at all. A Supplement module (a Compendium volume) augments its own Core Rules module once both it and its parent are checked — e.g. activating the Five Leagues Compendium adds its own character Origins and Enemy tables on top of the core rulebook\'s.', ui)}
+      ${families}
+      ${hostileGameSystemSection(doc, ui)}
     </div>`;
 }
 
@@ -3478,8 +3666,14 @@ function contentPackSection(ui) {
 // Economy): every real, installable pack (content packs AND HOSTILE's own
 // data-pack zone files) in one filtered, ruleset-aware list — "the
 // available packs need to be filtered to display only if associated to
-// the ruleset" (direct instruction), reusing matchesProfileRuleset the
-// same way Statblock Templates does. HOSTILE's own two data-pack manifest
+// the ruleset" (direct instruction). Direct follow-up request narrowed the
+// scope further: "Limit the 'Available Packs' options to only those that
+// belong to the module of the game system and other game system modules
+// that might be enabled in the Rules Constitution" — matchesEnabledModule
+// (data/rulesConstitution.js), same tighter filter Statblock Templates
+// uses, replacing the broader "anywhere in the same Genre Pack" scope
+// matchesProfileRuleset gives (still used as-is for Turn Step Lists).
+// HOSTILE's own two data-pack manifest
 // rows get the identical small row-button every content-pack row already
 // has, wired to the SAME existing data-hostile-locations-import handler
 // on each (the real fetch already merges both zones into one idempotent
@@ -3488,10 +3682,10 @@ function contentPackSection(ui) {
 // HOSTILE's own Starport Classes/Bases/Trade Codes reference lists move
 // down with it, still gated on the Rules Constitution's own 'hostile'
 // frontier-setting choice.
-function availablePacksSection(pseudoDoc, draft, ui) {
+function availablePacksSection(pseudoDoc, ui) {
   const importingIds = ui.contentPackImporting || new Set();
-  const contentPacks = CONTENT_PACKS_MANIFEST.filter((p) => p.kind === 'content-pack' && matchesProfileRuleset(p.ruleset, draft));
-  const dataPacks = CONTENT_PACKS_MANIFEST.filter((p) => p.kind === 'data-pack' && matchesProfileRuleset(p.ruleset, draft));
+  const contentPacks = CONTENT_PACKS_MANIFEST.filter((p) => p.kind === 'content-pack' && matchesEnabledModule(p.ruleset, pseudoDoc.settings));
+  const dataPacks = CONTENT_PACKS_MANIFEST.filter((p) => p.kind === 'data-pack' && matchesEnabledModule(p.ruleset, pseudoDoc.settings));
   const hostileImporting = !!ui.hostileLocationsImporting;
   const packRow = (p) => `<li>
       <b>${esc(p.title)}</b>
@@ -3505,8 +3699,7 @@ function availablePacksSection(pseudoDoc, draft, ui) {
   return `
     <div class="settings-group">
       <h4 style="margin-top: var(--sp-3);" title="Safe to import more than one pack, or re-import the same one — entities that already exist by name are skipped, never duplicated. Needs the app served over http(s) (npm run serve) — plain file:// can't fetch these.">Available Packs</h4>
-      ${rows ? `<ul class="rules-provider-legend">${rows}</ul>` : '<p class="dim small">None for this profile\'s ruleset yet.</p>'}
-      ${hostileCanonLocationsSection(pseudoDoc)}
+      ${rows ? `<ul class="rules-provider-legend">${rows}</ul>` : '<p class="dim small">None for this profile\'s module yet.</p>'}
     </div>`;
 }
 
@@ -3527,7 +3720,7 @@ function sourcebookInventorySection(ui) {
   return `
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Sourcebook Inventory', 'settings-sourcebook-inventory')}
-      ${helpBody('settings-sourcebook-inventory', 'Every real PDF in the Reference Library (assets/docs/), and what\'s actually been authored from it so far — a sourcebook can sit in the library a long time before becoming in-app content, or ever. Per the copyright posture behind every ruleset addition here, "integrated"/"authored" content is always an original re-implementation of well-known concepts, never a transcription of a book\'s actual text or tables.', ui)}
+      ${helpBody('settings-sourcebook-inventory', 'Every real PDF in the Reference Library (assets/docs/), and what\'s actually been authored from it so far — a sourcebook can sit in the library a long time before becoming in-app content, or ever. Per the copyright posture behind every module addition here, "integrated"/"authored" content is always an original re-implementation of well-known concepts, never a transcription of a book\'s actual text or tables.', ui)}
       <ul class="rules-provider-legend">${rows}</ul>
     </div>`;
 }
@@ -3543,27 +3736,52 @@ function sourcebookInventorySection(ui) {
 // installation from the web server" (direct quote): licenseStatus exists
 // so a future server-verified entitlement check has somewhere real to
 // write its answer, not enforced here today.
-function licensesSection(ui) {
+function licensesSection(doc, ui) {
+  // Game System Activation writes into the SAME pending profile draft
+  // (Save/Discard, not instant-apply) the rest of the Ruleset Profile
+  // Editor already uses — ui.profileDraft (shell.js's getProfileDraft,
+  // threaded through buildDrawerUi() the same way as everywhere else a
+  // drawers/index.js render needs it, since shell.js's own draft-storage
+  // Map isn't reachable from here directly). Reading the checkbox state
+  // off plain `doc` instead of this draft-overlaid pseudoDoc was the real
+  // bug the first cut of this move shipped with: it checked the box
+  // against the UNSAVED draft but then displayed the SAVED doc's own
+  // stale value on every re-render, so a click looked like it reverted
+  // itself the instant you let go. Falls back to `doc` on the (should
+  // not normally happen, draft creation is lazy) chance no draft exists.
+  const activationDoc = ui.profileDraft ? profileAsSettingsDoc(doc, ui.profileDraft) : doc;
   const byRuleset = new Map();
   for (const p of CONTENT_PACKS_MANIFEST) {
     if (!byRuleset.has(p.ruleset)) byRuleset.set(p.ruleset, []);
     byRuleset.get(p.ruleset).push(p);
   }
-  const groups = [...byRuleset.entries()].map(([rulesetId, packs]) => {
-    const label = (RULES_PROVIDERS[rulesetId] && RULES_PROVIDERS[rulesetId].label) || rulesetId;
-    const rows = packs.map((p) => `
+  // Direct follow-up request: "The list of rulesets should only show the
+  // enabled licenses, and should be auto-populated when the license is
+  // enabled." — a ruleset gated by Game System Activation (fivepfh/
+  // planetfall/fiveleagues) only shows its pack group once its checkbox
+  // above is checked; an ungated ruleset (dnd5e, hostile) always shows,
+  // same as isGameSystemActivated's own always-true behavior for those.
+  // Reusing that single function (not a new gate) means this list is
+  // already "auto-populated" the instant the checkbox above is ticked —
+  // both read the SAME activationDoc on the SAME render.
+  const groups = [...byRuleset.entries()]
+    .filter(([rulesetId]) => isGameSystemActivated(activationDoc, rulesetId))
+    .map(([rulesetId, packs]) => {
+      const label = (RULES_PROVIDERS[rulesetId] && RULES_PROVIDERS[rulesetId].label) || rulesetId;
+      const rows = packs.map((p) => `
       <li><b>${esc(p.title)}</b> <span class="dim small">(${esc(p.kind)}, ${esc(p.licenseStatus)})</span> — <span class="dim small">${esc(p.description)}</span></li>`).join('');
-    return `
+      return `
       <div class="settings-group">
         <h4>${esc(label)}</h4>
         <ul class="rules-provider-legend">${rows}</ul>
       </div>`;
-  }).join('');
+    }).join('');
   return `
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Licenses', 'settings-licenses')}
-      ${helpBody('settings-licenses', 'Every content pack and data pack shipped under /assets/, grouped by the ruleset it belongs to. Read-only for now — a future update will check this against your actual license before allowing a pack to install from the web server.', ui)}
+      ${helpBody('settings-licenses', 'Every content pack and data pack shipped under /assets/, grouped by the module it belongs to — a module behind Game System Activation only appears here once activated below. Read-only for now — a future update will check this against your actual license before allowing a pack to install from the web server.', ui)}
     </div>
+    ${gameSystemActivationSection(activationDoc, ui)}
     ${groups}`;
 }
 
@@ -3576,8 +3794,25 @@ function licensesSection(ui) {
 // active at a time; switching it changes future tag SUGGESTIONS only — a
 // Location already tagged from the other model keeps working, since
 // trade.js's economyBiasAt checks both models regardless of which is active.
+// Direct follow-up request: "Make 'Trade Economy Model' and 'Biomes
+// (Sci-Fi (generic))' into section headers that are collapsed by
+// default." Both now use the same generic collapsible-header mechanism
+// the Navigator workflow groups just adopted (ui.collapsedActorGroups
+// Set + data-actor-group-toggle, shell.js's handler is already fully
+// generic — no new wiring needed) rather than sectionHeadRow's own plain
+// static <h3>, which has no collapse concept at all. Each piece built as
+// its own flat `const` first, not nested inside another template
+// literal's ${} — scripts/build.js's regex-based bundler doesn't reliably
+// track nested-backtick depth (see dashboardTrackersBlock's own note).
 function tradeEconomyModelSection(doc, ui) {
   const active = doc.settings.tradeEconomyModel || 'hostile';
+  const collapsedSet = (ui && ui.collapsedActorGroups) || new Set();
+  const sectionKey = 'settings:trade-economy';
+  const sectionCollapsed = !collapsedSet.has(sectionKey);
+  const headRow = `<div class="section-head-row">
+      <button type="button" class="field-label-static actor-group-toggle" data-actor-group-toggle="${esc(sectionKey)}">${sectionCollapsed ? '▸' : '▾'} Trade Economy Model</button>
+      <span class="entity-chip-row">${helpToggle('settings-trade-economy')}</span>
+    </div>`;
   const modelSelect = `
     <label class="field-label">Model
       <select data-trade-economy-model-select>
@@ -3589,11 +3824,13 @@ function tradeEconomyModelSection(doc, ui) {
   // mix, not every feature always on, so a profile that doesn't use the
   // Trade Economy Model mechanic shouldn't show its reference lists at all.
   if (active === 'none') {
+    const bodyHtml = sectionCollapsed ? '' : `
+      ${helpBody('settings-trade-economy', "Set a Location's Development Level (on its Location card) to one of these to bias its market prices beyond the manual supply/demand dials — unset Locations are unaffected. \"None\" turns this mechanic off entirely for this profile; a Location already tagged from when a model was active keeps working if you switch a model back on.", ui)}
+      ${modelSelect}`;
     return `
     <div class="settings-group">
-      ${sectionHeadRow('h3', 'Trade Economy Model', 'settings-trade-economy')}
-      ${helpBody('settings-trade-economy', "Set a Location's Development Level (on its Location card) to one of these to bias its market prices beyond the manual supply/demand dials — unset Locations are unaffected. \"None\" turns this mechanic off entirely for this profile; a Location already tagged from when a model was active keeps working if you switch a model back on.", ui)}
-      ${modelSelect}
+      ${headRow}
+      ${bodyHtml}
     </div>`;
   }
   const types = economyTypesForModel(active);
@@ -3602,49 +3839,63 @@ function tradeEconomyModelSection(doc, ui) {
   const biomes = biomesForGenrePack(resolveBiomeGenrePackId(doc));
   const biomeRows = biomes.map((b) => `
     <li><b>${esc(b.label)}</b> — <span class="dim small">water ${b.resourceScarcity.water}, fuel ${b.resourceScarcity.fuel}, food ${b.resourceScarcity.food}, ore ${b.resourceScarcity.ore}, tech ${b.resourceScarcity.tech}, luxury ${b.resourceScarcity.luxury} (/10).</span> ${esc(b.description)}</li>`).join('');
-  return `
-    <div class="settings-group">
-      ${sectionHeadRow('h3', 'Trade Economy Model', 'settings-trade-economy')}
+  const biomesLabel = (GENRE_PACKS.find((p) => p.id === (doc.settings.genrePack || 'sci-fi-generic')) || {}).label || 'active pack';
+  const biomesKey = 'settings:trade-economy-biomes';
+  const biomesCollapsed = !collapsedSet.has(biomesKey);
+  const biomesHeadRow = `<div class="section-head-row">
+      <button type="button" class="field-label-static actor-group-toggle" data-actor-group-toggle="${esc(biomesKey)}">${biomesCollapsed ? '▸' : '▾'} Biomes (${esc(biomesLabel)})</button>
+    </div>`;
+  const biomesBodyHtml = biomesCollapsed ? '' : `
+      <p class="dim small">Set a Location's Biome (on its Location card) to one of these to bias prices by resource type, independent of and compounding with Development Level. Dials are 0-10, 0 = locally abundant/cheap, 10 = scarce/expensive.</p>
+      <ul class="rules-provider-legend">${biomeRows}</ul>`;
+  const bodyHtml = sectionCollapsed ? '' : `
       ${helpBody('settings-trade-economy', 'Set a Location\'s Development Level (on its Location card) to one of these to bias its market prices beyond the manual supply/demand dials — unset Locations are unaffected. Only one model is active at a time, but a Location already tagged the old way (a matching tag instead of the field) keeps working if you switch.', ui)}
       ${modelSelect}
       <ul class="rules-provider-legend">${rows}</ul>
-      <h4>Biomes (${esc((GENRE_PACKS.find((p) => p.id === (doc.settings.genrePack || 'sci-fi-generic')) || {}).label || 'active pack')})</h4>
-      <p class="dim small">Set a Location's Biome (on its Location card) to one of these to bias prices by resource type, independent of and compounding with Development Level. Dials are 0-10, 0 = locally abundant/cheap, 10 = scarce/expensive.</p>
-      <ul class="rules-provider-legend">${biomeRows}</ul>
+      ${biomesHeadRow}
+      ${biomesBodyHtml}`;
+  return `
+    <div class="settings-group">
+      ${headRow}
+      ${bodyHtml}
     </div>`;
 }
 
-// HOSTILE Canon Locations (docs/adr/0026-hostile-canon-locations.md): the
-// import button plus a UWP reference legend, gated to the Hostile genre
-// pack — the Universal World Profile format is Cepheus Engine/HOSTILE-
-// specific, not a generic sci-fi concept the way Trade Economy Model/
-// Biome above are. The import itself is additive/idempotent (dedup by
-// name, domain/hostileLocations.js), so no confirmation dialog is needed
-// — matches the "Advance Faction Turns" bulk-action button's shape. The
-// catalog itself is fetched at click time now (docs/adr/0026 JSON-pack
-// addendum, ui/hostileLocationsFetch.js) rather than read from bundled
-// JS — HOSTILE_LOCATIONS_META's few counts are the only piece of it still
-// shipped as JS, so this legend text doesn't need a network round-trip
-// just to describe what importing will do.
-// Settings restructuring: the standalone big import button is gone — its
-// own row now lives in availablePacksSection's own list, styled the same
-// as every other data/content pack row ("reformat this button to look the
-// same as other data packs," direct instruction). This keeps just the
-// descriptive text + the Starport Classes/Bases/Trade Codes reference
-// lists, still gated the same way.
-function hostileCanonLocationsSection(doc) {
+// HOSTILE Canon Locations (docs/adr/0026-hostile-canon-locations.md): a
+// UWP reference legend, gated to the Hostile genre pack — the Universal
+// World Profile format is Cepheus Engine/HOSTILE-specific, not a generic
+// sci-fi concept the way Trade Economy Model/Biome above are. The import
+// button itself lives in availablePacksSection's own list, styled the
+// same as every other data/content pack row.
+// Settings restructuring (direct follow-up request): "move the text
+// starting with 'The HOSTILE Settings sourcebook's' and including the
+// subsequent sections 'Starport Classes', 'Bases', and 'Trade Codes' to
+// [a] collapsed section titled 'World Information' under the Hostile
+// game system section of the Licenses tab" — moved out of
+// availablePacksSection (Rulesets tab) into gameSystemActivationSection's
+// own Hostile family block below, collapsed by default via the same
+// generic ui.collapsedActorGroups/data-actor-group-toggle mechanism Trade
+// Economy Model/Biomes just adopted.
+function hostileWorldInformationSection(doc, ui) {
   // Phase A audit: same repoint as worldProfileSection above — Hostile is
   // now a Game System, not the genre pack itself, so "is this campaign
   // running Hostile specifically" is the Rules Constitution's own
   // 'frontier-setting' choice, not genrePack.
   if (resolveActiveProviderChoice(doc, 'frontier-setting') !== 'hostile') return '';
+  const key = 'settings:hostile-world-information';
+  const collapsedSet = (ui && ui.collapsedActorGroups) || new Set();
+  const collapsed = !collapsedSet.has(key);
+  const headRow = `<div class="section-head-row">
+      <button type="button" class="field-label-static actor-group-toggle" data-actor-group-toggle="${esc(key)}">${collapsed ? '▸' : '▾'} World Information</button>
+    </div>`;
+  if (collapsed) return headRow;
   const starportRows = STARPORT_CLASSES.map((s) => `
     <li><b>${esc(s.code)} — ${esc(s.label)}</b> <span class="dim small">${esc(s.description)}</span></li>`).join('');
   const baseRows = BASES.map((b) => `
     <li><b>${esc(b.code)}</b> — <span class="dim small">${esc(b.label)}: ${esc(b.description)}</span></li>`).join('');
   const tradeCodeRows = TRADE_CODES.map((t) => `
     <li><b>${esc(t.label)}</b> <span class="dim small">(${esc(t.code)})</span> — <span class="dim small">${esc(t.description)}</span></li>`).join('');
-  return `
+  const bodyHtml = `
     <p class="dim small" style="margin-top: var(--sp-3);">The HOSTILE Settings sourcebook's own world gazetteer — ${HOSTILE_LOCATIONS_META.worldCount} worlds, ${HOSTILE_LOCATIONS_META.starCount} star systems, and ${HOSTILE_LOCATIONS_META.baseCount} bases authored so far (${esc(HOSTILE_LOCATIONS_META.zoneLabel)}), more zones queued. Importing creates a real, fully-editable Location entity per world/star/base (bases and stars first, so every world's references resolve); already-imported ones (matched by name) are skipped, so it's safe to re-run after a new zone is added. Fetches the data pack over the network at click time — needs <code>npm run serve</code> (won't work opened directly as a <code>file://</code> page).</p>
     <h4>Starport Classes</h4>
     <ul class="rules-provider-legend">${starportRows}</ul>
@@ -3652,6 +3903,26 @@ function hostileCanonLocationsSection(doc) {
     <ul class="rules-provider-legend">${baseRows}</ul>
     <h4>Trade Codes</h4>
     <ul class="rules-provider-legend">${tradeCodeRows}</ul>`;
+  return `${headRow}${bodyHtml}`;
+}
+
+// Hostile has no Game System Activation gate (RULES_PROVIDERS.hostile
+// carries no requiresActivation — it's this app's own always-on default
+// genre content), so it can't join GAME_SYSTEM_FAMILIES' own gated-
+// checkbox loop above (a data-integrity test asserts every 'system'-kind
+// family module IS a requiresActivation one). This renders the same
+// .game-system-family visual shell as the real families, just with a
+// plain label instead of a checkbox, so Licenses still reads as "every
+// Game System has its own section" — purely a home for
+// hostileWorldInformationSection below, not a new activation control.
+function hostileGameSystemSection(doc, ui) {
+  const body = hostileWorldInformationSection(doc, ui);
+  if (!body) return '';
+  return `
+    <div class="game-system-family">
+      <h4>Hostile</h4>
+      ${body}
+    </div>`;
 }
 
 // Game Mechanics Index (docs/adr/0014-mechanics-index-pdfjs.md): a Settings
@@ -3665,7 +3936,7 @@ function mechanicsIndexSection(doc, ui) {
   return `
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Game Mechanics Index', 'settings-mechanics-index')}
-      ${helpBody('settings-mechanics-index', "Scans the Reference Library's PDFs relevant to your active stat ruleset (plus Hostile's own core material) for terms like Strain, Supply, Momentum, and links each to the page it turns up on, in the Guide drawer below.", ui)}
+      ${helpBody('settings-mechanics-index', "Scans the Reference Library's PDFs relevant to your active stat module (plus Hostile's own core material) for terms like Strain, Supply, Momentum, and links each to the page it turns up on, in the Guide drawer below.", ui)}
       <button class="btn ghost" data-mechanics-scan ${scanning ? 'disabled' : ''}>${scanning ? 'Scanning…' : '🔄 Refresh Mechanics Index'}</button>
       <p class="dim small">${entries.length ? `${entries.length} term(s) indexed.` : 'Not scanned yet.'}</p>
       <p class="dim small">Needs the app served over http(s) (<code>npm run serve</code>) — reading local PDFs is blocked when running straight off <code>file://</code>.</p>
@@ -3691,17 +3962,21 @@ function tocSection(doc, ui) {
     </div>`;
 }
 
-// Settings restructuring: filters by the PROFILE BEING EDITED (draft),
-// fixing a real pre-existing drift the research pass flagged — this used
-// to read doc.settings.genrePack (the active campaign's own genre), which
-// could disagree with whatever profile a GM was mid-editing elsewhere in
-// this same tab. `doc` here is already profileAsSettingsDoc(realDoc, draft)
-// from the caller, so doc.settings.genrePack now correctly reflects the
-// draft too — `draft` itself is passed separately only for the ruleset tag
-// match (matchesProfileRuleset needs the real profile shape, not the
-// pseudo-doc).
-function statblockTemplateEditor(doc, draft) {
-  const templates = listTemplates(doc.settings).filter((t) => matchesProfileRuleset(t.ruleset, draft));
+// Settings restructuring: filters by the PROFILE BEING EDITED, fixing a
+// real pre-existing drift the research pass flagged — this used to read
+// doc.settings.genrePack (the active campaign's own genre), which could
+// disagree with whatever profile a GM was mid-editing elsewhere in this
+// same tab. `doc` here is already profileAsSettingsDoc(realDoc, draft)
+// from the caller, so doc.settings.* (genrePack/statRuleset/
+// rulesProviderChoices/gameSystemActivations) all correctly reflect the
+// draft already — no separate `draft` param needed any more now that the
+// list filter (direct follow-up request: "Limit the 'Statblock Templates
+// (LifeForm)' options to only those that belong to the module of the game
+// system and other game system modules that might be enabled in the
+// 'Rules Constitution'") is matchesEnabledModule (data/
+// rulesConstitution.js), which only ever reads doc.settings.
+function statblockTemplateEditor(doc) {
+  const templates = listTemplates(doc.settings).filter((t) => matchesEnabledModule(t.ruleset, doc.settings));
   const systems = templates.map((t) => `
     <details class="tpl-system">
       <summary>${esc(t.label)} <span class="dim small">(${t.fields.length} field${t.fields.length === 1 ? '' : 's'})</span></summary>
@@ -3714,8 +3989,7 @@ function statblockTemplateEditor(doc, draft) {
   const term = bestiaryTerm(doc.settings.genrePack);
   return `
     <div class="settings-group">
-      <h3>Statblock Templates (${esc(term)})</h3>
-      <p class="dim small">Per-system NPC/creature field manifests — game system, field kind (attribute badge vs track/progress-bar), roll method, and sort order. An NPC picks one template from its statblock's "${esc(term)} template" selector.</p>
+      <h3 title="Per-system NPC/creature field manifests — game system, field kind (attribute badge vs track/progress-bar), roll method, and sort order. An NPC picks one template from its statblock's &quot;${esc(term)} template&quot; selector.">Statblock Templates (${esc(term)})</h3>
       <div class="tpl-system-list">${systems}</div>
       <button class="btn ghost sm" data-tpl-system-add>＋ Game system</button>
     </div>`;
@@ -3791,6 +4065,14 @@ function templateFieldRow(systemId, f, i, count) {
 function partyMemberStatblocks(e, doc, ui, opts = {}) {
   const sorted = sortStatblockGroups(e.statblocks, doc.settings);
   const openKey = (ui && ui.expandedPartyStatField) || null;
+  // Direct follow-up request: "remove the description of the character
+  // sheet... in the dropdown of the entity on the Party panel if there is
+  // only one character sheet on the entity" — same count/reasoning as
+  // characterSheetGroupBlock's own identical suppression in the Entity
+  // Editor: the "Character Sheet · {ruleset}" label only earns its keep
+  // telling several of them apart. Scoped to kind:'character' groups only
+  // — a Bestiary/Vehicle/Gear group's own label is untouched regardless.
+  const characterSheetCount = (e.statblocks || []).filter((g) => g.kind === 'character' && !g.archived).length;
   return sorted.map(({ group, index: gi }) => {
     const fields = (group.fields || []).map((f, fi) => ({ f, fi }));
     const attrs = fields.filter(({ f }) => f.attribute);
@@ -3806,8 +4088,9 @@ function partyMemberStatblocks(e, doc, ui, opts = {}) {
     // combat tracker (to save space)" — opts.compact (set only by the
     // Combat Tracker's own call site) drops the group label entirely; the
     // Party Roster's own expanded card (opts.compact unset) is unaffected.
+    const hideLabel = opts.compact || (group.kind === 'character' && characterSheetCount <= 1);
     return `<div class="party-stat-group">
-      ${opts.compact ? '' : `<div class="party-stat-group-label">${esc(statblockGroupLabel(group, doc))}</div>`}
+      ${hideLabel ? '' : `<div class="party-stat-group-label">${esc(statblockGroupLabel(group, doc))}</div>`}
       ${attrPills ? `<div class="party-stat-pills">${attrPills}</div>` : ''}
       ${trackPills ? `<div class="party-stat-pills">${trackPills}</div>` : ''}
       ${otherPills ? `<div class="party-stat-pills">${otherPills}</div>` : ''}
@@ -3909,24 +4192,38 @@ function partyStatTrackExpansion(f, entityId, gi, fi) {
 // Small right-aligned counter on a collapsed Party Roster row — direct
 // follow-up request: "the Health and momentum numbers need to be the
 // single value total that is at the end of the counter" (a plain number,
-// not the row-of-boxes this used to render). Which track fields surface
-// here is entirely GM-configured (settings.partyHeadlineFields, Settings →
-// Stat system — "GM picks per-ruleset which fields surface"), since a
-// field literally named "Momentum" only exists under some rulesets.
-// Reuses the SAME data-statblock-roll double-click-to-roll trigger
-// trackRow's own badge uses, entity-scoped via the "entityId::gi::fi" key
-// shape (parseStatblockKey, shell.js).
+// not the row-of-boxes this used to render). Which fields surface here is
+// entirely GM-configured (settings.partyHeadlineFields, Settings → Stat
+// system — "GM picks per-ruleset which fields surface"), since a field
+// literally named "Momentum" only exists under some rulesets. Direct
+// follow-up request: "whatever is added to 'Party Roster headline fields'
+// should be checked as a statblock and displayed if present in any of the
+// enabled character sheets" — listPartyHeadlineTracks (domain/party.js)
+// now matches ANY field kind, not just tracks, so this has to format/roll
+// each kind the way its own normal row does (formatAttrValue + attribute's
+// own rollMethod-defaults-to-'none' convention for an attribute, same
+// value-or-'—' fallback partyStatPill already uses for plain text) rather
+// than assuming every match is a plain number. Reuses the SAME
+// data-statblock-roll double-click-to-roll trigger trackRow's own badge
+// uses for every rollable kind here (not attrRow's click-the-label
+// convention — no room in a small badge for two different trigger
+// gestures), entity-scoped via the "entityId::gi::fi" key shape
+// (parseStatblockKey, shell.js); onDblClick's own handler reads whichever
+// field this resolves to and rolls it correctly regardless of kind.
 function partyMemberHeadlineCounters(doc, e) {
-  const tracks = listPartyHeadlineTracks(doc, e);
-  if (!tracks.length) return '';
-  const counters = tracks.map(({ f, gi, fi }) => {
-    const value = Number(f.value) || 0;
+  const fields = listPartyHeadlineTracks(doc, e);
+  if (!fields.length) return '';
+  const counters = fields.map(({ f, gi, fi }) => {
     const key = `${e.id}::${gi}::${fi}`;
-    const method = f.rollMethod || 'action';
-    const rollable = method !== 'none';
+    const isText = !f.attribute && !f.track;
+    const display = f.attribute ? formatAttrValue(Number(f.value) || 0, f.format || 'sign')
+      : f.track ? String(Number(f.value) || 0)
+      : (f.value || '—');
+    const method = f.rollMethod || (f.attribute ? 'none' : 'action');
+    const rollable = !isText && method !== 'none';
     const valueEl = rollable
-      ? `<button type="button" class="track-value-badge party-headline-value" data-statblock-roll="${key}" title="${esc(f.key)}: double-click to roll">${value}</button>`
-      : `<span class="track-value-badge track-value-badge-static party-headline-value" title="${esc(f.key)}: not rollable">${value}</span>`;
+      ? `<button type="button" class="track-value-badge party-headline-value" data-statblock-roll="${key}" title="${esc(f.key)}: double-click to roll">${esc(display)}</button>`
+      : `<span class="track-value-badge track-value-badge-static party-headline-value" title="${esc(f.key)}${isText ? '' : ': not rollable'}">${esc(display)}</span>`;
     return `<span class="party-headline-counter">
       <span class="party-headline-counter-label">${esc(f.key)}</span>
       ${valueEl}
@@ -4116,6 +4413,17 @@ function partyRelationshipsSectionHtml(doc, ui) {
     </div>` : '<p class="dim small">Add an entity in Cast first.</p>'}`}`;
 }
 
+// Direct follow-up request: "Remove the arrow opening the Entity Editor in
+// the Party record since the thumbnail opens the entity editor" — the
+// standalone ↗ button was fully redundant with partyMemberThumb's own
+// data-open-entity (every other Actor thumbnail in the app — WHO, Shared
+// Assets — already opens the entity editor on click with no second
+// control beside it). A follow-up to THAT request ("add a 'x' removal
+// where the arrow... was") puts a real action in that now-empty spot
+// instead — leaving the Party (removes the #character tag, same
+// confirm+archive behavior as doing it from the Entity Editor's own tag
+// chips, just addressed by this row's own id — shell.js's
+// data-party-member-remove handler).
 export function partyMemberCard(e, doc, ui, opts = {}) {
   const open = (ui.expandedPartyMembers || new Set()).has(e.id);
   return `
@@ -4124,7 +4432,7 @@ export function partyMemberCard(e, doc, ui, opts = {}) {
         ${partyMemberThumb(doc, e)}
         <button type="button" class="party-member-name" data-party-member-toggle="${esc(e.id)}">${open ? '▾' : '▸'} ${esc(e.name) || '<em>Unnamed</em>'}</button>
         ${partyMemberHeadlineCounters(doc, e)}
-        <button class="icon-btn" data-open-entity="${esc(e.id)}" title="Open in entity editor" aria-label="Open in entity editor">↗</button>
+        <button class="icon-btn" data-party-member-remove="${esc(e.id)}" title="Remove from Party" aria-label="Remove from Party">✕</button>
       </div>
       ${open ? partyMemberStatblocks(e, doc, ui, opts) : ''}
     </div>`;
@@ -4197,6 +4505,15 @@ function party(doc, ui = {}) {
   // (direct follow-up request: "needs to be a thumbnail like other NPC
   // entity thumbnails") and open the Entity Editor.
   const sharedAssetVehicleThumbs = (party_.sharedAssetIds || []).map((id) => sharedAssetVehicleThumb(doc, id)).join('');
+  // Direct follow-up request: "Hide the cargo manifest unless there is a
+  // vehicle under shared assets" — sharedAssetIds is entity-type-agnostic
+  // (vehicles/items/assets all land in the same list, see commitEntityPickerPick's
+  // own comment on this), so this checks each linked entity's own #vehicle
+  // tag directly rather than assuming every id in the list is a vehicle.
+  const hasSharedVehicle = (party_.sharedAssetIds || []).some((id) => {
+    const linked = getEntity(doc, id);
+    return linked && (linked.tags || []).includes('vehicle');
+  });
 
   // Direct follow-up request: "by default, the section headers for [Campaign
   // and Party] should all be collapsed" — every OTHER Party section shares
@@ -4213,8 +4530,8 @@ function party(doc, ui = {}) {
   const sharedGearCollapsed = isPartySectionCollapsed(ui, 'sharedGear', true);
 
   return `
-    <div class="party-member-list">
-      ${memberCards || '<p class="ws-placeholder">No party members yet. Add one above, or tag an existing NPC #character in Cast.</p>'}
+    <div class="party-member-list" data-drop-party>
+      ${memberCards || '<p class="ws-placeholder">No party members yet. Add one above, or tag an existing NPC #character in Cast, or drag one in here.</p>'}
     </div>
     ${partyStarshipSectionHtml(doc, ui)}
     ${partySectionHeaderHtml('trackers', 'Party Trackers', trackersCollapsed, `${ui.partyTrackerAddOpen ? '' : '<button class="icon-btn" data-party-tracker-add-toggle title="Add tracker">＋</button>'}<button class="icon-btn" data-party-trackers-edit-toggle title="${trackersEditOpen ? 'Done editing' : 'Edit trackers (rename, remove)'}">${trackersEditOpen ? '💾' : '✎'}</button>`)}
@@ -4225,14 +4542,13 @@ function party(doc, ui = {}) {
     </div>`}
     ${partySectionHeaderHtml('sharedGear', 'Shared Gear', sharedGearCollapsed, richToolbarToggleHTML(sharedGearKey, toolbarCollapsed(doc, ui, sharedGearKey)))}
     ${sharedGearCollapsed ? '' : `<div class="rich-field">${richToolbarHTML(sharedGearKey, toolbarCollapsed(doc, ui, sharedGearKey), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-party-field="sharedGear" data-placeholder="A shared toolkit, the ship's medkit, anything not tied to one character…">${buildMentionEditorHTML(doc, party_.sharedGear)}</div></div>`}
-    ${partySectionHeaderHtml('sharedAssets', 'Shared Assets', sharedAssetsCollapsed, `<button class="chip" data-entity-picker-open="party-vehicle">＋ Vehicle</button><button class="chip" data-entity-picker-open="party-item">＋ Item</button><button class="chip" data-entity-picker-open="party-asset">＋ Asset</button>`)}
+    ${partySectionHeaderHtml('sharedAssets', 'Shared Assets', sharedAssetsCollapsed, `<button class="chip" data-entity-picker-open="party-shared-asset">＋ Shared Asset</button>`)}
     ${sharedAssetsCollapsed ? '' : `
     ${sharedAssetVehicleThumbs ? `<div class="actor-thumb-row">${sharedAssetVehicleThumbs}</div>` : ''}
     <div class="entity-chips">${sharedAssetChips || (sharedAssetVehicleThumbs ? '' : '<span class="dim small">None yet.</span>')}</div>
     <div class="entity-add-row"><input class="doc-tag-input" data-party-shared-asset-input placeholder="Add a shared asset…"></div>`}
-    ${partyRelationshipsSectionHtml(doc, ui)}
-    ${cargoManifestSection(doc, ui, { collapsible: true })}
-    ${contractsSection(doc, ui, { collapsible: true })}`;
+    ${hasSharedVehicle ? cargoManifestSection(doc, ui, { collapsible: true }) : ''}
+    ${partyRelationshipsSectionHtml(doc, ui)}`;
 }
 
 // --- Colony: 5PFH Planetfall turn sheet + crew roster + lifeform filter ----
@@ -4646,7 +4962,7 @@ const COLONY_PANEL_TABS = [
 const COLONY_PANEL_TAB_RENDERERS = { colony: colonyTabHtml, starship: starshipTabHtml, warband: warbandTabHtml };
 function colony(doc, ui = {}) {
   const visibleTabs = COLONY_PANEL_TABS.filter((t) => isGameSystemActivated(doc, t.system));
-  if (!visibleTabs.length) return '<p class="ws-placeholder">Colony, Starship, and Warband are all currently deactivated — enable Planetfall, Five Parsecs from Home, and/or Five Leagues from Borderlands under Settings → Rulesets → Game System Activation.</p>';
+  if (!visibleTabs.length) return '<p class="ws-placeholder">Colony, Starship, and Warband are all currently deactivated — enable Planetfall, Five Parsecs from Home, and/or Five Leagues from Borderlands under Settings → Licenses → Game System Activation.</p>';
   const activeTab = visibleTabs.some((t) => t.id === ui.colonyPanelTab) ? ui.colonyPanelTab : visibleTabs[0].id;
   const tabBar = visibleTabs.length > 1 ? `<div class="settings-tab-bar align-right">${visibleTabs.map((t) => `
     <button class="btn ghost sm ${t.id === activeTab ? 'active' : ''}" data-colony-panel-tab="${t.id}" aria-selected="${t.id === activeTab}">${esc(t.label)}</button>`).join('')}</div>` : '';
@@ -4801,7 +5117,13 @@ function contractsLabel(genrePackId) {
   return genrePackId === 'fantasy' ? 'Quests' : 'Contracts';
 }
 
-function contractsSection(doc, ui, { collapsible = false } = {}) {
+// Direct follow-up request: "Move quests from Party panel to the
+// Navigator" — exported so workspace/index.js's Navigator can render it
+// too; party() itself no longer calls this at all. Still shared verbatim
+// with trade()'s own (non-collapsible) call site below — same function,
+// same markup, same already-generic (not container-scoped) data-trade-*/
+// data-thread-* handlers, just one more caller.
+export function contractsSection(doc, ui, { collapsible = false } = {}) {
   const locations = listEntities(doc, ['location']);
   const npcs = listEntities(doc, ['npc']);
   const contracts = listContracts(doc);
@@ -5044,12 +5366,44 @@ function refTagEditor(r) {
 // toggles docTagEditor/refTagEditor open/closed (ui.docTagEditorOpen, a Set
 // of doc ids / ref keys — ephemeral, not persisted) instead of always
 // rendering the tag row, to keep each card's default footprint small.
+// Direct follow-up request: "Allow sort and filter option on the doc
+// library. Default the sort to ASC alphabetical." — applied per-list
+// (Notes, uploaded files, Reference Library each sort independently,
+// same section order as before) rather than merging the uploaded-files/
+// Reference-Library sections into one interleaved list, since they
+// already render via two differently-shaped row templates (lib:/ref:
+// prefixes, different rename/delete semantics). A ref doc has no
+// createdAt at all (a static catalog entry, not a per-campaign record),
+// so a 'date-*' sort leaves it in title order via the tie-break below —
+// never undefined-vs-undefined arbitrary order.
+function sortDocEntries(list, sortKey) {
+  const sorted = list.slice();
+  const byTitle = (a, b) => String(a.title || '').localeCompare(String(b.title || ''));
+  if (sortKey === 'title-desc') sorted.sort((a, b) => byTitle(b, a));
+  else if (sortKey === 'date-newest') sorted.sort((a, b) => (a.createdAt && b.createdAt ? b.createdAt.localeCompare(a.createdAt) : 0) || byTitle(a, b));
+  else if (sortKey === 'date-oldest') sorted.sort((a, b) => (a.createdAt && b.createdAt ? a.createdAt.localeCompare(b.createdAt) : 0) || byTitle(a, b));
+  else sorted.sort(byTitle); // 'title-asc', and the default for an unrecognized value
+  return sorted;
+}
+const DOC_SORT_OPTIONS = [
+  { value: 'title-asc', label: 'Title (A → Z)' },
+  { value: 'title-desc', label: 'Title (Z → A)' },
+  { value: 'date-newest', label: 'Date Added (newest)' },
+  { value: 'date-oldest', label: 'Date Added (oldest)' },
+];
+const DOC_TYPE_FILTER_OPTIONS = [
+  { value: 'all', label: 'All types' },
+  { value: 'note', label: 'Notes' },
+  { value: 'ref', label: 'Reference Library' },
+];
 function documents(doc, ui = {}) {
   const search = ui.docFilter || '';
   const activeTags = ui.docTagFilters || new Set();
   const tagEditorOpen = ui.docTagEditorOpen || new Set();
   const renameOpen = ui.docRenameOpen || new Set();
   const tagListOpen = !!ui.docTagListOpen;
+  const sortKey = ui.docSort || 'title-asc';
+  const typeFilter = ui.docTypeFilter || 'all';
   const items = filterDocuments(doc, { search, tags: [...activeTags] });
   // An uploaded FILE (kind:'file', a real PDF) is an openable document same
   // as any bundled Reference Library one — it renders in that same section
@@ -5058,7 +5412,7 @@ function documents(doc, ui = {}) {
   // NOTE (kind:'note', free text with no underlying file) is categorically
   // different — nothing to "open," just an editable text block — and stays
   // in its own top section.
-  const noteItems = items.filter((d) => d.kind !== 'file');
+  const noteItems = sortDocEntries(items.filter((d) => d.kind !== 'file'), sortKey);
   const uploadedFileItems = items.filter((d) => d.kind === 'file');
   const mentions = listDocumentMentions(doc);
   const allTags = allDocumentTags(doc);
@@ -5101,7 +5455,8 @@ function documents(doc, ui = {}) {
   }).join('');
   const mentionSummary = mentions.length ? `<p class="dim small">Mentioned in Journal or dashboard fields: ${mentions.map((m) => esc(m.name)).join(', ')}</p>` : '';
 
-  const uploadedFileRows = uploadedFileItems.map((d) => `
+  function uploadedFileRowHtml(d) {
+    return `
     <div class="doc-card ref-doc-card">
       <div class="doc-card-head">
         ${renameOpen.has(d.id)
@@ -5114,7 +5469,8 @@ function documents(doc, ui = {}) {
         </div>
       </div>
       ${tagEditorOpen.has(d.id) ? docTagEditor(d) : ''}
-    </div>`).join('');
+    </div>`;
+  }
 
   // Direct follow-up request: "create a bulk export/import to transfer the
   // library records and docs themselves from one browser to another" — a
@@ -5123,7 +5479,8 @@ function documents(doc, ui = {}) {
   // ui.refDocBlobKeys (populated async, shell.js's openDrawerTab) is what
   // that "☁ Imported" badge below reads.
   const blobKeys = ui.refDocBlobKeys || new Set();
-  const refRows = refDocs.map((r) => `
+  function refRowHtml(r) {
+    return `
     <div class="doc-card ref-doc-card">
       <div class="doc-card-head">
         ${renameOpen.has(r.key)
@@ -5137,7 +5494,23 @@ function documents(doc, ui = {}) {
         </div>
       </div>
       ${tagEditorOpen.has(r.key) ? refTagEditor(r) : ''}
-    </div>`).join('');
+    </div>`;
+  }
+  // Direct bug report: sorting the Docs library used to sort uploaded My
+  // Files and Reference Library entries SEPARATELY, then always render
+  // every uploaded file before every ref doc regardless of sort — so a
+  // newly-uploaded file (or any uploaded file) stayed pinned at the top
+  // of the merged Reference Library section no matter what sort was
+  // chosen. Both kinds already share one visual section (an earlier
+  // direct follow-up request folded them together on purpose), so they
+  // need one combined sort, not two independent ones stacked. Tagging
+  // each with __kind here is just bookkeeping to pick the right row
+  // template below — never part of the sort comparison itself.
+  const mergedRefSection = sortDocEntries([
+    ...uploadedFileItems.map((d) => ({ ...d, __kind: 'file' })),
+    ...refDocs.map((r) => ({ ...r, __kind: 'ref' })),
+  ], sortKey);
+  const refSectionRows = mergedRefSection.map((d) => (d.__kind === 'file' ? uploadedFileRowHtml(d) : refRowHtml(d))).join('');
 
   return `
     <datalist id="doc-tag-list">${allTags.map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
@@ -5145,22 +5518,34 @@ function documents(doc, ui = {}) {
       ${helpBody('documents-intro', 'A note is free text stored here; an imported file (see "Import File(s)" below) joins the Reference Library, alongside the bundled rulebooks. Drag either into a note or context field to insert a @ pointer.', ui)}
     </div>
     <input class="drawer-search" data-doc-filter value="${esc(search)}" placeholder="Search by name or tag…">
+    <div class="doc-sort-filter-row">
+      <label class="field-label sm">Sort
+        <select data-doc-sort>
+          ${DOC_SORT_OPTIONS.map((o) => `<option value="${o.value}" ${o.value === sortKey ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}
+        </select>
+      </label>
+      <label class="field-label sm">Show
+        <select data-doc-type-filter>
+          ${DOC_TYPE_FILTER_OPTIONS.map((o) => `<option value="${o.value}" ${o.value === typeFilter ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}
+        </select>
+      </label>
+    </div>
     ${allTags.length ? `
     <button class="btn ghost sm" data-doc-tag-list-toggle>${tagListOpen ? '▾' : '▸'} Tags (${allTags.length})</button>
     ${tagListOpen ? `<div class="doc-tag-filter-chips">
       ${allTags.map((t) => `<button class="chip sm ${activeTags.has(t) ? 'active' : ''}" data-doc-tag-filter="${esc(t)}">#${esc(t)}</button>`).join('')}
     </div>` : ''}` : ''}
     ${mentionSummary}
-    ${noteItems.length ? `
+    ${(typeFilter !== 'ref' && noteItems.length) ? `
     <div class="statblock-head"><h4>Notes</h4></div>
     <div class="doc-list">${rows}</div>` : ''}
-    ${(uploadedFileItems.length || refDocs.length) ? `
+    ${(typeFilter !== 'note' && (uploadedFileItems.length || refDocs.length)) ? `
     <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Reference Library</h4>${helpToggle('documents-reflib')}</div>
     ${helpBody('documents-reflib', 'Bundled rulebooks and setting docs from <code>assets/docs/</code>, plus anything you import — refreshed on every build. "Import File(s)" reads real files off your device into this browser\'s own storage: a filename matching a catalog entry joins the Reference Library so it opens even when assets/docs/ is empty on this machine; anything else becomes a new personal document (no size limit). Bulk "Export Library"/"Import Library" (a zip of every such doc, to carry to another browser) live in Settings → General → Data.', ui)}
     <div class="drawer-note ref-doc-transfer-row">
       <label class="btn ghost sm file-btn">📥 Import File(s)<input type="file" data-ref-doc-import multiple hidden></label>
     </div>
-    <div class="doc-list">${uploadedFileRows}${refRows}</div>` : ''}`;
+    <div class="doc-list">${refSectionRows}</div>` : ''}`;
 }
 
 // Gallery (Phase 11, docs/adr/0021-gallery.md): a tagged image collection,

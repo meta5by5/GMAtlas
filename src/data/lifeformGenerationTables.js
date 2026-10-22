@@ -1,6 +1,6 @@
 // lifeformGenerationTables.js — the D100 tables behind Planetfall's own
 // "Generating Lifeforms" procedure (rulebook p.146-148, confirmed via
-// `pdftotext -raw -f 148/149/150 "assets/docs/5PFH Planetfall 1.2.pdf"` —
+// `pdftotext -raw -f 148/149/150 "assets/docs/5PFH/Five Parsecs - Planetfall 1.2.pdf"` —
 // PDF page 148 = printed p.146, matching this app's established +2
 // PDF-to-printed offset). Kept as plain data (CLAUDE.md: "keep statblocks,
 // oracle tables, and similar content data, not code") — domain/lifeforms.js

@@ -12,6 +12,7 @@ import {
   findProgressDifficulty, STARFORGED_PROGRESS_TRACK_MAX,
   STARFORGED_MOMENTUM_MIN, STARFORGED_MOMENTUM_MAX, STARFORGED_MOMENTUM_RESET, STARFORGED_SUPPLY_MAX,
 } from '../data/rulesets.js';
+import { isGameSystemActivated } from '../data/rulesConstitution.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 
@@ -49,24 +50,35 @@ export function listPartyMembers(campaign) {
   return listEntities(campaign, ['npc']).filter(hasCharacterTag);
 }
 
-/** The member's own track fields (across every statblock group they carry —
- *  Character Sheet AND any Bestiary group at once, since #character NPCs
- *  can have both) whose key matches one of settings.partyHeadlineFields
- *  (case-insensitive) — what the Party Roster's collapsed member row shows
- *  as small right-aligned counters (direct request: "GM picks per-ruleset
- *  which fields surface"). Order follows settings.partyHeadlineFields, not
- *  field/group order, so a GM's chosen priority (e.g. "Health before
- *  Momentum") is honored regardless of how the underlying groups are
- *  sorted. Returns {f, gi, fi} triples — gi/fi index into entity.statblocks
- *  exactly like every other statblock mutator in this app expects. */
+/** The member's own statblock fields (across every ENABLED — non-archived
+ *  — statblock group they carry: a Character Sheet AND any Bestiary group
+ *  at once, since #character NPCs can have both, or even two different
+ *  rulesets' Character Sheets at once) whose key matches one of
+ *  settings.partyHeadlineFields (case-insensitive) — what the Party
+ *  Roster's collapsed member row shows as small right-aligned counters
+ *  (direct request: "GM picks per-ruleset which fields surface"). Direct
+ *  follow-up request: "whatever is added to 'Party Roster headline
+ *  fields' should be checked as a statblock and displayed if present in
+ *  any of the enabled character sheets" — ANY field kind (attribute,
+ *  track, or plain text) is eligible, not just track fields as this used
+ *  to require (a GM naming an attribute like Five Leagues' "Combat Skill"
+ *  used to silently never surface here); an ARCHIVED group (the Bestiary/
+ *  Character sheet currently swapped OUT of view, see ensureAutoStatblock)
+ *  is skipped, since its fields aren't really "present" while hidden.
+ *  Order follows settings.partyHeadlineFields, not field/group order, so a
+ *  GM's chosen priority (e.g. "Health before Momentum") is honored
+ *  regardless of how the underlying groups are sorted. Returns {f, gi, fi}
+ *  triples — gi/fi index into entity.statblocks exactly like every other
+ *  statblock mutator in this app expects. */
 export function listPartyHeadlineTracks(campaign, entity) {
   const wanted = ((campaign.settings && campaign.settings.partyHeadlineFields) || []).map((s) => s.trim().toLowerCase()).filter(Boolean);
   if (!wanted.length) return [];
   const groups = entity.statblocks || [];
   const found = [];
   groups.forEach((group, gi) => {
+    if (group.archived) return;
     (group.fields || []).forEach((f, fi) => {
-      if (f && f.track && wanted.includes(String(f.key || '').trim().toLowerCase())) found.push({ f, gi, fi });
+      if (f && wanted.includes(String(f.key || '').trim().toLowerCase())) found.push({ f, gi, fi });
     });
   });
   return wanted
@@ -76,6 +88,36 @@ export function listPartyHeadlineTracks(campaign, entity) {
 
 export function listPartyTrackers(campaign) {
   return ((campaign.party && campaign.party.trackers) || []);
+}
+
+// Which Party Tracker NAMES (lowercased) each ruleset's own auto-seed
+// function below actually creates — a lookup, not a stored field on the
+// tracker itself, since adding a `ruleset` field would be a schema change
+// for something fully derivable from the name a GM hasn't renamed away
+// from its seeded default (renaming one just means it stops being
+// recognized as that ruleset's own, same as any other "matched by name"
+// convention this app already uses — e.g. listPartyHeadlineTracks). Direct
+// follow-up request ("the trackers on Navigator are for Starforged and
+// should be filtered to that ruleset and all rulesets activated would
+// have their trackers added to Navigator"): this is what lets the
+// Navigator isolate "just Five Leagues' own trackers" out of a party.
+// trackers array that may carry more than one ruleset's worth at once
+// (ensureParty*Trackers below never removes a prior ruleset's own
+// trackers when the GM switches statRuleset away from it).
+const RULESET_OWNED_TRACKER_NAMES = {
+  starforged: ['momentum', 'supply'],
+  fiveleagues: ['gold marks', 'enemy threat', 'enemy plans'],
+};
+
+/** Whichever of campaign.party.trackers belong to `rulesetId`, matched by
+ *  name against RULESET_OWNED_TRACKER_NAMES. Empty for a ruleset with no
+ *  entry there yet (SWN/5PFH/Planetfall have no dedicated Party Tracker
+ *  auto-seed of their own today) rather than throwing — callers can treat
+ *  "no trackers" and "unrecognized ruleset" identically. */
+export function listPartyTrackersForRuleset(campaign, rulesetId) {
+  const names = RULESET_OWNED_TRACKER_NAMES[rulesetId];
+  if (!names) return [];
+  return listPartyTrackers(campaign).filter((t) => names.includes(String(t.name || '').trim().toLowerCase()));
 }
 
 /** A tracker's kind (and, for a Starforged counter, its difficulty) is fixed
@@ -144,36 +186,92 @@ export function gaugeWindow(value, min, max, size = 10) {
   return Array.from({ length: span }, (_, i) => start + i);
 }
 
+// Direct follow-up request, supersedes this function's own prior "never
+// removed" design: "auto-setup and configure all trackers and shared
+// fields in a game system module when that module is activated. Keep it
+// in a record of module-specific functionality such that they are removed
+// if the campaign or profile is modified or disabled where those
+// trackers... are no longer applicable." Every tracker either ensure
+// function below creates now carries its own `moduleId` — the ONE thing
+// that lets this distinguish "auto-created by a module, safe to tear
+// down" from a GM's own hand-added tracker (addPartyTracker, no moduleId
+// — NEVER touched by this). Re-activating a module later recreates its
+// trackers fresh (value reset to the same starting figure a brand-new
+// one gets) rather than restoring whatever the GM had tracked before
+// deactivating — an accepted, explicit tradeoff per this request's own
+// wording, not an oversight.
 /** Auto-populates Momentum (a 'gauge', -6..10, reset value +2) and Supply (a
  *  'meter', 0..5, starting full) onto the Party Tracker list the first time
  *  it's viewed under the Starforged ruleset (direct request) — idempotent
  *  (matched by name, case-insensitive) so it's safe to call on every Party
- *  drawer open rather than needing a one-time migration flag. Deliberately
- *  never REMOVES either tracker if the campaign's ruleset later changes
- *  away from Starforged — same "declared but inert, never silently
- *  dropped" posture every other ruleset-specific field in this app follows
- *  (migration rule 5's spirit, applied to a UI-triggered backfill instead
- *  of a schema migration). */
+ *  drawer open rather than needing a one-time migration flag. Starforged
+ *  has no Game System Activation gate of its own (always "on"), so
+ *  statRuleset itself is the only real "is this the active one" signal —
+ *  removes both (by moduleId, not name, so a GM's own same-named tracker
+ *  is never caught in this) the moment statRuleset moves away from it. */
 export function ensurePartyStarforgedTrackers(campaign) {
   const isStarforged = ((campaign.settings && campaign.settings.statRuleset) || 'starforged') === 'starforged';
-  if (!isStarforged) return campaign;
   const next = clone(campaign);
   const party = ensure(next);
+  if (!isStarforged) {
+    party.trackers = party.trackers.filter((t) => t.moduleId !== 'starforged');
+    return next;
+  }
   const hasByName = (name) => party.trackers.some((t) => (t.name || '').trim().toLowerCase() === name);
   if (!hasByName('momentum')) {
     party.trackers.push({
       id: 'ptrk_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      name: 'Momentum', kind: 'gauge',
+      name: 'Momentum', kind: 'gauge', moduleId: 'starforged',
       value: STARFORGED_MOMENTUM_RESET, min: STARFORGED_MOMENTUM_MIN, max: STARFORGED_MOMENTUM_MAX,
     });
   }
   if (!hasByName('supply')) {
     party.trackers.push({
       id: 'ptrk_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      name: 'Supply', kind: 'meter',
+      name: 'Supply', kind: 'meter', moduleId: 'starforged',
       value: STARFORGED_SUPPLY_MAX, max: STARFORGED_SUPPLY_MAX,
     });
   }
+  return next;
+}
+
+/** Same idempotent-by-name, call-on-every-Party-open shape as
+ *  ensurePartyStarforgedTrackers above, for Five Leagues from the
+ *  Borderlands (direct follow-up request: "When the campaign ruleset
+ *  assigns 5LFB, auto-create the Party trackers for Gold Marks currency
+ *  tracker and other trackers common to the ruleset") — three real,
+ *  warband-wide (not per-character) mechanics named in the rulebook's own
+ *  Campaign Turn sequence (data/turnStepListFiveLeagues.js's own step
+ *  text, confirmed against the real PDF): Gold Marks (a 'currency'
+ *  tracker — "if the warband has no Gold Marks, check Hard Times," p.81),
+ *  Enemy Threat (a 'counter' — "track and escalate the current Enemy
+ *  Threat level as the campaign progresses," p.97), and Enemy Plans (a
+ *  'counter' — "advance the current Enemy's own scheme per the Enemy
+ *  Plans track," p.207). All three start at 0 rather than a guessed
+ *  starting figure — a new warband's actual starting Gold Marks (and
+ *  Threat/Plans position) depends on the specific scenario/campaign
+ *  start the GM is running, not a single fixed rulebook number the way
+ *  Starforged's own Momentum reset (+2) or Supply max are. Direct follow-
+ *  up request ("auto-setup... when that module is activated... removed
+ *  if... disabled") moved the trigger from statRuleset to the real
+ *  fiveleagues Game System Activation checkbox itself (Settings →
+ *  Licenses) — Five Leagues, unlike Starforged, actually has one — and
+ *  all three now get torn down (by moduleId, not name, so a GM's own
+ *  same-named tracker is never caught in this) the moment that checkbox
+ *  is unchecked, rather than staying forever once created. */
+export function ensurePartyFiveLeaguesTrackers(campaign) {
+  const isFiveLeaguesActive = isGameSystemActivated(campaign, 'fiveleagues');
+  const next = clone(campaign);
+  const party = ensure(next);
+  if (!isFiveLeaguesActive) {
+    party.trackers = party.trackers.filter((t) => t.moduleId !== 'fiveleagues');
+    return next;
+  }
+  const hasByName = (name) => party.trackers.some((t) => (t.name || '').trim().toLowerCase() === name);
+  const newTracker = (name, kind) => ({ id: 'ptrk_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, kind, value: 0, moduleId: 'fiveleagues' });
+  if (!hasByName('gold marks')) party.trackers.push(newTracker('Gold Marks', 'currency'));
+  if (!hasByName('enemy threat')) party.trackers.push(newTracker('Enemy Threat', 'counter'));
+  if (!hasByName('enemy plans')) party.trackers.push(newTracker('Enemy Plans', 'counter'));
   return next;
 }
 

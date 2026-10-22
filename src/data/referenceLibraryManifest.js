@@ -78,7 +78,15 @@ export const REFERENCE_LIBRARY_MANIFEST = [
   { file: 'assets/docs/5LFB/5LDB Warband Sheet US.pdf', title: 'Five Leagues Warband Sheet', ext: 'pdf', sizeBytes: 45674, releaseAsset: '5LDB.Warband.Sheet.US.pdf' },
   { file: 'assets/docs/dnd5e/SRD_CC_v5.2.1.pdf', title: 'D&D 5e SRD 5.2.1', ext: 'pdf', sizeBytes: 6031375, releaseAsset: 'SRD_CC_v5.2.1.pdf' },
   { file: 'assets/docs/Starforged/Starforged-reference-guide.pdf', title: 'Starforged Reference Guide', ext: 'pdf', sizeBytes: 19779875, releaseAsset: 'Starforged-reference-guide.pdf' },
-  { file: 'assets/docs/5PFH/5PFH-Five-Parsecs-From-Home-v3.pdf', title: 'Five Parsecs From Home (3rd Edition)', ext: 'pdf', sizeBytes: 9703190, releaseAsset: '5PFH-Five-Parsecs-From-Home-v3.pdf' },
+  // Direct follow-up request: "Rename all 'Turn Step' filename link
+  // references to match the actual filenames in the /docs subdirectories"
+  // — the real file on disk is now 'Five Parsecs From Home v3.pdf' (no
+  // '5PFH-' prefix, no hyphens), matching turnStepsDefault5pfh.js's own
+  // @[...] mentions, which already targeted this exact title. releaseAsset
+  // follows this file's own documented GitHub-sanitization pattern
+  // (whitespace collapses) but hasn't been re-verified against a real
+  // re-upload under this name yet — see this file's own header comment.
+  { file: 'assets/docs/5PFH/Five Parsecs From Home v3.pdf', title: 'Five Parsecs From Home v3', ext: 'pdf', sizeBytes: 9703190, releaseAsset: 'Five.Parsecs.From.Home.v3.pdf' },
   { file: 'assets/docs/Traveller/Traveller-2e-Core-Rulebook.pdf', title: 'Traveller 2e Core Rulebook', ext: 'pdf', sizeBytes: 56988103, releaseAsset: 'Traveller-2e-Core-Rulebook.pdf' },
   // Secondary sourcebooks data/rulesetGuideDefaults.js's own starforged/
   // 5pfh/traveller lists reference alongside each ruleset's primary PDF
@@ -87,8 +95,33 @@ export const REFERENCE_LIBRARY_MANIFEST = [
   { file: 'assets/docs/Starforged/Ironsworn-Starforged-rulebook.pdf', title: 'Ironsworn Starforged rulebook', ext: 'pdf', sizeBytes: 32245844, releaseAsset: 'Ironsworn-Starforged-rulebook.pdf' },
   { file: 'assets/docs/Starforged/Starsmith-Assets-Mar-5-23.pdf', title: 'Starsmith Assets Mar 5 23', ext: 'pdf', sizeBytes: 31570395, releaseAsset: 'Starsmith-Assets-Mar-5-23.pdf' },
   { file: 'assets/docs/Starforged/Starsmith-Expanded-Oracles-May-15-23.pdf', title: 'Starsmith Expanded Oracles May 15 23', ext: 'pdf', sizeBytes: 22045227, releaseAsset: 'Starsmith-Expanded-Oracles-May-15-23.pdf' },
-  { file: 'assets/docs/5PFH/5PFH-3e-Compendium-Includes-Bug-Hunt.pdf', title: '5PFH 3e Compendium Includes Bug Hunt', ext: 'pdf', sizeBytes: 50678570, releaseAsset: '5PFH-3e-Compendium-Includes-Bug-Hunt.pdf' },
-  { file: 'assets/docs/5PFH/5PFH Planetfall 1.2.pdf', title: '5PFH Planetfall 1.2', ext: 'pdf', sizeBytes: 43722123, releaseAsset: '5PFH.Planetfall.1.2.pdf' },
+  // Direct follow-up request: real file on disk is now 'Five Parsecs -
+  // Compendium Includes Bug Hunt.pdf' — matches the Planetfall rename's own
+  // "Five Parsecs - X" convention; turnStepsDefault5pfh.js's own @[...]
+  // mentions (previously targeting the stale title '3e Compendium/Bug
+  // Hunt') are updated to match this exact title.
+  { file: 'assets/docs/5PFH/Five Parsecs - Compendium Includes Bug Hunt.pdf', title: 'Five Parsecs - Compendium Includes Bug Hunt', ext: 'pdf', sizeBytes: 50678570, releaseAsset: 'Five-Parsecs-Compendium-Includes-Bug-Hunt.pdf' },
+  { file: 'assets/docs/5PFH/Five Parsecs - Planetfall 1.2.pdf', title: 'Five Parsecs - Planetfall 1.2', ext: 'pdf', sizeBytes: 43722123, releaseAsset: 'Five-Parsecs-Planetfall-1.2.pdf' },
   { file: 'assets/docs/Traveller/Traveller-2e-high-guard-2022-update.pdf', title: 'Traveller 2e high guard 2022 update', ext: 'pdf', sizeBytes: 77816836, releaseAsset: 'Traveller-2e-high-guard-2022-update.pdf' },
   { file: 'assets/docs/Traveller/Traveller-2e-the-great-rift-book-4-deep-space-exploration-handbook.pdf', title: 'Traveller 2e the great rift book 4 deep space exploration handbook', ext: 'pdf', sizeBytes: 9233647, releaseAsset: 'Traveller-2e-the-great-rift-book-4-deep-space-exploration-handbook.pdf' },
 ];
+
+/** Direct follow-up request: "If the file doesn't exist for that filename,
+ *  prompt the user with the filename expected and instruct to upload the
+ *  appropriate file of that filename." A Turn Step's own @[Label|Title#Page]
+ *  mention (turnStepsDefault5pfh.js/turnStepListPlanetfall.js/
+ *  turnStepListFiveLeagues.js) can target a title that's a real, KNOWN
+ *  sourcebook (this committed catalog describes it even when the actual
+ *  PDF bytes aren't present on this install/deployment — see this file's
+ *  own header comment on why the two are separate) but isn't currently
+ *  openable (domain/documents.js's findDocumentTabByTitle reads the
+ *  gitignored, build-time DOCS_MANIFEST scan instead, which only lists
+ *  what's actually on disk right now). This is the lookup that tells the
+ *  mention renderer "this isn't just a typo/unlinked name, it's a real
+ *  expected file that's simply missing" so it can say so instead of
+ *  rendering as plain dead text. */
+export function findExpectedReferenceDoc(title) {
+  const key = String(title || '').trim().toLowerCase();
+  if (!key) return null;
+  return REFERENCE_LIBRARY_MANIFEST.find((r) => r.title.trim().toLowerCase() === key) || null;
+}

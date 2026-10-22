@@ -1331,7 +1331,7 @@ test('listTagVocabulary swaps a Location\'s seeds for Five Leagues from the Bord
 // rules and require the selection of an opponent in the combat tracker
 // when performing the combat challenge dice roles which would use the
 // stats of the opponent.") -----------------------------------------------
-import { FIVE_LEAGUES_ORIGINS, findFiveLeaguesOrigin, FIVE_LEAGUES_ORIGIN_TABLE, originForD100 } from '../src/data/fiveLeaguesOrigins.js';
+import { FIVE_LEAGUES_ORIGINS, FIVE_LEAGUES_COMPENDIUM_ORIGINS, findFiveLeaguesOrigin, FIVE_LEAGUES_ORIGIN_TABLE, originForD100 } from '../src/data/fiveLeaguesOrigins.js';
 import { findFiveLeaguesGroupIndex, getFiveLeaguesStat, setEntityFiveLeaguesOrigin } from '../src/domain/fiveLeagues.js';
 import {
   rollFiveLeaguesExchange, formatFiveLeaguesExchangeText, formatFiveLeaguesExchangeCopyText,
@@ -1356,6 +1356,38 @@ test('FIVE_LEAGUES_ORIGINS has all 6 real Character Origins (p.15-19), each with
   for (const o of FIVE_LEAGUES_ORIGINS) {
     if (o.key !== 'human') assert.equal(o.willMaxOverride, 1, `${o.key} capped at 1 Will (only Human is "Driven")`);
   }
+});
+
+// Direct follow-up request: "update 5LFB origins to expand also to include
+// the origins from Compendium if that is enabled license" — the
+// Compendium's own "New Origins" chapter (8 origins), kept in a SEPARATE
+// array from the core 6 above since they're only offered once the
+// 'fiveleagues-compendium' Supplement Activation is on (drawers/index.js's
+// fiveLeaguesTypeAndOriginRowHtml), but findFiveLeaguesOrigin resolves
+// either array unconditionally so an already-set one always displays.
+test('FIVE_LEAGUES_COMPENDIUM_ORIGINS has all 8 real Compendium Origins (pp.65-73), each with a background/traits, and no key collides with a core origin; findFiveLeaguesOrigin resolves both lists', () => {
+  const keys = FIVE_LEAGUES_COMPENDIUM_ORIGINS.map((o) => o.key).sort();
+  assert.deepEqual(keys, ['deepkin', 'dwarf', 'elriki', 'felid', 'gnawling', 'kobold', 'skysworn', 'winged'].sort());
+  const coreKeys = new Set(FIVE_LEAGUES_ORIGINS.map((o) => o.key));
+  for (const o of FIVE_LEAGUES_COMPENDIUM_ORIGINS) {
+    assert.equal(coreKeys.has(o.key), false, `${o.key}: collides with a core origin key`);
+    assert.equal(typeof o.background, 'string');
+    assert.ok(Array.isArray(o.traits) && o.traits.length >= 1, `${o.key} has at least 1 trait`);
+    // Will/Luck: none of the 8 states its own override (Skysworn's "no
+    // Driven trait" note just confirms the same default every other
+    // non-Human core origin already uses) — see the data file's own doc
+    // comment for why.
+    assert.equal(o.willMaxOverride, 1, `${o.key}: capped at 1 Will like every non-Human origin`);
+    assert.equal(o.luckMaxOverride, null, `${o.key}: no Luck restriction stated`);
+  }
+  // Elriki's own text is explicit it gets no skill bonus at all; Deep Kin's
+  // is explicit it gets three at once — both deliberately diverge from the
+  // single-skill shape every other origin (core and Compendium) uses.
+  assert.equal(findFiveLeaguesOrigin('elriki').skillExpertise, null);
+  assert.equal(findFiveLeaguesOrigin('deepkin').skillExpertise, 'Scouting, Crafting, Wits');
+  assert.equal(findFiveLeaguesOrigin('dwarf').label, 'Dwarf');
+  assert.equal(findFiveLeaguesOrigin('human').label, 'Human', 'core lookup still works unchanged');
+  assert.equal(findFiveLeaguesOrigin('not-a-real-key'), null);
 });
 
 test('the Character Origin Table (p.15, D100) covers 1-100 with no gaps/overlaps; originForD100 resolves a roll to the right origin and clamps out-of-range input', () => {
@@ -2294,10 +2326,15 @@ test('addEntityStatblockGroup lets an entity hold both a Bestiary group and a ma
   let camp = defaultCampaign();
   let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Marshal' }));
   assert.equal(getEntity(camp, id).statblocks.length, 1); // auto-attached Bestiary
+  // defaultCampaign()'s own default statRuleset is 'starforged' — the
+  // auto-attached group now resolves THAT ruleset's own Bestiary template
+  // (DEFAULT_NPC_TEMPLATE_BY_RULESET, direct follow-up request: "add the
+  // default statblock for the ruleset"), not the old generic fallback.
+  assert.ok(getEntity(camp, id).statblocks.some((g) => g.templateId === 'starforged'));
   camp = addEntityStatblockGroup(camp, id, 'npc', '5pfh');
   const groups = getEntity(camp, id).statblocks;
   assert.equal(groups.length, 2);
-  assert.ok(groups.some((g) => g.templateId === 'generic'));
+  assert.ok(groups.some((g) => g.templateId === 'starforged'));
   assert.ok(groups.some((g) => g.templateId === '5pfh'));
 });
 
@@ -2732,7 +2769,7 @@ test('formatDicePoolRollText/formatDicePoolRollCopyText render each die\'s own r
 });
 
 // --- party (Party tab: #character roster + free trackers) ------------------
-import { listPartyMembers, addPartyTracker, updatePartyTracker, stepPartyTracker, setPartyTrackerValue, removePartyTracker, listPartyTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity, reconcilePartySharedAssetVehicleTag, setGaugeTrackerValue, gaugeWindow, ensurePartyStarforgedTrackers, listPartyHeadlineTracks, addPartyRelationship, removePartyRelationship, updatePartyRelationshipLabel, updatePartyRelationshipType, updatePartyRelationshipStrength, setPartyStarship, clearPartyStarship } from '../src/domain/party.js';
+import { listPartyMembers, addPartyTracker, updatePartyTracker, stepPartyTracker, setPartyTrackerValue, removePartyTracker, listPartyTrackers, listPartyTrackersForRuleset, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity, reconcilePartySharedAssetVehicleTag, setGaugeTrackerValue, gaugeWindow, ensurePartyStarforgedTrackers, ensurePartyFiveLeaguesTrackers, listPartyHeadlineTracks, addPartyRelationship, removePartyRelationship, updatePartyRelationshipLabel, updatePartyRelationshipType, updatePartyRelationshipStrength, setPartyStarship, clearPartyStarship } from '../src/domain/party.js';
 
 test('listPartyMembers returns only npc entities tagged #character', () => {
   let camp = defaultCampaign();
@@ -2855,7 +2892,15 @@ test('gaugeWindow returns a 10-box sliding window over a wider range, centered o
   assert.deepEqual(gaugeWindow(1, 0, 5, 10), [0, 1, 2, 3, 4, 5]);
 });
 
-test('ensurePartyStarforgedTrackers auto-adds Momentum (gauge) and Supply (meter) once, only under the Starforged ruleset, and never removes them if the ruleset later changes', () => {
+// Direct follow-up request, supersedes this test's own prior "never
+// removes them" assertion: "auto-setup and configure all trackers...
+// when that module is activated. Keep it in a record of module-specific
+// functionality such that they are removed if... disabled... no longer
+// applicable." Starforged has no Game System Activation gate of its own,
+// so statRuleset itself is still the trigger — but switching away now
+// tears its auto-created trackers down (tagged moduleId:'starforged'),
+// reversing the old "declared but inert, never dropped" behavior.
+test('ensurePartyStarforgedTrackers auto-adds Momentum (gauge) and Supply (meter), tagged moduleId:\'starforged\', only while Starforged is the active ruleset — removes both again the moment it changes away', () => {
   let camp = defaultCampaign();
   camp.settings.statRuleset = '5pfh';
   camp = ensurePartyStarforgedTrackers(camp);
@@ -2870,19 +2915,84 @@ test('ensurePartyStarforgedTrackers auto-adds Momentum (gauge) and Supply (meter
   assert.equal(momentum.value, 2);
   assert.equal(momentum.min, -6);
   assert.equal(momentum.max, 10);
+  assert.equal(momentum.moduleId, 'starforged');
   const supply = listPartyTrackers(camp).find((t) => t.name === 'Supply');
   assert.equal(supply.kind, 'meter');
   assert.equal(supply.value, 5);
   assert.equal(supply.max, 5);
+  assert.equal(supply.moduleId, 'starforged');
 
   // Idempotent: re-running doesn't duplicate.
   camp = ensurePartyStarforgedTrackers(camp);
   assert.equal(listPartyTrackers(camp).length, 2);
 
-  // Switching ruleset away never removes what's already there.
+  // A GM's own hand-added tracker (no moduleId) is never touched.
+  camp = addPartyTracker(camp, { name: 'Homebrew Thing', kind: 'counter' });
+
+  // Switching ruleset away now tears down just the moduleId:'starforged'
+  // pair, leaving the hand-added tracker alone.
   camp.settings.statRuleset = '5pfh';
   camp = ensurePartyStarforgedTrackers(camp);
-  assert.equal(listPartyTrackers(camp).length, 2);
+  assert.deepEqual(listPartyTrackers(camp).map((t) => t.name), ['Homebrew Thing']);
+});
+
+// Direct follow-up request, supersedes this test's own prior "never
+// removes them" assertion: the trigger moved from statRuleset to the
+// real fiveleagues Game System Activation flag itself (unlike Starforged,
+// Five Leagues actually has one) — unchecking it now tears the three
+// trackers down (tagged moduleId:'fiveleagues'), rather than leaving them
+// forever once created.
+test('ensurePartyFiveLeaguesTrackers auto-adds Gold Marks (currency), Enemy Threat (counter), and Enemy Plans (counter), tagged moduleId:\'fiveleagues\', only while the fiveleagues Game System is activated — removes all three again the moment it\'s deactivated', () => {
+  let camp = defaultCampaign();
+  camp.settings.statRuleset = 'fiveleagues'; // the ruleset alone is no longer enough
+  camp = ensurePartyFiveLeaguesTrackers(camp);
+  assert.equal(listPartyTrackers(camp).length, 0, 'not activated — no-op');
+
+  camp.settings.gameSystemActivations = { ...camp.settings.gameSystemActivations, fiveleagues: true };
+  camp = ensurePartyFiveLeaguesTrackers(camp);
+  const names = listPartyTrackers(camp).map((t) => t.name).sort();
+  assert.deepEqual(names, ['Enemy Plans', 'Enemy Threat', 'Gold Marks']);
+  assert.equal(listPartyTrackers(camp).find((t) => t.name === 'Gold Marks').kind, 'currency');
+  assert.equal(listPartyTrackers(camp).find((t) => t.name === 'Enemy Threat').kind, 'counter');
+  assert.equal(listPartyTrackers(camp).find((t) => t.name === 'Enemy Plans').kind, 'counter');
+  assert.ok(listPartyTrackers(camp).every((t) => t.value === 0));
+  assert.ok(listPartyTrackers(camp).every((t) => t.moduleId === 'fiveleagues'));
+
+  // Idempotent: re-running doesn't duplicate.
+  camp = ensurePartyFiveLeaguesTrackers(camp);
+  assert.equal(listPartyTrackers(camp).length, 3);
+
+  // A GM's own hand-added tracker (no moduleId) is never touched.
+  camp = addPartyTracker(camp, { name: 'Homebrew Thing', kind: 'counter' });
+
+  // Deactivating now tears down just the moduleId:'fiveleagues' trio,
+  // leaving the hand-added tracker alone.
+  camp.settings.gameSystemActivations = { ...camp.settings.gameSystemActivations, fiveleagues: false };
+  camp = ensurePartyFiveLeaguesTrackers(camp);
+  assert.deepEqual(listPartyTrackers(camp).map((t) => t.name), ['Homebrew Thing']);
+});
+
+// Direct follow-up request: "The trackers on Navigator are for Starforged
+// and should be filtered to that ruleset and all rulesets activated
+// would have their trackers added to Navigator" — listPartyTrackersForRuleset
+// is what isolates "just THIS ruleset's own trackers" out of a party.
+// trackers array that (per the test above) can carry more than one
+// ruleset's worth at once once a campaign has switched statRuleset more
+// than one time over its life.
+test('listPartyTrackersForRuleset isolates just one ruleset\'s own trackers out of a mixed party.trackers array, and returns empty for a ruleset with no known trackers of its own', () => {
+  let camp = defaultCampaign();
+  camp.settings.statRuleset = 'starforged';
+  camp = ensurePartyStarforgedTrackers(camp);
+  camp.settings.statRuleset = 'fiveleagues';
+  camp.settings.gameSystemActivations = { ...camp.settings.gameSystemActivations, fiveleagues: true };
+  camp = ensurePartyFiveLeaguesTrackers(camp);
+  camp = addPartyTracker(camp, { name: 'Homebrew Thing', kind: 'counter' });
+  assert.equal(listPartyTrackers(camp).length, 6, 'Momentum/Supply + Gold Marks/Enemy Threat/Enemy Plans + 1 custom');
+
+  assert.deepEqual(listPartyTrackersForRuleset(camp, 'starforged').map((t) => t.name).sort(), ['Momentum', 'Supply']);
+  assert.deepEqual(listPartyTrackersForRuleset(camp, 'fiveleagues').map((t) => t.name).sort(), ['Enemy Plans', 'Enemy Threat', 'Gold Marks']);
+  assert.deepEqual(listPartyTrackersForRuleset(camp, 'fivepfh'), [], 'no dedicated Party Tracker auto-seed of its own yet');
+  assert.deepEqual(listPartyTrackersForRuleset(camp, 'not-a-real-ruleset'), []);
 });
 
 test('listPartyHeadlineTracks returns the GM-configured track fields (settings.partyHeadlineFields), in configured order, across ALL of a member\'s statblock groups at once', () => {
@@ -2902,6 +3012,35 @@ test('listPartyHeadlineTracks returns the GM-configured track fields (settings.p
 
   camp.settings.partyHeadlineFields = [];
   assert.deepEqual(listPartyHeadlineTracks(camp, getEntity(camp, id)), []);
+});
+
+// Direct follow-up request: "whatever is added to 'Party Roster headline
+// fields' should be checked as a statblock and displayed if present in
+// any of the enabled character sheets for that entity" — this used to
+// only ever match TRACK fields (f.track); now matches ANY field kind
+// (attribute included), and skips an ARCHIVED group's fields entirely
+// (the swapped-out, hidden half of a Bestiary/Character pair isn't really
+// "enabled").
+test('listPartyHeadlineTracks also matches attribute fields (not just tracks), and skips fields on an archived (currently hidden) statblock group', () => {
+  let camp = defaultCampaign();
+  camp.settings.statRuleset = 'fiveleagues';
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Hero' }));
+  camp = setEntityTags(camp, id, 'character'); // Five Leagues character sheet: Agility/Combat Skill are attribute fields
+  camp.settings.partyHeadlineFields = ['Combat Skill', 'Agility'];
+  const found = listPartyHeadlineTracks(camp, getEntity(camp, id));
+  assert.deepEqual(found.map(({ f }) => f.key), ['Combat Skill', 'Agility']);
+  assert.ok(found[0].f.attribute, 'Combat Skill is an attribute field, not a track');
+
+  // Archive the character group directly (same shape ensureAutoStatblock
+  // leaves a swapped-out group in) and confirm its fields no longer
+  // surface — mutating camp's own statblocks array in place rather than
+  // going through updateEntity/addEntityTag, since either of those re-runs
+  // ensureAutoStatblock, which would just un-archive it again right away
+  // (the entity still carries the #character tag).
+  const eDirect = getEntity(camp, id);
+  const gi = eDirect.statblocks.findIndex((g) => g.kind === 'character');
+  eDirect.statblocks[gi].archived = true;
+  assert.deepEqual(listPartyHeadlineTracks(camp, getEntity(camp, id)), [], 'an archived group\'s fields are skipped entirely');
 });
 
 test('setPartySharedGear overwrites the party-wide gear note wholesale; a fresh campaign defaults it to \'\'', () => {
@@ -4539,8 +4678,60 @@ test('a NPC entity can add a Bestiary template by id, alongside its existing gro
   const fivePfh = e.statblocks.find((g) => g.templateId === '5pfh');
   assert.ok(fivePfh);
   assert.ok(fivePfh.fields.some((f) => f.key === 'Toughness'));
-  // the auto-attached generic Bestiary group from creation is untouched, not replaced
-  assert.ok(e.statblocks.some((g) => g.templateId === 'generic'));
+  // the auto-attached Bestiary group from creation is untouched, not replaced
+  // (defaultCampaign()'s own statRuleset is 'starforged' — see DEFAULT_NPC_TEMPLATE_BY_RULESET)
+  assert.ok(e.statblocks.some((g) => g.templateId === 'starforged'));
+});
+
+test('ensureAutoStatblock picks the active ruleset\'s own Bestiary template for a freshly-created NPC (direct follow-up request: "add the default statblock for the ruleset"), falling back to the generic one when the ruleset has no dedicated template', () => {
+  for (const [statRuleset, expectedTemplateId] of [['starforged', 'starforged'], ['5pfh', '5pfh'], ['fiveleagues', 'fiveleagues-lifeform'], ['dnd5e', 'dnd5e-lifeform'], ['traveller', 'generic'], ['ironsworn', 'generic']]) {
+    let camp = defaultCampaign();
+    camp.settings.statRuleset = statRuleset;
+    let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Test' }));
+    const group = getEntity(camp, id).statblocks.find((g) => g.kind === 'npc');
+    assert.ok(group, `${statRuleset}: no npc group created`);
+    assert.equal(group.templateId, expectedTemplateId, `${statRuleset}`);
+  }
+});
+
+test('ensureAutoStatblock swaps Bestiary/Character — exactly one is ever un-archived at a time for an NPC (direct follow-up request: "Don\'t allow both a bestiary and a character sheet at the same time... swap... if the Character tag is added/removed")', () => {
+  let camp = defaultCampaign();
+  camp.settings.statRuleset = 'starforged';
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Rook' }));
+  let e = getEntity(camp, id);
+  assert.equal(e.statblocks.length, 1);
+  assert.equal(e.statblocks[0].kind, 'npc');
+  assert.ok(!e.statblocks[0].archived);
+
+  // Add #character — Bestiary archives, Character sheet is created and active.
+  camp = addEntityTag(camp, id, 'character');
+  e = getEntity(camp, id);
+  assert.equal(e.statblocks.length, 2, 'both groups now exist (Bestiary archived, not deleted)');
+  const npcGroup = e.statblocks.find((g) => g.kind === 'npc');
+  const charGroup = e.statblocks.find((g) => g.kind === 'character');
+  assert.ok(npcGroup.archived, 'Bestiary group archived while #character is active');
+  assert.ok(!charGroup.archived, 'Character sheet is the active one');
+
+  // Edit a Character Sheet field so we can confirm it survives the round trip below.
+  const edgeFieldIndex = charGroup.fields.findIndex((f) => f.key === 'Edge');
+  camp = setEntityStatblockAttributeValue(camp, id, e.statblocks.indexOf(charGroup), edgeFieldIndex, 3);
+
+  // Remove #character — swaps back: Character archives, Bestiary un-archives (not recreated).
+  camp = removeEntityTag(camp, id, 'character');
+  e = getEntity(camp, id);
+  assert.equal(e.statblocks.length, 2, 'still both groups — removal never deletes either side');
+  const npcGroup2 = e.statblocks.find((g) => g.kind === 'npc');
+  const charGroup2 = e.statblocks.find((g) => g.kind === 'character');
+  assert.ok(!npcGroup2.archived, 'Bestiary group restored to active');
+  assert.ok(charGroup2.archived, 'Character sheet archived, not deleted');
+
+  // Re-add #character — the SAME Character group (with its edited field) comes back, un-archived.
+  camp = addEntityTag(camp, id, 'character');
+  e = getEntity(camp, id);
+  assert.equal(e.statblocks.length, 2, 'still exactly 2 groups — re-adding the tag never creates a duplicate Character sheet');
+  const charGroup3 = e.statblocks.find((g) => g.kind === 'character');
+  assert.ok(!charGroup3.archived);
+  assert.equal(charGroup3.fields.find((f) => f.key === 'Edge').value, 3, 'the earlier edit survived the archive/restore round trip');
 });
 
 test('template field CRUD: add, update, remove, and reorder via campaign settings', () => {
@@ -4628,7 +4819,7 @@ test('formatSessionRecap renders a readable plain-text block', () => {
 });
 
 // --- Rules Constitution (data reference, requirements/initial design inputs/gameplay-goals.md) ---
-import { RULES_PROVIDERS, GAME_SYSTEMS, GAMEPLAY_AREAS, providerLabel, resolveProviderChoice, resolveActiveProviderChoice, isGameSystemActivated, genrePackIdForRuleset } from '../src/data/rulesConstitution.js';
+import { RULES_PROVIDERS, GAME_SYSTEMS, GAMEPLAY_AREAS, providerLabel, resolveProviderChoice, resolveActiveProviderChoice, isGameSystemActivated, genrePackIdForRuleset, GAME_SYSTEM_SUPPLEMENTS, isSupplementActivated, GAME_SYSTEM_FAMILIES, matchesEnabledModule } from '../src/data/rulesConstitution.js';
 
 // Direct follow-up report: "The scifi oracles should not be visible to the
 // fantasy (generic) genre and vice versa. I can see all the scifi oracles
@@ -4672,11 +4863,93 @@ test('resolveProviderChoice falls back to an area\'s own first-listed provider w
   assert.equal(resolveProviderChoice({}, 'not-a-real-area'), null);
 });
 
+test('resolveProviderChoice defaults to the Rules Profile\'s own Module for Profile (settings.statRuleset) when it\'s a valid, activated provider for that area — direct follow-up request: "include the assigned Module for Profile as the default option for each selection" — but never overrides an explicit rulesProviderChoices, and falls back to the old first-listed default when the module is unset, not one of that area\'s providers, or not yet activated', () => {
+  // 'factions' lists ['swn', 'gmatlascore'] — an activated swn module wins over the old 'swn' positional default (same value here, but via the new path).
+  assert.equal(resolveProviderChoice({ statRuleset: 'swn', gameSystemActivations: { swn: true } }, 'factions'), 'swn');
+  // 'tactical-combat' lists only ['fivepfh'] — statRuleset spells it '5pfh' (data/rulesets.js's own id), a known mismatch this resolves internally.
+  assert.equal(resolveProviderChoice({ statRuleset: '5pfh', gameSystemActivations: { fivepfh: true } }, 'tactical-combat'), 'fivepfh');
+  // Not activated yet — falls back to the area's first-listed provider, same as an unset module.
+  assert.equal(resolveProviderChoice({ statRuleset: '5pfh' }, 'tactical-combat'), 'fivepfh');
+  // A module that isn't a provider for this area at all (e.g. 'starforged' for 'colony-management': ['planetfall']) — falls back unchanged.
+  assert.equal(resolveProviderChoice({ statRuleset: 'starforged' }, 'colony-management'), 'planetfall');
+  // An explicit rulesProviderChoices always wins over the module default.
+  assert.equal(resolveProviderChoice({ statRuleset: 'swn', gameSystemActivations: { swn: true }, rulesProviderChoices: { factions: 'gmatlascore' } }, 'factions'), 'gmatlascore');
+});
+
+test('matchesEnabledModule (direct follow-up requests: "Limit the \'Available Packs\'/\'Statblock Templates (LifeForm)\' options to only those that belong to the module of the game system and other game system modules that might be enabled in the Rules Constitution") scopes to the Module for Profile plus any OTHER provider actually chosen for a gameplay area, not matchesProfileRuleset\'s broader whole-Genre-Pack scope', () => {
+  // null/undefined rulesetTag (a GM's own custom entry, or a generic one already tagged by Genre Pack id) is always shown.
+  assert.equal(matchesEnabledModule(null, { genrePack: 'sci-fi-generic', statRuleset: '5pfh' }), true);
+  // Tagged by the active Genre Pack id directly.
+  assert.equal(matchesEnabledModule('sci-fi-generic', { genrePack: 'sci-fi-generic' }), true);
+  // Tagged by the Module for Profile itself — '5pfh' (statRuleset's own id) resolves to the 'fivepfh' provider id.
+  assert.equal(matchesEnabledModule('fivepfh', { genrePack: 'sci-fi-generic', statRuleset: '5pfh' }), true);
+  // Tagged by an OTHER Game System the GM actually assigned to some Rules Constitution gameplay area AND actively activated — even though it's not the Module for Profile.
+  assert.equal(matchesEnabledModule('swn', { genrePack: 'sci-fi-generic', statRuleset: '5pfh', rulesProviderChoices: { factions: 'swn' }, gameSystemActivations: { swn: true } }), true);
+  // Chosen for an area but NOT activated yet — resolveActiveProviderChoice falls back past it (here to GMAtlas Core, 'factions' own fallback), so it's correctly excluded until actually enabled.
+  assert.equal(matchesEnabledModule('swn', { genrePack: 'sci-fi-generic', statRuleset: '5pfh', rulesProviderChoices: { factions: 'swn' } }), false);
+  // A Game System from the same Genre Pack that's neither the Module for Profile nor an actually-enabled Rules Constitution choice — excluded (the actual narrowing this request asked for), even though it's that area's own positional default.
+  assert.equal(matchesEnabledModule('planetfall', { genrePack: 'sci-fi-generic', statRuleset: '5pfh' }), false);
+});
+
 test('isGameSystemActivated: a provider with no requiresActivation flag is always activated; swn requires an explicit true under settings.gameSystemActivations', () => {
   assert.equal(isGameSystemActivated({ settings: {} }, 'gmatlascore'), true, 'gmatlascore has no gate');
   assert.equal(isGameSystemActivated({ settings: {} }, 'swn'), false, 'swn is gated, unset reads as not activated');
   assert.equal(isGameSystemActivated({ settings: { gameSystemActivations: { swn: true } } }, 'swn'), true);
   assert.equal(isGameSystemActivated({ settings: { gameSystemActivations: { swn: false } } }, 'swn'), false);
+});
+
+// Direct follow-up request: "have a checkbox to activate each game system
+// AND supplement so that default rules can be augmented by the
+// supplemental rules" — a supplement (a Compendium volume) needs its own
+// activation flag AND its parent system's, never standing alone.
+test('isSupplementActivated requires BOTH the supplement\'s own flag and its parent Game System\'s own activation — neither alone is enough', () => {
+  assert.equal(isSupplementActivated({ settings: {} }, 'fiveleagues', 'fiveleagues-compendium'), false, 'neither set');
+  assert.equal(isSupplementActivated({ settings: { gameSystemActivations: { 'fiveleagues-compendium': true } } }, 'fiveleagues', 'fiveleagues-compendium'), false, 'supplement on, parent system off');
+  assert.equal(isSupplementActivated({ settings: { gameSystemActivations: { fiveleagues: true } } }, 'fiveleagues', 'fiveleagues-compendium'), false, 'parent system on, supplement itself off');
+  assert.equal(isSupplementActivated({ settings: { gameSystemActivations: { fiveleagues: true, 'fiveleagues-compendium': true } } }, 'fiveleagues', 'fiveleagues-compendium'), true, 'both on');
+});
+
+test('GAME_SYSTEM_SUPPLEMENTS: every listed supplement\'s parent key is a real, requiresActivation RULES_PROVIDERS entry', () => {
+  for (const [parentId, supplements] of Object.entries(GAME_SYSTEM_SUPPLEMENTS)) {
+    const parent = RULES_PROVIDERS[parentId];
+    assert.ok(parent && parent.requiresActivation, `${parentId}: not a real gated Game System`);
+    for (const s of supplements) {
+      assert.ok(s.id && s.label, `${parentId}: a supplement is missing id/label`);
+    }
+  }
+});
+
+// Direct follow-up request: "group all modules for a game system under
+// the header of the game system" — a data-integrity test (same
+// discipline as the test right above) keeping GAME_SYSTEM_FAMILIES in
+// sync with RULES_PROVIDERS/GAME_SYSTEM_SUPPLEMENTS: every requiresActivation
+// system and every supplement must appear in exactly one family's modules
+// list, or it would silently vanish from the Licenses tab's own Game
+// System Activation section (drawers/index.js's gameSystemActivationSection
+// only ever renders what GAME_SYSTEM_FAMILIES names, not a generic scan).
+test('GAME_SYSTEM_FAMILIES covers every requiresActivation RULES_PROVIDERS entry and every GAME_SYSTEM_SUPPLEMENTS entry exactly once, and every supplement module\'s parentId matches its own real GAME_SYSTEM_SUPPLEMENTS key', () => {
+  const systemModuleIds = [];
+  const supplementModuleIds = [];
+  for (const family of GAME_SYSTEM_FAMILIES) {
+    assert.ok(family.label, 'every family needs a label');
+    for (const m of family.modules) {
+      assert.ok(m.label, `${family.label}: a module is missing its own label`);
+      if (m.kind === 'system') {
+        systemModuleIds.push(m.id);
+        assert.ok(RULES_PROVIDERS[m.id] && RULES_PROVIDERS[m.id].requiresActivation, `${family.label}: ${m.id} is not a real gated Game System`);
+      } else if (m.kind === 'supplement') {
+        supplementModuleIds.push(m.id);
+        const supplements = GAME_SYSTEM_SUPPLEMENTS[m.parentId] || [];
+        assert.ok(supplements.some((s) => s.id === m.id), `${family.label}: ${m.id}'s parentId ${m.parentId} doesn't actually list it`);
+      } else {
+        assert.fail(`${family.label}: unknown module kind ${m.kind}`);
+      }
+    }
+  }
+  const requiresActivationIds = Object.entries(RULES_PROVIDERS).filter(([, p]) => p.requiresActivation).map(([id]) => id);
+  assert.deepEqual(systemModuleIds.slice().sort(), requiresActivationIds.slice().sort(), 'every gated Game System must appear in exactly one family, with no duplicates');
+  const allSupplementIds = Object.values(GAME_SYSTEM_SUPPLEMENTS).flat().map((s) => s.id);
+  assert.deepEqual(supplementModuleIds.slice().sort(), allSupplementIds.slice().sort(), 'every supplement must appear in exactly one family, with no duplicates');
 });
 
 // --- Phase A audit (A2/A3): Game System registry + gameplay-area resolution
@@ -4825,7 +5098,7 @@ test('a fresh campaign has no Activity set, and patchContext can set one', () =>
 });
 
 // --- Phase 9: genre packs (data/genrePacks.js) ------------------------------
-import { GENRE_PACKS, findGenrePack } from '../src/data/genrePacks.js';
+import { GENRE_PACKS, findGenrePack, bestiaryTerm, locationHierarchyTerms } from '../src/data/genrePacks.js';
 import { FANTASY_FULL_TABLES } from '../src/data/tables-fantasy-full.js';
 
 test('every genre pack carries the load-bearing categories copilot.js/generateNpc reference by exact path', () => {
@@ -4849,6 +5122,28 @@ test('findGenrePack resolves a known id and falls back to sci-fi-generic (the de
   assert.equal(findGenrePack('fantasy').id, 'fantasy');
   assert.equal(findGenrePack('nonexistent').id, 'sci-fi-generic');
   assert.equal(findGenrePack(undefined).id, 'sci-fi-generic');
+});
+
+test('bestiaryTerm: LifeForm for sci-fi-flavored packs, Bestiary for fantasy/dnd5e, and a safe default for an unknown id', () => {
+  assert.equal(bestiaryTerm('sci-fi-generic'), 'LifeForm');
+  assert.equal(bestiaryTerm('hostile'), 'LifeForm');
+  assert.equal(bestiaryTerm('cyberpunk'), 'LifeForm');
+  assert.equal(bestiaryTerm('fantasy'), 'Bestiary');
+  assert.equal(bestiaryTerm('dnd5e'), 'Bestiary');
+  assert.equal(bestiaryTerm('nonexistent'), 'Bestiary');
+});
+
+// Direct follow-up request: "all scifi terms should be genre specific...
+// reference to 'Star' is only for scifi genre" — WHERE's System/Star
+// location hierarchy reads as a Realm/Ruler for a non-sci-fi genre
+// instead (confirmed via AskUserQuestion), same label-swap-only posture
+// as bestiaryTerm above — the #system/#star tags themselves never change.
+test('locationHierarchyTerms: System/Star for sci-fi-flavored packs, Realm/Ruler for fantasy/dnd5e, and the sci-fi default for an unknown id', () => {
+  assert.deepEqual(locationHierarchyTerms('sci-fi-generic'), { system: 'System', star: 'Star' });
+  assert.deepEqual(locationHierarchyTerms('cyberpunk'), { system: 'System', star: 'Star' });
+  assert.deepEqual(locationHierarchyTerms('fantasy'), { system: 'Realm', star: 'Ruler' });
+  assert.deepEqual(locationHierarchyTerms('dnd5e'), { system: 'Realm', star: 'Ruler' });
+  assert.deepEqual(locationHierarchyTerms('nonexistent'), { system: 'System', star: 'Star' });
 });
 
 // Direct follow-up request, confirmed via AskUserQuestion: reflavor EVERY
@@ -7186,7 +7481,7 @@ test('advanceCampaignTurn increments colony.fields.campaignTurn from whatever it
   assert.equal(getColonyFields(camp).campaignTurn, 2);
 });
 
-test('advanceCampaignTurnWithAccrual applies the 5PFH Planetfall rulebook\'s automatic per-turn bookkeeping (assets/docs/5PFH Planetfall 1.2.pdf p.67-69): Build/Research Points += their own "/Turn" rate, Colony Morale always -1 regardless of any rate — and skips a rate that\'s 0/unset entirely rather than logging a no-op change', () => {
+test('advanceCampaignTurnWithAccrual applies the 5PFH Planetfall rulebook\'s automatic per-turn bookkeeping (assets/docs/5PFH/Five Parsecs - Planetfall 1.2.pdf p.67-69): Build/Research Points += their own "/Turn" rate, Colony Morale always -1 regardless of any rate — and skips a rate that\'s 0/unset entirely rather than logging a no-op change', () => {
   let camp = defaultCampaign();
   camp = setColonyField(camp, 'buildPointsPerTurn', 3);
   camp = setColonyField(camp, 'buildPoints', 10);
@@ -9742,6 +10037,40 @@ import { TURN_STEPS_FIVE_LEAGUES } from '../src/data/turnStepListFiveLeagues.js'
 import { grandfatherCampaignPanelActivation, backfillDnd5eStoryboardProfile, backfillFiveLeaguesStoryboardProfile, backfillGenrePackRename } from '../src/domain/rulesProfiles.js';
 import { moveCrewTaskInList, updateCrewTaskText, loadDefaultCrewTasks, listEligibleCrewMembers, assignCrewTask } from '../src/domain/crewTasks.js';
 import { CREW_TASKS_5PFH } from '../src/data/crewTasksDefault5pfh.js';
+import { findExpectedReferenceDoc } from '../src/data/referenceLibraryManifest.js';
+
+// Direct follow-up request: "Rename all 'Turn Step' filename link
+// references to match the actual filenames in the /docs subdirectories" —
+// this is the regression guard that would have caught the original bug
+// (Turn Step text citing a stale title, '3e Compendium/Bug Hunt', that no
+// REFERENCE_LIBRARY_MANIFEST entry's title ever matched, after the real
+// PDF was renamed). Every @[Label|Title#Page] mention target across all 3
+// real Turn Step Lists must resolve to a real, known sourcebook.
+test('every @[Label|Title#Page] document-mention target in the 3 real Turn Step Lists matches a real REFERENCE_LIBRARY_MANIFEST title', () => {
+  const targetPattern = /@\[[^|\]]*\|([^#\]]+)(?:#[^\]]*)?\]/g;
+  const targets = new Set();
+  for (const list of [TURN_STEPS_5PFH, PLANETFALL_TURN_STEPS, TURN_STEPS_FIVE_LEAGUES]) {
+    for (const group of list) {
+      for (const step of group.steps) {
+        let m;
+        while ((m = targetPattern.exec(step.text))) targets.add(m[1].trim());
+      }
+    }
+  }
+  assert.ok(targets.size > 0, 'sanity check: the regex actually found mention targets');
+  for (const title of targets) {
+    assert.ok(findExpectedReferenceDoc(title), `Turn Step mention target "${title}" has no matching REFERENCE_LIBRARY_MANIFEST entry`);
+  }
+});
+
+test('findExpectedReferenceDoc resolves a real manifest title case-insensitively and returns null for an unknown one', () => {
+  assert.ok(findExpectedReferenceDoc('Five Parsecs - Compendium Includes Bug Hunt'));
+  assert.ok(findExpectedReferenceDoc('five parsecs - compendium includes bug hunt'), 'case-insensitive');
+  assert.equal(findExpectedReferenceDoc('3e Compendium/Bug Hunt'), null, 'the old, now-stale title no longer matches anything');
+  assert.equal(findExpectedReferenceDoc('Not a Real Sourcebook'), null);
+  assert.equal(findExpectedReferenceDoc(''), null);
+  assert.equal(findExpectedReferenceDoc(null), null);
+});
 
 // A small 3-group fixture mirroring the real shape (root -> branch ->
 // nested branch) without the real content's size, so tests stay readable.
@@ -10464,7 +10793,7 @@ import { FIVE_LEAGUES_SPELLS, findFiveLeaguesSpell } from '../src/data/fiveLeagu
 import {
   setEntityFiveLeaguesCharacterType, setEntityFiveLeaguesBackground, toggleEntityFiveLeaguesSkill,
   setEntityFiveLeaguesArmorBody, setEntityFiveLeaguesArmorFlag, toggleEntityFiveLeaguesArmorImprovement,
-  toggleEntityFiveLeaguesSpell, applyFiveLeaguesWeaponCatalogPick, addFiveLeaguesItemFromCatalog,
+  toggleEntityFiveLeaguesSpell, applyFiveLeaguesWeaponCatalogPick, addFiveLeaguesWeaponFromCatalog, addFiveLeaguesItemFromCatalog,
 } from '../src/domain/fiveLeagues.js';
 import { addEntityStatblockItem, updateEntityStatblockItem, removeEntityStatblockItem } from '../src/domain/entities.js';
 
@@ -10488,17 +10817,21 @@ test('FIVE_LEAGUES_SKILLS covers all 12 real Skills (p.23 Skills Table), each wi
 });
 
 test('availableFiveLeaguesBackgrounds (pp.19-23) resolves the real Origin restrictions, Mystic character type overrides everything, and an unset Origin allows every non-Mystic background', () => {
-  assert.deepEqual(availableFiveLeaguesBackgrounds('human', ''), ['frontier', 'noble', 'townsfolk', 'zealot'], 'Human may select from 4 backgrounds');
+  // Compendium follow-up ("expand 5LFB origins to include the Compendium's
+  // own origins") also extended Mountain/Downworlder's allowedOrigins onto
+  // several of these CORE origins (e.g. Human/Duskling may also pick the
+  // new Mountain background) — see data/fiveLeaguesCharacter.js.
+  assert.deepEqual(availableFiveLeaguesBackgrounds('human', ''), ['frontier', 'noble', 'townsfolk', 'zealot', 'mountain'], 'Human may select from 4 core backgrounds plus the Compendium\'s Mountain');
   assert.deepEqual(availableFiveLeaguesBackgrounds('halfling', ''), ['frontier'], 'Halfling must take Frontier');
   assert.deepEqual(availableFiveLeaguesBackgrounds('preen', ''), ['townsfolk'], 'Preen must take Townsfolk');
   assert.deepEqual(availableFiveLeaguesBackgrounds('feyblood', ''), ['outsider'], 'Fey-blood must take Outsider');
-  assert.deepEqual(availableFiveLeaguesBackgrounds('duskling', ''), ['outsider']);
+  assert.deepEqual(availableFiveLeaguesBackgrounds('duskling', ''), ['outsider', 'mountain']);
   assert.deepEqual(availableFiveLeaguesBackgrounds('feral', ''), ['outsider']);
   // Mystic character type forces Mystic background regardless of Origin.
   assert.deepEqual(availableFiveLeaguesBackgrounds('human', 'mystic'), ['mystic']);
   assert.deepEqual(availableFiveLeaguesBackgrounds('feral', 'mystic'), ['mystic']);
   // No Origin picked yet -> every non-Mystic background is offered.
-  assert.deepEqual(availableFiveLeaguesBackgrounds('', ''), ['frontier', 'noble', 'outsider', 'townsfolk', 'zealot']);
+  assert.deepEqual(availableFiveLeaguesBackgrounds('', ''), ['frontier', 'noble', 'outsider', 'townsfolk', 'zealot', 'mountain', 'downworlder']);
   assert.equal(findFiveLeaguesBackground('noble').allowedOrigins.includes('human'), true);
   assert.equal(findFiveLeaguesBackground('nope'), null);
 });
@@ -10766,6 +11099,37 @@ test('applyFiveLeaguesWeaponCatalogPick fills a Weapons-table row\'s Name/Range/
   assert.deepEqual(findByName(camp, name).statblocks[gi].weapons[0], before);
   camp = applyFiveLeaguesWeaponCatalogPick(camp, id, gi, 5, 'warhammer');
   assert.equal(findByName(camp, name).statblocks[gi].weapons.length, 1, 'no new row is created out of thin air');
+});
+
+// Direct follow-up request: "remove the 'category' weapon picker and use
+// that selection approach as part of the '+ Weapon' button... the choice
+// of that selection would then create the weapon record populated with
+// that selected weapon and its stats" — same catalog fill as the test
+// above, just pushing a brand NEW row instead of patching an existing one
+// (mirrors addFiveLeaguesItemFromCatalog's own one-step shape for Items).
+test('addFiveLeaguesWeaponFromCatalog pushes a brand new, prefilled Weapons-table row (same fields applyFiveLeaguesWeaponCatalogPick fills on an existing one), and falls back to a blank row for an unknown catalog key', () => {
+  let { camp, id, gi, name } = makeFiveLeaguesTestEntity();
+  camp = addFiveLeaguesWeaponFromCatalog(camp, id, gi, 'crossbow');
+  let weapons = findByName(camp, name).statblocks[gi].weapons;
+  assert.equal(weapons.length, 1, 'exactly one row created, not a blank one plus a filled one');
+  assert.equal(weapons[0].name, 'Crossbow');
+  assert.equal(weapons[0].range, '24"');
+  assert.equal(weapons[0].damage, '+1 / +0');
+  assert.equal(weapons[0].traits, 'Bulky, Limited Ammunition');
+  assert.equal(weapons[0].location, 'self');
+
+  // A second pick appends, it doesn't overwrite the first row.
+  camp = addFiveLeaguesWeaponFromCatalog(camp, id, gi, 'warhammer');
+  weapons = findByName(camp, name).statblocks[gi].weapons;
+  assert.equal(weapons.length, 2);
+  assert.equal(weapons[1].name, 'Warhammer');
+
+  // An unknown catalog key still adds a row (blank), same "+ Custom
+  // Weapon" shape as clicking the plain add button — never a no-op.
+  camp = addFiveLeaguesWeaponFromCatalog(camp, id, gi, 'not-a-real-weapon');
+  weapons = findByName(camp, name).statblocks[gi].weapons;
+  assert.equal(weapons.length, 3);
+  assert.deepEqual(weapons[2], { name: '', range: '', shots: '', damage: '', traits: '' });
 });
 
 test('addFiveLeaguesItemFromCatalog pushes a prefilled Items-table row (name + real rule text, Location defaulted to self), and the row stays plain-array-index addressable like the Weapons table', () => {

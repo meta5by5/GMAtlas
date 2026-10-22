@@ -78,7 +78,7 @@ export function advanceCampaignTurn(campaign) {
 }
 
 /** The 5PFH Planetfall Campaign Turn sequence's automatic per-turn
- *  bookkeeping (assets/docs/5PFH Planetfall 1.2.pdf), applied when a new
+ *  bookkeeping (assets/docs/5PFH/Five Parsecs - Planetfall 1.2.pdf), applied when a new
  *  Campaign Turn starts (direct follow-up request — "add any points/turn
  *  calculations... as per the rulebook"):
  *    - Step 14 (Research) / Step 15 (Building): each stat's own "/Turn"
@@ -168,7 +168,7 @@ export function decrementCampaignMilestones(campaign) {
 }
 
 // Crew Role list — the three character classes 5PFH Planetfall's colony
-// roster actually uses (assets/docs/5PFH Planetfall 1.2.pdf, "Your Colony
+// roster actually uses (assets/docs/5PFH/Five Parsecs - Planetfall 1.2.pdf, "Your Colony
 // Crew"). There is no Pilot/Engineer/Medic/Gunner/Quartermaster/Diplomat
 // role table in the book — that was a placeholder guess pending the real
 // source, since replaced with the actual class list.

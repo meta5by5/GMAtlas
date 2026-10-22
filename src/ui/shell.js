@@ -29,7 +29,7 @@ import {
 } from '../domain/dice.js';
 import {
   createEntity, updateEntity, addEntityTag, removeEntityTag, removeEntity, filterEntities, setActiveEntity, addRelationship, removeRelationship,
-  getEntity, addEntityStatblockGroup, removeEntityStatblockGroup, moveEntityStatblockGroup, setCharacterStatblocksArchived, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
+  getEntity, addEntityStatblockGroup, removeEntityStatblockGroup, moveEntityStatblockGroup, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
   addEntityStatblockWeapon, updateEntityStatblockWeapon, removeEntityStatblockWeapon, setEntityStatblockGear,
   addEntityStatblockItem, updateEntityStatblockItem, removeEntityStatblockItem,
   addEntityStatblockAttack, updateEntityStatblockAttack, removeEntityStatblockAttack, applyDnd5ePdfImport,
@@ -80,7 +80,7 @@ import {
   listReferenceDocuments, renameRefDocument, addRefDocumentTag, removeRefDocumentTag, hideRefDocument, listDocuments,
   sanitizeExternalLinkUrl, mergeRefOverrides, referencedBlobKeys,
 } from '../domain/documents.js';
-import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue, setGaugeTrackerValue, ensurePartyStarforgedTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity, reconcilePartySharedAssetVehicleTag, listPartyMembers, addPartyRelationship, removePartyRelationship, updatePartyRelationshipLabel, updatePartyRelationshipType, updatePartyRelationshipStrength, setPartyStarship, clearPartyStarship } from '../domain/party.js';
+import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue, setGaugeTrackerValue, ensurePartyStarforgedTrackers, ensurePartyFiveLeaguesTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity, reconcilePartySharedAssetVehicleTag, listPartyMembers, addPartyRelationship, removePartyRelationship, updatePartyRelationshipLabel, updatePartyRelationshipType, updatePartyRelationshipStrength, setPartyStarship, clearPartyStarship } from '../domain/party.js';
 import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, updateColonyEncounter, detachColonyEncounterEntity, listColonyEncounters, advanceCampaignTurnWithAccrual, formatTurnAdvanceNote, incrementCampaignMilestones, decrementCampaignMilestones, syncCrewRosterWithParty, createGeneratedLifeform, listLifeformEncounters } from '../domain/colony.js';
 import { resolveLifeformEncounterSlot } from '../domain/lifeforms.js';
 import {
@@ -123,7 +123,7 @@ import {
   setEntityFiveLeaguesOrigin, getFiveLeaguesStat,
   setEntityFiveLeaguesCharacterType, setEntityFiveLeaguesBackground, toggleEntityFiveLeaguesSkill,
   setEntityFiveLeaguesArmorBody, setEntityFiveLeaguesArmorFlag, toggleEntityFiveLeaguesArmorImprovement,
-  toggleEntityFiveLeaguesSpell, applyFiveLeaguesWeaponCatalogPick, addFiveLeaguesItemFromCatalog,
+  toggleEntityFiveLeaguesSpell, addFiveLeaguesWeaponFromCatalog, addFiveLeaguesItemFromCatalog,
   entityHasFiveLeaguesCounterAttack, entityHasFiveLeaguesParry,
   setEntityFiveLeaguesActiveWeapon,
   formatFiveLeaguesOvercome, getFiveLeaguesAttackProfile, findFiveLeaguesGroupIndex,
@@ -132,10 +132,11 @@ import { renderFactionEvents } from './drawers/factionEvents.js';
 import { roll3d } from './diceBox3d.js';
 import { renderSearchPanel } from './searchPanel.js';
 import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
-import { isModuleVisible, setModuleEnabled, setStoryboardPosition, updateProfileRuleset, applyProfileDraft, resolvePositionContentId } from '../domain/rulesProfiles.js';
+import { isModuleVisible, setModuleEnabled, setStoryboardPosition, updateProfileRuleset, applyProfileDraft, resolvePositionContentId, BUILTIN_SLOT_CONTENT } from '../domain/rulesProfiles.js';
 import { TURN_STEP_ORACLE_LINKS, TURN_STEP_LOCATION_STEPS } from '../data/turnStepWorkflowMeta.js';
 import { genrePackIdForRuleset } from '../data/rulesConstitution.js';
 import { RULESET_GENRE_PACK_HINTS, findRuleset } from '../data/rulesets.js';
+import { locationHierarchyTerms } from '../data/genrePacks.js';
 import { rulesetGuideDocExists, ensureRulesetGuideDefault } from '../domain/rulesetGuide.js';
 import { canLoadRulesetReference } from '../domain/permissions.js';
 import { fetchRulesetReferenceBlob } from './rulesetReferenceFetch.js';
@@ -144,6 +145,7 @@ import { moveTurnStepInList, updateTurnStepText, setTurnStepShowCrewTasks, loadD
 import { getCurrentTurnStep, advanceTurnStep, retreatTurnStep, startNextColonyCampaignTurn, startNextStarshipCampaignTurn, startNextWarbandCampaignTurn } from '../domain/turnSteps.js';
 import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
 import { PLANETFALL_TURN_STEPS } from '../data/turnStepListPlanetfall.js';
+import { TURN_STEPS_FIVE_LEAGUES } from '../data/turnStepListFiveLeagues.js';
 import { moveCrewTaskInList, updateCrewTaskText, loadDefaultCrewTasks, assignCrewTask } from '../domain/crewTasks.js';
 import { CREW_TASKS_5PFH } from '../data/crewTasksDefault5pfh.js';
 
@@ -260,8 +262,22 @@ function renderPositionContent(contentId, doc, ui) {
 function renderStoryboardGrid(doc, ui, profile) {
   const anchoredComposerId = anchoredPanels.length >= 2 ? anchoredPanels[anchoredPanels.length - 2] : null;
   const anchoredNavigatorId = anchoredPanels.length >= 1 ? anchoredPanels[anchoredPanels.length - 1] : null;
-  const composerContentId = anchoredComposerId || resolvePositionContentId(profile, 'composer');
+  let composerContentId = anchoredComposerId || resolvePositionContentId(profile, 'composer');
   const navigatorContentId = anchoredNavigatorId || resolvePositionContentId(profile, 'navigator');
+  // Direct bug report: "The Campaign Turn functionality on Navigator
+  // should only be on the panel once. It appears duplicated now." Root
+  // cause: the Storyboard Positions settings (Rulesets tab) let a GM
+  // assign the SAME content (e.g. "Navigator") to BOTH the Composer and
+  // Navigator position dropdowns independently, with nothing stopping it
+  // — rendering the identical card (same Campaign Turn stepper, same Turn
+  // Step text) twice side by side. Rather than also policing this at every
+  // place a position gets assigned/saved, this one spot both slots always
+  // render through is the simplest place to guarantee it can't happen:
+  // Composer (not Navigator — the report is specifically that Navigator's
+  // own content should keep showing) falls back to its own true default
+  // ('dashboard') whenever it would otherwise duplicate whatever Navigator
+  // is already showing.
+  if (composerContentId === navigatorContentId) composerContentId = BUILTIN_SLOT_CONTENT.composer;
   const titleWithUnanchor = (label, anchoredId) => anchoredId
     ? `${escapeHtml(label)} <button type="button" class="icon-btn storyboard-unanchor" data-storyboard-unanchor="${escapeHtml(anchoredId)}" title="Return to the tab strip" aria-label="Return to the tab strip">⇤</button>`
     : escapeHtml(label);
@@ -534,6 +550,15 @@ let docTagFilters = new Set();
 let docTagEditorOpen = new Set(); // ephemeral — which doc/ref cards' tag editors are expanded
 let docRenameOpen = new Set(); // ephemeral — which doc/ref cards are showing an inline rename input instead of their title link
 let docTagListOpen = false; // ephemeral — collapses the Documents drawer's tag-filter chip row (can get long once many tags exist)
+// Direct follow-up request: "Allow sort and filter option on the doc
+// library. Default the sort to ASC alphabetical." — alongside the
+// existing free-text search (docFilter) + tag chips (docTagFilters)
+// above, which narrow WHICH entries show; these two instead control
+// ORDER (docSort) and WHICH SECTION (docTypeFilter: notes/My Files/
+// Reference Library, independent of the other two). Neither persisted —
+// a per-session display preference, not campaign data.
+let docSort = 'title-asc'; // 'title-asc' | 'title-desc' | 'date-newest' | 'date-oldest'
+let docTypeFilter = 'all'; // 'all' | 'note' | 'file' | 'ref'
 let journalEditOpen = new Set(); // ephemeral — which journal entries are showing an editable mention-editor instead of their static rendered text
 let galleryFilter = ''; // ephemeral — Gallery drawer search box
 // Gallery's own "+ Upload" flow (as opposed to an entity's "+ Photo"): the
@@ -885,6 +910,23 @@ let navigatorStepMapLink = { colony: null, starship: null, warband: null };
 let oracleEditorOpen = new Set(); // ephemeral — which oracle tables' entry editors are expanded
 let oracleTagEditorOpen = new Set(); // ephemeral — which oracle tables' TAG editors are expanded (docs/adr/0016), hidden by default
 let oracleTagFilter = null; // ephemeral — array of tags a field's 🔮 link jumped here with, or null for the ordinary text-filtered view (mutually exclusive with oracleFilter)
+// Direct follow-up request: "If an oracle link is selected on the
+// Navigator panel and the oracle panel is activated, route the output of
+// the oracles to append to the scene summary on the Navigator. Reset the
+// oracle output to the journal if the oracle panel is closed and reopened
+// or another panel is activated besides the navigator or oracle panels."
+// Set true only by the Navigator workflow manager's own per-step
+// data-turnstep-oracle-link click (the one 🔮 link that actually lives on
+// the Navigator panel — an entity-field 🔮 elsewhere, e.g. the Entity
+// Editor, never touches this); read by data-roll's own handler to decide
+// whether a roll appends to Scene Summary (sceneSummaryOverride) instead
+// of its normal addJournal (rollOracle's own toJournal flag). Reset to
+// false by openDrawerTab (switching the active drawer to anything but
+// 'oracle') and closeDrawerTab('oracle') (closing it outright) — between
+// them, "closed and reopened" and "another panel activated" both already
+// clear it before a GM could land back on Oracle without going through
+// the link again.
+let oracleRouteToNavigator = false;
 let expandedGuideNodes = new Set(); // ephemeral — which Guide tree nodes are expanded (docs/adr/0017)
 let guideRenameOpen = new Set(); // ephemeral — which Guide docs (tree row or the active title) are showing an inline rename input
 let entitySearch = ''; // ephemeral — Cast panel name/tag search
@@ -900,6 +942,24 @@ let expandedPartyMembers = new Set(); // ephemeral — entity ids whose Party me
 let expandedWhatConflicts = new Set(); // ephemeral — Conflict entity ids whose chip under WHAT's Situation field shows its detail box (direct follow-up request, collapsed by default; click the chip to toggle)
 let expandedPartyStatField = null; // ephemeral — the single "entityId::gi::fi" key (or null) whose Party Roster track pill shows its full tracker view below; a single value, not a Set, so picking a different track field REPLACES the open one instead of stacking a second (direct follow-up request)
 let journalActionsOpen = false; // ephemeral — the Journal drawer's Actions row (Add note, Generate Mission, ...), collapsed by default (direct follow-up request — was open by default)
+// Direct bug report: "when clicking anywhere off the text editor textbox,
+// the field should persist any content it has and not clear out or reset
+// as it does now." Root cause: the Journal compose box (data-journal-input)
+// had NO backing ephemeral field at all — its only read happened at
+// data-journal-add's own click time, straight off the live DOM node — so
+// ANY re-render for an unrelated reason (not just blur itself; anything
+// that calls render()/renderDrawerBody() while the GM has unsaved text)
+// rebuilt that <div> from scratch via buildMentionEditorHTML(doc, '')`,
+// always starting blank, silently discarding whatever was typed. This is
+// the commit target (onFocusOut's new data-journal-input branch) and the
+// render source (journal(), drawers/index.js) now both read from, same
+// "ephemeral, never persisted" shape as sceneSummaryOverride above.
+let journalDraftText = '';
+// Direct bug report: "When the Journal text editor is selected, the
+// Actions section should expand to expose the option buttons." —
+// onFocusIn's new data-journal-input branch opens it the moment the
+// compose box is focused, instead of requiring a separate manual click on
+// the collapsed "▸ Actions" toggle first.
 let collapsedOverview = new Set(); // ephemeral — entity ids whose Overview field has been explicitly collapsed (open by default, UX batch)
 let collapsedEntityTags = new Set(); // ephemeral — entity ids whose Tags chip list has been explicitly collapsed (open by default, direct follow-up request)
 let expandedContracts = new Set(); // ephemeral — contract (Thread) ids whose full row is expanded (collapsed to just the name by default, UX batch)
@@ -1302,13 +1362,16 @@ export function mountShell(el) {
         </div>
       </div>
       <header class="mc-header">
-        <div class="brand"><h1>GMAtlas</h1></div>
-        <div class="header-actions">
-          <button class="btn ghost sm" data-search-toggle title="Search everything (Cast, Journal, Oracle, Documents, Party, Colony) — Ctrl/Cmd+K"><span class="icon-mono">🔍</span> <span class="btn-label">Search</span></button>
+        <div class="brand">
+          <h1>GMAtlas</h1>
+          <span class="brand-sep" aria-hidden="true">|</span>
           <div class="campaign-switcher-wrap">
             <button type="button" class="campaign-title" data-campaign-switcher-toggle title="Switch campaign"></button>
             <div class="campaign-switcher-menu" data-campaign-switcher-menu hidden></div>
           </div>
+        </div>
+        <div class="header-actions">
+          <button class="btn ghost sm" data-search-toggle title="Search everything (Cast, Journal, Oracle, Documents, Party, Colony) — Ctrl/Cmd+K"><span class="icon-mono">🔍</span> <span class="btn-label">Search</span></button>
           <div class="header-drawer-tabs" data-header-drawer-tabs></div>
           <div class="settings-menu-wrap">
             <button class="btn ghost sm" data-settings-menu-toggle title="Menu" aria-label="Menu"><span class="glyph">⚙</span><b>Settings</b></button>
@@ -1426,6 +1489,7 @@ export function mountShell(el) {
   // doesn't), and picking a suggestion never reaches here in the first
   // place since onMouseDown already preventDefault()s that click.
   el.addEventListener('focusout', onFocusOut);
+  el.addEventListener('focusin', onFocusIn);
   // A small, deliberately short set (2026-07-04 review: "add shortcuts when
   // non-disruptive") — two near-universal conventions rather than a bound
   // shortcut for every action. On document, not root: Escape/Ctrl+K should
@@ -1972,23 +2036,16 @@ function onClick(ev) {
     return;
   }
 
-  // WHO's "Introduce NPC" (workspace/index.js's whoSectionBody) — its own
-  // dedicated inline-prompt kind, not the generic shift-prompt above (that
-  // used to silently write into WHO's now-removed Focus field). See
-  // commitInlinePrompt's 'who-introduce-npc' branch for the actual
-  // resolve-an-existing-NPC-or-create-a-new-one logic.
-  const whoIntroduceNpc = hit('[data-who-introduce-npc]');
-  if (whoIntroduceNpc) {
-    openInlinePrompt('who-introduce-npc', {
-      label: 'Introduce NPC', placeholder: 'Name, or @ an existing NPC…',
-      anchorRect: whoIntroduceNpc.getBoundingClientRect(),
-    });
-    return;
-  }
-
   const roll = hit('[data-roll]');
   if (roll) {
     const path = roll.dataset.roll.split('>');
+    // Direct follow-up request: "route the output of the oracles to
+    // append to the scene summary on the Navigator" — only while the
+    // routing flag is set (a Navigator-panel 🔮/chip is what set it) AND
+    // Oracle is still genuinely the active drawer (belt-and-suspenders
+    // against any stale flag); every other roll keeps its normal
+    // toJournal:true behavior, unchanged.
+    const routeToNavigator = oracleRouteToNavigator && activeDrawer === 'oracle';
     (async () => {
       const forced = await resolveOracleDiceIndex(path);
       let text = '';
@@ -1996,8 +2053,19 @@ function onClick(ev) {
       // own ruleset.genrePack) — real bug, see oracles.js's
       // currentTableEntries doc comment: the raw doc a store.update()
       // mutator receives never reflects a profile switch on its own.
-      store.update((d) => { const r = rollOracle(d, path, { ...forced, genrePack: store.get().settings.genrePack }); text = r.text; return r.campaign; });
-      toast('🎲 ' + text.split('\n').slice(-1)[0]);
+      store.update((d) => {
+        const r = rollOracle(d, path, { ...forced, genrePack: store.get().settings.genrePack, toJournal: !routeToNavigator });
+        text = r.text;
+        return r.campaign;
+      });
+      if (routeToNavigator) {
+        const current = currentSceneSummary();
+        sceneSummaryOverride = current ? `${current}\n\n${text}` : text;
+        toast('🎲 added to Scene Summary');
+        render();
+      } else {
+        toast('🎲 ' + text.split('\n').slice(-1)[0]);
+      }
     })();
     return;
   }
@@ -2005,7 +2073,11 @@ function onClick(ev) {
   if (hit('[data-journal-add]')) {
     const ta = root.querySelector('[data-journal-input]');
     const v = ta && serializeMentionEditor(ta).trim();
-    if (v) { store.update((d) => addNote(d, v, 'Note')); toast('Note added'); }
+    if (v) {
+      journalDraftText = ''; // clears the persisted draft so the re-render store.update triggers shows an empty compose box, not the just-added text again
+      store.update((d) => addNote(d, v, 'Note'));
+      toast('Note added');
+    }
     return;
   }
   const del = hit('[data-journal-del]');
@@ -2902,42 +2974,26 @@ function onClick(ev) {
     }
     return;
   }
-  // WHERE's System section — "New Location" (direct follow-up request):
-  // first offer a pick from existing #system-tagged Locations; only if
-  // NONE exist does the button fall back to a create-a-new-one prompt
-  // (window.confirm, the same yes/no posture every other confirm in this
-  // app uses — not free-text entry, so it's not a data-entry window.prompt
-  // case). Picking a candidate is handled by entityPickerSelectBtn below
-  // (entityType 'system' -> setSceneSystem, scenes.js); creating one here
-  // also immediately wires it up as the scene's System (setSceneSystem
-  // again) so the GM lands in the Entity Editor with it already selected,
-  // not on a second round trip back to this button.
+  // WHERE's System/Realm section — "New Location" (direct follow-up
+  // request: "have a location entity picker instead of the 'Select
+  // system'") — always opens the real entity picker overlay, same as
+  // every other "+" in this app, instead of the old window.confirm()-
+  // then-direct-create fallback it used to fall back to when no
+  // #system-tagged Location existed yet. entityPickerCreateType already
+  // maps entityType 'system' to 'location' (ENTITY_PICKER_CREATE_TYPE
+  // below), so the picker's own "+ Create New Location" row covers that
+  // case now — entityPickerCreateBtn's own handler tags the freshly-
+  // created one #system (mirroring its existing party-vehicle/#vehicle
+  // special case) so it's immediately a real candidate for THIS and any
+  // future System picker, not just wired up for this one scene. Picking
+  // an existing candidate is handled by commitEntityPickerPick
+  // (entityType 'system' -> setSceneSystem, scenes.js).
   const whereAddLoc = hit('[data-where-add-location]');
   if (whereAddLoc) {
-    const currentDoc = store.get();
-    const systemCandidates = listEntities(currentDoc, ['location']).filter((l) => (l.tags || []).includes('system'));
-    if (systemCandidates.length) {
-      entityPicker = { entityType: 'system', mode: 'system', scope: null, query: '' };
-      renderEntityPickerOverlay();
-      const inp = root.querySelector('[data-entity-picker-query]');
-      if (inp) { inp.value = ''; inp.focus(); }
-      return;
-    }
-    if (!window.confirm('No locations are tagged #system yet — create one?')) return;
-    const sceneId = currentSceneId();
-    let newId = null;
-    store.update((d) => {
-      const created = createEntity(d, { type: 'location', name: '' });
-      newId = created.id;
-      let next = addEntityTag(created.campaign, newId, 'system');
-      if (sceneId) next = setSceneSystem(next, sceneId, newId);
-      return next;
-    });
-    if (newId) {
-      openDrawerTab('entity-detail');
-      focusInspectorNameNextRender = true;
-      store.update((d) => setActiveEntity(d, newId));
-    }
+    entityPicker = { entityType: 'system', mode: 'system', scope: null, query: '' };
+    renderEntityPickerOverlay();
+    const inp = root.querySelector('[data-entity-picker-query]');
+    if (inp) { inp.value = ''; inp.focus(); }
     return;
   }
   // WHERE's "Present Here" curated list (context.where.entityIds) was
@@ -2990,8 +3046,13 @@ function onClick(ev) {
     // label too (isProtectedEntityTag, drawers/index.js) — those get a
     // plain generic confirm, no special side effect.
     if (tag.toLowerCase() === 'character') {
-      if (!window.confirm('Remove the "character" tag? This entity stops being a Party member. Its Character Sheet stats are kept but hidden from view — re-add the tag later to restore them.')) return;
-      return store.update((d) => setCharacterStatblocksArchived(syncCrewRosterWithParty(removeEntityTag(d, active, tag)), active, true));
+      if (!window.confirm('Remove the "character" tag? This entity stops being a Party member. Its Character Sheet stats are kept but hidden from view (swapped back to its Bestiary sheet) — re-add the tag later to restore them.')) return;
+      // removeEntityTag now runs ensureAutoStatblock itself (direct
+      // follow-up request: swap, don't stack), so the explicit
+      // setCharacterStatblocksArchived call this used to need is gone —
+      // archiving the Character side AND restoring/creating the Bestiary
+      // side both happen there now.
+      return store.update((d) => syncCrewRosterWithParty(removeEntityTag(d, active, tag)));
     }
     if (isProtectedEntityTag(tag)) {
       if (!window.confirm(`Remove the protected "${tag}" tag?`)) return;
@@ -3341,17 +3402,27 @@ function onClick(ev) {
   const turnStepOracleLink = hit('[data-turnstep-oracle-link]');
   if (turnStepOracleLink) {
     const tags = TURN_STEP_ORACLE_LINKS[turnStepOracleLink.dataset.turnstepOracleLink];
-    if (tags) { oracleTagFilter = tags; oracleFilter = ''; openDrawerTab('oracle'); render(); }
+    // Direct follow-up request: "If an oracle link is selected on the
+    // Navigator panel and the oracle panel is activated, route the output
+    // of the oracles to append to the scene summary on the Navigator" —
+    // this 🔮 link is one of the two that actually live on the Navigator
+    // panel (the other is data-oracle-tag-jump below); set BEFORE
+    // openDrawerTab('oracle') since that function itself clears the flag
+    // for any id OTHER than 'oracle', not this one.
+    if (tags) { oracleTagFilter = tags; oracleFilter = ''; oracleRouteToNavigator = true; openDrawerTab('oracle'); render(); }
     return;
   }
   // "Helpful Oracles" (Navigator workflow card, workspace/index.js) — same
   // open-filtered-drawer mechanic as the 🔮 button just above, scoped to
   // the ONE tag a specific listed table matched under, since each chip
-  // names a real table rather than a whole hand-tagged set at once.
+  // names a real table rather than a whole hand-tagged set at once. Also
+  // one of the two Navigator-panel oracle links the routing request above
+  // applies to.
   const oracleTagJump = hit('[data-oracle-tag-jump]');
   if (oracleTagJump) {
     oracleTagFilter = [oracleTagJump.dataset.oracleTagJump];
     oracleFilter = '';
+    oracleRouteToNavigator = true;
     openDrawerTab('oracle');
     return render();
   }
@@ -3535,6 +3606,21 @@ function onClick(ev) {
     // Composer/Navigator/Advisor.
     renderCombatTrackerPanel();
     return renderDrawerBody();
+  }
+  // Direct follow-up request: "add a 'x' removal where the arrow on the
+  // entity record in party was" — replaces the ↗ "Open in entity editor"
+  // button removed from partyMemberCard (now redundant with the thumbnail)
+  // with a real "leave the Party" action. Same confirm text + archive-not-
+  // delete behavior as removing the #character tag from the Entity
+  // Editor's own tag chips (data-entity-tag-remove above), just addressed
+  // by this SPECIFIC row's own id rather than the Entity Editor's "active"
+  // entity, since a Party Roster row isn't necessarily the one currently
+  // open there.
+  const partyMemberRemove = hit('[data-party-member-remove]');
+  if (partyMemberRemove) {
+    const id = partyMemberRemove.dataset.partyMemberRemove;
+    if (!window.confirm('Remove from the Party? This entity stops being a Party member. Its Character Sheet stats are kept but hidden from view (swapped back to its Bestiary sheet) — re-add the "character" tag later to restore them.')) return;
+    return store.update((d) => syncCrewRosterWithParty(removeEntityTag(d, id, 'character')));
   }
   // Direct follow-up bug report: "weapon selection in combat tracker...
   // picking one does nothing" — real root cause: a real browser's click
@@ -4152,6 +4238,21 @@ function onClick(ev) {
     docViewerRightSection = !!docOpen.closest('[data-turn-step-text-body]');
     store.update((d) => openDocumentTab(d, docOpen.dataset.docOpen, page));
     return;
+  }
+  // Direct follow-up request: "If the file doesn't exist for that
+  // filename, prompt the user with the filename expected and instruct to
+  // upload the appropriate file of that filename" — a mention naming a
+  // real, known-but-missing sourcebook (mentionEditor.js's own
+  // findExpectedReferenceDoc fallback) renders as a 📤 upload-needed badge
+  // instead of plain dead text; clicking it names the exact expected
+  // filename (so a re-download/re-upload can't guess wrong) and opens
+  // Documents, where the real "Import File(s)" control already lives —
+  // no new upload flow invented, just pointed at the existing one.
+  const mentionUploadNeeded = hit('[data-mention-upload-needed]');
+  if (mentionUploadNeeded) {
+    ev.preventDefault();
+    toast(`Missing file: upload "${mentionUploadNeeded.dataset.mentionUploadNeeded}" in Documents to make this link work.`);
+    return openDrawerTab('documents');
   }
   const tabClose = hit('[data-doc-viewer-tab-close]');
   if (tabClose) { store.update((d) => closeDocumentTab(d, tabClose.dataset.docViewerTabClose)); return; }
@@ -4957,6 +5058,16 @@ function onClick(ev) {
     }
     entityPicker = raw === 'asset'
       ? { entityType: 'asset', mode: 'asset', scope: null, query: '' }
+      // Direct follow-up request: "Use just one '+' selector for Shared
+      // Assets that pops up a picker that asks to create or filter on
+      // Vehicle, item or assets" — replaces the old 3 separate "+Vehicle"/
+      // "+Item"/"+Asset" chips with one that opens this kind-choice step
+      // first (renderEntityPickerOverlay's own party-shared-asset mode
+      // branch); picking a kind there swaps entityPicker to the
+      // corresponding party-vehicle/party-item/party-asset mode below,
+      // completely unchanged from how those 3 buttons used to work.
+      : raw === 'party-shared-asset'
+        ? { entityType: 'party-shared-asset', mode: 'party-shared-asset', scope: null, query: '' }
       : raw === 'party-vehicle'
         ? { entityType: 'party-vehicle', mode: 'party-vehicle', scope: null, query: '' }
         : raw === 'party-item'
@@ -4989,6 +5100,32 @@ function onClick(ev) {
   }
   const entityPickerCloseBtn = hit('[data-entity-picker-close]');
   if (entityPickerCloseBtn) { entityPicker = null; return renderEntityPickerOverlay(); }
+  // WHO header's "Add NPC" picker's own second step (renderEntityPickerOverlay's
+  // pendingEntityId branch) — commits the stashed pick/create to whichever
+  // scene role the GM actually chose.
+  const whoAddNpcRole = hit('[data-who-add-npc-role]');
+  if (whoAddNpcRole) {
+    const role = whoAddNpcRole.dataset.whoAddNpcRole;
+    const npcId = entityPicker && entityPicker.pendingEntityId;
+    const sceneId = currentSceneId();
+    entityPicker = null;
+    if (npcId && sceneId) {
+      store.update((d) => (role === 'protagonist' ? addSceneProtagonist(d, sceneId, npcId)
+        : role === 'antagonist' ? addSceneAntagonist(d, sceneId, npcId)
+        : addSceneBystander(d, sceneId, npcId)));
+    }
+    return renderEntityPickerOverlay();
+  }
+  // Shared Assets' own "+" picker's first step (renderEntityPickerOverlay's
+  // party-shared-asset mode branch) — swaps to whichever kind the GM
+  // picked, which the existing party-vehicle/party-item/party-asset
+  // candidate/create/commit logic (all unchanged) takes over from there.
+  const partySharedAssetKind = hit('[data-party-shared-asset-kind]');
+  if (partySharedAssetKind) {
+    const kind = partySharedAssetKind.dataset.partySharedAssetKind;
+    entityPicker = { entityType: `party-${kind}`, mode: `party-${kind}`, scope: null, query: '' };
+    return renderEntityPickerOverlay();
+  }
   // Lifeform Encounters picker's own "Create New Lifeform" row (direct
   // follow-up request) — closes the picker and opens the same "type a
   // name, commit" inline prompt thread-add/expedition-add/battlemap-add
@@ -5148,8 +5285,17 @@ function onClick(ev) {
       // so a freshly-created one needs this tag immediately, or it would
       // silently fail to appear as "already linked" there despite being
       // linked via sharedAssetIds (commitEntityPickerPick, below) a moment
-      // later in this same action.
-      return picker.entityType === 'party-vehicle' ? addEntityTag(created.campaign, newId, 'vehicle') : created.campaign;
+      // later in this same action. 'system' gets the exact same treatment
+      // (direct follow-up request: WHERE's System/Realm "+" now always
+      // opens this same generic picker, which needed this to keep tagging
+      // a freshly-created System Location #system the way the old bespoke
+      // create-flow it replaced always did) — without it, a new System
+      // would get wired up for THIS scene via commitEntityPickerPick's own
+      // setSceneSystem below, but silently fail to show up as a candidate
+      // for any OTHER scene's System picker later.
+      if (picker.entityType === 'party-vehicle') return addEntityTag(created.campaign, newId, 'vehicle');
+      if (picker.entityType === 'system') return addEntityTag(created.campaign, newId, 'system');
+      return created.campaign;
     });
     if (newId) commitEntityPickerPick(picker, newId);
     openDrawerTab('entity-detail');
@@ -5351,7 +5497,7 @@ function onClick(ev) {
   const turnStepListLoadDefault = hit('[data-turnsteplist-load-default]');
   if (turnStepListLoadDefault) {
     const [listId, which] = turnStepListLoadDefault.dataset.turnstepListLoadDefault.split('::');
-    const seed = which === 'planetfall' ? PLANETFALL_TURN_STEPS : TURN_STEPS_5PFH;
+    const seed = which === 'planetfall' ? PLANETFALL_TURN_STEPS : which === 'fiveleagues' ? TURN_STEPS_FIVE_LEAGUES : TURN_STEPS_5PFH;
     return store.updateAppConfig((cfg) => loadDefaultIntoTurnStepList(cfg, listId, seed));
   }
   // "+ Category"/"+ Step" (direct follow-up request: "insert new Turn
@@ -5800,11 +5946,19 @@ function onKeydown(ev) {
   }
 }
 
-// Crew-Link-style "double-click a stat to roll" — track fields only
-// (attribute fields roll via their label click, see onClick's
-// data-statblock-roll-label handler above). A field with rollMethod:'none'
-// (a plain progress bar, e.g. Health) never gets a roll button in the first
-// place — see trackRow() in drawers/index.js.
+// Crew-Link-style "double-click a stat to roll" — normally track fields
+// only (attribute fields roll via their label click instead, see onClick's
+// data-statblock-roll-label handler above); also reached for an attribute
+// field from the Party Roster's own headline counters (partyMemberHeadlineCounters,
+// drawers/index.js — direct follow-up request: "whatever is added to
+// 'Party Roster headline fields' should be checked as a statblock... in
+// any of the enabled character sheets," which widened that badge to any
+// field kind, not just tracks), since that small badge has no room for a
+// separate click-vs-dblclick gesture per kind. A field with rollMethod:
+// 'none' (a plain progress bar, e.g. Health, or a non-rollable attribute)
+// never gets a roll button rendered in the first place — see trackRow()/
+// attrRow() in drawers/index.js — so no kind check is needed here either;
+// performFieldRoll itself already no-ops on rollMethod:'none'.
 function onDblClick(ev) {
   const rollTarget = ev.target.closest('[data-statblock-roll]');
   if (!rollTarget) return;
@@ -5813,7 +5967,7 @@ function onDblClick(ev) {
   const e = getEntity(store.get(), entityId);
   const group = e && e.statblocks && e.statblocks[gi];
   const f = group && group.fields[fi];
-  if (!f || !f.track) return;
+  if (!f) return;
   performFieldRoll(f, `${e.name || 'Unnamed'} — ${f.key || 'Stat'}`);
 }
 
@@ -5846,8 +6000,11 @@ function commitEntityTagValue(value) {
   // enforces going forward, just applied retroactively here.
   let becameOrphanedVehicle = false;
   store.update((d) => {
+    // addEntityTag already runs ensureAutoStatblock, which now un-archives
+    // (or creates) the matching side itself — direct follow-up request
+    // made the Bestiary/Character swap symmetric, so this no longer needs
+    // its own explicit setCharacterStatblocksArchived call for 'character'.
     let next = syncCrewRosterWithParty(addEntityTag(d, active, value));
-    if (value.toLowerCase() === 'character') next = setCharacterStatblocksArchived(next, active, false);
     if (value.toLowerCase() === 'vehicle') {
       const r = reconcilePartySharedAssetVehicleTag(next, active);
       next = r.campaign;
@@ -5860,6 +6017,12 @@ function commitEntityTagValue(value) {
 
 function onChange(ev) {
   const t = ev.target;
+  // Docs library sort/filter (direct follow-up request) — a <select> only
+  // ever fires 'change', never the Documents search box's own live
+  // 'input' (data-doc-filter, onInput above), so these two belong here,
+  // not alongside it.
+  if (t.closest('[data-doc-sort]')) { docSort = t.value; return renderDrawerBody(); }
+  if (t.closest('[data-doc-type-filter]')) { docTypeFilter = t.value; return renderDrawerBody(); }
   // Dice roller pool's per-die Modifier field (direct follow-up request) —
   // edits the currently-selected die's own modifier; a no-op if nothing is
   // selected (the field is disabled in that state, but guard anyway since
@@ -6279,15 +6442,20 @@ function onChange(ev) {
     const active = store.get().entities.activeId;
     return store.update((d) => updateEntityStatblockItem(d, active, Number(gi), Number(ii), { [key]: t.value }));
   }
-  // Weapon/Item catalog quick-fill pickers — selecting an option applies
-  // it immediately (no separate "Add" click needed); the picker itself
-  // isn't backed by any stored value, so the re-render after store.update
-  // naturally puts it back to its own placeholder option.
-  const weaponCatalogPick = t.closest('[data-fiveleagues-weapon-catalog-pick]');
-  if (weaponCatalogPick) {
-    const [gi, wi] = weaponCatalogPick.dataset.fiveleaguesWeaponCatalogPick.split('::');
+  // Weapon/Item catalog quick-ADD pickers — selecting an option creates a
+  // brand new row already filled from the catalog (no separate "Add"
+  // click needed); the picker itself isn't backed by any stored value, so
+  // the re-render after store.update naturally puts it back to its own
+  // placeholder option. Direct follow-up request: the Weapons table used
+  // to have a PER-ROW catalog picker (quick-filling an existing row in
+  // place) — removed in favor of this, matching Items' own "+ Add from
+  // catalog…" shape exactly, so picking a weapon now creates the row
+  // rather than needing "+ Custom Weapon" first and a second picker after.
+  const weaponCatalogAdd = t.closest('[data-fiveleagues-weapon-catalog-add]');
+  if (weaponCatalogAdd) {
+    const gi = Number(weaponCatalogAdd.dataset.fiveleaguesWeaponCatalogAdd);
     const active = store.get().entities.activeId;
-    if (t.value) return store.update((d) => applyFiveLeaguesWeaponCatalogPick(d, active, Number(gi), Number(wi), t.value));
+    if (t.value) return store.update((d) => addFiveLeaguesWeaponFromCatalog(d, active, gi, t.value));
     return;
   }
   const itemCatalogAdd = t.closest('[data-fiveleagues-item-catalog-add]');
@@ -7281,6 +7449,14 @@ function openDrawerTab(id) {
   // openDrawers/activeDrawer entry pointing at a module the NEW active
   // profile hides — never let it be (re)opened while hidden.
   if (!isModuleVisible(store.getActiveProfile(), id)) return;
+  // Direct follow-up request: "...another panel is activated besides the
+  // navigator or oracle panels" resets oracle-output routing back to the
+  // Journal — covers switching the active drawer to anything but Oracle
+  // itself (the Navigator Storyboard position isn't a drawer tab at all,
+  // so it never reaches here). Checked unconditionally, not just inside
+  // the "newly added" guard below, so re-focusing an already-pinned OTHER
+  // tab resets it too, not just opening a brand new one.
+  if (id !== 'oracle') oracleRouteToNavigator = false;
   if (!openDrawers.includes(id)) {
     openDrawers = [...openDrawers, id];
     if (id === 'oracle') oracleFilter = '';
@@ -7301,7 +7477,7 @@ function openDrawerTab(id) {
   // since a GM could switch to Starforged mid-session with Party already
   // pinned open, or reopen it after removing a tracker; ensurePartyStarforgedTrackers
   // is idempotent, so a redundant call when both already exist is a no-op.
-  if (id === 'party') store.update((d) => ensurePartyStarforgedTrackers(d));
+  if (id === 'party') store.update((d) => ensurePartyFiveLeaguesTrackers(ensurePartyStarforgedTrackers(d)));
   activeDrawer = id;
 }
 
@@ -7365,6 +7541,13 @@ function toggleAnchorPanel(id) {
 }
 
 function closeDrawerTab(id) {
+  // Direct follow-up request: "...if the oracle panel is closed and
+  // reopened" also resets oracle-output routing back to the Journal —
+  // openDrawerTab's own reset only fires when switching TO a different
+  // tab, which wouldn't cover closing Oracle while it's the only/last
+  // pinned tab (activeDrawer just goes to null, no other id ever passes
+  // through openDrawerTab).
+  if (id === 'oracle') oracleRouteToNavigator = false;
   openDrawers = openDrawers.filter((d) => d !== id);
   anchoredPanels = anchoredPanels.filter((d) => d !== id);
   if (activeDrawer === id) activeDrawer = openDrawers[openDrawers.length - 1] || null;
@@ -7790,6 +7973,15 @@ function onDragOver(ev) {
     const trackerTarget = ev.target.closest('[data-dice-roller-toggle], [data-drop-combat-tracker]');
     if (trackerTarget) { ev.preventDefault(); trackerTarget.classList.add('drop-hover'); return; }
   }
+  // Party panel (direct follow-up request: "Allow drag drop of NPC
+  // entities into the Party form") — same dual ACTOR_DRAG_TYPE/
+  // ENTITY_DRAG_TYPE acceptance as the Combat Tracker drop just above,
+  // since an NPC can arrive dragged either as a WHO Actor thumbnail or a
+  // plain Cast entity row.
+  if (types.includes(ACTOR_DRAG_TYPE) || types.includes(ENTITY_DRAG_TYPE)) {
+    const partyTarget = ev.target.closest('[data-drop-party]');
+    if (partyTarget) { ev.preventDefault(); partyTarget.classList.add('drop-hover'); return; }
+  }
   if (types.includes(BATTLEMAP_ICON_DRAG_TYPE) || types.includes(ENTITY_DRAG_TYPE)) {
     const bmTarget = ev.target.closest('[data-drop-battlemap]');
     if (bmTarget) { ev.preventDefault(); bmTarget.classList.add('drop-hover'); return; }
@@ -7804,6 +7996,12 @@ function onDragOver(ev) {
   if (types.includes(ACTOR_DRAG_TYPE) || types.includes(ENTITY_DRAG_TYPE)) {
     const actorTarget = ev.target.closest('[data-drop-actor-group]');
     if (actorTarget) { ev.preventDefault(); actorTarget.classList.add('drop-hover'); return; }
+    // WHO section-wide fallback target (direct follow-up request: "with a
+    // prompt to be antagonist, protagonist or bystander") — only reached
+    // when the drop isn't already inside one of the 3 specific groups
+    // just checked.
+    const whoTarget = ev.target.closest('[data-drop-who]');
+    if (whoTarget) { ev.preventDefault(); whoTarget.classList.add('drop-hover'); return; }
   }
   // Same request, WHERE's Location Details ("...and Locations to 'WHERE
   // it happens'") — a dedicated attribute, not WHO's data-drop-actor-group
@@ -7862,10 +8060,31 @@ function onDrop(ev) {
       return;
     }
   }
+  // Party panel's own drop target — checked before the generic actorRef/
+  // entityIdForGroup handling below so a drop landing on the Party list
+  // doesn't also fall through into WHO's unrelated actor-group logic.
+  const partyDropTarget = ev.target.closest('[data-drop-party]');
+  if (partyDropTarget) {
+    const actorRefForParty = ev.dataTransfer.getData(ACTOR_DRAG_TYPE);
+    const entityIdForParty = ev.dataTransfer.getData(ENTITY_DRAG_TYPE);
+    if (actorRefForParty || entityIdForParty) {
+      ev.preventDefault();
+      partyDropTarget.classList.remove('drop-hover');
+      completePartyAddCharacterDrop(actorRefForParty, entityIdForParty);
+      return;
+    }
+  }
   const actorRef = ev.dataTransfer.getData(ACTOR_DRAG_TYPE);
   if (actorRef) {
     const actorTarget = ev.target.closest('[data-drop-actor-group]');
-    if (actorTarget) { ev.preventDefault(); actorTarget.classList.remove('drop-hover'); completeActorDrop(actorTarget.dataset.dropActorGroup, actorRef); }
+    if (actorTarget) { ev.preventDefault(); actorTarget.classList.remove('drop-hover'); completeActorDrop(actorTarget.dataset.dropActorGroup, actorRef); return; }
+    // Direct follow-up request: "Enable drag-drop NPC entities into the
+    // Composer with a prompt to be antagonist, protagonist or bystander"
+    // — a drop landing somewhere in WHO that ISN'T one of its 3 specific
+    // groups (checked just above already) falls through to this broader
+    // section-wide target instead of being silently swallowed.
+    const whoTarget = ev.target.closest('[data-drop-who]');
+    if (whoTarget) { ev.preventDefault(); whoTarget.classList.remove('drop-hover'); completeWhoRolePromptDrop(actorRef.split('::')[1]); }
     return;
   }
   // Direct follow-up request: "allow drag of entities into sections
@@ -7882,6 +8101,8 @@ function onDrop(ev) {
     if (actorTarget) { ev.preventDefault(); actorTarget.classList.remove('drop-hover'); completeActorEntityDrop(actorTarget.dataset.dropActorGroup, entityIdForGroup); return; }
     const locTarget = ev.target.closest('[data-drop-location-group]');
     if (locTarget) { ev.preventDefault(); locTarget.classList.remove('drop-hover'); completeLocationEntityDrop(entityIdForGroup); return; }
+    const whoTarget = ev.target.closest('[data-drop-who]');
+    if (whoTarget) { ev.preventDefault(); whoTarget.classList.remove('drop-hover'); completeWhoRolePromptDrop(entityIdForGroup); return; }
   }
   const entityId = ev.dataTransfer.getData(ENTITY_DRAG_TYPE);
   const documentId = ev.dataTransfer.getData(DOCUMENT_DRAG_TYPE);
@@ -7949,6 +8170,29 @@ function completeCombatTrackerAdd(actorRef, entityId) {
     }
   }
   store.update((d) => addCombatTrackerEntity(d, idToAdd));
+}
+
+// Party panel's own drop target (direct follow-up request: "Allow drag
+// drop of NPC entities into the Party form") — same tag-and-sync action
+// as the header "＋" picker's own commit branch (party-add-character),
+// reused rather than duplicated.
+function completePartyAddCharacterDrop(actorRef, entityId) {
+  const idToAdd = actorRef ? actorRef.split('::')[1] : entityId;
+  if (!idToAdd) return;
+  store.update((d) => syncCrewRosterWithParty(addEntityTag(d, idToAdd, 'character')));
+}
+
+// WHO section's broader drop target (direct follow-up request: "Enable
+// drag-drop NPC entities into the Composer with a prompt to be
+// antagonist, protagonist or bystander") — opens the SAME role-choice
+// picker step the header's "Add NPC" button uses (entityPicker.mode
+// 'who-add-npc' + pendingEntityId) rather than guessing which of the 3
+// groups the GM meant; renderEntityPickerOverlay already knows how to
+// show that step for any id landing there, regardless of how it arrived.
+function completeWhoRolePromptDrop(entityId) {
+  if (!entityId) return;
+  entityPicker = { entityType: 'npc', mode: 'who-add-npc', scope: null, query: '', pendingEntityId: entityId };
+  renderEntityPickerOverlay();
 }
 
 function completeActorDrop(toKind, actorRef) {
@@ -8589,6 +8833,18 @@ const MENTION_MAX_SUGGESTIONS = 8;
 function onFocusOut(ev) {
   if (mentionSuggest && ev.target === mentionSuggest.field) closeMentionSuggest();
 
+  // Direct bug report: "when clicking anywhere off the text editor
+  // textbox, the field should persist any content it has and not clear
+  // out or reset as it does now" — the Journal compose box had no
+  // ephemeral backing field at all before this (see journalDraftText's
+  // own declaration comment for the full story); this is the commit side,
+  // same blur-commit shape as summaryField below.
+  const journalInputField = ev.target.closest('[data-journal-input]');
+  if (journalInputField) {
+    const value = serializeMentionEditor(journalInputField);
+    if (value !== journalDraftText) journalDraftText = value;
+  }
+
   // Contenteditable context fields (WHO/WHERE/WHAT/WHY/HOW) have no native
   // 'change' event — that only exists on <input>/<textarea>/<select> — so
   // this is their blur-commit instead, same trigger point onChange's
@@ -8709,6 +8965,32 @@ function onFocusOut(ev) {
   }
 }
 
+// Direct bug report: "When the Journal text editor is selected, the
+// Actions section should expand to expose the option buttons." A single
+// new delegated 'focusin' listener (rule 4 — one per event type,
+// registered once in mountShell) — focusin bubbles (plain 'focus'
+// doesn't), same reasoning onFocusOut's own comment already gives for why
+// that one uses 'focusout' instead of 'blur'. Deliberately does NOT go
+// through the usual renderDrawerBody() round-trip other handlers use —
+// that replaces the drawer's whole DOM subtree, which would yank focus
+// (and the cursor position) right back out of the field the GM just
+// clicked into. journal()'s own markup (drawers/index.js) always renders
+// the Actions body now (never omits it), just hidden when collapsed, so
+// this can toggle that one attribute directly and leave the rest of the
+// DOM — including the just-focused input — completely alone. Only ever
+// needs the one branch today; kept as its own function (not folded into
+// onClick/onChange) so a future focus-triggered behavior has an obvious
+// home instead of being wedged into a handler for a different event type.
+function onFocusIn(ev) {
+  const journalInputField = ev.target.closest('[data-journal-input]');
+  if (!journalInputField || journalActionsOpen) return;
+  journalActionsOpen = true;
+  const actionsBody = root && root.querySelector('[data-journal-actions-body]');
+  if (actionsBody) actionsBody.hidden = false;
+  const toggleBtn = root && root.querySelector('[data-journal-actions-toggle]');
+  if (toggleBtn) toggleBtn.textContent = '▾ Actions';
+}
+
 // Ctrl/Cmd+Click a document mention's page (ADR 0018) — the page lives in a
 // fixed data-mention-page/data-doc-open-page attribute, not the editable
 // label text, so it needs its own edit path rather than "arrow-key in and
@@ -8826,20 +9108,6 @@ function commitInlinePrompt() {
 
   if (kind === 'shift-prompt') {
     if (value) { store.update((d) => applyStoryShift(d, meta.name, value)); toast(meta.name); }
-  } else if (kind === 'who-introduce-npc') {
-    const sceneId = currentSceneId();
-    if (!value) { /* nothing typed — no-op */ }
-    else if (!sceneId) toast('Continue Story (Advisor) to start a scene first');
-    else {
-      store.update((d) => {
-        const { campaign: withNpc, id } = resolveOrCreateIntroducedNpc(d, value);
-        if (!id) return withNpc;
-        const npc = getEntity(withNpc, id);
-        const isCharacter = npc && (npc.tags || []).includes('character');
-        return isCharacter ? addSceneProtagonist(withNpc, sceneId, id) : addSceneAntagonist(withNpc, sceneId, id);
-      });
-      toast('NPC introduced');
-    }
   } else if (kind === 'statblock-add-field') {
     const active = store.get().entities.activeId;
     store.update((d) => addEntityStatblockField(d, active, meta.gi, { key: value || 'New Field', value: '' }));
@@ -9037,27 +9305,6 @@ function commitMentionField(field) {
   if (!ctxAttr) return;
   const [key, fieldName] = ctxAttr.split('.');
   store.update((d) => editContextText(d, key, fieldName, serializeMentionEditor(field)));
-}
-
-// WHO's "Introduce NPC" (data-who-introduce-npc) — resolves the typed
-// text against existing NPCs by name (an @Name/@[Name|...] wrapper is
-// unwrapped to its plain name first, same shapes findMentions elsewhere
-// recognizes, but matched here by a direct case-insensitive name compare
-// rather than the mention-scan regex findMentions uses, since this is a
-// single deliberately-typed value, not free prose to scan for incidental
-// mentions). No match creates a brand-new NPC named after the typed text,
-// the same shape "+ New NPC" creates blank. Pure but for createEntity's
-// id generation, so it stays here rather than in domain/ — it's plumbing
-// for one specific UI action, not a reusable domain concept.
-function resolveOrCreateIntroducedNpc(campaign, rawText) {
-  const text = (rawText || '').trim();
-  if (!text) return { campaign, id: null };
-  const bracket = text.match(/^@\[([^\]|]+)(?:\|[^\]]*)?\]$/);
-  const name = (bracket ? bracket[1] : text.startsWith('@') ? text.slice(1) : text).trim();
-  const existing = listEntities(campaign, ['npc']).find((e) => (e.name || '').trim().toLowerCase() === name.toLowerCase());
-  if (existing) return { campaign, id: existing.id };
-  const created = createEntity(campaign, { type: 'npc', name });
-  return { campaign: created.campaign, id: created.id };
 }
 
 // Shared by clicking a suggestion and pressing Enter on the highlighted one.
@@ -9697,7 +9944,30 @@ function commitEntityPickerPick(picker, id) {
     // rest of Colony).
     return store.update((d) => updateColonyEncounter(d, picker.scope, { entityId: id }));
   }
-  const sceneId = currentSceneId();
+  if (picker.mode === 'party-add-character') {
+    // Party panel's header "＋" — not scene-scoped at all (Party is a
+    // Cast-wide #character tag, same as the direct-create button this
+    // replaced), so this must run BEFORE the sceneId guard just below,
+    // which every OTHER NPC-role picker genuinely needs but this one
+    // doesn't.
+    return store.update((d) => syncCrewRosterWithParty(addEntityTag(d, id, 'character')));
+  }
+  // Direct follow-up request: WHO's Protagonist/Antagonist/Bystander
+  // sections (and their "+" pickers) now render even before the first
+  // scene exists — auto-start one here (the same continueStory the
+  // Advisor's own "Continue Story" button triggers) rather than silently
+  // no-op'ing, so picking/creating an NPC through one of those three (or
+  // the header's own who-add-npc picker, which stashes a pick for the
+  // SAME three roles) always actually lands somewhere. Scoped to just
+  // those 4 modes — asset/location-current/system pickers (WHERE's own)
+  // keep their original "needs an active scene already" behavior
+  // unchanged, since nothing asked for those to auto-start one too.
+  const npcRoleModes = picker.mode === 'protagonist' || picker.mode === 'antagonist' || picker.mode === 'bystander' || picker.mode === 'who-add-npc';
+  let sceneId = currentSceneId();
+  if (!sceneId && npcRoleModes) {
+    store.update((d) => ((d.scenes && d.scenes.length) ? d : continueStory(d, { toJournal: false })));
+    sceneId = currentSceneId();
+  }
   if (!sceneId) return renderEntityPickerOverlay();
   if (picker.entityType === 'asset') return store.update((d) => addSceneAsset(d, sceneId, id));
   if (picker.entityType === 'location-current') return store.update((d) => addSceneLocation(d, sceneId, id));
@@ -9705,6 +9975,14 @@ function commitEntityPickerPick(picker, id) {
   if (picker.mode === 'protagonist') return store.update((d) => addSceneProtagonist(d, sceneId, id));
   if (picker.mode === 'antagonist') return store.update((d) => addSceneAntagonist(d, sceneId, id));
   if (picker.mode === 'bystander') return store.update((d) => addSceneBystander(d, sceneId, id));
+  if (picker.mode === 'who-add-npc') {
+    // Don't commit to a role yet — stash the pick and let
+    // renderEntityPickerOverlay's own pendingEntityId branch ask which
+    // one, same for a freshly-created NPC (entityPickerCreateBtn's own
+    // handler calls commitEntityPickerPick too) as for an existing one.
+    entityPicker = { ...picker, pendingEntityId: id };
+    return renderEntityPickerOverlay();
+  }
   return renderEntityPickerOverlay();
 }
 
@@ -9755,6 +10033,38 @@ function renderEntityPickerOverlay() {
   if (!resultsEl) return;
   if (!entityPicker) { resultsEl.innerHTML = ''; return; }
   const doc = store.get();
+  // WHO header's "🧑＋ Add NPC" (direct bug report: it used to create a
+  // blank NPC directly, bypassing the picker entirely) — a two-step
+  // picker: pick/create the NPC first (the generic candidate-list step
+  // below, entityPicker.mode === 'who-add-npc'), then — once
+  // commitEntityPickerPick has stashed the chosen id as pendingEntityId —
+  // this second step asks WHICH scene role to add them as, rather than
+  // silently defaulting to one (direct follow-up answer: "ask me each
+  // time via the picker itself").
+  if (entityPicker.mode === 'who-add-npc' && entityPicker.pendingEntityId) {
+    const pendingNpc = getEntity(doc, entityPicker.pendingEntityId);
+    resultsEl.innerHTML = `
+      <p class="dim small">Add ${escapeHtml((pendingNpc && pendingNpc.name) || 'this NPC')} to the current scene as:</p>
+      <button type="button" class="entity-picker-row" data-who-add-npc-role="protagonist">Protagonist</button>
+      <button type="button" class="entity-picker-row" data-who-add-npc-role="antagonist">Antagonist</button>
+      <button type="button" class="entity-picker-row" data-who-add-npc-role="bystander">Bystander</button>
+      <button type="button" class="entity-picker-row entity-picker-row-remove" data-entity-picker-close>Cancel</button>`;
+    return;
+  }
+  // Party's Shared Assets "+" (direct follow-up request, see the
+  // data-entity-picker-open parse above for the full story) — asks which
+  // kind FIRST, then swaps to that kind's own already-existing mode
+  // (data-party-shared-asset-kind's click handler below) rather than
+  // showing a candidate list of its own.
+  if (entityPicker.mode === 'party-shared-asset') {
+    resultsEl.innerHTML = `
+      <p class="dim small">Add a Shared Asset as:</p>
+      <button type="button" class="entity-picker-row" data-party-shared-asset-kind="vehicle">🚗 Vehicle</button>
+      <button type="button" class="entity-picker-row" data-party-shared-asset-kind="item">📦 Item</button>
+      <button type="button" class="entity-picker-row" data-party-shared-asset-kind="asset">🎒 Asset</button>
+      <button type="button" class="entity-picker-row entity-picker-row-remove" data-entity-picker-close>Cancel</button>`;
+    return;
+  }
   const query = (entityPicker.query || '').trim().toLowerCase();
   let candidates; let emptyMessage;
   if (entityPicker.entityType === 'asset') {
@@ -9847,7 +10157,11 @@ function renderEntityPickerOverlay() {
     emptyMessage = 'No other Location entities yet — add one in Cast first.';
   } else if (entityPicker.entityType === 'system') {
     candidates = listEntities(doc, ['location']).filter((l) => (l.tags || []).includes('system'));
-    emptyMessage = 'No #system locations yet — tag one in Cast first.';
+    // Direct follow-up request: "all scifi terms should be genre
+    // specific... reference to 'Star' is only for scifi genre" — "System"
+    // reads as a Realm for a fantasy/D&D 5e campaign (locationHierarchyTerms,
+    // data/genrePacks.js); the #system TAG itself is unchanged either way.
+    emptyMessage = `No ${locationHierarchyTerms((doc.settings && doc.settings.genrePack)).system} locations yet — create one below.`;
   } else if (entityPicker.entityType === 'hexcrawl-location') {
     // Hexcrawl's center icon (direct request) — every Location entity not
     // already linked to some OTHER hex on THIS map (the same hex being
@@ -9927,6 +10241,23 @@ function renderEntityPickerOverlay() {
       ...(isModuleVisible(profile, 'dungeoncrawl') ? listDungeonMaps(doc).map((m) => ({ ...m, name: `🏰 ${m.name}` })) : []),
     ];
     emptyMessage = 'No maps yet — create one below.';
+  } else if (entityPicker.mode === 'who-add-npc') {
+    // WHO header's "Add NPC" — role-agnostic (no #character filter either
+    // way, since the GM picks the role as a separate step after this),
+    // excluding an NPC already present in ANY of the 3 scene groups
+    // rather than just one.
+    const scenes = doc.scenes || [];
+    const scene = scenes[scenes.length - 1];
+    const excludeIds = scene ? new Set([...(scene.protagonistIds || []), ...(scene.antagonistIds || []), ...(scene.bystanderIds || [])]) : new Set();
+    candidates = listEntities(doc, ['npc']).filter((n) => !excludeIds.has(n.id));
+    emptyMessage = 'No available NPCs — everyone is already in this scene, or create a new one below.';
+  } else if (entityPicker.mode === 'party-add-character') {
+    // Party panel's header "＋" (direct bug report, same class as WHO's
+    // own fix above) — every NPC NOT already tagged #character (i.e. not
+    // already a Party member), same exclusion listPartyMembers itself
+    // applies in the other direction.
+    candidates = listEntities(doc, ['npc']).filter((n) => !hasCharacterTag(n));
+    emptyMessage = 'No available NPCs — everyone is already in the Party, or create a new one below.';
   } else {
     const scenes = doc.scenes || [];
     const scene = scenes[scenes.length - 1];
@@ -10672,7 +11003,15 @@ function headExtraForDrawer(id) {
   // the explanatory copy that used to sit below it as a <p> now carried as
   // this button's own title tooltip instead.
   if (id === 'party') {
-    return `<button class="icon-btn" data-party-add-character title="Add NPC — NPC entities tagged #character. Tag an NPC in the Cast drawer to add one you already made, or add one here.">＋</button>`;
+    // Direct bug report: "Revise the Party panel '+' NPC button to NPC
+    // selector form and not default to create a new NPC" — this used to
+    // create a blank NPC directly (data-party-add-character), same bug
+    // class as WHO's own header "Add NPC" button. Retargeted to the
+    // shared entity picker (data-entity-picker-open="party-add-character")
+    // so the GM can pick an existing NPC to promote to Party first,
+    // with "+ Create New NPC" still available inside the picker for a
+    // genuinely new one.
+    return `<button class="icon-btn" data-entity-picker-open="party-add-character" title="Add NPC — pick an existing NPC to add to Party, or create a new one. Tagging an NPC #character in Cast does the same thing.">＋</button>`;
   }
   // Guide/Documents' top-of-drawer intro tips have no in-content header of
   // their own to sit next to (unlike a Settings group's <h3> or Documents'
@@ -10694,10 +11033,10 @@ function headExtraForDrawer(id) {
 // Every ephemeral UI flag a drawer template might read, in one place.
 function buildDrawerUi() {
   return {
-    oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, navigatorStepMapLink, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
+    oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, oracleRouteToNavigator: oracleRouteToNavigator && activeDrawer === 'oracle', navigatorStepMapLink, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, docSort, docTypeFilter, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     fiveLeaguesInfoOpen, fiveLeaguesItemNotesOpen,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, journalActionsOpen, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, expandedWhatConflicts,
+    enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, journalActionsOpen, journalDraftText, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, expandedWhatConflicts,
     advisorOracleResults, advisorDrafts, advisorConsequenceDraw, sceneSummaryOverride,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName, partyTrackersEditOpen, collapsedPartySections,

@@ -1,7 +1,7 @@
 // turnStepListPlanetfall.js — seed content for the "Planetfall" Turn Step
 // List (direct follow-up request: "make an equivalent Turn Step list from
 // the Planetfall Campaign Turn Sequence on p.58"), transcribed via
-// `pdftotext -layout` from assets/docs/5PFH Planetfall 1.2.pdf's own
+// `pdftotext -layout` from assets/docs/5PFH/Five Parsecs - Planetfall 1.2.pdf's own
 // "Campaign Turn Sequence" (printed p.57 onward — confirmed PDF-to-printed
 // page offset of +2, matching this app's existing turn-step/crew-task
 // content). The rulebook's own sequence is linear ("you must progress
@@ -26,7 +26,7 @@
 // first-time install / backfilled for an existing one missing it (see
 // core/migrate.js, core/store.js).
 
-const DOC = '5PFH Planetfall 1.2';
+const DOC = 'Five Parsecs - Planetfall 1.2';
 
 export const PLANETFALL_TURN_STEPS = [
   {

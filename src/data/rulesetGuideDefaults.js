@@ -30,9 +30,9 @@ export const RULESET_GUIDE_DEFAULTS = {
     { file: 'assets/docs/ironsworn/Ironsworn-Assets-Master-Set.pdf', title: 'Ironsworn Assets Master Set' },
   ],
   '5pfh': [
-    { file: 'assets/docs/5PFH/5PFH-Five-Parsecs-From-Home-v3.pdf', title: 'Five Parsecs From Home (3rd Edition)' },
-    { file: 'assets/docs/5PFH-3e-Compendium-Includes-Bug-Hunt.pdf', title: '5PFH 3e Compendium Includes Bug Hunt' },
-    { file: 'assets/docs/5PFH Planetfall 1.2.pdf', title: '5PFH Planetfall 1.2' },
+    { file: 'assets/docs/5PFH/Five Parsecs From Home v3.pdf', title: 'Five Parsecs From Home v3' },
+    { file: 'assets/docs/5PFH/Five Parsecs - Compendium Includes Bug Hunt.pdf', title: 'Five Parsecs - Compendium Includes Bug Hunt' },
+    { file: 'assets/docs/5PFH/Five Parsecs - Planetfall 1.2.pdf', title: 'Five Parsecs - Planetfall 1.2' },
   ],
   traveller: [
     { file: 'assets/docs/Traveller/Traveller-2e-Core-Rulebook.pdf', title: 'Traveller 2e Core Rulebook' },

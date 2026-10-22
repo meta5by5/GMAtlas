@@ -44,20 +44,31 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--tier1-bg);
   border-bottom: 1px solid var(--tier1-border);
 }
-.mc-header .brand { display: flex; align-items: baseline; gap: var(--sp-3); }
+/* Direct follow-up request: "Move the campaign picker to the right of the
+   app title separated by a '|'" — the campaign switcher now lives INSIDE
+   .brand (not off in .header-actions on its own), right after the "|",
+   so title/separator/picker read as one group on every width, including
+   mobile (see that media query's own updated note below — the earlier
+   "hide the title, show just the campaign name on phone" treatment is
+   superseded, since the request now wants the FULL "GMAtlas | Campaign"
+   picker working there too, not just the bare name). .brand's own
+   flex-wrap lets the picker drop to its own line on a genuinely narrow
+   phone rather than clipping or overflowing. */
+.mc-header .brand { display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap; min-width: 0; }
 .mc-header h1 { font-size: 1.05rem; margin: 0; letter-spacing: 0.02em; }
 .mc-header .tagline { font-size: 0.72rem; color: var(--text-dim); }
+.mc-header .brand-sep { color: var(--text-dim); }
 .mc-header .campaign-title { font-size: 0.85rem; color: var(--accent); }
 
 /* Campaign switcher (direct follow-up request) — .campaign-title reverts
    to being a real clickable control (it used to open Settings directly,
    pre-header-gear-menu; now it's a <button> opening this new dropdown
    instead), so it needs a bare-button reset the old plain <span> never did. */
-.campaign-switcher-wrap { position: relative; }
-.mc-header .campaign-title { background: none; border: none; font: inherit; padding: 0; }
+.campaign-switcher-wrap { position: relative; min-width: 0; }
+.mc-header .campaign-title { background: none; border: none; font: inherit; padding: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .campaign-switcher-menu {
   position: absolute; top: 100%; left: 0; margin-top: 0.3rem; z-index: 20;
-  min-width: 14rem; max-width: 20rem; background: var(--tier2-bg); border: 1px solid var(--border);
+  min-width: 14rem; max-width: min(20rem, calc(100vw - 2 * var(--sp-4))); background: var(--tier2-bg); border: 1px solid var(--border);
   border-radius: var(--radius-sm); box-shadow: 0 4px 16px rgba(0,0,0,0.35); padding: var(--sp-2);
 }
 .campaign-switcher-menu[hidden] { display: none; }
@@ -642,11 +653,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
      tablet/desktop where the row has room). Icon-only; the button's own
      title attribute still names it for a long-press/hover. */
   .header-drawer-tabs .btn-label { display: none; }
-  /* Direct request: drop the campaign name and the "Search" label from the
-     phone header too, same compression complaint — the campaign title is
-     still reachable in Settings (its own editable field there), and the
-     search button keeps its icon plus its title="" tooltip. */
-  .mc-header .campaign-title { display: none; }
+  /* Direct follow-up request (supersedes the earlier "remove the GMAtlas
+     title, replace with the campaign selector" decision right above's own
+     note): "Move the campaign picker to the right of the app title...
+     ensure that the full picker functionality works on the mobile device
+     instead of just the campaign name." The title and the picker are one
+     group now (.brand, above) and both stay visible/fully interactive at
+     phone width — .brand's own flex-wrap lets the picker drop to its own
+     line here instead of either being hidden or squeezed into an
+     ellipsis. Search still keeps its icon-only, title=""-tooltip treatment
+     from before. */
   .mc-header [data-search-toggle] .btn-label { display: none; }
   .field-row2, .colony-fields, .rel-add, .party-tracker-row, .colony-crew-row,
   .thread-row, .trade-contract-row {
@@ -820,6 +836,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .dashboard-trackers { margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--border); }
 .dashboard-tracker { margin-top: var(--sp-2); }
 .dashboard-tracker:first-child { margin-top: 0; }
+/* Direct follow-up request: "The trackers on Navigator are for Starforged
+   and should be filtered to that ruleset and all rulesets activated
+   would have their trackers added to Navigator (separated by section
+   header named for the ruleset if there are more than one...)." Each
+   ruleset's own .dashboard-trackers block becomes one
+   .dashboard-trackers-section; its own border-top already separates it
+   from the one above, so the wrapper itself needs no extra chrome beyond
+   an optional label. A read-only tracker (another ruleset's own Party
+   Trackers, shown here but only ever EDITED on the Party panel) reads as
+   one line, label left/value right, instead of a slider underneath. */
+.dashboard-trackers-section-head { margin: 0 0 var(--sp-1); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); }
+.dashboard-tracker-readonly { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); }
 /* Each former W-tab, now a collapsible section (dashboardSection(),
    ui/workspace/index.js) — reuses .section-head-row (drawers/index.js's
    Bases of Influence toggle already established this exact convention)
@@ -1068,6 +1096,13 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
   color: var(--accent); border-bottom-color: var(--accent); cursor: pointer;
 }
 .mention-link.mention-link-active:hover { color: var(--accent-strong); border-bottom-color: var(--accent-strong); }
+/* Direct follow-up request: a mention naming a real, known sourcebook
+   that just isn't physically present on this install (mentionEditor.js's
+   findExpectedReferenceDoc fallback) — a distinct warm color + solid
+   underline so it reads as "actionable, something's missing" rather than
+   either a normal working link or plain unlinked text. */
+.mention-link.mention-link-missing { color: var(--warn); border-bottom: 1px solid var(--warn); cursor: pointer; }
+.mention-link.mention-link-missing:hover { opacity: 0.85; }
 
 /* A plain-text-styled clickable name (Faction Events' faction-name links
    into the Entity Editor) — not a chip/button, just a link-colored,
@@ -1145,6 +1180,11 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 button.doc-badge { font: inherit; color: inherit; cursor: pointer; }
 button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .drawer-search { margin-bottom: var(--sp-3); }
+/* Docs library sort/filter row (direct follow-up request) — same
+   field-label-with-inline-select shape used elsewhere, just packed into
+   one flex row side by side instead of each stacking full-width. */
+.doc-sort-filter-row { display: flex; gap: var(--sp-3); margin-bottom: var(--sp-3); flex-wrap: wrap; }
+.doc-sort-filter-row .field-label { flex: 1 1 10rem; }
 .oracle-list { display: flex; flex-direction: column; gap: 2px; }
 .oracle-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: 0.3rem 0.4rem; border-radius: var(--radius-sm); }
 .oracle-row:hover { background: var(--tier2-bg); }
@@ -1155,6 +1195,11 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    toggle, same footprint-saving posture as the entries editor below. */
 .oracle-tag-editor { margin: 0 0 var(--sp-2) 0.4rem; padding: var(--sp-2); background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .oracle-tag-filter-badge { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); padding: 0.3rem 0.5rem; background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.8rem; color: var(--text-dim); }
+/* Direct follow-up request: oracle rolls temporarily routed to the
+   Navigator's Scene Summary instead of the Journal — accent-colored
+   border so it reads as a distinct, temporary mode rather than the plain
+   tag-filter badge above. */
+.oracle-route-banner { border-color: var(--accent); color: var(--accent); }
 /* Oracle table entry editor (Phase 8) — collapsed behind the row's ✎ toggle */
 .oracle-editor { margin: 0 0 var(--sp-2) 0.4rem; padding: var(--sp-2); background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .oracle-entry-row, .oracle-entry-add { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: 2px; }
@@ -1269,6 +1314,16 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    to (domain/entitlements.js's canAccessGameSystem) renders visibly locked
    rather than being silently absent. */
 .game-system-locked { cursor: not-allowed; }
+/* Supplement checkboxes (e.g. a Compendium volume) nest visually under
+   their parent Game System's own activation row above. */
+.game-system-supplement-row { margin-left: var(--sp-4); }
+/* Direct follow-up request: "group all modules for a game system under
+   the header of the game system" — one real-world product line's worth
+   of Modules (Core Rules/Compendium/Planetfall, ...) under its own small
+   heading, visually separated from the next family. */
+.game-system-family { margin-top: var(--sp-3); padding-top: var(--sp-2); border-top: 1px solid var(--border); }
+.game-system-family:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+.game-system-family h4 { margin: 0 0 var(--sp-1); }
 
 /* Planetfall Grid Battlemap (Phase 11, docs/adr/0023) */
 .battlemap-tabs { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-2); }
@@ -2294,7 +2349,17 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 /* Direct follow-up request: "Change Will, XP and Luck to number fields
    instead of trackers" — same bordered-pill family as track-row-compact
    just above, swapping the click-to-set box row for a narrow number
-   <input> plus a "/ max" suffix. */
+   <input>. Direct follow-up requests since: (1) "change... to a currency
+   field format" — the input is wrapped in numStepper (its own generic
+   ＋/－ pair); (2) "drop the '/' separator and the last number. Just show
+   the label, the textfield and the +-. Also, locate the +- under the
+   textbox" — the old "/ max" suffix text is gone (dropped from the markup
+   entirely, drawers/index.js's numberFieldRow), and the stepper's ＋/－
+   buttons move from beside the input to below it via this 2-column grid:
+   the input (first child) spans both columns on row 1, the two buttons
+   (numStepper's own fixed 3-child shape) auto-place into row 2 — no
+   markup change needed, and every OTHER numStepper call site (Party
+   Tracker Size, Navigator workflow cards) keeps its normal inline row. */
 .number-row-compact {
   display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); flex: 0 0 auto;
   width: fit-content; max-width: 100%; min-width: 0; margin-bottom: 0; padding: 0.25rem 0.5rem;
@@ -2302,8 +2367,8 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 }
 .number-row-compact .statblock-key { font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.68rem; white-space: nowrap; line-height: 1.2; }
 .number-row-input-wrap { display: flex; align-items: center; gap: 0.2em; }
-.number-row-compact .attr-val-input { width: 2.6em; text-align: center; padding: 0.1rem 0.2rem; font-size: 0.85rem; }
-.number-row-max { white-space: nowrap; }
+.number-row-compact .num-stepper { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; justify-items: center; }
+.number-row-compact .attr-val-input { grid-column: 1 / -1; width: 2.6em; text-align: center; padding: 0.1rem 0.2rem; font-size: 0.85rem; }
 /* Plain text/value field's own compact pill (direct follow-up request —
    textRow had no compact variant before; every statblock field now gets
    one). Same family as track-row-compact/attr-row-compact: content-sized
@@ -2337,6 +2402,34 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .statblock-weapon-table th:nth-child(2), .statblock-weapon-table th:nth-child(3), .statblock-weapon-table th:nth-child(4) { width: 12%; }
 .statblock-weapon-remove-cell { width: 1.8rem; padding-left: 0.1rem; padding-right: 0.1rem; text-align: center; }
 .statblock-weapon-remove-btn { padding-left: 0.15rem; padding-right: 0.15rem; }
+/* Five Leagues weapon cards (direct follow-up request: "use two rows where
+   Weapon name is wide enough... Move traits and location and the delete
+   icon to a second row") — Five Leagues' extra Catalog + Location columns
+   left no room in 5PFH's original single-row table for readable headers,
+   so each weapon becomes its own two-row card instead of a <table> row.
+   Row 1 (name/range/shots/damage) shares a grid-template-columns with the
+   header row above it so the two line up; row 2 (traits/location/delete)
+   is a second, independent grid since it has no shared header. Direct
+   follow-up request moved the Catalog picker out of row 2 entirely (into
+   the "+ Weapon" add row below, five-leagues-item-add-row), so row 2 is
+   now 3 columns, not 4. Direct follow-up request: "widen the weapon name
+   field by 15% and widen the Dmg field 15%... ensure that field will show
+   the entire string (ex. '+0/+0')" — Name's minmax(6rem, 2fr) and Dmg's
+   3.4rem both scaled by 1.15 (6.9rem/2.3fr and 3.9rem); the catalog's own
+   real damage format is "+N / +N" (formatFiveLeaguesOvercome, domain/
+   fiveLeagues.js — WITH spaces around the slash, slightly wider than the
+   request's own space-free example), and 3.9rem comfortably fits that at
+   this row's 0.82rem font plus its input's own horizontal padding. */
+.statblock-weapon-headrow, .statblock-weapon-row1 { display: grid; grid-template-columns: minmax(6.9rem, 2.3fr) 3.4rem 3rem 3.9rem; gap: var(--sp-2); }
+.statblock-weapon-headrow { font-size: 0.68rem; letter-spacing: 0.06em; color: var(--text-dim); text-transform: uppercase; padding: 0 0.1rem 0.2rem; }
+.statblock-weapon-headrow span:not(.statblock-weapon-name-head) { text-align: center; }
+.statblock-weapon-list { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+.statblock-weapon-card { border: 1px solid var(--border); border-radius: var(--radius-sm, 4px); padding: 0.35rem 0.4rem; }
+.statblock-weapon-row1 input { width: 100%; padding: 0.3rem 0.4rem; font-size: 0.82rem; text-align: center; }
+.statblock-weapon-row1 .statblock-weapon-name-input { text-align: left; font-weight: 600; }
+.statblock-weapon-row2 { display: grid; grid-template-columns: 1fr 5rem 1.8rem; gap: var(--sp-2); margin-top: 0.3rem; }
+.statblock-weapon-row2 input, .statblock-weapon-row2 select { width: 100%; padding: 0.25rem 0.35rem; font-size: 0.78rem; }
+.statblock-weapon-row2 .statblock-weapon-remove-btn { width: 100%; padding-left: 0.15rem; padding-right: 0.15rem; }
 .statblock-gear-field { margin-top: var(--sp-3); }
 .statblock-gear-field textarea { width: 100%; }
 /* Direct follow-up request: "update the character sheet for 5lfb to track
@@ -2417,6 +2510,16 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 }
 .attr-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.68rem; white-space: nowrap; line-height: 1.2; }
 .attr-row-compact .attr-val-input { width: 0; min-width: 100%; box-sizing: border-box; padding: 0; font-size: 0.85rem; }
+/* Direct follow-up request: "narrow the padding around the text and
+   number of the statblocks for the 5LFB character sheet so that all six
+   fields fit on one row" — tighter pill padding/gap scoped to just Five
+   Leagues' own 6-stat compact row (attrRow's opts.ruleset === 'fiveleagues'
+   check), so Starforged/5PFH's own compact attribute pills keep their
+   normal spacing. */
+.attr-row-compact-fiveleagues,
+.statblock-row.attr-row.attr-row-compact-fiveleagues {
+  padding: 0.2rem 0.3rem; gap: 2px;
+}
 
 /* Drag-and-drop (entity ↔ entity, entity → text) */
 [data-drag-entity] { cursor: grab; }
@@ -3201,22 +3304,42 @@ input[type="number"] { -moz-appearance: textfield; }
    second, parallel way to step through it) — .workflow-step-card reuses
    the Campaign panel's own .turn-step-* classes above for its nav row/
    current-step label/text row verbatim, plus its own border+spacing
-   since it's not living inside a .colony-fields grid here. */
+   since it's not living inside a .colony-fields grid here.
+   .navigator-workflow itself (direct follow-up request: "put a box around
+   both workflows and shade it slightly differently to stand out from
+   other options") gets its own bordered/shaded panel — --bg-raised rather
+   than .oracle-links-block's own --bg-inset, so the two boxed areas read
+   as distinct from each other, not just from the unboxed sections around
+   them. No longer carries .threads (that class's own margin-top/border-
+   top "separator from the section above" treatment would double up with
+   a full box border) — its own margin-top below covers the same spacing
+   job now that Scene Summary sits directly above it (moved there per the
+   same follow-up request). */
+.navigator-workflow { margin-top: var(--sp-4); padding: var(--sp-3); background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .navigator-workflow .workflow-step-card + .workflow-step-card { margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--border); }
 .workflow-step-card .btn { margin-top: var(--sp-2); }
+/* One collapsible header per Game System when 2+ workflows show at once
+   (showHeaders, workspace/index.js) — plain spacing between them; each
+   one's own toggle button reuses .actor-group-toggle/.field-label-static
+   verbatim (WHO/WHERE's own collapsible-group header styling) so it reads
+   as the same interaction pattern, not a one-off. */
+.workflow-group + .workflow-group { margin-top: var(--sp-3); padding-top: var(--sp-2); border-top: 1px solid var(--border); }
+.workflow-group .workflow-step-card { margin-top: var(--sp-2); }
 .turn-step-map-row { display: flex; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-2); }
 /* "Helpful Oracles" (Navigator workflow card, direct follow-up request:
    "display all relevant oracles that might be helpful for that scene...
    group them all under a section header 'helpful oracles'") — a compact
    chip-wrap list, same .chip.sm treatment every other oracle-tag-link
-   chip in this app already uses; the "Supplemental Oracles" sub-label
-   sits between the two chip rows only when a hand-tagged tier exists
-   above it (workspace/index.js omits it when there's nothing to tier
-   against). */
-.turn-step-helpful-oracles { margin: 0 0 var(--sp-2); }
-.turn-step-helpful-oracles-head { font-size: 0.75rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: var(--sp-1); }
-.turn-step-oracle-tier-label { font-size: 0.72rem; color: var(--text-dim); margin: var(--sp-2) 0 var(--sp-1); }
-.turn-step-oracle-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+   chip in this app already uses. Direct follow-up request: "Put a panel-
+   wide box around helpful and supplemental oracles to make it stand out.
+   Do not have a subheader called Supplemental oracles. Just show the
+   oracles provided" — hand-tagged and supplemental matches are now one
+   flat chip list (workspace/index.js's helpfulOraclesHtml), and the block
+   itself is a real bordered/background box spanning the full card width
+   instead of a bare margin wrapper, so it reads as a distinct panel. */
+.oracle-links-block { margin: 0 0 var(--sp-2); padding: var(--sp-2) var(--sp-3); background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.oracle-links-head { font-size: 0.75rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: var(--sp-1); }
+.oracle-links-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
 
 /* Turn Step Settings tab — each group's reorderable step list. flex-wrap
    (direct follow-up request: "revise the 'Move To' and 'Branches to'

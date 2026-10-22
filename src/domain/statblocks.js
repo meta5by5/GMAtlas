@@ -229,19 +229,54 @@ export function ensureStatblocksArray(entity) {
   return entity;
 }
 
+// Direct follow-up request: "When creating an NPC entity, add the default
+// statblock for the ruleset... a bestiary sheet if not specifically
+// selected as character sheet if the NPC is a Character" — a Character
+// sheet already resolves settings.statRuleset directly (findRuleset,
+// above); a non-#character NPC's auto-attached Bestiary group never did
+// the equivalent lookup, always landing on makeStatblock's own generic
+// DEFAULT_BESTIARY_TEMPLATE fallback regardless of the active ruleset.
+// Keyed by statRuleset (NOT the RULES_PROVIDERS/template-tag id, which
+// sometimes differs, e.g. statRuleset '5pfh' vs template-internal
+// ruleset: 'fivepfh') — only the systems with a REAL, non-generic
+// Bestiary template of their own (data/statblockTemplates.js) are listed;
+// traveller/ironsworn fall through to makeStatblock's own existing
+// generic fallback unchanged, since no dedicated template exists for
+// either yet.
+const DEFAULT_NPC_TEMPLATE_BY_RULESET = {
+  starforged: 'starforged',
+  '5pfh': '5pfh',
+  fiveleagues: 'fiveleagues-lifeform',
+  dnd5e: 'dnd5e-lifeform',
+};
+
 /**
  * Ensure an entity carries the statblock groups its current type/tags call
  * for. Mutates the passed entity in place and returns it (caller supplies an
  * already-cloned entity — see entities.js). Always ADDS a missing group; it
  * never replaces or removes one that's already there, so multiple groups
  * (e.g. two rulesets' character sheets) coexist rather than being toggled.
- *   - npc entities get a Bestiary group if they have none at all.
+ *   - npc entities get a Bestiary group if they have none at all — the
+ *     active ruleset's own Bestiary template (DEFAULT_NPC_TEMPLATE_BY_RULESET
+ *     above) when one exists, else makeStatblock's own generic fallback.
  *   - #character-tagged NPCs additionally get a full character sheet if they
  *     don't already have one (a Party member — see domain/party.js).
  *   - asset entities tagged #vehicle get a 'vehicle' group if they don't
  *     already have one.
  *   - Moving away from a qualifying type/tag never deletes an existing
  *     group — no data loss, it just stops being auto-managed.
+ *
+ * Direct follow-up request: "Don't allow both a bestiary and a character
+ * sheet at the same time. Swap the bestiary sheet with the character
+ * sheet or the reverse if the Character tag is added/removed." For an
+ * NPC/lifeform specifically, exactly one of Bestiary/Character is ever
+ * ACTIVE (non-archived) at a time — toggling #character flips which one
+ * is visible, archiving (never deleting) whichever side just lost the
+ * swap, same "hide, don't discard" posture setCharacterStatblocksArchived
+ * already established for the tag-removal direction alone; this makes it
+ * symmetric and routes both directions through this one function instead
+ * of two separately-maintained call sites (entities.js's addEntityTag/
+ * removeEntityTag both already run every mutation through here).
  */
 export function ensureAutoStatblock(entity, settings) {
   if (!entity) return entity;
@@ -256,11 +291,25 @@ export function ensureAutoStatblock(entity, settings) {
   if (wantsVehicle && !entity.statblocks.some((g) => g.kind === 'vehicle')) {
     entity.statblocks.push(makeStatblock('vehicle', null, 'vehicle', settings));
   }
-  if (wantsCharacter && !entity.statblocks.some((g) => g.kind === 'character')) {
-    entity.statblocks.push(makeStatblock('character', settings && settings.statRuleset));
-  }
-  if (wantsNpc && !wantsCharacter && entity.statblocks.length === 0) {
-    entity.statblocks.push(makeStatblock('npc', null, null, settings));
+  if (wantsNpc) {
+    if (wantsCharacter) {
+      if (!entity.statblocks.some((g) => g.kind === 'character')) {
+        entity.statblocks.push(makeStatblock('character', settings && settings.statRuleset));
+      }
+      for (const g of entity.statblocks) {
+        if (g.kind === 'character') g.archived = false;
+        if (g.kind === 'npc') g.archived = true;
+      }
+    } else {
+      if (!entity.statblocks.some((g) => g.kind === 'npc')) {
+        const templateId = DEFAULT_NPC_TEMPLATE_BY_RULESET[settings && settings.statRuleset] || null;
+        entity.statblocks.push(makeStatblock('npc', null, templateId, settings));
+      }
+      for (const g of entity.statblocks) {
+        if (g.kind === 'npc') g.archived = false;
+        if (g.kind === 'character') g.archived = true;
+      }
+    }
   }
   return entity;
 }
