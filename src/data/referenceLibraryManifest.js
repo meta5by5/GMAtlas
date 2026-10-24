@@ -75,7 +75,7 @@ export const REFERENCE_LIBRARY_MANIFEST = [
   { file: 'assets/docs/ironsworn/Ironsworn-Assets-Master-Set.pdf', title: 'Ironsworn Assets Master Set', ext: 'pdf', sizeBytes: 496644, releaseAsset: 'Ironsworn-Assets-Master-Set.pdf' },
   { file: 'assets/docs/5LFB/five-leagues-from-the-borderlands-3e.pdf', title: 'Five Leagues from the Borderlands (3rd Edition)', ext: 'pdf', sizeBytes: 19595101, releaseAsset: 'five-leagues-from-the-borderlands-3e.pdf' },
   { file: 'assets/docs/5LFB/Five Leagues - Compendium_Final_Digital.pdf', title: 'Five Leagues Compendium', ext: 'pdf', sizeBytes: 45108472, releaseAsset: 'Five.Leagues.-.Compendium_Final_Digital.pdf' },
-  { file: 'assets/docs/5LFB/5LDB Warband Sheet US.pdf', title: 'Five Leagues Warband Sheet', ext: 'pdf', sizeBytes: 45674, releaseAsset: '5LDB.Warband.Sheet.US.pdf' },
+  { file: 'assets/docs/5LFB/5LFB Warband Sheet US.pdf', title: 'Five Leagues Warband Sheet', ext: 'pdf', sizeBytes: 45674, releaseAsset: '5LDB.Warband.Sheet.US.pdf' },
   { file: 'assets/docs/dnd5e/SRD_CC_v5.2.1.pdf', title: 'D&D 5e SRD 5.2.1', ext: 'pdf', sizeBytes: 6031375, releaseAsset: 'SRD_CC_v5.2.1.pdf' },
   { file: 'assets/docs/Starforged/Starforged-reference-guide.pdf', title: 'Starforged Reference Guide', ext: 'pdf', sizeBytes: 19779875, releaseAsset: 'Starforged-reference-guide.pdf' },
   // Direct follow-up request: "Rename all 'Turn Step' filename link
@@ -104,6 +104,29 @@ export const REFERENCE_LIBRARY_MANIFEST = [
   { file: 'assets/docs/5PFH/Five Parsecs - Planetfall 1.2.pdf', title: 'Five Parsecs - Planetfall 1.2', ext: 'pdf', sizeBytes: 43722123, releaseAsset: 'Five-Parsecs-Planetfall-1.2.pdf' },
   { file: 'assets/docs/Traveller/Traveller-2e-high-guard-2022-update.pdf', title: 'Traveller 2e high guard 2022 update', ext: 'pdf', sizeBytes: 77816836, releaseAsset: 'Traveller-2e-high-guard-2022-update.pdf' },
   { file: 'assets/docs/Traveller/Traveller-2e-the-great-rift-book-4-deep-space-exploration-handbook.pdf', title: 'Traveller 2e the great rift book 4 deep space exploration handbook', ext: 'pdf', sizeBytes: 9233647, releaseAsset: 'Traveller-2e-the-great-rift-book-4-deep-space-exploration-handbook.pdf' },
+  // Licenses (design/adr/licenses-and-rules-constitution.md): the Hostile
+  // and Without Number books live in per-game subfolders on disk now, but
+  // were only catalogued at their old flat paths (left above, untouched —
+  // never repoint a `file`). These are the real paths each license's
+  // Load button and Docs-library filter use. The D&D 5e Monster Manual is
+  // new; its releaseAsset hasn't been uploaded yet.
+  { file: 'assets/docs/Hostile/Hostile setting.pdf', title: 'Hostile Setting', ext: 'pdf', sizeBytes: 66869289, releaseAsset: 'Hostile.setting.pdf' },
+  { file: 'assets/docs/Hostile/Hostile_Introduction_to_HOSTILE3.pdf', title: 'Hostile: Introduction to Hostile', ext: 'pdf', sizeBytes: 5045626, releaseAsset: 'Hostile_Introduction_to_HOSTILE3.pdf' },
+  { file: 'assets/docs/Hostile/Hostile_marinecorps8.pdf', title: 'Hostile: Marine Corps', ext: 'pdf', sizeBytes: 7603018, releaseAsset: 'Hostile_marinecorps8.pdf' },
+  { file: 'assets/docs/Hostile/Hostile_marine-sheet.pdf', title: 'Hostile: Marine Sheet', ext: 'pdf', sizeBytes: 244769, releaseAsset: 'Hostile_marine-sheet.pdf' },
+  { file: 'assets/docs/Hostile/Hostile_tool-kit9.pdf', title: 'Hostile: Tool Kit', ext: 'pdf', sizeBytes: 2174407, releaseAsset: 'Hostile_tool-kit9.pdf' },
+  { file: 'assets/docs/Hostile/HOSTILE-TECH2.pdf', title: 'Hostile: Tech', ext: 'pdf', sizeBytes: 3432837, releaseAsset: 'HOSTILE-TECH2.pdf' },
+  { file: 'assets/docs/Hostile/Hostile_Alien-Breeds3.pdf', title: 'Hostile: Alien Breeds', ext: 'pdf', sizeBytes: 4683108, releaseAsset: 'Hostile_Alien-Breeds3.pdf' },
+  { file: 'assets/docs/Hostile/Hostile_colony-builder4.pdf', title: 'Hostile: Colony Builder', ext: 'pdf', sizeBytes: 7236679, releaseAsset: 'Hostile_colony-builder4.pdf' },
+  { file: 'assets/docs/Hostile/Hostile_Crew_Expendable3.pdf', title: 'Hostile: Crew Expendable', ext: 'pdf', sizeBytes: 7039616, releaseAsset: 'Hostile_Crew_Expendable3.pdf' },
+  { file: 'assets/docs/Hostile/Hostile_EXPLORERS-2.pdf', title: 'Hostile: Explorers', ext: 'pdf', sizeBytes: 6314070, releaseAsset: 'Hostile_EXPLORERS-2.pdf' },
+  { file: 'assets/docs/Hostile/HOSTILE_SHORTS-001GhostShip.pdf', title: 'Hostile Shorts 001: Ghost Ship', ext: 'pdf', sizeBytes: 580866, releaseAsset: 'HOSTILE_SHORTS-001GhostShip.pdf' },
+  { file: 'assets/docs/Hostile/HOSTILE_SHORTS-002Snakehead.pdf', title: 'Hostile Shorts 002: Snakehead', ext: 'pdf', sizeBytes: 662922, releaseAsset: 'HOSTILE_SHORTS-002Snakehead.pdf' },
+  { file: 'assets/docs/Hostile/HOSTILE_SHORTS-003Repellant.pdf', title: 'Hostile Shorts 003: Repellant', ext: 'pdf', sizeBytes: 628088, releaseAsset: 'HOSTILE_SHORTS-003Repellant.pdf' },
+  { file: 'assets/docs/Hostile/HOSTILE_SHORTS-005OneOfUs.pdf', title: 'Hostile Shorts 005: One of Us', ext: 'pdf', sizeBytes: 578976, releaseAsset: 'HOSTILE_SHORTS-005OneOfUs.pdf' },
+  { file: 'assets/docs/WithoutNumber/Stars Without Number Revised - Deluxe Edition.pdf', title: 'Stars Without Number Revised (Deluxe Edition)', ext: 'pdf', sizeBytes: 11074701, releaseAsset: 'Stars.Without.Number.Revised.-.Deluxe.Edition.pdf' },
+  { file: 'assets/docs/WithoutNumber/CitiesWithoutNumber_Deluxe.pdf', title: 'Cities Without Number (Deluxe Edition)', ext: 'pdf', sizeBytes: 8751275, releaseAsset: 'CitiesWithoutNumber_Deluxe.pdf' },
+  { file: 'assets/docs/dnd5e/Monster Manual.pdf', title: 'D&D 5e Monster Manual', ext: 'pdf', sizeBytes: 218217953, releaseAsset: 'Monster.Manual.pdf' },
 ];
 
 /** Direct follow-up request: "If the file doesn't exist for that filename,

@@ -47,6 +47,9 @@ export const CONTENT_PACKS_MANIFEST = [
   },
   {
     id: '5pfh-cbh-lifeforms',
+    // Supplement content: listed only once the profile picks this Compendium
+    // for Rules Constitution -> Bestiary & enemies.
+    supplement: 'fivepfh-compendium',
     file: 'assets/content-packs/5pfh_cbh-lifeforms-content-pack.json',
     title: 'Five Parsecs from Home Compendium Lifeforms & Enemies (Bug Hunt)',
     description: "The 16 named entries from the 5PFH Compendium's own Bug Hunt monster table (p.194-195) — Vent-crawlers, Acid Blobs, Face-rippers, Slithering Horrors, Tentacle Creepers, Shambling Reanimations, Razor Lizards (Bug Hunt), Berserk Robots, Converted Assault/Infiltration Teams, Dimensional Distorts, The Swarm, Horde Invasion Force, Shatter-forms, Strangle Worms, Gripper Weeds.",
@@ -110,6 +113,7 @@ export const CONTENT_PACKS_MANIFEST = [
     // the Wolf Prince/Silent Battalion Enemy Tables) rather than the core
     // rulebook — same gating/extraction caveats as the core pack above.
     id: 'fiveleagues-compendium-enemies',
+    supplement: 'fiveleagues-compendium',
     file: 'assets/content-packs/fiveleagues-compendium-enemies-content-pack.json',
     title: 'Five Leagues from Borderlands Enemies (Compendium)',
     description: "38 named entries from the Compendium's own Enemy Tables — The Ancient Land of Dust's \"The Dust Rises Enemy Table\" and Deep Below's Bloodstained/Outlaw Bands/Retinue of the Wolf Prince Enemy Tables — each as a #lifeform-tagged NPC with a full Five Leagues Enemy statblock.",

@@ -112,9 +112,10 @@ documented:
    `campaign:<id>` key plus a `campaignBackup:<id>` one-slot backup written
    best-effort immediately before every real write, and one `appConfig` key
    for the campaign/profile registry above). Its public surface: synchronous
-   `get()` (the active campaign doc, with the active Rules Profile's six
+   `get()` (the active campaign doc, with the active Rules Profile's
    ruleset fields — Genre Pack, Stat System, Trade Economy Model, Rules
-   Constitution choices, Game System Activation, Party headline fields —
+   Constitution choices, Party headline fields — plus the install-wide
+   `licenses` (owned books, design/adr/licenses-and-rules-constitution.md)
    overlaid onto its `settings`), synchronous-call-shape `update(fn)`
    (persists the active campaign in the background, notifies subscribers
    immediately, rolls back and re-notifies on a failed persist unless a
@@ -241,7 +242,8 @@ guarantee made concrete: oracle tables for 3 genre packs (~49 top-level
 categories in the default Hostile pack alone), the Oracle drawer's grouping
 scheme, per-ruleset character templates and Bestiary/gear statblock
 templates, a cross-system gear catalog, the Rules Constitution provider
-registry (9 named providers, 19 gameplay areas), two mechanically-identical
+registry (11 Game Systems, 1 Supplement, 13 licenses in data/licenses.js, 6 gameplay areas — option map in
+design/rules-constitution-mapping.md), two mechanically-identical
 faction content catalogs (one real-sourcebook transcription behind an
 explicit opt-in gate, one 100% original default), trade economy models and
 commodities, biomes, UWP world-profile decode tables, suggestion lenses,
@@ -445,9 +447,10 @@ campaigns, fresh ids, dangling-reference dropping); curated bulk catalog
 import with name-collision skip (the HOSTILE Canon Locations gazetteer is
 the one shipped example, ~54 worlds).
 
-**Activities → Rules Lens suggestion.** A fixed activity catalog mapped to
-gameplay areas via the Rules Constitution registry; resolving an
-unrecognized activity id returns `null`, never throws.
+**Activities → Rules Lens suggestion.** A fixed activity catalog, each with
+its own suggested providers (independent of the Rules Constitution's
+gameplay areas); resolving an unrecognized activity id returns `null`,
+never throws.
 
 **Reference tools.** An on-demand Game Mechanics Index PDF full-text scan and
 a PDF bookmark/outline-to-Guide-tree scan — both browser-only, both requiring

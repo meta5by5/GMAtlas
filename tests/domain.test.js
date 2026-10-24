@@ -17,7 +17,7 @@ import { generateScene, recomposeSceneText } from '../src/domain/scenes.js';
 import { continueStory, restartStory, applyStoryShift, rollOracle, patchContext, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles } from '../src/domain/session.js';
 import { SUGGESTION_LENSES, lensOracleCategories } from '../src/data/suggestionLenses.js';
 import { defaultCampaign, defaultAppConfig, defaultRulesProfile, GATEABLE_MODULES } from '../src/core/schema.js';
-import { parseStatsString } from '../src/domain/statblocks.js';
+import { parseStatsString, isPristineStatblockGroup } from '../src/domain/statblocks.js';
 import {
   createRulesProfile, renameProfile, updateProfileRuleset, setModuleEnabled, setStoryboardPosition, isModuleVisible, resolveOverlaySettings,
   createCampaign, renameCampaignEntry, setActiveCampaign, reassignCampaignProfile, applyProfileDraft, resolvePositionContentId,
@@ -2785,13 +2785,13 @@ test('listPartyMembers returns only npc entities tagged #character', () => {
   assert.equal(members[0].id, heroId);
 });
 
-test('#character-tagged npc entities gain a full character sheet, alongside (not instead of) their Bestiary group', () => {
+test('#character-tagged npc entities gain a full character sheet, and lose their untouched auto-created Bestiary group (a Character has no Bestiary statblock)', () => {
   let camp = defaultCampaign();
   let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Hero' }));
   camp = setEntityTags(camp, id, 'character');
   const groups = getEntity(camp, id).statblocks;
   assert.ok(groups.some((g) => g.kind === 'character'));
-  assert.ok(groups.some((g) => g.kind === 'npc'), 'auto-attached Bestiary group is not replaced, just supplemented');
+  assert.ok(!groups.some((g) => g.kind === 'npc'), 'untouched Bestiary dropped, not kept hidden');
 });
 
 test('party trackers: add, step (currency), rename, remove', () => {
@@ -2944,11 +2944,11 @@ test('ensurePartyStarforgedTrackers auto-adds Momentum (gauge) and Supply (meter
 // forever once created.
 test('ensurePartyFiveLeaguesTrackers auto-adds Gold Marks (currency), Enemy Threat (counter), and Enemy Plans (counter), tagged moduleId:\'fiveleagues\', only while the fiveleagues Game System is activated — removes all three again the moment it\'s deactivated', () => {
   let camp = defaultCampaign();
-  camp.settings.statRuleset = 'fiveleagues'; // the ruleset alone is no longer enough
+  camp.settings.statRuleset = 'fiveleagues'; // the module alone isn't enough without owning the book
   camp = ensurePartyFiveLeaguesTrackers(camp);
-  assert.equal(listPartyTrackers(camp).length, 0, 'not activated — no-op');
+  assert.equal(listPartyTrackers(camp).length, 0, 'not owned — no-op');
 
-  camp.settings.gameSystemActivations = { ...camp.settings.gameSystemActivations, fiveleagues: true };
+  camp.settings.licenses = { fiveleagues: true };
   camp = ensurePartyFiveLeaguesTrackers(camp);
   const names = listPartyTrackers(camp).map((t) => t.name).sort();
   assert.deepEqual(names, ['Enemy Plans', 'Enemy Threat', 'Gold Marks']);
@@ -2967,9 +2967,10 @@ test('ensurePartyFiveLeaguesTrackers auto-adds Gold Marks (currency), Enemy Thre
 
   // Deactivating now tears down just the moduleId:'fiveleagues' trio,
   // leaving the hand-added tracker alone.
-  camp.settings.gameSystemActivations = { ...camp.settings.gameSystemActivations, fiveleagues: false };
+  camp.settings.statRuleset = 'starforged'; // no longer the module, and not picked anywhere
   camp = ensurePartyFiveLeaguesTrackers(camp);
-  assert.deepEqual(listPartyTrackers(camp).map((t) => t.name), ['Homebrew Thing']);
+  assert.ok(!listPartyTrackers(camp).some((t) => t.moduleId === 'fiveleagues'));
+  assert.ok(listPartyTrackers(camp).some((t) => t.name === 'Homebrew Thing'));
 });
 
 // Direct follow-up request: "The trackers on Navigator are for Starforged
@@ -2984,7 +2985,7 @@ test('listPartyTrackersForRuleset isolates just one ruleset\'s own trackers out 
   camp.settings.statRuleset = 'starforged';
   camp = ensurePartyStarforgedTrackers(camp);
   camp.settings.statRuleset = 'fiveleagues';
-  camp.settings.gameSystemActivations = { ...camp.settings.gameSystemActivations, fiveleagues: true };
+  camp.settings.licenses = { fiveleagues: true };
   camp = ensurePartyFiveLeaguesTrackers(camp);
   camp = addPartyTracker(camp, { name: 'Homebrew Thing', kind: 'counter' });
   assert.equal(listPartyTrackers(camp).length, 6, 'Momentum/Supply + Gold Marks/Enemy Threat/Enemy Plans + 1 custom');
@@ -4694,44 +4695,46 @@ test('ensureAutoStatblock picks the active ruleset\'s own Bestiary template for 
   }
 });
 
-test('ensureAutoStatblock swaps Bestiary/Character — exactly one is ever un-archived at a time for an NPC (direct follow-up request: "Don\'t allow both a bestiary and a character sheet at the same time... swap... if the Character tag is added/removed")', () => {
+test('ensureAutoStatblock swaps Bestiary/Character — exactly one is ever active for an NPC; an untouched Bestiary is dropped on becoming a Character, an edited one is kept inactive and comes back intact', () => {
   let camp = defaultCampaign();
   camp.settings.statRuleset = 'starforged';
   let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Rook' }));
   let e = getEntity(camp, id);
   assert.equal(e.statblocks.length, 1);
   assert.equal(e.statblocks[0].kind, 'npc');
-  assert.ok(!e.statblocks[0].archived);
+  assert.ok(isPristineStatblockGroup(e.statblocks[0], camp.settings), 'a fresh Bestiary reads as untouched');
 
-  // Add #character — Bestiary archives, Character sheet is created and active.
+  // Untouched Bestiary + #character -> Bestiary gone, Character sheet active.
   camp = addEntityTag(camp, id, 'character');
   e = getEntity(camp, id);
-  assert.equal(e.statblocks.length, 2, 'both groups now exist (Bestiary archived, not deleted)');
-  const npcGroup = e.statblocks.find((g) => g.kind === 'npc');
-  const charGroup = e.statblocks.find((g) => g.kind === 'character');
-  assert.ok(npcGroup.archived, 'Bestiary group archived while #character is active');
-  assert.ok(!charGroup.archived, 'Character sheet is the active one');
-
-  // Edit a Character Sheet field so we can confirm it survives the round trip below.
+  assert.deepEqual(e.statblocks.map((g) => g.kind), ['character']);
+  const charGroup = e.statblocks[0];
+  assert.ok(!charGroup.archived);
   const edgeFieldIndex = charGroup.fields.findIndex((f) => f.key === 'Edge');
-  camp = setEntityStatblockAttributeValue(camp, id, e.statblocks.indexOf(charGroup), edgeFieldIndex, 3);
+  camp = setEntityStatblockAttributeValue(camp, id, 0, edgeFieldIndex, 3);
 
-  // Remove #character — swaps back: Character archives, Bestiary un-archives (not recreated).
+  // Remove #character -> Character archived (kept), a fresh Bestiary is active.
   camp = removeEntityTag(camp, id, 'character');
   e = getEntity(camp, id);
-  assert.equal(e.statblocks.length, 2, 'still both groups — removal never deletes either side');
-  const npcGroup2 = e.statblocks.find((g) => g.kind === 'npc');
-  const charGroup2 = e.statblocks.find((g) => g.kind === 'character');
-  assert.ok(!npcGroup2.archived, 'Bestiary group restored to active');
-  assert.ok(charGroup2.archived, 'Character sheet archived, not deleted');
+  assert.ok(e.statblocks.find((g) => g.kind === 'character').archived, 'Character sheet archived, not deleted');
+  assert.ok(!e.statblocks.find((g) => g.kind === 'npc').archived, 'Bestiary active again');
 
-  // Re-add #character — the SAME Character group (with its edited field) comes back, un-archived.
+  // Re-add #character -> the SAME edited Character sheet returns; the untouched Bestiary is dropped again.
   camp = addEntityTag(camp, id, 'character');
   e = getEntity(camp, id);
-  assert.equal(e.statblocks.length, 2, 'still exactly 2 groups — re-adding the tag never creates a duplicate Character sheet');
-  const charGroup3 = e.statblocks.find((g) => g.kind === 'character');
-  assert.ok(!charGroup3.archived);
-  assert.equal(charGroup3.fields.find((f) => f.key === 'Edge').value, 3, 'the earlier edit survived the archive/restore round trip');
+  assert.deepEqual(e.statblocks.map((g) => g.kind), ['character'], 'no duplicate Character sheet, no leftover Bestiary');
+  assert.equal(e.statblocks[0].fields.find((f) => f.key === 'Edge').value, 3, 'the edit survived the round trip');
+
+  // An EDITED Bestiary is never discarded: it stays, inactive, and comes back on removing #character.
+  let id2; ({ campaign: camp, id: id2 } = createEntity(camp, { type: 'npc', name: 'Grunt' }));
+  camp = setEntityStatblockField(camp, id2, 0, 0, { value: 4 });
+  assert.ok(!isPristineStatblockGroup(getEntity(camp, id2).statblocks[0], camp.settings));
+  camp = addEntityTag(camp, id2, 'character');
+  e = getEntity(camp, id2);
+  const kept = e.statblocks.find((g) => g.kind === 'npc');
+  assert.ok(kept && kept.archived, 'edited Bestiary kept, inactive');
+  camp = removeEntityTag(camp, id2, 'character');
+  assert.equal(getEntity(camp, id2).statblocks.find((g) => g.kind === 'npc').fields[0].value, 4, 'edits intact');
 });
 
 test('template field CRUD: add, update, remove, and reorder via campaign settings', () => {
@@ -4819,7 +4822,8 @@ test('formatSessionRecap renders a readable plain-text block', () => {
 });
 
 // --- Rules Constitution (data reference, requirements/initial design inputs/gameplay-goals.md) ---
-import { RULES_PROVIDERS, GAME_SYSTEMS, GAMEPLAY_AREAS, providerLabel, resolveProviderChoice, resolveActiveProviderChoice, isGameSystemActivated, genrePackIdForRuleset, GAME_SYSTEM_SUPPLEMENTS, isSupplementActivated, GAME_SYSTEM_FAMILIES, matchesEnabledModule } from '../src/data/rulesConstitution.js';
+import { LICENSES } from '../src/data/licenses.js';
+import { RULES_PROVIDERS, GAME_SYSTEMS, GAMEPLAY_AREAS, providerLabel, resolveProviderChoice, resolveActiveProviderChoice, isGameSystemActivated, genrePackIdForRuleset, GAME_SYSTEM_SUPPLEMENTS, licenseFamilies, licenseFor, licenseForDoc, isLicenseInUse, isReferenceDocInUse, isTurnStepSystemActive, matchesEnabledModule, isLicensed, isSupplementInUse, rulesConstitutionOptionIds, moduleProviderId, findSupplement } from '../src/data/rulesConstitution.js';
 
 // Direct follow-up report: "The scifi oracles should not be visible to the
 // fantasy (generic) genre and vice versa. I can see all the scifi oracles
@@ -4835,12 +4839,114 @@ test('genrePackIdForRuleset resolves a ruleset id to its Game System\'s own decl
   assert.equal(genrePackIdForRuleset('not-a-real-ruleset'), null);
 });
 
-test('every provider referenced in GAMEPLAY_AREAS is a registered RULES_PROVIDERS entry', () => {
-  const ids = new Set(Object.keys(RULES_PROVIDERS));
-  for (const { area, providers } of GAMEPLAY_AREAS) {
-    for (const p of providers) assert.ok(ids.has(p), `${area} references unregistered provider "${p}"`);
+test('every provider referenced in GAMEPLAY_AREAS is a registered Game System or Supplement, and every area has a label', () => {
+  for (const { id, area, providers } of GAMEPLAY_AREAS) {
+    assert.ok(area, `${id} needs a label`);
+    for (const p of providers) assert.ok(RULES_PROVIDERS[p] || findSupplement(p), `${area} references unregistered provider "${p}"`);
   }
 });
+
+// Licenses = install-wide ownership; nothing is in use until the profile's
+// Module for Profile or a Rules Constitution pick uses it
+// (design/adr/licenses-and-rules-constitution.md).
+test('isLicensed: open (CC-BY) licenses are always owned; every other book needs its own license — a Compendium never needs its core book', () => {
+  assert.equal(isLicensed({}, 'starforged'), true, 'open');
+  assert.equal(isLicensed({}, 'ironsworn'), true, 'open');
+  assert.equal(isLicensed({}, 'dnd5e'), true, 'open');
+  assert.equal(isLicensed({}, 'gmatlascore'), true, 'platform content, no license');
+  assert.equal(isLicensed({}, 'hostile'), false);
+  assert.equal(isLicensed({}, 'traveller'), false);
+  assert.equal(isLicensed({ licenses: { swn: true } }, 'swn'), true);
+  assert.equal(isLicensed({ licenses: { 'fiveleagues-compendium': true } }, 'fiveleagues-compendium'), true, 'no parent needed');
+  assert.equal(isLicensed({ licenses: { 'fivepfh-compendium': true } }, 'fivepfh-compendium'), true, 'standalone game');
+  assert.equal(licenseFor('fiveleagues-compendium').id, 'fiveleagues-compendium');
+  assert.equal(licenseForDoc('assets/docs/Hostile/Hostile_tool-kit9.pdf').id, 'hostile', 'Hostile supplements ride on the one Hostile license');
+});
+
+test('isReferenceDocInUse / isLicenseInUse: a sourcebook reaches a campaign\'s Docs library only when its license is owned AND one of its game systems is designated — open ones too', () => {
+  const sf = { statRuleset: 'starforged', genrePack: 'sci-fi-generic' };
+  assert.equal(isReferenceDocInUse(sf, 'assets/docs/Starforged/Ironsworn-Starforged-rulebook.pdf'), true, 'the module');
+  assert.equal(isReferenceDocInUse(sf, 'assets/docs/ironsworn/Ironsworn-Rulebook.pdf'), false, 'open, but not designated here');
+  assert.equal(isReferenceDocInUse(sf, 'assets/docs/Hostile/Hostile setting.pdf'), false, 'not owned');
+  const withHostile = { ...sf, licenses: { hostile: true } };
+  assert.equal(isReferenceDocInUse(withHostile, 'assets/docs/Hostile/Hostile setting.pdf'), false, 'owned, not designated');
+  const hostilePicked = { ...withHostile, rulesProviderChoices: { 'frontier-setting': 'hostile' } };
+  assert.equal(isReferenceDocInUse(hostilePicked, 'assets/docs/Hostile/Hostile_marinecorps8.pdf'), true);
+  assert.equal(isLicenseInUse(hostilePicked, 'ist'), false, 'IST not owned');
+  assert.equal(isLicenseInUse({ ...hostilePicked, licenses: { hostile: true, ist: true } }, 'ist'), true, 'IST comes along with Hostile');
+  assert.equal(isLicenseInUse({ statRuleset: 'starforged', licenses: { cwn: true, swn: true }, rulesProviderChoices: { factions: 'swn' } }, 'cwn'), true, 'CWN comes along with SWN');
+  assert.equal(isReferenceDocInUse(sf, 'assets/docs/Hostile setting.pdf'), false, 'an old flat-path entry belongs to no license');
+});
+
+test('isTurnStepSystemActive: Turn Steps follow only what a Turn-Step gameplay area resolves to — being in use for another area never brings them', () => {
+  const owned = { licenses: { fivepfh: true, fiveleagues: true, planetfall: true, 'fivepfh-compendium': true, swn: true } };
+  const c = (settings) => ({ settings: { ...owned, ...settings } });
+  assert.equal(isTurnStepSystemActive(c({ statRuleset: '5pfh' }), 'fivepfh'), true, 'Campaign turn defaults to the module');
+  assert.equal(isTurnStepSystemActive(c({ statRuleset: '5pfh', rulesProviderChoices: { 'campaign-turn': 'fiveleagues' } }), 'fivepfh'), false, 'Campaign turn reassigned');
+  assert.equal(isTurnStepSystemActive(c({ statRuleset: '5pfh', rulesProviderChoices: { 'campaign-turn': 'fiveleagues' } }), 'fiveleagues'), true);
+  assert.equal(isTurnStepSystemActive(c({ statRuleset: 'starforged' }), 'planetfall'), false, 'Colony management not assigned');
+  assert.equal(isTurnStepSystemActive(c({ statRuleset: 'starforged', rulesProviderChoices: { 'colony-management': 'planetfall' } }), 'planetfall'), true);
+  assert.equal(isTurnStepSystemActive(c({ statRuleset: 'starforged', rulesProviderChoices: { bestiary: 'fivepfh-compendium' } }), 'fivepfh-compendium'), false, 'Bestiary has no Turn Steps');
+  assert.equal(isTurnStepSystemActive({ settings: { statRuleset: '5pfh' } }, 'fivepfh'), false, 'module not owned');
+});
+
+test('isGameSystemActivated (in use): owning a book alone turns nothing on — it must be the Module for Profile or picked in an area', () => {
+  assert.equal(isGameSystemActivated({ settings: {} }, 'starforged'), true, 'free systems always in use');
+  const owned = { licenses: { fiveleagues: true, planetfall: true } };
+  assert.equal(isGameSystemActivated({ settings: { ...owned, statRuleset: 'starforged' } }, 'fiveleagues'), false, 'owned but unused');
+  assert.equal(isGameSystemActivated({ settings: { ...owned, statRuleset: 'fiveleagues' } }, 'fiveleagues'), true, 'the module');
+  assert.equal(isGameSystemActivated({ settings: { statRuleset: 'fiveleagues' } }, 'fiveleagues'), false, 'the module, but not owned');
+  assert.equal(isGameSystemActivated({ settings: { ...owned, statRuleset: 'starforged', rulesProviderChoices: { 'colony-management': 'planetfall' } } }, 'planetfall'), true, 'picked in an area');
+  assert.equal(isGameSystemActivated({ settings: { statRuleset: '5pfh', licenses: { fivepfh: true } } }, 'fivepfh'), true, "statRuleset '5pfh' is the fivepfh provider");
+});
+
+test('resolveProviderChoice: the dropdown value is a still-valid stored pick, else "" (Module for Profile) — an unowned or unlisted pick falls back to ""', () => {
+  assert.equal(resolveProviderChoice({}, 'factions'), '');
+  assert.equal(resolveProviderChoice({ rulesProviderChoices: { factions: 'gmatlascore' } }, 'factions'), 'gmatlascore');
+  assert.equal(resolveProviderChoice({ rulesProviderChoices: { factions: 'swn' } }, 'factions'), '', 'SWN not owned');
+  assert.equal(resolveProviderChoice({ licenses: { swn: true }, rulesProviderChoices: { factions: 'swn' } }, 'factions'), 'swn');
+  assert.equal(resolveProviderChoice({ licenses: { swn: true }, rulesProviderChoices: { factions: 'starforged' } }, 'factions'), '', 'not a provider for this area');
+  assert.equal(resolveProviderChoice({}, 'not-a-real-area'), null);
+});
+
+test('resolveActiveProviderChoice: a valid pick, else the Module for Profile when it provides the area, else the area fallback', () => {
+  const owned = { licenses: { fivepfh: true, fiveleagues: true, swn: true } };
+  assert.equal(resolveActiveProviderChoice({ settings: { ...owned, statRuleset: '5pfh' } }, 'campaign-turn'), 'fivepfh', 'module provides it');
+  assert.equal(resolveActiveProviderChoice({ settings: { ...owned, statRuleset: 'starforged' } }, 'campaign-turn'), null, 'module has no campaign turn, no fallback');
+  assert.equal(resolveActiveProviderChoice({ settings: { ...owned, statRuleset: '5pfh', rulesProviderChoices: { 'campaign-turn': 'fiveleagues' } } }, 'campaign-turn'), 'fiveleagues');
+  assert.equal(resolveActiveProviderChoice({ settings: { statRuleset: 'starforged' } }, 'factions'), 'gmatlascore', 'Factions fallback');
+  assert.equal(resolveActiveProviderChoice({ settings: { ...owned, rulesProviderChoices: { factions: 'swn' } } }, 'factions'), 'swn');
+  assert.equal(resolveActiveProviderChoice({ settings: {} }, 'not-a-real-area'), null);
+});
+
+test('rulesConstitutionOptionIds: only owned, currently-valid providers beyond the module — a supplement only while its parent is in use', () => {
+  const s = { statRuleset: 'fiveleagues', licenses: { fiveleagues: true, 'fiveleagues-compendium': true, fivepfh: true } };
+  assert.deepEqual(rulesConstitutionOptionIds(s, 'character-creation'), ['fiveleagues-compendium']);
+  assert.deepEqual(rulesConstitutionOptionIds(s, 'campaign-turn'), ['fivepfh'], 'module itself excluded (it is the first option)');
+  assert.deepEqual(rulesConstitutionOptionIds({ ...s, statRuleset: 'starforged' }, 'character-creation'), [], 'parent Five Leagues not in use');
+  assert.deepEqual(rulesConstitutionOptionIds({ statRuleset: 'fiveleagues', licenses: { fiveleagues: true } }, 'character-creation'), [], 'Compendium not owned');
+  assert.deepEqual(rulesConstitutionOptionIds({ statRuleset: 'starforged', licenses: { 'fivepfh-compendium': true } }, 'bestiary'), ['fivepfh-compendium'], 'standalone: no 5PFH needed');
+  assert.equal(moduleProviderId({ statRuleset: '5pfh' }), 'fivepfh');
+});
+
+test('isSupplementInUse: a supplement turns on per gameplay area, so Origins and enemies are independent picks', () => {
+  const s = { statRuleset: 'fiveleagues', licenses: { fiveleagues: true, 'fiveleagues-compendium': true }, rulesProviderChoices: { 'character-creation': 'fiveleagues-compendium' } };
+  assert.equal(isSupplementInUse({ settings: s }, 'fiveleagues-compendium', 'character-creation'), true);
+  assert.equal(isSupplementInUse({ settings: s }, 'fiveleagues-compendium', 'bestiary'), false);
+  const unowned = { ...s, licenses: { fiveleagues: true } };
+  assert.equal(isSupplementInUse({ settings: unowned }, 'fiveleagues-compendium', 'character-creation'), false, 'a stored pick of an unowned supplement is ignored');
+});
+
+test('matchesEnabledModule scopes Available Packs / Statblock Templates to the Module for Profile plus whatever a Rules Constitution area has in effect', () => {
+  assert.equal(matchesEnabledModule(null, { genrePack: 'sci-fi-generic', statRuleset: '5pfh' }), true);
+  assert.equal(matchesEnabledModule('sci-fi-generic', { genrePack: 'sci-fi-generic' }), true);
+  assert.equal(matchesEnabledModule('fivepfh', { genrePack: 'sci-fi-generic', statRuleset: '5pfh' }), true);
+  const planetfallPicked = { genrePack: 'sci-fi-generic', statRuleset: '5pfh', licenses: { fivepfh: true, planetfall: true }, rulesProviderChoices: { 'colony-management': 'planetfall' } };
+  assert.equal(matchesEnabledModule('planetfall', planetfallPicked), true);
+  assert.equal(matchesEnabledModule('planetfall', { ...planetfallPicked, rulesProviderChoices: {} }), false, 'owned but not picked');
+  assert.equal(matchesEnabledModule('gmatlascore', { statRuleset: '5pfh' }), true, 'Factions resolves to GMAtlas Core by default');
+});
+
 
 test('providerLabel resolves a known id and falls back to the id itself for an unknown one', () => {
   assert.equal(providerLabel('starforged'), 'Starforged');
@@ -4857,57 +4963,14 @@ test('every GAMEPLAY_AREAS entry has a unique id; Factions lists both swn and gm
   assert.deepEqual(factions.providers, ['swn', 'gmatlascore']);
 });
 
-test('resolveProviderChoice falls back to an area\'s own first-listed provider when unset, and honors an explicit settings.rulesProviderChoices override', () => {
-  assert.equal(resolveProviderChoice({}, 'factions'), 'swn');
-  assert.equal(resolveProviderChoice({ rulesProviderChoices: { factions: 'gmatlascore' } }, 'factions'), 'gmatlascore');
-  assert.equal(resolveProviderChoice({}, 'not-a-real-area'), null);
-});
 
-test('resolveProviderChoice defaults to the Rules Profile\'s own Module for Profile (settings.statRuleset) when it\'s a valid, activated provider for that area — direct follow-up request: "include the assigned Module for Profile as the default option for each selection" — but never overrides an explicit rulesProviderChoices, and falls back to the old first-listed default when the module is unset, not one of that area\'s providers, or not yet activated', () => {
-  // 'factions' lists ['swn', 'gmatlascore'] — an activated swn module wins over the old 'swn' positional default (same value here, but via the new path).
-  assert.equal(resolveProviderChoice({ statRuleset: 'swn', gameSystemActivations: { swn: true } }, 'factions'), 'swn');
-  // 'tactical-combat' lists only ['fivepfh'] — statRuleset spells it '5pfh' (data/rulesets.js's own id), a known mismatch this resolves internally.
-  assert.equal(resolveProviderChoice({ statRuleset: '5pfh', gameSystemActivations: { fivepfh: true } }, 'tactical-combat'), 'fivepfh');
-  // Not activated yet — falls back to the area's first-listed provider, same as an unset module.
-  assert.equal(resolveProviderChoice({ statRuleset: '5pfh' }, 'tactical-combat'), 'fivepfh');
-  // A module that isn't a provider for this area at all (e.g. 'starforged' for 'colony-management': ['planetfall']) — falls back unchanged.
-  assert.equal(resolveProviderChoice({ statRuleset: 'starforged' }, 'colony-management'), 'planetfall');
-  // An explicit rulesProviderChoices always wins over the module default.
-  assert.equal(resolveProviderChoice({ statRuleset: 'swn', gameSystemActivations: { swn: true }, rulesProviderChoices: { factions: 'gmatlascore' } }, 'factions'), 'gmatlascore');
-});
 
-test('matchesEnabledModule (direct follow-up requests: "Limit the \'Available Packs\'/\'Statblock Templates (LifeForm)\' options to only those that belong to the module of the game system and other game system modules that might be enabled in the Rules Constitution") scopes to the Module for Profile plus any OTHER provider actually chosen for a gameplay area, not matchesProfileRuleset\'s broader whole-Genre-Pack scope', () => {
-  // null/undefined rulesetTag (a GM's own custom entry, or a generic one already tagged by Genre Pack id) is always shown.
-  assert.equal(matchesEnabledModule(null, { genrePack: 'sci-fi-generic', statRuleset: '5pfh' }), true);
-  // Tagged by the active Genre Pack id directly.
-  assert.equal(matchesEnabledModule('sci-fi-generic', { genrePack: 'sci-fi-generic' }), true);
-  // Tagged by the Module for Profile itself — '5pfh' (statRuleset's own id) resolves to the 'fivepfh' provider id.
-  assert.equal(matchesEnabledModule('fivepfh', { genrePack: 'sci-fi-generic', statRuleset: '5pfh' }), true);
-  // Tagged by an OTHER Game System the GM actually assigned to some Rules Constitution gameplay area AND actively activated — even though it's not the Module for Profile.
-  assert.equal(matchesEnabledModule('swn', { genrePack: 'sci-fi-generic', statRuleset: '5pfh', rulesProviderChoices: { factions: 'swn' }, gameSystemActivations: { swn: true } }), true);
-  // Chosen for an area but NOT activated yet — resolveActiveProviderChoice falls back past it (here to GMAtlas Core, 'factions' own fallback), so it's correctly excluded until actually enabled.
-  assert.equal(matchesEnabledModule('swn', { genrePack: 'sci-fi-generic', statRuleset: '5pfh', rulesProviderChoices: { factions: 'swn' } }), false);
-  // A Game System from the same Genre Pack that's neither the Module for Profile nor an actually-enabled Rules Constitution choice — excluded (the actual narrowing this request asked for), even though it's that area's own positional default.
-  assert.equal(matchesEnabledModule('planetfall', { genrePack: 'sci-fi-generic', statRuleset: '5pfh' }), false);
-});
 
-test('isGameSystemActivated: a provider with no requiresActivation flag is always activated; swn requires an explicit true under settings.gameSystemActivations', () => {
-  assert.equal(isGameSystemActivated({ settings: {} }, 'gmatlascore'), true, 'gmatlascore has no gate');
-  assert.equal(isGameSystemActivated({ settings: {} }, 'swn'), false, 'swn is gated, unset reads as not activated');
-  assert.equal(isGameSystemActivated({ settings: { gameSystemActivations: { swn: true } } }, 'swn'), true);
-  assert.equal(isGameSystemActivated({ settings: { gameSystemActivations: { swn: false } } }, 'swn'), false);
-});
 
 // Direct follow-up request: "have a checkbox to activate each game system
 // AND supplement so that default rules can be augmented by the
 // supplemental rules" — a supplement (a Compendium volume) needs its own
 // activation flag AND its parent system's, never standing alone.
-test('isSupplementActivated requires BOTH the supplement\'s own flag and its parent Game System\'s own activation — neither alone is enough', () => {
-  assert.equal(isSupplementActivated({ settings: {} }, 'fiveleagues', 'fiveleagues-compendium'), false, 'neither set');
-  assert.equal(isSupplementActivated({ settings: { gameSystemActivations: { 'fiveleagues-compendium': true } } }, 'fiveleagues', 'fiveleagues-compendium'), false, 'supplement on, parent system off');
-  assert.equal(isSupplementActivated({ settings: { gameSystemActivations: { fiveleagues: true } } }, 'fiveleagues', 'fiveleagues-compendium'), false, 'parent system on, supplement itself off');
-  assert.equal(isSupplementActivated({ settings: { gameSystemActivations: { fiveleagues: true, 'fiveleagues-compendium': true } } }, 'fiveleagues', 'fiveleagues-compendium'), true, 'both on');
-});
 
 test('GAME_SYSTEM_SUPPLEMENTS: every listed supplement\'s parent key is a real, requiresActivation RULES_PROVIDERS entry', () => {
   for (const [parentId, supplements] of Object.entries(GAME_SYSTEM_SUPPLEMENTS)) {
@@ -4927,29 +4990,19 @@ test('GAME_SYSTEM_SUPPLEMENTS: every listed supplement\'s parent key is a real, 
 // list, or it would silently vanish from the Licenses tab's own Game
 // System Activation section (drawers/index.js's gameSystemActivationSection
 // only ever renders what GAME_SYSTEM_FAMILIES names, not a generic scan).
-test('GAME_SYSTEM_FAMILIES covers every requiresActivation RULES_PROVIDERS entry and every GAME_SYSTEM_SUPPLEMENTS entry exactly once, and every supplement module\'s parentId matches its own real GAME_SYSTEM_SUPPLEMENTS key', () => {
-  const systemModuleIds = [];
-  const supplementModuleIds = [];
-  for (const family of GAME_SYSTEM_FAMILIES) {
-    assert.ok(family.label, 'every family needs a label');
-    for (const m of family.modules) {
-      assert.ok(m.label, `${family.label}: a module is missing its own label`);
-      if (m.kind === 'system') {
-        systemModuleIds.push(m.id);
-        assert.ok(RULES_PROVIDERS[m.id] && RULES_PROVIDERS[m.id].requiresActivation, `${family.label}: ${m.id} is not a real gated Game System`);
-      } else if (m.kind === 'supplement') {
-        supplementModuleIds.push(m.id);
-        const supplements = GAME_SYSTEM_SUPPLEMENTS[m.parentId] || [];
-        assert.ok(supplements.some((s) => s.id === m.id), `${family.label}: ${m.id}'s parentId ${m.parentId} doesn't actually list it`);
-      } else {
-        assert.fail(`${family.label}: unknown module kind ${m.kind}`);
-      }
-    }
+test('LICENSES: every gated Game System and every Supplement is granted by exactly one license; every license doc is a real catalog entry, listed once', () => {
+  const granted = LICENSES.flatMap((l) => l.systems);
+  for (const [id, prov] of Object.entries(RULES_PROVIDERS)) {
+    if (prov.requiresActivation) assert.equal(granted.filter((g) => g === id).length, 1, `${id} needs exactly one license`);
   }
-  const requiresActivationIds = Object.entries(RULES_PROVIDERS).filter(([, p]) => p.requiresActivation).map(([id]) => id);
-  assert.deepEqual(systemModuleIds.slice().sort(), requiresActivationIds.slice().sort(), 'every gated Game System must appear in exactly one family, with no duplicates');
-  const allSupplementIds = Object.values(GAME_SYSTEM_SUPPLEMENTS).flat().map((s) => s.id);
-  assert.deepEqual(supplementModuleIds.slice().sort(), allSupplementIds.slice().sort(), 'every supplement must appear in exactly one family, with no duplicates');
+  for (const sup of Object.values(GAME_SYSTEM_SUPPLEMENTS).flat()) assert.equal(granted.filter((g) => g === sup.id).length, 1, `${sup.id} needs exactly one license`);
+  const catalog = new Set(REFERENCE_LIBRARY_MANIFEST.map((e) => e.file));
+  const allDocs = LICENSES.flatMap((l) => l.docs);
+  for (const f of allDocs) assert.ok(catalog.has(f), `${f} is not in the Reference Library catalog`);
+  assert.equal(new Set(allDocs).size, allDocs.length, 'a sourcebook belongs to one license only');
+  assert.equal(new Set(LICENSES.map((l) => l.id)).size, LICENSES.length);
+  for (const l of LICENSES) assert.ok(l.label && l.family && l.text, `${l.id} needs label/family/text`);
+  assert.ok(licenseFamilies().every((f) => f.licenses.length));
 });
 
 // --- Phase A audit (A2/A3): Game System registry + gameplay-area resolution
@@ -4976,29 +5029,6 @@ test('every Game System carries a genrePackId, and a dedicatedRulesetId (its own
   }
 });
 
-test('resolveActiveProviderChoice resolves the GM\'s chosen provider when it\'s activated, falls back to whichever GMAtlas Core id (gmatlascore or sagaatlas) covers that area when the chosen one is disabled, and to null when GMAtlas Core has no coverage there', () => {
-  // fivepfh (tactical-combat's only provider) requires activation — unset,
-  // no GMAtlas Core listed for that area at all -> null, not a crash.
-  assert.equal(resolveActiveProviderChoice({ settings: {} }, 'tactical-combat'), null);
-  assert.equal(
-    resolveActiveProviderChoice({ settings: { gameSystemActivations: { fivepfh: true } } }, 'tactical-combat'),
-    'fivepfh',
-  );
-  // Factions: swn (gated, unset) falls back to gmatlascore, which IS listed
-  // for this area and is itself ungated.
-  assert.equal(resolveActiveProviderChoice({ settings: {} }, 'factions'), 'gmatlascore');
-  assert.equal(
-    resolveActiveProviderChoice({ settings: { gameSystemActivations: { swn: true } } }, 'factions'),
-    'swn',
-    'once activated, the GM\'s actual choice resolves again — re-enabling restores it with no other change needed',
-  );
-  // long-term-campaign-memory: sagaatlas is both the only provider AND
-  // ungated, so it always resolves directly, never needing the fallback
-  // path at all.
-  assert.equal(resolveActiveProviderChoice({ settings: {} }, 'long-term-campaign-memory'), 'sagaatlas');
-  // An unknown area resolves to null, same as resolveProviderChoice.
-  assert.equal(resolveActiveProviderChoice({ settings: {} }, 'not-a-real-area'), null);
-});
 
 // --- Sourcebook Inventory (Settings' "what third-party content is actually
 // used" view) — every curated entry must key against a real, currently-
@@ -5071,9 +5101,11 @@ test('universalSearch matches documents (library + Reference Library), Party tra
 // --- Phase 9: Activity -> Rules Lens recommender --------------------------
 import { ACTIVITIES, findActivity, suggestRulesLens } from '../src/domain/activities.js';
 
-test('every Activity references a real GAMEPLAY_AREAS area', () => {
-  const areas = new Set(GAMEPLAY_AREAS.map((g) => g.area));
-  for (const a of ACTIVITIES) assert.ok(areas.has(a.area), `Activity "${a.id}" references unknown area "${a.area}"`);
+test('every Activity suggests only registered RULES_PROVIDERS entries', () => {
+  for (const a of ACTIVITIES) {
+    assert.ok(a.providers.length, `Activity "${a.id}" has no suggested providers`);
+    for (const id of a.providers) assert.ok(RULES_PROVIDERS[id], `Activity "${a.id}" suggests unregistered provider "${id}"`);
+  }
 });
 
 test('findActivity resolves a known id and returns null for an unknown one', () => {
@@ -5253,7 +5285,7 @@ test('every Genre Pack carries a gameSystemIds list (Phase A audit, A2/A4); sci-
   assert.ok(sciFi, 'sci-fi-generic pack exists (replacing the old standalone "hostile" pack)');
   assert.deepEqual(
     [...sciFi.gameSystemIds].sort(),
-    ['fivepfh', 'gmatlascore', 'hostile', 'planetfall', 'sagaatlas', 'starforged', 'swn', 'traveller'].sort(),
+    ['fivepfh', 'fivepfh-compendium', 'gmatlascore', 'hostile', 'planetfall', 'sagaatlas', 'starforged', 'swn', 'traveller'].sort(),
   );
   assert.deepEqual(GENRE_PACKS.find((p) => p.id === 'dnd5e').gameSystemIds, ['dnd5e']);
   assert.deepEqual(GENRE_PACKS.find((p) => p.id === 'cyberpunk').gameSystemIds, []);
@@ -7827,7 +7859,17 @@ test('computeFactionMaxHp sums 4 + hpValue(force)+hpValue(cunning)+hpValue(wealt
   assert.equal(getEntity(camp, factionId).hp, 7, 'hp clamps down to the new, lower max');
 });
 
+// These Faction Turn Engine tests exercise SWN's own catalog, so the
+// campaign explicitly picks SWN for Rules Constitution -> Factions (an
+// unset pick now resolves to GMAtlas Core).
+function useSwnFactions(camp) {
+  const choices = (camp.settings && camp.settings.rulesProviderChoices) || {};
+  if (choices.factions) return camp;
+  return { ...camp, settings: { ...camp.settings, rulesProviderChoices: { ...choices, factions: 'swn' } } };
+}
+
 function makeFactionWithHomeworld(camp, name, { force = 3, cunning = 3, wealth = 3, facCreds = 10 } = {}) {
+  camp = useSwnFactions(camp);
   let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name }));
   let locationId; ({ campaign: camp, id: locationId } = createEntity(camp, { type: 'location', name: `${name} Homeworld` }));
   camp = updateEntity(camp, factionId, { force, cunning, wealth, facCreds, homeworldId: locationId });
@@ -8026,7 +8068,7 @@ test('useAssetAbility resolves the small set of automatic dice-for-FacCreds abil
 });
 
 test('a faction goal is tracked as a kind:"faction-goal" Thread (mirrors the Pressure Track exactly); advanceGoalProgress completes it and awards XP equal to its difficulty, clearing currentGoalId', () => {
-  let camp = defaultCampaign();
+  let camp = useSwnFactions(defaultCampaign());
   let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
   camp = updateEntity(camp, factionId, { currentGoalId: 'blood-the-enemy' });
   camp = ensureFactionGoalTrack(camp, factionId, 'blood-the-enemy');
@@ -8045,7 +8087,7 @@ test('a faction goal is tracked as a kind:"faction-goal" Thread (mirrors the Pre
 });
 
 test('factionsWithGoalNearCompletion mirrors factionsUnderPressure exactly: surfaces a faction whose goal track is >=75% filled', () => {
-  let camp = defaultCampaign();
+  let camp = useSwnFactions(defaultCampaign());
   let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Sable Cartel' }));
   camp = updateEntity(camp, factionId, { currentGoalId: 'peaceable-kingdom' }); // difficulty 1 -> clamped to a 2-segment thread
   camp = ensureFactionGoalTrack(camp, factionId, 'peaceable-kingdom');
@@ -8572,11 +8614,12 @@ test('findGmatlasAssetAnyStat finds an asset regardless of stat track, and retur
   assert.equal(findGmatlasAssetAnyStat('does-not-exist'), null);
 });
 
-test('factionProviderId resolution order: a faction\'s own rulesProvider override beats the campaign\'s settings.rulesProviderChoices.factions default, which beats the hardcoded "swn" fallback', () => {
-  assert.equal(factionProviderId({ settings: {} }, null), 'swn');
+test('factionProviderId resolution order: a faction\'s own rulesProvider override beats the profile\'s stored Rules Constitution -> Factions pick, which beats that area\'s Module-for-Profile default (GMAtlas Core)', () => {
+  assert.equal(factionProviderId({ settings: {} }, null), 'gmatlascore');
+  assert.equal(factionProviderId({ settings: { rulesProviderChoices: { factions: 'swn' } } }, null), 'swn', 'a stored pick is honored even if SWN is no longer owned, so existing faction data never switches catalogs');
   assert.equal(factionProviderId({ settings: { rulesProviderChoices: { factions: 'gmatlascore' } } }, { rulesProvider: '' }), 'gmatlascore');
   assert.equal(factionProviderId({ settings: { rulesProviderChoices: { factions: 'gmatlascore' } } }, { rulesProvider: 'swn' }), 'swn', 'per-faction override wins over the campaign default');
-  assert.equal(factionProviderFor({ settings: {} }, null), FACTION_RULES_PROVIDERS.swn);
+  assert.equal(factionProviderFor({ settings: {} }, null), FACTION_RULES_PROVIDERS.gmatlascore);
 });
 
 test('a faction entity defaults rulesProvider to \'\' (campaign default)', () => {
@@ -10622,7 +10665,7 @@ test('listEligibleCrewMembers returns party members (party.js\'s listPartyMember
 test('advanceCampaignTurnWithAccrual also resets crewTaskProgress.doneMemberIds (direct follow-up request) — Crew Tasks eligibility clears whenever the Campaign Turn actually advances', () => {
   const camp = { colony: { fields: { campaignTurn: 1 }, crew: [], encounters: [] }, crewTaskProgress: { doneMemberIds: ['npc1', 'npc2'] } };
   const { campaign: next } = advanceCampaignTurnWithAccrual(camp);
-  assert.deepEqual(next.crewTaskProgress, { doneMemberIds: [] });
+  assert.deepEqual(next.crewTaskProgress, { doneMemberIds: [], assignments: {} });
 });
 
 // --- combat tracker (direct request) ---------------------------------------
@@ -11224,4 +11267,179 @@ test('isFiveLeaguesWeaponRanged (p.39 vs pp.40-44): a catalog-filled ranged weap
   const weapons = findByName(camp, name).statblocks[gi].weapons;
   assert.equal(isFiveLeaguesWeaponRanged(weapons[0]), true, 'Self bow (filled from the real catalog) reads as ranged');
   assert.equal(isFiveLeaguesWeaponRanged(weapons[1]), false, 'Bastard sword (filled from the real catalog) reads as melee');
+});
+
+// Direct follow-up request: a new NPC created into a WHO role gets its
+// role's default statblock from the ACTIVE profile's module — Protagonist a
+// character sheet, Antagonist/Bystander that module's Bestiary statblock.
+import { applyNewNpcRoleStatblock } from '../src/domain/entities.js';
+test('applyNewNpcRoleStatblock: Protagonist gets the passed settings\' character sheet (+#character so it sticks), Antagonist/Bystander get that module\'s own Bestiary template — using the passed settings, not the raw doc\'s', () => {
+  const base = defaultCampaign();
+  base.settings.statRuleset = 'starforged';
+  const profileSettings = { ...base.settings, statRuleset: 'fiveleagues' };
+
+  const p = createEntity(base, { type: 'npc', name: 'Hero' });
+  const pc = applyNewNpcRoleStatblock(p.campaign, p.id, 'protagonist', profileSettings);
+  const hero = pc.entities.items.find((e) => e.id === p.id);
+  assert.ok(hero.tags.includes('character'));
+  assert.equal(hero.statblocks.length, 1);
+  assert.equal(hero.statblocks[0].kind, 'character');
+  assert.equal(hero.statblocks[0].ruleset, 'fiveleagues');
+  // Survives a later edit (ensureAutoStatblock keeps a #character NPC's sheet active).
+  const edited = updateEntity(pc, p.id, { name: 'Hero II' }).entities.items.find((e) => e.id === p.id);
+  assert.equal(edited.statblocks.filter((g) => !g.archived)[0].kind, 'character');
+
+  // Party's ＋ 'Create New (Character)' uses the same default as a new Protagonist.
+  const ch = createEntity(base, { type: 'npc', name: 'Recruit' });
+  const chNpc = applyNewNpcRoleStatblock(ch.campaign, ch.id, 'character', profileSettings).entities.items.find((e) => e.id === ch.id);
+  assert.ok(chNpc.tags.includes('character'));
+  assert.deepEqual(chNpc.statblocks.map((g) => g.kind + ':' + g.ruleset), ['character:fiveleagues']);
+
+  for (const role of ['antagonist', 'bystander']) {
+    const a = createEntity(base, { type: 'npc', name: role });
+    const ac = applyNewNpcRoleStatblock(a.campaign, a.id, role, profileSettings);
+    const npc = ac.entities.items.find((e) => e.id === a.id);
+    assert.equal(npc.statblocks.length, 1);
+    assert.equal(npc.statblocks[0].kind, 'npc');
+    assert.equal(npc.statblocks[0].templateId, 'fiveleagues-lifeform');
+    assert.ok(!(npc.tags || []).includes('character'));
+  }
+});
+
+// One-time move from per-profile Game System Activation to install-wide
+// Licenses + Rules Constitution picks — what keeps existing campaigns
+// showing what they showed before.
+import { migrateLicensesFromActivations, migrateLicensesV2 } from '../src/domain/rulesProfiles.js';
+import { setLicense } from '../src/domain/entitlements.js';
+test('migrateLicensesFromActivations: every activated book becomes owned, and each profile gets the area picks that preserve what it showed — only filling unset picks, once', () => {
+  const base = defaultAppConfig();
+  const profile = (name, ruleset) => ({ ...defaultRulesProfile(name), ruleset: { ...defaultRulesProfile(name).ruleset, ...ruleset } });
+  const cfg = {
+    ...base,
+    profiles: [
+      profile('SF', { statRuleset: 'starforged', genrePack: 'sci-fi-generic', gameSystemActivations: { fivepfh: true, planetfall: true, swn: true } }),
+      profile('FL', { statRuleset: 'fiveleagues', genrePack: 'fantasy', gameSystemActivations: { fiveleagues: true, 'fiveleagues-compendium': true }, rulesProviderChoices: { factions: 'gmatlascore' } }),
+    ],
+  };
+  delete cfg.licenses;
+  const out = migrateLicensesFromActivations(cfg);
+  assert.deepEqual(Object.keys(out.licenses).sort(), ['fiveleagues', 'fiveleagues-compendium', 'fivepfh', 'planetfall', 'swn']);
+  const sf = out.profiles[0].ruleset.rulesProviderChoices;
+  assert.equal(sf['colony-management'], 'planetfall');
+  assert.equal(sf['campaign-turn'], 'fivepfh', 'Starship tab kept on a Starforged profile');
+  assert.equal(sf.factions, 'swn');
+  assert.equal(sf['frontier-setting'], 'hostile', 'sci-fi always resolved Frontier setting to Hostile');
+  const fl = out.profiles[1].ruleset.rulesProviderChoices;
+  assert.equal(fl['character-creation'], 'fiveleagues-compendium');
+  assert.equal(fl.bestiary, 'fiveleagues-compendium');
+  assert.equal(fl.factions, 'gmatlascore', 'an existing pick is never overwritten');
+  assert.equal(fl['campaign-turn'], undefined, 'Five Leagues is the module — Warband comes with it');
+  assert.equal(fl['frontier-setting'], undefined, 'not a sci-fi profile');
+  assert.equal(migrateLicensesFromActivations(out), out, 'idempotent once licenses exist');
+
+  // And the migrated profile really shows the same things through the resolver.
+  const settings = { ...out.profiles[0].ruleset, licenses: out.licenses };
+  for (const id of ['fivepfh', 'planetfall', 'swn']) assert.equal(isGameSystemActivated({ settings }, id), true, id);
+
+  assert.deepEqual(setLicense(out, 'dnd5e', true).licenses.dnd5e, true);
+
+  const v2 = migrateLicensesV2(out);
+  assert.equal(v2.licenses.hostile, true, 'Hostile was free before and this install picked it for Frontier setting');
+  assert.equal(v2.licenses.traveller, undefined, 'no Traveller profile');
+  assert.equal(v2.licensesVersion, 2);
+  assert.equal(migrateLicensesV2(v2), v2, 'runs once');
+});
+
+// Settings -> Campaigns -> Source Data: a pack is offered only when its
+// sourcebook's license is owned and in use by the campaign's profile.
+import { isPackInUse } from '../src/data/rulesConstitution.js';
+test('isPackInUse: Source Data lists only packs whose sourcebook license is owned and designated in the campaign', () => {
+  const pack = (id) => CONTENT_PACKS_MANIFEST.find((p) => p.id === id);
+  const s = { statRuleset: 'starforged', licenses: { hostile: true, planetfall: true, fiveleagues: true }, rulesProviderChoices: { 'frontier-setting': 'hostile', 'colony-management': 'planetfall' } };
+  assert.equal(isPackInUse(s, pack('hostile-near-earth-zone')), true);
+  assert.equal(isPackInUse(s, pack('hostile-fomalhaut-settlement-zone')), true);
+  assert.equal(isPackInUse(s, pack('planetfall-lifeforms')), true);
+  assert.equal(isPackInUse(s, pack('fiveleagues-core-enemies')), false, 'owned but not designated');
+  assert.equal(isPackInUse(s, pack('dnd5e-srd-monsters')), false, 'open, but this campaign is not D&D');
+  assert.equal(isPackInUse({ statRuleset: 'dnd5e' }, pack('dnd5e-srd-monsters')), true);
+  assert.equal(isPackInUse({ ...s, rulesProviderChoices: { 'frontier-setting': '' } }, pack('hostile-near-earth-zone')), false, 'Hostile owned but no longer picked');
+  const fl = { statRuleset: 'fiveleagues', licenses: { fiveleagues: true, 'fiveleagues-compendium': true } };
+  assert.equal(isPackInUse(fl, pack('fiveleagues-core-enemies')), true);
+  assert.equal(isPackInUse(fl, pack('fiveleagues-compendium-enemies')), false, 'Compendium owned but not picked for any area');
+  assert.equal(isPackInUse({ ...fl, rulesProviderChoices: { bestiary: 'fiveleagues-compendium' } }, pack('fiveleagues-compendium-enemies')), true);
+  assert.ok(CONTENT_PACKS_MANIFEST.every((p) => licenseFor(p.supplement || p.ruleset)), 'every shipped pack belongs to a license');
+});
+
+// The Docs library lists no default entries: only sourcebooks already
+// stored in this browser AND used by the active campaign's profile; the
+// rest of the campaign's sourcebooks are offered for loading.
+import { listCampaignReferenceDocuments } from '../src/domain/documents.js';
+test('listCampaignReferenceDocuments lists only sourcebooks stored in this browser AND used by the campaign — no default entries', () => {
+  const camp = defaultCampaign();
+  camp.settings = { ...camp.settings, statRuleset: 'traveller', genrePack: 'sci-fi-generic', licenses: { traveller: true }, rulesProviderChoices: {} };
+  const travellerCore = 'assets/docs/Traveller/Traveller-2e-Core-Rulebook.pdf';
+  const starforged = 'assets/docs/Starforged/Ironsworn-Starforged-rulebook.pdf';
+  assert.deepEqual(listCampaignReferenceDocuments(camp).map((r) => r.file), [], 'nothing stored in this browser yet — no default entries');
+  const stored = new Set([travellerCore, starforged]);
+  assert.deepEqual(listCampaignReferenceDocuments(camp, stored).map((r) => r.file), [travellerCore], 'Starforged is stored too, but a Traveller campaign never shows it');
+  assert.ok(!universalSearch(camp, 'starforged', { loadedDocKeys: stored }).some((r) => r.category === 'Documents'));
+});
+
+// Crew Tasks table (Campaign panel's Starship/Colony steps that show Crew
+// Tasks): one row per Party member, a planned task each, performed once.
+import { setCrewTaskAssignment, crewTaskRows, freshCrewTaskProgress } from '../src/domain/crewTasks.js';
+test('crewTaskRows/setCrewTaskAssignment: one row per Party member with their planned task; a member who already acted keeps their task; every Campaign Turn advance (Starship and Warband too) resets', () => {
+  let camp = defaultCampaign();
+  camp.crewTasks = { tasks: [{ id: 'train', label: 'Train', text: 'Earn 1 XP.' }, { id: 'trade', label: 'Trade', text: 'Roll on Trade.' }] };
+  let a, b; ({ campaign: camp, id: a } = createEntity(camp, { type: 'npc', name: 'Ada' })); ({ campaign: camp, id: b } = createEntity(camp, { type: 'npc', name: 'Bo' }));
+  camp = addEntityTag(addEntityTag(camp, a, 'character'), b, 'character');
+  camp = setCrewTaskAssignment(camp, a, 'train');
+  let rows = crewTaskRows(camp);
+  assert.deepEqual(rows.map((r) => [r.member.name, r.taskId, r.done]), [['Ada', 'train', false], ['Bo', '', false]]);
+  assert.equal(rows[0].task.label, 'Train');
+  camp = assignCrewTask(camp, 'train', a);
+  camp = setCrewTaskAssignment(camp, a, 'trade');
+  assert.equal(crewTaskRows(camp)[0].taskId, 'train', 'already acted — task unchanged');
+  assert.equal(crewTaskRows(camp)[0].done, true);
+  camp = setCrewTaskAssignment(camp, b, 'trade');
+  camp = setCrewTaskAssignment(camp, b, '');
+  assert.equal(crewTaskRows(camp)[1].taskId, '', 'empty pick clears');
+  for (const advance of [startNextStarshipCampaignTurn, startNextWarbandCampaignTurn]) {
+    assert.deepEqual(advance(camp).campaign.crewTaskProgress, freshCrewTaskProgress());
+  }
+});
+
+import { genreStyleFamily } from '../src/data/genrePacks.js';
+test('genreStyleFamily picks the genre stylesheet: fantasy for Fantasy/D&D 5e packs or any Ironsworn profile, sci-fi otherwise', () => {
+  assert.equal(genreStyleFamily('fantasy'), 'fantasy');
+  assert.equal(genreStyleFamily('dnd5e'), 'fantasy');
+  assert.equal(genreStyleFamily('sci-fi-generic', 'ironsworn'), 'fantasy');
+  assert.equal(genreStyleFamily('sci-fi-generic', 'starforged'), 'sci-fi');
+  assert.equal(genreStyleFamily('cyberpunk'), 'sci-fi');
+  assert.equal(genreStyleFamily(undefined), 'sci-fi');
+});
+
+// Party Trackers follow the profile's game system: a module's trackers go
+// when it stops being used, including ones from before trackers were tagged.
+import { syncModuleTrackers, tagLegacyModuleTrackers } from '../src/domain/party.js';
+test('syncModuleTrackers removes a game system\'s Party Trackers once the profile no longer uses it (legacy untagged ones too, after tagLegacyModuleTrackers), and never touches a GM\'s own', () => {
+  let camp = defaultCampaign();
+  const fl = { ...camp.settings, statRuleset: 'fiveleagues', licenses: { fiveleagues: true } };
+  camp = syncModuleTrackers(camp, fl);
+  assert.deepEqual(listPartyTrackers(camp).map((t) => t.name).sort(), ['Enemy Plans', 'Enemy Threat', 'Gold Marks']);
+  camp = addPartyTracker(camp, { name: 'Homebrew', kind: 'counter' });
+  const sf = { ...camp.settings, statRuleset: 'starforged', licenses: { fiveleagues: true } };
+  camp = syncModuleTrackers(camp, sf);
+  assert.deepEqual(listPartyTrackers(camp).map((t) => t.name).sort(), ['Homebrew', 'Momentum', 'Supply'], 'Five Leagues trackers gone, Starforged ones added, Homebrew kept');
+
+  // A tracker from before moduleId existed.
+  let old = defaultCampaign();
+  old = addPartyTracker(old, { name: 'Gold Marks', kind: 'currency' });
+  old = addPartyTracker(old, { name: 'Homebrew', kind: 'counter' });
+  assert.equal(syncModuleTrackers(old, sf).party.trackers.some((t) => t.name === 'Gold Marks'), true, 'untagged — left alone');
+  old = tagLegacyModuleTrackers(old);
+  assert.equal(old.party.trackers.find((t) => t.name === 'Gold Marks').moduleId, 'fiveleagues');
+  assert.equal(old.party.trackers.find((t) => t.name === 'Homebrew').moduleId, undefined);
+  assert.deepEqual(syncModuleTrackers(old, sf).party.trackers.map((t) => t.name).sort(), ['Homebrew', 'Momentum', 'Supply']);
+  assert.equal(tagLegacyModuleTrackers(old), old, 'idempotent once tagged');
 });

@@ -250,6 +250,29 @@ const DEFAULT_NPC_TEMPLATE_BY_RULESET = {
   dnd5e: 'dnd5e-lifeform',
 };
 
+/** True when a Bestiary (kind 'npc') group still holds exactly what its
+ *  template would create today — no GM edits to any field, and nothing
+ *  added beyond its fields. Anything that can't be confirmed untouched
+ *  (an edited value, a user-edited template, extra data) reads as edited,
+ *  so it's never discarded by mistake. */
+export function isPristineStatblockGroup(group, settings) {
+  if (!group || group.kind !== 'npc') return false;
+  const extra = Object.keys(group).filter((k) => !['kind', 'templateId', 'fields', 'archived'].includes(k));
+  if (extra.some((k) => { const v = group[k]; return Array.isArray(v) ? v.length : (v != null && v !== ''); })) return false;
+  const fresh = makeStatblock('npc', null, group.templateId, settings);
+  const fields = group.fields || [];
+  if (fresh.templateId !== group.templateId || fresh.fields.length !== fields.length) return false;
+  return fields.every((f, i) => {
+    const g = fresh.fields[i];
+    return f.key === g.key && String(f.value == null ? '' : f.value) === String(g.value == null ? '' : g.value) && (f.max == null ? null : f.max) === (g.max == null ? null : g.max);
+  });
+}
+
+/** The active module's own Bestiary template id, or null for makeStatblock's generic fallback. */
+export function defaultNpcTemplateId(settings) {
+  return DEFAULT_NPC_TEMPLATE_BY_RULESET[settings && settings.statRuleset] || null;
+}
+
 /**
  * Ensure an entity carries the statblock groups its current type/tags call
  * for. Mutates the passed entity in place and returns it (caller supplies an
@@ -296,14 +319,18 @@ export function ensureAutoStatblock(entity, settings) {
       if (!entity.statblocks.some((g) => g.kind === 'character')) {
         entity.statblocks.push(makeStatblock('character', settings && settings.statRuleset));
       }
+      // A Character has no Bestiary statblock: an untouched auto-created
+      // one is dropped outright. One the GM actually edited is kept, but
+      // inactive (archived) — the Entity Editor lists it under "Inactive
+      // statblocks" so it can be removed deliberately, never silently lost.
+      entity.statblocks = entity.statblocks.filter((g) => !(g.kind === 'npc' && isPristineStatblockGroup(g, settings)));
       for (const g of entity.statblocks) {
         if (g.kind === 'character') g.archived = false;
         if (g.kind === 'npc') g.archived = true;
       }
     } else {
       if (!entity.statblocks.some((g) => g.kind === 'npc')) {
-        const templateId = DEFAULT_NPC_TEMPLATE_BY_RULESET[settings && settings.statRuleset] || null;
-        entity.statblocks.push(makeStatblock('npc', null, templateId, settings));
+        entity.statblocks.push(makeStatblock('npc', null, defaultNpcTemplateId(settings), settings));
       }
       for (const g of entity.statblocks) {
         if (g.kind === 'npc') g.archived = false;

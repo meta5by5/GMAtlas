@@ -12,6 +12,7 @@ import {
   addStatblockWeapon, updateStatblockWeapon, removeStatblockWeapon, setStatblockGear,
   addStatblockItem, updateStatblockItem, removeStatblockItem,
   addStatblockAttack, updateStatblockAttack, removeStatblockAttack,
+  makeStatblock, defaultNpcTemplateId, hasCharacterTag,
 } from './statblocks.js';
 import { economyTypesForModel } from '../data/economyTypes.js';
 import { SWN_XP_TABLE } from '../data/swnFactionData.js';
@@ -753,6 +754,30 @@ export function createEntity(campaign, opts) {
   const next = clone(campaign);
   const rec = _create(next, opts);
   return { campaign: next, id: rec.id };
+}
+
+/** Gives a JUST-CREATED NPC the default statblock for the scene role it was
+ *  created into: a Protagonist gets the module's character sheet (and the
+ *  #character tag that keeps it — ensureAutoStatblock otherwise swaps an
+ *  untagged NPC back to Bestiary on its next edit; it also makes it a Party
+ *  member and a valid Protagonist-picker candidate), anyone else gets the
+ *  module's own Bestiary statblock. Replaces the entity's statblocks
+ *  outright, so only call it on a brand-new, untouched NPC. `settings` is
+ *  passed explicitly because a store.update() mutator sees the raw doc, not
+ *  the active Rules Profile's overlaid statRuleset. */
+export function applyNewNpcRoleStatblock(campaign, id, role, settings) {
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  if (!e || e.type !== 'npc') return next;
+  const s = settings || next.settings;
+  if (role === 'protagonist' || role === 'character') {
+    if (!hasCharacterTag(e)) e.tags = [...(e.tags || []), 'character'];
+    e.statblocks = [makeStatblock('character', s && s.statRuleset)];
+  } else {
+    if (hasCharacterTag(e)) return next;
+    e.statblocks = [makeStatblock('npc', null, defaultNpcTemplateId(s), s)];
+  }
+  return next;
 }
 
 /** Create an Item entity from a gear/weapon/armor catalog entry (ADR 0012,

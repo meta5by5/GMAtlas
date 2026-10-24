@@ -98,7 +98,7 @@ campaign management (list/switch/rename/create, and reassigning an
 existing campaign to a different profile — `reassignCampaignProfile`,
 appConfig-only, never touches that campaign's own document) lives in its
 own **Campaigns** tab; every field a profile owns (ruleset, Rules
-Constitution, Game System Activation, visible modules, Storyboard
+Constitution, visible modules, Storyboard
 positions) lives in **Ruleset Profile Editor**, which selects a profile
 and edits it as a whole. Edits there mutate an in-memory draft
 (`shell.js`'s `profileDrafts`, one per profile id touched this session —

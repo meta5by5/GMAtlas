@@ -13,6 +13,7 @@ import {
   GMATLAS_FACTION_ASSETS, GMATLAS_FACTION_TAGS, GMATLAS_FACTION_GOALS, GMATLAS_ASSET_MAINTENANCE,
   GMATLAS_AUTOMATIC_ASSET_ABILITIES, findGmatlasAssetAnyStat, findGmatlasTag, findGmatlasGoal,
 } from './gmatlasFactionData.js';
+import { resolveActiveProviderChoice } from './rulesConstitution.js';
 
 export const FACTION_RULES_PROVIDERS = {
   swn: {
@@ -41,19 +42,18 @@ export const FACTION_RULES_PROVIDERS = {
   },
 };
 
-/** Resolution order: a faction's own override wins, then the campaign's
- *  default choice (Settings -> Rules Constitution -> Factions), then
- *  `'swn'` — unchanged default so an existing campaign/test behaves
- *  exactly as before this provider indirection existed. Callers that also
- *  need to respect the Game System Activation gate (rulesConstitution.js's
- *  `isGameSystemActivated`) do that check separately, at the UI selection
- *  point — this function always resolves whatever is actually stored,
- *  gated or not, so already-existing campaign data never silently changes
- *  which catalog it reads from. */
+/** Resolution order: a faction's own override wins, then the profile's
+ *  stored Rules Constitution -> Factions pick (honored as stored even if
+ *  the book is no longer owned, so existing faction data never silently
+ *  switches catalogs), then whatever that area resolves to by default —
+ *  GMAtlas Core, since no Module for Profile carries faction rules of its
+ *  own. store.js's one-time license migration writes an explicit 'swn'
+ *  pick for every profile that had SWN activated before this model. */
 export function factionProviderId(campaign, faction) {
   return (faction && faction.rulesProvider) ||
     (campaign && campaign.settings && campaign.settings.rulesProviderChoices && campaign.settings.rulesProviderChoices.factions) ||
-    'swn';
+    resolveActiveProviderChoice(campaign, 'factions') ||
+    'gmatlascore';
 }
 
 export function factionProviderFor(campaign, faction) {

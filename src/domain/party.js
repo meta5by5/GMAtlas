@@ -209,8 +209,8 @@ export function gaugeWindow(value, min, max, size = 10) {
  *  statRuleset itself is the only real "is this the active one" signal —
  *  removes both (by moduleId, not name, so a GM's own same-named tracker
  *  is never caught in this) the moment statRuleset moves away from it. */
-export function ensurePartyStarforgedTrackers(campaign) {
-  const isStarforged = ((campaign.settings && campaign.settings.statRuleset) || 'starforged') === 'starforged';
+export function ensurePartyStarforgedTrackers(campaign, settings = campaign.settings) {
+  const isStarforged = ((settings && settings.statRuleset) || 'starforged') === 'starforged';
   const next = clone(campaign);
   const party = ensure(next);
   if (!isStarforged) {
@@ -259,8 +259,8 @@ export function ensurePartyStarforgedTrackers(campaign) {
  *  all three now get torn down (by moduleId, not name, so a GM's own
  *  same-named tracker is never caught in this) the moment that checkbox
  *  is unchecked, rather than staying forever once created. */
-export function ensurePartyFiveLeaguesTrackers(campaign) {
-  const isFiveLeaguesActive = isGameSystemActivated(campaign, 'fiveleagues');
+export function ensurePartyFiveLeaguesTrackers(campaign, settings = campaign.settings) {
+  const isFiveLeaguesActive = isGameSystemActivated({ settings }, 'fiveleagues');
   const next = clone(campaign);
   const party = ensure(next);
   if (!isFiveLeaguesActive) {
@@ -513,5 +513,34 @@ export function clearPartyStarship(campaign) {
   if (target && Array.isArray(target.tags)) target.tags = target.tags.filter((t) => t.toLowerCase() !== 'starship');
   party.relationships = party.relationships.filter((r) => !(r.type === 'owns' && r.to === party.starshipEntityId));
   party.starshipEntityId = null;
+  return next;
+}
+
+/** Brings a campaign's module-owned Party Trackers in line with its profile:
+ *  adds the trackers of a module that's in use, removes those (tagged
+ *  moduleId) of one that no longer is. A GM's own trackers are never
+ *  touched. `settings` is the profile-overlaid settings (a store.update()
+ *  mutator only sees the raw doc). */
+export function syncModuleTrackers(campaign, settings = campaign.settings) {
+  return ensurePartyFiveLeaguesTrackers(ensurePartyStarforgedTrackers(campaign, settings), settings);
+}
+
+/** Older campaigns' module trackers were created before trackers carried a
+ *  moduleId, so nothing ever removed them when the game system changed.
+ *  Tags an untagged tracker whose name is one a module seeds with that
+ *  module's id. Idempotent. */
+export function tagLegacyModuleTrackers(campaign) {
+  const trackers = campaign && campaign.party && Array.isArray(campaign.party.trackers) ? campaign.party.trackers : null;
+  const moduleFor = (t) => {
+    const name = String(t.name || '').trim().toLowerCase();
+    return Object.keys(RULESET_OWNED_TRACKER_NAMES).find((m) => RULESET_OWNED_TRACKER_NAMES[m].includes(name));
+  };
+  if (!trackers || !trackers.some((t) => !t.moduleId && moduleFor(t))) return campaign;
+  const next = clone(campaign);
+  for (const t of next.party.trackers) {
+    if (t.moduleId) continue;
+    const moduleId = moduleFor(t);
+    if (moduleId) t.moduleId = moduleId;
+  }
   return next;
 }

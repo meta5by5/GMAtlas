@@ -7,10 +7,10 @@ import { universalSearch } from '../domain/search.js';
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-export function renderSearchPanel(doc, query) {
+export function renderSearchPanel(doc, query, loadedDocKeys) {
   const q = String(query || '').trim();
   if (!q) return '<p class="ws-placeholder">Type to search Cast, Journal, Oracle tables, Documents, Party, and Colony — all at once.</p>';
-  const results = universalSearch(doc, q);
+  const results = universalSearch(doc, q, { loadedDocKeys });
   if (!results.length) return `<p class="ws-placeholder">No matches for "${esc(q)}".</p>`;
   let out = '';
   let lastCategory = null;

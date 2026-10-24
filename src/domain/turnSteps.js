@@ -16,6 +16,7 @@
 // Pure functions only. No DOM, no localStorage.
 
 import { advanceCampaignTurnWithAccrual } from './colony.js';
+import { freshCrewTaskProgress } from './crewTasks.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 
@@ -174,6 +175,7 @@ export function startNextStarshipCampaignTurn(campaign) {
   const party = next.party && typeof next.party === 'object' ? next.party : (next.party = {});
   const turn = (Number(party.starshipCampaignTurn) || 0) + 1;
   party.starshipCampaignTurn = turn;
+  next.crewTaskProgress = freshCrewTaskProgress();
   const groups = resolveGroups(next, 'starship');
   if (groups.length) {
     next.turnStepProgress = next.turnStepProgress || {};
@@ -191,6 +193,7 @@ export function startNextWarbandCampaignTurn(campaign) {
   const party = next.party && typeof next.party === 'object' ? next.party : (next.party = {});
   const turn = (Number(party.warbandCampaignTurn) || 0) + 1;
   party.warbandCampaignTurn = turn;
+  next.crewTaskProgress = freshCrewTaskProgress();
   const groups = resolveGroups(next, 'warband');
   if (groups.length) {
     next.turnStepProgress = next.turnStepProgress || {};

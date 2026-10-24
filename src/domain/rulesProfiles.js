@@ -214,6 +214,55 @@ export function backfillDefaultCrewTasks(appConfig, seedTasks) {
  *  fires once" posture as migrate.js's own SWN grandfather step. Called
  *  once from store.js's load(), alongside the Turn Step List/Crew Tasks
  *  backfills. */
+/** One-time move from per-profile Game System Activation to install-wide
+ *  Licenses + per-profile Rules Constitution picks (design/adr/licenses-
+ *  and-rules-constitution.md). Runs only while `appConfig.licenses` is
+ *  still absent. Every book any profile had activated becomes owned, and
+ *  each profile gets the area picks that keep what it showed before:
+ *  Planetfall -> Colony management; a non-module 5PFH/Five Leagues ->
+ *  Campaign turn (5PFH wins if a profile had both); a Compendium -> its
+ *  areas; SWN -> Factions; a sci-fi profile -> Frontier setting = Hostile
+ *  (it always resolved to Hostile before). Only fills UNSET picks. The old
+ *  gameSystemActivations stay on each profile untouched (now inert). */
+export function migrateLicensesFromActivations(appConfig) {
+  if (appConfig.licenses !== undefined) return appConfig;
+  const licenses = {};
+  for (const p of appConfig.profiles) {
+    for (const [id, on] of Object.entries((p.ruleset && p.ruleset.gameSystemActivations) || {})) if (on) licenses[id] = true;
+  }
+  const profiles = appConfig.profiles.map((p) => {
+    const ruleset = p.ruleset || {};
+    const act = ruleset.gameSystemActivations || {};
+    const module = ruleset.statRuleset === '5pfh' ? 'fivepfh' : ruleset.statRuleset;
+    const choices = { ...(ruleset.rulesProviderChoices || {}) };
+    const fill = (area, id) => { if (!choices[area]) choices[area] = id; };
+    if (act.planetfall) fill('colony-management', 'planetfall');
+    if (act.fivepfh && module !== 'fivepfh') fill('campaign-turn', 'fivepfh');
+    if (act.fiveleagues && module !== 'fiveleagues') fill('campaign-turn', 'fiveleagues');
+    if (act['fiveleagues-compendium'] && act.fiveleagues) { fill('character-creation', 'fiveleagues-compendium'); fill('bestiary', 'fiveleagues-compendium'); }
+    if (act['fivepfh-compendium'] && act.fivepfh) fill('bestiary', 'fivepfh-compendium');
+    if (act.swn) fill('factions', 'swn');
+    if ((ruleset.genrePack || 'sci-fi-generic') === 'sci-fi-generic') fill('frontier-setting', 'hostile');
+    return { ...p, ruleset: { ...ruleset, rulesProviderChoices: choices } };
+  });
+  return { ...appConfig, licenses, profiles };
+}
+
+/** Second license step (data/licenses.js registry, v0.83.0): Hostile and
+ *  Traveller used to be free/ungated, so an install whose profiles already
+ *  relied on them is granted those licenses — Hostile when any profile
+ *  picks it for Frontier setting, Traveller when any profile's Module for
+ *  Profile is Traveller. Runs once (appConfig.licensesVersion), after
+ *  migrateLicensesFromActivations. */
+export function migrateLicensesV2(appConfig) {
+  if ((appConfig.licensesVersion || 1) >= 2) return appConfig;
+  const licenses = { ...(appConfig.licenses || {}) };
+  const profiles = appConfig.profiles || [];
+  if (profiles.some((p) => ((p.ruleset && p.ruleset.rulesProviderChoices) || {})['frontier-setting'] === 'hostile')) licenses.hostile = true;
+  if (profiles.some((p) => p.ruleset && p.ruleset.statRuleset === 'traveller')) licenses.traveller = true;
+  return { ...appConfig, licenses, licensesVersion: 2 };
+}
+
 export function grandfatherCampaignPanelActivation(appConfig) {
   const needsGrandfathering = appConfig.profiles.some((p) => (
     p.moduleEnabled.colony !== false

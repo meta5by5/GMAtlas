@@ -54,7 +54,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
    picker working there too, not just the bare name). .brand's own
    flex-wrap lets the picker drop to its own line on a genuinely narrow
    phone rather than clipping or overflowing. */
-.mc-header .brand { display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap; min-width: 0; }
+.mc-header .brand { display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: nowrap; flex: 0 1 auto; min-width: 0; }
+/* One-row top nav (shell.js's fitHeaderToOneRow): nothing wraps; when the
+   full "GMAtlas | Campaign" doesn't fit beside the buttons, the title and
+   separator drop out, then the campaign name truncates with an ellipsis. */
+.mc-header { gap: var(--sp-3); flex-wrap: nowrap; }
+.mc-header .header-actions { flex: 0 0 auto; flex-wrap: nowrap; }
+.mc-header h1, .mc-header .brand-sep { flex: 0 0 auto; white-space: nowrap; }
+.mc-header-measuring .brand { flex-shrink: 0; }
+.mc-header-measuring .campaign-title { max-width: none; }
+.mc-header-compact .brand h1, .mc-header-compact .brand-sep { display: none; }
 .mc-header h1 { font-size: 1.05rem; margin: 0; letter-spacing: 0.02em; }
 .mc-header .tagline { font-size: 0.72rem; color: var(--text-dim); }
 .mc-header .brand-sep { color: var(--text-dim); }
@@ -65,9 +74,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
    pre-header-gear-menu; now it's a <button> opening this new dropdown
    instead), so it needs a bare-button reset the old plain <span> never did. */
 .campaign-switcher-wrap { position: relative; min-width: 0; }
-.mc-header .campaign-title { background: none; border: none; font: inherit; padding: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-header .campaign-title { display: block; background: none; border: none; font: inherit; padding: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* z-index above the compact-width drawer panel (20) and edge nav (21),
+   which otherwise paint over this menu on phone/tablet — the same fix the
+   ⚙ settings menu already has. */
 .campaign-switcher-menu {
-  position: absolute; top: 100%; left: 0; margin-top: 0.3rem; z-index: 20;
+  position: absolute; top: 100%; left: 0; margin-top: 0.3rem; z-index: 70;
   min-width: 14rem; max-width: min(20rem, calc(100vw - 2 * var(--sp-4))); background: var(--tier2-bg); border: 1px solid var(--border);
   border-radius: var(--radius-sm); box-shadow: 0 4px 16px rgba(0,0,0,0.35); padding: var(--sp-2);
 }
@@ -653,17 +665,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
      tablet/desktop where the row has room). Icon-only; the button's own
      title attribute still names it for a long-press/hover. */
   .header-drawer-tabs .btn-label { display: none; }
-  /* Direct follow-up request (supersedes the earlier "remove the GMAtlas
-     title, replace with the campaign selector" decision right above's own
-     note): "Move the campaign picker to the right of the app title...
-     ensure that the full picker functionality works on the mobile device
-     instead of just the campaign name." The title and the picker are one
-     group now (.brand, above) and both stay visible/fully interactive at
-     phone width — .brand's own flex-wrap lets the picker drop to its own
-     line here instead of either being hidden or squeezed into an
-     ellipsis. Search still keeps its icon-only, title=""-tooltip treatment
-     from before. */
+  /* The header stays one row (shell.js's fitHeaderToOneRow drops the
+     "GMAtlas |" title when needed, then the campaign name truncates); the
+     campaign picker stays fully usable. Search, header tabs and ⚙ go
+     icon-only here, each keeping its title="" tooltip. */
   .mc-header [data-search-toggle] .btn-label { display: none; }
+  /* Tighter top nav so everything fits one row on a phone. */
+  .mc-header { padding: 0 var(--sp-2); gap: var(--sp-2); }
+  .mc-header .header-actions, .mc-header .header-drawer-tabs { gap: var(--sp-1); }
+  .mc-header .btn.sm { padding: 0.3rem 0.4rem; }
+  .mc-header [data-settings-menu-toggle] b { display: none; }
   .field-row2, .colony-fields, .rel-add, .party-tracker-row, .colony-crew-row,
   .thread-row, .trade-contract-row {
     grid-template-columns: 1fr;
@@ -1180,11 +1191,11 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 button.doc-badge { font: inherit; color: inherit; cursor: pointer; }
 button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .drawer-search { margin-bottom: var(--sp-3); }
-/* Docs library sort/filter row (direct follow-up request) — same
-   field-label-with-inline-select shape used elsewhere, just packed into
-   one flex row side by side instead of each stacking full-width. */
-.doc-sort-filter-row { display: flex; gap: var(--sp-3); margin-bottom: var(--sp-3); flex-wrap: wrap; }
-.doc-sort-filter-row .field-label { flex: 1 1 10rem; }
+/* Docs library: a short search box with the sort icon beside it (its menu
+   reuses the Hexcrawl palette's .hexcrawl-menu look). */
+.doc-search-row { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.doc-search-row .drawer-search { margin-bottom: 0; flex: 0 1 16rem; width: auto; min-width: 8rem; }
+.doc-sort-menu { left: auto; right: 0; }
 .oracle-list { display: flex; flex-direction: column; gap: 2px; }
 .oracle-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: 0.3rem 0.4rem; border-radius: var(--radius-sm); }
 .oracle-row:hover { background: var(--tier2-bg); }
@@ -1280,6 +1291,10 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .rules-provider-chip { display: inline-block; margin: 1px 2px 1px 0; cursor: default; }
 .rules-provider-legend { margin: var(--sp-3) 0 0; padding-left: 1.1rem; font-size: 0.78rem; color: var(--text-dim); }
 .rules-provider-legend li { margin-bottom: var(--sp-1); }
+/* Settings -> Campaigns -> Source Data: pack text left, its Import button right. */
+.source-data-list { list-style: none; padding-left: 0; }
+.source-data-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2); }
+.source-data-row .btn { flex: 0 0 auto; }
 
 /* Activity -> Rules Lens suggestion (Phase 9, HOW workspace view) */
 .rules-lens-suggestion { margin: var(--sp-2) 0; padding: var(--sp-2); border: 1px solid var(--border); border-radius: 6px; }
@@ -1399,32 +1414,26 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    the exact same reason as .battlemap-world's own — shell.js's
    screenToHexcrawlWorldPixel/zoomHexcrawlCamera math assumes translate/
    scale apply relative to the viewport's own top-left corner. */
-/* Direct follow-up request: "Put Geography, Encounters and Overlays as
-   side-by-side columns with vertical lines between to separate them" —
-   .hexcrawl-palette (the plain wrapper div drawers/index.js already
-   renders hexcrawlPalette's output into) becomes the flex row of
-   columns; each column keeps its own chips wrapping vertically as
-   needed. border-left on every column but the first draws the dividing
-   lines without a stray line on the outer edge. */
-.hexcrawl-palette { display: flex; align-items: flex-start; gap: var(--sp-3); flex-wrap: wrap; }
-.hexcrawl-palette-col {
-  display: flex; flex-direction: column; flex-wrap: wrap; gap: var(--sp-1); align-items: flex-start;
-  flex: 1 1 12rem; min-width: 10rem; padding-left: var(--sp-3);
+/* Hexcrawl palette: one row of icon buttons (Geography, Locations,
+   Encounter, Overlays); each menu drops down under its own button. */
+.hexcrawl-palette { display: flex; align-items: center; gap: var(--sp-1); flex-wrap: nowrap; margin: var(--sp-2) 0; }
+.hexcrawl-menu-wrap { position: relative; }
+.hexcrawl-menu-btn {
+  display: inline-flex; align-items: center; gap: 0.15rem;
+  background: var(--tier2-bg); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  padding: 0.25rem 0.45rem; font-size: 1.05rem; line-height: 1;
 }
-.hexcrawl-palette-col:first-child { padding-left: 0; }
-.hexcrawl-palette-col:not(:first-child) { border-left: 1px solid var(--border); }
-/* Direct follow-up request: "Use a dropdown to select Geography,
-   Encounters and Overlays instead of a list of buttons" — the column's
-   own flex-direction:column already stacks the label above the select;
-   width:100% just keeps the select from shrink-wrapping to its currently
-   selected option's own text width (which would make it visibly resize
-   every time the selection changes). */
-.hexcrawl-palette-col select { width: 100%; }
-/* Direct follow-up request: "a new selectable button '+ Encounter' that
-   can be toggled" — same armed-state indicator every other palette
-   control already gets from its own selected <option>, just for a plain
-   <button> instead of a <select>. */
-.hexcrawl-palette-col .btn.active { color: var(--accent); border-color: var(--accent); }
+.hexcrawl-menu-btn.active { color: var(--accent); border-color: var(--accent); background: var(--bg-inset); }
+.hexcrawl-menu-caret { font-size: 0.65rem; color: var(--text-dim); }
+.hexcrawl-menu {
+  position: absolute; top: 100%; left: 0; margin-top: 0.25rem; z-index: 30;
+  display: flex; flex-direction: column; min-width: 12rem; max-height: 18rem; overflow-y: auto;
+  background: var(--tier2-bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35); padding: var(--sp-1);
+}
+.hexcrawl-menu button { text-align: left; background: none; border: none; color: var(--text); padding: 0.35rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.85rem; white-space: nowrap; }
+.hexcrawl-menu button:hover { background: var(--bg-inset); }
+.hexcrawl-menu button.selected { color: var(--accent); }
 /* min-height 690px ~= 10 hex rows tall at HEX_SIZE=44 (domain/hexcrawls.js
    — row spacing 1.5*HEX_SIZE=66px, so 9 row-steps + one full hex height:
    66*9 + 2*44 = 682px, rounded up a bit) — direct follow-up request:
@@ -3383,9 +3392,20 @@ input[type="number"] { -moz-appearance: textfield; }
    so neither needs a grid-column span any more. */
 .crew-task-box { margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--border); }
 .crew-task-box h4 { margin: 0 0 var(--sp-2); font-size: 0.85rem; color: var(--accent); }
-.crew-task-buttons { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: var(--sp-2); }
+/* Crew Tasks table: one row per Party member (task picker, ▶ Start), the
+   picked task's rules on a full-width row beneath it. */
+.crew-task-steps { margin: 0 0 var(--sp-2); padding-left: 1.2rem; }
+.crew-task-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.crew-task-table th { text-align: left; font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); padding: 0 var(--sp-1) var(--sp-1); }
+.crew-task-table td { padding: var(--sp-1); vertical-align: middle; border-top: 1px solid var(--border); }
+.crew-task-table .crew-task-rules-row td { border-top: none; padding-top: 0; }
+.crew-task-table .crew-task-rules-row .crew-task-description { margin-top: 0; }
+.crew-task-table select { width: 100%; }
+.crew-task-member { font-weight: 600; white-space: nowrap; }
+.crew-task-action { text-align: right; white-space: nowrap; width: 1%; }
+.crew-task-row-done .crew-task-member { color: var(--text-dim); }
+.crew-task-done { color: var(--ok); border-color: var(--ok); }
 .crew-task-description { margin-top: var(--sp-2); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset); }
-.crew-task-foot { display: flex; justify-content: flex-end; margin-top: var(--sp-2); }
 
 /* Trade (Merchant Rules Lens, ADR 0003/0004) */
 .trade-market-table { width: 100%; border-collapse: collapse; margin: var(--sp-2) 0 var(--sp-3); font-size: 0.85rem; }
@@ -3480,3 +3500,16 @@ input[type="number"] { -moz-appearance: textfield; }
 .tpl-field-max { display: inline-flex; align-items: center; gap: 4px; font-size: 0.7rem; color: var(--text-dim); }
 .tpl-field-max input { width: 3.5rem; }
 .tpl-field-actions { margin-left: auto; display: inline-flex; gap: 2px; }
+
+/* A right-nav icon re-selecting its already-open panel (shell.js's
+   focusDrawerPanel): a brief accent outline where focus landed. */
+.panel-focus-flash { outline: 2px solid var(--accent); outline-offset: -2px; transition: outline-color 0.8s ease-out; }
+[data-drawer-body]:focus, .storyboard-grid [tabindex="-1"]:focus, [data-copilot]:focus { outline: none; }
+.panel-focus-flash:focus { outline: 2px solid var(--accent); }
+
+/* Entity Editor: statblocks the Bestiary <-> Character swap kept but made
+   inactive — listed, each removable. */
+.statblock-inactive { margin: var(--sp-2) 0; padding: var(--sp-2); border: 1px dashed var(--border); border-radius: var(--radius-sm); }
+.statblock-inactive h4 { margin: 0 0 var(--sp-1); }
+.statblock-inactive-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2); }
+.statblock-inactive-row + .statblock-inactive-row { margin-top: var(--sp-2); }

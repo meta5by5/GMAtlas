@@ -33,10 +33,16 @@ function ensureCrewTasks(profile) {
 
 function ensureProgress(campaign) {
   if (!campaign.crewTaskProgress || typeof campaign.crewTaskProgress !== 'object') {
-    campaign.crewTaskProgress = { doneMemberIds: [] };
+    campaign.crewTaskProgress = { doneMemberIds: [], assignments: {} };
   }
   if (!Array.isArray(campaign.crewTaskProgress.doneMemberIds)) campaign.crewTaskProgress.doneMemberIds = [];
+  if (!campaign.crewTaskProgress.assignments || typeof campaign.crewTaskProgress.assignments !== 'object') campaign.crewTaskProgress.assignments = {};
   return campaign.crewTaskProgress;
+}
+
+/** A fresh Campaign Turn's crew-task state: nobody has acted, nothing picked. */
+export function freshCrewTaskProgress() {
+  return { doneMemberIds: [], assignments: {} };
 }
 
 // --- Definitions (Rules Profile content, draft-edited) ---------------------
@@ -100,5 +106,33 @@ export function assignCrewTask(campaign, taskId, memberId) {
   const next = clone(campaign);
   const progress = ensureProgress(next);
   if (!progress.doneMemberIds.includes(memberId)) progress.doneMemberIds.push(memberId);
+  if (taskId) progress.assignments[memberId] = taskId;
   return next;
+}
+
+/** Picks (or, with an empty taskId, clears) the task a Party member will
+ *  perform this Campaign Turn — the Crew Tasks table's per-row dropdown.
+ *  Planning only; Start (assignCrewTask) is what performs it. A member who
+ *  already performed a task this turn keeps it unchanged. */
+export function setCrewTaskAssignment(campaign, memberId, taskId) {
+  const next = clone(campaign);
+  const progress = ensureProgress(next);
+  if (!memberId || progress.doneMemberIds.includes(memberId)) return next;
+  if (taskId) progress.assignments[memberId] = taskId;
+  else delete progress.assignments[memberId];
+  return next;
+}
+
+/** One row per Party member for the Crew Tasks table: the member, the task
+ *  picked for them (if any, resolved against the profile's task list), and
+ *  whether they've already performed a task this Campaign Turn. */
+export function crewTaskRows(campaign) {
+  const progress = campaign.crewTaskProgress || {};
+  const done = new Set(progress.doneMemberIds || []);
+  const assignments = progress.assignments || {};
+  const tasks = (campaign.crewTasks && campaign.crewTasks.tasks) || [];
+  return listPartyMembers(campaign).map((member) => {
+    const taskId = assignments[member.id] || '';
+    return { member, taskId, task: tasks.find((t) => t.id === taskId) || null, done: done.has(member.id) };
+  });
 }

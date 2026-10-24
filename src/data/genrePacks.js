@@ -33,7 +33,7 @@ export const GENRE_PACKS = [
     // itself" providers (see rulesConstitution.js's own comment on why
     // they're two records, not one) and A4 says GMAtlas Core specifically
     // "is linked into Sci-Fi (generic) alongside the others".
-    gameSystemIds: ['hostile', 'starforged', 'fivepfh', 'traveller', 'swn', 'planetfall', 'gmatlascore', 'sagaatlas'],
+    gameSystemIds: ['hostile', 'starforged', 'fivepfh', 'traveller', 'swn', 'planetfall', 'fivepfh-compendium', 'gmatlascore', 'sagaatlas'],
   },
   { id: 'cyberpunk', label: 'Cyberpunk / Shadowrun', tables: CYBERPUNK_TABLES, gameSystemIds: [] },
   // Relabeled from "Fantasy (D&D-style)" (direct request: a Five Leagues
@@ -122,4 +122,14 @@ const LOCATION_HIERARCHY_TERMS = {
 const DEFAULT_LOCATION_HIERARCHY_TERMS = { system: 'System', star: 'Star' };
 export function locationHierarchyTerms(genrePackId) {
   return LOCATION_HIERARCHY_TERMS[genrePackId] || DEFAULT_LOCATION_HIERARCHY_TERMS;
+}
+
+// Which genre stylesheet (styles/genre-scifi.css / styles/genre-fantasy.css)
+// a campaign wears — shell.js sets it as <html data-genre="..."> every
+// render, so changing the profile's Genre Pack (or picking Ironsworn, whose
+// oracles already read as fantasy) restyles the app automatically.
+const FANTASY_GENRE_PACKS = new Set(['fantasy', 'dnd5e']);
+export function genreStyleFamily(genrePackId, statRuleset) {
+  if (statRuleset === 'ironsworn' || FANTASY_GENRE_PACKS.has(genrePackId)) return 'fantasy';
+  return 'sci-fi';
 }

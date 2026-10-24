@@ -19,6 +19,8 @@ import { PLANETFALL_TURN_STEPS } from '../data/turnStepListPlanetfall.js';
 import { TURN_STEPS_FIVE_LEAGUES } from '../data/turnStepListFiveLeagues.js';
 import { CREW_TASKS_5PFH } from '../data/crewTasksDefault5pfh.js';
 import { MAX_ENCOUNTERS } from '../domain/colony.js';
+import { hasCharacterTag, isPristineStatblockGroup } from '../domain/statblocks.js';
+import { tagLegacyModuleTrackers } from '../domain/party.js';
 import { dnd5eStoryboardProfile, fiveLeaguesStoryboardProfile } from '../domain/rulesProfiles.js';
 
 // Every legacy key the old app is known to write, plus the very old aliases.
@@ -279,6 +281,21 @@ export function migrateDocument(doc, now = new Date().toISOString()) {
       if (!e.tags.some((t) => /^world$/i.test(String(t).trim()))) e.tags.push('World');
     }
   }
+
+  // A Character has no Bestiary statblock: drop the untouched auto-created
+  // one an NPC used to keep (hidden) after being tagged #character. An
+  // edited one stays, inactive, for the GM to remove from the Entity Editor.
+  // Idempotent.
+  if (d.entities && Array.isArray(d.entities.items)) {
+    for (const e of d.entities.items) {
+      if (!e || (e.type !== 'npc' && e.type !== 'lifeform') || !hasCharacterTag(e) || !Array.isArray(e.statblocks)) continue;
+      e.statblocks = e.statblocks.filter((g) => !(g.kind === 'npc' && g.archived && isPristineStatblockGroup(g, d.settings)));
+    }
+  }
+
+  // Module-seeded Party Trackers from before trackers carried a moduleId get
+  // tagged, so a later game-system change can remove them (party.js).
+  d = tagLegacyModuleTrackers(d);
 
   d.schemaVersion = SCHEMA_VERSION;
   d.app = APP_NAME;

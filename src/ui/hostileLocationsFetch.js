@@ -25,12 +25,14 @@ const PACK_URLS = [
   './assets/data-packs/hostile-fomalhaut-settlement-zone.json',
 ];
 
-export async function fetchHostileLocationsPack() {
+// `urls` narrows the import to particular zone files — Settings ->
+// Campaigns -> Source Data imports each zone on its own.
+export async function fetchHostileLocationsPack(urls = PACK_URLS) {
   if (typeof location !== 'undefined' && location.protocol === 'file:') {
     throw new Error('HOSTILE Canon Locations needs the app served over http(s) — run `npm run serve` and try again (file:// blocks reading a local JSON file for security reasons)');
   }
   const merged = { zones: [], bases: [], stars: [], locations: [] };
-  for (const url of PACK_URLS) {
+  for (const url of urls) {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Could not load the HOSTILE Locations data pack at ${url} (HTTP ${res.status})`);
     const pack = await res.json();

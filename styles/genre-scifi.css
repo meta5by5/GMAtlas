@@ -1,0 +1,17 @@
+/* genre-scifi.css — the sci-fi genre's look (sci-fi-generic, Hostile,
+   cyberpunk). Applied automatically: shell.js sets <html data-genre="sci-fi">
+   from the profile's Genre Pack (data/genrePacks.js's genreStyleFamily).
+   tokens.css already defines the dark sci-fi palette as the app's base, so
+   this sheet only adds what's specific to the genre's mood. */
+
+:root[data-genre="sci-fi"] body {
+  /* A faint starfield behind the panels. */
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(1px 1px at 12% 18%, rgba(232, 238, 248, 0.45), transparent 60%),
+    radial-gradient(1px 1px at 68% 32%, rgba(232, 238, 248, 0.35), transparent 60%),
+    radial-gradient(1px 1px at 38% 74%, rgba(232, 238, 248, 0.3), transparent 60%),
+    radial-gradient(1px 1px at 86% 82%, rgba(125, 211, 252, 0.35), transparent 60%),
+    radial-gradient(ellipse at 50% -10%, rgba(56, 189, 248, 0.08), transparent 60%);
+  background-attachment: fixed;
+}

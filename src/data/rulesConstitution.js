@@ -1,3 +1,5 @@
+import { LICENSES } from './licenses.js';
+
 // rulesConstitution.js — the "Rules Constitution": which external ruleset
 // (or GMAtlas Core) is the content provider for each gameplay area.
 // Source: requirements/initial design inputs/gameplay-goals.md, reconciled in
@@ -47,7 +49,6 @@ export const RULES_PROVIDERS = {
   fivepfh: {
     label: 'Five Parsecs From Home', status: 'integrated', note: 'Character sheets (Phase 4). Also gates the Campaign panel\'s Starship tab (direct follow-up request) — a different kind of gate than SWN\'s own below (a plain feature toggle, not a licensing confirmation), reusing the same mechanism rather than inventing a second one.', rulesetId: '5pfh', genrePackId: 'sci-fi-generic', get dedicatedRulesetId() { return this.rulesetId; },
     requiresActivation: true,
-    activationText: 'Show the Campaign panel\'s Starship tab (base Five Parsecs from Home game).',
   },
   traveller: { label: 'Traveller', status: 'character ruleset authored (original content)', note: 'Stale as of the 2026-07-03 ruleset library review this note used to cite: real Traveller 2e PDFs now live under assets/docs/Traveller/ (found while mapping assets/docs/\'s real per-game subfolders for the Ruleset Guide ToC + "Load" sourcebook button feature). The character ruleset (data/rulesets.js) remains original content inspired by classic Traveller\'s six characteristics and its 2d6-vs-8 task resolution (domain/dice.js\'s rollTraveller), not a transcription; still no Trade/Vehicle/NPC-generation content of its own beyond what Hostile/SWN already provide for those areas.', rulesetId: 'traveller', genrePackId: 'sci-fi-generic', get dedicatedRulesetId() { return this.rulesetId; } },
   // Direct request (Phase A audit, A4): "the Hostile (sci-fi, default)
@@ -56,11 +57,10 @@ export const RULES_PROVIDERS = {
   // in data/genrePacks.js's GENRE_PACKS; it's a Game System (this entry)
   // whose genrePackId points at the new shared 'sci-fi-generic' pack
   // alongside starforged/fivepfh/traveller/swn/planetfall/gmatlascore.
-  hostile: { label: 'Hostile', status: 'default genre', note: 'campaign.settings.genre default; the oracle tables in data/tables.js are Hostile-flavored.', genrePackId: 'sci-fi-generic', dedicatedRulesetId: null },
+  hostile: { label: 'Hostile', status: 'default genre', note: 'The default sci-fi Genre Pack\'s oracle tables (data/tables.js) are Hostile-flavored.', genrePackId: 'sci-fi-generic', dedicatedRulesetId: null },
   swn: {
     label: 'Stars Without Number', status: 'faction/world/bestiary content authored (original content)', note: 'The SWN Revised Deluxe PDF now lives in assets/docs (2026-07-06) as reference material — the content below is still an original re-implementation of SWN\'s well-known CONCEPTS, not a transcription of its text/tables (docs/adr/0011-swn-cwn-content.md), EXCEPT the Faction Turn Engine (domain/factionTurnEngine.js, docs/adr/0031), which does transcribe SWN\'s real named assets/tags/goals in full and is why it alone sits behind the Game System Activation gate below. A "Stars Without Number" oracle group (data/tables.js) — Faction Action and World Tag. Faction depth (entities.js/domain/factions.js): Force/Cunning/Wealth stats plus a growing Assets list (the Faction card\'s Assets section, "Faction Asset" oracle table), and a stat-driven turn-resolution mini-game (resolveFactionTurn) layered onto the existing Pressure Track/Faction Turn automation. NPC deepening (domain/session.js\'s deepenNpc): Stereotype/Want/Complication tables roll onto an existing NPC\'s Overview. Bestiary styling: a Xenobestiary oracle group (Creature Origin/Method/Trait/Threat) and a Site Concept group (Feature/Danger/Wonder), both combinatorial "building block" generators in SWN\'s own well-documented style. Sector generation remains future work.',
     requiresActivation: true,
-    activationText: 'Activate Stars Without Number faction content — I confirm I own a copy of Stars Without Number Revised (Deluxe Edition) and intend to use this transcribed content (data/swnFactionData.js) for my own personal GM reference, not for redistribution.',
     genrePackId: 'sci-fi-generic', dedicatedRulesetId: null,
   },
   gmatlascore: {
@@ -70,7 +70,14 @@ export const RULES_PROVIDERS = {
   planetfall: {
     label: 'Planetfall (Five Parsecs from Home)', status: 'integrated', note: 'Colony drawer (domain/colony.js). Also gates the Campaign panel\'s Colony tab (direct follow-up request) — see fivepfh\'s own note above for why this reuses the Game System Activation mechanism as a plain feature toggle here.',
     requiresActivation: true,
-    activationText: "Show the Campaign panel's Colony tab (Planetfall colony sim).",
+    genrePackId: 'sci-fi-generic', dedicatedRulesetId: null,
+  },
+  // A standalone game (Bug Hunt) plus 5PFH expansions — licensed on its
+  // own (data/licenses.js) and usable without 5PFH itself in use.
+  'fivepfh-compendium': {
+    label: 'Five Parsecs From Home: Compendium (Bug Hunt)', status: 'content pack authored (owned-sourcebook transcription)',
+    note: 'Contributes the Bug Hunt Lifeforms & Enemies content pack today (Rules Constitution -> Bestiary & enemies).',
+    requiresActivation: true,
     genrePackId: 'sci-fi-generic', dedicatedRulesetId: null,
   },
   // Direct request (literal rename): "Saga Atlas itself" -> "GMAtlas Core".
@@ -110,7 +117,6 @@ export const RULES_PROVIDERS = {
     label: 'Five Leagues from the Borderlands', status: 'ruleset + content pack authored (owned-sourcebook transcription)',
     note: 'Character sheets (data/rulesets.js\'s fiveleagues characterTemplate) are original content in this app\'s own format, mirroring 5PFH\'s own field shape (its sister game, same publisher/designer). The Five Leagues Enemies content packs (core rulebook + Compendium) DO transcribe real Enemy Profile stat-block numbers and traits from the purchased PDF, which is why this system sits behind the Game System Activation gate below — same posture as swn. Also gates the Campaign panel\'s Warband tab.',
     requiresActivation: true,
-    activationText: 'Activate Five Leagues from the Borderlands content — I confirm I own a copy of Five Leagues from the Borderlands (3rd Edition) and intend to use this transcribed content for my own personal GM reference, not for redistribution.',
     rulesetId: 'fiveleagues', genrePackId: 'fantasy', get dedicatedRulesetId() { return this.rulesetId; },
   },
 };
@@ -122,141 +128,74 @@ export const RULES_PROVIDERS = {
 // carries real risk for zero behavior change.
 export const GAME_SYSTEMS = RULES_PROVIDERS;
 
-/** Whether `systemId` (a RULES_PROVIDERS key) is usable right now. A
- *  provider with no `requiresActivation` flag is always activated — this
- *  gate exists only for content transcribed from a real, owned sourcebook
- *  (SWN's Faction Turn Engine today), because this app also deploys
- *  publicly (GitHub Pages), where "personal reference to a book you own"
- *  doesn't hold by default (docs/adr/0032). Deliberately a single function
- *  every call site goes through instead of reading `campaign.settings.
- *  gameSystemActivations` directly — the seam a real licensing check would
- *  replace this with later; nothing else in this app should assume a
- *  boolean flag is the permanent mechanism. */
-export function isGameSystemActivated(campaign, systemId) {
-  const provider = RULES_PROVIDERS[systemId];
-  if (!provider || !provider.requiresActivation) return true;
-  return !!(campaign && campaign.settings && campaign.settings.gameSystemActivations && campaign.settings.gameSystemActivations[systemId]);
-}
-
-// Supplement Activation (direct follow-up request: "have a checkbox to
-// activate each game system AND SUPPLEMENT so that default rules can be
-// augmented by the supplemental rules") — a second, finer-grained opt-in
-// UNDER a parent Game System, for expansion content that transcribes its
-// own separately-purchased sourcebook (the Compendium volumes) rather than
-// the base rulebook the parent system's own activationText already covers.
-// Reuses the exact SAME `gameSystemActivations` free-form map (no schema
-// change — it's already a sparse id->boolean object, data/schema.js never
-// enumerates its keys), just keyed by the supplement's own id instead of a
-// RULES_PROVIDERS key, so the existing data-game-system-activate click
-// handler (shell.js) needs no changes to drive these too. A supplement has
-// no meaning with its parent system off, so isSupplementActivated also
-// requires the parent — UI additionally disables the checkbox in that
-// state (gameSystemActivationSection, drawers/index.js) rather than
-// relying on this guard alone.
+// Supplements: books whose content only ever augments a parent Game
+// System in USE (the Five Leagues Compendium's Origins and enemies are for
+// Five Leagues characters). Licensing is separate and independent
+// (data/licenses.js — owning a Compendium never requires owning its core
+// book). A profile turns a supplement on per gameplay area, so a GM can
+// take its Origins without its enemies. The 5PFH Compendium is a
+// standalone game (Bug Hunt), so it's a RULES_PROVIDERS entry above, not
+// one of these.
 export const GAME_SYSTEM_SUPPLEMENTS = {
-  fivepfh: [
-    {
-      id: 'fivepfh-compendium',
-      label: 'Five Parsecs from Home: Compendium (Bug Hunt)',
-      activationText: 'Activate the Five Parsecs from Home Compendium (Bug Hunt) — I confirm I own a copy and intend to use this transcribed content (the Compendium Lifeforms & Enemies content pack) for my own personal GM reference, not for redistribution.',
-    },
-  ],
   fiveleagues: [
-    {
-      id: 'fiveleagues-compendium',
-      label: 'Five Leagues from the Borderlands: Compendium',
-      activationText: 'Activate the Five Leagues Compendium — I confirm I own a copy of the Five Leagues from the Borderlands Compendium and intend to use this transcribed content (its Enemy tables, and its new character Origins) for my own personal GM reference, not for redistribution.',
-    },
+    { id: 'fiveleagues-compendium', label: 'Five Leagues from the Borderlands: Compendium' },
   ],
 };
 
-/** Whether `supplementId` (a GAME_SYSTEM_SUPPLEMENTS entry's own id) is
- *  usable right now — its parent Game System must ALSO be activated, since
- *  a supplement only ever augments that system's base rules, never stands
- *  alone. `parentSystemId` is the RULES_PROVIDERS key the supplement lives
- *  under (its GAME_SYSTEM_SUPPLEMENTS[parentSystemId] list) — passed
- *  explicitly rather than re-derived, since a supplement id alone doesn't
- *  encode which system it belongs to. */
-export function isSupplementActivated(campaign, parentSystemId, supplementId) {
-  if (!isGameSystemActivated(campaign, parentSystemId)) return false;
-  return !!(campaign && campaign.settings && campaign.settings.gameSystemActivations && campaign.settings.gameSystemActivations[supplementId]);
+/** The supplement descriptor for `id`, with its `parentId` — or null. */
+export function findSupplement(id) {
+  for (const [parentId, list] of Object.entries(GAME_SYSTEM_SUPPLEMENTS)) {
+    const s = list.find((x) => x.id === id);
+    if (s) return { ...s, parentId };
+  }
+  return null;
 }
 
-// Direct follow-up request: "Change the term reference of ruleset to
-// Module. On the Licenses tab in Settings, group all checkboxes for a
-// given module under a section header named for the module. group all
-// modules for a game system under the header of the game system (such as
-// Five Parsecs from Home has the Core Rules, Compendium and Planetfall)."
-// A "Module" (the new display term for what Game System Activation gates
-// — a base RULES_PROVIDERS entry's own core rules, OR a
-// GAME_SYSTEM_SUPPLEMENTS entry) is grouped here under whichever real-
-// world product LINE it's published as part of — which isn't always the
-// same as its own standalone RULES_PROVIDERS record. Planetfall has its
-// own distinct Colony-sim mechanics, so it's its own Game System entry
-// (own requiresActivation gate, own Campaign-panel tab), not literally
-// nested under fivepfh's record — but it's still a Five Parsecs from Home
-// product to a GM licensing it, so it's grouped under that SAME family
-// header here. This grouping is intentionally its own small data
-// structure rather than inferred from RULES_PROVIDERS/GAME_SYSTEM_
-// SUPPLEMENTS' own label text (fragile string-parsing) — a data-integrity
-// test (tests/domain.test.js) keeps it in sync, asserting every
-// requiresActivation system and every supplement appears exactly once.
-export const GAME_SYSTEM_FAMILIES = [
-  {
-    label: 'Five Parsecs from Home',
-    modules: [
-      { kind: 'system', id: 'fivepfh', label: 'Core Rules' },
-      { kind: 'supplement', parentId: 'fivepfh', id: 'fivepfh-compendium', label: 'Compendium' },
-      { kind: 'system', id: 'planetfall', label: 'Planetfall' },
-    ],
-  },
-  {
-    label: 'Five Leagues from the Borderlands',
-    modules: [
-      { kind: 'system', id: 'fiveleagues', label: 'Core Rules' },
-      { kind: 'supplement', parentId: 'fiveleagues', id: 'fiveleagues-compendium', label: 'Compendium' },
-    ],
-  },
-  {
-    label: 'Stars Without Number',
-    modules: [
-      { kind: 'system', id: 'swn', label: 'Core Rules' },
-    ],
-  },
-];
+/** The license granting a Game System/Supplement id (or a license id
+ *  itself), or null for platform content with no license (GMAtlas Core). */
+export function licenseFor(id) {
+  return LICENSES.find((l) => l.id === id) || LICENSES.find((l) => l.systems.includes(id)) || null;
+}
 
-// Verbatim from the gameplay-goals.md "Recommended Rules Constitution" table,
-// with the narrative section's fuller provider lists preferred over the
-// table's abbreviations where the two differ (e.g. NPC generation lists all
-// three sources the narrative section named, not just the table's two).
+/** The license whose Load list includes a Reference Library `file`, or null. */
+export function licenseForDoc(file) {
+  return LICENSES.find((l) => l.docs.includes(file)) || null;
+}
+
+/** Licenses grouped under their product-line header, in registry order —
+ *  what the Settings -> Licenses tab renders. */
+export function licenseFamilies() {
+  const out = [];
+  for (const l of LICENSES) {
+    let fam = out.find((f) => f.label === l.family);
+    if (!fam) { fam = { label: l.family, licenses: [] }; out.push(fam); }
+    fam.licenses.push(l);
+  }
+  return out;
+}
+
+// The Rules Constitution's gameplay areas (design/adr/licenses-and-rules-
+// constitution.md; full feature map in design/rules-constitution-mapping.md).
+// Trimmed to areas that actually switch functionality. A profile picks one
+// provider per area; unset means "Module for Profile" — the module's own
+// rules when it's listed as a provider here, else `fallback`. `providers`
+// lists Game Systems (RULES_PROVIDERS keys) and Supplements
+// (GAME_SYSTEM_SUPPLEMENTS ids) that can fill the area. `turnSteps` marks
+// the areas that carry a Turn Step walkthrough (isTurnStepSystemActive).
 export const GAMEPLAY_AREAS = [
-  { id: 'story-structure', area: 'Story structure', providers: ['starforged'] },
-  { id: 'exploration', area: 'Exploration', providers: ['starforged', 'traveller'] },
-  { id: 'tactical-combat', area: 'Tactical combat', providers: ['fivepfh'] },
-  { id: 'frontier-setting', area: 'Frontier setting', providers: ['hostile'] },
-  { id: 'sector-generation', area: 'Sector generation', providers: ['swn'] },
-  { id: 'world-generation', area: 'World generation', providers: ['swn', 'hostile'] },
-  { id: 'trade', area: 'Trade', providers: ['traveller', 'hostile'] },
-  { id: 'colony-management', area: 'Colony management', providers: ['planetfall'] },
-  // The one gameplay area with two real, interchangeable providers today
-  // (docs/adr/0032) — 'swn' listed first so an unset choice still defaults
-  // to today's behavior for any campaign that predates this dropdown.
-  { id: 'factions', area: 'Factions', providers: ['swn', 'gmatlascore'] },
-  { id: 'npc-generation', area: 'NPC generation', providers: ['traveller', 'swn', 'hostile'] },
-  { id: 'discovery', area: 'Discovery', providers: ['starforged'] },
-  { id: 'horror', area: 'Horror', providers: ['hostile'] },
-  { id: 'vehicle-rules', area: 'Vehicle rules', providers: ['traveller'] },
-  { id: 'crew-relationships', area: 'Crew relationships', providers: ['starforged'] },
-  { id: 'reputation-heat', area: 'Reputation & Heat', providers: ['hostile', 'traveller'] },
-  { id: 'long-term-campaign-memory', area: 'Long-term campaign memory', providers: ['sagaatlas'] },
-  { id: 'story-continuity', area: 'Story continuity', providers: ['sagaatlas'] },
-  { id: 'rules-switching', area: 'Rules switching', providers: ['sagaatlas'] },
-  { id: 'recommendation-engine', area: 'Recommendation engine', providers: ['sagaatlas'] },
+  { id: 'campaign-turn', area: 'Campaign turn', providers: ['fivepfh', 'fiveleagues'], fallback: null, turnSteps: true },
+  { id: 'colony-management', area: 'Colony management', providers: ['planetfall'], fallback: null, turnSteps: true },
+  { id: 'character-creation', area: 'Character creation', providers: ['fiveleagues-compendium'], fallback: null },
+  { id: 'bestiary', area: 'Bestiary & enemies', providers: ['fivepfh-compendium', 'fiveleagues-compendium'], fallback: null },
+  { id: 'factions', area: 'Factions', providers: ['swn', 'gmatlascore'], fallback: 'gmatlascore' },
+  { id: 'frontier-setting', area: 'Frontier setting', providers: ['hostile'], fallback: null },
 ];
 
 export function providerLabel(id) {
   const p = RULES_PROVIDERS[id];
-  return p ? p.label : id;
+  if (p) return p.label;
+  const s = findSupplement(id);
+  return s ? s.label : id;
 }
 
 /** The genrePackId belonging to whichever RULES_PROVIDERS entry's own
@@ -278,98 +217,150 @@ export function genrePackIdForRuleset(rulesetId) {
   return entry ? entry.genrePackId : null;
 }
 
-/** The GM's chosen provider for a gameplay area — `settings.
- *  rulesProviderChoices[areaId]` if explicitly set, else that area's own
- *  first-listed provider (preserves current behavior for a campaign that
- *  predates this dropdown, since `factions`'s own providers list keeps
- *  `'swn'` first). Only the `'factions'` area's resolved value actually
- *  changes app behavior right now (data/factionRulesProviders.js reads the
- *  same `settings.rulesProviderChoices.factions` key directly) — every
- *  other area is a recorded preference only (docs/adr/0032). */
-// data/rulesets.js's own statRuleset ("Module for Profile") id space
-// doesn't always spell a RULES_PROVIDERS id the same way — today's one
-// known mismatch, kept as its own tiny lookup rather than renaming either
-// id space to match the other.
+// data/rulesets.js's statRuleset ("Module for Profile") id space doesn't
+// always spell a RULES_PROVIDERS id the same way — today's one known mismatch.
 const STAT_RULESET_TO_PROVIDER_ID = { '5pfh': 'fivepfh' };
 
+/** The Module for Profile as a RULES_PROVIDERS/area-provider id, or null. */
+export function moduleProviderId(settings) {
+  const raw = settings && settings.statRuleset;
+  return raw ? (STAT_RULESET_TO_PROVIDER_ID[raw] || raw) : null;
+}
+
+/** Install-wide ownership (Settings -> Licenses, `appConfig.licenses`,
+ *  spliced onto every doc's settings by store.js's overlay), looked up
+ *  through the license that grants `id` (data/licenses.js). An open
+ *  (CC-BY) license is always owned; platform content with no license
+ *  (GMAtlas Core) always counts as owned. Each license stands alone — a
+ *  Compendium never needs its core book owned. Owning turns nothing on by
+ *  itself; the Module for Profile or a Rules Constitution pick does. */
+export function isLicensed(settings, id) {
+  const lic = licenseFor(id);
+  if (!lic || lic.open) return true;
+  return !!((settings && settings.licenses) || {})[lic.id];
+}
+
+function findArea(areaId) { return GAMEPLAY_AREAS.find((a) => a.id === areaId) || null; }
+
+function isSystemInUse(settings, systemId) {
+  if (!isLicensed(settings, systemId)) return false;
+  if (moduleProviderId(settings) === systemId) return true;
+  const choices = (settings && settings.rulesProviderChoices) || {};
+  return GAMEPLAY_AREAS.some((a) => choices[a.id] === systemId && a.providers.includes(systemId));
+}
+
+/** Whether `id` is a pickable, currently-valid provider for `area` here: one
+ *  of its listed providers, owned, and (a supplement) its parent in use. */
+function isValidChoice(settings, area, id) {
+  if (!id || !area.providers.includes(id) || !isLicensed(settings, id)) return false;
+  const sup = findSupplement(id);
+  return sup ? isSystemInUse(settings, sup.parentId) : true;
+}
+
+/** Whether a Game System is in use by this campaign's profile: owned AND
+ *  either the Module for Profile or picked in some Rules Constitution area.
+ *  Free/original systems (no requiresActivation) are always in use. Every
+ *  "is X on" gate (Campaign-panel tabs, Navigator workflows, module
+ *  trackers) goes through this. */
+export function isGameSystemActivated(campaign, systemId) {
+  const provider = RULES_PROVIDERS[systemId];
+  if (!provider || !provider.requiresActivation) return true;
+  return isSystemInUse(campaign && campaign.settings, systemId);
+}
+
+/** The dropdown VALUE for an area: the stored pick if still valid, else ''
+ *  (= "Module for Profile"). */
 export function resolveProviderChoice(settings, areaId) {
-  const area = GAMEPLAY_AREAS.find((a) => a.id === areaId);
+  const area = findArea(areaId);
   if (!area) return null;
   const chosen = settings && settings.rulesProviderChoices && settings.rulesProviderChoices[areaId];
-  if (chosen) return chosen;
-  // Direct follow-up request: "include the assigned 'Module for Profile'
-  // as the default option for each selection" — before falling back to
-  // the first-listed provider (the old, order-dependent default), prefer
-  // the Rules Profile's own Module for Profile (settings.statRuleset) for
-  // any gameplay area it's actually a valid, currently-activated provider
-  // for. Only changes the DEFAULT shown before a GM ever touches that
-  // row's own dropdown; an explicit rulesProviderChoices[areaId] above
-  // always wins regardless, same as before.
-  const rawModule = settings && settings.statRuleset;
-  const moduleProviderId = rawModule && (STAT_RULESET_TO_PROVIDER_ID[rawModule] || rawModule);
-  if (moduleProviderId && area.providers.includes(moduleProviderId) && isGameSystemActivated({ settings }, moduleProviderId)) {
-    return moduleProviderId;
-  }
-  return area.providers[0];
+  return isValidChoice(settings, area, chosen) ? chosen : '';
 }
 
-/** Tighter alternative to rulesProfiles.js's matchesProfileRuleset, for
- *  Available Packs / Statblock Templates (direct follow-up requests:
- *  "Limit the 'Available Packs'/'Statblock Templates (LifeForm)' options
- *  to only those that belong to the module of the game system and other
- *  game system modules that might be enabled in the Rules Constitution").
- *  matchesProfileRuleset scopes to "anywhere in the same Genre Pack" (still
- *  used as-is for Turn Step Lists, unaffected by this) — this instead
- *  scopes to just the profile's own Module for Profile (settings.
- *  statRuleset) plus whichever OTHER Game Systems are actually assigned to
- *  some gameplay area here in Rules Constitution (resolveProviderChoice
- *  per area — the GM's own stated choices, not merely "available in this
- *  genre pack"). `rulesetTag` null/undefined (a GM's own custom entry, or
- *  a generic one tagged by Genre Pack id directly) is always shown, same
- *  "nothing a GM adds ever vanishes" guarantee matchesProfileRuleset
- *  already established. `settings` here is the pseudo-doc's own
- *  (profileAsSettingsDoc(doc, draft).settings, drawers/index.js) — already
- *  the draft being edited, not necessarily the live campaign. */
+/** The provider actually in effect for an area: a valid pick, else the
+ *  Module for Profile when it's one of the area's providers and owned, else
+ *  the area's fallback (or null — nothing extra in effect). */
+export function resolveActiveProviderChoice(campaign, areaId) {
+  const settings = campaign && campaign.settings;
+  const area = findArea(areaId);
+  if (!area) return null;
+  const chosen = resolveProviderChoice(settings, areaId);
+  if (chosen) return chosen;
+  const mod = moduleProviderId(settings);
+  if (mod && area.providers.includes(mod) && isLicensed(settings, mod)) return mod;
+  return area.fallback;
+}
+
+/** Whether a Game System/Supplement is actually designated in this
+ *  campaign: owned, and either the Module for Profile or in effect for
+ *  some Rules Constitution area. */
+function isDesignated(settings, id) {
+  if (!isLicensed(settings, id)) return false;
+  if (moduleProviderId(settings) === id) return true;
+  const campaign = { settings };
+  return GAMEPLAY_AREAS.some((a) => resolveActiveProviderChoice(campaign, a.id) === id);
+}
+
+/** Whether a license's sourcebooks belong in this campaign's Docs
+ *  library: owned, and one of its systems (or, for a license with no
+ *  rules of its own, one of its `alsoWith` systems) is designated here.
+ *  An open license (Starforged, Ironsworn, the SRD) is only listed in a
+ *  campaign that actually designates it. */
+export function isLicenseInUse(settings, licenseId) {
+  const lic = LICENSES.find((l) => l.id === licenseId);
+  if (!lic || !isLicensed(settings, lic.id)) return false;
+  return [...lic.systems, ...(lic.alsoWith || [])].some((id) => isDesignated(settings, id));
+}
+
+/** Whether a Reference Library `file` belongs in this campaign's Docs
+ *  library. A file no license lists (an old flat-path catalog entry, an
+ *  uncatalogued local file) never does. */
+export function isReferenceDocInUse(settings, file) {
+  const lic = licenseForDoc(file);
+  return !!lic && isLicenseInUse(settings, lic.id);
+}
+
+/** Whether a game system's Turn Step walkthrough (Campaign-panel tab,
+ *  its Crew Tasks, its Navigator workflow card) shows in this campaign:
+ *  only when that system is what a `turnSteps` gameplay area actually
+ *  resolves to — the area's pick, or the Module for Profile by default.
+ *  Being in use for some other area (SWN for Factions, a Compendium for
+ *  Bestiary) never brings Turn Steps along. */
+export function isTurnStepSystemActive(campaign, systemId) {
+  return GAMEPLAY_AREAS.some((a) => a.turnSteps && resolveActiveProviderChoice(campaign, a.id) === systemId);
+}
+
+/** Whether a content/data pack (data/contentPacksManifest.js) belongs to
+ *  this campaign — the same test as its sourcebooks in the Docs library:
+ *  the license for the pack's supplement (or else its game system) is
+ *  owned AND designated in the campaign's profile. Drives Settings ->
+ *  Campaigns -> Source Data. */
+export function isPackInUse(settings, pack) {
+  const lic = pack && licenseFor(pack.supplement || pack.ruleset);
+  return !!lic && isLicenseInUse(settings, lic.id);
+}
+
+/** Whether a supplement is turned on for one specific gameplay area. */
+export function isSupplementInUse(campaign, supplementId, areaId) {
+  return resolveActiveProviderChoice(campaign, areaId) === supplementId;
+}
+
+/** The extra (non-module) provider ids an area's dropdown offers after its
+ *  first "Module for Profile" option: owned, valid now, minus the module. */
+export function rulesConstitutionOptionIds(settings, areaId) {
+  const area = findArea(areaId);
+  if (!area) return [];
+  const mod = moduleProviderId(settings);
+  return area.providers.filter((id) => id !== mod && isValidChoice(settings, area, id));
+}
+
+/** Available Packs / Statblock Templates scope: untagged entries, the active
+ *  Genre Pack's own, the Module for Profile's own, and anything some Rules
+ *  Constitution area currently has in effect. */
 export function matchesEnabledModule(rulesetTag, settings) {
   if (rulesetTag == null) return true;
-  const genrePackId = settings && settings.genrePack;
-  if (rulesetTag === genrePackId) return true;
-  const rawModule = settings && settings.statRuleset;
-  const moduleProviderId = rawModule && (STAT_RULESET_TO_PROVIDER_ID[rawModule] || rawModule);
-  if (rulesetTag === moduleProviderId) return true;
-  // "Other game system modules that MIGHT BE ENABLED" — resolveActiveProviderChoice
-  // (not the plain resolveProviderChoice) so an area's own unset, merely-
-  // positional default (e.g. 'colony-management': ['planetfall'], its only
-  // listed provider) doesn't count as "enabled" when that Game System
-  // hasn't actually been activated (Settings -> Licenses) — only a real,
-  // currently-usable provider choice extends the list.
+  if (rulesetTag === (settings && settings.genrePack)) return true;
+  if (rulesetTag === moduleProviderId(settings)) return true;
   const campaign = { settings };
   return GAMEPLAY_AREAS.some((area) => resolveActiveProviderChoice(campaign, area.id) === rulesetTag);
-}
-
-// The two ids that both mean "GMAtlas Core" today (see the sagaatlas entry's
-// own comment above for why they're two records, not one) — used below to
-// answer "does GMAtlas Core cover this gameplay area" without assuming
-// either specific id.
-const GMATLAS_CORE_IDS = ['gmatlascore', 'sagaatlas'];
-
-/** Phase A audit (A3), the real "what does a GM's Rules Constitution choice
- *  actually resolve to during play" question `resolveProviderChoice` alone
- *  doesn't answer — that function returns the STORED/default choice
- *  regardless of whether the chosen Game System is actually usable right
- *  now. This layers the disable/fallback rule on top: a disabled Game
- *  System's own areas resolve to GMAtlas Core's ruleset if GMAtlas Core
- *  covers that specific area, else to `null` (no provider currently
- *  active) — resolved PER GAMEPLAY AREA, never a single global fallback
- *  flag, exactly as A3 specifies. The stored choice itself is never
- *  altered by this — re-enabling the Game System immediately restores it,
- *  since `resolveProviderChoice` (and thus this function) always reads
- *  the ORIGINAL stored value fresh, never a cached/rewritten one. */
-export function resolveActiveProviderChoice(campaign, areaId) {
-  const area = GAMEPLAY_AREAS.find((a) => a.id === areaId);
-  if (!area) return null;
-  const chosen = resolveProviderChoice(campaign && campaign.settings, areaId);
-  if (isGameSystemActivated(campaign, chosen)) return chosen;
-  const coreFallback = area.providers.find((p) => GMATLAS_CORE_IDS.includes(p));
-  return coreFallback || null;
 }

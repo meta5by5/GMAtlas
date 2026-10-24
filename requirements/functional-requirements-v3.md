@@ -646,8 +646,8 @@ Fully built: Universal Search across Cast/Journal/Oracle/Documents/Party/
 Colony in a fixed category order; whole-campaign export/import (always
 fully replaces); Content Pack export/import between separate campaigns
 (always additive, fresh ids); curated bulk catalog import with name-
-collision skip; Activity → Rules Lens suggestion via the Rules Constitution
-provider registry; two on-demand PDF scan tools (Mechanics Index, Table-of-
+collision skip; Activity → Rules Lens suggestion (each Activity's own
+provider list); two on-demand PDF scan tools (Mechanics Index, Table-of-
 Contents generation), both requiring an `http(s)` origin rather than
 `file://`.
 

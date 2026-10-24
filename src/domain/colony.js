@@ -10,6 +10,7 @@
 
 import { listEntities, createEntity, getEntity, addEntityStatblockGroup, removeEntityStatblockGroup } from './entities.js';
 import { listPartyMembers } from './party.js';
+import { freshCrewTaskProgress } from './crewTasks.js';
 import { rollLifeformProfile, formatLifeformProfile } from './lifeforms.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
@@ -136,7 +137,7 @@ export function advanceCampaignTurnWithAccrual(campaign) {
   // this function already does, so both places that actually advance the
   // Campaign Turn (World Tracker's End Turn ▸, and Turn Step's own "start
   // the next Campaign Turn" confirm) clear it for free.
-  next.crewTaskProgress = { doneMemberIds: [] };
+  next.crewTaskProgress = freshCrewTaskProgress();
 
   return { campaign: next, turn, changes };
 }

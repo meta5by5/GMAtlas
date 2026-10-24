@@ -9,7 +9,7 @@
 
 import { listEntities } from './entities.js';
 import { tablesWithOverrides, flattenKeys } from './oracles.js';
-import { listDocuments, listReferenceDocuments } from './documents.js';
+import { listDocuments, listCampaignReferenceDocuments } from './documents.js';
 import { listPartyTrackers } from './party.js';
 import { COLONY_FIELDS, getColonyFields, listCrewRows } from './colony.js';
 
@@ -26,7 +26,7 @@ function matches(haystack, q) { return String(haystack || '').toLowerCase().incl
  * docTabKey? } — describing where clicking it should navigate; this module
  * never touches the DOM itself.
  */
-export function universalSearch(campaign, query, { limit = 40 } = {}) {
+export function universalSearch(campaign, query, { limit = 40, loadedDocKeys = new Set() } = {}) {
   const q = String(query || '').trim().toLowerCase();
   if (!q) return [];
   const out = [];
@@ -77,7 +77,8 @@ export function universalSearch(campaign, query, { limit = 40 } = {}) {
       });
     }
   }
-  const refDocs = listReferenceDocuments(campaign);
+  // Only sourcebooks stored in this browser (see listCampaignReferenceDocuments).
+  const refDocs = listCampaignReferenceDocuments(campaign, loadedDocKeys);
   refDocs.forEach((r) => {
     const haystack = [r.title, ...(r.tags || [])].join(' ');
     if (matches(haystack, q)) {

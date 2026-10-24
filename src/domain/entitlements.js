@@ -29,3 +29,11 @@ export function canAccessGameSystem(appConfig, systemId) {
 export function setEntitlement(appConfig, systemId, allowed) {
   return { ...appConfig, entitlements: { ...appConfig.entitlements, [systemId]: !!allowed } };
 }
+
+/** Marks one book (Game System or Supplement id) owned or not — install-wide
+ *  Settings -> Licenses state, distinct from entitlements above (what this
+ *  install is ALLOWED to own). Owning turns nothing on by itself; a profile's
+ *  Module for Profile / Rules Constitution decides what's in use. */
+export function setLicense(appConfig, id, owned) {
+  return { ...appConfig, licenses: { ...(appConfig.licenses || {}), [id]: !!owned } };
+}

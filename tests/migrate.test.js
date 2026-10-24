@@ -406,3 +406,26 @@ test('migrateDocument backfills the #World protected tag (direct follow-up reque
   const migratedTwice = migrateDocument(migrated);
   assert.deepEqual(migratedTwice.entities.items.map((e) => e.tags), migrated.entities.items.map((e) => e.tags));
 });
+
+// A Character has no Bestiary statblock: migrateDocument drops the untouched
+// auto-created one an NPC used to keep (archived, hidden) after being tagged
+// #character; an edited one stays (inactive, removable in the Entity Editor).
+import { makeStatblock } from '../src/domain/statblocks.js';
+test('migrateDocument drops an untouched archived Bestiary from #character NPCs, keeps an edited one, and leaves non-Characters alone', () => {
+  const doc = defaultCampaign();
+  const pristine = { ...makeStatblock('npc', null, null, doc.settings), archived: true };
+  const edited = { ...makeStatblock('npc', null, null, doc.settings), archived: true };
+  edited.fields = edited.fields.map((f, i) => (i === 0 ? { ...f, value: 4 } : f));
+  const sheet = makeStatblock('character', 'starforged');
+  doc.entities.items = [
+    { id: 'a', type: 'npc', name: 'Hero', tags: ['character'], statblocks: [sheet, pristine] },
+    { id: 'b', type: 'npc', name: 'Vet', tags: ['character'], statblocks: [sheet, edited] },
+    { id: 'c', type: 'npc', name: 'Guard', tags: [], statblocks: [{ ...pristine, archived: false }] },
+  ];
+  const out = migrateDocument(doc);
+  const kinds = (id) => out.entities.items.find((e) => e.id === id).statblocks.map((g) => g.kind + (g.archived ? '(archived)' : ''));
+  assert.deepEqual(kinds('a'), ['character']);
+  assert.deepEqual(kinds('b'), ['character', 'npc(archived)']);
+  assert.deepEqual(kinds('c'), ['npc']);
+  assert.deepEqual(migrateDocument(out).entities.items.map((e) => e.statblocks.length), [1, 2, 1], 'idempotent');
+});

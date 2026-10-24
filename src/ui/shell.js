@@ -28,7 +28,7 @@ import {
   FIVE_LEAGUES_RANGED_BANDS, findFiveLeaguesRangedBand,
 } from '../domain/dice.js';
 import {
-  createEntity, updateEntity, addEntityTag, removeEntityTag, removeEntity, filterEntities, setActiveEntity, addRelationship, removeRelationship,
+  createEntity, applyNewNpcRoleStatblock, updateEntity, addEntityTag, removeEntityTag, removeEntity, filterEntities, setActiveEntity, addRelationship, removeRelationship,
   getEntity, addEntityStatblockGroup, removeEntityStatblockGroup, moveEntityStatblockGroup, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
   addEntityStatblockWeapon, updateEntityStatblockWeapon, removeEntityStatblockWeapon, setEntityStatblockGear,
   addEntityStatblockItem, updateEntityStatblockItem, removeEntityStatblockItem,
@@ -77,10 +77,10 @@ import { generateCreatureConcept, formatCreatureConcept, generateSiteConcept, fo
 import {
   addDocument, updateDocument, removeDocument, getDocument, addDocumentTag, removeDocumentTag, renameDocument,
   openDocumentTab, closeDocumentTab, setActiveDocumentTab, resolveDocumentTab,
-  listReferenceDocuments, renameRefDocument, addRefDocumentTag, removeRefDocumentTag, hideRefDocument, listDocuments,
+  listReferenceDocuments, listCampaignReferenceDocuments, renameRefDocument, addRefDocumentTag, removeRefDocumentTag, hideRefDocument, listDocuments,
   sanitizeExternalLinkUrl, mergeRefOverrides, referencedBlobKeys,
 } from '../domain/documents.js';
-import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue, setGaugeTrackerValue, ensurePartyStarforgedTrackers, ensurePartyFiveLeaguesTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity, reconcilePartySharedAssetVehicleTag, listPartyMembers, addPartyRelationship, removePartyRelationship, updatePartyRelationshipLabel, updatePartyRelationshipType, updatePartyRelationshipStrength, setPartyStarship, clearPartyStarship } from '../domain/party.js';
+import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue, setGaugeTrackerValue, ensurePartyStarforgedTrackers, ensurePartyFiveLeaguesTrackers, syncModuleTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity, reconcilePartySharedAssetVehicleTag, listPartyMembers, addPartyRelationship, removePartyRelationship, updatePartyRelationshipLabel, updatePartyRelationshipType, updatePartyRelationshipStrength, setPartyStarship, clearPartyStarship } from '../domain/party.js';
 import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, updateColonyEncounter, detachColonyEncounterEntity, listColonyEncounters, advanceCampaignTurnWithAccrual, formatTurnAdvanceNote, incrementCampaignMilestones, decrementCampaignMilestones, syncCrewRosterWithParty, createGeneratedLifeform, listLifeformEncounters } from '../domain/colony.js';
 import { resolveLifeformEncounterSlot } from '../domain/lifeforms.js';
 import {
@@ -135,18 +135,19 @@ import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
 import { isModuleVisible, setModuleEnabled, setStoryboardPosition, updateProfileRuleset, applyProfileDraft, resolvePositionContentId, BUILTIN_SLOT_CONTENT } from '../domain/rulesProfiles.js';
 import { TURN_STEP_ORACLE_LINKS, TURN_STEP_LOCATION_STEPS } from '../data/turnStepWorkflowMeta.js';
 import { genrePackIdForRuleset } from '../data/rulesConstitution.js';
+import { LICENSES } from '../data/licenses.js';
 import { RULESET_GENRE_PACK_HINTS, findRuleset } from '../data/rulesets.js';
-import { locationHierarchyTerms } from '../data/genrePacks.js';
-import { rulesetGuideDocExists, ensureRulesetGuideDefault } from '../domain/rulesetGuide.js';
+import { locationHierarchyTerms, genreStyleFamily } from '../data/genrePacks.js';
 import { canLoadRulesetReference } from '../domain/permissions.js';
 import { fetchRulesetReferenceBlob } from './rulesetReferenceFetch.js';
 import { DRAWER_META, drawerMeta } from './drawerMeta.js';
+import { setLicense } from '../domain/entitlements.js';
 import { moveTurnStepInList, updateTurnStepText, setTurnStepShowCrewTasks, loadDefaultIntoTurnStepList, renameTurnStepList, deleteTurnStepList, addTurnStepGroup, renameTurnStepGroup, addTurnStepToGroup, moveTurnStepToGroup, setTurnStepBranchTo } from '../domain/turnStepLists.js';
 import { getCurrentTurnStep, advanceTurnStep, retreatTurnStep, startNextColonyCampaignTurn, startNextStarshipCampaignTurn, startNextWarbandCampaignTurn } from '../domain/turnSteps.js';
 import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
 import { PLANETFALL_TURN_STEPS } from '../data/turnStepListPlanetfall.js';
 import { TURN_STEPS_FIVE_LEAGUES } from '../data/turnStepListFiveLeagues.js';
-import { moveCrewTaskInList, updateCrewTaskText, loadDefaultCrewTasks, assignCrewTask } from '../domain/crewTasks.js';
+import { moveCrewTaskInList, updateCrewTaskText, loadDefaultCrewTasks, assignCrewTask, setCrewTaskAssignment, crewTaskRows } from '../domain/crewTasks.js';
 import { CREW_TASKS_5PFH } from '../data/crewTasksDefault5pfh.js';
 
 // DRAWERS/DRAWER_META/drawerMeta live in ./drawerMeta.js — shared with
@@ -191,6 +192,12 @@ const EDGE_ORDER = ['guide', 'oracle', 'cast', 'faction-events', 'trade', 'docum
 // the separate headerTabButtonHTML() below since the header is a compact
 // horizontal bar, not the edge nav's vertical icon-tile strip.
 const HEADER_ORDER = ['party', 'colony', 'world-tracker', 'journal'];
+// Nav buttons whose panel is brought into focus — never closed — when
+// clicked, wherever that panel currently lives: an open tab, an anchored
+// Storyboard card, or a Storyboard position (direct requests, Party). Their
+// button stays in the nav even while the panel fills a position. Close it
+// with its own tab ✕ instead.
+const FOCUS_ON_REOPEN_DRAWERS = new Set(['party']);
 
 // Rules Profile module gating + Storyboard positions (design/adr/rules-
 // profiles-multi-campaign.md). EDGE_ORDER/HEADER_ORDER above are the full,
@@ -228,7 +235,9 @@ function computeVisibleEdgeOrder(profile) {
 }
 function computeVisibleHeaderOrder(profile) {
   const positioned = positionContentIds(profile);
-  const base = HEADER_ORDER.filter((id) => isModuleVisible(profile, id) && !positioned.has(id));
+  // FOCUS_ON_REOPEN_DRAWERS ids (Party) keep their button even while filling a
+  // position — clicking it goes to that position (focusDrawerPanel).
+  const base = HEADER_ORDER.filter((id) => isModuleVisible(profile, id) && (!positioned.has(id) || FOCUS_ON_REOPEN_DRAWERS.has(id)));
   const freedBuiltins = BUILTIN_CONTENT_IDS.filter((id) => !positioned.has(id));
   return [...base, ...freedBuiltins];
 }
@@ -350,8 +359,15 @@ function logTurnStepToJournal(slot) {
   const text = (mapLink && mapLink.stepId === current.step.id)
     ? `${current.step.text}\n\n🗺️ @[${mapLink.mapName}]`
     : current.step.text;
+  const source = `Turn Step — ${current.group.label} ${current.index + 1}/${current.total}`;
+  // Starting the step that was JUST logged (the Journal's latest entry is
+  // this same step) doesn't log it a second time.
+  const journal = store.get().journal || [];
+  const last = journal[journal.length - 1];
+  if (last && last.source === source && last.text === text) return toast('Already logged — this step is the latest Journal entry');
   if (mapLink && mapLink.stepId === current.step.id) navigatorStepMapLink = { ...navigatorStepMapLink, [slot]: null };
-  updateAndOpenJournal((d) => addNote(d, text, `Turn Step — ${current.group.label} ${current.index + 1}/${current.total}`));
+  // Adds the entry without switching over to the Journal tab.
+  store.update((d) => addNote(d, text, source));
   toast('Step logged to Journal');
 }
 
@@ -466,6 +482,8 @@ let settingsMenuOpen = false; // ephemeral — the header gear's Settings/About 
 // (with a confirm prompt) plus a "start new campaign" shortcut into
 // Settings' own Campaigns tab.
 let campaignSwitcherOpen = false;
+// Which Hexcrawl palette menu is open ('geography' | 'threat' | 'overlay' | null).
+let hexcrawlPaletteMenu = null;
 // Direct request: "a startup page on initial app startup that displays the
 // available campaigns and an option to open settings" — a full-screen
 // landing page shown on every launch (confirmed via AskUserQuestion, not
@@ -538,8 +556,6 @@ let turnStepBranchEditOpen = new Set();
 // dl2 crew-task box, purely ephemeral (nothing is committed to the
 // campaign until Log). Reset to null/'' on any Log, or on any Turn Step
 // ◂/▸ navigation (a fresh visit to dl2 always starts blank).
-let crewTaskSelectedId = null;
-let crewTaskSelectedMemberId = '';
 // Doc viewer's "right-two-section" position (direct follow-up request) —
 // set fresh on every [data-doc-open] click based on where the click came
 // from (Colony's Step Text vs. anywhere else), not tracked per tab; never
@@ -554,11 +570,10 @@ let docTagListOpen = false; // ephemeral — collapses the Documents drawer's ta
 // library. Default the sort to ASC alphabetical." — alongside the
 // existing free-text search (docFilter) + tag chips (docTagFilters)
 // above, which narrow WHICH entries show; these two instead control
-// ORDER (docSort) and WHICH SECTION (docTypeFilter: notes/My Files/
-// Reference Library, independent of the other two). Neither persisted —
-// a per-session display preference, not campaign data.
+// ORDER (docSort, picked from the sort icon's menu). Not persisted — a
+// per-session display preference, not campaign data.
 let docSort = 'title-asc'; // 'title-asc' | 'title-desc' | 'date-newest' | 'date-oldest'
-let docTypeFilter = 'all'; // 'all' | 'note' | 'file' | 'ref'
+let docSortMenuOpen = false; // the Docs library's sort icon menu
 let journalEditOpen = new Set(); // ephemeral — which journal entries are showing an editable mention-editor instead of their static rendered text
 let galleryFilter = ''; // ephemeral — Gallery drawer search box
 // Gallery's own "+ Upload" flow (as opposed to an entity's "+ Photo"): the
@@ -758,12 +773,12 @@ function wtFeatureKindLabel(kind) { return WT_FEATURE_KIND_LABELS[kind] || kind;
 let contentPackFlags = { entities: false, guide: false, journal: false };
 // Direct follow-up request: "Available Packs" list (Settings > General) —
 // which manifest pack ids currently have a fetch in flight, mirroring
-// hostileLocationsImporting's own in-flight-guard role but keyed by id
+// dataPackImporting's own in-flight-guard role, keyed by id
 // since more than one pack can exist.
 let contentPackImporting = new Set();
-// Rulesets tab's "Load" button — same in-flight-guard role, keyed by
-// ruleset id since each ruleset gets its own button.
-let rulesetReferenceLoading = new Set();
+// Licenses tab's per-sourcebook "Load" buttons — same in-flight-guard
+// role, keyed by the sourcebook's Reference Library file.
+let licenseDocLoading = new Set();
 // Export Campaign JSON's opt-in "Include attached files" checkbox (off by
 // default — a GM transferring devices ticks it on deliberately, everyone
 // else keeps the small plain export). The size preview is computed async
@@ -968,7 +983,8 @@ let basesOfInfluenceToggled = new Set(); // ephemeral — faction ids whose Base
 let expandedConflictDepth = new Set(); // ephemeral — conflict entity ids whose "Add depth" section is expanded (Faction Conflict, collapsed by default per the validated hero-path/depth split)
 let conflictEscalationSuggestions = []; // ephemeral — computed right after a Faction Turn commit (suggestedConflictEscalations); a dismissible one-click "did this affect a tracked conflict?" prompt, never applied automatically (Article II)
 let mechanicsScanning = false; // ephemeral — true while scanMechanicsIndex()'s async PDF.js scan is in flight (docs/adr/0014)
-let hostileLocationsImporting = false; // ephemeral — true while fetchHostileLocationsPack()'s async fetch is in flight (docs/adr/0026 JSON-pack addendum)
+// Source Data's per-zone data-pack imports in flight, keyed by manifest pack id.
+let dataPackImporting = new Set();
 let tocScanning = false; // ephemeral — true while scanAndGenerateToc()'s async PDF.js outline scan is in flight (docs/adr/0020)
 let lensPickerOpen = false; // ephemeral — "What Happens Next?"'s Suggestion Lens chip picker, open or not (docs/adr/0009)
 let lensDraw = []; // ephemeral — the current random draw of lens chips, fixed until re-opened (not redrawn on every unrelated re-render)
@@ -1070,7 +1086,10 @@ let collapsedPartySections = new Set();
 // itself is shell.js-owned ephemeral state read/written directly here,
 // not through a per-render UI snapshot drawers/index.js could import.
 const CAMPAIGN_SECTION_KEYS = [
-  { key: 'campaignGuide', defaultCollapsed: true },
+  // Campaign Guide (all three sub-tabs' copies) starts EXPANDED every time
+  // the Campaign panel opens, regardless of the other sections; it can
+  // still be collapsed by hand or by the panel's collapse-all.
+  { key: 'campaignGuide', defaultCollapsed: false },
   { key: 'colonyTurnSheet', defaultCollapsed: true },
   { key: 'crewRoster', defaultCollapsed: true },
   { key: 'lifeformEncounters', defaultCollapsed: true },
@@ -1080,12 +1099,13 @@ const CAMPAIGN_SECTION_KEYS = [
   // in this same list so the drawer title's collapse-all/expand-all and
   // the force-collapse-on-tab-open both cover the Starship sub-tab too,
   // not just whichever sub-tab happens to be active at the time.
-  { key: 'starshipCampaignGuide', defaultCollapsed: true },
+  { key: 'starshipCampaignGuide', defaultCollapsed: false },
   // Warband sub-tab's own mirror of campaignGuide/starshipCampaignGuide
   // (Five Leagues from the Borderlands) — same reasoning as
   // starshipCampaignGuide above.
-  { key: 'warbandCampaignGuide', defaultCollapsed: true },
+  { key: 'warbandCampaignGuide', defaultCollapsed: false },
 ];
+const CAMPAIGN_GUIDE_KEYS = new Set(['campaignGuide', 'starshipCampaignGuide', 'warbandCampaignGuide']);
 const PARTY_SECTION_KEYS = [
   // 'roster' removed (direct follow-up request: "removing the Party Roster
   // subheader to always show party members") — the member list no longer
@@ -1207,6 +1227,55 @@ let docBlobCheckedKeys = new Set();
 // drawer's "☁ Imported" badge (drawers/index.js) can render without the
 // pure drawer-render functions needing to touch IndexedDB themselves.
 let refDocBlobKeys = new Set();
+// The top nav stays on one row at every width: measured with the campaign
+// name at full width and nothing allowed to shrink (.mc-header-measuring);
+// if that overflows, the "GMAtlas |" title is dropped (.mc-header-compact)
+// and the campaign name then truncates with an ellipsis to whatever room
+// is left. Runs every render, so a resize/rotation (which re-renders)
+// re-fits it too.
+function fitHeaderToOneRow(root) {
+  const header = root.querySelector('.mc-header');
+  if (!header) return;
+  header.classList.remove('mc-header-compact');
+  header.classList.add('mc-header-measuring');
+  const overflows = header.scrollWidth > header.clientWidth + 1;
+  header.classList.remove('mc-header-measuring');
+  header.classList.toggle('mc-header-compact', overflows);
+}
+
+// Pulls one sourcebook PDF from the web server into this browser's doc-blob
+// store (keyed by its assets/docs/ path) — what makes it appear in the Docs
+// library of any campaign that uses its game system. Resolves to true on
+// success; never rejects (a failure is toasted).
+function loadLicenseDoc(file, { quiet = false } = {}) {
+  if (!canLoadRulesetReference() || licenseDocLoading.has(file)) return Promise.resolve(false);
+  licenseDocLoading = new Set(licenseDocLoading).add(file);
+  renderDrawerBody();
+  const done = () => { licenseDocLoading = new Set(licenseDocLoading); licenseDocLoading.delete(file); renderDrawerBody(); };
+  return fetchRulesetReferenceBlob(file)
+    .then(async (blob) => {
+      await store.putDocBlob(file, blob);
+      refreshRefDocBlobKeys();
+      done();
+      if (!quiet) toast(`${file.split('/').pop()} saved in this browser — it shows in the Docs library of campaigns that use this game`);
+      return true;
+    })
+    .catch((err) => { done(); toast(`Load failed (${file.split('/').pop()}) — ${err.message}`); return false; });
+}
+
+// Adds/removes module-owned Party Trackers to match the active profile
+// (party.js's syncModuleTrackers) — only touching the store when the result
+// actually differs. A store.update() mutator sees the raw doc, so the
+// profile-overlaid settings are passed in.
+function syncPartyModuleTrackers() {
+  const doc = store.get();
+  if (!doc) return;
+  const settings = doc.settings;
+  const before = JSON.stringify((doc.party && doc.party.trackers) || []);
+  const after = JSON.stringify((syncModuleTrackers(doc, settings).party || {}).trackers || []);
+  if (before !== after) store.update((d) => syncModuleTrackers(d, settings));
+}
+
 function refreshRefDocBlobKeys() {
   store.listDocBlobKeys().then((keys) => { refDocBlobKeys = new Set(keys); render(); });
 }
@@ -1526,6 +1595,12 @@ export function mountShell(el) {
   });
 
   store.subscribe(render);
+  // Party Trackers follow the profile's game systems on ANY change — a saved
+  // profile edit, a campaign switch, a profile reassignment, a license — not
+  // only when the Party panel opens. Writes only when something differs, so
+  // the resulting notify finds nothing left to change (no loop).
+  store.subscribe(() => queueMicrotask(syncPartyModuleTrackers));
+  refreshRefDocBlobKeys();
   // A background persist failure (docs/adr/0015-indexeddb-persistence.md) —
   // rare now that IndexedDB's quota is orders of magnitude bigger than
   // localStorage's was, but not impossible. Same wording guarded() already
@@ -1539,6 +1614,11 @@ export function mountShell(el) {
 function onClick(ev) {
   const t = ev.target;
   const hit = (sel) => t.closest(sel);
+  if (hexcrawlPaletteMenu && !hit('.hexcrawl-menu-wrap')) { hexcrawlPaletteMenu = null; renderDrawerBody(); }
+  if (docSortMenuOpen && !hit('.doc-sort-wrap')) { docSortMenuOpen = false; renderDrawerBody(); }
+  if (hit('[data-doc-sort-menu-toggle]')) { docSortMenuOpen = !docSortMenuOpen; return renderDrawerBody(); }
+  const docSortPick = hit('[data-doc-sort-pick]');
+  if (docSortPick) { docSort = docSortPick.dataset.docSortPick; docSortMenuOpen = false; return renderDrawerBody(); }
 
   const suggestItem = hit('[data-mention-suggest-item]');
   if (suggestItem) { chooseMentionSuggestItem(Number(suggestItem.dataset.mentionSuggestItem)); return; }
@@ -1567,7 +1647,11 @@ function onClick(ev) {
   }
 
   const edge = hit('[data-drawer-open]');
-  if (edge) return toggleDrawer(edge.dataset.drawerOpen);
+  if (edge) {
+    const id = edge.dataset.drawerOpen;
+    if (FOCUS_ON_REOPEN_DRAWERS.has(id)) return focusDrawerPanel(id);
+    return toggleDrawer(id);
+  }
   if (hit('[data-close-drawer]')) return closeDrawerTab(activeDrawer);
   // Check the nested close ✕ before the tab button it sits inside — both
   // match `[data-drawer-tab]` via closest() otherwise (the tab button
@@ -1958,7 +2042,7 @@ function onClick(ev) {
   const searchResult = hit('[data-search-result]');
   if (searchResult) {
     const idx = Number(searchResult.dataset.searchResult);
-    const item = universalSearch(store.get(), searchQuery)[idx];
+    const item = universalSearch(store.get(), searchQuery, { loadedDocKeys: refDocBlobKeys })[idx];
     searchOpen = false; searchQuery = '';
     const inp = root.querySelector('[data-search-input]'); if (inp) inp.value = '';
     if (item && item.target) {
@@ -2506,6 +2590,22 @@ function onClick(ev) {
   // (next open corner, 6-max toast, auto-opens the Conflict picker). A
   // second click while already armed with this exact key un-arms it —
   // same toggle semantics as re-picking "Select" in the dropdown.
+  const hexMenuToggle = hit('[data-hexcrawl-menu-toggle]');
+  if (hexMenuToggle) {
+    const kind = hexMenuToggle.dataset.hexcrawlMenuToggle;
+    hexcrawlPaletteMenu = hexcrawlPaletteMenu === kind ? null : kind;
+    return renderDrawerBody();
+  }
+  const hexPick = hit('[data-hexcrawl-pick]');
+  if (hexPick) {
+    const [kind, key] = hexPick.dataset.hexcrawlPick.split('::');
+    hexcrawlPaletteMenu = null;
+    if (!key) hexcrawlPlacingIcon = null;
+    else if (kind === 'overlay') hexcrawlPlacingIcon = { layer: key };
+    else hexcrawlPlacingIcon = { layer: kind, key };
+    if (kind !== 'geography') { hexcrawlRiverStart = null; hexcrawlRoadStart = null; }
+    return renderDrawerBody();
+  }
   if (hit('[data-hexcrawl-arm-quick-encounter]')) {
     hexcrawlPlacingIcon = (hexcrawlPlacingIcon && hexcrawlPlacingIcon.layer === 'threat' && hexcrawlPlacingIcon.key === 'unknown')
       ? null : { layer: 'threat', key: 'unknown' };
@@ -4623,11 +4723,18 @@ function onClick(ev) {
       });
     return;
   }
-  if (hit('[data-hostile-locations-import]')) {
-    if (hostileLocationsImporting) return;
-    hostileLocationsImporting = true;
+  // Settings -> Campaigns -> Source Data: one data pack (a Hostile zone
+  // file) at a time into this campaign — importHostileLocations dedups by
+  // name, so re-running one is harmless.
+  const dataPackImportBtn = hit('[data-data-pack-import]');
+  if (dataPackImportBtn) {
+    const packId = dataPackImportBtn.dataset.dataPackImport;
+    const entry = CONTENT_PACKS_MANIFEST.find((pk) => pk.id === packId && pk.kind === 'data-pack');
+    if (!entry || dataPackImporting.has(packId)) return;
+    dataPackImporting = new Set(dataPackImporting).add(packId);
     renderDrawerBody();
-    fetchHostileLocationsPack()
+    const done = () => { dataPackImporting = new Set(dataPackImporting); dataPackImporting.delete(packId); renderDrawerBody(); };
+    fetchHostileLocationsPack(['./' + entry.file])
       .then((pack) => {
         let createdCount = 0;
         store.update((d) => {
@@ -4635,57 +4742,34 @@ function onClick(ev) {
           createdCount = r.createdIds.length;
           return r.campaign;
         });
-        hostileLocationsImporting = false;
-        renderDrawerBody();
-        toast(createdCount ? `${createdCount} location(s) imported` : 'Already up to date — nothing new to import');
+        done();
+        toast(createdCount ? `${createdCount} location(s) imported from ${entry.title}` : `${entry.title} is already up to date — nothing new to import`);
       })
-      .catch((err) => { hostileLocationsImporting = false; renderDrawerBody(); toast(`Import failed — ${err.message}`); });
+      .catch((err) => { done(); toast(`Import failed — ${err.message}`); });
     return;
   }
-  // Rulesets tab's "Load" button (direct instruction): fetches the active
-  // ruleset's one primary sourcebook PDF and stores it under the Reference
-  // Library's own blob store, keyed by its real assets/docs/ path exactly
-  // like a matched "Import File(s)" drop already does (documents.js's
-  // listReferenceDocuments reads it live from there — no addDocument() of
-  // its own needed). Then checks whether this ruleset's default Guide ToC
-  // entry still exists; if a GM deleted it (or it was never seeded), asks
-  // before recreating it, rather than silently resurrecting it.
-  const refLoadBtn = hit('[data-ruleset-reference-load]');
-  if (refLoadBtn) {
-    const rulesetId = refLoadBtn.dataset.rulesetReferenceLoad;
-    const ruleset = findRuleset(rulesetId);
-    if (!canLoadRulesetReference() || !ruleset.doc || rulesetReferenceLoading.has(rulesetId)) return;
-    const file = ruleset.doc;
-    rulesetReferenceLoading = new Set(rulesetReferenceLoading).add(rulesetId);
-    renderDrawerBody();
-    fetchRulesetReferenceBlob(file)
-      .then(async (blob) => {
-        await store.putDocBlob(file, blob);
-        // Direct bug report: "the import indicates success, but is not
-        // actually loading the doc into the Docs library" — the blob
-        // itself was always stored correctly, but nothing here ever
-        // refreshed refDocBlobKeys (shell.js), the Documents drawer's own
-        // "which files are actually imported" cache — every other import
-        // path (Import File(s)/Import Library/Documents' own re-open)
-        // already calls this; the Load button was the one gap, so the ☁
-        // "Imported" badge (and the blob itself, as far as that cache's
-        // concerned) could look absent until something else happened to
-        // trigger a refresh.
-        refreshRefDocBlobKeys();
-        if (!rulesetGuideDocExists(store.get(), rulesetId)) {
-          if (window.confirm(`No Guide entry exists yet for "${ruleset.label}" — create one and link this sourcebook to it?`)) {
-            store.update((d) => ensureRulesetGuideDefault(d, rulesetId, { force: true }));
-          }
-        }
-        rulesetReferenceLoading = new Set(rulesetReferenceLoading); rulesetReferenceLoading.delete(rulesetId);
-        renderDrawerBody();
-        toast(`${ruleset.label} PDF loaded into your Doc Library`);
-      })
-      .catch((err) => {
-        rulesetReferenceLoading = new Set(rulesetReferenceLoading); rulesetReferenceLoading.delete(rulesetId);
-        renderDrawerBody();
-        toast(`Load failed — ${err.message}`);
-      });
+  // Settings -> Licenses (an admin action): Load pulls a sourcebook from the
+  // web server into this browser once; after that it's Overwrite, which
+  // asks first and replaces the same stored copy (same blob-store key —
+  // never a second one). "Load all" pulls a license's not-yet-stored books
+  // one at a time. A downloaded book then shows in the Docs library of every
+  // campaign whose profile uses that game.
+  const licenseDocLoadBtn = hit('[data-license-doc-load], [data-license-doc-reload]');
+  if (licenseDocLoadBtn) {
+    const file = licenseDocLoadBtn.dataset.licenseDocLoad || licenseDocLoadBtn.dataset.licenseDocReload;
+    if (refDocBlobKeys.has(file) && !window.confirm(`"${file.split('/').pop()}" is already in this browser. Overwrite it with a fresh copy from the server?`)) return;
+    loadLicenseDoc(file);
+    return;
+  }
+  const licenseLoadAllBtn = hit('[data-license-load-all]');
+  if (licenseLoadAllBtn) {
+    const lic = LICENSES.find((l) => l.id === licenseLoadAllBtn.dataset.licenseLoadAll);
+    const files = lic ? lic.docs.filter((f) => !refDocBlobKeys.has(f)) : [];
+    (async () => {
+      let loaded = 0;
+      for (const file of files) if (await loadLicenseDoc(file, { quiet: true })) loaded += 1;
+      toast(`${loaded} of ${files.length} ${lic ? lic.label : ''} sourcebook(s) loaded into this browser`);
+    })();
     return;
   }
   if (hit('[data-advance-faction-turns]')) {
@@ -5107,13 +5191,10 @@ function onClick(ev) {
   if (whoAddNpcRole) {
     const role = whoAddNpcRole.dataset.whoAddNpcRole;
     const npcId = entityPicker && entityPicker.pendingEntityId;
+    const justCreated = !!(entityPicker && entityPicker.justCreated);
     const sceneId = currentSceneId();
     entityPicker = null;
-    if (npcId && sceneId) {
-      store.update((d) => (role === 'protagonist' ? addSceneProtagonist(d, sceneId, npcId)
-        : role === 'antagonist' ? addSceneAntagonist(d, sceneId, npcId)
-        : addSceneBystander(d, sceneId, npcId)));
-    }
+    if (npcId && sceneId) store.update((d) => addNpcToSceneRole(d, sceneId, npcId, role, justCreated));
     return renderEntityPickerOverlay();
   }
   // Shared Assets' own "+" picker's first step (renderEntityPickerOverlay's
@@ -5295,9 +5376,12 @@ function onClick(ev) {
       // for any OTHER scene's System picker later.
       if (picker.entityType === 'party-vehicle') return addEntityTag(created.campaign, newId, 'vehicle');
       if (picker.entityType === 'system') return addEntityTag(created.campaign, newId, 'system');
+      // Party's ＋: the new NPC is born a Character — #character plus the active
+      // profile's character sheet (store.get().settings: this mutator sees the raw doc).
+      if (picker.mode === 'party-add-character') return applyNewNpcRoleStatblock(created.campaign, newId, 'character', store.get().settings);
       return created.campaign;
     });
-    if (newId) commitEntityPickerPick(picker, newId);
+    if (newId) commitEntityPickerPick({ ...picker, justCreated: true }, newId);
     openDrawerTab('entity-detail');
     focusInspectorNameNextRender = true;
     return store.update((d) => setActiveEntity(d, newId));
@@ -5545,12 +5629,10 @@ function onClick(ev) {
   // Any navigation resets the Crew Tasks box's own ephemeral picks (direct
   // follow-up request) — a fresh visit to dl2 always starts blank.
   if (hit('[data-turn-step-prev]')) {
-    crewTaskSelectedId = null; crewTaskSelectedMemberId = '';
     return applyTurnStepMutation('colony', retreatTurnStep);
   }
   const turnStepNext = hit('[data-turn-step-next]');
   if (turnStepNext) {
-    crewTaskSelectedId = null; crewTaskSelectedMemberId = '';
     // Reaching the true end of the workflow (hasNext false — no branchTo,
     // no more steps in the group, empty returnStack) offers to start the
     // next Campaign Turn instead of the button just staying disabled
@@ -5623,32 +5705,19 @@ function onClick(ev) {
   // Warband tab's own "Start" (Five Leagues from the Borderlands — its
   // Step Text row mirrors Colony's/Starship's exactly, slot 'warband').
   if (hit('[data-warband-turn-step-start]')) return logTurnStepToJournal('warband');
-  // Crew Tasks box (Daily Life step 2, direct follow-up request) — picking
-  // a task button just records the pick (ephemeral, nothing committed yet);
-  // Log is the one action that actually performs it.
-  const crewTaskSelect = hit('[data-crew-task-select]');
-  if (crewTaskSelect) { crewTaskSelectedId = crewTaskSelect.dataset.crewTaskSelect; return renderDrawerBody(); }
-  const crewTaskLog = hit('[data-crew-task-log]');
-  if (crewTaskLog) {
-    const taskId = crewTaskSelectedId;
-    const memberId = crewTaskSelectedMemberId;
-    if (!taskId || !memberId) return;
-    const doc = store.get();
-    const task = ((doc.crewTasks && doc.crewTasks.tasks) || []).find((t) => t.id === taskId);
-    const member = getEntity(doc, memberId);
-    if (!task || !member) return;
-    // Logging IS "performing" the task (assignCrewTask marks the member
-    // done for this Campaign Turn) — the new entry opens straight into
-    // edit mode (journalEditOpen, same Set data-journal-edit-toggle uses)
-    // so the GM can add outcome details right away, per the direct
-    // request. store.update()'s own return value (via updateAndOpenJournal)
-    // is the fresh overlaid doc, so the just-created entry is its journal
-    // array's own last element — no second store.get() needed.
-    const updated = updateAndOpenJournal((d) => addNote(assignCrewTask(d, taskId, memberId), `${task.label} — ${member.name || 'Unnamed'}.`, 'Crew Task'));
-    const newEntry = updated.journal[updated.journal.length - 1];
-    if (newEntry) journalEditOpen.add(newEntry.id);
-    crewTaskSelectedId = null; crewTaskSelectedMemberId = '';
-    return render();
+  // Crew Tasks table: ▶ Start performs one member's picked task — the task
+  // and its rules go to the Journal (no switch to the Journal tab) and the
+  // member is marked done for this Campaign Turn. Starting a member who
+  // already acted does nothing a second time.
+  const crewTaskStart = hit('[data-crew-task-start]');
+  if (crewTaskStart) {
+    const memberId = crewTaskStart.dataset.crewTaskStart;
+    const row = crewTaskRows(store.get()).find((r) => r.member.id === memberId);
+    if (!row) return;
+    if (row.done) return toast(`${row.member.name || 'This crew member'} already performed a task this Campaign Turn`);
+    if (!row.task) return toast('Pick a task first');
+    store.update((d) => addNote(assignCrewTask(d, row.task.id, memberId), `${row.task.label} — ${row.member.name || 'Unnamed'}.\n\n${row.task.text}`, 'Crew Task'));
+    return toast(`${row.task.label} logged to the Journal`);
   }
   if (hit('[data-bind-file]')) return store.bindFile().then(() => toast('Save file bound')).catch(() => {});
   if (hit('[data-restore-backup]')) {
@@ -6021,8 +6090,6 @@ function onChange(ev) {
   // ever fires 'change', never the Documents search box's own live
   // 'input' (data-doc-filter, onInput above), so these two belong here,
   // not alongside it.
-  if (t.closest('[data-doc-sort]')) { docSort = t.value; return renderDrawerBody(); }
-  if (t.closest('[data-doc-type-filter]')) { docTypeFilter = t.value; return renderDrawerBody(); }
   // Dice roller pool's per-die Modifier field (direct follow-up request) —
   // edits the currently-selected die's own modifier; a no-op if nothing is
   // selected (the field is disabled in that state, but guard anyway since
@@ -6082,27 +6149,6 @@ function onChange(ev) {
   // category is armed — no more toggle-if-already-armed logic the old
   // chip buttons needed, since a dropdown can't be "clicked again" the
   // same way; picking the blank placeholder option disarms explicitly.
-  // Only one category is ever armed at a time (hexcrawlPlacingIcon is a
-  // single value) — hexcrawlPalette's own render reflects that by
-  // resetting the OTHER two selects back to "Select" whenever a different
-  // one is actually armed, so the dropdowns never show a stale selection.
-  const hexSelectGeo = t.closest('[data-hexcrawl-select-geography]');
-  if (hexSelectGeo) {
-    hexcrawlPlacingIcon = t.value ? { layer: 'geography', key: t.value } : null;
-    return renderDrawerBody();
-  }
-  const hexSelectThreat = t.closest('[data-hexcrawl-select-threat]');
-  if (hexSelectThreat) {
-    hexcrawlPlacingIcon = t.value ? { layer: 'threat', key: t.value } : null;
-    hexcrawlRiverStart = null; hexcrawlRoadStart = null;
-    return renderDrawerBody();
-  }
-  const hexSelectOverlay = t.closest('[data-hexcrawl-select-overlay]');
-  if (hexSelectOverlay) {
-    hexcrawlPlacingIcon = t.value ? { layer: t.value } : null;
-    hexcrawlRiverStart = null; hexcrawlRoadStart = null;
-    return renderDrawerBody();
-  }
   const hexDetailGeo = t.closest('[data-hex-detail-geography]');
   if (hexDetailGeo) {
     const [mapId, q, r] = hexDetailGeo.dataset.hexDetailGeography.split('::');
@@ -6673,16 +6719,19 @@ function onChange(ev) {
     const areaId = rulesProviderChoice.dataset.rulesProviderChoice;
     const profileId = currentEditingProfileId();
     const draft = getProfileDraft(profileId);
-    if (draft) setProfileDraft(profileId, updateProfileRuleset(draft, { rulesProviderChoices: { ...draft.ruleset.rulesProviderChoices, [areaId]: t.value } }));
+    if (draft) {
+      // '' = "Module for Profile": drop the stored pick so the area follows the module.
+      const choices = { ...draft.ruleset.rulesProviderChoices };
+      if (t.value) choices[areaId] = t.value; else delete choices[areaId];
+      setProfileDraft(profileId, updateProfileRuleset(draft, { rulesProviderChoices: choices }));
+    }
     return render();
   }
-  const gameSystemActivate = t.closest('[data-game-system-activate]');
-  if (gameSystemActivate) {
-    const systemId = gameSystemActivate.dataset.gameSystemActivate;
-    const profileId = currentEditingProfileId();
-    const draft = getProfileDraft(profileId);
-    if (draft) setProfileDraft(profileId, updateProfileRuleset(draft, { gameSystemActivations: { ...draft.ruleset.gameSystemActivations, [systemId]: t.checked } }));
-    return render();
+  // Licenses: install-wide ownership, written straight to appConfig (not a profile draft).
+  const licenseToggle = t.closest('[data-license-toggle]');
+  if (licenseToggle) {
+    const id = licenseToggle.dataset.licenseToggle;
+    return store.updateAppConfig((cfg) => setLicense(cfg, id, t.checked));
   }
   if (t.closest('[data-rpe-show-all-genre-packs]')) {
     showAllGenrePacksInRpe = t.checked;
@@ -6926,11 +6975,9 @@ function onChange(ev) {
   const expDial = t.closest('[data-expedition-dial]');
   if (expDial) { const [threadId, field] = expDial.dataset.expeditionDial.split('::'); return store.update((d) => setExpeditionDial(d, threadId, field, Number(t.value))); }
 
-  if (t.closest('[data-campaign-title-input]')) return store.update((d) => { d.meta.title = t.value; return d; });
   if (t.closest('[data-campaign-css-template]')) return store.update((d) => { d.meta.cssTemplate = t.value; return d; });
   const guideTitleInput = t.closest('[data-guide-title-input]');
   if (guideTitleInput) { const id = getActiveGuideDoc(store.get()).id; if (t.value.trim()) return store.update((d) => renameGuideDoc(d, id, t.value.trim())); return; }
-  if (t.closest('[data-genre-input]')) return store.update((d) => { d.settings.genre = t.value; return d; });
   // Ruleset Profile Editor fields (design/adr/rules-profiles-multi-
   // campaign.md): these six used to write straight onto the campaign doc's
   // own settings; they now edit an uncommitted DRAFT of whichever profile
@@ -7024,7 +7071,8 @@ function onChange(ev) {
   }
   // Colony's Crew Tasks box — Party Member <select> (direct follow-up
   // request), purely ephemeral until Log commits it.
-  if (t.closest('[data-crew-task-member]')) { crewTaskSelectedMemberId = t.value; return renderDrawerBody(); }
+  const crewTaskAssign = t.closest('[data-crew-task-assign]');
+  if (crewTaskAssign) return store.update((d) => setCrewTaskAssignment(d, crewTaskAssign.dataset.crewTaskAssign, t.value));
   if (t.closest('[data-settings-toolbar-default]')) return store.update((d) => { d.settings.toolbarCollapsedByDefault = t.checked; return d; });
   if (t.closest('[data-settings-dice3d]')) return store.update((d) => { d.settings.dice3dEnabled = t.checked; return d; });
   if (t.closest('[data-settings-dice3d-theme]')) return store.update((d) => { d.settings.dice3dTheme = t.value; return d; });
@@ -7437,6 +7485,65 @@ function onInput(ev) {
 // single-drawer toggle behavior for the common case), otherwise opens it as
 // a new tab (or just switches to it if already pinned open) — never resets
 // an already-open tab's own filter state, only a newly-opened one's.
+
+// Bring an already-open panel to the front and move keyboard focus into it:
+// in the tab strip it becomes the active tab (re-showing a collapsed drawer
+// panel, keeping its scroll position); anchored to the Storyboard, its card
+// is scrolled into view and focused instead of reopening a placeholder in
+// the drawer (on phone/tablet, where the Storyboard isn't shown, it returns
+// to the tab strip). Not open yet → opens normally.
+function focusDrawerPanel(id) {
+  // Filling a Storyboard position: select that position wherever it shows —
+  // its pinned tab on phone/tablet; its Storyboard card on desktop (unless
+  // an anchored panel is covering that slot right now, in which case it
+  // opens as an ordinary tab instead); the Advisor panel (or, while drawers
+  // are open, the Advisor tab) for the Advisor slot.
+  const slot = BUILTIN_POSITION_IDS.find((sl) => resolvePositionContentId(store.getActiveProfile(), sl) === id);
+  if (slot && !anchoredPanels.includes(id)) {
+    if (isCompactTab() || (slot === 'advisor' && openDrawers.length)) {
+      activeDrawer = slot;
+      drawerCollapsed = false;
+      render();
+      flashFocus(root.querySelector('[data-drawer-body]'));
+      const tab = root.querySelector(`[data-drawer-tab="${slot}"]`);
+      if (tab && tab.scrollIntoView) tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      return;
+    }
+    if (slot === 'advisor') { render(); return flashFocus(root.querySelector('[data-copilot]')); }
+    const covered = (slot === 'navigator' && anchoredPanels.length >= 1) || (slot === 'composer' && anchoredPanels.length >= 2);
+    if (!covered) {
+      render();
+      return flashFocus(root.querySelector(slot === 'navigator' ? '.storyboard-grid > .navigator-card' : '.storyboard-grid > .workspace-card:not(.navigator-card)'));
+    }
+  }
+  if (anchoredPanels.includes(id)) {
+    if (isCompactTab()) return toggleAnchorPanel(id);
+    render();
+    const card = root.querySelector(`[data-storyboard-unanchor="${id}"]`);
+    return flashFocus(card && card.closest('.workspace-card'));
+  }
+  if (!openDrawers.includes(id)) return toggleDrawer(id);
+  drawerCollapsed = false;
+  openDrawerTab(id);
+  render();
+  flashFocus(root.querySelector('[data-drawer-body]'));
+  const tab = root.querySelector(`[data-drawer-tab="${id}"]`);
+  if (tab && tab.scrollIntoView) tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+// Keyboard focus onto a panel (without jumping its scroll), plus a brief
+// outline so the GM sees where focus landed.
+function flashFocus(el) {
+  if (!el) return;
+  if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+  try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+  if (el.scrollIntoView && (el.closest('.storyboard-grid') || el.matches('[data-copilot]'))) el.scrollIntoView({ block: 'nearest' });
+  el.classList.remove('panel-focus-flash');
+  void el.offsetWidth;
+  el.classList.add('panel-focus-flash');
+  setTimeout(() => el.classList.remove('panel-focus-flash'), 900);
+}
+
 function toggleDrawer(id) {
   if (activeDrawer === id) return closeDrawerTab(id);
   openDrawerTab(id);
@@ -7461,6 +7568,7 @@ function openDrawerTab(id) {
     openDrawers = [...openDrawers, id];
     if (id === 'oracle') oracleFilter = '';
     if (id === 'documents') { docFilter = ''; docTagFilters = new Set(); docTagEditorOpen = new Set(); refreshRefDocBlobKeys(); }
+    if (id === 'settings') refreshRefDocBlobKeys();
     if (id === 'graph') graphView = { scale: 1, x: 0, y: 0 };
     if (id === 'world-tracker') { worldTrackerTab = 'sectors'; worldTrackerSelectedSector = null; worldTrackerMigrateOpen = new Set(); }
     if (id === 'colony') colonyPanelTab = 'colony';
@@ -7477,7 +7585,7 @@ function openDrawerTab(id) {
   // since a GM could switch to Starforged mid-session with Party already
   // pinned open, or reopen it after removing a tracker; ensurePartyStarforgedTrackers
   // is idempotent, so a redundant call when both already exist is a no-op.
-  if (id === 'party') store.update((d) => ensurePartyFiveLeaguesTrackers(ensurePartyStarforgedTrackers(d)));
+  if (id === 'party') syncPartyModuleTrackers();
   activeDrawer = id;
 }
 
@@ -9261,7 +9369,7 @@ function updateMentionSuggest(field) {
     .map((e) => ({ kind: 'entity', id: e.id, label: e.name || 'Unnamed', sublabel: entityTypeLabel(e.type, doc.settings.genrePack) }));
   const docItems = [
     ...listDocuments(doc).map((d) => ({ kind: 'doc', title: d.title || d.fileName || 'Untitled document', sublabel: 'document', tabKey: 'lib:' + d.id })),
-    ...listReferenceDocuments(doc).map((r) => ({ kind: 'doc', title: r.title, sublabel: 'reference library', tabKey: 'ref:' + r.key })),
+    ...listCampaignReferenceDocuments(doc, refDocBlobKeys).map((r) => ({ kind: 'doc', title: r.title, sublabel: 'reference library', tabKey: 'ref:' + r.key })),
   ].filter((d) => d.title.toLowerCase().includes(query));
   const items = [...entityItems, ...docItems].slice(0, MENTION_MAX_SUGGESTIONS);
   if (!items.length) return closeMentionSuggest();
@@ -9391,7 +9499,11 @@ function render() {
 
   renderStartupScreen();
 
-  root.querySelector('.campaign-title').textContent = doc.meta.title;
+  // Genre stylesheet (styles/genre-scifi.css / genre-fantasy.css) follows the profile's Genre Pack.
+  document.documentElement.dataset.genre = genreStyleFamily(doc.settings.genrePack, doc.settings.statRuleset);
+  const campaignTitleEl = root.querySelector('.campaign-title');
+  campaignTitleEl.textContent = doc.meta.title;
+  campaignTitleEl.title = `${doc.meta.title} — switch campaign`;
 
   const bc = root.querySelector('[data-breadcrumb]');
   const crumbs = doc.timeline.length ? doc.timeline : [{ label: doc.meta.title }, { label: `Scene ${doc.scenes.length}` }];
@@ -9514,6 +9626,8 @@ function render() {
         <button type="button" class="btn ghost sm campaign-switcher-new" data-campaign-switcher-new>+ Start New Campaign</button>`;
     }
   }
+
+  fitHeaderToOneRow(root);
 
   const settingsMenuEl = root.querySelector('[data-settings-menu]');
   if (settingsMenuEl) {
@@ -9806,7 +9920,7 @@ function renderSearchOverlay() {
   if (!overlay) return;
   overlay.hidden = !searchOpen;
   const resultsEl = overlay.querySelector('[data-search-results]');
-  if (resultsEl) resultsEl.innerHTML = searchOpen ? renderSearchPanel(store.get(), searchQuery) : '';
+  if (resultsEl) resultsEl.innerHTML = searchOpen ? renderSearchPanel(store.get(), searchQuery, refDocBlobKeys) : '';
 }
 
 /** What commitEntityPickerPick above actually does once a candidate
@@ -9814,6 +9928,21 @@ function renderSearchOverlay() {
  *  data-entity-picker-select click handler verbatim so BOTH picking an
  *  existing entity and the newer "+ Create New" button (which creates
  *  one, then wires it up the exact same way) share one implementation. */
+// A brand-new NPC first gets its role's default statblock (Protagonist: the
+// active profile's character sheet; Antagonist/Bystander: its Bestiary
+// statblock) — store.get().settings, not d.settings, so the active Rules
+// Profile's own Module wins over the raw doc's possibly-stale copy.
+function addNpcToSceneRole(d, sceneId, npcId, role, justCreated) {
+  let next = d;
+  if (justCreated) {
+    next = applyNewNpcRoleStatblock(next, npcId, role, store.get().settings);
+    if (role === 'protagonist') next = syncCrewRosterWithParty(next);
+  }
+  if (role === 'protagonist') return addSceneProtagonist(next, sceneId, npcId);
+  if (role === 'antagonist') return addSceneAntagonist(next, sceneId, npcId);
+  return addSceneBystander(next, sceneId, npcId);
+}
+
 function commitEntityPickerPick(picker, id) {
   if (!picker) return renderEntityPickerOverlay();
   if (picker.entityType === 'where-faction-link') {
@@ -9972,9 +10101,9 @@ function commitEntityPickerPick(picker, id) {
   if (picker.entityType === 'asset') return store.update((d) => addSceneAsset(d, sceneId, id));
   if (picker.entityType === 'location-current') return store.update((d) => addSceneLocation(d, sceneId, id));
   if (picker.entityType === 'system') return store.update((d) => setSceneSystem(d, sceneId, id));
-  if (picker.mode === 'protagonist') return store.update((d) => addSceneProtagonist(d, sceneId, id));
-  if (picker.mode === 'antagonist') return store.update((d) => addSceneAntagonist(d, sceneId, id));
-  if (picker.mode === 'bystander') return store.update((d) => addSceneBystander(d, sceneId, id));
+  if (picker.mode === 'protagonist' || picker.mode === 'antagonist' || picker.mode === 'bystander') {
+    return store.update((d) => addNpcToSceneRole(d, sceneId, id, picker.mode, picker.justCreated));
+  }
   if (picker.mode === 'who-add-npc') {
     // Don't commit to a role yet — stash the pick and let
     // renderEntityPickerOverlay's own pendingEntityId branch ask which
@@ -10367,7 +10496,7 @@ function renderEntityPickerOverlay() {
   // (Vehicle)'" — distinguishes it from "+Asset"'s own plain "Create New
   // Asset" (both create the same `asset` entity type, so the label is the
   // only thing that would otherwise tell them apart in this list).
-  const createGenericLabel = entityTypeLabel(createGenericType, store.get().settings.genrePack) + (entityPicker.entityType === 'party-vehicle' ? ' (Vehicle)' : '');
+  const createGenericLabel = entityTypeLabel(createGenericType, store.get().settings.genrePack) + (entityPicker.entityType === 'party-vehicle' ? ' (Vehicle)' : '') + (entityPicker.mode === 'party-add-character' ? ' (Character)' : '');
   const createGenericBtn = createGenericType
     ? `<button type="button" class="entity-picker-row entity-picker-row-create" data-entity-picker-create>＋ Create New ${escapeHtml(createGenericLabel)}</button>`
     : '';
@@ -10993,26 +11122,7 @@ function castGenerateSelectHtml() {
 }
 function headExtraForDrawer(id) {
   if (id === 'cast') return castGenerateSelectHtml();
-  // Direct follow-up request: "Move + Add NPC to the same row as the
-  // 'Party' header and replace it with just a '+'. Move the text 'NPC
-  // entities tagged #character...' into a tooltip on the same row as the
-  // 'party' header." — same data-party-add-character handler Party Roster's
-  // own button used (drawers/index.js no longer renders one at all now
-  // that the Party Roster subheader itself is gone), just relocated to the
-  // drawer chrome's own title row and reduced to an icon-only button, with
-  // the explanatory copy that used to sit below it as a <p> now carried as
-  // this button's own title tooltip instead.
-  if (id === 'party') {
-    // Direct bug report: "Revise the Party panel '+' NPC button to NPC
-    // selector form and not default to create a new NPC" — this used to
-    // create a blank NPC directly (data-party-add-character), same bug
-    // class as WHO's own header "Add NPC" button. Retargeted to the
-    // shared entity picker (data-entity-picker-open="party-add-character")
-    // so the GM can pick an existing NPC to promote to Party first,
-    // with "+ Create New NPC" still available inside the picker for a
-    // genuinely new one.
-    return `<button class="icon-btn" data-entity-picker-open="party-add-character" title="Add NPC — pick an existing NPC to add to Party, or create a new one. Tagging an NPC #character in Cast does the same thing.">＋</button>`;
-  }
+  // (Party's ＋ picker lives on the Party panel's own "Party" section header.)
   // Guide/Documents' top-of-drawer intro tips have no in-content header of
   // their own to sit next to (unlike a Settings group's <h3> or Documents'
   // own "Reference Library" <h4>, both wrapped directly where they're
@@ -11033,7 +11143,7 @@ function headExtraForDrawer(id) {
 // Every ephemeral UI flag a drawer template might read, in one place.
 function buildDrawerUi() {
   return {
-    oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, oracleRouteToNavigator: oracleRouteToNavigator && activeDrawer === 'oracle', navigatorStepMapLink, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, docSort, docTypeFilter, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
+    oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, oracleRouteToNavigator: oracleRouteToNavigator && activeDrawer === 'oracle', navigatorStepMapLink, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, docSort, docSortMenuOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     fiveLeaguesInfoOpen, fiveLeaguesItemNotesOpen,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
     enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, journalActionsOpen, journalDraftText, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, expandedWhatConflicts,
@@ -11044,11 +11154,11 @@ function buildDrawerUi() {
     journalEditOpen, graphFilter, helpOpen, settingsMenuOpen, settingsTab, rulesetsSubTab, campaignFormOpen, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
-    hexcrawlPlacingIcon, hexcrawlCamera, hexcrawlSelectedHex, hexcrawlRange, hexcrawlRiverStart, hexcrawlRoadStart,
+    hexcrawlPlacingIcon, hexcrawlPaletteMenu, hexcrawlCamera, hexcrawlSelectedHex, hexcrawlRange, hexcrawlRiverStart, hexcrawlRoadStart,
     dungeonCrawlPending, dungeonCrawlSelected, dungeonCrawlDetailZoom, dungeonCrawlMergeMode, dungeonCrawlMergeSelection, dungeonCrawlArmedDressing,
-    contentPackFlags, contentPackImporting, hostileLocationsImporting, rulesetReferenceLoading, exportIncludeAttachments, exportAttachmentsPreview,
+    contentPackFlags, contentPackImporting, dataPackImporting, licenseDocLoading, canLoadReference: canLoadRulesetReference(), exportIncludeAttachments, exportAttachmentsPreview,
     worldTrackerTab, worldTrackerSelectedSector, worldTrackerMigrateOpen,
-    expandedTurnStepGroups, editingTurnStepListId, turnStepListsCollapsed, turnStepMoveEditOpen, turnStepBranchEditOpen, crewTaskSelectedId, crewTaskSelectedMemberId, colonyPanelTab,
+    expandedTurnStepGroups, editingTurnStepListId, turnStepListsCollapsed, turnStepMoveEditOpen, turnStepBranchEditOpen, colonyPanelTab,
     // Faction Events' own docked-in-WHERE state (see factionEventsDockedInWhere's
     // comment above) — workspace/index.js's WHERE view reads these to render
     // the same renderFactionEvents() body a second way when docked.
@@ -11233,7 +11343,10 @@ function renderDrawerBody() {
   // collapse every one of its own sections. Placed here (not
   // openDrawerTab's own "genuinely new" guard) so switching straight from
   // an already-pinned tab, not just opening it fresh, also resets it.
-  if (switchedDrawer && activeDrawer === 'colony') setSectionsCollapsed(CAMPAIGN_SECTION_KEYS, true);
+  if (switchedDrawer && activeDrawer === 'colony') {
+    setSectionsCollapsed(CAMPAIGN_SECTION_KEYS.filter((sec) => !CAMPAIGN_GUIDE_KEYS.has(sec.key)), true);
+    setSectionsCollapsed(CAMPAIGN_SECTION_KEYS.filter((sec) => CAMPAIGN_GUIDE_KEYS.has(sec.key)), false);
+  }
   if (switchedDrawer && lastRenderedDrawerId) drawerScrollPositions.set(lastRenderedDrawerId, drawerEl.scrollTop);
   if (body) replaceBodyPreservingScroll(body, renderActiveDrawerHtml(doc));
   if (switchedDrawer && drawerEl) drawerEl.scrollTop = drawerScrollPositions.get(activeDrawer) || 0;

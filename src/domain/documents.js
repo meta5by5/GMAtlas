@@ -2,6 +2,7 @@
 
 import { DOCS_MANIFEST } from '../data/docsManifest.js';
 import { findByName } from './entities.js';
+import { isReferenceDocInUse } from '../data/rulesConstitution.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 
@@ -106,11 +107,11 @@ export function removeDocumentTag(campaign, id, tag) {
 /** Every distinct tag across the uploaded/note library AND the Reference
  *  Library overlay, sorted — for the tag-filter chip row and the
  *  tag-picker datalist. */
-export function allDocumentTags(campaign) {
+export function allDocumentTags(campaign, loadedKeys = new Set()) {
   const library = (campaign.documents && campaign.documents.library) || [];
   const set = new Set();
   for (const d of library) for (const t of (d.tags || [])) set.add(t);
-  for (const r of listReferenceDocuments(campaign)) for (const t of (r.tags || [])) set.add(t);
+  for (const r of listCampaignReferenceDocuments(campaign, loadedKeys)) for (const t of (r.tags || [])) set.add(t);
   return [...set].sort();
 }
 
@@ -395,6 +396,22 @@ export function listReferenceDocuments(campaign) {
     // Library) are both consistently name-ordered.
     .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
 }
+
+/** The Reference Library as THIS campaign sees it: only sourcebooks already
+ *  stored in this browser (`loadedKeys` — the doc-blob-store keys, shell.js's
+ *  refDocBlobKeys) whose license is owned and whose game system the
+ *  campaign's profile designates (data/rulesConstitution.js's
+ *  isReferenceDocInUse). No catalog entry shows just because it exists on
+ *  the web server — a Traveller campaign never sees Starforged's books, and
+ *  nothing is listed until it's been pulled into this browser. This is what
+ *  the Docs library, @-mention suggestions, search, and tag chips list.
+ *  Mention resolution, import matching, and export keep using the full
+ *  listReferenceDocuments, so an existing link never breaks. */
+export function listCampaignReferenceDocuments(campaign, loadedKeys = new Set()) {
+  return listReferenceDocuments(campaign)
+    .filter((r) => loadedKeys.has(r.file) && isReferenceDocInUse(campaign && campaign.settings, r.file));
+}
+
 
 /** Bulk-restore refOverrides from an imported Reference Library export
  *  (direct follow-up request: "transfer the library records and docs

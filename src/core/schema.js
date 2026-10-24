@@ -254,7 +254,7 @@ export function defaultCampaign(now = new Date().toISOString()) {
     // field edit. The task DEFINITIONS themselves live on the active Rules
     // Profile (crewTasks.tasks, only ever read here via store.get()'s
     // overlay, same as turnSteps above) — see domain/crewTasks.js.
-    crewTaskProgress: { doneMemberIds: [] },
+    crewTaskProgress: { doneMemberIds: [], assignments: {} },
 
     // A tree of freeform reference documents (docs/adr/0017-multi-doc-
     // guide-tree.md) — each a table of contents with @mentions/@[Doc]
@@ -421,11 +421,11 @@ export function defaultRulesProfile(name = 'Default', now = new Date().toISOStri
       tradeEconomyModel: 'hostile',
       statRuleset: 'starforged',
       rulesProviderChoices: {},
-      // fivepfh/planetfall (direct follow-up request — the Campaign panel's
-      // Colony/Starship tabs are each independently hideable) default true:
-      // unlike swn (a genuinely optional bolt-on), these are core to what
-      // this app already plays, so a new profile shows both tabs by
-      // default; a GM can still switch either off here.
+      // Inert since install-wide Licenses + Rules Constitution picks
+      // (design/adr/licenses-and-rules-constitution.md). Still read once by
+      // rulesProfiles.js's migrateLicensesFromActivations, which is how a
+      // brand-new install starts owning 5PFH/Planetfall with the Starship
+      // and Colony tabs on, same as before.
       gameSystemActivations: { swn: false, fivepfh: true, planetfall: true },
       partyHeadlineFields: ['Health', 'Momentum'],
     },

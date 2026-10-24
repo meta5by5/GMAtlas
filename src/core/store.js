@@ -37,7 +37,7 @@ import { defaultCampaign, defaultAppConfig } from './schema.js';
 import {
   importCampaign, migrateDocument, migrateFromLegacyKeys, readLegacyKeys, wrapLegacyCampaignIntoAppConfig, LEGACY_KEYS,
 } from './migrate.js';
-import { createCampaign, renameCampaignEntry, setActiveCampaign, createRulesProfile, reassignCampaignProfile, backfillDefaultCrewTasks, grandfatherCampaignPanelActivation, backfillDnd5eStoryboardProfile, backfillFiveLeaguesStoryboardProfile, backfillGenrePackRename } from '../domain/rulesProfiles.js';
+import { createCampaign, renameCampaignEntry, setActiveCampaign, createRulesProfile, reassignCampaignProfile, backfillDefaultCrewTasks, grandfatherCampaignPanelActivation, migrateLicensesFromActivations, migrateLicensesV2, backfillDnd5eStoryboardProfile, backfillFiveLeaguesStoryboardProfile, backfillGenrePackRename } from '../domain/rulesProfiles.js';
 import { createTurnStepList, hoistLegacyProfileTurnSteps, backfillTurnStepListInventory, fixPlanetfallBranching } from '../domain/turnStepLists.js';
 import { ensureRulesetGuideDefault } from '../domain/rulesetGuide.js';
 import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
@@ -178,11 +178,15 @@ function createStore() {
   // every doc unconditionally, even when no profile resolves at all
   // (unlike settings/crewTasks below, which need an active profile to mean
   // anything).
+  // `licenses` (install-wide book ownership, Settings -> Licenses) rides
+  // along on settings the same way, so isLicensed/isGameSystemActivated
+  // (data/rulesConstitution.js) can read it from any doc.
   function overlayProfileWith(rawDoc, profile) {
     if (!rawDoc) return rawDoc;
-    const withLists = { ...rawDoc, turnStepLists: appConfig.turnStepLists || [] };
+    const licenses = appConfig.licenses || {};
+    const withLists = { ...rawDoc, turnStepLists: appConfig.turnStepLists || [], settings: { ...rawDoc.settings, licenses } };
     if (!profile) return withLists;
-    return { ...withLists, settings: { ...rawDoc.settings, ...profile.ruleset }, crewTasks: profile.crewTasks };
+    return { ...withLists, settings: { ...rawDoc.settings, ...profile.ruleset, licenses }, crewTasks: profile.crewTasks };
   }
 
   function overlayProfile(rawDoc) { return overlayProfileWith(rawDoc, activeProfile()); }
@@ -264,6 +268,7 @@ function createStore() {
       backfilled = fixPlanetfallBranching(backfilled);
       backfilled = backfillDefaultCrewTasks(backfilled, CREW_TASKS_5PFH);
       backfilled = grandfatherCampaignPanelActivation(backfilled);
+      backfilled = migrateLicensesV2(migrateLicensesFromActivations(backfilled));
       backfilled = backfillDnd5eStoryboardProfile(backfilled);
       backfilled = backfillFiveLeaguesStoryboardProfile(backfilled);
       backfilled = backfillGenrePackRename(backfilled);
@@ -301,7 +306,7 @@ function createStore() {
       }
     }
     const wrapped = wrapLegacyCampaignIntoAppConfig(legacyDoc);
-    appConfig = wrapped.appConfig;
+    appConfig = migrateLicensesV2(migrateLicensesFromActivations(wrapped.appConfig));
     docs.set(wrapped.campaignDoc.meta.id, wrapped.campaignDoc);
     await idbPut(database, APP_CONFIG_KEY, appConfig);
     await idbPut(database, campaignDocKey(wrapped.campaignDoc.meta.id), wrapped.campaignDoc);

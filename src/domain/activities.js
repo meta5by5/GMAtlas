@@ -12,19 +12,24 @@
 // as data/rulesets.js and data/statblockTemplates.js: a genre pack could
 // ship a different Activity list without touching domain logic.
 
-import { GAMEPLAY_AREAS, RULES_PROVIDERS } from '../data/rulesConstitution.js';
+// Each Activity carries its own suggested providers (the same lists the old
+// 18-row Rules Constitution held for these areas). Decoupled from
+// GAMEPLAY_AREAS when the Rules Constitution was trimmed to areas that switch
+// real functionality (design/adr/licenses-and-rules-constitution.md) — this
+// recommender only suggests a Module, it doesn't switch anything itself.
+import { RULES_PROVIDERS } from '../data/rulesConstitution.js';
 
 export const ACTIVITIES = [
-  { id: 'explore', label: 'Explore', area: 'Exploration' },
-  { id: 'investigate', label: 'Investigate', area: 'Discovery' },
-  { id: 'negotiate', label: 'Negotiate', area: 'Crew relationships' },
-  { id: 'travel', label: 'Travel', area: 'Vehicle rules' },
-  { id: 'trade', label: 'Trade', area: 'Trade' },
-  { id: 'combat', label: 'Combat', area: 'Tactical combat' },
-  { id: 'faction', label: 'Faction dealings', area: 'Factions' },
-  { id: 'downtime', label: 'Downtime / Colony', area: 'Colony management' },
-  { id: 'horror', label: 'Horror encounter', area: 'Horror' },
-  { id: 'worldbuild', label: 'World / Setting', area: 'Frontier setting' },
+  { id: 'explore', label: 'Explore', area: 'Exploration', providers: ['starforged', 'traveller'] },
+  { id: 'investigate', label: 'Investigate', area: 'Discovery', providers: ['starforged'] },
+  { id: 'negotiate', label: 'Negotiate', area: 'Crew relationships', providers: ['starforged'] },
+  { id: 'travel', label: 'Travel', area: 'Vehicle rules', providers: ['traveller'] },
+  { id: 'trade', label: 'Trade', area: 'Trade', providers: ['traveller', 'hostile'] },
+  { id: 'combat', label: 'Combat', area: 'Tactical combat', providers: ['fivepfh'] },
+  { id: 'faction', label: 'Faction dealings', area: 'Factions', providers: ['swn', 'gmatlascore'] },
+  { id: 'downtime', label: 'Downtime / Colony', area: 'Colony management', providers: ['planetfall'] },
+  { id: 'horror', label: 'Horror encounter', area: 'Horror', providers: ['hostile'] },
+  { id: 'worldbuild', label: 'World / Setting', area: 'Frontier setting', providers: ['hostile'] },
 ];
 
 export function findActivity(id) {
@@ -32,16 +37,14 @@ export function findActivity(id) {
 }
 
 /**
- * Look up the registered Rules Lens provider(s) for an Activity.
+ * Look up the suggested Rules Lens provider(s) for an Activity.
  * @returns {{area: string, providers: Array<{id: string, label: string, status: string, note: string, rulesetId?: string}>}|null}
  */
 export function suggestRulesLens(activityId) {
   const activity = findActivity(activityId);
   if (!activity) return null;
-  const gameplayArea = GAMEPLAY_AREAS.find((g) => g.area === activity.area);
-  if (!gameplayArea) return null;
   return {
-    area: gameplayArea.area,
-    providers: gameplayArea.providers.map((id) => ({ id, ...RULES_PROVIDERS[id] })),
+    area: activity.area,
+    providers: activity.providers.map((id) => ({ id, ...RULES_PROVIDERS[id] })),
   };
 }

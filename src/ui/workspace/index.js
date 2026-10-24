@@ -22,7 +22,7 @@ import { WORLD_FLAG_VALUES, WORLD_FLAG_VALUE_LABEL } from '../../domain/worldFla
 import { composeNarrativeDraft } from '../../domain/copilot.js';
 import { getNpcSceneState } from '../../domain/scenes.js';
 import { getCurrentTurnStep } from '../../domain/turnSteps.js';
-import { isGameSystemActivated, providerLabel } from '../../data/rulesConstitution.js';
+import { isGameSystemActivated, isTurnStepSystemActive, providerLabel } from '../../data/rulesConstitution.js';
 import { listPartyTrackersForRuleset } from '../../domain/party.js';
 import { TURN_STEP_ORACLE_LINKS, TURN_STEP_LOCATION_STEPS } from '../../data/turnStepWorkflowMeta.js';
 import { tablesWithOverrides, oraclePathsWithAnyTag, excludeFactionOracleTables } from '../../domain/oracles.js';
@@ -922,7 +922,7 @@ function helpfulOraclesHtml(doc, stepId) {
 
 function navigatorWorkflowStepCard(doc, ui, def) {
   const current = getCurrentTurnStep(doc, def.slot);
-  if (!isGameSystemActivated(doc, def.system) || !current) return '';
+  if (!isTurnStepSystemActive(doc, def.system) || !current) return '';
   const stepId = current.step.id;
   const [prevAttr, nextAttr] = def.nav;
   const oracleTags = TURN_STEP_ORACLE_LINKS[stepId];
@@ -991,7 +991,7 @@ function navigatorWorkflowStepCard(doc, ui, def) {
 // since a workflow group has no roster "count" and doesn't need its own
 // per-group help toggle on top of the block's existing one.
 function navigatorWorkflowBlock(doc, ui) {
-  const activeDefs = WORKFLOW_SLOTS.filter((def) => isGameSystemActivated(doc, def.system) && getCurrentTurnStep(doc, def.slot));
+  const activeDefs = WORKFLOW_SLOTS.filter((def) => isTurnStepSystemActive(doc, def.system) && getCurrentTurnStep(doc, def.slot));
   if (!activeDefs.length) return '';
   const showHeaders = activeDefs.length > 1;
   const collapsedSet = (ui && ui.collapsedActorGroups) || new Set();

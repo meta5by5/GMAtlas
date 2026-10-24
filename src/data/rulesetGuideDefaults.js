@@ -42,6 +42,6 @@ export const RULESET_GUIDE_DEFAULTS = {
   fiveleagues: [
     { file: 'assets/docs/5LFB/five-leagues-from-the-borderlands-3e.pdf', title: 'Five Leagues from the Borderlands (3rd Edition)' },
     { file: 'assets/docs/5LFB/Five Leagues - Compendium_Final_Digital.pdf', title: 'Five Leagues Compendium' },
-    { file: 'assets/docs/5LFB/5LDB Warband Sheet US.pdf', title: 'Five Leagues Warband Sheet' },
+    { file: 'assets/docs/5LFB/5LFB Warband Sheet US.pdf', title: 'Five Leagues Warband Sheet' },
   ],
 };
