@@ -9,9 +9,16 @@
 // Shares mechanicsScan.js's file:// restriction (Chromium blocks a
 // file:// page from reading another file:// resource's bytes — see that
 // module's own comment) and its one-time PDF.js worker setup.
-import { listReferenceDocuments } from '../domain/documents.js';
-import { generateReferenceToc } from '../domain/toc.js';
+import { listReferenceDocuments, getDocument } from '../domain/documents.js';
+import { generateReferenceToc, findReferenceToc, rememberToc } from '../domain/toc.js';
 import { configureWorker } from './mechanicsScan.js';
+
+/** Whether a TOC scan can run here at all — the open-a-PDF prompt checks
+ *  this first, so it never offers a scan that's bound to fail. */
+export function canScanToc() {
+  return typeof window !== 'undefined' && !!window.pdfjsLib
+    && !(typeof location !== 'undefined' && location.protocol === 'file:');
+}
 
 function assertScannable() {
   const pdfjsLib = typeof window !== 'undefined' && window.pdfjsLib;
@@ -74,40 +81,57 @@ async function scanOutline(pdfjsLib, source) {
   return { entries: out, seenCount: seen.count };
 }
 
-/** Every PDF this app can currently scan for a TOC — the Reference
- *  Library (assets/docs/) plus any uploaded 'file'-kind document, both
- *  resolved to whatever PDF.js's getDocument() can open directly (a file
- *  path or a data: URL alike). */
-function combinedScannableDocs(campaign) {
-  const refs = listReferenceDocuments(campaign).map((r) => ({ title: r.title, source: r.src || r.file }));
-  const uploaded = ((campaign.documents && campaign.documents.library) || [])
-    .filter((d) => d.kind === 'file' && d.dataUrl)
-    .map((d) => ({ title: d.title || d.fileName, source: d.dataUrl }));
-  return [...refs, ...uploaded];
+/** What PDF.js's getDocument() should open for one TOC source
+ *  ({sourceKey, tabKey} — domain/toc.js's listTocSources): this browser's
+ *  own stored copy first (the same doc-blob-store key the viewer loads it
+ *  by), else a Reference Library entry's served path or a legacy upload's
+ *  inline data: URL. Returns {url, revoke} or null. */
+async function resolveScanUrl(store, campaign, source) {
+  const blob = await store.getDocBlob(source.sourceKey);
+  if (blob) return { url: URL.createObjectURL(blob), revoke: true };
+  if (String(source.tabKey).startsWith('ref:')) {
+    const ref = listReferenceDocuments(campaign).find((r) => r.file === source.sourceKey);
+    return ref ? { url: ref.src || ref.file, revoke: false } : null;
+  }
+  const entry = getDocument(campaign, String(source.tabKey).slice('lib:'.length));
+  return entry && entry.dataUrl ? { url: entry.dataUrl, revoke: false } : null;
 }
 
-/** Scans `onlyDoc` (the per-upload path — {title, source}) or the whole
- *  combined library (the manual Settings button) for real bookmarks and
- *  writes a Guide TOC entry per document that has any (domain/toc.js).
- *  Returns {generated, skipped, unresolved} — `unresolved` is the count of
- *  documents whose PDF outline had bookmarks that were SEEN but none of
- *  them resolved to a page (as opposed to having no bookmarks at all), so
- *  the caller can tell the GM apart "no TOC in this file" from "this file's
- *  TOC uses a bookmark format this scanner couldn't read." */
-export async function scanAndGenerateToc(store, { onlyDoc } = {}) {
+/** Writes a Guide TOC for each of `sources` ({sourceKey, docTitle,
+ *  tabKey}) that doesn't already have one — a PDF with an existing TOC is
+ *  skipped untouched, never rescanned or overwritten. A scan already
+ *  remembered app-wide (appConfig.tocLibrary) is reused instead of
+ *  re-reading the PDF; every fresh scan is remembered there, empty ones
+ *  included, so other campaigns get it for free. Returns {generated,
+ *  skipped, existing, unresolved} — `unresolved` is the count of documents
+ *  whose PDF outline had bookmarks that were SEEN but none of them resolved
+ *  to a page (as opposed to having no bookmarks at all), so the caller can
+ *  tell the GM apart "no TOC in this file" from "this file's TOC uses a
+ *  bookmark format this scanner couldn't read." */
+export async function scanAndGenerateToc(store, { sources = [] } = {}) {
   const pdfjsLib = assertScannable();
-  const docs = onlyDoc ? [onlyDoc] : combinedScannableDocs(store.get());
   const scanResults = [];
   let unresolved = 0;
-  for (const doc of docs) {
-    const { entries, seenCount } = await scanOutline(pdfjsLib, doc.source);
+  let existing = 0;
+  for (const source of sources) {
+    const campaign = store.get();
+    if (findReferenceToc(campaign, source)) { existing++; continue; }
+    const remembered = (store.getAppConfig().tocLibrary || {})[source.sourceKey];
+    if (remembered) { scanResults.push({ ...source, entries: remembered.entries }); continue; }
+    const target = await resolveScanUrl(store, campaign, source);
+    const { entries, seenCount } = target ? await scanOutline(pdfjsLib, target.url) : { entries: [], seenCount: 0 };
+    if (target && target.revoke) URL.revokeObjectURL(target.url);
     if (!entries.length && seenCount > 0) unresolved++;
-    scanResults.push({ docTitle: doc.title, entries });
+    // Only a PDF that actually opened is remembered — a missing file
+    // stays askable once it's been imported.
+    if (target) store.updateAppConfig((c) => ({ ...c, tocLibrary: rememberToc(c.tocLibrary, source.sourceKey, { docTitle: source.docTitle, entries }) }));
+    scanResults.push({ ...source, entries });
   }
-  let result = { generated: 0, skipped: 0, unresolved };
+  let result = { generated: 0, skipped: 0, existing, unresolved };
+  if (!scanResults.length) return result;
   store.update((d) => {
     const r = generateReferenceToc(d, scanResults);
-    result = { generated: r.generated, skipped: r.skipped, unresolved };
+    result = { generated: r.generated, skipped: r.skipped, existing: existing + r.existing, unresolved };
     return r.campaign;
   });
   return result;

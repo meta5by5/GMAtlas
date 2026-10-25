@@ -674,7 +674,10 @@ test('parseTextBlocks: text/table/text sequences preserve order and stop the sur
 });
 
 // --- Reference Table of Contents generation (docs/adr/0020) ---------------
-import { buildTocText, generateReferenceToc } from '../src/domain/toc.js';
+import {
+  buildTocText, generateReferenceToc, addReferenceToc, findReferenceToc, declineToc, isTocDeclined,
+  rememberToc, applyRememberedTocs, tocPromptNeeded, listTocSources,
+} from '../src/domain/toc.js';
 
 test('buildTocText turns flat, depth-tagged outline entries into real @[...] mention bullets', () => {
   const text = buildTocText([
@@ -705,13 +708,69 @@ test('generateReferenceToc creates a "Table of Contents" parent doc and one chil
   assert.ok(!next.guide.docs.some((d) => d.title === 'Book B'));
 });
 
-test('generateReferenceToc re-run updates an existing document\'s TOC child in place rather than duplicating it', () => {
+test('generateReferenceToc re-run never duplicates or overwrites an existing document\'s TOC', () => {
   const camp = defaultCampaign();
   const first = generateReferenceToc(camp, [{ docTitle: 'Book A', entries: [{ title: 'Ch 1', page: 1, depth: 0 }] }]);
   const second = generateReferenceToc(first.campaign, [{ docTitle: 'Book A', entries: [{ title: 'Ch 1 Revised', page: 2, depth: 0 }] }]);
+  assert.equal(second.generated, 0);
+  assert.equal(second.existing, 1);
   const children = second.campaign.guide.docs.filter((d) => d.title === 'Book A');
   assert.equal(children.length, 1);
-  assert.ok(children[0].text.includes('Ch 1 Revised'));
+  assert.ok(children[0].text.includes('@[Ch 1|Book A#1]'));
+  assert.ok(!children[0].text.includes('Revised'));
+});
+
+test('addReferenceToc stamps the sourceKey, finds a renamed TOC by it, and leaves the active Guide doc alone', () => {
+  let camp = defaultCampaign();
+  const activeBefore = camp.guide.activeId;
+  const r = addReferenceToc(camp, { sourceKey: 'assets/docs/a.pdf', docTitle: 'Book A', entries: [{ title: 'Ch 1', page: 3, depth: 0 }] });
+  assert.equal(r.added, true);
+  assert.equal(r.campaign.guide.activeId, activeBefore);
+  const child = r.campaign.guide.docs.find((d) => d.tocSourceKey === 'assets/docs/a.pdf');
+  assert.equal(child.title, 'Book A');
+  child.title = 'My Notes On A';
+  assert.ok(findReferenceToc(r.campaign, { sourceKey: 'assets/docs/a.pdf', docTitle: 'Book A' }));
+  assert.equal(addReferenceToc(r.campaign, { sourceKey: 'assets/docs/a.pdf', docTitle: 'Book A', entries: [{ title: 'X', page: 1 }] }).added, false);
+  assert.equal(addReferenceToc(camp, { sourceKey: 'k', docTitle: 'Empty', entries: [] }).added, false);
+});
+
+test('declineToc is per-campaign and suppresses the prompt; an explicit addReferenceToc clears it', () => {
+  let camp = defaultCampaign();
+  const source = { sourceKey: 'assets/docs/a.pdf', docTitle: 'Book A' };
+  assert.equal(tocPromptNeeded(camp, {}, source), true);
+  const declined = declineToc(declineToc(camp, source.sourceKey), source.sourceKey);
+  assert.deepEqual(declined.documents.tocDeclined, ['assets/docs/a.pdf']);
+  assert.equal(isTocDeclined(declined, source.sourceKey), true);
+  assert.equal(tocPromptNeeded(declined, {}, source), false);
+  assert.equal(isTocDeclined(camp, source.sourceKey), false); // input not mutated
+  const r = addReferenceToc(declined, { ...source, entries: [{ title: 'Ch 1', page: 1 }] });
+  assert.equal(isTocDeclined(r.campaign, source.sourceKey), false);
+});
+
+test('a remembered scan (even an empty one) stops the prompt and is applied to another campaign under that campaign\'s own title', () => {
+  const lib = rememberToc(rememberToc({}, 'assets/docs/a.pdf', { docTitle: 'Book A', entries: [{ title: 'Ch 1', page: 4, depth: 0, extra: 'x' }] }), 'assets/docs/empty.pdf', { docTitle: 'Empty', entries: [] });
+  assert.deepEqual(lib['assets/docs/a.pdf'].entries, [{ title: 'Ch 1', page: 4, depth: 0 }]);
+  const other = defaultCampaign();
+  assert.equal(tocPromptNeeded(other, lib, { sourceKey: 'assets/docs/empty.pdf', docTitle: 'Empty' }), false);
+  const sources = [
+    { sourceKey: 'assets/docs/a.pdf', docTitle: 'Renamed A' },
+    { sourceKey: 'assets/docs/empty.pdf', docTitle: 'Empty' },
+    { sourceKey: 'assets/docs/unknown.pdf', docTitle: 'Unknown' },
+  ];
+  const r = applyRememberedTocs(other, lib, sources);
+  assert.equal(r.added, 1);
+  const child = r.campaign.guide.docs.find((d) => d.tocSourceKey === 'assets/docs/a.pdf');
+  assert.ok(child.text.includes('@[Ch 1|Renamed A#4]'));
+  assert.equal(applyRememberedTocs(r.campaign, lib, sources).added, 0); // idempotent
+  assert.equal(applyRememberedTocs(declineToc(other, 'assets/docs/a.pdf'), lib, sources).added, 0); // declined campaigns are skipped
+});
+
+test('listTocSources lists this campaign\'s uploaded PDFs (keyed by blobKey) and skips non-PDF files and notes', () => {
+  let camp = defaultCampaign();
+  camp = addDocument(camp, { id: 'doc_pdf', kind: 'file', title: 'House Rules', fileName: 'rules.pdf', mimeType: 'application/pdf', blobKey: 'doc_pdf' });
+  camp = addDocument(camp, { id: 'doc_png', kind: 'file', title: 'Map', fileName: 'map.png', mimeType: 'image/png', blobKey: 'doc_png' });
+  const sources = listTocSources(camp, new Set());
+  assert.deepEqual(sources, [{ sourceKey: 'doc_pdf', docTitle: 'House Rules', tabKey: 'lib:doc_pdf' }]);
 });
 
 test('threads: add, advance (clamped), complete, remove', () => {
@@ -3917,7 +3976,7 @@ test('renameDocument changes only the display title, never the underlying file',
 // --- Gallery (Phase 11, docs/adr/0021-gallery.md) ---------------------------
 import {
   addGalleryImages, removeGalleryImage, addGalleryTag, removeGalleryTag,
-  listGalleryImages, listGalleryTagVocabulary, setEntityThumbnail, clearEntityThumbnail, getGalleryImage,
+  listGalleryImages, listGalleryTagVocabulary, setEntityThumbnail, clearEntityThumbnail, getGalleryImage, isGalleryVideo,
 } from '../src/domain/gallery.js';
 
 test('addGalleryImages: an upload that needed no resize creates exactly one thumbnail record and points the entity at it', () => {
@@ -3992,6 +4051,26 @@ test('setEntityThumbnail/clearEntityThumbnail point an entity at a real thumbnai
   assert.equal(camp.entities.items.find((e) => e.id === id).thumbnailId, r.thumbnailId);
   camp = clearEntityThumbnail(camp, id);
   assert.equal(camp.entities.items.find((e) => e.id === id).thumbnailId, null);
+});
+
+test('isGalleryVideo reads mimeType, falling back to the data URL prefix', () => {
+  assert.equal(isGalleryVideo({ mimeType: 'video/mp4', dataUrl: 'x' }), true);
+  assert.equal(isGalleryVideo({ mimeType: 'image/png', dataUrl: 'data:video/mp4;base64,' }), false);
+  assert.equal(isGalleryVideo({ mimeType: '', dataUrl: 'data:video/mp4;base64,AAAA' }), true);
+  assert.equal(isGalleryVideo({ dataUrl: 'data:image/png;base64,AAAA' }), false);
+  assert.equal(isGalleryVideo(null), false);
+});
+
+test('a video Gallery record works as a battlemap background but is refused as an entity thumbnail', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Voss' }));
+  const r = addGalleryImages(camp, { lockedTag: 'battlemap', mimeType: 'video/mp4', thumbDataUrl: 'data:video/mp4;base64,AAAA' });
+  assert.equal(r.originalId, null);
+  camp = setEntityThumbnail(r.campaign, id, r.thumbnailId);
+  assert.equal(camp.entities.items.find((e) => e.id === id).thumbnailId ?? null, null);
+  let mapId; ({ campaign: camp, id: mapId } = createBattlemap(camp, 'Reactor'));
+  camp = setBattlemapBackground(camp, mapId, r.thumbnailId);
+  assert.equal(getBattlemap(camp, mapId).backgroundImageId, r.thumbnailId);
 });
 
 // --- entities: editable relationship note/label -----------------------------

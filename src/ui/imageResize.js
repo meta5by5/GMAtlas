@@ -36,6 +36,20 @@ function loadImage(dataUrl) {
  *  PNGs stay PNG (their transparency matters for token-style art); every
  *  other type re-encodes as JPEG at a fixed quality, matching how most
  *  camera/phone photos already arrive. */
+/** A video file (Battlemap's animated backgrounds) skips the canvas step
+ *  entirely — there's no frame-accurate client-side re-encode worth doing
+ *  — so its bytes are stored verbatim, in the same
+ *  `{thumbDataUrl, originalDataUrl, resized}` shape loadAndMaybeResize
+ *  returns, ready for domain/gallery.js's addGalleryImages. */
+export function isVideoFile(file) {
+  return !!file && /^video\//.test(file.type || '');
+}
+
+export async function loadVideo(file) {
+  const dataUrl = await readFileAsDataURL(file);
+  return { thumbDataUrl: dataUrl, originalDataUrl: null, resized: false };
+}
+
 export async function loadAndMaybeResize(file, maxDim = 256) {
   const dataUrl = await readFileAsDataURL(file);
   const img = await loadImage(dataUrl);

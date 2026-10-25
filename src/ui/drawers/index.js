@@ -43,7 +43,8 @@ import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel, resolveProviderChoice, 
 import { CONTENT_PACKS_MANIFEST } from '../../data/contentPacksManifest.js';
 import { CSS_TEMPLATES } from '../../data/cssTemplates.js';
 import { SOURCEBOOK_INVENTORY } from '../../data/sourcebookInventory.js';
-import { listGalleryImages, listGalleryTagVocabulary, getGalleryImage } from '../../domain/gallery.js';
+import { listGalleryImages, listGalleryTagVocabulary, getGalleryImage, isGalleryVideo } from '../../domain/gallery.js';
+import { listTocSources, findReferenceToc, isTocDeclined } from '../../domain/toc.js';
 import { listBattlemaps, getActiveBattlemap } from '../../domain/battlemaps.js';
 import { BATTLEMAP_ICONS, findBattlemapIcon } from '../../data/battlemapIcons.js';
 import { listHexMaps, getActiveHexMap, getHex, axialToPixel, hexVertexPoints, HEX_SIZE, ENCOUNTER_VERTEX_ORDER, hexEdgeMidpoints, edgeNeighbor } from '../../domain/hexcrawls.js';
@@ -2902,6 +2903,7 @@ function settings(doc, ui = {}) {
         </div>
       </div>
       ${contentPackSection(ui)}
+      ${sourcebookTocSection(doc, ui)}
       <div class="settings-group">
         ${sectionHeadRow('h3', 'Editor preferences', 'settings-editor')}
         <label class="chip sm"><input type="checkbox" data-settings-toolbar-default ${doc.settings.toolbarCollapsedByDefault ? 'checked' : ''}> Rich-text formatting toolbars start collapsed</label>
@@ -2926,8 +2928,7 @@ function settings(doc, ui = {}) {
       <p class="dim small">Trade Economy Model moved to <b>Rulesets</b> — it's a Rules Profile setting now.</p>`,
     factions: () => factionsSettingsSection(doc, ui),
     'reference-tools': () => `
-      ${mechanicsIndexSection(doc, ui)}
-      ${tocSection(doc, ui)}`,
+      ${mechanicsIndexSection(doc, ui)}`,
     licenses: () => licensesSection(doc, ui),
   };
 
@@ -3883,22 +3884,36 @@ function mechanicsIndexSection(doc, ui) {
     </div>`;
 }
 
-// Reference Library Table of Contents generation ("USER CHANGES" batch,
-// docs/adr/0020): a Settings trigger for the async PDF.js outline scan
-// (ui/tocScan.js) that writes a real Guide document per source PDF with
-// bookmarks, nested under a "Table of Contents" parent doc. Same
-// button/status-line shape as Game Mechanics Index just above it.
-function tocSection(doc, ui) {
-  const scanning = !!(ui && ui.tocScanning);
-  const tocParent = ((doc.guide && doc.guide.docs) || []).find((d) => !d.parentId && d.title === 'Table of Contents');
-  const childCount = tocParent ? (doc.guide.docs || []).filter((d) => d.parentId === tocParent.id).length : 0;
+// Sourcebook Tables of Contents (design/adr/reference-toc-library.md),
+// Settings → General: a link that opens one row per PDF in this campaign's
+// local Docs library — ✓ when the Guide already has its TOC (never
+// regenerated or overwritten), "no bookmarks" when a remembered scan found
+// nothing, otherwise a "Create" link that scans it (ui/tocScan.js) into a
+// Guide doc under "Table of Contents".
+function sourcebookTocSection(doc, ui) {
+  const scanning = !!ui.tocScanning;
+  const library = ui.tocLibrary || {};
+  const sources = listTocSources(doc, ui.refDocBlobKeys || new Set());
+  const rows = sources.map((s) => {
+    const remembered = library[s.sourceKey];
+    let status;
+    if (findReferenceToc(doc, s)) status = '<span class="dim small">✓ In Guide</span>';
+    else if (remembered && !remembered.entries.length) status = '<span class="dim small">No bookmarks</span>';
+    else if (!ui.canScanToc) status = '';
+    else status = `<a href="#" data-toc-create="${esc(s.sourceKey)}" ${scanning ? 'aria-disabled="true"' : ''}>Create TOC</a>${isTocDeclined(doc, s.sourceKey) ? ' <span class="dim small">(declined earlier)</span>' : ''}`;
+    return `<li class="toc-source-row"><span>${esc(s.docTitle)}</span> ${status}</li>`;
+  }).join('');
+  const missing = sources.filter((s) => !findReferenceToc(doc, s) && !(library[s.sourceKey] && !library[s.sourceKey].entries.length)).length;
+  const body = !ui.tocOfferOpen ? '' : `
+      ${sources.length ? `<ul class="toc-source-list">${rows}</ul>` : '<p class="dim small">No PDFs in this campaign’s Docs library yet.</p>'}
+      ${ui.canScanToc && missing > 1 ? `<a href="#" data-toc-create-all>${scanning ? 'Scanning…' : `Create all ${missing} missing`}</a>` : ''}
+      ${ui.canScanToc ? '' : '<p class="dim small">Needs the app served over http(s) (<code>npm run serve</code>) — reading local PDFs is blocked when running straight off <code>file://</code>.</p>'}`;
   return `
     <div class="settings-group">
-      ${sectionHeadRow('h3', 'Reference Table of Contents', 'settings-toc')}
-      ${helpBody('settings-toc', 'Scans every PDF in your library (Reference Library plus your own uploads) for its real bookmarks and writes a linked table of contents for each into the Guide, under a "Table of Contents" entry.', ui)}
-      <button class="btn ghost" data-toc-scan ${scanning ? 'disabled' : ''}>${scanning ? 'Scanning…' : '📑 Generate Reference Table of Contents'}</button>
-      <p class="dim small">${childCount ? `${childCount} document(s) indexed.` : 'Not generated yet.'}</p>
-      <p class="dim small">Needs the app served over http(s) (<code>npm run serve</code>) — reading local PDFs is blocked when running straight off <code>file://</code>.</p>
+      ${sectionHeadRow('h3', 'Sourcebook Tables of Contents', 'settings-toc')}
+      ${helpBody('settings-toc', 'Reads a PDF’s bookmarks and writes a linked table of contents into the Guide, under "Table of Contents". A TOC made once is remembered in this browser and added to every campaign that shows the same PDF. Existing TOCs are never overwritten or duplicated.', ui)}
+      <a href="#" data-toc-offer-toggle>${ui.tocOfferOpen ? '▾' : '▸'} Create Guide TOCs for sourcebooks${missing ? ` (${missing} without one)` : ''}</a>
+      ${body}
     </div>`;
 }
 
@@ -5544,9 +5559,11 @@ function gallery(doc, ui = {}) {
     }).join('');
     return `
     <div class="gallery-card">
-      <img class="${img.kind === 'thumbnail' ? 'gallery-thumb-circle' : 'gallery-original-img'}" src="${esc(img.dataUrl)}" alt="${esc(img.title || img.lockedTag || 'Gallery image')}">
+      ${isGalleryVideo(img)
+        ? `<video class="gallery-original-img" src="${esc(img.dataUrl)}" muted preload="metadata" aria-label="${esc(img.title || 'Gallery video')}"></video>`
+        : `<img class="${img.kind === 'thumbnail' ? 'gallery-thumb-circle' : 'gallery-original-img'}" src="${esc(img.dataUrl)}" alt="${esc(img.title || img.lockedTag || 'Gallery image')}">`}
       <div class="gallery-card-meta">
-        <span class="dim small">${img.kind === 'thumbnail' ? 'Thumbnail' : 'Original'}${owner ? ` · ${esc(owner.name || 'Unnamed')}` : ''}</span>
+        <span class="dim small">${isGalleryVideo(img) ? 'Video' : img.kind === 'thumbnail' ? 'Thumbnail' : 'Original'}${owner ? ` · ${esc(owner.name || 'Unnamed')}` : ''}</span>
         <div class="tag-chips">${tagChips}</div>
       </div>
       <button class="icon-btn" data-gallery-delete="${esc(img.id)}" title="Delete image" aria-label="Delete image">✕</button>
@@ -5609,11 +5626,14 @@ function battlemap(doc, ui = {}) {
         <div class="section-head-row battlemap-section-head">${groupToggle('battlemap:maps', 'Maps', mapsCollapsed)}${helpToggle(helpKey)}</div>
         ${mapsBody}
       </div>`;
-  const help = helpBody(helpKey, 'Upload or pick a background image, then place icons (hazards, doors, notes — from the palette in Map Objectives) or drag a Cast entity onto the map to place a combatant token. Drag any placed icon to reposition it; click a token to open its entity, click an annotation to edit its note. On a wide screen, ⛶ (next to the panel title) widens the map one Storyboard section at a time, up to all three, and ⊟ narrows it back one at a time.', ui);
+  const help = helpBody(helpKey, 'Upload or pick a background image (or an MP4 video, which loops silently as an animated background), then place icons (hazards, doors, notes — from the palette in Map Objectives) or drag a Cast entity onto the map to place a combatant token. Drag any placed icon to reposition it; click a token to open its entity, click an annotation to edit its note. On a wide screen, ⛶ (next to the panel title) widens the map one Storyboard section at a time, up to all three, and ⊟ narrows it back one at a time.', ui);
 
   if (!active) return `<div class="battlemap-panel"><div class="battlemap-sections-row">${mapsColumn}</div>${help}<p class="ws-placeholder">No maps yet — create one to get started.</p></div>`;
 
   const bg = active.backgroundImageId ? getGalleryImage(doc, active.backgroundImageId) : null;
+  // An MP4 background is an empty <video> placeholder here — shell.js's
+  // syncBattlemapVideos() sets its src and keeps it playing across renders.
+  const bgVideo = isGalleryVideo(bg);
   // Only Gallery images tagged "battlemap" are offered as a pickable
   // background — an upload made through THIS drawer (below) is
   // auto-tagged with it, the same "auto-tag + lock" convention an entity
@@ -5660,10 +5680,10 @@ function battlemap(doc, ui = {}) {
       </span>`;
   const objectivesBody = objectivesCollapsed ? '' : `
     <div class="battlemap-toolbar">
-      <label class="chip sm">🖼 Background<input type="file" accept="image/*" data-battlemap-bg-upload="${esc(active.id)}" hidden></label>
+      <label class="chip sm" title="An image, or an MP4 video for an animated background">🖼 Background<input type="file" accept="image/*,video/mp4" data-battlemap-bg-upload="${esc(active.id)}" hidden></label>
       ${pickableImages.length ? `<select data-battlemap-bg-select="${esc(active.id)}">
-        <option value="">— pick existing image —</option>
-        ${pickableImages.map((img) => `<option value="${esc(img.id)}" ${active.backgroundImageId === img.id ? 'selected' : ''}>${esc(img.title || img.id)}</option>`).join('')}
+        <option value="">— pick existing background —</option>
+        ${pickableImages.map((img) => `<option value="${esc(img.id)}" ${active.backgroundImageId === img.id ? 'selected' : ''}>${isGalleryVideo(img) ? '🎞 ' : ''}${esc(img.title || img.id)}</option>`).join('')}
       </select>` : ''}
       <label class="chip sm"><input type="checkbox" data-battlemap-grid-toggle="${esc(active.id)}" ${active.gridEnabled ? 'checked' : ''}> Grid</label>
       ${active.gridEnabled ? numStepper(`<input type="number" class="battlemap-grid-size-input" min="10" max="200" value="${active.gridSize}" data-battlemap-grid-size="${esc(active.id)}" title="Grid cell size (px)">`) : ''}
@@ -5678,8 +5698,9 @@ function battlemap(doc, ui = {}) {
     </div>
     ${help}
     <div class="battlemap-viewport ${ui.battlemapPlacingIcon ? 'placing' : ''}" data-battlemap-canvas="${esc(active.id)}" data-drop-battlemap="${esc(active.id)}">
-      <div class="battlemap-world" style="transform:translate(${cam.x}px,${cam.y}px) scale(${cam.scale});${bg ? `background-image:url('${esc(bg.dataUrl)}');` : ''}${active.gridEnabled ? `--battlemap-grid-size:${active.gridSize}px;` : ''}">
-        ${!bg ? '<p class="ws-placeholder battlemap-placeholder">No background set — upload or pick an image above.</p>' : ''}
+      <div class="battlemap-world" style="transform:translate(${cam.x}px,${cam.y}px) scale(${cam.scale});${bg && !bgVideo ? `background-image:url('${esc(bg.dataUrl)}');` : ''}${active.gridEnabled ? `--battlemap-grid-size:${active.gridSize}px;` : ''}">
+        ${!bg ? '<p class="ws-placeholder battlemap-placeholder">No background set — upload or pick an image or MP4 above.</p>' : ''}
+        ${bgVideo ? `<video class="battlemap-bg-video" data-battlemap-video="${esc(bg.id)}" muted loop autoplay playsinline disablepictureinpicture></video>` : ''}
         ${active.gridEnabled ? '<div class="battlemap-grid-overlay"></div>' : ''}
         ${markers}
       </div>

@@ -68,6 +68,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .mc-header .tagline { font-size: 0.72rem; color: var(--text-dim); }
 .mc-header .brand-sep { color: var(--text-dim); }
 .mc-header .campaign-title { font-size: 0.85rem; color: var(--accent); }
+/* Phone: the "GMAtlas" wordmark and "|" give way to a wireframe-planet
+   icon to save space — kept even when fitHeaderToOneRow goes compact,
+   since it costs barely more than nothing. */
+.mc-header .brand-planet { display: none; color: var(--accent); }
+@media (max-width: 480px) {
+  .mc-header .brand { align-items: center; }
+  .mc-header .brand h1, .mc-header-compact .brand h1 { display: flex; align-items: center; }
+  .mc-header .brand-planet { display: block; }
+  .mc-header .brand-name, .mc-header .brand-sep { display: none; }
+}
 
 /* Campaign switcher (direct follow-up request) — .campaign-title reverts
    to being a real clickable control (it used to open Settings directly,
@@ -1237,6 +1247,10 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .recap-panel [data-recap-save] { margin-top: var(--sp-3); }
 .settings-group { margin-bottom: var(--sp-6); }
 .settings-group h3 { font-size: 0.85rem; margin: 0 0 var(--sp-2); color: var(--accent); }
+/* Settings → General's per-sourcebook Guide TOC list. */
+.toc-source-list { list-style: none; margin: var(--sp-2) 0; padding: 0; }
+.toc-source-row { display: flex; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-1) 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+.toc-source-row > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Settings topical tabs (UX batch) — a plain sticky button row above
    whichever tab's sections are currently rendered. */
 .settings-tab-bar { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: var(--sp-4); padding-bottom: var(--sp-3); border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--tier2-bg, inherit); z-index: 1; }
@@ -1411,6 +1425,13 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
   background-size: cover; background-position: center;
 }
 .battlemap-world:active { cursor: grabbing; }
+/* An MP4 background — the same cover/center fit as an image background.
+   pointer-events:none so pan/drop/placing clicks land on .battlemap-world
+   exactly as they do over a still image. */
+.battlemap-world .battlemap-bg-video {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; object-position: center; pointer-events: none;
+}
 .battlemap-world .battlemap-placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; margin: 0; }
 .battlemap-camera-controls { display: inline-flex; gap: 2px; margin-left: auto; }
 /* A CSS-only grid (no SVG/canvas drawing) — --battlemap-grid-size is set

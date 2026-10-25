@@ -120,10 +120,22 @@ export function listGalleryTagVocabulary(campaign) {
   return [...set].sort((a, b) => a.localeCompare(b));
 }
 
+/** A Gallery record holding a video (a Battlemap's animated MP4
+ *  background) rather than a still image — keyed off `mimeType`, falling
+ *  back to the data URL's own prefix for a record with no mimeType. */
+export function isGalleryVideo(img) {
+  if (!img) return false;
+  if (img.mimeType) return /^video\//.test(img.mimeType);
+  return /^data:video\//.test(img.dataUrl || '');
+}
+
+/** A video record is never usable as an entity portrait (every portrait
+ *  surface is an <img>), so it's refused here rather than left to render
+ *  as a broken image. */
 export function setEntityThumbnail(campaign, entityId, imageId) {
   const next = clone(campaign);
   const e = (next.entities.items || []).find((x) => x.id === entityId);
-  const img = ensure(next).images.find((x) => x.id === imageId && x.kind === 'thumbnail');
+  const img = ensure(next).images.find((x) => x.id === imageId && x.kind === 'thumbnail' && !isGalleryVideo(x));
   if (e && img) e.thumbnailId = imageId;
   return next;
 }

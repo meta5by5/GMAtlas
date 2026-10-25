@@ -44,11 +44,12 @@ import { findCatalogItem } from '../data/gearCatalog.js';
 import { installEnhancement, removeEnhancement } from '../domain/enhancements.js';
 import { getMechanicsIndex } from '../domain/mechanicsIndex.js';
 import { scanMechanicsIndex } from './mechanicsScan.js';
-import { scanAndGenerateToc } from './tocScan.js';
+import { scanAndGenerateToc, canScanToc } from './tocScan.js';
+import { listTocSources, applyRememberedTocs, tocPromptNeeded, declineToc, TOC_PARENT_TITLE } from '../domain/toc.js';
 import { parseDnd5eCharacterSheetPdf } from './dnd5ePdfImport.js';
 import { buildZip, readZip } from './zip.js';
-import { loadAndMaybeResize } from './imageResize.js';
-import { addGalleryImages, removeGalleryImage, addGalleryTag, removeGalleryTag } from '../domain/gallery.js';
+import { loadAndMaybeResize, isVideoFile, loadVideo } from './imageResize.js';
+import { addGalleryImages, removeGalleryImage, addGalleryTag, removeGalleryTag, getGalleryImage } from '../domain/gallery.js';
 import {
   listBattlemaps, getBattlemap, getActiveBattlemap, createBattlemap, renameBattlemap, removeBattlemap,
   setActiveBattlemap, setBattlemapBackground, setBattlemapGrid, addBattlemapIcon, moveBattlemapIcon,
@@ -998,7 +999,87 @@ let conflictEscalationSuggestions = []; // ephemeral — computed right after a 
 let mechanicsScanning = false; // ephemeral — true while scanMechanicsIndex()'s async PDF.js scan is in flight (docs/adr/0014)
 // Source Data's per-zone data-pack imports in flight, keyed by manifest pack id.
 let dataPackImporting = new Set();
-let tocScanning = false; // ephemeral — true while scanAndGenerateToc()'s async PDF.js outline scan is in flight (docs/adr/0020)
+let tocScanning = false; // ephemeral — true while scanAndGenerateToc()'s async PDF.js outline scan is in flight (design/adr/reference-toc-library.md)
+let tocOfferOpen = false; // ephemeral — Settings → General's per-sourcebook "Create Guide TOC" list, shown or not
+const tocPromptedThisSession = new Set(); // sourceKeys already asked about since load — never ask twice while a scan is still in flight
+let lastTocSyncSignature = null; // see syncRememberedTocs()
+
+// Runs a TOC scan over `sources` (domain/toc.js's listTocSources shape)
+// and reports the outcome. Shared by the open-a-PDF prompt, the upload
+// prompt, and Settings → General's sourcebook list.
+function runTocScan(sources) {
+  if (!sources.length) return;
+  tocScanning = true;
+  renderDrawerBody();
+  scanAndGenerateToc(store, { sources })
+    .then(({ generated, skipped, existing, unresolved }) => {
+      tocScanning = false;
+      if (generated > 0) {
+        // The new entry lands nested under a "Table of Contents" Guide doc,
+        // which the tree renders collapsed by default (expandedGuideNodes
+        // starts empty) — without this, a successful scan looked identical
+        // to "nothing happened" unless the GM already knew to click the
+        // parent's caret.
+        const parent = ((store.get().guide && store.get().guide.docs) || []).find((g) => !g.parentId && g.title === TOC_PARENT_TITLE);
+        if (parent) expandedGuideNodes.add(parent.id);
+      }
+      renderDrawerBody();
+      if (sources.length > 1) {
+        const parts = [`${generated} generated`];
+        if (existing) parts.push(`${existing} already had one`);
+        if (skipped) parts.push(`${skipped} without bookmarks`);
+        if (unresolved) parts.push(`${unresolved} with unreadable bookmarks`);
+        return toast(`Table of Contents: ${parts.join(', ')}`);
+      }
+      const title = sources[0].docTitle;
+      if (generated) toast(`Table of Contents added for "${title}" — see Guide → Table of Contents`);
+      else if (existing) toast(`"${title}" already has a Table of Contents in the Guide`);
+      // Bookmarks seen but none resolved to a page — a different, more
+      // diagnostic message than "no bookmarks," since the fix belongs in
+      // this scanner rather than the PDF itself.
+      else if (unresolved) toast(`"${title}" has bookmarks, but none could be resolved to a page — its bookmark format isn't supported yet`);
+      else toast(`"${title}" has no bookmarks — nothing to generate`);
+    })
+    .catch((err) => { tocScanning = false; renderDrawerBody(); toast(`Table of Contents scan failed — ${err.message}`); });
+}
+
+// Opening a PDF with no Guide TOC asks once whether to make one. A "no"
+// is remembered for this campaign only (documents.tocDeclined); a PDF
+// whose scan is already remembered app-wide never asks — its TOC (if it
+// has bookmarks) arrives via syncRememberedTocs() instead.
+function maybePromptToc(tabKey) {
+  if (!canScanToc()) return;
+  const doc = store.get();
+  const source = listTocSources(doc, refDocBlobKeys).find((s) => s.tabKey === tabKey);
+  if (!source || tocPromptedThisSession.has(source.sourceKey)) return;
+  if (!tocPromptNeeded(doc, store.getAppConfig().tocLibrary || {}, source)) return;
+  tocPromptedThisSession.add(source.sourceKey);
+  // Deferred a tick so the viewer paints before the (blocking) confirm.
+  setTimeout(() => {
+    if (window.confirm(`"${source.docTitle}" has no Table of Contents in the Guide yet. Generate one from its PDF bookmarks?`)) return runTocScan([source]);
+    store.update((d) => declineToc(d, source.sourceKey));
+    toast('Won’t ask again in this campaign — Settings → General can still create it');
+  }, 0);
+}
+
+// Every campaign showing a PDF in its Docs library gets that PDF's
+// remembered TOC (appConfig.tocLibrary), unless it declined or already
+// has one. Checked from render() but only acts when the inputs actually
+// changed — campaign, the PDFs on show, or the remembered scans — so a
+// campaign switch, a sourcebook import, or a scan in another campaign
+// all land here without hooking each of those paths separately.
+function syncRememberedTocs() {
+  const doc = store.get();
+  if (!doc) return;
+  const library = store.getAppConfig().tocLibrary || {};
+  const sources = listTocSources(doc, refDocBlobKeys);
+  const signature = `${doc.meta && doc.meta.id}|${sources.map((s) => `${s.sourceKey}=${s.docTitle}`).join(',')}|${Object.keys(library).join(',')}`;
+  if (signature === lastTocSyncSignature) return;
+  lastTocSyncSignature = signature;
+  if (!applyRememberedTocs(doc, library, sources).added) return;
+  // Deferred: render() is mid-flight, and store.update() re-renders.
+  queueMicrotask(() => store.update((d) => applyRememberedTocs(d, store.getAppConfig().tocLibrary || {}, listTocSources(d, refDocBlobKeys)).campaign));
+}
 let lensPickerOpen = false; // ephemeral — "What Happens Next?"'s Suggestion Lens chip picker, open or not (docs/adr/0009)
 let lensDraw = []; // ephemeral — the current random draw of lens chips, fixed until re-opened (not redrawn on every unrelated re-render)
 let whyLensPickerOpen = false; // ephemeral — WHY's own "Suggest a Lens" picker (docs/adr/0039 Phase 2) — separate from lensPickerOpen/lensDraw above so the two never interfere
@@ -1456,7 +1537,7 @@ export function mountShell(el) {
       </div>
       <header class="mc-header">
         <div class="brand">
-          <h1>GMAtlas</h1>
+          <h1 aria-label="GMAtlas"><svg class="brand-planet" viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><circle cx="10" cy="10" r="9"/><ellipse cx="10" cy="10" rx="4" ry="9"/><path d="M10 1v18M1 10h18M2.2 5.5h15.6M2.2 14.5h15.6"/></svg><span class="brand-name">GMAtlas</span></h1>
           <span class="brand-sep" aria-hidden="true">|</span>
           <div class="campaign-switcher-wrap">
             <button type="button" class="campaign-title" data-campaign-switcher-toggle title="Switch campaign"></button>
@@ -4370,6 +4451,7 @@ function onClick(ev) {
     // Reflects only the MOST RECENT open's origin — not per-tab state.
     docViewerRightSection = !!docOpen.closest('[data-turn-step-text-body]');
     store.update((d) => openDocumentTab(d, docOpen.dataset.docOpen, page));
+    maybePromptToc(docOpen.dataset.docOpen);
     return;
   }
   // Direct follow-up request: "If the file doesn't exist for that
@@ -5768,23 +5850,20 @@ function onClick(ev) {
       .catch((err) => { mechanicsScanning = false; renderDrawerBody(); toast(`Mechanics scan failed — ${err.message}`); });
     return;
   }
-  // --- Reference Table of Contents (docs/adr/0020) ---
-  const tocScan = hit('[data-toc-scan]');
-  if (tocScan) {
-    tocScanning = true;
-    renderDrawerBody();
-    scanAndGenerateToc(store)
-      .then(({ generated, skipped, unresolved }) => {
-        tocScanning = false;
-        if (generated > 0) {
-          const parent = ((store.get().guide && store.get().guide.docs) || []).find((g) => !g.parentId && g.title === 'Table of Contents');
-          if (parent) expandedGuideNodes.add(parent.id);
-        }
-        renderDrawerBody();
-        const unresolvedNote = unresolved ? `, ${unresolved} had unreadable bookmarks` : '';
-        toast(`Table of Contents: ${generated} document(s) generated${skipped ? `, ${skipped} skipped (no bookmarks)` : ''}${unresolvedNote}`);
-      })
-      .catch((err) => { tocScanning = false; renderDrawerBody(); toast(`Table of Contents scan failed — ${err.message}`); });
+  // --- Reference Table of Contents (design/adr/reference-toc-library.md) ---
+  // Settings → General's sourcebook list: one PDF, or every one still missing a TOC.
+  if (hit('[data-toc-offer-toggle]')) { ev.preventDefault(); tocOfferOpen = !tocOfferOpen; return renderDrawerBody(); }
+  const tocCreate = hit('[data-toc-create]');
+  if ((tocCreate || hit('[data-toc-create-all]')) && tocScanning) { ev.preventDefault(); return; }
+  if (tocCreate) {
+    ev.preventDefault();
+    const source = listTocSources(store.get(), refDocBlobKeys).find((s) => s.sourceKey === tocCreate.dataset.tocCreate);
+    if (source) runTocScan([source]);
+    return;
+  }
+  if (hit('[data-toc-create-all]')) {
+    ev.preventDefault();
+    runTocScan(listTocSources(store.get(), refDocBlobKeys));
     return;
   }
 }
@@ -6157,12 +6236,17 @@ function onChange(ev) {
   // entityId: a battlemap background isn't owned by any one entity. A
   // larger maxDim (1600, vs. an entity thumbnail's 256) since this is meant
   // to actually be looked at full-drawer-width, not shown as a small photo.
+  // An MP4 (animated background) is stored verbatim instead — it lives in
+  // the one campaign document like every other upload, so a large clip
+  // gets a size warning (every save clones the whole document).
   const bmBgUpload = t.closest('[data-battlemap-bg-upload]');
   if (bmBgUpload) {
     const mapId = bmBgUpload.dataset.battlemapBgUpload;
     const file = (t.files || [])[0];
     if (!file) return;
-    loadAndMaybeResize(file, 1600)
+    const video = isVideoFile(file);
+    if (video && file.size > 25 * 1024 * 1024) toast(`Large video (${Math.round(file.size / (1024 * 1024))} MB) — saves and exports may slow down`);
+    (video ? loadVideo(file) : loadAndMaybeResize(file, 1600))
       .then(({ thumbDataUrl, originalDataUrl }) => {
         store.update((d) => {
           const r = addGalleryImages(d, { entityId: null, lockedTag: 'battlemap', title: titleFromFilename(file.name), mimeType: file.type, thumbDataUrl, originalDataUrl });
@@ -7324,38 +7408,24 @@ function onChange(ev) {
       if (added.length) parts.push(`${added.length} as new document${added.length === 1 ? '' : 's'}`);
       toast(`Imported ${parts.join(', ') || '0 files'}`);
       refreshRefDocBlobKeys();
-      // Reference Table of Contents (docs/adr/0020) — per the user's
-      // explicit choice, this is prompted per upload, not silent/automatic:
-      // a real bookmark scan is real work (and needs npm run serve, same
-      // file:// restriction as Mechanics Index), so a GM opts in per
-      // document rather than it firing unasked. Only offered for a NEW
-      // personal document (a catalog-matched file already has whatever ToC
-      // handling the Reference Library gives it).
-      for (const { title, file } of added) {
-        if (file.type !== 'application/pdf') continue;
-        if (!window.confirm(`Generate a Table of Contents entry for "${title}"? (scans its PDF bookmarks)`)) continue;
-        scanAndGenerateToc(store, { onlyDoc: { title, source: URL.createObjectURL(file) } })
-          .then(({ generated, unresolved }) => {
-            if (generated > 0) {
-              // The new/updated entry lands nested under a "Table of
-              // Contents" Guide doc, which the tree renders collapsed by
-              // default (expandedGuideNodes starts empty) — without this,
-              // a successful scan looked identical to "nothing happened"
-              // unless the GM already knew to click the parent's caret.
-              const parent = ((store.get().guide && store.get().guide.docs) || []).find((g) => !g.parentId && g.title === 'Table of Contents');
-              if (parent) expandedGuideNodes.add(parent.id);
-              toast(`Table of Contents added for "${title}" — see Guide → Table of Contents`);
-            } else if (unresolved > 0) {
-              // The PDF has real bookmarks (seen during the scan) but none
-              // resolved to a page — a different, more diagnostic message
-              // than "no bookmarks," since the fix belongs in this scanner
-              // rather than the PDF itself.
-              toast(`"${title}" has bookmarks, but none could be resolved to a page — its bookmark format isn't supported yet`);
-            } else {
-              toast(`"${title}" has no bookmarks — nothing to generate`);
-            }
-          })
-          .catch((err) => toast(`Table of Contents scan failed — ${err.message}`));
+      // Reference Table of Contents (design/adr/reference-toc-library.md) —
+      // per the user's explicit choice, this is prompted per upload, not
+      // silent/automatic: a real bookmark scan is real work (and needs npm
+      // run serve, same file:// restriction as Mechanics Index), so a GM
+      // opts in per document rather than it firing unasked. Only offered for
+      // a NEW personal document — a catalog-matched sourcebook is offered
+      // when it's first opened instead (maybePromptToc). A "no" is
+      // remembered for this campaign, same as that open-a-PDF prompt.
+      const pdfSources = added
+        .filter(({ file }) => file.type === 'application/pdf')
+        .map(({ id, title }) => ({ sourceKey: id, docTitle: title, tabKey: `lib:${id}` }));
+      if (pdfSources.length && canScanToc()) {
+        const accepted = pdfSources.filter((s) => {
+          if (window.confirm(`Generate a Table of Contents entry for "${s.docTitle}"? (scans its PDF bookmarks)`)) return true;
+          store.update((d) => declineToc(d, s.sourceKey));
+          return false;
+        });
+        if (accepted.length) runTocScan(accepted);
       }
     });
     t.value = '';
@@ -8447,6 +8517,38 @@ function updateBattlemapWorldTransform() {
   const world = root.querySelector('.battlemap-world');
   if (!world) return;
   world.style.transform = `translate(${battlemapCamera.x}px, ${battlemapCamera.y}px) scale(${battlemapCamera.scale})`;
+}
+
+// A video Battlemap background renders as an empty
+// <video data-battlemap-video="imageId"> placeholder (drawers/index.js) —
+// every render tears the drawer down, which would restart the clip and
+// re-parse a multi-MB data URL each time. Instead the one live <video>
+// per image is kept here and swapped back in over each fresh placeholder,
+// so playback just continues; its src is set once, as a property (never
+// escaped into the HTML string). Entries for backgrounds no longer on
+// screen are dropped so a deleted clip's bytes can be released.
+const battlemapVideoEls = new Map();
+function syncBattlemapVideos() {
+  if (!root) return;
+  const seen = new Set();
+  root.querySelectorAll('video[data-battlemap-video]').forEach((placeholder) => {
+    const id = placeholder.dataset.battlemapVideo;
+    let el = battlemapVideoEls.get(id);
+    if (seen.has(id) || !el) {
+      const img = getGalleryImage(store.get(), id);
+      if (!img) return;
+      placeholder.muted = true;
+      placeholder.src = img.dataUrl;
+      if (!seen.has(id)) battlemapVideoEls.set(id, placeholder);
+      el = placeholder;
+    } else {
+      placeholder.replaceWith(el);
+    }
+    seen.add(id);
+    // Detaching a playing <video> pauses it (HTML spec) — resume after the swap.
+    if (el.paused) { const p = el.play(); if (p && p.catch) p.catch(() => {}); }
+  });
+  for (const id of [...battlemapVideoEls.keys()]) if (!seen.has(id)) battlemapVideoEls.delete(id);
 }
 
 /** Rescales the camera so the world point currently under (screenX,
@@ -9972,6 +10074,8 @@ function render() {
   renderSearchOverlay();
   renderEntityPickerOverlay();
   renderDiceRollOverlay();
+  syncBattlemapVideos();
+  syncRememberedTocs();
 
   if (window.scrollX !== scrollX || window.scrollY !== scrollY) window.scrollTo(scrollX, scrollY);
 }
@@ -11211,7 +11315,7 @@ function buildDrawerUi() {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, oracleRouteToNavigator: oracleRouteToNavigator && activeDrawer === 'oracle', navigatorStepMapLink, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, docSort, docSortMenuOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     fiveLeaguesInfoOpen, fiveLeaguesItemNotesOpen,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, journalActionsOpen, journalDraftText, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, expandedWhatConflicts,
+    enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, journalActionsOpen, journalDraftText, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, tocOfferOpen, tocLibrary: store.getAppConfig().tocLibrary || {}, canScanToc: canScanToc(), lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, expandedWhatConflicts,
     advisorOracleResults, advisorDrafts, advisorConsequenceDraw, sceneSummaryOverride,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName, partyTrackersEditOpen, collapsedPartySections,
@@ -11442,6 +11546,7 @@ function renderDrawerBody() {
     const advisorContentId = resolvePositionContentId(profile, 'advisor');
     copilotBodyEl.innerHTML = renderPositionContent(advisorContentId, doc, buildDrawerUi());
   }
+  syncBattlemapVideos();
   // Clicking any entity link (inline mention, WHO/WHERE chip, relationship
   // chip, graph node, ...) sets this so the Cast inspector's name field is
   // immediately focused+selected once it renders — "single click opens it

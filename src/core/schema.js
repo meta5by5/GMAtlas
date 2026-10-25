@@ -120,7 +120,9 @@ export function defaultCampaign(now = new Date().toISOString()) {
 
     director: {},        // unified Story Director cascade state
     oracles: { overrides: {}, usage: {} },
-    documents: { library: [], openTabs: [], activeTab: null, refOverrides: {} },
+    // tocDeclined: sourceKeys (domain/toc.js) of PDFs this campaign said
+    // "no" to a Guide TOC for — design/adr/reference-toc-library.md.
+    documents: { library: [], openTabs: [], activeTab: null, refOverrides: {}, tocDeclined: [] },
 
     // Gallery (Phase 11, docs/adr/0021-gallery.md): a tagged image
     // collection, separate from Documents (rulebooks/notes) — an entity's
@@ -454,7 +456,9 @@ export function defaultRulesProfile(name = 'Default', now = new Date().toISOStri
 // Separate from any one campaign document since a profile is shared across
 // campaigns and a campaign list obviously can't live inside one campaign.
 export function defaultAppConfig() {
-  return { activeCampaignId: null, campaigns: [], profiles: [], turnStepLists: [] };
+  // tocLibrary: {[sourceKey]: {docTitle, entries, scannedAt}} — every PDF
+  // outline scan, remembered across campaigns (design/adr/reference-toc-library.md).
+  return { activeCampaignId: null, campaigns: [], profiles: [], turnStepLists: [], tocLibrary: {} };
 }
 
 // A single named, reorderable Turn Step List — shared across every Rules
