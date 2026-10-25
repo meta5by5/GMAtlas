@@ -5582,14 +5582,36 @@ function battlemap(doc, ui = {}) {
   const maps = listBattlemaps(doc);
   const active = getActiveBattlemap(doc);
 
-  const head = `${sectionHeadRow('h3', 'Planetfall Grid Battlemap', helpKey)}
-    ${helpBody(helpKey, 'Upload or pick a background image, then place icons (hazards, doors, notes — from the palette below) or drag a Cast entity onto the map to place a combatant token. Drag any placed icon to reposition it; click a token to open its entity, click an annotation to edit its note.', ui)}
+  // Two collapsible groups (ui.collapsedActorGroups / data-actor-group-toggle,
+  // expanded by default): "Maps" (which map + its name), then "Map
+  // Objectives" (background, grid, icon palette) — whose header row also
+  // carries the zoom controls, so the map stays workable while it's collapsed.
+  const collapsedSet = ui.collapsedActorGroups || new Set();
+  const mapsCollapsed = collapsedSet.has('battlemap:maps');
+  const objectivesCollapsed = collapsedSet.has('battlemap:objectives');
+  const groupToggle = (key, label, collapsed) => '<button type="button" class="field-label-static actor-group-toggle" data-actor-group-toggle="' + key + '" aria-expanded="' + !collapsed + '">' + (collapsed ? '▸' : '▾') + ' ' + label + '</button>';
+  const mapTabs = `
     <div class="battlemap-tabs">
       ${maps.map((m) => `<button type="button" class="btn ghost sm ${active && active.id === m.id ? 'active' : ''}" data-battlemap-select="${esc(m.id)}">${esc(m.name)}</button>`).join('')}
       <button type="button" class="chip sm" data-battlemap-add>＋ New Map</button>
     </div>`;
+  const nameRow = active ? `
+    <div class="battlemap-toolbar">
+      <input class="battlemap-name-input" data-battlemap-rename="${esc(active.id)}" value="${esc(active.name)}" placeholder="Map name">
+      <button type="button" class="icon-btn" data-battlemap-remove="${esc(active.id)}" title="Delete this map" aria-label="Delete map">✕</button>
+    </div>` : '';
+  const mapsBody = mapsCollapsed ? '' : mapTabs + nameRow;
+  // No panel title (the drawer/card title already says Battlemap): "Maps"
+  // and "Map Objectives" sit side by side as two collapsible columns of one
+  // row; the help "?" rides on the Maps header.
+  const mapsColumn = `
+      <div class="battlemap-section">
+        <div class="section-head-row battlemap-section-head">${groupToggle('battlemap:maps', 'Maps', mapsCollapsed)}${helpToggle(helpKey)}</div>
+        ${mapsBody}
+      </div>`;
+  const help = helpBody(helpKey, 'Upload or pick a background image, then place icons (hazards, doors, notes — from the palette in Map Objectives) or drag a Cast entity onto the map to place a combatant token. Drag any placed icon to reposition it; click a token to open its entity, click an annotation to edit its note. On a wide screen, ⛶ (next to the panel title) widens the map one Storyboard section at a time, up to all three, and ⊟ narrows it back one at a time.', ui);
 
-  if (!active) return `${head}<p class="ws-placeholder">No maps yet — create one to get started.</p>`;
+  if (!active) return `<div class="battlemap-panel"><div class="battlemap-sections-row">${mapsColumn}</div>${help}<p class="ws-placeholder">No maps yet — create one to get started.</p></div>`;
 
   const bg = active.backgroundImageId ? getGalleryImage(doc, active.backgroundImageId) : null;
   // Only Gallery images tagged "battlemap" are offered as a pickable
@@ -5631,10 +5653,13 @@ function battlemap(doc, ui = {}) {
   // during interaction (updateBattlemapWorldTransform); this inline style
   // is only the value on a fresh render.
   const cam = ui.battlemapCamera || { scale: 1, x: 0, y: 0 };
-  return `${head}
+  const zoomControls = `<span class="battlemap-camera-controls">
+        <button type="button" class="icon-btn" data-battlemap-camera-zoom="out" title="Zoom out">－</button>
+        <button type="button" class="icon-btn" data-battlemap-camera-zoom="in" title="Zoom in">＋</button>
+        <button type="button" class="icon-btn" data-battlemap-camera-reset title="Reset view">⟲</button>
+      </span>`;
+  const objectivesBody = objectivesCollapsed ? '' : `
     <div class="battlemap-toolbar">
-      <input class="battlemap-name-input" data-battlemap-rename="${esc(active.id)}" value="${esc(active.name)}" placeholder="Map name">
-      <button type="button" class="icon-btn" data-battlemap-remove="${esc(active.id)}" title="Delete this map" aria-label="Delete map">✕</button>
       <label class="chip sm">🖼 Background<input type="file" accept="image/*" data-battlemap-bg-upload="${esc(active.id)}" hidden></label>
       ${pickableImages.length ? `<select data-battlemap-bg-select="${esc(active.id)}">
         <option value="">— pick existing image —</option>
@@ -5642,19 +5667,23 @@ function battlemap(doc, ui = {}) {
       </select>` : ''}
       <label class="chip sm"><input type="checkbox" data-battlemap-grid-toggle="${esc(active.id)}" ${active.gridEnabled ? 'checked' : ''}> Grid</label>
       ${active.gridEnabled ? numStepper(`<input type="number" class="battlemap-grid-size-input" min="10" max="200" value="${active.gridSize}" data-battlemap-grid-size="${esc(active.id)}" title="Grid cell size (px)">`) : ''}
-      <span class="battlemap-camera-controls">
-        <button type="button" class="icon-btn" data-battlemap-camera-zoom="out" title="Zoom out">－</button>
-        <button type="button" class="icon-btn" data-battlemap-camera-zoom="in" title="Zoom in">＋</button>
-        <button type="button" class="icon-btn" data-battlemap-camera-reset title="Reset view">⟲</button>
-      </span>
     </div>
-    <div class="battlemap-palette">${palette}</div>
+    <div class="battlemap-palette">${palette}</div>`;
+  return `<div class="battlemap-panel">
+    <div class="battlemap-sections-row">${mapsColumn}
+      <div class="battlemap-section">
+        <div class="section-head-row battlemap-section-head">${groupToggle('battlemap:objectives', 'Map Objectives', objectivesCollapsed)}${zoomControls}</div>
+        ${objectivesBody}
+      </div>
+    </div>
+    ${help}
     <div class="battlemap-viewport ${ui.battlemapPlacingIcon ? 'placing' : ''}" data-battlemap-canvas="${esc(active.id)}" data-drop-battlemap="${esc(active.id)}">
       <div class="battlemap-world" style="transform:translate(${cam.x}px,${cam.y}px) scale(${cam.scale});${bg ? `background-image:url('${esc(bg.dataUrl)}');` : ''}${active.gridEnabled ? `--battlemap-grid-size:${active.gridSize}px;` : ''}">
         ${!bg ? '<p class="ws-placeholder battlemap-placeholder">No background set — upload or pick an image above.</p>' : ''}
         ${active.gridEnabled ? '<div class="battlemap-grid-overlay"></div>' : ''}
         ${markers}
       </div>
+    </div>
     </div>`;
 }
 

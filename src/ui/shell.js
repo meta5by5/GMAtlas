@@ -288,11 +288,19 @@ function renderStoryboardGrid(doc, ui, profile) {
   // is already showing.
   if (composerContentId === navigatorContentId) composerContentId = BUILTIN_SLOT_CONTENT.composer;
   const titleWithUnanchor = (label, anchoredId) => anchoredId
-    ? `${escapeHtml(label)} <button type="button" class="icon-btn storyboard-unanchor" data-storyboard-unanchor="${escapeHtml(anchoredId)}" title="Return to the tab strip" aria-label="Return to the tab strip">⇤</button>`
+    ? `${escapeHtml(label)}${anchoredId === 'battlemap' ? battlemapSpanControlsHtml() : ''} <button type="button" class="icon-btn storyboard-unanchor" data-storyboard-unanchor="${escapeHtml(anchoredId)}" title="Return to the tab strip" aria-label="Return to the tab strip">⇤</button>`
     : escapeHtml(label);
   const composerLabel = titleWithUnanchor((drawerMeta(composerContentId) || DRAWER_META.composer).label, anchoredComposerId);
   const navigatorLabel = titleWithUnanchor((drawerMeta(navigatorContentId) || DRAWER_META.navigator).label, anchoredNavigatorId);
-  return `<div class="storyboard-grid">${positionCardHtml(composerLabel, renderPositionContent(composerContentId, doc, ui))}${positionCardHtml(navigatorLabel, renderPositionContent(navigatorContentId, doc, ui), 'navigator-card')}</div>`;
+  // An anchored Battlemap widened to 2 or 3 sections takes the whole grid
+  // (2 = both Storyboard columns; 3 = also over the right-hand column).
+  const wideBattlemapSlot = battlemapSpan >= 2 && !isCompactTab()
+    ? (anchoredNavigatorId === 'battlemap' ? 'navigator' : anchoredComposerId === 'battlemap' ? 'composer' : null) : null;
+  if (wideBattlemapSlot) {
+    const label = wideBattlemapSlot === 'navigator' ? navigatorLabel : composerLabel;
+    return `<div class="storyboard-grid">${positionCardHtml(label, renderPositionContent('battlemap', doc, ui), 'battlemap-card storyboard-span-' + battlemapSpan)}</div>`;
+  }
+  return `<div class="storyboard-grid">${positionCardHtml(composerLabel, renderPositionContent(composerContentId, doc, ui), anchoredComposerId === 'battlemap' ? 'battlemap-card' : '')}${positionCardHtml(navigatorLabel, renderPositionContent(navigatorContentId, doc, ui), 'navigator-card' + (anchoredNavigatorId === 'battlemap' ? ' battlemap-card' : ''))}</div>`;
 }
 // A Storyboard SLOT id ('composer'/'navigator'/'advisor') resolves through
 // the active profile (resolvePositionContentId) to whatever CONTENT id
@@ -484,6 +492,11 @@ let settingsMenuOpen = false; // ephemeral — the header gear's Settings/About 
 let campaignSwitcherOpen = false;
 // Which Hexcrawl palette menu is open ('geography' | 'threat' | 'overlay' | null).
 let hexcrawlPaletteMenu = null;
+// How many Storyboard sections the Battlemap panel covers (1 | 2 | 3), desktop only.
+let battlemapSpan = 1;
+// A tab the GM brought forward with its nav button (focusDrawerPanel) — the
+// tab strip lists it first. A Storyboard slot id when the panel fills a position.
+let navbarFrontId = null;
 // Direct request: "a startup page on initial app startup that displays the
 // available campaigns and an option to open settings" — a full-screen
 // landing page shown on every launch (confirmed via AskUserQuestion, not
@@ -1276,6 +1289,17 @@ function syncPartyModuleTrackers() {
   if (before !== after) store.update((d) => syncModuleTrackers(d, settings));
 }
 
+// The Battlemap's width controls, shown on the panel's own title row (the
+// drawer head, or its Storyboard card when anchored): ⛶ widens it one
+// Storyboard section at a time up to all three, ⊟ narrows it one at a time.
+// Desktop only — on phone/tablet the panel already fills the screen.
+function battlemapSpanControlsHtml() {
+  if (isCompactTab()) return '';
+  const widen = battlemapSpan < 3 ? `<button type="button" class="icon-btn" data-battlemap-span-step="1" title="Widen the map to ${battlemapSpan + 1} Storyboard sections" aria-label="Widen map">⛶</button>` : '';
+  const narrow = battlemapSpan > 1 ? `<button type="button" class="icon-btn" data-battlemap-span-step="-1" title="Narrow the map to ${battlemapSpan - 1} Storyboard section${battlemapSpan - 1 === 1 ? '' : 's'}" aria-label="Narrow map">⊟</button>` : '';
+  return `<span class="battlemap-span-controls" role="group" aria-label="Map width (${battlemapSpan} of 3 sections)">${narrow}${widen}</span>`;
+}
+
 function refreshRefDocBlobKeys() {
   store.listDocBlobKeys().then((keys) => { refDocBlobKeys = new Set(keys); render(); });
 }
@@ -1684,7 +1708,14 @@ function onClick(ev) {
   if (hit('[data-close-all-drawers]')) return closeAllDrawerTabs();
   if (hit('[data-drawer-collapse]')) { drawerCollapsed = true; return render(); }
   if (hit('[data-drawer-restore]')) { drawerCollapsed = false; return render(); }
-  if (hit('[data-toggle-copilot]')) { copilotOpen = !copilotOpen; return render(); }
+  if (hit('[data-toggle-copilot]')) {
+    // The right nav's Advisor button is labeled after whatever fills the
+    // Advisor position — when that's Party (FOCUS_ON_REOPEN_DRAWERS), it acts
+    // like the Party button: bring Party to the front and make it active.
+    const advisorContent = resolvePositionContentId(store.getActiveProfile(), 'advisor');
+    if (FOCUS_ON_REOPEN_DRAWERS.has(advisorContent)) return focusDrawerPanel(advisorContent);
+    copilotOpen = !copilotOpen; return render();
+  }
   if (hit('[data-toggle-cast]')) return toggleDrawer('cast');
   // Faction Events edge-nav button (docs/adr/0031/0032, between Cast and
   // Trade — see EDGE_ORDER): now an ordinary drawer tab; opening it also
@@ -2284,7 +2315,7 @@ function onClick(ev) {
   const bmCanvas = hit('[data-battlemap-canvas]');
   if (bmCanvas && battlemapPlacingIcon) {
     const mapId = bmCanvas.dataset.battlemapCanvas;
-    const rect = bmCanvas.getBoundingClientRect();
+    const rect = battlemapWorldRect(bmCanvas);
     const { x, y } = screenToWorldFraction(rect, battlemapCamera, ev.clientX, ev.clientY);
     const key = battlemapPlacingIcon;
     battlemapPlacingIcon = null;
@@ -2590,6 +2621,8 @@ function onClick(ev) {
   // (next open corner, 6-max toast, auto-opens the Conflict picker). A
   // second click while already armed with this exact key un-arms it —
   // same toggle semantics as re-picking "Select" in the dropdown.
+  const battlemapSpanBtn = hit('[data-battlemap-span-step]');
+  if (battlemapSpanBtn) { battlemapSpan = Math.min(3, Math.max(1, battlemapSpan + Number(battlemapSpanBtn.dataset.battlemapSpanStep))); return render(); }
   const hexMenuToggle = hit('[data-hexcrawl-menu-toggle]');
   if (hexMenuToggle) {
     const kind = hexMenuToggle.dataset.hexcrawlMenuToggle;
@@ -7493,6 +7526,18 @@ function onInput(ev) {
 // the drawer (on phone/tablet, where the Storyboard isn't shown, it returns
 // to the tab strip). Not open yet → opens normally.
 function focusDrawerPanel(id) {
+  // Already a tab in the strip (even while it ALSO fills a Storyboard
+  // position): that tab moves to the front and becomes active.
+  if (openDrawers.includes(id)) {
+    drawerCollapsed = false;
+    navbarFrontId = id;
+    openDrawerTab(id);
+    render();
+    flashFocus(root.querySelector('[data-drawer-body]'));
+    const frontTab = root.querySelector(`[data-drawer-tab="${id}"]`);
+    if (frontTab && frontTab.scrollIntoView) frontTab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    return;
+  }
   // Filling a Storyboard position: select that position wherever it shows —
   // its pinned tab on phone/tablet; its Storyboard card on desktop (unless
   // an anchored panel is covering that slot right now, in which case it
@@ -7502,6 +7547,7 @@ function focusDrawerPanel(id) {
   if (slot && !anchoredPanels.includes(id)) {
     if (isCompactTab() || (slot === 'advisor' && openDrawers.length)) {
       activeDrawer = slot;
+      navbarFrontId = slot;
       drawerCollapsed = false;
       render();
       flashFocus(root.querySelector('[data-drawer-body]'));
@@ -7509,7 +7555,7 @@ function focusDrawerPanel(id) {
       if (tab && tab.scrollIntoView) tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       return;
     }
-    if (slot === 'advisor') { render(); return flashFocus(root.querySelector('[data-copilot]')); }
+    if (slot === 'advisor') { copilotOpen = true; render(); return flashFocus(root.querySelector('[data-copilot]')); }
     const covered = (slot === 'navigator' && anchoredPanels.length >= 1) || (slot === 'composer' && anchoredPanels.length >= 2);
     if (!covered) {
       render();
@@ -7522,8 +7568,9 @@ function focusDrawerPanel(id) {
     const card = root.querySelector(`[data-storyboard-unanchor="${id}"]`);
     return flashFocus(card && card.closest('.workspace-card'));
   }
-  if (!openDrawers.includes(id)) return toggleDrawer(id);
+  if (!openDrawers.includes(id)) { navbarFrontId = id; return toggleDrawer(id); }
   drawerCollapsed = false;
+  navbarFrontId = id;
   openDrawerTab(id);
   render();
   flashFocus(root.querySelector('[data-drawer-body]'));
@@ -8347,7 +8394,7 @@ function completeLocationEntityDrop(entityId) {
 // completeDrop/completeGuideNodeDrop above.
 function completeBattlemapDrop(target, { entityId, battlemapIconRef }, clientX, clientY) {
   const mapId = target.dataset.dropBattlemap;
-  const rect = target.getBoundingClientRect();
+  const rect = battlemapWorldRect(target);
   const { x, y } = screenToWorldFraction(rect, battlemapCamera, clientX, clientY);
   if (battlemapIconRef) {
     const [srcMapId, iconId] = battlemapIconRef.split('::');
@@ -8377,6 +8424,15 @@ function completeBattlemapDrop(target, { entityId, battlemapIconRef }, clientX, 
  *  lands from where the cursor was. domain/battlemaps.js's own
  *  clampFraction still clamps the result on write, same as before this
  *  feature existed. */
+// The map image box's own untransformed rect inside its viewport — the
+// box keeps the map's proportions (it no longer stretches with the window),
+// so placement fractions are of the box, not the whole viewport.
+function battlemapWorldRect(viewport) {
+  const rect = viewport.getBoundingClientRect();
+  const world = viewport.querySelector('.battlemap-world');
+  if (!world || !world.offsetWidth) return rect;
+  return { left: rect.left + world.offsetLeft, top: rect.top + world.offsetTop, width: world.offsetWidth, height: world.offsetHeight };
+}
 function screenToWorldFraction(rect, camera, clientX, clientY) {
   if (!rect.width || !rect.height) return { x: 0.5, y: 0.5 };
   const sx = clientX - rect.left, sy = clientY - rect.top;
@@ -9689,6 +9745,11 @@ function render() {
   // with nothing active.
   if (compact && !activeDrawer) activeDrawer = 'composer';
   const drawer = root.querySelector('[data-drawer]');
+  // The Battlemap can widen over two (Navigator) or all three Storyboard sections.
+  const span = activeDrawer === 'battlemap' && !compact && !anchoredPanels.includes('battlemap') ? battlemapSpan : 1;
+  drawer.classList.toggle('drawer-battlemap', activeDrawer === 'battlemap');
+  drawer.classList.toggle('drawer-span-2', span === 2);
+  drawer.classList.toggle('drawer-span-3', span === 3);
   // drawerCollapsed ("peek behind the drawer") is ignored at compact
   // widths — there is nothing behind it to peek at once .mc-workspace is
   // hidden there.
@@ -9748,6 +9809,9 @@ function render() {
   const tabIds = compact
     ? [...PINNED_TAB_IDS, ...openDrawers]
     : (openDrawers.length ? [...openDrawers, 'advisor'] : []);
+  // The tab a nav button brought forward (e.g. Party, even while it fills a
+  // Storyboard position) leads the strip.
+  if (navbarFrontId && tabIds.includes(navbarFrontId)) tabIds.splice(0, tabIds.length, navbarFrontId, ...tabIds.filter((x) => x !== navbarFrontId));
   const drawerTabsEl = root.querySelector('[data-drawer-tabs]');
   drawerTabsEl.hidden = compact ? false : tabIds.length < 2;
   drawerTabsEl.innerHTML = (!compact && tabIds.length < 2) ? '' : (
@@ -11122,6 +11186,7 @@ function castGenerateSelectHtml() {
 }
 function headExtraForDrawer(id) {
   if (id === 'cast') return castGenerateSelectHtml();
+  if (id === 'battlemap') return battlemapSpanControlsHtml();
   // (Party's ＋ picker lives on the Party panel's own "Party" section header.)
   // Guide/Documents' top-of-drawer intro tips have no in-content header of
   // their own to sit next to (unlike a Settings group's <h3> or Documents'
@@ -11154,7 +11219,7 @@ function buildDrawerUi() {
     journalEditOpen, graphFilter, helpOpen, settingsMenuOpen, settingsTab, rulesetsSubTab, campaignFormOpen, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
-    hexcrawlPlacingIcon, hexcrawlPaletteMenu, hexcrawlCamera, hexcrawlSelectedHex, hexcrawlRange, hexcrawlRiverStart, hexcrawlRoadStart,
+    hexcrawlPlacingIcon, hexcrawlPaletteMenu, battlemapSpan, hexcrawlCamera, hexcrawlSelectedHex, hexcrawlRange, hexcrawlRiverStart, hexcrawlRoadStart,
     dungeonCrawlPending, dungeonCrawlSelected, dungeonCrawlDetailZoom, dungeonCrawlMergeMode, dungeonCrawlMergeSelection, dungeonCrawlArmedDressing,
     contentPackFlags, contentPackImporting, dataPackImporting, licenseDocLoading, canLoadReference: canLoadRulesetReference(), exportIncludeAttachments, exportAttachmentsPreview,
     worldTrackerTab, worldTrackerSelectedSector, worldTrackerMigrateOpen,

@@ -1350,6 +1350,40 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .hexcrawl-map-name { flex: 1 1 12rem; min-width: 8rem; font-weight: 600; }
 .battlemap-toolbar select, .battlemap-grid-size-input { width: auto; }
 .battlemap-palette { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: var(--sp-2); }
+/* Battlemap's collapsible "Maps" / "Map Objectives" groups; the zoom
+   controls ride on the Map Objectives header row (right-aligned), so they
+   stay reachable while it's collapsed. */
+.battlemap-section { margin-bottom: var(--sp-2); min-width: 0; }
+/* Maps | Map Objectives: two collapsible columns of one row (stacking on a
+   narrow panel); a collapsed column shrinks to just its header. */
+.battlemap-sections-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-3); }
+.battlemap-sections-row > .battlemap-section { flex: 1 1 14rem; }
+.battlemap-sections-row > .battlemap-section + .battlemap-section { border-left: 1px solid var(--border); padding-left: var(--sp-3); }
+.battlemap-section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); margin-bottom: var(--sp-1); }
+.battlemap-span-controls { display: inline-flex; gap: 2px; margin-left: var(--sp-2); vertical-align: middle; }
+/* The Battlemap panel is a fill-height column: header and its two sections
+   on top, the map window taking everything left below Map Objectives —
+   in the drawer and on an anchored Storyboard card alike. */
+.mc-drawer.drawer-battlemap { display: flex; flex-direction: column; }
+.mc-drawer.drawer-battlemap .mc-drawer-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.workspace-card.battlemap-card .workspace-card-body { display: flex; flex-direction: column; }
+.workspace-card.battlemap-card .workspace-card-body-inner { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.battlemap-panel { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.battlemap-panel .battlemap-viewport { flex: 1 1 auto; min-height: 18rem; padding-top: 0; container-type: size; }
+/* The map image box keeps the map's 5:3 shape, as large as fits the window. */
+.battlemap-panel .battlemap-world { inset: auto; left: 0; top: 0; width: min(100cqw, 100cqh * 5 / 3); aspect-ratio: 5 / 3; }
+/* An anchored Battlemap widened over the Storyboard: 2 = both columns,
+   3 = the whole Storyboard including the right-hand column. */
+.storyboard-grid > .storyboard-span-2 { grid-column: 1 / -1; }
+.workspace-card.storyboard-span-3 {
+  position: fixed; top: var(--header-h); left: 0; right: var(--edge-w); bottom: 0; z-index: 22;
+  margin: var(--sp-2);
+}
+/* Width over the Storyboard (desktop): 2 = this column plus Navigator (half
+   the workspace), 3 = the whole Storyboard. */
+.mc-drawer.drawer-span-2 { width: calc(var(--drawer-w) + (100vw - var(--edge-w) - var(--drawer-w)) / 2); }
+.mc-drawer.drawer-span-3 { width: calc(100vw - var(--edge-w)); }
+@media (max-width: 1023px) { .battlemap-span-controls { display: none; } }
 /* The viewport: a fixed-aspect box (padding-top trick — no fixed height,
    since a GM's background image could be any shape), overflow:hidden so
    panning/zooming the world layer inside it never spills outside the
