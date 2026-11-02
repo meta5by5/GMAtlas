@@ -865,10 +865,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
    .dashboard-trackers-section; its own border-top already separates it
    from the one above, so the wrapper itself needs no extra chrome beyond
    an optional label. A read-only tracker (another ruleset's own Party
-   Trackers, shown here but only ever EDITED on the Party panel) reads as
-   one line, label left/value right, instead of a slider underneath. */
+   Trackers, shown here but only ever EDITED on the Party panel) is just a
+   label and a number, so they all share one row, wrapping only when the
+   panel is too narrow. flex-direction undoes .field-label's column. */
 .dashboard-trackers-section-head { margin: 0 0 var(--sp-1); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); }
-.dashboard-tracker-readonly { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); }
+.dashboard-trackers-readonly { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-4); }
+.dashboard-tracker-readonly { flex-direction: row; align-items: baseline; gap: var(--sp-1); margin-top: 0; white-space: nowrap; }
 /* Each former W-tab, now a collapsible section (dashboardSection(),
    ui/workspace/index.js) — reuses .section-head-row (drawers/index.js's
    Bases of Influence toggle already established this exact convention)
@@ -1183,6 +1185,10 @@ input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
 .mc-drawer-body { font-size: 0.88rem; }
 .drawer-note { margin-bottom: var(--sp-3); }
 .drawer-note-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
+/* The Journal compose box's ➜📖 submit (an icon button, like a chat
+   "send") and Clear, left-aligned under the text box. */
+.journal-submit-row { display: flex; justify-content: flex-start; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2); }
+.journal-submit { min-width: 2.75rem; min-height: 2.25rem; padding: 0.3rem 0.7rem; font-size: 1.05rem; line-height: 1; letter-spacing: -0.05em; }
 .doc-card {
   background: var(--tier2-bg);
   border: 1px solid var(--border);
@@ -1282,9 +1288,8 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 /* Settings restructuring: the Campaigns tab's own switcher dropdown + New/
    Rename/Delete icon buttons, same inline-row posture as .campaign-row
    above (which it replaces as the tab's primary control). */
-.campaign-switcher-row { display: flex; align-items: flex-end; gap: var(--sp-2); flex-wrap: wrap; }
-.campaign-switcher-row .field-label { flex: 1; min-width: 12rem; margin: 0; }
-.new-campaign-form { display: flex; flex-direction: column; gap: var(--sp-2); padding-top: var(--sp-2); border-top: 1px solid var(--border); }
+.campaign-switcher-row { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.campaign-switcher-row > select { flex: 1; min-width: 12rem; }
 .profile-list { flex-direction: row; flex-wrap: wrap; }
 .profile-list .btn.active { color: var(--accent); border-color: var(--accent); }
 .module-enable-checks { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
@@ -2534,6 +2539,8 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    Test, p.52)' to a tooltip" — a plain hover tooltip (short text, unlike
    the expand/collapse panel below). */
 .five-leagues-hint { cursor: help; color: var(--text-dim); font-size: 0.85em; }
+/* "Skills ⓘ" — the hint sits on the header's own line, right after the word. */
+.five-leagues-skills-label { display: inline-flex; align-items: baseline; gap: 0.3em; margin: 0; white-space: nowrap; }
 /* Direct follow-up request: "move those two fields to the same row... The
    descriptive text for 'character type' and 'origin' should be hidden and
    connected to a question mark tool tip that... expand[s]/collapse[s]
@@ -3485,6 +3492,11 @@ input[type="number"] { -moz-appearance: textfield; }
 .trade-contract-name { background: none; border: none; padding: 0; margin: 0; font: inherit; font-weight: 600; color: inherit; cursor: pointer; text-align: left; }
 .trade-contract-payout { margin-left: auto; color: var(--accent-strong); font-weight: 700; }
 .trade-contract-route { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--sp-2); }
+/* Description, Conflict, Opportunity, then the tracker controls (clock,
+   status, priority, advance/set back/remove) — one full-width line each. */
+.trade-contract-row > .field-label { grid-column: 1 / -1; margin: 0; }
+.trade-contract-row > .field-label textarea { display: block; width: 100%; box-sizing: border-box; }
+.trade-contract-tracker-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
 
 /* Guide (docs/adr/0017: multi-doc tree, was one freeform field). Direct
    follow-up request ("move the open/close arrow to the editor icons to the

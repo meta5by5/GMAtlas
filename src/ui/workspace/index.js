@@ -14,7 +14,7 @@ import { getCurrentWhereLocations, factionsInRegion, factionPresenceReasons } fr
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { buildMentionEditorHTML, richToolbarHTML, richToolbarToggleHTML, toolbarCollapsed } from '../mentionEditor.js';
 import { renderFactionEvents } from '../drawers/factionEvents.js';
-import { CONFLICT_STATUS_OPTIONS, helpToggle, numStepper, contractsSection } from '../drawers/index.js';
+import { CONFLICT_STATUS_OPTIONS, helpToggle, numStepper, contractsSection, generatorsSection } from '../drawers/index.js';
 import { getColonyFields } from '../../domain/colony.js';
 import { getGalleryImage } from '../../domain/gallery.js';
 import { openForeshadowing } from '../../domain/foreshadowing.js';
@@ -815,6 +815,7 @@ export function navigatorBodyHtml(doc, ui) {
     ${narrativeComposerBlock(doc, ui)}
     ${navigatorWorkflowBlock(doc, ui)}
     ${dashboardTrackersBlock(doc)}
+    ${generatorsSection(ui)}
     ${contractsSection(doc, ui, { collapsible: true })}
   `;
 }
@@ -1045,7 +1046,7 @@ function starforgedDialsHtml(doc) {
 // Tracker's value stays exclusively on the Party panel itself) list of
 // another ruleset's own Party Trackers, for dashboardTrackersBlock below.
 function readonlyPartyTrackersHtml(trackers) {
-  return `<div class="dashboard-trackers">
+  return `<div class="dashboard-trackers dashboard-trackers-readonly">
     ${trackers.map((t) => {
       const hasMax = (t.kind === 'meter' || t.kind === 'gauge') && t.max != null;
       // Plain string concatenation rather than a ternary with a

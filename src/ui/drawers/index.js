@@ -2251,24 +2251,32 @@ function fiveLeaguesBackgroundSectionHtml(e) {
   </div>`;
 }
 
-// The 12 named Skills (p.23) — a plain has/doesn't checklist (see data/
+// The 12 named Skills (p.23) — a plain has/doesn't set (see data/
 // fiveLeaguesCharacter.js's own doc comment on why the real +2 Proficiency
-// Test bonus isn't automated here); each checkbox's tooltip is the Skill's
-// own "Uses" text from the real Skills Table.
+// Test bonus isn't automated here), edited the same way an entity's Tags
+// are (tagEditorHead/tagEditorList above): a "+ Add skill…" dropdown of the
+// skills not yet taken, and a removable chip per known skill. Each option/
+// chip's tooltip is the Skill's own "Uses" text from the real Skills Table.
 function fiveLeaguesSkillsSectionHtml(e) {
   const known = Array.isArray(e.fiveLeaguesSkills) ? e.fiveLeaguesSkills : [];
-  const boxes = FIVE_LEAGUES_SKILLS.map((s) => `
-    <label class="five-leagues-chip" title="${esc(s.uses)}">
-      <input type="checkbox" data-entity-five-leagues-skill="${esc(e.id)}::${esc(s.key)}" ${known.includes(s.key) ? 'checked' : ''}>
-      ${esc(s.label)}
-    </label>`).join('');
+  const available = FIVE_LEAGUES_SKILLS.filter((s) => !known.includes(s.key));
+  const addSelect = available.length ? `
+    <select class="tag-editor-select" data-entity-five-leagues-skill-add="${esc(e.id)}" title="Add a skill">
+      <option value="" selected disabled>+ Add skill…</option>
+      ${available.map((s) => `<option value="${esc(s.key)}" title="${esc(s.uses)}">${esc(s.label)}</option>`).join('')}
+    </select>` : '';
+  const chips = FIVE_LEAGUES_SKILLS.filter((s) => known.includes(s.key)).map((s) => `
+    <span class="tag-chip" title="${esc(s.uses)}">${esc(s.label)}<button type="button" class="icon-btn" data-entity-five-leagues-skill-remove="${esc(e.id)}::${esc(s.key)}" title="Remove skill" aria-label="Remove ${esc(s.label)}">✕</button></span>`).join('');
   // Direct follow-up request: "Move the text '(+2 on a relevant
   // Proficiency Test, p.52)' to a tooltip" — a plain hover tooltip is fine
   // here (unlike Character Type/Origin's own expand/collapse panel above),
   // since this text is short enough to fit a floating tooltip.
   return `<div class="five-leagues-skills">
-    <p class="field-label">Skills <span class="five-leagues-hint" title="+2 on a relevant Proficiency Test, p.52">ⓘ</span></p>
-    <div class="five-leagues-chip-list">${boxes}</div>
+    <div class="tag-editor-head">
+      <span class="field-label five-leagues-skills-label">Skills<span class="five-leagues-hint" title="+2 on a relevant Proficiency Test, p.52">ⓘ</span></span>
+      ${addSelect}
+    </div>
+    <div class="tag-chips">${chips || '<span class="dim small">None yet.</span>'}</div>
   </div>`;
 }
 
@@ -2622,33 +2630,45 @@ function plainText(s) { return String(s || '').replace(/<[^>]+>/g, ' ').replace(
 function journal(doc, ui = {}) {
   const entries = (doc.journal || []).slice().reverse();
   const recapOpen = !!ui.recapOpen;
-  // Collapsed by default (direct follow-up request — was open by default);
-  // same collapsible-section-header look as Party/Colony's own sections
-  // (.party-section-toggle) instead of a plain button, for visual
-  // consistency across the app's collapsible sections.
-  const actionsOpen = !!ui.journalActionsOpen;
+  // The compose box's unsent text is campaign.journalDraft (saved on blur,
+  // shell.js's onFocusOut), so it's still here after a closed window. The
+  // generators that used to sit under it live in the Navigator now
+  // (generatorsSection, below); the plain-text export is a Settings →
+  // General → Selective Content Import/Export option.
   return `
     <button class="btn ghost recap-toggle" data-recap-toggle>${recapOpen ? '▾' : '▸'} Previously on…</button>
     ${recapOpen ? recapPanel(doc) : ''}
     <div class="drawer-note">
       <span class="field-label-row">${richToolbarToggleHTML('journal:new', toolbarCollapsed(doc, ui, 'journal:new'))}</span>
-      <div class="rich-field">${richToolbarHTML('journal:new', toolbarCollapsed(doc, ui, 'journal:new'), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-journal-input data-placeholder="Add a note, ruling, or clue… (drag an entity here, or type @, to mention it)">${buildMentionEditorHTML(doc, ui.journalDraftText || '')}</div></div>
-      <div class="statblock-head" style="margin-top: var(--sp-3);">
-        <button type="button" class="party-section-toggle" data-journal-actions-toggle>${actionsOpen ? '▾' : '▸'} Actions</button>
-      </div>
-      <div class="drawer-note-actions" data-journal-actions-body ${actionsOpen ? '' : 'hidden'}>
-        <button class="btn" data-journal-add>Add note</button>
-        <button class="btn ghost" data-export-journal>Export</button>
-        <button class="btn ghost" data-generate-mission title="Roll a job: payout/deadline scaled by the current Threat, plus a complication">🎲 Generate Mission</button>
-        <button class="btn ghost" data-advance-faction-turns title="Advance every tracked faction's pressure by one tick and roll a rumor for each">🎲 Advance Faction Turns</button>
-        <button class="btn ghost" data-generate-creature title="Roll a creature concept: origin, movement, trait, and threat">🎲 Creature Concept</button>
-        <button class="btn ghost" data-generate-site title="Roll a site concept: a feature, a danger, and a wonder">🎲 Site Concept</button>
-        <button class="btn ghost" data-generate-seed title="Roll an adventure seed: a hook, a twist, and a complication">🎲 Adventure Seed</button>
+      <div class="rich-field">${richToolbarHTML('journal:new', toolbarCollapsed(doc, ui, 'journal:new'), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-journal-input data-placeholder="Add a note, ruling, or clue… (drag an entity here, or type @, to mention it)">${buildMentionEditorHTML(doc, doc.journalDraft || '')}</div></div>
+      <div class="journal-submit-row">
+        <button type="button" class="btn journal-submit" data-journal-add title="Add to Journal" aria-label="Add to Journal"><span aria-hidden="true">➜📖</span></button>
+        <button type="button" class="btn ghost" data-journal-clear title="Clear the text box without adding it">Clear</button>
       </div>
     </div>
     <div class="journal-list">
       ${entries.length ? entries.map((e) => journalEntryRow(doc, e, ui)).join('')
         : '<p class="ws-placeholder">No entries yet. Scenes and oracle rolls land here automatically.</p>'}
+    </div>`;
+}
+
+// The Navigator's "Generators" section (workspace/index.js's
+// navigatorBodyHtml) — the one-click roll-a-thing buttons that used to sit
+// under the Journal compose box. Each still writes its result into the
+// Journal (same shell.js handlers, same data-* attributes). Collapsed by
+// default, same section header as Contracts just below it.
+export function generatorsSection(ui) {
+  const collapsed = isPartySectionCollapsed(ui, 'navigator-generators', true);
+  const header = partySectionHeaderHtml('navigator-generators', 'Generators', collapsed);
+  if (collapsed) return header;
+  return `${header}
+    <p class="dim small">Each result is added to the Journal.</p>
+    <div class="drawer-note-actions">
+      <button class="btn ghost" data-generate-mission title="Roll a job: payout/deadline scaled by the current Threat, plus a complication">🎲 Generate Mission</button>
+      <button class="btn ghost" data-advance-faction-turns title="Advance every tracked faction's pressure by one tick and roll a rumor for each">🎲 Advance Faction Turns</button>
+      <button class="btn ghost" data-generate-creature title="Roll a creature concept: origin, movement, trait, and threat">🎲 Creature Concept</button>
+      <button class="btn ghost" data-generate-site title="Roll a site concept: a feature, a danger, and a wonder">🎲 Site Concept</button>
+      <button class="btn ghost" data-generate-seed title="Roll an adventure seed: a hook, a twist, and a complication">🎲 Adventure Seed</button>
     </div>`;
 }
 
@@ -3015,75 +3035,60 @@ function dice3dSettingsSection(doc, ui) {
     </div>`;
 }
 
-// Settings restructuring (direct instruction): a single campaign switcher
-// dropdown replaces the old flat .campaign-row list (picking an option
-// switches the active campaign immediately, same action the old "Switch"
-// button ran); Rename/Delete act on whichever campaign is active. Below
-// it, module-visibility checkboxes for the active campaign's OWN assigned
-// profile, grouped and filtered by that profile's Game System Ruleset —
-// edits the same profile.moduleEnabled the Rulesets tab's own flat
-// checklist does (both are kept, per the confirmed answer), through its
-// own independent draft (ui.activeProfileDraft, not tied to whichever
-// profile the Rulesets tab's "Profile Name" picker currently shows).
+// Settings → Campaigns: the dropdown picks which campaign this tab
+// CONFIGURES (ui.configCampaignId, shell.js's configCampaignId) — never
+// which one is active; only the header switcher changes that. Rename,
+// Delete, Profile, CSS Style Template, Plugins and Source Data below all
+// act on the configured campaign, and each commit to the active campaign
+// shows immediately. Plugins are the configured campaign's OWN assigned
+// profile's module-visibility checkboxes, grouped and filtered by that
+// profile's Game System Ruleset — the same profile.moduleEnabled the
+// Rulesets tab's own flat checklist edits, through the same draft
+// (ui.configProfileDraft), committed with Save Profile.
 function campaignsSection(doc, ui) {
   const campaigns = ui.campaigns || [];
   const profiles = ui.profiles || [];
-  const draft = ui.newCampaignDraft || { title: '', profileId: '' };
+  const configured = campaigns.find((c) => c.id === ui.configCampaignId) || campaigns.find((c) => c.active) || null;
   const activeCampaign = campaigns.find((c) => c.active) || null;
+  const configDoc = ui.configCampaignDoc || doc;
 
+  // The active campaign can't be deleted (store.deleteCampaign refuses it),
+  // so ✕ only appears while configuring a different one.
   const switcherRow = `
     <div class="campaign-switcher-row">
-      <label class="field-label sm">Campaign
-        <select data-campaign-switcher-select>
-          ${campaigns.map((c) => `<option value="${esc(c.id)}" ${c.active ? 'selected' : ''}>${esc(c.title)}</option>`).join('')}
-        </select>
-      </label>
-      <button type="button" class="icon-btn" data-campaign-form-toggle title="New Campaign">＋</button>
-      ${activeCampaign ? `<button type="button" class="icon-btn" data-campaign-rename="${esc(activeCampaign.id)}" title="Rename &quot;${esc(activeCampaign.title)}&quot;">✎</button>` : ''}
-      ${activeCampaign && campaigns.length > 1 ? `<button type="button" class="icon-btn danger" data-campaign-delete="${esc(activeCampaign.id)}" title="Downloads a backup, then deletes this campaign and all its data">✕</button>` : ''}
-    </div>`;
+      <select data-campaign-switcher-select aria-label="Campaign">
+        ${campaigns.map((c) => `<option value="${esc(c.id)}" ${configured && c.id === configured.id ? 'selected' : ''}>${esc(c.title)}${c.active ? ' (active)' : ''}</option>`).join('')}
+      </select>
+      ${configured ? `<button type="button" class="icon-btn" data-campaign-rename="${esc(configured.id)}" title="Rename &quot;${esc(configured.title)}&quot;">✎</button>` : ''}
+      ${configured && !configured.active && campaigns.length > 1 ? `<button type="button" class="icon-btn danger" data-campaign-delete="${esc(configured.id)}" title="Downloads a backup, then deletes this campaign and all its data">✕</button>` : ''}
+    </div>
+    ${configured && !configured.active && activeCampaign ? `<p class="dim small">Configuring "${esc(configured.title)}" — "${esc(activeCampaign.title)}" stays the active campaign. Switch from the campaign name in the header.</p>` : ''}`;
 
-  const profilePicker = activeCampaign ? `
+  const profilePicker = configured ? `
     <label class="field-label sm campaign-profile-picker">Profile *
-      <select data-campaign-reassign-profile="${esc(activeCampaign.id)}" required>
-        ${profiles.map((p) => `<option value="${esc(p.id)}" ${p.id === activeCampaign.profileId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+      <select data-campaign-reassign-profile="${esc(configured.id)}" required>
+        ${profiles.map((p) => `<option value="${esc(p.id)}" ${p.id === configured.profileId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
       </select>
     </label>` : '';
 
-  const newCampaignForm = ui.campaignFormOpen ? `
-    <div class="new-campaign-form">
-      <label class="field-label sm">New campaign title
-        <input data-new-campaign-title value="${esc(draft.title)}" placeholder="New Campaign">
-      </label>
-      <label class="field-label sm">Rules Profile *
-        <select data-new-campaign-profile required>
-          ${profiles.map((p) => `<option value="${esc(p.id)}" ${(draft.profileId || ui.activeProfileId) === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
-        </select>
-      </label>
-      <button class="btn" data-campaign-create>+ Create Campaign</button>
-    </div>` : '';
-
-  // The Campaign dropdown leads, so everything below it reads as belonging
-  // to the active campaign: its Profile, then its CSS Style Template, then
-  // Plugins and Source Data. Renaming is the dropdown row's own ✎ (no
-  // separate Title field). The old free-text "Setting" field is gone — it
-  // drove nothing (settings.genre is still kept in the schema, unused).
+  // Renaming is the dropdown row's own ✎ (no separate Title field). The old
+  // free-text "Setting" field is gone — it drove nothing (settings.genre is
+  // still kept in the schema, unused).
   const cssTemplatePicker = `
     <label class="field-label sm">CSS Style Template
-      <select data-campaign-css-template>${CSS_TEMPLATES.map((t) => `<option value="${esc(t.id)}" ${t.id === (doc.meta.cssTemplate || 'default') ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select>
+      <select data-campaign-css-template>${CSS_TEMPLATES.map((t) => `<option value="${esc(t.id)}" ${t.id === (configDoc.meta.cssTemplate || 'default') ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select>
     </label>`;
 
   return `
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Campaigns', 'settings-campaigns')}
-      ${helpBody('settings-campaigns', "Pick the campaign to work on — everything below applies to it. Each campaign is fully independent (its own Cast, Journal, scenes, ...) and is assigned one Rules Profile — change which one with the Profile dropdown at any time; reassigning never touches that campaign's own data, it only changes which module/visible-plugins/Storyboard-positions it reads. Rename with ✎, add with ＋. Edit a profile's own contents in Modules.", ui)}
+      ${helpBody('settings-campaigns', "Pick the campaign to configure — everything below applies to it, and changes to the active campaign take effect right away. Picking one here doesn't switch campaigns; use the campaign name in the header for that. Each campaign is fully independent (its own Cast, Journal, scenes, ...) and is assigned one Rules Profile — change which one with the Profile dropdown at any time; reassigning never touches that campaign's own data, it only changes which module/visible-plugins/Storyboard-positions it reads. Rename with ✎; start a new one from the campaign name's menu in the header (+ Start New Campaign). Edit a profile's own contents in Modules.", ui)}
       ${campaigns.length ? switcherRow : '<p class="dim small">No campaigns yet.</p>'}
-      ${newCampaignForm}
       ${profilePicker}
       ${cssTemplatePicker}
     </div>
     ${campaignModuleChecksSection(ui)}
-    ${sourceDataSection(doc, ui)}`;
+    ${sourceDataSection(configDoc, ui)}`;
 }
 
 // The module-specific subheader grouping (direct instruction): "Campaign"/
@@ -3102,10 +3107,10 @@ function campaignsSection(doc, ui) {
 // user-facing labels below changed, same "swap the LABEL only" posture as
 // bestiaryTerm/locationHierarchyTerms.
 function campaignModuleChecksSection(ui) {
-  const activeProfile = (ui.profiles || []).find((p) => p.id === ui.activeProfileId);
-  const draft = ui.activeProfileDraft;
+  const activeProfile = (ui.profiles || []).find((p) => p.id === ui.configProfileId);
+  const draft = ui.configProfileDraft;
   if (!activeProfile || !draft) return '';
-  const dirty = !!ui.activeProfileDraftDirty;
+  const dirty = !!ui.configProfileDraftDirty;
   const statRuleset = draft.ruleset.statRuleset;
   const check = (id) => `
     <label class="chip sm"><input type="checkbox" data-module-enabled-toggle="${id}" data-module-profile-id="${esc(activeProfile.id)}" ${draft.moduleEnabled[id] !== false ? 'checked' : ''}> ${esc((drawerMeta(id) || {}).label || id)}</label>`;
@@ -3681,18 +3686,19 @@ function gameSystemActivationSection(doc, ui) {
 // Settings -> Campaigns -> Source Data (sourceDataSection); this is just the
 // export/import controls.
 function contentPackSection(ui) {
-  const flags = ui.contentPackFlags || { entities: false, guide: false, journal: false };
+  const flags = ui.contentPackFlags || { entities: false, guide: false, journal: false, journalText: false };
   return `
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Selective Content Import/Export', 'settings-content-packs')}
-      ${helpBody('settings-content-packs', 'Export just Entities, Guide docs, and/or Journal entries as a portable file, then import it into another campaign — additive, unlike the whole-campaign export above. Entities skip anything that already exists by name (safe to import the same pack twice, or several overlapping packs); Guide docs and Journal entries always import fresh, no dedup.', ui)}
+      ${helpBody('settings-content-packs', 'Export just Entities, Guide docs, and/or Journal entries as a portable file, then import it into another campaign — or tick "Journal as text" for a readable .txt of the Journal alongside it — additive, unlike the whole-campaign export above. Entities skip anything that already exists by name (safe to import the same pack twice, or several overlapping packs); Guide docs and Journal entries always import fresh, no dedup.', ui)}
       <div class="content-pack-checks">
         <label class="chip sm"><input type="checkbox" data-content-pack-flag="entities" ${flags.entities ? 'checked' : ''}> Entities</label>
         <label class="chip sm"><input type="checkbox" data-content-pack-flag="guide" ${flags.guide ? 'checked' : ''}> Guide docs</label>
         <label class="chip sm"><input type="checkbox" data-content-pack-flag="journal" ${flags.journal ? 'checked' : ''}> Journal entries</label>
+        <label class="chip sm" title="A plain-text .txt of every Journal entry, for reading or printing — not re-importable"><input type="checkbox" data-content-pack-flag="journalText" ${flags.journalText ? 'checked' : ''}> Journal as text (.txt)</label>
       </div>
       <div class="btn-col">
-        <button class="btn" data-export-content-pack>Export Content Pack</button>
+        <button class="btn" data-export-content-pack>Export Selected</button>
         <label class="btn ghost file-btn">Import Content Pack<input type="file" accept=".json,application/json" data-import-content-pack hidden></label>
       </div>
     </div>`;
@@ -5006,34 +5012,37 @@ function contractRow(doc, c, ui) {
     <div class="trade-contract-head">
       <button type="button" class="trade-contract-name" data-contract-toggle="${esc(c.id)}">${open ? '▾' : '▸'} ${esc(c.name)}</button>
       ${c.type ? `<span class="chip sm">${esc(c.type)}</span>` : ''}
-      <span class="trade-contract-payout">💰 ${c.payout}</span>
+      <span class="trade-contract-payout">💰 ${c.payout}${c.payoutUnit ? ` ${esc(c.payoutUnit)}` : ''}</span>
     </div>
     ${open ? `
     <div class="trade-contract-route">
-      ${patron ? `<button class="entity-chip" data-open-entity="${esc(patron.id)}" title="Patron">${esc(patron.name) || 'Unnamed'}</button>` : '<span class="dim small">No patron set</span>'}
+      ${patron ? `<button class="entity-chip" data-open-entity="${esc(patron.id)}" title="Patron">${patron.type === 'faction' ? '⚑ ' : ''}${esc(patron.name) || 'Unnamed'}</button>` : '<span class="dim small">No patron set</span>'}
+      <button type="button" class="icon-btn" data-entity-picker-open="contract-patron::${esc(c.id)}" title="${patron ? 'Change patron' : 'Choose a patron'} (NPC or Faction)" aria-label="${patron ? 'Change patron' : 'Choose a patron'}">＋</button>
       ${origin || destination ? `<span class="dim small">${origin ? esc(origin.name) || 'Unnamed' : '?'} → ${destination ? esc(destination.name) || 'Unnamed' : '?'}</span>` : ''}
     </div>
     <label class="field-label sm">Description
-      <textarea data-contract-field="${esc(c.id)}::description" rows="1" placeholder="What the job actually is…">${esc(c.description)}</textarea>
+      <textarea class="oracle-field-textarea" data-contract-field="${esc(c.id)}::description" rows="1" placeholder="What the job actually is…">${esc(c.description)}</textarea>
     </label>
     <label class="field-label sm">Conflict
-      <textarea data-contract-field="${esc(c.id)}::conflict" rows="1" placeholder="What's working against the party…">${esc(c.conflict)}</textarea>
+      <textarea class="oracle-field-textarea" data-contract-field="${esc(c.id)}::conflict" rows="1" placeholder="What's working against the party…">${esc(c.conflict)}</textarea>
     </label>
     <label class="field-label sm">Opportunity
-      <textarea data-contract-field="${esc(c.id)}::opportunity" rows="1" placeholder="What upside exists beyond the payout…">${esc(c.opportunity)}</textarea>
+      <textarea class="oracle-field-textarea" data-contract-field="${esc(c.id)}::opportunity" rows="1" placeholder="What upside exists beyond the payout…">${esc(c.opportunity)}</textarea>
     </label>
-    <span class="thread-clock" title="${c.filled}/${c.segments}">${pips}</span>
-    <select class="thread-status-select" data-thread-status="${esc(c.id)}" title="Narrative lifecycle stage">
-      ${THREAD_STATUSES.map((s) => `<option value="${s}" ${s === c.status ? 'selected' : ''}>${esc(THREAD_STATUS_LABELS[s])}</option>`).join('')}
-    </select>
-    <select class="thread-priority-select" data-thread-priority="${esc(c.id)}" title="Priority">
-      ${THREAD_PRIORITIES.map((p) => `<option value="${p}" ${p === c.priority ? 'selected' : ''}>${p[0].toUpperCase()}${p.slice(1)}</option>`).join('')}
-    </select>
-    <span class="thread-actions">
-      <button class="icon-btn" data-thread-adv="${esc(c.id)}" title="Advance">＋</button>
-      <button class="icon-btn" data-thread-back="${esc(c.id)}" title="Set back">－</button>
-      <button class="icon-btn" data-thread-del="${esc(c.id)}" title="Remove">✕</button>
-    </span>
+    <div class="trade-contract-tracker-row">
+      <span class="thread-clock" title="${c.filled}/${c.segments}">${pips}</span>
+      <select class="thread-status-select" data-thread-status="${esc(c.id)}" title="Narrative lifecycle stage">
+        ${THREAD_STATUSES.map((s) => `<option value="${s}" ${s === c.status ? 'selected' : ''}>${esc(THREAD_STATUS_LABELS[s])}</option>`).join('')}
+      </select>
+      <select class="thread-priority-select" data-thread-priority="${esc(c.id)}" title="Priority">
+        ${THREAD_PRIORITIES.map((p) => `<option value="${p}" ${p === c.priority ? 'selected' : ''}>${p[0].toUpperCase()}${p.slice(1)}</option>`).join('')}
+      </select>
+      <span class="thread-actions">
+        <button class="icon-btn" data-thread-adv="${esc(c.id)}" title="Advance">＋</button>
+        <button class="icon-btn" data-thread-back="${esc(c.id)}" title="Set back">－</button>
+        <button class="icon-btn" data-thread-del="${esc(c.id)}" title="Remove">✕</button>
+      </span>
+    </div>
     ` : ''}
   </div>`;
 }
@@ -5094,7 +5103,7 @@ export function contractsSection(doc, ui, { collapsible = false } = {}) {
   const collapsed = collapsible && isPartySectionCollapsed(ui, 'contracts', true);
   const label = collapsible ? contractsLabel(doc.settings.genrePack) : 'Contracts';
   const headerActions = `<div class="trade-contract-head-actions">
-        <button class="chip" data-trade-generate-contract title="Roll the Contract Type oracle table into a new contract">🎲 Generate</button>
+        <button class="chip" data-trade-generate-contract title="Generate a new one, with its description, conflict and opportunity seeded from the current scene">🎲 Generate</button>
         ${ui.tradeContractAddOpen ? '' : `<button class="chip" data-trade-contract-add-toggle>＋ ${esc(label.replace(/s$/, ''))}</button>`}
       </div>`;
   const header = collapsible

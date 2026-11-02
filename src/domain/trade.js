@@ -30,6 +30,10 @@ import { findBiome } from '../data/biomes.js';
 import { getEntity } from './entities.js';
 import { addThread, listThreads } from './threads.js';
 import { tablesWithOverrides, pick } from './oracles.js';
+import { gatherSceneContext } from './copilot.js';
+import { QUEST_REWARD_RULES, DEFAULT_QUEST_REWARD, VOW_RANKS, VOW_PROGRESS_BOXES } from '../data/questRewards.js';
+import { QUEST_BRIEFS } from '../data/questOracles.js';
+import { findGenrePack } from '../data/genrePacks.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 
@@ -238,7 +242,7 @@ function addJournalEntry(campaign, text, source) {
  *  what they created — a contract is exactly the kind of session event a
  *  returning GM should see in "Previously on..." without having to dig
  *  through the Trade drawer's contract board to reconstruct it. */
-export function createContract(campaign, { name = '', type = '', patronId = '', originId = '', destinationId = '', payout = 0, segments = 4, description = '', conflict = '', opportunity = '' } = {}) {
+export function createContract(campaign, { name = '', type = '', patronId = '', originId = '', destinationId = '', payout = 0, payoutUnit = '', segments = 4, description = '', conflict = '', opportunity = '' } = {}) {
   const next = addThread(campaign, name || type || 'New contract', segments);
   const t = next.threads[next.threads.length - 1];
   Object.assign(t, {
@@ -248,6 +252,10 @@ export function createContract(campaign, { name = '', type = '', patronId = '', 
     originId: originId || '',
     destinationId: destinationId || '',
     payout: Math.max(0, Math.round(Number(payout)) || 0),
+    // The payout's currency/reward unit ('credits', 'gold marks', 'Cr',
+    // 'gp', 'XP'…) — set by generateContract from the stat ruleset; blank
+    // for a hand-made contract or a trade-route payout.
+    payoutUnit: payoutUnit || '',
     // Free-text flavor fields (UX batch) — same "opt-in, no roll-up
     // mechanic" posture as Faction's HQ/Leadership/Agenda: what the job
     // actually is, what's working against the party, and what upside
@@ -263,7 +271,7 @@ export function createContract(campaign, { name = '', type = '', patronId = '', 
     type && `Type: ${type}`,
     patron && `Patron: ${patron.name || 'Unnamed'}`,
     (origin || destination) && `Route: ${origin ? (origin.name || 'Unnamed') : '?'} → ${destination ? (destination.name || 'Unnamed') : '?'}`,
-    `Payout: ${t.payout}`,
+    `Payout: ${t.payout}${t.payoutUnit ? ' ' + t.payoutUnit : ''}`,
   ].filter(Boolean).join(' · ');
   addJournalEntry(next, `New contract: ${t.name}${details ? ' — ' + details : ''}`, 'Trade');
   return { campaign: next, id: t.id };
@@ -283,6 +291,7 @@ export function updateContract(campaign, id, patch = {}) {
   if (patch.originId !== undefined) t.originId = patch.originId;
   if (patch.destinationId !== undefined) t.destinationId = patch.destinationId;
   if (patch.payout !== undefined) t.payout = Math.max(0, Math.round(Number(patch.payout)) || 0);
+  if (patch.payoutUnit !== undefined) t.payoutUnit = String(patch.payoutUnit || '');
   if (patch.description !== undefined) t.description = patch.description;
   if (patch.conflict !== undefined) t.conflict = patch.conflict;
   if (patch.opportunity !== undefined) t.opportunity = patch.opportunity;
@@ -293,10 +302,10 @@ export function updateContract(campaign, id, patch = {}) {
  *  commodity at each and pay out ten times the gap between them — a real
  *  price delta (buy low, sell high) turned into a contract's stakes,
  *  instead of a flat, hand-tuned number (ADR 0003's "reward is framed as
- *  the price delta... not a flat margin"). Falls back to a modest flat
- *  default when no route is picked yet (a GM can still roll a contract's
- *  type before deciding where it goes, and edit the payout once they do). */
-function estimatePayout(campaign, originId, destinationId, commodityId) {
+ *  the price delta... not a flat margin"). Null when there's no priced
+ *  route yet — generateContract then uses the game system's own reward
+ *  (rollQuestReward) instead. */
+function estimateRoutePayout(campaign, originId, destinationId, commodityId) {
   const origin = getEntity(campaign, originId);
   const destination = getEntity(campaign, destinationId);
   const commodity = findCommodity(commodityId);
@@ -304,19 +313,125 @@ function estimatePayout(campaign, originId, destinationId, commodityId) {
     const delta = Math.abs(priceAt(destination, commodity.id) - priceAt(origin, commodity.id));
     return Math.max(20, delta * 10);
   }
-  return 50;
+  return null;
 }
 
-/** Roll the "Contract Type" oracle table (Trade & Cargo group, ADR 0004's
- *  15-type taxonomy) and create a contract from the result in one action —
- *  the "Generate Contract" button, mirroring how generateNpc() rolls the
- *  Characters oracle chain into a new NPC. Pure/RNG-injectable like every
- *  other roll here; only tests pass a seeded rng. */
-export function generateContract(campaign, { rng = Math.random, patronId = '', originId = '', destinationId = '', commodityId = '', segments = 4 } = {}) {
+/** A generated quest's reward and progress clock, in the stat ruleset's
+ *  own terms (data/questRewards.js): a few credits for Five Parsecs, gold
+ *  marks for Five Leagues, thousands of Cr for Traveller, a gp purse for
+ *  D&D 5e — or, for Starforged/Ironsworn, a sworn vow of a rolled rank
+ *  whose reward is that rank's experience on a 10-box progress track.
+ *  Returns {payout, unit, segments, rank} (rank is null except for a vow). */
+export function rollQuestReward(statRuleset, rng = Math.random) {
+  const rule = QUEST_REWARD_RULES[statRuleset] || DEFAULT_QUEST_REWARD;
+  if (rule.vow) {
+    const rank = pick(VOW_RANKS, rng);
+    return { payout: rank.xp, unit: 'XP', segments: VOW_PROGRESS_BOXES, rank };
+  }
+  let total = 0;
+  if (rule.dice) for (let i = 0; i < rule.dice.count; i++) total += 1 + Math.floor(rng() * rule.dice.sides);
+  return { payout: total * (rule.multiplier || 1) + (rule.bonus || 0), unit: rule.unit || '', segments: rule.segments || 4, rank: null };
+}
+
+function capitalizeFirst(s) {
+  const text = String(s || '');
+  return text ? text[0].toUpperCase() + text.slice(1) : text;
+}
+
+/** A generated quest's Description, Conflict and Opportunity: an oracle roll
+ *  for each, tied to what's actually in play via copilot.js's
+ *  gatherSceneContext — the current location, a present faction or bystander
+ *  as patron (when the caller didn't pick one), scene antagonists, a rival
+ *  faction, a Conflict here, open threads/foreshadowing, and any dial far
+ *  enough from its default to matter. An empty scene just reads as the
+ *  rolls. Returns {patronId, description, conflict, opportunity}. */
+function seedQuestFields(campaign, { job, opposition, benefit, reward, patronId, rng }) {
+  const ctx = gatherSceneContext(campaign);
+  const scenes = campaign.scenes || [];
+  const scene = scenes[scenes.length - 1] || {};
+  const sentences = (parts) => parts.filter(Boolean).map((p) => String(p).replace(/[.\s]+$/, '')).join('. ') + '.';
+  const named = (list) => list.filter((e) => e && e.name);
+  const sceneActors = (ids) => named((ids || []).map((id) => getEntity(campaign, id)));
+  const pickOne = (list) => (list.length ? pick(list, rng) : null);
+
+  const factions = named(ctx.factionsHere);
+  const patron = patronId
+    ? getEntity(campaign, patronId)
+    : pickOne([...factions, ...sceneActors(scene.bystanderIds)]);
+  const patronName = patron && patron.name;
+  const where = (named(ctx.whereLocations)[0] || {}).name;
+
+  let description = capitalizeFirst(job);
+  if (patronName) description = `${patronName}${where ? ` at ${where}` : ''} hires the party to ${job}`;
+  else if (where) description = `Word at ${where}: someone is needed to ${job}`;
+
+  const foe = pickOne(sceneActors(scene.antagonistIds));
+  const rival = pickOne(factions.filter((f) => !patron || f.id !== patron.id));
+  const clash = pickOne(named(ctx.conflictsHere));
+  const conflict = sentences([
+    foe && `${foe.name} is already in the way`,
+    rival && `${rival.name} has its own stake in the outcome`,
+    capitalizeFirst(opposition),
+    clash && `This runs straight into ${clash.name}`,
+    ctx.threat >= 7 && 'Danger here is already high, so trouble comes early',
+  ]);
+
+  const lead = benefit ? `${patronName || 'The patron'} ${benefit}` : capitalizeFirst(reward);
+  const lines = [
+    ...named(ctx.openThreads).map((t) => `It could also move "${t.name}" forward`),
+    ...ctx.foreshadowing.filter((f) => f.text).map((f) => `It's a chance to pay off: ${f.text}`),
+  ];
+  const opportunity = sentences([
+    lead,
+    pickOne(lines),
+    ctx.resources <= 3 && 'The pay would ease the party\'s short supplies',
+    ctx.reputation <= 3 && 'A clean finish would mend the party\'s standing',
+  ]);
+
+  return { patronId: patron ? patron.id : '', description: sentences([description]), conflict, opportunity };
+}
+
+/** Generates a whole quest/contract in one action — the 🎲 Generate button
+ *  (Navigator's Quests/Contracts, and the Trade/Party copies of the same
+ *  section). Type comes from Quests > Quest Type (falling back to Trade &
+ *  Cargo > Contract Type); Description, Conflict and Opportunity are seeded
+ *  from the oracles and the current scene (seedQuestFields), the job itself
+ *  matching the Type via QUEST_BRIEFS. The reward and clock follow the stat
+ *  ruleset (rollQuestReward), unless a priced trade route is given.
+ *  genrePack/statRuleset default to the campaign's own settings; a caller
+ *  inside store.update() (which hands over the raw doc, without the Rules
+ *  Profile's overlay) passes store.get()'s instead. Pure/RNG-injectable like
+ *  every other roll here; only tests pass a seeded rng. */
+export function generateContract(campaign, { rng = Math.random, patronId = '', originId = '', destinationId = '', commodityId = '', segments, genrePack, statRuleset } = {}) {
   const next = clone(campaign);
-  const tables = tablesWithOverrides(next.oracles?.overrides, next.settings?.genrePack);
-  const typeTable = (tables && tables['Trade & Cargo'] && tables['Trade & Cargo']['Contract Type']) || [];
-  const type = typeTable.length ? pick(typeTable, rng) : 'Courier';
-  const payout = estimatePayout(next, originId, destinationId, commodityId);
-  return createContract(next, { name: `${type} contract`, type, patronId, originId, destinationId, payout, segments });
+  const settings = next.settings || {};
+  genrePack = genrePack || settings.genrePack;
+  statRuleset = statRuleset || settings.statRuleset;
+  const tables = tablesWithOverrides(next.oracles?.overrides, genrePack) || {};
+  const roll = (...paths) => {
+    for (const [cat, name] of paths) {
+      const t = tables[cat] && tables[cat][name];
+      if (Array.isArray(t) && t.length) return String(pick(t, rng));
+    }
+    return '';
+  };
+  const type = roll(['Quests', 'Quest Type'], ['Trade & Cargo', 'Contract Type']) || 'Courier';
+  const brief = (QUEST_BRIEFS[findGenrePack(genrePack).id] || {})[type];
+  const seeded = seedQuestFields(next, {
+    job: brief || roll(['Missions', 'Mission Type']),
+    opposition: roll(['Quests', 'Opposition'], ['Adventure', 'Complication'], ['Miscellaneous', 'Story Complication']),
+    benefit: roll(['Missions', 'Patron Benefit']),
+    reward: roll(['Missions', 'Reward']),
+    patronId, rng,
+  });
+  const reward = rollQuestReward(statRuleset, rng);
+  const routePayout = estimateRoutePayout(next, originId, destinationId, commodityId);
+  const noun = genrePack === 'fantasy' || genrePack === 'dnd5e' ? 'quest' : 'contract';
+  const name = reward.rank ? `${reward.rank.label} ${type} vow` : `${type} ${noun}`;
+  return createContract(next, {
+    name, type, originId, destinationId, ...seeded,
+    payout: routePayout != null ? routePayout : reward.payout,
+    payoutUnit: routePayout != null ? '' : reward.unit,
+    segments: segments != null ? segments : reward.segments,
+  });
 }

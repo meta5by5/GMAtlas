@@ -21,15 +21,24 @@ function rollFrom(tables, group, key, rng) {
 
 /** A creature concept: origin, method of movement, an unusual trait, and
  *  what makes it genuinely dangerous — enough to seed a unique Bestiary
- *  entry rather than reusing a generic "hostile alien" template. */
+ *  entry rather than reusing a generic "hostile alien" template. The fantasy
+ *  pack names this same group Bestiary; a pack with neither (Cyberpunk, D&D
+ *  5e) rolls all-blank — see hasCreatureConcept. */
 export function generateCreatureConcept(campaign, { rng = Math.random } = {}) {
   const tables = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides, campaign.settings && campaign.settings.genrePack);
+  const group = tables.Xenobestiary ? 'Xenobestiary' : 'Bestiary';
   return {
-    origin: rollFrom(tables, 'Xenobestiary', 'Creature Origin', rng),
-    method: rollFrom(tables, 'Xenobestiary', 'Creature Method', rng),
-    trait: rollFrom(tables, 'Xenobestiary', 'Creature Trait', rng),
-    threat: rollFrom(tables, 'Xenobestiary', 'Creature Threat', rng),
+    origin: rollFrom(tables, group, 'Creature Origin', rng),
+    method: rollFrom(tables, group, 'Creature Method', rng),
+    trait: rollFrom(tables, group, 'Creature Trait', rng),
+    threat: rollFrom(tables, group, 'Creature Threat', rng),
   };
+}
+
+/** False when the genre pack had nothing to roll, so the caller can say so
+ *  rather than journaling a bare heading. */
+export function hasCreatureConcept(c) {
+  return !!(c.origin || c.method || c.trait || c.threat);
 }
 
 export function formatCreatureConcept(c) {

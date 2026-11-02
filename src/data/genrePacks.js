@@ -12,6 +12,10 @@ import { SCENE_TABLES } from './tables.js';
 import { CYBERPUNK_TABLES } from './tables-cyberpunk.js';
 import { DND5E_TABLES } from './tables-dnd5e.js';
 import { FANTASY_FULL_TABLES } from './tables-fantasy-full.js';
+import { QUEST_ORACLES } from './questOracles.js';
+
+// Each pack's tables plus its own "Quests" category (data/questOracles.js).
+const withQuests = (tables, id) => ({ ...tables, Quests: QUEST_ORACLES[id] });
 
 // Phase A audit (A4): "the Hostile (sci-fi, default) Genre Pack becomes
 // the Hostile Game System (not renamed as a pack — restructured as a
@@ -28,14 +32,14 @@ import { FANTASY_FULL_TABLES } from './tables-fantasy-full.js';
 // A4 actually asked for, not an invented System for every existing pack.
 export const GENRE_PACKS = [
   {
-    id: 'sci-fi-generic', label: 'Sci-Fi (generic)', tables: SCENE_TABLES,
+    id: 'sci-fi-generic', label: 'Sci-Fi (generic)', tables: withQuests(SCENE_TABLES, 'sci-fi-generic'),
     // sagaatlas included alongside gmatlascore — both are "the platform
     // itself" providers (see rulesConstitution.js's own comment on why
     // they're two records, not one) and A4 says GMAtlas Core specifically
     // "is linked into Sci-Fi (generic) alongside the others".
     gameSystemIds: ['hostile', 'starforged', 'fivepfh', 'traveller', 'swn', 'planetfall', 'fivepfh-compendium', 'gmatlascore', 'sagaatlas'],
   },
-  { id: 'cyberpunk', label: 'Cyberpunk / Shadowrun', tables: CYBERPUNK_TABLES, gameSystemIds: [] },
+  { id: 'cyberpunk', label: 'Cyberpunk / Shadowrun', tables: withQuests(CYBERPUNK_TABLES, 'cyberpunk'), gameSystemIds: [] },
   // Relabeled from "Fantasy (D&D-style)" (direct request: a Five Leagues
   // from the Borderlands Game System "in the 'Fantasy (generic)' genre") —
   // Five Leagues' own umbrella pack the same way 'sci-fi-generic' is
@@ -63,7 +67,7 @@ export const GENRE_PACKS = [
   // the standalone 'fantasy-full' pack id is retired too, folded into this
   // one rather than kept as a second, now-redundant, easy-to-pick-wrong
   // option.
-  { id: 'fantasy', label: 'Fantasy (generic)', tables: FANTASY_FULL_TABLES, gameSystemIds: ['fiveleagues'] },
+  { id: 'fantasy', label: 'Fantasy (generic)', tables: withQuests(FANTASY_FULL_TABLES, 'fantasy'), gameSystemIds: ['fiveleagues'] },
   // Direct request: "associating all of this to the 'Fantasy (D&D-style)'
   // genre pack... everything including the oracles must be independent or
   // a copy allocated to this version so it can be customized to D&D game
@@ -72,7 +76,7 @@ export const GENRE_PACKS = [
   // point on so customizing it (directly, or per-campaign via
   // oracles.overrides) never touches the 'fantasy' pack above or anything
   // else using it.
-  { id: 'dnd5e', label: 'D&D 5e', tables: DND5E_TABLES, gameSystemIds: ['dnd5e'] },
+  { id: 'dnd5e', label: 'D&D 5e', tables: withQuests(DND5E_TABLES, 'dnd5e'), gameSystemIds: ['dnd5e'] },
 ];
 
 // The old 'hostile' pack id, aliased forever (not just for one migration

@@ -6,7 +6,7 @@
 import { store } from '../core/store.js';
 import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
-import { continueStory, restartStory, applyStoryShift, rollOracle, addNote, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField, rollLocationFantasyField, editLocationFantasyField, rollWhereDetailField, addContextEntity, removeContextEntity } from '../domain/session.js';
+import { continueStory, restartStory, applyStoryShift, rollOracle, addNote, setJournalDraft, submitJournalDraft, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField, rollLocationFantasyField, editLocationFantasyField, rollWhereDetailField, addContextEntity, removeContextEntity } from '../domain/session.js';
 import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, addSceneAsset, removeSceneAsset, addSceneLocation, removeSceneLocation, setSceneSystem, addSceneDismissedFaction, removeSceneDismissedFaction, moveSceneActor } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag } from '../domain/oracles.js';
@@ -74,7 +74,7 @@ import {
 import { DUNGEON_CRAWL_ARCHETYPES, DUNGEON_CRAWL_ENTRANCE_ARCHETYPE, DUNGEON_CRAWL_PACKS } from '../data/dungeonCrawlTiles.js';
 import { DUNGEON_TILE_GRID_SIZE } from '../data/dungeonCrawlDressing.js';
 import { findHexcrawlThreat, HEXCRAWL_THREAT_ICONS } from '../data/hexcrawlIcons.js';
-import { generateCreatureConcept, formatCreatureConcept, generateSiteConcept, formatSiteConcept, generateAdventureSeed, formatAdventureSeed } from '../domain/worldbuilding.js';
+import { generateCreatureConcept, formatCreatureConcept, hasCreatureConcept, generateSiteConcept, formatSiteConcept, generateAdventureSeed, formatAdventureSeed } from '../domain/worldbuilding.js';
 import {
   addDocument, updateDocument, removeDocument, getDocument, addDocumentTag, removeDocumentTag, renameDocument,
   openDocumentTab, closeDocumentTab, setActiveDocumentTab, resolveDocumentTab,
@@ -92,7 +92,7 @@ import {
   toggleInvestigationSite, rollRandomInvestigationSite, setSectorResourceLevel, setSectorHazardLevel, resetWorldTracker,
   MAX_INVESTIGATION_SITES,
 } from '../domain/worldTracker.js';
-import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract, updateContract } from '../domain/trade.js';
+import { setMarketDial, buyCommodity, sellCommodity, createContract, generateContract, updateContract, listContracts } from '../domain/trade.js';
 import { createPressureTrack, advanceFactionTurns, formatFactionTurnRumors, resolveFactionTurn, formatFactionTurnResult, rollFactionAsset } from '../domain/factions.js';
 import {
   ensureFactionGoalTrack, buyAsset, sellAsset, repairAssetOrFaction, useAssetAbility, expandInfluence,
@@ -317,8 +317,26 @@ function resolveSlotContentId(id, profile) {
 }
 function currentEditingProfileId() {
   if (settingsSelectedProfileId && store.listProfiles().some((p) => p.id === settingsSelectedProfileId)) return settingsSelectedProfileId;
-  const active = store.getActiveProfile();
+  return configCampaignProfileId();
+}
+
+// The campaign Settings → Campaigns is configuring — picked in that tab's
+// own dropdown, independent of the ACTIVE campaign (picking one there
+// never switches; only the header switcher does). Falls back to the active
+// campaign when nothing is picked or the pick no longer exists (deleted).
+// Every edit in that tab writes through store.updateCampaign(), which for
+// the active campaign is the ordinary live update(), so it shows at once.
+function configCampaignId() {
+  const campaigns = store.listCampaigns();
+  if (settingsCampaignId && campaigns.some((c) => c.id === settingsCampaignId)) return settingsCampaignId;
+  const active = campaigns.find((c) => c.active);
   return active ? active.id : null;
+}
+function configCampaignProfileId() {
+  const entry = store.listCampaigns().find((c) => c.id === configCampaignId());
+  const profiles = store.listProfiles();
+  const p = (entry && profiles.find((x) => x.id === entry.profileId)) || store.getActiveProfile() || profiles[0];
+  return p ? p.id : null;
 }
 
 // store.update()'s mutator receives the RAW campaign doc — unlike store.get(),
@@ -514,16 +532,7 @@ let rulesetsSubTab = 'profile';
 // null falls back to the active campaign's own profile
 // (currentEditingProfileId()).
 let settingsSelectedProfileId = null;
-// Buffered fields for the "New Campaign" bespoke inline form (title + a
-// Rules Profile <select>) — a genuinely multi-field create action, so per
-// CLAUDE.md this is its own inline form rather than window.prompt() or the
-// single-field openInlinePrompt.
-let newCampaignDraft = { title: '', profileId: '' };
-// Settings restructuring: whether the Campaigns tab's own "+ New Campaign"
-// form is expanded — "the usual + button to create a new one" (direct
-// instruction), toggle-revealed rather than always-visible, same posture
-// as the Trade Contract/Party Tracker bespoke inline forms CLAUDE.md names.
-let campaignFormOpen = false;
+let settingsCampaignId = null; // ephemeral — Settings → Campaigns' configured campaign; see configCampaignId()
 // Ruleset Profile Editor drafts (direct request: profile edits apply "when
 // the changes are saved," not instantly like the rest of Settings) — one
 // uncommitted draft per profile id touched this session, so switching
@@ -784,7 +793,7 @@ function wtFeatureKindLabel(kind) { return WT_FEATURE_KIND_LABELS[kind] || kind;
 // sections the next "Export Content Pack" click includes; unrelated to
 // campaign data itself (domain/contentPack.js's exportContentPack takes
 // this exact shape as its second argument).
-let contentPackFlags = { entities: false, guide: false, journal: false };
+let contentPackFlags = { entities: false, guide: false, journal: false, journalText: false };
 // Direct follow-up request: "Available Packs" list (Settings > General) —
 // which manifest pack ids currently have a fetch in flight, mirroring
 // dataPackImporting's own in-flight-guard role, keyed by id
@@ -970,25 +979,6 @@ let collapsedToolbars = new Set(); // ephemeral — rich-text toolbar keys OVERR
 let expandedPartyMembers = new Set(); // ephemeral — entity ids whose Party member card shows its statblocks (collapsed by default; click the name to expand, UX batch)
 let expandedWhatConflicts = new Set(); // ephemeral — Conflict entity ids whose chip under WHAT's Situation field shows its detail box (direct follow-up request, collapsed by default; click the chip to toggle)
 let expandedPartyStatField = null; // ephemeral — the single "entityId::gi::fi" key (or null) whose Party Roster track pill shows its full tracker view below; a single value, not a Set, so picking a different track field REPLACES the open one instead of stacking a second (direct follow-up request)
-let journalActionsOpen = false; // ephemeral — the Journal drawer's Actions row (Add note, Generate Mission, ...), collapsed by default (direct follow-up request — was open by default)
-// Direct bug report: "when clicking anywhere off the text editor textbox,
-// the field should persist any content it has and not clear out or reset
-// as it does now." Root cause: the Journal compose box (data-journal-input)
-// had NO backing ephemeral field at all — its only read happened at
-// data-journal-add's own click time, straight off the live DOM node — so
-// ANY re-render for an unrelated reason (not just blur itself; anything
-// that calls render()/renderDrawerBody() while the GM has unsaved text)
-// rebuilt that <div> from scratch via buildMentionEditorHTML(doc, '')`,
-// always starting blank, silently discarding whatever was typed. This is
-// the commit target (onFocusOut's new data-journal-input branch) and the
-// render source (journal(), drawers/index.js) now both read from, same
-// "ephemeral, never persisted" shape as sceneSummaryOverride above.
-let journalDraftText = '';
-// Direct bug report: "When the Journal text editor is selected, the
-// Actions section should expand to expose the option buttons." —
-// onFocusIn's new data-journal-input branch opens it the moment the
-// compose box is focused, instead of requiring a separate manual click on
-// the collapsed "▸ Actions" toggle first.
 let collapsedOverview = new Set(); // ephemeral — entity ids whose Overview field has been explicitly collapsed (open by default, UX batch)
 let collapsedEntityTags = new Set(); // ephemeral — entity ids whose Tags chip list has been explicitly collapsed (open by default, direct follow-up request)
 let expandedContracts = new Set(); // ephemeral — contract (Thread) ids whose full row is expanded (collapsed to just the name by default, UX batch)
@@ -1663,7 +1653,6 @@ export function mountShell(el) {
   // doesn't), and picking a suggestion never reaches here in the first
   // place since onMouseDown already preventDefault()s that click.
   el.addEventListener('focusout', onFocusOut);
-  el.addEventListener('focusin', onFocusIn);
   // A small, deliberately short set (2026-07-04 review: "add shortcuts when
   // non-disruptive") — two near-universal conventions rather than a bound
   // shortcut for every action. On document, not root: Escape/Ctrl+K should
@@ -1816,9 +1805,8 @@ function onClick(ev) {
 
   // Header gear menu (Settings / About — "USER CHANGES" QoL batch,
   // replacing the old bare campaign-title-is-the-settings-button). New
-  // Campaign lives only inside the Settings drawer now (data-new-campaign,
-  // below) — a destructive-adjacent action one menu level deeper than
-  // Settings/About on purpose. Matches this app's existing convention
+  // Campaign lives in the header campaign switcher's menu
+  // (data-campaign-switcher-new), not here. Matches this app's existing convention
   // (lensPickerOpen etc.): only an explicit toggle or picking an item
   // closes it, no click-outside handler.
   if (hit('[data-settings-menu-toggle]')) { settingsMenuOpen = !settingsMenuOpen; return render(); }
@@ -1861,7 +1849,6 @@ function onClick(ev) {
   if (settingsTabBtn) { settingsTab = settingsTabBtn.dataset.settingsTab; return renderDrawerBody(); }
   const rulesetsSubTabBtn = hit('[data-rulesets-subtab]');
   if (rulesetsSubTabBtn) { rulesetsSubTab = rulesetsSubTabBtn.dataset.rulesetsSubtab; return renderDrawerBody(); }
-  if (hit('[data-campaign-form-toggle]')) { campaignFormOpen = !campaignFormOpen; return render(); }
   // Dice settings tab's quick-pick color swatches (direct follow-up
   // request: "add dice color options including maroon, pink and dark
   // green") — same dice3dColor field the native color input next to them
@@ -1882,11 +1869,22 @@ function onClick(ev) {
     if (!window.confirm(`Switch to campaign "${target.title}"? Each campaign is fully independent — nothing in the current one is lost, you're just changing which one is active.`)) return render();
     return store.switchCampaign(id).then(() => toast('Switched campaign'));
   }
+  // Creates the campaign straight away — the one New Campaign path since
+  // Settings → Campaigns dropped its own title/profile form. It starts on
+  // the current campaign's Rules Profile; Settings → Campaigns opens so the
+  // GM can rename it (✎) and pick a different Profile there.
   if (hit('[data-campaign-switcher-new]')) {
     campaignSwitcherOpen = false;
-    settingsTab = 'campaigns';
-    openDrawerTab('settings');
-    return render();
+    const active = store.getActiveProfile();
+    const profileId = (active && active.id) || ((store.listProfiles()[0] || {}).id);
+    if (!profileId) { toast('Create a Rules Profile first'); return render(); }
+    return store.newCampaign({ profileId }).then(() => {
+      settingsCampaignId = null; // configure the new (now active) campaign
+      settingsTab = 'campaigns';
+      openDrawerTab('settings');
+      render();
+      toast('Campaign created — rename it with ✎ and pick its Profile below');
+    });
   }
 
   // --- Phase 9: Activity -> Rules Lens suggestion, apply as default ruleset
@@ -2266,14 +2264,22 @@ function onClick(ev) {
     return;
   }
 
+  // The compose box's ➜📖 submit: adds the note and clears the saved draft
+  // (campaign.journalDraft) in one write.
   if (hit('[data-journal-add]')) {
     const ta = root.querySelector('[data-journal-input]');
     const v = ta && serializeMentionEditor(ta).trim();
     if (v) {
-      journalDraftText = ''; // clears the persisted draft so the re-render store.update triggers shows an empty compose box, not the just-added text again
-      store.update((d) => addNote(d, v, 'Note'));
+      store.update((d) => submitJournalDraft(d, v, 'Note'));
       toast('Note added');
     }
+    return;
+  }
+  // Clear: empties the compose box and its saved draft, adding nothing.
+  if (hit('[data-journal-clear]')) {
+    const ta = root.querySelector('[data-journal-input]');
+    if (ta) ta.innerHTML = '';
+    store.update((d) => setJournalDraft(d, ''));
     return;
   }
   const del = hit('[data-journal-del]');
@@ -2286,7 +2292,6 @@ function onClick(ev) {
   }
 
   if (hit('[data-recap-toggle]')) { recapOpen = !recapOpen; return renderDrawerBody(); }
-  if (hit('[data-journal-actions-toggle]')) { journalActionsOpen = !journalActionsOpen; return renderDrawerBody(); }
   const overviewToggle = hit('[data-overview-toggle]');
   if (overviewToggle) {
     const id = overviewToggle.dataset.overviewToggle;
@@ -3247,6 +3252,13 @@ function onClick(ev) {
     if (expandedFactionsNearby.has(id)) expandedFactionsNearby.delete(id); else expandedFactionsNearby.add(id);
     return render();
   }
+  const skillRemove = hit('[data-entity-five-leagues-skill-remove]');
+  if (skillRemove) {
+    const [entityId, skillKey] = skillRemove.dataset.entityFiveLeaguesSkillRemove.split('::');
+    const ent = getEntity(store.get(), entityId);
+    if (!ent || !(ent.fiveLeaguesSkills || []).includes(skillKey)) return;
+    return store.update((d) => toggleEntityFiveLeaguesSkill(d, entityId, skillKey));
+  }
   const entTagRemove = hit('[data-entity-tag-remove]');
   if (entTagRemove) {
     const active = store.get().entities.activeId;
@@ -4168,10 +4180,13 @@ function onClick(ev) {
     store.update((d) => sellCommodity(d, locId, commodityId, qty));
     return toast(`Sold ${qty}`);
   }
+  // 🎲 Generate (Navigator's Quests/Contracts, and the Trade/Party copies):
+  // every field rolled from the oracles, reward per the stat ruleset.
   if (hit('[data-trade-generate-contract]')) {
-    let type = '';
-    store.update((d) => { const r = generateContract(d); const c = r.campaign.threads.find((x) => x.id === r.id); type = c ? c.type : ''; return r.campaign; });
-    return toast(type ? `Generated a ${type} contract` : 'Contract generated');
+    const { genrePack, statRuleset } = store.get().settings;
+    let name = '';
+    store.update((d) => { const r = generateContract(d, { genrePack, statRuleset }); const c = r.campaign.threads.find((x) => x.id === r.id); name = c ? c.name : ''; return r.campaign; });
+    return toast(name ? `Generated: ${name}` : 'Contract generated');
   }
   if (hit('[data-trade-contract-add-toggle]')) { tradeContractAddOpen = true; return renderDrawerBody(); }
   if (hit('[data-trade-contract-add-cancel]')) { tradeContractAddOpen = false; return renderDrawerBody(); }
@@ -4695,15 +4710,24 @@ function onClick(ev) {
     });
     return;
   }
+  // Export Selected: a content pack (.json) for any of Entities/Guide/
+  // Journal entries, and/or the Journal as plain text (.txt) — the
+  // Journal drawer's old Export button, now one more option here.
   if (hit('[data-export-content-pack]')) {
-    if (!contentPackFlags.entities && !contentPackFlags.guide && !contentPackFlags.journal) return toast('Select at least one section to export');
-    const pack = exportContentPack(store.get(), contentPackFlags);
-    return download(`gmatlas-content-pack-${stamp()}.json`, JSON.stringify(pack, null, 2));
+    const { journalText, ...packFlags } = contentPackFlags;
+    const wantsPack = packFlags.entities || packFlags.guide || packFlags.journal;
+    if (!wantsPack && !journalText) return toast('Select at least one section to export');
+    if (wantsPack) download(`gmatlas-content-pack-${stamp()}.json`, JSON.stringify(exportContentPack(store.get(), packFlags), null, 2));
+    if (journalText) exportJournal();
+    return;
   }
-  if (hit('[data-export-journal]')) return exportJournal();
+  // The Navigator's Generators: each result goes to the Journal AND is
+  // appended to the Navigator's Scene Summary (appendToSceneSummary).
   if (hit('[data-generate-mission]')) {
-    store.update((d) => addNote(d, formatMission(generateMission(d)), 'Mission'));
-    return toast('Mission generated');
+    const text = formatMission(generateMission(store.get()));
+    appendToSceneSummary(text);
+    store.update((d) => addNote(d, text, 'Mission'));
+    return toast('Mission generated — added to the Journal and Scene Summary');
   }
   // Living Faction Engine Phase C: a hot faction's activity becomes a
   // real, trackable mission (campaign.missions[]) instead of only a
@@ -4818,15 +4842,17 @@ function onClick(ev) {
     if (!entry || contentPackImporting.has(packId)) return;
     contentPackImporting = new Set(contentPackImporting).add(packId);
     renderDrawerBody();
+    // Into the campaign Settings → Campaigns is configuring (configCampaignId).
+    const campaignId = configCampaignId();
+    let importedCount = 0;
     fetchJsonPack(entry.file)
-      .then((pack) => {
-        let importedCount = 0;
-        store.update((d) => {
-          const before = (d.entities?.items || []).length;
-          const next = importContentPack(d, pack);
-          importedCount = (next.entities?.items || []).length - before;
-          return next;
-        });
+      .then((pack) => store.updateCampaign(campaignId, (d) => {
+        const before = (d.entities?.items || []).length;
+        const next = importContentPack(d, pack);
+        importedCount = (next.entities?.items || []).length - before;
+        return next;
+      }))
+      .then(() => {
         contentPackImporting = new Set(contentPackImporting); contentPackImporting.delete(packId);
         renderDrawerBody();
         toast(importedCount ? `${importedCount} entit${importedCount === 1 ? 'y' : 'ies'} imported` : 'Nothing to import');
@@ -4849,14 +4875,15 @@ function onClick(ev) {
     dataPackImporting = new Set(dataPackImporting).add(packId);
     renderDrawerBody();
     const done = () => { dataPackImporting = new Set(dataPackImporting); dataPackImporting.delete(packId); renderDrawerBody(); };
+    const campaignId = configCampaignId();
+    let createdCount = 0;
     fetchHostileLocationsPack(['./' + entry.file])
-      .then((pack) => {
-        let createdCount = 0;
-        store.update((d) => {
-          const r = importHostileLocations(d, pack);
-          createdCount = r.createdIds.length;
-          return r.campaign;
-        });
+      .then((pack) => store.updateCampaign(campaignId, (d) => {
+        const r = importHostileLocations(d, pack);
+        createdCount = r.createdIds.length;
+        return r.campaign;
+      }))
+      .then(() => {
         done();
         toast(createdCount ? `${createdCount} location(s) imported from ${entry.title}` : `${entry.title} is already up to date — nothing new to import`);
       })
@@ -4889,24 +4916,35 @@ function onClick(ev) {
   }
   if (hit('[data-advance-faction-turns]')) {
     let rumorCount = 0;
+    let text = '';
     store.update((d) => {
       const r = advanceFactionTurns(d);
       rumorCount = r.rumors.length;
-      return addNote(r.campaign, formatFactionTurnRumors(r.rumors), 'Faction Turn');
+      text = formatFactionTurnRumors(r.rumors);
+      return addNote(r.campaign, text, 'Faction Turn');
     });
-    return toast(rumorCount ? `${rumorCount} faction(s) acted` : 'No factions tracked yet');
+    if (rumorCount) { appendToSceneSummary(text); render(); }
+    return toast(rumorCount ? `${rumorCount} faction(s) acted — added to the Journal and Scene Summary` : 'No factions tracked yet');
   }
   if (hit('[data-generate-creature]')) {
-    store.update((d) => addNote(d, formatCreatureConcept(generateCreatureConcept(d)), 'Creature Concept'));
-    return toast('Creature concept generated');
+    const concept = generateCreatureConcept(store.get());
+    if (!hasCreatureConcept(concept)) return toast('This genre pack has no creature tables to roll');
+    const text = formatCreatureConcept(concept);
+    appendToSceneSummary(text);
+    store.update((d) => addNote(d, text, 'Creature Concept'));
+    return toast('Creature concept generated — added to the Journal and Scene Summary');
   }
   if (hit('[data-generate-site]')) {
-    store.update((d) => addNote(d, formatSiteConcept(generateSiteConcept(d)), 'Site Concept'));
-    return toast('Site concept generated');
+    const text = formatSiteConcept(generateSiteConcept(store.get()));
+    appendToSceneSummary(text);
+    store.update((d) => addNote(d, text, 'Site Concept'));
+    return toast('Site concept generated — added to the Journal and Scene Summary');
   }
   if (hit('[data-generate-seed]')) {
-    store.update((d) => addNote(d, formatAdventureSeed(generateAdventureSeed(d)), 'Adventure Seed'));
-    return toast('Adventure seed generated');
+    const text = formatAdventureSeed(generateAdventureSeed(store.get()));
+    appendToSceneSummary(text);
+    store.update((d) => addNote(d, text, 'Adventure Seed'));
+    return toast('Adventure seed generated — added to the Journal and Scene Summary');
   }
   // Co-Pilot's OWN "Need inspiration?" buttons (copilotPanel.js) — distinct
   // data-* from the Journal drawer's identical-looking pair just above
@@ -5291,7 +5329,9 @@ function onClick(ev) {
                   ? { entityType: 'where-faction-link', mode: 'link', scope: raw.slice('where-faction-link:'.length), query: '' }
                   : raw.startsWith('colony-encounter::')
                     ? { entityType: 'colony-encounter', mode: 'colony-encounter', scope: raw.slice('colony-encounter::'.length), query: '' }
-                    : { entityType: 'npc', mode: raw, scope: null, query: '' };
+                    : raw.startsWith('contract-patron::')
+                      ? { entityType: 'contract-patron', mode: 'contract-patron', scope: raw.slice('contract-patron::'.length), query: '' }
+                      : { entityType: 'npc', mode: raw, scope: null, query: '' };
     renderEntityPickerOverlay();
     const inp = root.querySelector('[data-entity-picker-query]');
     if (inp) { inp.value = ''; inp.focus(); }
@@ -5299,6 +5339,12 @@ function onClick(ev) {
   }
   const entityPickerCloseBtn = hit('[data-entity-picker-close]');
   if (entityPickerCloseBtn) { entityPicker = null; return renderEntityPickerOverlay(); }
+  if (hit('[data-contract-patron-clear]') && entityPicker && entityPicker.entityType === 'contract-patron') {
+    const contractId = entityPicker.scope;
+    entityPicker = null;
+    renderEntityPickerOverlay();
+    return store.update((d) => updateContract(d, contractId, { patronId: '' }));
+  }
   // WHO header's "Add NPC" picker's own second step (renderEntityPickerOverlay's
   // pendingEntityId branch) — commits the stashed pick/create to whichever
   // scene role the GM actually chose.
@@ -5567,11 +5613,10 @@ function onClick(ev) {
   }
 
   // Campaigns / Ruleset Profile Editor (design/adr/rules-profiles-multi-
-  // campaign.md) — campaign switch/create/rename, profile select/create/
-  // rename. Multiple
-  // campaigns coexist now, so "New Campaign" no longer destroys the current
-  // one (confirmNewCampaign's old window.confirm() is gone) — it registers
-  // a new one from the buffered newCampaignDraft form and switches to it.
+  // campaign.md) — campaign switch/rename/delete, profile select/create/
+  // rename. Multiple campaigns coexist now, so "New Campaign" (the header
+  // switcher's "+ Start New Campaign", data-campaign-switcher-new) no
+  // longer destroys the current one — it registers a new one and switches to it.
   const campaignSwitchBtn = hit('[data-campaign-switch]');
   if (campaignSwitchBtn) {
     return store.switchCampaign(campaignSwitchBtn.dataset.campaignSwitch).then(() => toast('Switched campaign'));
@@ -5605,20 +5650,6 @@ function onClick(ev) {
         else toast((result.error && result.error.message) || 'Delete failed');
       });
     });
-  }
-  if (hit('[data-campaign-create]')) {
-    const profiles = store.listProfiles();
-    const profileId = newCampaignDraft.profileId || (profiles[0] && profiles[0].id);
-    // Rules Profile is a required field (direct instruction) — in practice
-    // there's always at least one profile to fall back to above, but this
-    // guards the case defensively rather than silently creating a
-    // campaign with no profile assigned at all.
-    if (!profileId) { toast('Create a Rules Profile first'); return; }
-    const title = newCampaignDraft.title.trim();
-    store.newCampaign({ title: title || undefined, profileId }).then(() => toast('Campaign created'));
-    newCampaignDraft = { title: '', profileId: '' };
-    campaignFormOpen = false;
-    return;
   }
   if (hit('[data-profile-create]')) {
     const cloneFromId = currentEditingProfileId();
@@ -6237,15 +6268,18 @@ function onChange(ev) {
   // larger maxDim (1600, vs. an entity thumbnail's 256) since this is meant
   // to actually be looked at full-drawer-width, not shown as a small photo.
   // An MP4 (animated background) is stored verbatim instead — it lives in
-  // the one campaign document like every other upload, so a large clip
-  // gets a size warning (every save clones the whole document).
+  // the one campaign document like every other upload, and every save
+  // clones the whole document, so a clip over 25 MB is refused outright.
   const bmBgUpload = t.closest('[data-battlemap-bg-upload]');
   if (bmBgUpload) {
     const mapId = bmBgUpload.dataset.battlemapBgUpload;
     const file = (t.files || [])[0];
     if (!file) return;
     const video = isVideoFile(file);
-    if (video && file.size > 25 * 1024 * 1024) toast(`Large video (${Math.round(file.size / (1024 * 1024))} MB) — saves and exports may slow down`);
+    if (video && file.size > 25 * 1024 * 1024) {
+      t.value = '';
+      return toast(`Video too large (${Math.round(file.size / (1024 * 1024))} MB) — battlemap videos are limited to 25 MB`);
+    }
     (video ? loadVideo(file) : loadAndMaybeResize(file, 1600))
       .then(({ thumbDataUrl, originalDataUrl }) => {
         store.update((d) => {
@@ -6488,9 +6522,14 @@ function onChange(ev) {
   if (backgroundSelect) {
     return store.update((d) => setEntityFiveLeaguesBackground(d, backgroundSelect.dataset.entityFiveLeaguesBackground, t.value));
   }
-  const skillCheckbox = t.closest('[data-entity-five-leagues-skill]');
-  if (skillCheckbox) {
-    const [entityId, skillKey] = skillCheckbox.dataset.entityFiveLeaguesSkill.split('::');
+  // Five Leagues Skills' "+ Add skill…" dropdown (removal is the chip's ✕, in onClick).
+  const skillAdd = t.closest('[data-entity-five-leagues-skill-add]');
+  if (skillAdd) {
+    const entityId = skillAdd.dataset.entityFiveLeaguesSkillAdd;
+    const skillKey = t.value;
+    if (!skillKey) return;
+    const ent = getEntity(store.get(), entityId);
+    if (ent && (ent.fiveLeaguesSkills || []).includes(skillKey)) return;
     return store.update((d) => toggleEntityFiveLeaguesSkill(d, entityId, skillKey));
   }
   const armorBodySelect = t.closest('[data-entity-five-leagues-armor-body]');
@@ -7092,7 +7131,11 @@ function onChange(ev) {
   const expDial = t.closest('[data-expedition-dial]');
   if (expDial) { const [threadId, field] = expDial.dataset.expeditionDial.split('::'); return store.update((d) => setExpeditionDial(d, threadId, field, Number(t.value))); }
 
-  if (t.closest('[data-campaign-css-template]')) return store.update((d) => { d.meta.cssTemplate = t.value; return d; });
+  if (t.closest('[data-campaign-css-template]')) {
+    const value = t.value;
+    return store.updateCampaign(configCampaignId(), (d) => { d.meta.cssTemplate = value; return d; })
+      .catch((err) => toast(`Couldn't save — ${err.message}`));
+  }
   const guideTitleInput = t.closest('[data-guide-title-input]');
   if (guideTitleInput) { const id = getActiveGuideDoc(store.get()).id; if (t.value.trim()) return store.update((d) => renameGuideDoc(d, id, t.value.trim())); return; }
   // Ruleset Profile Editor fields (design/adr/rules-profiles-multi-
@@ -7223,18 +7266,17 @@ function onChange(ev) {
     return render();
   }
   if (t.closest('[data-profile-select]')) { settingsSelectedProfileId = t.value; return render(); }
-  if (t.closest('[data-new-campaign-profile]')) { newCampaignDraft.profileId = t.value; return; }
   const campaignReassignSelect = t.closest('[data-campaign-reassign-profile]');
   if (campaignReassignSelect) {
     const campaignId = campaignReassignSelect.dataset.campaignReassignProfile;
     return store.setCampaignProfile(campaignId, t.value).then(() => toast('Campaign profile changed'));
   }
-  // Settings restructuring: the Campaigns tab's own switcher dropdown —
-  // picking an option switches the active campaign immediately, same
-  // action the old per-row "Switch" button ran (no confirm — that's the
-  // header menu's own switcher's convention, not this tab's).
+  // Settings → Campaigns' dropdown picks which campaign the tab configures
+  // — it never switches the active campaign (the header switcher does).
   if (t.closest('[data-campaign-switcher-select]')) {
-    return store.switchCampaign(t.value).then(() => toast('Switched campaign'));
+    settingsCampaignId = t.value;
+    settingsSelectedProfileId = null; // Modules tab follows the configured campaign's profile
+    return store.loadCampaign(t.value).then(() => render());
   }
 
   if (t.closest('[data-import-campaign]')) {
@@ -7523,8 +7565,6 @@ function onInput(ev) {
   const expDial = t.closest('[data-expedition-dial]');
   if (expDial) { const lbl = expDial.previousElementSibling; if (lbl && lbl.classList.contains('metric')) lbl.textContent = `${t.value}/10`; return; }
 
-  const newCampaignTitle = t.closest('[data-new-campaign-title]');
-  if (newCampaignTitle) { newCampaignDraft.title = t.value; return; }
 
   const diceRollerCustom = t.closest('[data-dice-roller-custom-input]');
   if (diceRollerCustom) { diceRollerCustomText = t.value; return; }
@@ -7685,7 +7725,7 @@ function openDrawerTab(id) {
     openDrawers = [...openDrawers, id];
     if (id === 'oracle') oracleFilter = '';
     if (id === 'documents') { docFilter = ''; docTagFilters = new Set(); docTagEditorOpen = new Set(); refreshRefDocBlobKeys(); }
-    if (id === 'settings') refreshRefDocBlobKeys();
+    if (id === 'settings') { settingsCampaignId = null; refreshRefDocBlobKeys(); }
     if (id === 'graph') graphView = { scale: 1, x: 0, y: 0 };
     if (id === 'world-tracker') { worldTrackerTab = 'sectors'; worldTrackerSelectedSector = null; worldTrackerMigrateOpen = new Set(); }
     if (id === 'colony') colonyPanelTab = 'colony';
@@ -9099,16 +9139,17 @@ const MENTION_MAX_SUGGESTIONS = 8;
 function onFocusOut(ev) {
   if (mentionSuggest && ev.target === mentionSuggest.field) closeMentionSuggest();
 
-  // Direct bug report: "when clicking anywhere off the text editor
-  // textbox, the field should persist any content it has and not clear
-  // out or reset as it does now" — the Journal compose box had no
-  // ephemeral backing field at all before this (see journalDraftText's
-  // own declaration comment for the full story); this is the commit side,
-  // same blur-commit shape as summaryField below.
+  // The Journal compose box's unsent text is saved to the campaign
+  // (campaign.journalDraft) on blur, so it survives a re-render AND a
+  // closed window — mountShell's beforeunload/visibilitychange
+  // flushFocusedField force-blur is what fires this on close. Saved
+  // silently (no re-render): the box already shows this text, and a
+  // re-render mid-click could swap out the ➜📖 submit button (or whatever
+  // else was clicked) before its click lands.
   const journalInputField = ev.target.closest('[data-journal-input]');
   if (journalInputField) {
     const value = serializeMentionEditor(journalInputField);
-    if (value !== journalDraftText) journalDraftText = value;
+    if (value !== (store.get().journalDraft || '')) store.update((d) => setJournalDraft(d, value), { silent: true });
   }
 
   // Contenteditable context fields (WHO/WHERE/WHAT/WHY/HOW) have no native
@@ -9229,32 +9270,6 @@ function onFocusOut(ev) {
     const current = (store.get().factionEvents || []).find((e) => e.id === id);
     if (current && value !== (current.readAloud || '')) store.update((d) => setEventReadAloud(d, id, value));
   }
-}
-
-// Direct bug report: "When the Journal text editor is selected, the
-// Actions section should expand to expose the option buttons." A single
-// new delegated 'focusin' listener (rule 4 — one per event type,
-// registered once in mountShell) — focusin bubbles (plain 'focus'
-// doesn't), same reasoning onFocusOut's own comment already gives for why
-// that one uses 'focusout' instead of 'blur'. Deliberately does NOT go
-// through the usual renderDrawerBody() round-trip other handlers use —
-// that replaces the drawer's whole DOM subtree, which would yank focus
-// (and the cursor position) right back out of the field the GM just
-// clicked into. journal()'s own markup (drawers/index.js) always renders
-// the Actions body now (never omits it), just hidden when collapsed, so
-// this can toggle that one attribute directly and leave the rest of the
-// DOM — including the just-focused input — completely alone. Only ever
-// needs the one branch today; kept as its own function (not folded into
-// onClick/onChange) so a future focus-triggered behavior has an obvious
-// home instead of being wedged into a handler for a different event type.
-function onFocusIn(ev) {
-  const journalInputField = ev.target.closest('[data-journal-input]');
-  if (!journalInputField || journalActionsOpen) return;
-  journalActionsOpen = true;
-  const actionsBody = root && root.querySelector('[data-journal-actions-body]');
-  if (actionsBody) actionsBody.hidden = false;
-  const toggleBtn = root && root.querySelector('[data-journal-actions-toggle]');
-  if (toggleBtn) toggleBtn.textContent = '▾ Actions';
 }
 
 // Ctrl/Cmd+Click a document mention's page (ADR 0018) — the page lives in a
@@ -9560,6 +9575,15 @@ function renderMentionSuggest() {
 function currentSceneSummary() {
   if (sceneSummaryOverride !== null) return sceneSummaryOverride;
   return composeNarrativeDraft(store.get(), { selectedOptionIds: Array.from(selectedStoryOptionIds) });
+}
+
+// Adds a block of text to the end of the Navigator's Scene Summary — the
+// same edit-in-place override an oracle roll routed to the Navigator
+// already appends to. The caller re-renders (its own store.update does).
+function appendToSceneSummary(text) {
+  if (!text) return;
+  const current = currentSceneSummary();
+  sceneSummaryOverride = current ? `${current}\n\n${text}` : text;
 }
 
 // Commits a mention-editor field's current content the same way its normal
@@ -10128,6 +10152,11 @@ function commitEntityPickerPick(picker, id) {
       return next;
     });
   }
+  if (picker.entityType === 'contract-patron') {
+    // A Quest/Contract's patron "＋" (Navigator/Trade/Party contract rows) —
+    // an NPC or a Faction; picker.scope is the contract (thread) id.
+    return store.update((d) => updateContract(d, picker.scope, { patronId: id }));
+  }
   if (picker.entityType === 'turnstep-map') {
     // Navigator workflow manager's map picker, existing-map branch — id's
     // own newId() prefix (bm_/hex_/dun_, each namespace unique) is enough
@@ -10291,6 +10320,7 @@ function commitEntityPickerPick(picker, id) {
 // enough for colony-encounter, which needs to roll stats too).
 const ENTITY_PICKER_CREATE_TYPE = {
   'where-faction-link': 'faction',
+  'contract-patron': 'npc',
   'party-vehicle': 'asset',
   'party-item': 'item',
   'party-asset': 'asset',
@@ -10521,6 +10551,16 @@ function renderEntityPickerOverlay() {
     const dismissed = new Set(scene ? (scene.dismissedFactionIds || []) : []);
     candidates = listEntities(doc, ['faction']).filter((f) => !seen.has(f.id) || dismissed.has(f.id));
     emptyMessage = 'No other Faction entities yet — add one in Cast first.';
+  } else if (entityPicker.entityType === 'contract-patron') {
+    // Every NPC and Faction except the current patron. `.name` gets a
+    // display-only ⚑/👤 prefix to tell the two apart in one list —
+    // commitEntityPickerPick only ever uses the id.
+    const contract = listContracts(doc).find((c) => c.id === entityPicker.scope);
+    const currentId = contract && contract.patronId;
+    candidates = listEntities(doc, ['npc', 'faction'])
+      .filter((n) => n.id !== currentId)
+      .map((n) => ({ ...n, name: `${n.type === 'faction' ? '⚑' : '👤'} ${n.name || 'Unnamed'}` }));
+    emptyMessage = 'No NPCs or Factions yet — create one below, or add one in Cast.';
   } else if (entityPicker.entityType === 'turnstep-map') {
     // Navigator workflow manager's "🗺️ Pick or create a map" (direct
     // follow-up request) — every map from whichever of Battlemap/Hexcrawl/
@@ -10668,7 +10708,12 @@ function renderEntityPickerOverlay() {
   const createGenericBtn = createGenericType
     ? `<button type="button" class="entity-picker-row entity-picker-row-create" data-entity-picker-create>＋ Create New ${escapeHtml(createGenericLabel)}</button>`
     : '';
-  resultsEl.innerHTML = createLifeformBtn + createLocationBtn + createConflictBtn + turnStepMapCreateBtn + createGenericBtn + (candidates.length
+  // A contract that already has a patron also offers clearing it.
+  const patronContract = entityPicker.entityType === 'contract-patron' ? listContracts(store.get()).find((c) => c.id === entityPicker.scope) : null;
+  const clearPatronBtn = patronContract && patronContract.patronId
+    ? '<button type="button" class="entity-picker-row entity-picker-row-remove" data-contract-patron-clear>✕ Remove patron</button>'
+    : '';
+  resultsEl.innerHTML = createLifeformBtn + createLocationBtn + createConflictBtn + turnStepMapCreateBtn + createGenericBtn + clearPatronBtn + (candidates.length
     ? candidates.map((n) => `<button type="button" class="entity-picker-row" data-entity-picker-select="${escapeHtml(n.id)}">${escapeHtml(n.name || 'Unnamed')}</button>`).join('')
     : `<p class="dim small">${escapeHtml(emptyMessage)}</p>`);
 }
@@ -11315,12 +11360,12 @@ function buildDrawerUi() {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, oracleRouteToNavigator: oracleRouteToNavigator && activeDrawer === 'oracle', navigatorStepMapLink, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, docSort, docSortMenuOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     fiveLeaguesInfoOpen, fiveLeaguesItemNotesOpen,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, journalActionsOpen, journalDraftText, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, tocOfferOpen, tocLibrary: store.getAppConfig().tocLibrary || {}, canScanToc: canScanToc(), lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, expandedWhatConflicts,
+    enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, tocOfferOpen, tocLibrary: store.getAppConfig().tocLibrary || {}, canScanToc: canScanToc(), lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, expandedWhatConflicts,
     advisorOracleResults, advisorDrafts, advisorConsequenceDraw, sceneSummaryOverride,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName, partyTrackersEditOpen, collapsedPartySections,
     tradeLocationId, tradeContractAddOpen,
-    journalEditOpen, graphFilter, helpOpen, settingsMenuOpen, settingsTab, rulesetsSubTab, campaignFormOpen, aboutOpen,
+    journalEditOpen, graphFilter, helpOpen, settingsMenuOpen, settingsTab, rulesetsSubTab, aboutOpen,
     galleryFilter, galleryTagFilters, galleryTagListOpen, galleryUploadDraft,
     battlemapPlacingIcon, battlemapCamera,
     hexcrawlPlacingIcon, hexcrawlPaletteMenu, battlemapSpan, hexcrawlCamera, hexcrawlSelectedHex, hexcrawlRange, hexcrawlRiverStart, hexcrawlRoadStart,
@@ -11341,7 +11386,6 @@ function buildDrawerUi() {
     // drawer already reads.
     campaigns: store.listCampaigns(), profiles: store.listProfiles(),
     activeProfileId: (store.getActiveProfile() || {}).id, editingProfileId: currentEditingProfileId(),
-    newCampaignDraft,
     profileDraft: getProfileDraft(currentEditingProfileId()),
     profileDraftDirty: isProfileDraftDirty(currentEditingProfileId()),
     // Settings restructuring: the Campaigns tab's own module checkboxes
@@ -11351,8 +11395,14 @@ function buildDrawerUi() {
     // Campaigns doesn't require first navigating to Rulesets to pick the
     // same profile there. Same getProfileDraft/isProfileDraftDirty
     // functions, just keyed by the active campaign's own profile id.
-    activeProfileDraft: getProfileDraft((store.getActiveProfile() || {}).id),
-    activeProfileDraftDirty: isProfileDraftDirty((store.getActiveProfile() || {}).id),
+    // Settings → Campaigns' configured campaign (configCampaignId) — its
+    // own doc (loaded via store.loadCampaign, else the active one while
+    // that load is still in flight) and its profile's draft.
+    configCampaignId: configCampaignId(),
+    configCampaignDoc: store.peekCampaign(configCampaignId()) || store.get(),
+    configProfileId: configCampaignProfileId(),
+    configProfileDraft: getProfileDraft(configCampaignProfileId()),
+    configProfileDraftDirty: isProfileDraftDirty(configCampaignProfileId()),
     showAllGenrePacksInRpe,
     // Phase B (entitlement layer, domain/entitlements.js): just the raw
     // map, not the whole appConfig — mirrors passing activeProfileId
@@ -11546,6 +11596,9 @@ function renderDrawerBody() {
     const advisorContentId = resolvePositionContentId(profile, 'advisor');
     copilotBodyEl.innerHTML = renderPositionContent(advisorContentId, doc, buildDrawerUi());
   }
+  // Same one-time sizing pass as render()'s — expanding a contract row only
+  // comes through here, and its seeded text needs to open at full height.
+  if (root) root.querySelectorAll('.oracle-field-textarea').forEach(autoGrowSceneField);
   syncBattlemapVideos();
   // Clicking any entity link (inline mention, WHO/WHERE chip, relationship
   // chip, graph node, ...) sets this so the Cast inspector's name field is

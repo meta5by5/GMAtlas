@@ -324,15 +324,18 @@ function createStore() {
    *  landed on top of this one, in which case the newer edit wins rather
    *  than a stale rollback clobbering it. Failures surface via
    *  onPersistError(fn), not a thrown exception (there is no synchronous
-   *  outcome to throw from anymore). */
-  function update(mutator) {
+   *  outcome to throw from anymore). `{silent: true}` skips the immediate
+   *  notify — for a value the screen already shows (the Journal compose
+   *  box's draft, saved on blur), where a re-render would only get in the
+   *  way of the click that caused the blur. A rollback still notifies. */
+  function update(mutator, { silent = false } = {}) {
     const activeId = appConfig.activeCampaignId;
     const prev = docs.get(activeId);
     const next = mutator(structuredCloneSafe(prev));
     const nextDoc = next || prev;
     nextDoc.meta.updatedAt = new Date().toISOString();
     docs.set(activeId, nextDoc);
-    notify();
+    if (!silent) notify();
     persistCampaignDoc(activeId, prev, nextDoc).catch((err) => {
       console.warn('persist failed (IndexedDB)', err);
       if (docs.get(activeId) === nextDoc) { docs.set(activeId, prev); notify(); }
@@ -439,6 +442,52 @@ function createStore() {
       target = migrateDocument(raw);
     }
     return JSON.stringify(overlayProfileWith(target, profileForCampaign(campaignId)), null, 2);
+  }
+
+  /** Loads a campaign's document into memory without switching to it — the
+   *  same lazy load switchCampaign() does — so Settings can configure a
+   *  campaign other than the active one. Resolves to the profile-overlaid
+   *  doc (same shape get() returns), or null for an unknown id. */
+  async function loadCampaign(campaignId) {
+    if (!appConfig.campaigns.some((c) => c.id === campaignId)) return null;
+    if (!docs.has(campaignId)) {
+      const database = await db();
+      const raw = await idbGet(database, campaignDocKey(campaignId));
+      let target = backfillCampaignTurnStepSlots(migrateDocument(raw || defaultCampaign()));
+      target = ensureRulesetGuideDefault(target, resolveActiveStatRuleset(appConfig, campaignId));
+      if (!docs.has(campaignId)) docs.set(campaignId, target);
+    }
+    return peekCampaign(campaignId);
+  }
+
+  /** Sync read of an already-loaded campaign (loadCampaign first), profile-
+   *  overlaid for THAT campaign's own profile; null if not loaded yet. */
+  function peekCampaign(campaignId) {
+    if (campaignId === appConfig.activeCampaignId) return get();
+    const raw = docs.get(campaignId);
+    return raw ? overlayProfileWith(raw, profileForCampaign(campaignId)) : null;
+  }
+
+  /** update() for any campaign, active or not. The active one goes through
+   *  update() itself, so the change shows immediately; any other campaign
+   *  is loaded if needed, changed, and persisted (backup slot first, same
+   *  as update()) without becoming active. Resolves once persisted; a
+   *  failed write rolls the in-memory doc back and rejects. */
+  async function updateCampaign(campaignId, mutator) {
+    if (campaignId === appConfig.activeCampaignId) return update(mutator);
+    if (!(await loadCampaign(campaignId))) throw new Error('Unknown campaign');
+    const prev = docs.get(campaignId);
+    const nextDoc = mutator(structuredCloneSafe(prev)) || prev;
+    nextDoc.meta.updatedAt = new Date().toISOString();
+    docs.set(campaignId, nextDoc);
+    notify();
+    try {
+      await persistCampaignDoc(campaignId, prev, nextDoc);
+    } catch (err) {
+      if (docs.get(campaignId) === nextDoc) { docs.set(campaignId, prev); notify(); }
+      throw err;
+    }
+    return peekCampaign(campaignId);
   }
 
   /** Permanently remove a campaign and its document + backup from
@@ -663,6 +712,7 @@ function createStore() {
     storageInfo, restoreBackup,
     putDocBlob, getDocBlob, deleteDocBlob, listDocBlobKeys,
     listCampaigns, switchCampaign, renameCampaign, setCampaignProfile, deleteCampaign, exportCampaignById,
+    loadCampaign, peekCampaign, updateCampaign,
     listProfiles, getActiveProfile, getAppConfig, createProfile, updateProfile, renameProfile,
     addTurnStepList, updateAppConfig,
     STORAGE_KEY, BACKUP_KEY, LEGACY_KEYS,

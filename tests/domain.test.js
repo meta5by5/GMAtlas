@@ -1222,7 +1222,28 @@ test('opening a document tab at a page anchors the resolved src with #page=N', (
 
 // --- entities + auto-linking (Phase 3A) -----------------------------------
 import { createEntity, updateEntity, removeEntity, addRelationship, removeRelationship, findByName, parseMentions, linkMentions, listEntities, filterEntities, addEntityTag, removeEntityTag, listTagVocabulary, entityTypeLabel, TYPE_LABEL, ENTITY_TYPES } from '../src/domain/entities.js';
-import { addNote, editContextText, editNote, addContextEntity, removeContextEntity, updateSceneField } from '../src/domain/session.js';
+import { addNote, editContextText, editNote, addContextEntity, removeContextEntity, updateSceneField, setJournalDraft, submitJournalDraft } from '../src/domain/session.js';
+
+test('setJournalDraft saves the compose box text without mutating, and is a no-op when unchanged', () => {
+  const camp = defaultCampaign();
+  assert.equal(camp.journalDraft, '');
+  const next = setJournalDraft(camp, 'Half a thought about @Voss');
+  assert.equal(next.journalDraft, 'Half a thought about @Voss');
+  assert.equal(camp.journalDraft, '');
+  assert.equal(setJournalDraft(next, 'Half a thought about @Voss'), next);
+  const legacy = { ...camp, journalDraft: undefined }; // a doc from before journalDraft existed
+  assert.equal(setJournalDraft(legacy, ''), legacy);
+});
+
+test('submitJournalDraft adds the note and clears the saved draft in one write; blank text changes nothing', () => {
+  let camp = setJournalDraft(defaultCampaign(), 'The clue is in the vault');
+  const before = camp.journal.length;
+  const next = submitJournalDraft(camp, '  The clue is in the vault  ');
+  assert.equal(next.journal.length, before + 1);
+  assert.equal(next.journal[next.journal.length - 1].text, 'The clue is in the vault');
+  assert.equal(next.journalDraft, '');
+  assert.equal(submitJournalDraft(camp, '   '), camp);
+});
 
 test('editNote updates an existing journal entry in place and re-links mentions', () => {
   let camp = defaultCampaign();
@@ -4433,7 +4454,7 @@ import { addLocationTradeCode, removeLocationTradeCode } from '../src/domain/ent
 import { resolveFactionTurn, formatFactionTurnResult, rollFactionAsset, FACTION_ACTION_TYPES } from '../src/domain/factions.js';
 import { deepenNpc } from '../src/domain/session.js';
 import {
-  generateCreatureConcept, formatCreatureConcept, generateSiteConcept, formatSiteConcept,
+  generateCreatureConcept, formatCreatureConcept, hasCreatureConcept, generateSiteConcept, formatSiteConcept,
   generateAdventureSeed, formatAdventureSeed,
 } from '../src/domain/worldbuilding.js';
 import {
@@ -4577,6 +4598,18 @@ test('generateCreatureConcept/formatCreatureConcept roll the Xenobestiary tables
   const text = formatCreatureConcept(c);
   assert.match(text, /^Creature concept:/);
   assert.match(text, /Origin:/); assert.match(text, /Gets around by:/); assert.match(text, /trait:/); assert.match(text, /dangerous:/);
+});
+
+test('generateCreatureConcept rolls the fantasy pack\'s Bestiary (Five Leagues), and reports nothing to roll for a pack with no creature tables', () => {
+  const camp = defaultCampaign();
+  camp.settings.genrePack = 'fantasy';
+  const c = generateCreatureConcept(camp, { rng: makeRng(4) });
+  const { Bestiary } = tablesWithOverrides({}, 'fantasy');
+  assert.ok(Bestiary['Creature Origin'].includes(c.origin));
+  assert.ok(Bestiary['Creature Threat'].includes(c.threat));
+  assert.ok(hasCreatureConcept(c));
+  camp.settings.genrePack = 'dnd5e';
+  assert.equal(hasCreatureConcept(generateCreatureConcept(camp, { rng: makeRng(4) })), false);
 });
 
 test('generateSiteConcept/formatSiteConcept roll the Site Concept tables into a readable block', () => {
@@ -5290,7 +5323,11 @@ function everyArrayNonEmpty(tables) {
 test('the "fantasy" pack (direct follow-up request: "make a fantasy equivalent duplicate of all oracles," THEN a follow-up report: "the fantasy oracles are not connected to the fantasy genre as seen in... the Five Leagues profile that is tied to the Fantasy genre" — the full set now backs this pack directly, not a separate never-selected one) structurally mirrors SCENE_TABLES\'s full breadth — same number of categories and tables, every table non-empty', () => {
   const fantasyPack = findGenrePack('fantasy');
   assert.equal(fantasyPack.id, 'fantasy');
-  assert.equal(fantasyPack.tables, FANTASY_FULL_TABLES, 'the fantasy pack\'s own tables ARE the full set — not a separate, unreachable pack');
+  // The pack is the full set plus its own "Quests" category (data/questOracles.js).
+  for (const [cat, tables] of Object.entries(FANTASY_FULL_TABLES)) {
+    assert.equal(fantasyPack.tables[cat], tables, `the fantasy pack's own tables ARE the full set — ${cat} comes straight from it`);
+  }
+  assert.deepEqual(Object.keys(fantasyPack.tables).filter((k) => !(k in FANTASY_FULL_TABLES)), ['Quests']);
   // Direct follow-up request ("create corresponding oracles that match all
   // the oracles for Ironsworn") deliberately broke exact 1:1 parity with
   // SCENE_TABLES on purpose — "Ironsworn Oracles"/"Ironsworn Delve Oracles"
@@ -5388,8 +5425,9 @@ test('every Genre Pack carries a gameSystemIds list (Phase A audit, A2/A4); sci-
 import { COMMODITIES, findCommodity } from '../src/data/commodities.js';
 import {
   getMarket, setMarketDial, priceAt, listCargoManifest, buyCommodity, sellCommodity,
-  listContracts, createContract, updateContract, generateContract,
+  listContracts, createContract, updateContract, generateContract, rollQuestReward,
 } from '../src/domain/trade.js';
+import { QUEST_BRIEFS } from '../src/data/questOracles.js';
 
 test('a fresh Location has no stored market, but getMarket reads every commodity at the neutral 50/50 midpoint', () => {
   let camp = defaultCampaign();
@@ -5898,6 +5936,16 @@ test('listContracts only returns kind: "contract" threads, excluding ordinary WH
   assert.equal(contracts[0].id, id);
 });
 
+test('updateContract accepts a Faction as patron (the Quests "＋" picker offers NPCs and Factions) and clears it with ""', () => {
+  let camp = defaultCampaign();
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'The Iron Guild' }));
+  let { campaign, id } = createContract(camp, { name: 'Escort the caravan' });
+  camp = updateContract(campaign, id, { patronId: factionId });
+  assert.equal(listContracts(camp).find((c) => c.id === id).patronId, factionId);
+  camp = updateContract(camp, id, { patronId: '' });
+  assert.equal(listContracts(camp).find((c) => c.id === id).patronId, '');
+});
+
 test('updateContract patches trade-specific fields and no-ops on a non-contract thread id', () => {
   let camp = defaultCampaign();
   let { campaign, id } = createContract(camp, { name: 'A contract', type: 'Courier', payout: 10 });
@@ -5937,13 +5985,118 @@ test('createContract defaults description/conflict/opportunity to \'\', and both
   assert.equal(contract.opportunity, 'None');
 });
 
-test('generateContract rolls the Contract Type oracle table (Trade & Cargo group) and creates a contract from it', () => {
-  let camp = defaultCampaign();
-  const { campaign, id } = generateContract(camp, { rng: makeRng(3) });
+test('generateContract in an empty scene rolls every field from the oracles, the Description matching the Type', () => {
+  const camp = defaultCampaign();
+  const { campaign, id } = generateContract(camp, { rng: makeRng(3), genrePack: 'sci-fi-generic', statRuleset: '5pfh' });
   const contract = listContracts(campaign).find((c) => c.id === id);
-  assert.ok(contract);
-  assert.ok(tablesWithOverrides({}, 'hostile')['Trade & Cargo']['Contract Type'].includes(contract.type));
-  assert.equal(contract.payout, 50); // no route picked — flat default
+  const t = tablesWithOverrides({}, 'sci-fi-generic');
+  const cap = (s) => s[0].toUpperCase() + s.slice(1);
+  assert.ok(t['Trade & Cargo']['Contract Type'].includes(contract.type), 'sci-fi has no Quest Type table, so Contract Type is used');
+  assert.equal(contract.description, `${cap(QUEST_BRIEFS['sci-fi-generic'][contract.type])}.`);
+  assert.ok(t.Quests.Opposition.map((o) => `${cap(o)}.`).includes(contract.conflict));
+  assert.ok(t.Missions['Patron Benefit'].map((b) => `The patron ${b}.`).includes(contract.opportunity));
+  assert.equal(contract.patronId, '');
+  assert.equal(contract.name, `${contract.type} contract`);
+});
+
+test('every Quest/Contract Type a genre pack can roll has a brief', () => {
+  for (const pack of GENRE_PACKS) {
+    const types = pack.tables.Quests['Quest Type'] || pack.tables['Trade & Cargo']['Contract Type'];
+    for (const type of types) assert.ok(QUEST_BRIEFS[pack.id][type], `${pack.id}: ${type}`);
+  }
+});
+
+test('generateContract seeds Description/Conflict/Opportunity from the current scene', () => {
+  let camp = defaultCampaign();
+  let locId, factionId, rivalId, foeId, clashId;
+  ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Oakhollow' }));
+  ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Ash Guild' }));
+  ({ campaign: camp, id: rivalId } = createEntity(camp, { type: 'faction', name: 'Red Hand' }));
+  ({ campaign: camp, id: foeId } = createEntity(camp, { type: 'npc', name: 'Sir Corvane' }));
+  ({ campaign: camp, id: clashId } = createEntity(camp, { type: 'conflict', name: 'The Toll War' }));
+  camp = updateEntity(camp, factionId, { homeworldId: locId });
+  camp = updateEntity(camp, rivalId, { homeworldId: locId });
+  camp = updateEntity(camp, clashId, { locationId: locId });
+  camp = addThread(camp, 'Who burned the mill?');
+  camp.scenes.push({ id: 's1', locationIds: [locId], antagonistIds: [foeId] });
+  camp.context.what.threat = 8;
+  camp.context.what.resources = 2;
+  camp.context.what.reputation = 2;
+
+  const { campaign, id } = generateContract(camp, { rng: makeRng(5), genrePack: 'fantasy', statRuleset: 'fiveleagues', patronId: factionId });
+  const q = listContracts(campaign).find((c) => c.id === id);
+  const job = QUEST_BRIEFS.fantasy[q.type];
+  assert.equal(q.patronId, factionId);
+  assert.equal(q.description, `Ash Guild at Oakhollow hires the party to ${job}.`);
+  assert.match(q.conflict, /^Sir Corvane is already in the way\. Red Hand has its own stake in the outcome\. /);
+  assert.match(q.conflict, /This runs straight into The Toll War\. Danger here is already high/);
+  assert.match(q.opportunity, /^Ash Guild /);
+  assert.match(q.opportunity, /It could also move "Who burned the mill\?" forward/);
+  assert.match(q.opportunity, /short supplies/);
+  assert.match(q.opportunity, /party's standing/);
+});
+
+test('generateContract picks a present faction or bystander as patron, never an antagonist, and a location alone still grounds the Description', () => {
+  let camp = defaultCampaign();
+  let locId, factionId, foeId;
+  ({ campaign: camp, id: locId } = createEntity(camp, { type: 'location', name: 'Oakhollow' }));
+  ({ campaign: camp, id: foeId } = createEntity(camp, { type: 'npc', name: 'Sir Corvane' }));
+  camp.scenes.push({ id: 's1', locationIds: [locId], antagonistIds: [foeId] });
+  const alone = generateContract(camp, { rng: makeRng(1), genrePack: 'fantasy' });
+  const q1 = listContracts(alone.campaign).find((c) => c.id === alone.id);
+  assert.equal(q1.patronId, '');
+  assert.match(q1.description, /^Word at Oakhollow: someone is needed to /);
+
+  ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Ash Guild' }));
+  camp = updateEntity(camp, factionId, { homeworldId: locId });
+  const hired = generateContract(camp, { rng: makeRng(1), genrePack: 'fantasy' });
+  const q2 = listContracts(hired.campaign).find((c) => c.id === hired.id);
+  assert.equal(q2.patronId, factionId);
+  assert.doesNotMatch(q2.conflict, /Ash Guild has its own stake/, 'the patron is not its own rival');
+});
+
+test('generateContract uses the fantasy pack\'s own Quest Type, calls it a quest, and pays Five Leagues gold marks', () => {
+  const { campaign, id } = generateContract(defaultCampaign(), { rng: makeRng(5), genrePack: 'fantasy', statRuleset: 'fiveleagues' });
+  const q = listContracts(campaign).find((c) => c.id === id);
+  assert.ok(tablesWithOverrides({}, 'fantasy').Quests['Quest Type'].includes(q.type));
+  assert.equal(q.name, `${q.type} quest`);
+  assert.equal(q.payoutUnit, 'gold marks');
+  assert.ok(q.payout >= 2 && q.payout <= 7);
+  assert.ok(campaign.journal[campaign.journal.length - 1].text.includes('gold marks'));
+});
+
+test('rollQuestReward follows each stat ruleset\'s own scale and currency', () => {
+  for (let seed = 1; seed <= 40; seed++) {
+    const p5 = rollQuestReward('5pfh', makeRng(seed));
+    assert.ok(p5.unit === 'credits' && p5.payout >= 2 && p5.payout <= 7 && p5.segments === 4);
+    const tr = rollQuestReward('traveller', makeRng(seed));
+    assert.ok(tr.unit === 'Cr' && tr.payout >= 2000 && tr.payout <= 12000 && tr.payout % 1000 === 0);
+    const dd = rollQuestReward('dnd5e', makeRng(seed));
+    assert.ok(dd.unit === 'gp' && dd.payout >= 50 && dd.payout <= 300 && dd.payout % 25 === 0);
+    const vow = rollQuestReward('starforged', makeRng(seed));
+    assert.ok(vow.rank && vow.unit === 'XP' && vow.segments === 10 && vow.payout === vow.rank.xp && vow.rank.id !== 'epic');
+  }
+  assert.deepEqual(rollQuestReward('unknown-system', makeRng(1)), { payout: 50, unit: '', segments: 4, rank: null });
+});
+
+test('a Starforged quest is generated as a ranked vow on a 10-box track, rewarding XP', () => {
+  const { campaign, id } = generateContract(defaultCampaign(), { rng: makeRng(9), statRuleset: 'starforged' });
+  const vow = listContracts(campaign).find((c) => c.id === id);
+  assert.match(vow.name, /^(Troublesome|Dangerous|Formidable|Extreme) .+ vow$/);
+  assert.equal(vow.segments, 10);
+  assert.equal(vow.payoutUnit, 'XP');
+});
+
+test('every genre pack carries a Quests category, each new table with 20 non-blank entries', () => {
+  for (const pack of GENRE_PACKS) {
+    const q = pack.tables.Quests;
+    assert.ok(q && Array.isArray(q.Opposition) && q.Opposition.length === 20, `${pack.id}: Quests > Opposition`);
+    if (pack.id !== 'sci-fi-generic') assert.equal((q['Quest Type'] || []).length, 20, `${pack.id}: Quests > Quest Type`);
+    for (const list of Object.values(q)) {
+      assert.ok(list.every((e) => typeof e === 'string' && e.trim()), `${pack.id}: blank entry`);
+      assert.equal(new Set(list).size, list.length, `${pack.id}: duplicate entry`);
+    }
+  }
 });
 
 test('generateContract prices its payout from the real gap between two Locations\' markets for a commodity, not a flat number', () => {

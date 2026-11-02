@@ -365,6 +365,28 @@ export function addNote(campaign, text, source = 'Note') {
   return next;
 }
 
+/** The Journal compose box's unsent text, kept on the campaign so it
+ *  survives a closed window. Unchanged text returns the input as-is, so a
+ *  blur that changed nothing never writes. */
+export function setJournalDraft(campaign, text) {
+  const value = String(text || '');
+  if ((campaign.journalDraft || '') === value) return campaign;
+  const next = clone(campaign);
+  next.journalDraft = value;
+  return next;
+}
+
+/** Submits the compose box: adds `text` as a journal note (same as
+ *  addNote) and clears the saved draft in the same write. Blank text
+ *  changes nothing. */
+export function submitJournalDraft(campaign, text, source = 'Note') {
+  const value = String(text || '').trim();
+  if (!value) return campaign;
+  const next = addNote(campaign, value, source);
+  next.journalDraft = '';
+  return next;
+}
+
 /** Edit an existing journal entry's text in place (the "USER CHANGES" batch's
  *  Journal edit icon) — same @mention (re)linking addNote already does, so an
  *  edit that adds a brand-new @Name still creates/links it, not just the

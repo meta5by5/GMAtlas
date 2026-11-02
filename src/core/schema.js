@@ -74,6 +74,9 @@ export function defaultCampaign(now = new Date().toISOString()) {
     entities: { items: [], activeId: null, history: [] },
     scenes: [],          // was sceneLog
     journal: [],
+    // The Journal compose box's unsent text — kept in the document so it
+    // survives a closed window (domain/session.js's setJournalDraft).
+    journalDraft: '',
     timeline: [],        // breadcrumbs: campaign > act > scene > beat
     threads: [],         // progress clocks (NEW): [{id,name,filled,segments,done}]
 
