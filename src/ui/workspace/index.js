@@ -1046,7 +1046,7 @@ function starforgedDialsHtml(doc) {
 // Tracker's value stays exclusively on the Party panel itself) list of
 // another ruleset's own Party Trackers, for dashboardTrackersBlock below.
 function readonlyPartyTrackersHtml(trackers) {
-  return `<div class="dashboard-trackers dashboard-trackers-readonly">
+  return `<div class="dashboard-trackers"><div class="character-sheet-stats">
     ${trackers.map((t) => {
       const hasMax = (t.kind === 'meter' || t.kind === 'gauge') && t.max != null;
       // Plain string concatenation rather than a ternary with a
@@ -1054,9 +1054,9 @@ function readonlyPartyTrackersHtml(trackers) {
       // doesn't reliably handle a backtick nested inside another
       // template literal's ${} (see dashboardTrackersBlock's own note).
       const display = hasMax ? (t.value + ' / ' + t.max) : String(t.value);
-      return `<div class="field-label sm dashboard-tracker dashboard-tracker-readonly">${esc(t.name)} <b class="metric">${esc(display)}</b></div>`;
+      return `<div class="statblock-row attr-row attr-row-compact"><span class="statblock-key">${esc(t.name)}</span><span class="attr-val-static">${esc(display)}</span></div>`;
     }).join('')}
-  </div>`;
+  </div></div>`;
 }
 
 // Direct follow-up request: "The trackers on Navigator are for Starforged

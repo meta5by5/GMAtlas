@@ -347,6 +347,13 @@ export function rollOracle(campaign, path, { group = false, toJournal = true, in
   return { campaign: next, roll, text };
 }
 
+/** One line for a roll that filled a field rather than going through
+ *  rollOracle — "Sir Corvane — Disposition: wary" — so it still says what
+ *  was rolled once it's copied to the Scene Summary away from that field. */
+export function formatFieldRoll(path, value, ownerName = '') {
+  return `${ownerName ? `${ownerName} — ` : ''}${path[path.length - 1]}: ${value}`;
+}
+
 /** Add a free-form journal note. @mentions auto-create/link entities. */
 export function addNote(campaign, text, source = 'Note') {
   let next = clone(campaign);
@@ -528,7 +535,7 @@ export function rollLocationSensoryField(campaign, locationId, field, { rng = Ma
 // dedicated table — same "one field, one table" shape
 // LOCATION_SENSORY_ORACLE_PATH (entities.js) uses for a Location's Sights/
 // Smells/Sounds, just for context.where instead of an entity.
-const WHERE_DETAIL_ORACLE_PATH = {
+export const WHERE_DETAIL_ORACLE_PATH = {
   siteDescription: ['Location Themes', 'Site Type'],
   surroundings: ['Location Themes', 'Immediate Surroundings'],
 };

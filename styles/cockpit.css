@@ -865,12 +865,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
    .dashboard-trackers-section; its own border-top already separates it
    from the one above, so the wrapper itself needs no extra chrome beyond
    an optional label. A read-only tracker (another ruleset's own Party
-   Trackers, shown here but only ever EDITED on the Party panel) is just a
-   label and a number, so they all share one row, wrapping only when the
-   panel is too narrow. flex-direction undoes .field-label's column. */
+   Trackers, shown here but only ever EDITED on the Party panel) uses the
+   Entity Editor's statblock pill (.attr-row-compact, .attr-val-static). */
 .dashboard-trackers-section-head { margin: 0 0 var(--sp-1); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); }
-.dashboard-trackers-readonly { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-4); }
-.dashboard-tracker-readonly { flex-direction: row; align-items: baseline; gap: var(--sp-1); margin-top: 0; white-space: nowrap; }
 /* Each former W-tab, now a collapsible section (dashboardSection(),
    ui/workspace/index.js) — reuses .section-head-row (drawers/index.js's
    Bases of Influence toggle already established this exact convention)
@@ -2581,6 +2578,8 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 }
 .attr-row-compact .statblock-key { display: block; width: 100%; text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.68rem; white-space: nowrap; line-height: 1.2; }
 .attr-row-compact .attr-val-input { width: 0; min-width: 100%; box-sizing: border-box; padding: 0; font-size: 0.85rem; }
+/* The same pill's value when it's display-only (Navigator's Party Trackers). */
+.attr-val-static { font-size: 0.85rem; font-weight: 700; color: var(--accent); text-align: center; white-space: nowrap; }
 /* Direct follow-up request: "narrow the padding around the text and
    number of the statblocks for the 5LFB character sheet so that all six
    fields fit on one row" — tighter pill padding/gap scoped to just Five

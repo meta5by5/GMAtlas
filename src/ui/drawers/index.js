@@ -1647,7 +1647,8 @@ function statblockGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
   // Bestiary/Vehicle/Gear group instead of "explicitly collapsed" —
   // data-statblock-group-toggle's click handler (shell.js) is a plain
   // has/delete/add toggle either way, so this flip needs no handler change.
-  const collapsed = !(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
+  const only = isOnlyStatblock(e, group);
+  const collapsed = !only && !(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
   // Direct follow-up request: "the 'LifeForm (NPC) · Starforged' statblock
   // should put the editable stat field pill on the top row like other
   // statblocks" — attribute-kind fields (a Bestiary template's rollable
@@ -1680,10 +1681,10 @@ function statblockGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
   const rest = indexed.filter(({ f }) => !f.attribute && !(usesHalfRow && HALF_ROW_KEYS.includes(f.key)));
   return `<div class="statblock-block">
     <div class="statblock-head">
-      <button class="icon-btn statblock-collapse-toggle" data-statblock-group-toggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button>
+      ${only ? '' : statblockCollapseToggleHtml(key, collapsed)}
       <h4>${statblockGroupLabel(group, doc)}</h4>
-      ${statblockMoveButtonsHtml(gi)}
-      <button class="icon-btn" data-statblock-remove-group="${gi}" title="Remove this statblock">🗑</button>
+      ${only ? '' : statblockMoveButtonsHtml(gi)}
+      ${only ? '' : statblockRemoveButtonHtml(gi)}
     </div>
     ${collapsed ? '' : `
     ${stats.length ? `<div class="character-sheet-stats">${stats.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true })).join('')}</div>` : ''}
@@ -1806,7 +1807,8 @@ function fiveLeaguesEnemyWideTextFieldHtml(label, found, gi, opts) {
 
 function fiveLeaguesEnemyStatblockHtml(e, group, gi, doc, ui = {}, opts = {}) {
   const key = `${e.id}::${gi}`;
-  const collapsed = !(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
+  const only = isOnlyStatblock(e, group);
+  const collapsed = !only && !(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
   const speed = statblockFieldByKey(group, 'Speed');
   const combat = statblockFieldByKey(group, 'Combat', 'Combat Skill');
   const damage = statblockFieldByKey(group, 'Damage');
@@ -1838,10 +1840,10 @@ function fiveLeaguesEnemyStatblockHtml(e, group, gi, doc, ui = {}, opts = {}) {
   </div>` : '';
   return `<div class="statblock-block fiveleagues-enemy-block">
     <div class="statblock-head">
-      <button class="icon-btn statblock-collapse-toggle" data-statblock-group-toggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button>
+      ${only ? '' : statblockCollapseToggleHtml(key, collapsed)}
       <h4>${statblockGroupLabel(group, doc)}</h4>
-      ${statblockMoveButtonsHtml(gi)}
-      <button class="icon-btn" data-statblock-remove-group="${gi}" title="Remove this statblock">🗑</button>
+      ${only ? '' : statblockMoveButtonsHtml(gi)}
+      ${only ? '' : statblockRemoveButtonHtml(gi)}
     </div>
     ${collapsed ? '' : `
     <div class="character-sheet-stats">
@@ -1933,7 +1935,8 @@ function characterSheetGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
   // now-inverted formula just above) — direct follow-up request: "Default
   // the character sheet section to be open, but all other sections to be
   // collapsed."
-  const collapsed = !!(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
+  const only = isOnlyStatblock(e, group);
+  const collapsed = !only && !!(ui.collapsedStatblockGroups && ui.collapsedStatblockGroups.has(key));
   // Two linked direct follow-up requests: (1) "Remove the up/down arrows
   // for the character sheet if there is just one character sheet" —
   // reordering is only meaningful when there's a second VISIBLE Character
@@ -1985,16 +1988,41 @@ function characterSheetGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
   const pdfImportBtn = group.ruleset === 'dnd5e'
     ? `<label class="btn ghost sm file-btn" title="Import a D&D Beyond character sheet PDF export">Import from PDF<input type="file" accept=".pdf,application/pdf" data-dnd5e-import-pdf="${gi}" hidden></label>`
     : '';
-  return `<div class="statblock-block character-sheet" data-statblock-group="${gi}">
-    <div class="statblock-head">
-      <button class="icon-btn statblock-collapse-toggle" data-statblock-group-toggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button>
+  // A lone sheet with no PDF import has nothing left in its header at all.
+  const headHtml = only && !pdfImportBtn ? '' : `<div class="statblock-head">
+      ${only ? '' : statblockCollapseToggleHtml(key, collapsed)}
       ${characterSheetCount > 1 ? `<h4>Character Sheet · ${esc(ruleset.label)}</h4>` : ''}
       ${pdfImportBtn}
       ${characterSheetCount > 1 ? statblockMoveButtonsHtml(gi) : ''}
-      <button class="icon-btn" data-statblock-remove-group="${gi}" title="Remove this statblock">🗑</button>
-    </div>
+      ${only ? '' : statblockRemoveButtonHtml(gi)}
+    </div>`;
+  return `<div class="statblock-block character-sheet" data-statblock-group="${gi}">
+    ${headHtml}
     ${collapsed ? '' : bodyHtml}
   </div>`;
+}
+
+// Collapse, reorder and delete exist to choose between game systems' stats on
+// one entity, so with only one Character Sheet/Bestiary group there's nothing
+// to choose: it has none of them and is always open, on every template. Gear
+// and Vehicle groups are managed items, not a system's stats — they keep all
+// their controls and don't count towards this. Nor do inactive (archived)
+// groups, which are listed separately with their own remove button.
+function isEntityStatblock(g) {
+  return g.kind !== 'gear' && g.kind !== 'vehicle';
+}
+
+function isOnlyStatblock(e, group) {
+  if (!isEntityStatblock(group)) return false;
+  return (e.statblocks || []).filter((g) => isEntityStatblock(g) && !g.archived).length <= 1;
+}
+
+function statblockCollapseToggleHtml(key, collapsed) {
+  return `<button class="icon-btn statblock-collapse-toggle" data-statblock-group-toggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button>`;
+}
+
+function statblockRemoveButtonHtml(gi) {
+  return `<button class="icon-btn" data-statblock-remove-group="${gi}" title="Remove this statblock">🗑</button>`;
 }
 
 // Direct follow-up request: "Add an up & down arrow to the left of the
@@ -3093,8 +3121,8 @@ function campaignsSection(doc, ui) {
 
 // The module-specific subheader grouping (direct instruction): "Campaign"/
 // "World" (GATEABLE_MODULES' colony/world-tracker) only for a Five Parsecs
-// From Home profile, "Hexcrawl" only for Five Leagues from Borderlands —
-// checked against the profile's own Game System Module (statRuleset)
+// From Home profile, "Hexcrawl"/"Dungeon Crawl" only for Five Leagues from
+// Borderlands — checked against the profile's own Game System Module (statRuleset)
 // directly (RULESETS ids '5pfh'/'fiveleagues'), not the broader Genre-Pack-
 // level matchesProfileRuleset used for packs/templates/turn-step-lists,
 // since "Module = Five Parsecs From Home" means the specific active
@@ -3116,7 +3144,7 @@ function campaignModuleChecksSection(ui) {
     <label class="chip sm"><input type="checkbox" data-module-enabled-toggle="${id}" data-module-profile-id="${esc(activeProfile.id)}" ${draft.moduleEnabled[id] !== false ? 'checked' : ''}> ${esc((drawerMeta(id) || {}).label || id)}</label>`;
   const rulesetSpecific = [
     statRuleset === '5pfh' ? `${check('colony')}${check('world-tracker')}` : '',
-    statRuleset === 'fiveleagues' ? check('hexcrawl') : '',
+    statRuleset === 'fiveleagues' ? `${check('hexcrawl')}${check('dungeoncrawl')}` : '',
   ].join('');
   return `
     <div class="settings-group">

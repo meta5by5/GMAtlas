@@ -19,7 +19,7 @@ import { SUGGESTION_LENSES, lensOracleCategories } from '../src/data/suggestionL
 import { defaultCampaign, defaultAppConfig, defaultRulesProfile, GATEABLE_MODULES } from '../src/core/schema.js';
 import { parseStatsString, isPristineStatblockGroup } from '../src/domain/statblocks.js';
 import {
-  createRulesProfile, renameProfile, updateProfileRuleset, setModuleEnabled, setStoryboardPosition, isModuleVisible, resolveOverlaySettings,
+  createRulesProfile, renameProfile, updateProfileRuleset, setModuleEnabled, setStoryboardPosition, isModuleVisible, resolveOverlaySettings, profileFileSlug,
   createCampaign, renameCampaignEntry, setActiveCampaign, reassignCampaignProfile, applyProfileDraft, resolvePositionContentId,
   backfillDefaultCrewTasks, matchesProfileRuleset,
 } from '../src/domain/rulesProfiles.js';
@@ -9161,7 +9161,12 @@ test('composeNarrativeDraft (docs/adr/0040 Phase 12f fix, updated for the Site D
 
 // --- docs/adr/0041 Phase 13a/13b: Location Details + scene-scoped NPC state ---
 import { getNpcSceneState, addSceneBystander, removeSceneBystander, addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, moveSceneActor, addSceneLocation, setSceneSystem, NPC_SCENE_FIELD_ORACLE_PATH } from '../src/domain/scenes.js';
-import { rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField, rollWhereDetailField } from '../src/domain/session.js';
+import { rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField, rollWhereDetailField, formatFieldRoll } from '../src/domain/session.js';
+
+test('formatFieldRoll names the table, and the NPC or Location when there is one', () => {
+  assert.equal(formatFieldRoll(['Characters', 'Disposition'], 'wary', 'Sir Corvane'), 'Sir Corvane — Disposition: wary');
+  assert.equal(formatFieldRoll(['Location Themes', 'Site Type'], 'a ruined keep'), 'Site Type: a ruined keep');
+});
 
 test('a location entity defaults sector/objectType (World Profile) and sights/smells/sounds + sensorySource (all null) — nothing required to create one', () => {
   let camp = defaultCampaign();
@@ -10186,6 +10191,13 @@ test('setStoryboardPosition: assigning a gateable module to a slot also force-en
   const other = setModuleEnabled(defaultRulesProfile('Q'), 'trade', false);
   const withBuiltin = setStoryboardPosition(other, 'navigator', 'narrative');
   assert.equal(withBuiltin.moduleEnabled.trade, false, 'an unrelated module\'s own setting is untouched');
+});
+
+test('profileFileSlug turns a profile name into a filename segment, with a fallback for a name with nothing usable in it', () => {
+  assert.equal(profileFileSlug({ name: 'Five Leagues (Storyboard)' }), 'five-leagues-storyboard');
+  assert.equal(profileFileSlug({ name: "D&D 5e / GM's" }), 'd-d-5e-gm-s');
+  assert.equal(profileFileSlug({ name: '   ' }), 'profile');
+  assert.equal(profileFileSlug(null), 'profile');
 });
 
 test('isModuleVisible: GATEABLE_MODULES ids follow moduleEnabled, everything else (Party, Guide, ...) is always visible regardless of profile', () => {

@@ -9,7 +9,10 @@ import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { continueStory, restartStory, applyStoryShift, rollOracle, addNote, setJournalDraft, submitJournalDraft, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField, rollLocationFantasyField, editLocationFantasyField, rollWhereDetailField, addContextEntity, removeContextEntity } from '../domain/session.js';
 import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, addSceneAsset, removeSceneAsset, addSceneLocation, removeSceneLocation, setSceneSystem, addSceneDismissedFaction, removeSceneDismissedFaction, moveSceneActor } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
-import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag } from '../domain/oracles.js';
+import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag, currentTableEntries } from '../domain/oracles.js';
+import { formatFieldRoll, WHERE_DETAIL_ORACLE_PATH } from '../domain/session.js';
+import { getNpcSceneState, NPC_SCENE_FIELD_ORACLE_PATH } from '../domain/scenes.js';
+import { LOCATION_SENSORY_ORACLE_PATH, LOCATION_FANTASY_FIELD_ORACLE_PATH } from '../domain/entities.js';
 import { oracleLinkTagsFor } from '../data/entityFieldOracleLinks.js';
 import { addThread, advanceThread, removeThread, setThreadStatus, setThreadPriority } from '../domain/threads.js';
 import { createExpedition, setExpeditionDial } from '../domain/expeditions.js';
@@ -133,7 +136,7 @@ import { renderFactionEvents } from './drawers/factionEvents.js';
 import { roll3d } from './diceBox3d.js';
 import { renderSearchPanel } from './searchPanel.js';
 import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
-import { isModuleVisible, setModuleEnabled, setStoryboardPosition, updateProfileRuleset, applyProfileDraft, resolvePositionContentId, BUILTIN_SLOT_CONTENT } from '../domain/rulesProfiles.js';
+import { isModuleVisible, setModuleEnabled, setStoryboardPosition, updateProfileRuleset, applyProfileDraft, resolvePositionContentId, BUILTIN_SLOT_CONTENT, profileFileSlug } from '../domain/rulesProfiles.js';
 import { TURN_STEP_ORACLE_LINKS, TURN_STEP_LOCATION_STEPS } from '../data/turnStepWorkflowMeta.js';
 import { genrePackIdForRuleset } from '../data/rulesConstitution.js';
 import { LICENSES } from '../data/licenses.js';
@@ -1423,7 +1426,7 @@ async function exportRefLibrary() {
   const blobUrl = URL.createObjectURL(new Blob([buildZip(files)], { type: 'application/zip' }));
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = `gmatlas-reference-library-${new Date().toISOString().slice(0, 10)}.zip`;
+  a.download = `${exportFilePrefix()}-reference-library-${new Date().toISOString().slice(0, 10)}.zip`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -2233,12 +2236,10 @@ function onClick(ev) {
   const roll = hit('[data-roll]');
   if (roll) {
     const path = roll.dataset.roll.split('>');
-    // Direct follow-up request: "route the output of the oracles to
-    // append to the scene summary on the Navigator" — only while the
-    // routing flag is set (a Navigator-panel 🔮/chip is what set it) AND
-    // Oracle is still genuinely the active drawer (belt-and-suspenders
-    // against any stale flag); every other roll keeps its normal
-    // toJournal:true behavior, unchanged.
+    // A roll started from a Navigator-panel 🔮/chip (the routing flag, and
+    // Oracle still genuinely the active drawer) goes to the Scene Summary
+    // INSTEAD of the Journal; any other roll goes to the Journal and is
+    // copied there too while the Navigator is on the Storyboard.
     const routeToNavigator = oracleRouteToNavigator && activeDrawer === 'oracle';
     (async () => {
       const forced = await resolveOracleDiceIndex(path);
@@ -2253,11 +2254,11 @@ function onClick(ev) {
         return r.campaign;
       });
       if (routeToNavigator) {
-        const current = currentSceneSummary();
-        sceneSummaryOverride = current ? `${current}\n\n${text}` : text;
+        appendToSceneSummary(text);
         toast('🎲 added to Scene Summary');
         render();
       } else {
+        copyOracleResultToSummary(text);
         toast('🎲 ' + text.split('\n').slice(-1)[0]);
       }
     })();
@@ -3483,7 +3484,12 @@ function onClick(ev) {
   // Location's Sights/Smells/Sounds already use, not a jump-to-browse link.
   const whereFieldRoll = hit('[data-where-field-roll]');
   if (whereFieldRoll) {
-    return store.update((d) => rollWhereDetailField(d, whereFieldRoll.dataset.whereFieldRoll, { genrePack: store.get().settings.genrePack }));
+    const field = whereFieldRoll.dataset.whereFieldRoll;
+    const path = WHERE_DETAIL_ORACLE_PATH[field];
+    return rollFieldsIntoSummary(
+      path ? [{ path, read: (doc) => doc.context.where[field] }] : [],
+      (d) => rollWhereDetailField(d, field, { genrePack: store.get().settings.genrePack }),
+    );
   }
   const toolbarToggle = hit('[data-rich-toolbar-toggle]');
   if (toolbarToggle) {
@@ -3553,6 +3559,7 @@ function onClick(ev) {
     const path = rollGroupBtn.dataset.rollGroup.split('>');
     let text = '';
     store.update((d) => { const r = rollOracle(d, path, { group: true, genrePack: store.get().settings.genrePack }); text = r.text; return r.campaign; });
+    copyOracleResultToSummary(text);
     return toast('🎲 ' + text.split('\n').slice(-1)[0]);
   }
 
@@ -4697,7 +4704,7 @@ function onClick(ev) {
     // already reads a GMAtlas campaign file (rule 5 — a schema change must
     // keep old exports importable; this is the inverse, keep NEW exports
     // readable by old tooling too, when nothing extra was asked for).
-    if (!exportIncludeAttachments) return download(`gmatlas-${stamp()}.json`, store.export());
+    if (!exportIncludeAttachments) return download(`${exportFilePrefix()}-${stamp()}.json`, store.export());
     const keys = referencedBlobKeys(store.get());
     Promise.all(keys.map(async (k) => {
       const blob = await store.getDocBlob(k);
@@ -4705,7 +4712,7 @@ function onClick(ev) {
     })).then((entries) => {
       const attachments = entries.filter(Boolean);
       const bundle = { kind: 'gmatlas-campaign-export', version: 1, exportedAt: new Date().toISOString(), campaign: JSON.parse(store.export()), attachments };
-      download(`gmatlas-${stamp()}.json`, JSON.stringify(bundle));
+      download(`${exportFilePrefix()}-${stamp()}.json`, JSON.stringify(bundle));
       toast(`Exported campaign + ${attachments.length} attached file${attachments.length === 1 ? '' : 's'}`);
     });
     return;
@@ -4717,7 +4724,7 @@ function onClick(ev) {
     const { journalText, ...packFlags } = contentPackFlags;
     const wantsPack = packFlags.entities || packFlags.guide || packFlags.journal;
     if (!wantsPack && !journalText) return toast('Select at least one section to export');
-    if (wantsPack) download(`gmatlas-content-pack-${stamp()}.json`, JSON.stringify(exportContentPack(store.get(), packFlags), null, 2));
+    if (wantsPack) download(`${exportFilePrefix()}-content-pack-${stamp()}.json`, JSON.stringify(exportContentPack(store.get(), packFlags), null, 2));
     if (journalText) exportJournal();
     return;
   }
@@ -5010,6 +5017,7 @@ function onClick(ev) {
       const forced = await resolveOracleDiceIndex(path);
       let text = '';
       store.update((d) => { const r = rollOracle(d, path, { ...forced, genrePack: store.get().settings.genrePack }); text = r.text; return r.campaign; });
+      copyOracleResultToSummary(text);
       toast(text || 'Rolled');
     })();
     return;
@@ -5073,6 +5081,9 @@ function onClick(ev) {
     const target = advisorAccept.dataset.advisorDraftTarget;
     const text = advisorOracleResults[resultKey];
     if (text) {
+      // Copied here rather than at the roll: a staged result can still be
+      // re-rolled away, so only the one the GM keeps reaches the summary.
+      if (navigatorOnStoryboard()) appendToSceneSummary(text);
       if (target === 'journal') {
         // No Composer field is mapped for this one (e.g. WHERE's Regional
         // faction activity) — the checkmark files it straight to the
@@ -5163,7 +5174,10 @@ function onClick(ev) {
     const [npcId, field] = sceneNpcRoll.dataset.sceneNpcRoll.split('::');
     const sceneId = currentSceneId();
     if (!sceneId) return;
-    return store.update((d) => rollNpcSceneField(d, sceneId, npcId, field, { genrePack: store.get().settings.genrePack }));
+    return rollFieldsIntoSummary(
+      [npcFieldRoll(sceneId, npcId, field)],
+      (d) => rollNpcSceneField(d, sceneId, npcId, field, { genrePack: store.get().settings.genrePack }),
+    );
   }
   // Composer's NPC scene-field popup "roll all" (direct follow-up
   // request): a double-dice button, right-aligned just left of the
@@ -5176,10 +5190,11 @@ function onClick(ev) {
     const npcId = sceneNpcRollAll.dataset.sceneNpcRollAll;
     const sceneId = currentSceneId();
     if (!sceneId) return;
-    return store.update((d) => {
+    const fields = ['disposition', 'motivation', 'threatRank', 'challenges', 'opportunities'];
+    return rollFieldsIntoSummary(fields.map((field) => npcFieldRoll(sceneId, npcId, field)), (d) => {
       let next = d;
       const genrePack = store.get().settings.genrePack;
-      for (const field of ['disposition', 'motivation', 'threatRank', 'challenges', 'opportunities']) {
+      for (const field of fields) {
         next = rollNpcSceneField(next, sceneId, npcId, field, { genrePack });
       }
       return next;
@@ -5584,7 +5599,10 @@ function onClick(ev) {
   const locationSensoryRoll = hit('[data-location-sensory-roll]');
   if (locationSensoryRoll) {
     const [locId, field] = locationSensoryRoll.dataset.locationSensoryRoll.split('::');
-    return store.update((d) => rollLocationSensoryField(d, locId, field, { genrePack: store.get().settings.genrePack }));
+    return rollFieldsIntoSummary(
+      [locationFieldRoll(locId, field, LOCATION_SENSORY_ORACLE_PATH[field])],
+      (d) => rollLocationSensoryField(d, locId, field, { genrePack: store.get().settings.genrePack }),
+    );
   }
   // "✕" on a Location Details sensory field (Sights/Smells/Sounds, direct
   // follow-up request) — same clear-in-place shape as the NPC scene-field
@@ -5604,7 +5622,10 @@ function onClick(ev) {
   const locationFantasyRoll = hit('[data-location-fantasy-roll]');
   if (locationFantasyRoll) {
     const [locId, field] = locationFantasyRoll.dataset.locationFantasyRoll.split('::');
-    return store.update((d) => rollLocationFantasyField(d, locId, field, { genrePack: store.get().settings.genrePack }));
+    return rollFieldsIntoSummary(
+      [locationFieldRoll(locId, field, LOCATION_FANTASY_FIELD_ORACLE_PATH[field])],
+      (d) => rollLocationFantasyField(d, locId, field, { genrePack: store.get().settings.genrePack }),
+    );
   }
   const locationFantasyClear = hit('[data-location-fantasy-clear]');
   if (locationFantasyClear) {
@@ -9586,6 +9607,63 @@ function appendToSceneSummary(text) {
   sceneSummaryOverride = current ? `${current}\n\n${text}` : text;
 }
 
+// Whether the Navigator fills one of the Storyboard's three positions in
+// the active profile — a profile can give it another plugin's place (5PFH).
+function navigatorOnStoryboard() {
+  return positionContentIds(store.getActiveProfile()).has('narrative');
+}
+
+// Every oracle result is also copied to the Scene Summary while the Navigator
+// is on the Storyboard. For after a store.update() has already rendered.
+function copyOracleResultToSummary(text) {
+  if (!text || !navigatorOnStoryboard()) return;
+  appendToSceneSummary(text);
+  render();
+}
+
+// The same copy for a roll that fills a field (WHO's NPC fields, WHERE's and
+// a Location's) instead of returning text. `fields` is [{path, read(doc),
+// owner(doc)?}]. The summary is read BEFORE the roll: WHERE's fields feed the
+// live draft, so reading it after would show the new value twice. A field
+// whose table is empty didn't roll (still holds its old value), so it's skipped.
+function rollFieldsIntoSummary(fields, mutate) {
+  const before = currentSceneSummary();
+  store.update(mutate);
+  if (!navigatorOnStoryboard()) return;
+  const doc = store.get();
+  const lines = fields
+    .filter(({ path }) => path && currentTableEntries(doc, path, doc.settings.genrePack).length)
+    .map(({ path, read, owner }) => {
+      const value = read(doc);
+      return value ? formatFieldRoll(path, value, owner ? owner(doc) : '') : '';
+    })
+    .filter(Boolean);
+  if (!lines.length) return;
+  const text = lines.join('\n');
+  sceneSummaryOverride = before ? `${before}\n\n${text}` : text;
+  render();
+}
+
+function npcFieldRoll(sceneId, npcId, field) {
+  return {
+    path: NPC_SCENE_FIELD_ORACLE_PATH[field],
+    read: (doc) => {
+      const scene = (doc.scenes || []).find((s) => s.id === sceneId);
+      const state = scene ? getNpcSceneState(scene, npcId)[field] : null;
+      return state ? state.value : '';
+    },
+    owner: (doc) => (getEntity(doc, npcId) || {}).name || '',
+  };
+}
+
+function locationFieldRoll(locId, field, path) {
+  return {
+    path,
+    read: (doc) => (getEntity(doc, locId) || {})[field] || '',
+    owner: (doc) => (getEntity(doc, locId) || {}).name || '',
+  };
+}
+
 // Commits a mention-editor field's current content the same way its normal
 // interaction would: Journal/Guide only save on their explicit button
 // (unaffected — the freshly-inserted node just sits there until clicked),
@@ -11661,7 +11739,7 @@ function restoreFocus(sel) {
 function exportJournal() {
   const doc = store.get();
   const text = (doc.journal || []).map((e) => `${new Date(e.createdAt).toLocaleString()} — ${e.source}\n${stripHtml(e.text)}`).join('\n\n');
-  download(`gmatlas-journal-${stamp()}.txt`, text || 'No journal entries.');
+  download(`${exportFilePrefix()}-journal-${stamp()}.txt`, text || 'No journal entries.');
 }
 
 function download(name, text) {
@@ -11674,6 +11752,8 @@ function download(name, text) {
 }
 
 function stamp() { return new Date().toISOString().slice(0, 19).replace(/:/g, '-'); }
+// Settings' exports all start "gmatlas-<active profile name>-".
+function exportFilePrefix() { return `gmatlas-${profileFileSlug(store.getActiveProfile())}`; }
 function stripHtml(s) { return String(s || '').replace(/<[^>]+>/g, ''); }
 function escapeHtml(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

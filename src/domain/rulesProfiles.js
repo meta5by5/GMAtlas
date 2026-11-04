@@ -76,6 +76,13 @@ export function resolvePositionContentId(profile, slot) {
   return raw === slot ? BUILTIN_SLOT_CONTENT[slot] : raw;
 }
 
+/** A profile's name as a filename segment — "Five Leagues (Storyboard)"
+ *  becomes "five-leagues-storyboard" — for Settings' export filenames. */
+export function profileFileSlug(profile) {
+  const slug = String((profile && profile.name) || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return slug || 'profile';
+}
+
 /** GATEABLE_MODULES ids can be hidden per-profile; everything else (Party,
  *  Guide, Cast, ...) is always visible regardless of profile. */
 export function isModuleVisible(profile, moduleId) {
