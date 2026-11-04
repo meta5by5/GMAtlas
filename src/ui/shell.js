@@ -956,17 +956,13 @@ let oracleTagFilter = null; // ephemeral — array of tags a field's 🔮 link j
 // the oracles to append to the scene summary on the Navigator. Reset the
 // oracle output to the journal if the oracle panel is closed and reopened
 // or another panel is activated besides the navigator or oracle panels."
-// Set true only by the Navigator workflow manager's own per-step
-// data-turnstep-oracle-link click (the one 🔮 link that actually lives on
-// the Navigator panel — an entity-field 🔮 elsewhere, e.g. the Entity
-// Editor, never touches this); read by data-roll's own handler to decide
-// whether a roll appends to Scene Summary (sceneSummaryOverride) instead
-// of its normal addJournal (rollOracle's own toJournal flag). Reset to
-// false by openDrawerTab (switching the active drawer to anything but
-// 'oracle') and closeDrawerTab('oracle') (closing it outright) — between
-// them, "closed and reopened" and "another panel activated" both already
-// clear it before a GM could land back on Oracle without going through
-// the link again.
+// Set true only by the oracle links that live on the Navigator panel (the
+// per-step 🔮 and the Helpful Oracles chips — an entity-field 🔮 elsewhere,
+// e.g. the Entity Editor, never touches this); read through
+// oracleRoutingActive() by the roll handlers to decide whether a roll appends
+// to Scene Summary instead of the Journal. Stays on across any number of rolls
+// and any back-and-forth between Oracle and the Navigator; selecting any other
+// tab (endOracleRoutingUnlessKept) or closing Oracle clears it.
 let oracleRouteToNavigator = false;
 let expandedGuideNodes = new Set(); // ephemeral — which Guide tree nodes are expanded (docs/adr/0017)
 let guideRenameOpen = new Set(); // ephemeral — which Guide docs (tree row or the active title) are showing an inline rename input
@@ -1765,7 +1761,7 @@ function onClick(ev) {
   const storyboardUnanchor = hit('[data-storyboard-unanchor]');
   if (storyboardUnanchor) return toggleAnchorPanel(storyboardUnanchor.dataset.storyboardUnanchor);
   const drawerTab = hit('[data-drawer-tab]');
-  if (drawerTab) { activeDrawer = drawerTab.dataset.drawerTab; return render(); }
+  if (drawerTab) { endOracleRoutingUnlessKept(drawerTab.dataset.drawerTab); activeDrawer = drawerTab.dataset.drawerTab; return render(); }
   // Direct follow-up request: "make the Campaign and Party headers...
   // toggle the section headers to open or close" — a "smart" toggle (not
   // a blind alternating flip): if every section is currently collapsed,
@@ -1787,6 +1783,7 @@ function onClick(ev) {
     // like the Party button: bring Party to the front and make it active.
     const advisorContent = resolvePositionContentId(store.getActiveProfile(), 'advisor');
     if (FOCUS_ON_REOPEN_DRAWERS.has(advisorContent)) return focusDrawerPanel(advisorContent);
+    if (!copilotOpen) endOracleRoutingUnlessKept(advisorContent);
     copilotOpen = !copilotOpen; return render();
   }
   if (hit('[data-toggle-cast]')) return toggleDrawer('cast');
@@ -2236,11 +2233,10 @@ function onClick(ev) {
   const roll = hit('[data-roll]');
   if (roll) {
     const path = roll.dataset.roll.split('>');
-    // A roll started from a Navigator-panel 🔮/chip (the routing flag, and
-    // Oracle still genuinely the active drawer) goes to the Scene Summary
-    // INSTEAD of the Journal; any other roll goes to the Journal and is
-    // copied there too while the Navigator is on the Storyboard.
-    const routeToNavigator = oracleRouteToNavigator && activeDrawer === 'oracle';
+    // A roll made while a Navigator-panel 🔮/chip's routing is active goes to
+    // the Scene Summary INSTEAD of the Journal; any other roll goes to the
+    // Journal only.
+    const routeToNavigator = oracleRoutingActive();
     (async () => {
       const forced = await resolveOracleDiceIndex(path);
       let text = '';
@@ -2258,7 +2254,6 @@ function onClick(ev) {
         toast('🎲 added to Scene Summary');
         render();
       } else {
-        copyOracleResultToSummary(text);
         toast('🎲 ' + text.split('\n').slice(-1)[0]);
       }
     })();
@@ -3557,9 +3552,14 @@ function onClick(ev) {
   const rollGroupBtn = hit('[data-roll-group]');
   if (rollGroupBtn) {
     const path = rollGroupBtn.dataset.rollGroup.split('>');
+    const routeToNavigator = oracleRoutingActive();
     let text = '';
-    store.update((d) => { const r = rollOracle(d, path, { group: true, genrePack: store.get().settings.genrePack }); text = r.text; return r.campaign; });
-    copyOracleResultToSummary(text);
+    store.update((d) => { const r = rollOracle(d, path, { group: true, genrePack: store.get().settings.genrePack, toJournal: !routeToNavigator }); text = r.text; return r.campaign; });
+    if (routeToNavigator) {
+      appendToSceneSummary(text);
+      render();
+      return toast('🎲 added to Scene Summary');
+    }
     return toast('🎲 ' + text.split('\n').slice(-1)[0]);
   }
 
@@ -3635,13 +3635,8 @@ function onClick(ev) {
   const turnStepOracleLink = hit('[data-turnstep-oracle-link]');
   if (turnStepOracleLink) {
     const tags = TURN_STEP_ORACLE_LINKS[turnStepOracleLink.dataset.turnstepOracleLink];
-    // Direct follow-up request: "If an oracle link is selected on the
-    // Navigator panel and the oracle panel is activated, route the output
-    // of the oracles to append to the scene summary on the Navigator" —
-    // this 🔮 link is one of the two that actually live on the Navigator
-    // panel (the other is data-oracle-tag-jump below); set BEFORE
-    // openDrawerTab('oracle') since that function itself clears the flag
-    // for any id OTHER than 'oracle', not this one.
+    // One of the two links that live on the Navigator panel (the other is
+    // data-oracle-tag-jump below), so rolls from here go to its Scene Summary.
     if (tags) { oracleTagFilter = tags; oracleFilter = ''; oracleRouteToNavigator = true; openDrawerTab('oracle'); render(); }
     return;
   }
@@ -7657,6 +7652,7 @@ function onInput(ev) {
 // the drawer (on phone/tablet, where the Storyboard isn't shown, it returns
 // to the tab strip). Not open yet → opens normally.
 function focusDrawerPanel(id) {
+  endOracleRoutingUnlessKept(id);
   // Already a tab in the strip (even while it ALSO fills a Storyboard
   // position): that tab moves to the front and becomes active.
   if (openDrawers.includes(id)) {
@@ -7677,6 +7673,7 @@ function focusDrawerPanel(id) {
   const slot = BUILTIN_POSITION_IDS.find((sl) => resolvePositionContentId(store.getActiveProfile(), sl) === id);
   if (slot && !anchoredPanels.includes(id)) {
     if (isCompactTab() || (slot === 'advisor' && openDrawers.length)) {
+      endOracleRoutingUnlessKept(slot);
       activeDrawer = slot;
       navbarFrontId = slot;
       drawerCollapsed = false;
@@ -7728,20 +7725,29 @@ function toggleDrawer(id) {
   render();
 }
 
+// Whether a roll right now goes to the Scene Summary instead of the Journal —
+// routing is on and the Oracle panel is on screen, as a tab or anchored.
+function oracleRoutingActive() {
+  return oracleRouteToNavigator && (activeDrawer === 'oracle' || anchoredPanels.includes('oracle'));
+}
+
+// Selecting a tab or panel ends routing unless it's Oracle or the Navigator:
+// moving between those two is still the same oracle activity. `id` can be the
+// Navigator's content id or, on phone/tablet, the slot tab holding it.
+function endOracleRoutingUnlessKept(id) {
+  if (id === 'oracle' || resolveSlotContentId(id, store.getActiveProfile()) === 'narrative') return;
+  oracleRouteToNavigator = false;
+}
+
 function openDrawerTab(id) {
   if (!id) return;
   // Defense in depth (design/adr/rules-profiles-multi-campaign.md): a profile switch can leave a stale
   // openDrawers/activeDrawer entry pointing at a module the NEW active
   // profile hides — never let it be (re)opened while hidden.
   if (!isModuleVisible(store.getActiveProfile(), id)) return;
-  // Direct follow-up request: "...another panel is activated besides the
-  // navigator or oracle panels" resets oracle-output routing back to the
-  // Journal — covers switching the active drawer to anything but Oracle
-  // itself (the Navigator Storyboard position isn't a drawer tab at all,
-  // so it never reaches here). Checked unconditionally, not just inside
-  // the "newly added" guard below, so re-focusing an already-pinned OTHER
-  // tab resets it too, not just opening a brand new one.
-  if (id !== 'oracle') oracleRouteToNavigator = false;
+  // Unconditional, not inside the "newly added" guard below, so re-focusing
+  // an already-pinned other tab ends routing too, not just opening a new one.
+  endOracleRoutingUnlessKept(id);
   if (!openDrawers.includes(id)) {
     openDrawers = [...openDrawers, id];
     if (id === 'oracle') oracleFilter = '';
@@ -7788,6 +7794,7 @@ function updateAndOpenJournal(mutator) {
 // toggle, same cleanup).
 function toggleAnchorPanel(id) {
   if (!id || BUILTIN_POSITION_IDS.includes(id)) return;
+  endOracleRoutingUnlessKept(id);
   if (anchoredPanels.includes(id)) {
     // Un-anchor (the Storyboard card's own "⇤ Return to the tab strip"
     // control) — direct follow-up request: "it is returned to the
@@ -7850,6 +7857,7 @@ function closeDrawerTab(id) {
 // on. Only rendered/reachable once 2+ tabs are pinned open in the first
 // place (see the drawer-tabs strip's own visibility gate).
 function closeAllDrawerTabs() {
+  oracleRouteToNavigator = false;
   openDrawers = [];
   activeDrawer = null;
   render();
@@ -9613,8 +9621,9 @@ function navigatorOnStoryboard() {
   return positionContentIds(store.getActiveProfile()).has('narrative');
 }
 
-// Every oracle result is also copied to the Scene Summary while the Navigator
-// is on the Storyboard. For after a store.update() has already rendered.
+// A roll made outside the Oracle panel (Story Options, field rolls) is also
+// copied to the Scene Summary while the Navigator is on the Storyboard. For
+// after a store.update() has already rendered.
 function copyOracleResultToSummary(text) {
   if (!text || !navigatorOnStoryboard()) return;
   appendToSceneSummary(text);
@@ -11435,7 +11444,7 @@ function headExtraForDrawer(id) {
 // Every ephemeral UI flag a drawer template might read, in one place.
 function buildDrawerUi() {
   return {
-    oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, oracleRouteToNavigator: oracleRouteToNavigator && activeDrawer === 'oracle', navigatorStepMapLink, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, docSort, docSortMenuOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
+    oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, oracleRouteToNavigator: oracleRoutingActive(), navigatorStepMapLink, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, docSort, docSortMenuOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     fiveLeaguesInfoOpen, fiveLeaguesItemNotesOpen,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
     enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, tocOfferOpen, tocLibrary: store.getAppConfig().tocLibrary || {}, canScanToc: canScanToc(), lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, expandedWhatConflicts,

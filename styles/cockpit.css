@@ -3366,7 +3366,11 @@ input[type="number"] { -moz-appearance: textfield; }
    wrapped second line stays flush with the first instead of centering. */
 .turn-step-current { display: inline-block; max-width: 40ch; white-space: normal; text-align: left; }
 .turn-step-text-row { display: flex; align-items: flex-start; gap: var(--sp-3); margin: 0 0 var(--sp-3); }
-.turn-step-text-body { flex: 1 1 auto; min-width: 0; }
+.turn-step-text-body {
+  flex: 1 1 auto; min-width: 0;
+  font-size: 0.8rem; padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
 .turn-step-text-row .btn { flex: 0 0 auto; }
 
 /* Navigator workflow manager (direct follow-up request: bring the

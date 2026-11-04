@@ -2768,18 +2768,13 @@ function oracle(doc, ui) {
   const tagBadge = (tagFilter && tagFilter.length)
     ? `<div class="oracle-tag-filter-badge">Filtered by: ${tagFilter.map((t) => esc(t)).join(', ')} <button class="icon-btn" data-oracle-tag-filter-clear title="Clear filter">✕</button></div>`
     : '';
-  // Direct follow-up request: "If an oracle link is selected on the
-  // Navigator panel and the oracle panel is activated, route the output
-  // of the oracles to append to the scene summary on the Navigator" —
-  // ui.oracleRouteToNavigator (shell.js) is only ever true right after a
-  // Navigator-panel 🔮/chip opened this drawer; a visible banner here so
-  // a GM rolling isn't surprised their result landed on Scene Summary
-  // instead of its normal Journal entry. Switching to any other drawer
-  // tab, or closing and reopening this one, clears the flag (shell.js's
-  // openDrawerTab/closeDrawerTab) — this banner disappears right along
-  // with it, same render pass.
+  // ui.oracleRouteToNavigator (shell.js) is true once a Navigator-panel 🔮/
+  // chip opened this drawer; a visible banner here so a GM rolling isn't
+  // surprised their result landed on Scene Summary instead of the Journal.
+  // Selecting a tab other than Oracle or the Navigator, or closing this one,
+  // clears the flag — and this banner with it, same render pass.
   const routeBanner = ui.oracleRouteToNavigator
-    ? '<div class="oracle-tag-filter-badge oracle-route-banner">🧭 Rolls here append to the Navigator\'s Scene Summary instead of the Journal, until you leave this tab.</div>'
+    ? '<div class="oracle-tag-filter-badge oracle-route-banner">🧭 Rolls here append to the Navigator\'s Scene Summary instead of the Journal, until you select a tab or panel other than Oracle or the Navigator.</div>'
     : '';
   return `
     <div class="oracle-toolbar">
