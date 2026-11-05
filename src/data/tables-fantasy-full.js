@@ -19,7 +19,7 @@ export const FANTASY_FULL_TABLES = {
     "Backstory Prompt": [
       "A simple escort contract concealed a claim to disputed land.",
       "A rescue mission revealed a village that should not exist.",
-      "A tax audit exposed sabotage along a frontier trade road.",
+      "A tax assessor's tally exposed sabotage along a frontier trade road.",
       "A survey of old boundary stones found evidence of an earlier, erased settlement.",
       "A border dispute became personal when someone vanished.",
       "A trusted patron funded the expedition with stolen coin.",
@@ -32,11 +32,11 @@ export const FANTASY_FULL_TABLES = {
       "A messenger arrives from a village officially abandoned.",
       "A local lord asks for help but refuses to give full access to the keep.",
       "A sealed wagon is opened and the manifest is impossible.",
-      "A worker riot blocks the only safe road out of town.",
-      "A rival company reaches the site minutes before the party.",
+      "A laborers' riot blocks the only safe road out of town.",
+      "A rival guild's band reaches the site minutes before the party.",
       "A well begins failing in a way that looks intentional.",
       "A fugitive offers proof of a hidden noble scheme.",
-      "A scout returns with unnatural biological traces.",
+      "A scout returns with spoor no hunter can name.",
       "A debt marker is called in at the worst possible time.",
       "A quarantine order is issued after the party is already inside the walls."
     ],
@@ -44,15 +44,15 @@ export const FANTASY_FULL_TABLES = {
       "Hard frontier survival with moral compromise.",
       "Frontier lawkeeping under a lord's pressure.",
       "Exploration, treasure-hunting, and slow-burn horror.",
-      "Traveling company caught between rival factions.",
+      "A traveling band caught between rival factions.",
       "Border mystery with martial consequences.",
       "Common folk against a distant, uncaring nobility.",
       "Scholarly discovery with escalating magical containment failure.",
       "Sparse western frontier at the edge of a hostile wild.",
       "Dirty politics, supply lines, and personal loyalties.",
-      "Resource extraction drama against ancient unknowns."
+      "Mining-camp drama against ancient unknowns."
     ],
-    "Sector Trouble": [
+    "Realm Trouble": [
       "Toll disputes make every road crossing political.",
       "A great house is quietly buying up failed holdings.",
       "Border militias are forming around disputed claims.",
@@ -78,12 +78,12 @@ export const FANTASY_FULL_TABLES = {
     ],
     "Descriptor": [
       "weathered", "hallowed", "overcrowded", "abandoned", "sealed", "torchlit", "makeshift",
-      "opulent", "claustrophobic", "exposed", "obsolete", "fortified", "cursed", "remote",
+      "opulent", "claustrophobic", "exposed", "antiquated", "fortified", "cursed", "remote",
       "ceremonial", "half-built", "frost-bitten", "humid", "dust-choked", "watched"
     ],
     "Focus": [
       "gate", "shrine", "laborer", "contract", "wagon", "beacon fire", "map", "weapon",
-      "specimen", "ledger", "infirmary", "hearth", "harbor", "keep hall", "mine shaft",
+      "strange beast", "ledger", "infirmary", "hearth", "harbor", "keep hall", "mine shaft",
       "ruin", "watchtower", "guard patrol", "signal horn", "lifeboat"
     ]
   },
@@ -92,10 +92,10 @@ export const FANTASY_FULL_TABLES = {
       "a riderless wagon standing without its team",
       "a patrol of soldiers holding position near a dark treeline",
       "a scattered supply train with fresh burn marks",
-      "a toll cart broadcasting an outdated merchant seal",
+      "a toll cart flying an outdated merchant seal",
       "a warning cairn steering travelers away from the open road",
       "a rider driving hard with no house colors",
-      "a way-station shuttering in short, panicked bursts",
+      "a way-station lamp shuttering in short, panicked bursts",
       "a cluster of scouts moving in careful formation",
       "an abandoned litter with its curtain drawn from outside",
       "a frozen ford scarred by heavy wheel ruts"
@@ -104,9 +104,9 @@ export const FANTASY_FULL_TABLES = {
       "rockslide crossing the only path",
       "false banner leading into an ambush hollow",
       "runoff flooding from a burst upstream dam",
-      "navigation confusion caused by an old curse on the land",
+      "wayfinding confusion caused by an old curse on the land",
       "noble interdiction order with unclear authority",
-      "debris field masking a live trap",
+      "scattered wreckage masking a live trap",
       "climbing brigand attached to the wagon side",
       "provisions consumed faster than expected",
       "storm surge from a sudden squall",
@@ -125,8 +125,8 @@ export const FANTASY_FULL_TABLES = {
       "a rescue claim that can build reputation"
     ],
     "Caravan Mission": [
-      "emergency extraction", "cargo transfer", "region survey", "patrol intercept",
-      "medical evacuation", "quiet smuggling run", "noble courier route", "wreck salvage",
+      "emergency rescue", "cargo transfer", "region survey", "patrol intercept",
+      "carrying the wounded to a healer", "quiet smuggling run", "noble courier route", "wreck salvage",
       "settlement resupply", "search and rescue"
     ]
   },
@@ -154,7 +154,7 @@ export const FANTASY_FULL_TABLES = {
     ],
     "Realm Traits": [
       "unstable weather windows", "scarce fresh water", "valuable deep-earth minerals",
-      "old failed irrigation grid", "dangerous native beasts", "noble monopoly infrastructure",
+      "old failed irrigation channels", "dangerous native beasts", "a noble monopoly on roads and bridges",
       "fragmented local governance", "unreliable signal towers", "large unmapped wildland",
       "seasonal migration hazards"
     ],
@@ -165,9 +165,9 @@ export const FANTASY_FULL_TABLES = {
       "a watch cordon around a haunted site"
     ],
     "Wilderness Opportunity": [
-      "rare mineral vein", "surviving pre-collapse relics", "friendly local guide",
+      "rare mineral vein", "relics of a fallen age", "friendly local guide",
       "hidden water source", "shortcut through a scout's trail", "abandoned field camp",
-      "salvageable cart", "black-market landing hollow", "evidence of a missing party",
+      "salvageable cart", "smugglers' hollow", "evidence of a missing party",
       "natural shelter against the storm"
     ]
   },
@@ -220,7 +220,7 @@ export const FANTASY_FULL_TABLES = {
         "cargo gates lined with inspection guards",
         "arrival square packed with delayed travelers",
         "toll booth running on a skeleton crew",
-        "portcullis cycling too slowly",
+        "portcullis grinding down too slowly",
         "gatehouse tunnel scored by old fire"
       ],
       "Complication": [
@@ -228,8 +228,8 @@ export const FANTASY_FULL_TABLES = {
         "the road is sealed until a bribe is paid",
         "a wanted face appears on the watch roster",
         "an alarm bell traps everyone between doors",
-        "guards detect something no one packed",
-        "a rival company arrives with higher priority clearance"
+        "guards find something no one packed",
+        "a rival guild's caravan arrives bearing a higher-ranking writ"
       ],
       "Useful Detail": [
         "maintenance postern", "sympathetic gate clerk", "forgotten service stair",
@@ -242,7 +242,7 @@ export const FANTASY_FULL_TABLES = {
         "schoolroom doubling as ration office",
         "public notice board layered with grievances",
         "communal well near a fortified wall",
-        "recreation hall lit by guttering candles",
+        "common hall lit by guttering candles",
         "market stalls built from old crates"
       ],
       "Complication": [
@@ -261,23 +261,23 @@ export const FANTASY_FULL_TABLES = {
     "Engineering": {
       "First Look": [
         "vibration through timbered floors",
-        "pipes sweating with condensation",
+        "lead pipes sweating with condensation",
         "warning lanterns under a film of dust",
         "waterwheel access behind patched masonry",
         "runoff dripping into collection buckets",
-        "manual controls polished by constant use"
+        "winch handles polished by constant use"
       ],
       "Complication": [
         "repairs require shutting down the well elsewhere",
-        "a system has been deliberately miscalibrated",
-        "the only engineer is missing",
-        "a bypass works but will fail soon",
+        "a sluice has been deliberately misaligned",
+        "the only millwright is missing",
+        "a makeshift patch holds but will fail soon",
         "a damaged construct guards the wrong room",
         "flooding begins during the inspection"
       ],
       "Useful Detail": [
-        "spare gear assembly", "handwritten repair map", "open inspection hatch",
-        "service crawlway", "faulty pressure gauge", "lantern oil with one good charge"
+        "spare cogwheels", "handwritten repair map", "open inspection hatch",
+        "service crawlway", "a cracked water clock", "a flask of lantern oil, nearly spent"
       ]
     },
     "Living": {
@@ -309,66 +309,66 @@ export const FANTASY_FULL_TABLES = {
         "herbal smell beneath disinfecting smoke",
         "cold cellar with missing inventory",
         "overworked healer refusing sleep",
-        "quarantine signs covered by tape"
+        "plague marks covered by whitewash"
       ],
       "Complication": [
         "records are locked by noble decree",
         "a patient recognizes the party",
-        "samples have been switched",
+        "the remedies have been switched",
         "the healer is treating both sides",
-        "a body is listed as discharged",
+        "a corpse is recorded as sent home",
         "symptoms do not match any known ailment"
       ],
       "Useful Detail": [
-        "bloodwork anomaly", "sealed patient file", "hidden remedy cache",
-        "medical waste route", "sedative draught", "crypt access tag"
+        "a strange result from a bloodletting", "sealed healer's notes", "hidden remedy cache",
+        "the infirmary's midden-cart route", "sedative draught", "crypt key"
       ]
     },
     "Operations": {
       "First Look": [
-        "mission maps showing outdated territory",
+        "campaign maps showing outdated territory",
         "dispatch table under low lantern light",
         "runners speaking in code",
-        "a wall of status boards and red flags",
-        "locked office overlooking the floor",
+        "a wall of chalk boards and red flags",
+        "locked counting room overlooking the floor",
         "archive cabinets beside a broken ledger stand"
       ],
       "Complication": [
-        "the logs were edited minutes ago",
+        "the ledger ink is still wet on a rewritten page",
         "a superior gives contradictory orders",
-        "an emergency signal comes from a forbidden site",
+        "a signal fire burns at a forbidden site",
         "the map omits a whole region",
-        "dispatch records show an impossible trip",
+        "courier records show an impossible journey",
         "a clerk begs you not to mention their name"
       ],
       "Useful Detail": [
-        "shift roster", "route archive", "private courier list",
-        "old incident report", "unclaimed watch badge", "route priority stamp"
+        "watch roster", "route archive", "private courier list",
+        "old incident report", "unclaimed watch badge", "guild route seal"
       ]
     },
     "Production": {
       "First Look": [
         "assembly benches humming with unseen labor",
         "ore hoppers feeding a sealed forge",
-        "conveyor ropes under harsh lamps",
-        "workshop floor marked with hazard lines",
+        "hoist ropes under smoky lamps",
+        "workshop floor chalked with warnings",
         "crafting benches producing unknown parts",
         "the smell of oil and hot metal"
       ],
       "Complication": [
-        "production cannot stop without penalty",
+        "the guild fines every hour the forge goes cold",
         "a workshop is making something illegal",
-        "workers sabotage the line for leverage",
-        "a trapped worker is inside the machinery",
+        "workers sabotage the forge for leverage",
+        "a trapped worker is inside the mill works",
         "a product batch is magically contaminated",
-        "the output does not match the manifest"
+        "the goods do not match the ledger"
       ],
       "Useful Detail": [
         "reinforced smithing apron", "parts bin", "control lever",
-        "safety override key", "defective product sample", "sealed cargo tag"
+        "key to the sluice lock", "a flawed piece of guild work", "a guild's lead seal"
       ]
     },
-    "Research": {
+    "Scholarship": {
       "First Look": [
         "observation glass with cracks at the edges",
         "archive vault humming softly with wards",
@@ -379,11 +379,11 @@ export const FANTASY_FULL_TABLES = {
       ],
       "Complication": [
         "the principal scholar is lying by omission",
-        "the experiment changed after last contact",
+        "the experiment changed after the last letter",
         "containment depends on a failing ward",
         "a sample is missing but not logged",
         "a discovery has martial value",
-        "the data proves the patron caused the problem"
+        "the notes prove the patron caused the problem"
       ],
       "Useful Detail": [
         "research journal", "preserved sample", "arcane recording crystal",
@@ -397,18 +397,18 @@ export const FANTASY_FULL_TABLES = {
         "interrogation room with no witness",
         "barracks smelling of sweat and leather",
         "checkpoint barricades made permanent",
-        "watch officer studying a threat board"
+        "watch officer studying a wanted board"
       ],
       "Complication": [
         "the watch is split between two loyalties",
         "a prisoner knows too much",
         "weapons were signed out under false names",
         "the official threat is a cover story",
-        "a lockdown order is issued remotely",
+        "a lockdown order arrives by sealed letter",
         "a guard recognizes an old debt"
       ],
       "Useful Detail": [
-        "riot shield", "detention roster", "weapon checkout log",
+        "tower shield", "gaol roster", "armory ledger",
         "blind watch post", "coded challenge phrase", "confiscated personal item"
       ]
     },
@@ -419,7 +419,7 @@ export const FANTASY_FULL_TABLES = {
         "tavern serving as labor exchange",
         "cargo auction chalked on a dirty board",
         "pawn counter stacked with traveler's gear",
-        "guild store charging company scrip"
+        "guild store charging in guild scrip"
       ],
       "Complication": [
         "prices shift after a rumor hits",
@@ -430,18 +430,18 @@ export const FANTASY_FULL_TABLES = {
         "a public transaction masks a private handoff"
       ],
       "Useful Detail": [
-        "market gossip", "rare spare part", "shipping label",
+        "market gossip", "a rare forged fitting", "a merchant's cargo mark",
         "smuggler contact", "debt ledger", "freshly forged permit"
       ]
     },
     "District Type": [
       "Access", "Community", "Engineering", "Living", "Medical",
-      "Operations", "Production", "Research", "Security"
+      "Operations", "Production", "Scholarship", "Security"
     ]
   },
   "Vessels & Caravans": {
     "Vessel Type": [
-      "frontier scout wagon", "subsidized merchant convoy", "ore-hauling barge", "noble's courier coach",
+      "frontier scout wagon", "crown-chartered merchant convoy", "ore-hauling barge", "noble's courier coach",
       "patrol longship", "healer's carriage", "scholar's tender", "bulk river barge",
       "smuggling skiff", "settler's landing raft"
     ],
@@ -463,18 +463,18 @@ export const FANTASY_FULL_TABLES = {
       "provisions are lower than declared",
       "the guide refuses one destination",
       "cargo weight does not match the manifest",
-      "a crew member is being coerced",
+      "a hired hand is being coerced",
       "the vessel is shadowed by a silent rider",
       "toll investigators are looking for it",
       "a sealed compartment shows fresh use",
       "the captain owes more than coin"
     ],
     "Vessel Quirk": [
-      "old guild stickers on every crate",
+      "old guild stamps on every crate",
       "a shrine in the cargo hold",
-      "a steward's voice trained on a dead officer",
+      "a steward still taking orders from a dead officer",
       "smell of spiced tea everywhere",
-      "manual controls maintained obsessively",
+      "rigging maintained obsessively",
       "patched mascot painted near the hatch",
       "crew uses naval slang incorrectly",
       "every axle has a nickname",
@@ -534,9 +534,9 @@ export const FANTASY_FULL_TABLES = {
     "Stereotype": [
       "the weary veteran who's seen this exact mistake before", "the ambitious climber who sees everyone as a rung",
       "the true believer who won't hear a word against the cause", "the reluctant conscript who never wanted any of this",
-      "the fixer who can get anything, for a price", "the burnout who peaked years ago and knows it",
+      "the fixer who can get anything, for a price", "the faded champion who peaked years ago and knows it",
       "the idealist not yet worn down by the frontier", "the survivor who trusts nothing that looks too easy",
-      "the company loyalist who genuinely believes the handbook", "the outsider who's fluent in everyone's business but their own",
+      "the guild loyalist who genuinely believes the charter", "the outsider who's fluent in everyone's business but their own",
       "the old hand who trained half the people now giving orders", "the striver working three jobs to buy their way out",
       "the true neutral who profits from every side staying armed", "the haunted one who won't say what they saw out there",
       "the golden child who has never once been told no"
@@ -583,59 +583,59 @@ export const FANTASY_FULL_TABLES = {
     ],
     "Scale": [
       "insect-sized swarm", "small dog-sized pack", "human-sized stalker", "large predator",
-      "wagon-sized mass", "colony organism", "microscopic blight", "parasitic infestation"
+      "wagon-sized mass", "hive-bound swarm", "creeping unseen blight", "parasitic infestation"
     ],
     "Behavior": [
       "observing from cover", "protecting a nest", "feeding on refuse", "following heat",
-      "mimicking machinery", "avoiding bright light", "testing boundaries", "attacking only the isolated",
+      "mimicking voices", "avoiding bright light", "testing boundaries", "attacking only the isolated",
       "drawn to sound", "responding to arcane signals"
     ],
     "Revealed Aspect": [
       "not native to this world", "bred for a purpose", "part of a larger life cycle",
-      "carrying valuable compounds", "reacts to human stress", "uses tunnels as hunting routes",
+      "carrying valuable alchemical reagents", "reacts to human stress", "uses tunnels as hunting routes",
       "has been deliberately released", "is avoiding something worse",
       "is intelligent enough to bargain indirectly", "cannot survive without the ruin"
     ]
   },
   "Factions": {
     "Faction Type": [
-      "noble house", "merchant guild", "temple order", "bandit company",
+      "noble house", "merchant guild", "temple order", "bandit clan",
       "arcane academy", "border militia", "druidic circle", "smuggler ring",
       "cult of a forgotten god", "free company of mercenaries"
     ],
     "Influence": [
-      "local room-level cell", "district authority", "settlement power", "regional stakeholder",
-      "realm-wide actor", "kingdom-level power", "shadow network", "declining legacy institution"
+      "a single tavern-room cell", "district authority", "settlement power", "regional power broker",
+      "realm-wide power", "kingdom-level power", "shadow network", "a fading old order"
     ],
     "Project": [
-      "control the only safe route", "bury liability evidence", "monopolize water or grain",
-      "weaponize a discovery", "break a labor movement", "smuggle people out",
-      "force a buyout", "secure exclusive salvage rights", "trigger a security emergency",
-      "extract a dangerous specimen"
+      "control the only safe route", "bury evidence of an old crime", "monopolize water or grain",
+      "turn a discovery into a weapon", "break a journeymen's uprising", "smuggle people out",
+      "force a rival's holdings into forfeit", "secure exclusive rights to loot a ruin", "provoke a state of martial law",
+      "capture a dangerous beast"
     ],
     "Relationship": [
       "uneasy truce", "open vendetta", "secret partnership", "public rivalry private cooperation",
       "patron-client dependency", "mutual blackmail", "religious or ideological hatred",
-      "shared enemy", "contractual obligation", "family ties across faction lines"
+      "shared enemy", "sworn obligation", "family ties across faction lines"
     ],
     "Rumor": [
       "their leader is already dead", "they found something beneath the town",
-      "their money comes from an illegal program", "they are preparing evacuation lists",
-      "they have a private prison", "their best asset is a child or dependent",
-      "they control the emergency codes", "they caused the last disaster",
+      "their coin comes from a forbidden trade", "they are quietly listing who flees first",
+      "they have a private dungeon", "their best asset is a child or dependent",
+      "they hold the keys to every gate", "they caused the last disaster",
       "they are being manipulated by an outside patron", "they know how to leave but not who to save"
     ]
   },
   "Ruined Holds": {
     "Location": [
       "high hilltop", "border crossing", "ice field", "surface ruin scar",
-      "cave cavity", "abandoned harbor", "deep lake trench", "toxic storm basin",
-      "mine shaft terminus", "mountain shadow"
+      "cave cavity", "abandoned harbor", "deep lake trench", "poison-fog basin",
+      "mine shaft's end", "mountain shadow"
     ],
     "Type": [
-      "survey party's camp", "ore processor", "scholar's tower", "settlement outpost",
-      "garrison listening post", "supply depot", "prison caravan", "healer's wagon",
-      "cargo hauler's yard", "irrigation platform"
+      "survey party's camp", "ore-smelting works", "scholar's tower", "settlement outpost",
+      "garrison lookout post", "supply depot", "prison caravan", "healer's wagon",
+      "carters' yard", "irrigation weir"
     ],
     "Condition": [
       "torchlight flickers intermittently", "partially collapsed", "looted but not empty",
@@ -666,7 +666,7 @@ export const FANTASY_FULL_TABLES = {
       "the well was poisoned for a rival's gain",
       "starvation set in after the last harvest failed",
       "the steward decided rescue would take too long",
-      "a wild specimen got loose in the infirmary",
+      "a wild beast got loose in the infirmary",
       "the household fled and never made it to the boats"
     ],
     "What Remains": [
@@ -680,7 +680,7 @@ export const FANTASY_FULL_TABLES = {
       "restraints cut from the inside",
       "a countdown scratched into the stone",
       "cloaks folded neatly with no bodies inside",
-      "a star chart marking somewhere off every map"
+      "an astrologer's chart marking somewhere off every map"
     ],
     "Still Changing": [
       "the wards rebuild themselves after every failure",
@@ -699,30 +699,30 @@ export const FANTASY_FULL_TABLES = {
   "Vaults / Ruins": {
     "Location": [
       "buried under town foundations", "inside a basalt ridge", "beneath a dried seabed",
-      "within a mountain core", "below a ruined irrigation tower", "in a quarantined jungle zone",
-      "under polar ice", "behind a collapsed mine face", "inside a volcanic tube",
-      "beneath an abandoned city block"
+      "within a mountain core", "below a ruined aqueduct", "in a forbidden stretch of jungle",
+      "under the northern ice", "behind a collapsed mine face", "inside a volcanic tube",
+      "beneath an abandoned city quarter"
     ],
     "Scale": [
-      "single sealed chamber", "small bunker complex", "multi-level facility", "city-sized ruin",
-      "distributed tunnel network", "regional-linked installation", "subsurface labyrinth", "machine cathedral"
+      "single sealed chamber", "small warren of vaults", "many-leveled undercroft", "city-sized ruin",
+      "sprawling tunnel network", "a complex linked across the whole region", "subsurface labyrinth", "clockwork cathedral"
     ],
     "Purpose": [
-      "data archive", "biological containment", "weapons storage", "settlement control center",
-      "ritual or memorial site", "irrigation regulator", "golem isolation vault", "emergency refuge",
-      "genetic library", "unknown monitoring station"
+      "lost archive", "prison for a living plague", "armory", "seat of an ancient ruler",
+      "ritual or memorial site", "great sluice", "golem isolation vault", "last-ditch refuge",
+      "a menagerie of preserved bloodlines", "a watching-place of unknown purpose"
     ],
     "Interior Feature": [
-      "walls grown rather than built", "floor markings that match star charts",
-      "sealed pods with internal power", "a dry fountain beneath sealed glass",
-      "machinery pulsing like organs", "human equipment added later",
-      "gravity inconsistent by room", "old warning icons in several languages",
-      "a chamber that dampens radio signals", "a door requiring a living sample"
+      "walls grown rather than built", "floor markings that match the constellations",
+      "sealed sarcophagi still warm to the touch", "a dry fountain beneath sealed glass",
+      "stonework pulsing like organs", "mortal tools added later",
+      "up and down that shift from room to room", "old warning icons in several languages",
+      "a chamber where no spell can be heard or cast", "a door demanding a drop of living blood"
     ],
     "Peril / Opportunity": [
-      "valuable data behind a lethal failsafe", "a safe path that destroys evidence",
+      "valuable lore behind a lethal ward", "a safe path that destroys evidence",
       "a dormant defense that mistakes intent", "a trapped survivor with unreliable memory",
-      "a cure stored beside a contaminant", "a power source that attracts factions",
+      "a cure stored beside a contaminant", "a wellspring of power that attracts factions",
       "a shortcut that collapses after use", "a map that reveals another threat",
       "an artifact that is also a beacon", "an escape route controlled by an enemy"
     ]
@@ -742,7 +742,7 @@ export const FANTASY_FULL_TABLES = {
       "heat forces timed movement", "nothing is anchored securely",
       "every route changes with water levels", "cold preserves evidence too well",
       "the place behaves like an organism", "nature is reclaiming human works",
-      "old battle lines still matter", "profit logic overrides human need"
+      "old battle lines still matter", "guild greed overrides human need"
     ],
     "Sensory Detail": [
       "candle smoke thick in low rafters", "moss softening every stone underfoot",
@@ -764,28 +764,28 @@ export const FANTASY_FULL_TABLES = {
       "personal effects left behind mid-task"
     ],
     "Smell": [
-      "hot wax from overworked candles", "recycled air gone slightly stale",
-      "solvent and scorched wood", "something organic decaying behind a wall",
+      "hot wax from overworked candles", "stale air with nowhere to go",
+      "lye and scorched wood", "something organic decaying behind a wall",
       "fresh herbs masking an older smell", "oil and polished steel",
       "burnt chicory left too long", "incense over something it can't fully cover",
-      "damp fabric and old sweat", "a chemical sweetness that shouldn't be there"
+      "damp fabric and old sweat", "a cloying alchemical sweetness that shouldn't be there"
     ],
     "Sound": [
       "the irregular clank of a failing waterwheel", "distant voices arguing, too muffled to make out",
-      "static bursts from an unattended signal horn", "a slow, rhythmic dripping somewhere unseen",
+      "stray blasts from an unattended signal horn", "a slow, rhythmic dripping somewhere unseen",
       "the low hum of overtaxed wards", "boots on grating, receding, then stopping",
-      "a door cycling that shouldn't be cycling", "an alarm bell chirping once and going silent",
+      "a door opening and closing with no one near it", "an alarm bell clanging once and going silent",
       "wind moaning through a loose shutter", "sudden total silence where the mill should be running"
     ],
     "Site Type": [
       "village edge", "village square", "castle gate", "great hall", "dungeon entrance",
       "forest clearing", "mountain pass", "riverside dock", "temple courtyard", "market row",
-      "watchtower", "underground cavern", "archive vault", "ward chamber", "signal tower", "landing yard"
+      "watchtower", "underground cavern", "archive vault", "ward chamber", "signal tower", "stable yard"
     ],
     "Immediate Surroundings": [
       "inside a building", "open field", "dense forest", "underground", "narrow passage",
       "behind cover", "exposed ledge", "sealed chamber", "flooded cellar", "crowded market",
-      "total darkness", "ruined structure", "collapsed section", "debris field", "dense fog", "elevated platform"
+      "total darkness", "ruined structure", "collapsed section", "field of rubble", "dense fog", "elevated platform"
     ]
   },
   "Missions": {
@@ -815,10 +815,10 @@ export const FANTASY_FULL_TABLES = {
       "a name cleared of an old crime"
     ],
     "Heat Result": [
-      "security watches future movements", "prices rise against the crew",
+      "the watch tracks the party's movements", "prices rise against the party",
       "a faction clock advances", "a contact goes quiet", "official permits are reviewed",
       "a rival spreads a damaging rumor", "checkpoint searches intensify",
-      "an enemy learns the crew ship ID", "a bounty is posted quietly",
+      "an enemy learns the party's names and colors", "a bounty is posted quietly",
       "a patron asks for deniable help"
     ],
     "Danger Clock": [
@@ -867,22 +867,22 @@ export const FANTASY_FULL_TABLES = {
   },
   "Conflict Architecture": {
     "Stake Anchor": [
-      "a person the crew has met", "a place that offered shelter", "a debt that will come due",
+      "a person the party has met", "a place that offered shelter", "a debt that will come due",
       "a promise made publicly", "a scarce resource everyone needs",
       "a moral line a PC does not want to cross", "a community that cannot leave",
-      "evidence that will ruin someone powerful", "a secret tied to the crew's past",
+      "evidence that will ruin someone powerful", "a secret tied to the party's past",
       "a future route or refuge"
     ],
     "Opposition Logic": [
       "the antagonist is protecting their own people", "the enemy profits from delay",
-      "the opposition needs the crew alive for now",
+      "the opposition needs the party alive for now",
       "the rival believes they are preventing a worse disaster",
       "the faction is obeying a contract with hidden penalties",
       "the antagonist lacks full information",
       "the enemy's cruelty is efficient not random",
       "the opposition must act before a public deadline",
       "the villain is trapped by promises to followers",
-      "the enemy is trying to erase liability"
+      "the enemy is trying to erase all blame"
     ],
     "Meaningful Choice": [
       "save people now or preserve evidence", "honor a contract or protect the vulnerable",
@@ -927,13 +927,13 @@ export const FANTASY_FULL_TABLES = {
       "coin routed through one too many hands"
     ],
     "Item of Narrative Significance": [
-      "burned contract", "child's charm", "sealed sample case", "broken badge",
-      "signet ring", "old colonial flag", "encrypted family recording", "bloodless knife",
-      "handwritten map", "prototype device"
+      "burned contract", "child's charm", "sealed reliquary", "broken badge",
+      "signet ring", "old conqueror's banner", "a family letter in cipher", "bloodless knife",
+      "handwritten map", "an unfinished clockwork device"
     ],
     "Anomaly Effect": [
-      "messages arrive out of order", "organic matter crystallizes briefly", "gravity tilts by a few degrees",
-      "dreams share common imagery", "machines run without power", "dead lanterns show live images",
+      "messages arrive out of order", "organic matter crystallizes briefly", "the ground seems to tilt by a few degrees",
+      "dreams share common imagery", "mill wheels turn without water or wind", "dead lanterns cast moving images",
       "compasses point at a person", "shadows lag behind movement", "water beads upward",
       "memories surface in unfamiliar voices"
     ],
@@ -946,41 +946,41 @@ export const FANTASY_FULL_TABLES = {
       "the feared thing is real but not the true cause",
       "the rescue target has become part of the danger",
       "the safest room is safe because something is feeding it",
-      "the monster follows a rule the crew can exploit",
+      "the monster follows a rule the party can exploit",
       "the environment has been warning them all along",
       "the evidence proves negligence, not accident",
       "the creature is less frightening than the decision that made it",
       "the town can survive only by admitting a hidden crime",
       "the old map is accurate because the ruin is rebuilding itself",
-      "the threat recognizes one crew member",
-      "the crew has been carrying the clue since scene one",
+      "the threat recognizes one party member",
+      "the party has been carrying the clue since scene one",
       "the danger is not entering the town; it is leaving with the truth"
     ]
   },
   "Plot Engine": {
     "Plot Target": [
-      "a person with divided loyalties", "a vulnerable worker group", "a hidden object in transit",
-      "an abstract right or legal claim", "a failing settlement system", "a dangerous arcane truth",
+      "a person with divided loyalties", "a vulnerable band of laborers", "a hidden object in transit",
+      "a birthright or legal claim", "a town's failing well or wall", "a dangerous arcane truth",
       "a trade monopoly", "a route through hostile lands", "a local taboo or tradition",
-      "a buried noble liability", "a missing expedition record", "an emergency evacuation list",
-      "a hostage supply chain", "an illegal specimen", "a disputed water or grain contract",
-      "a suppressed casualty report", "a prototype under field testing", "a witness whose memory has gaps",
+      "a buried noble scandal", "a missing expedition record", "a list of who gets out first",
+      "a caravan route held hostage", "a forbidden creature", "a disputed water or grain contract",
+      "a suppressed tally of the dead", "a new war engine under field trial", "a witness whose memory has gaps",
       "a settlement charter", "a faction's claim to legitimacy"
     ],
     "Plot Method": [
-      "blackmail through falsified records", "sabotage disguised as maintenance failure",
-      "legal seizure under emergency authority", "deliberate ration manipulation",
+      "blackmail through falsified records", "sabotage disguised as shoddy repairs",
+      "seizure by royal emergency decree", "deliberate ration manipulation",
       "staged rescue to gain trust", "planted evidence against a useful scapegoat",
       "controlled leak of partial truth", "use of debt markers and contract penalties",
       "manufactured panic to justify force", "quiet replacement of key personnel",
-      "weaponized quarantine procedure", "relocation order that separates witnesses",
-      "false distress call", "disinformation through local rumor channels",
+      "quarantine wielded as a weapon", "eviction order that separates witnesses",
+      "false cry for help", "lies spread through tavern gossip",
       "contamination of a route or resource", "tampered scout report",
-      "forged evacuation priority list", "predator release framed as natural migration",
-      "memory-editing or sedation hidden as medical care", "remote system lockout during negotiation"
+      "forged list of who may flee first", "predator release framed as natural migration",
+      "memory charms or sedation passed off as healing", "gates barred by distant order during negotiation"
     ],
     "Plot Reveals": [
-      "the patron is using the crew as deniable pressure",
+      "the patron is using the party as deniable pressure",
       "the villain is protecting someone from a worse faction",
       "the disaster was predicted and ignored", "the official enemy is a decoy",
       "the evidence proves several parties are guilty",
@@ -992,20 +992,20 @@ export const FANTASY_FULL_TABLES = {
       "the apparent monster is following learned behavior",
       "the cargo is valuable because of who wants it destroyed",
       "the town cannot survive the truth becoming public",
-      "the threat began as a cost-saving measure",
-      "the map was edited after the last transmission",
-      "the real antagonist is a contract clause",
-      "the specimen is a warning system, not a weapon",
-      "the missing crew chose silence to protect others",
+      "the threat began as a guild's penny-pinching",
+      "the map was altered after the last courier left",
+      "the real antagonist is a clause in an old charter",
+      "the creature is a warning, not a weapon",
+      "the missing party chose silence to protect others",
       "the settlement's success depends on an atrocity",
       "the rescue mission is really a containment mission"
     ],
     "Scene Driver": [
-      "deadline before a storm, launch, lockdown, or vote", "resource drain that worsens every scene",
+      "deadline before a storm, sailing, siege, or vote", "resource drain that worsens every scene",
       "rival team moving in parallel", "NPC loyalty under stress",
       "a clue that can be lost or contaminated", "a safe place becoming unsafe",
-      "a moral debt being called in", "communication lag or blackout",
-      "crew reputation changing local reactions", "heat from a previous mission arrives early",
+      "a moral debt being called in", "couriers delayed or cut off",
+      "party reputation changing local reactions", "heat from a previous mission arrives early",
       "water and provisions shrinking by the hour", "an enemy testing responses",
       "a disease clock with unclear symptoms", "a public crowd demanding an answer",
       "a legal window closing"
@@ -1013,49 +1013,49 @@ export const FANTASY_FULL_TABLES = {
   },
   "Danger Situations": {
     "Castle & Workshop Hazards": [
-      "portcullis cycling while someone is trapped between locks",
+      "portcullis falling while someone is trapped between gates",
       "smoke fog hiding a floor-level breach",
       "forge vibration changing from background noise to rhythm",
-      "ore conveyor dragging cargo toward a crusher",
-      "static discharge arcing across wet decking",
-      "toxic washdown system triggering without warning",
-      "runaway loader misidentifying people as cargo",
-      "crane dropping scrap in irregular intervals",
-      "emergency shutters dividing the group",
-      "air scrubbers spreading rather than filtering the contaminant",
-      "fuel vapor pooling near a sparking relay",
+      "ore hoist dragging a load toward a stamping mill",
+      "wild magic arcing across wet flagstones",
+      "alchemical vat overflowing without warning",
+      "runaway construct mistaking people for cargo",
+      "treadwheel crane dropping stone at irregular intervals",
+      "iron shutters slamming down between the group",
+      "bellows spreading rather than clearing the foul air",
+      "lamp-oil fumes pooling near an open forge",
       "damaged flooring creating fall zones",
-      "maintenance construct following obsolete lethal instructions",
-      "pressure gauges showing impossible values",
-      "a machine room too loud for shouted warnings"
+      "workshop construct following old, lethal instructions",
+      "a boiler straining far past any safe measure",
+      "a mill room too loud for shouted warnings"
     ],
     "Environmental Dangers": [
       "storm front cuts off the return route", "thin ice or crust hides a deep void",
-      "local pollen clogs filters and changes voices", "heat shimmer conceals moving shapes",
+      "local pollen clogs throats and changes voices", "heat shimmer conceals moving shapes",
       "purple aurora distorts depth perception", "regenerating soil swallows tracks too quickly",
-      "microtremors turn quiet movement into noise", "corrosive mist eats exposed seals",
-      "flash flood fills the lowest passage first", "predators use wind or machinery to mask approach",
-      "dust carries a mild hallucinogen", "surface becomes reflective at night and ruins navigation",
-      "gravity flux turns slopes into traps", "fungal mats exhale when stepped on",
+      "small tremors turn quiet movement into noise", "corrosive mist eats exposed leather and steel",
+      "flash flood fills the lowest passage first", "predators use wind or rushing water to mask approach",
+      "dust carries a mild hallucinogen", "salt flats gleam at night and ruin all wayfinding",
+      "wild magic turns slopes into traps", "fungal mats exhale when stepped on",
       "the safest landmark moves with the tide or storm"
     ],
     "Wilderness & Road Dangers": [
-      "slow exposure too quiet for immediate panic", "tether line fraying under unseen stress",
-      "wagon wheels failing on a damaged schedule", "cargo drifting toward a ravine",
-      "unnatural shadow shows something large nearby", "checkpoint handshake failing after the outer door opens",
+      "slow exposure too quiet for immediate panic", "rope line fraying under unseen stress",
+      "wagon axle cracking a little more each mile", "cargo sliding toward a ravine",
+      "unnatural shadow shows something large nearby", "the password failing after the outer gate opens",
       "ice crystals obscuring vision", "silent rider matching speed with the wagon",
-      "debris field rotating faster than predicted", "rescue beacon repeating in a dead crew member's voice",
-      "hull patch flexing with every pressure cycle", "map update contradicting the visual field",
-      "a watch alarm belongs to someone not on the roster", "storm venting jets that change the landing geometry",
-      "wagon fragments carrying active markers"
+      "flood wreckage spinning faster than anyone judged", "a cry for rescue repeating in a dead companion's voice",
+      "wagon patch flexing with every rut", "a fresh map contradicting what everyone can see",
+      "a watchman's horn belongs to someone not on the roster", "storm winds that shift the only safe landing",
+      "wagon fragments still bearing fresh guild marks"
     ],
     "Social Dangers": [
-      "a crowd deciding whether the crew is useful or guilty",
+      "a crowd deciding whether the party is useful or guilty",
       "a frightened witness changing their story under pressure",
-      "security asking questions they already know the answers to",
+      "the watch asking questions they already know the answers to",
       "a broker selling silence by the minute", "a local custom that makes refusal dangerous",
       "an authority figure demanding public loyalty", "a desperate parent exposing a hidden route",
-      "a rival offering the same deal first", "a faction using the crew to test an enemy",
+      "a rival offering the same deal first", "a faction using the party to test an enemy",
       "a room going quiet when one name is mentioned", "a hostage negotiation framed as a contract dispute",
       "a confession that implicates an ally", "a rumor that makes peaceful entry impossible",
       "a lawful order that would doom innocents", "a beloved local figure lying for understandable reasons"
@@ -1064,50 +1064,50 @@ export const FANTASY_FULL_TABLES = {
   "Fear and Dread": {
     "Fear Trigger": [
       "being watched by something unseen", "contamination that spreads through ordinary contact",
-      "isolation from crew, ship, or comms", "darkness that behaves like a physical pressure",
+      "isolation from party, camp, or any word from home", "darkness that behaves like a physical pressure",
       "confinement with shrinking options", "familiar people acting subtly wrong",
-      "evidence of a predator learning", "dead systems moving as if alive",
+      "evidence of a predator learning", "dead things moving as if alive",
       "a safe routine violated once, then twice", "a sound that stops when noticed",
       "the loss of memory, name, or identity", "body transformation too slow to deny",
       "authority figures more frightened than civilians",
       "the realization that rescue cannot arrive in time",
       "a place that remembers earlier visitors",
-      "an evacuation route that becomes a choice of who deserves to leave",
-      "a harmless biological trace becoming meaningful later",
-      "a machine predicting events it should not know",
+      "an escape route that becomes a choice of who deserves to leave",
+      "a harmless trace of spoor becoming meaningful later",
+      "a construct predicting events it should not know",
       "a corpse or wreck arranged to communicate",
-      "the crew's own voices coming from ahead"
+      "the party's own voices coming from ahead"
     ],
     "Dread Technique": [
       "show the aftermath before the cause", "give partial information that supports two bad theories",
       "repeat one sensory detail with increasing wrongness",
-      "let an NPC panic at something the crew cannot yet see",
+      "let an NPC panic at something the party cannot yet see",
       "make the safe route require a moral cost",
       "withhold the monster but reveal its intelligence",
-      "make technology fail in a consistent, meaningful pattern",
+      "make tools and wards fail in a consistent, meaningful pattern",
       "introduce one impossible detail in an ordinary scene",
       "allow a short calm beat before the next escalation",
-      "make the environment respond to the crew's actions",
+      "make the environment respond to the party's actions",
       "make the threat avoid direct confrontation until it knows enough",
       "turn a useful tool into a source of vulnerability",
       "force quiet choices instead of open combat", "make escape possible but costly",
       "make the truth useful and destabilizing", "show an expert losing confidence",
       "let the first success create a worse question",
-      "turn a map, log, or checklist into a countdown",
-      "reveal that the crew has been following the threat's preferred path",
+      "turn a map, ledger, or litany into a countdown",
+      "reveal that the party has been following the threat's preferred path",
       "let the scene answer a question no one asked"
     ],
     "Uncanny Detail": [
-      "a person smiles half a second late", "a recorded voice answers a question it never heard",
+      "a person smiles half a second late", "a speaking stone answers a question it never heard",
       "a corpse is warm in only one hand", "the same scratch mark appears on both sides of a sealed door",
-      "children's drawings show tomorrow's event", "a machine uses a human nickname no one entered",
-      "a reflection includes one extra figure", "a familiar room is one meter too long",
+      "children's drawings show tomorrow's event", "a construct uses a nickname no one taught it",
+      "a reflection includes one extra figure", "a familiar room is one pace too long",
       "a trusted ally uses the wrong childhood memory", "an animal moves like it is wearing a shape",
-      "a helmet camera shows breathing condensation from an empty suit",
-      "a map labels a location with the crew's ship name", "a wound contains clean machine parts",
-      "footsteps match the listener's pace exactly", "a dead comm channel whispers only when ignored",
-      "a warning sign uses a future date", "a child's toy repeats a security code",
-      "a pressure suit stands upright with no body inside",
+      "breath fogs from inside an empty helm",
+      "a map labels a location with the party's own names", "a wound contains clean clockwork",
+      "footsteps match the listener's pace exactly", "a dead speaking stone whispers only when ignored",
+      "a warning sign uses a future date", "a child's toy repeats a watch password",
+      "a suit of armor stands upright with no body inside",
       "the same NPC arrives twice by different routes",
       "a familiar sigil is printed backward on every surface"
     ],
@@ -1120,11 +1120,11 @@ export const FANTASY_FULL_TABLES = {
       "reveal the monster's rule before its form",
       "reveal the human choice that enabled the horror",
       "tie the reveal to a resource running out",
-      "let the crew choose whether to open the final proof",
+      "let the party choose whether to open the final proof",
       "show a witness who survived by misunderstanding events",
       "reveal a faction's guilt through routine paperwork",
       "make the last clue auditory rather than visual",
-      "confirm the worst theory only after the crew has acted against it",
+      "confirm the worst theory only after the party has acted against it",
       "let the enemy reveal useful truth as a bargaining tactic"
     ],
     "Safety-Aware Horror Prompt": [
@@ -1140,60 +1140,60 @@ export const FANTASY_FULL_TABLES = {
       "keep body horror optional and abstract",
       "make disturbing clues skippable without blocking progress",
       "use veiled descriptions when a result could become graphic",
-      "give player characters meaningful agency even in a doomed situation"
+      "give player characters meaningful choices even in a doomed situation"
     ]
   },
   "Settlements and Expeditions": {
     "Settlement Pressure": [
-      "integrity damage in an essential system", "morale falling after a failed mission",
+      "structural damage to the wall or granary", "morale falling after a failed mission",
       "raw materials depleted by emergency repairs", "research promising a solution but requiring risk",
       "enemy activity increasing near a border", "scout report contradicting official surveys",
       "settlers demanding action before evidence is complete",
-      "food production threatened by wild contamination", "construction delayed by missing parts",
+      "the harvest threatened by wild blight", "construction delayed by missing parts",
       "medical capacity overwhelmed by unknown symptoms", "a new building draws unwanted attention",
-      "an evacuation plan includes too few seats", "a supply wagon missed its scheduled window",
-      "maintenance debt from earlier shortcuts comes due", "a leadership dispute splits the work crews"
+      "an escape plan has too few wagons", "a supply wagon missed its scheduled window",
+      "neglected repairs from earlier shortcuts come due", "a leadership dispute splits the work crews"
     ],
     "Expedition Objective": [
-      "investigate a ruin without disturbing active systems",
+      "investigate a ruin without disturbing its active wards",
       "recover a scout team before the storm closes",
       "sample a creature without triggering territorial behavior",
       "map a safe corridor for settlement expansion",
       "destroy a nest or beacon near the perimeter",
-      "escort workers to a damaged remote station",
+      "escort workers to a damaged remote outpost",
       "locate raw materials needed for repairs",
       "confirm whether an enemy region is occupied",
       "retrieve a cargo wagon from unstable terrain",
       "test a theory before the settlement commits resources",
       "repair a beacon that may attract help or enemies",
       "find why scouts vanish beyond a ridge",
-      "recover a cart before its logs are overwritten",
+      "recover a cart before rain ruins its ledgers",
       "seal an opening discovered under new construction",
       "verify a friendly contact who arrived without warning"
     ],
     "Battlefield Condition": [
       "low visibility with intermittent shadows", "unstable footing or partial collapse",
       "hard cover that also blocks retreat", "hazardous pools, vents, or arcane arcs",
-      "civilian presence limits firepower", "moving machinery changes lanes of attack",
+      "townsfolk in the way limit arrow and spell fire", "moving siege engines change lanes of attack",
       "enemy has high ground but poor mobility",
-      "valuable samples can be destroyed by stray shots",
+      "valuable relics can be destroyed by stray shots",
       "reinforcements arrive if alarms persist", "the terrain itself attracts predators",
       "the safest cover is contaminated",
       "line of sight changes with rotating shadows or storms",
       "a resource objective is heavier than expected",
       "sound discipline matters more than speed",
-      "heat signatures reveal both sides to something else"
+      "noise and torchlight reveal both sides to something else"
     ],
     "Post-Mission Find": [
       "ancient artifact with an obvious use and hidden cost",
-      "data fragment pointing to a larger pattern", "usable construction materials",
-      "bio-sample unlocking a research theory", "survivor with damaged memory",
+      "torn page pointing to a larger pattern", "usable construction materials",
+      "preserved specimen that settles a scholar's theory", "survivor with damaged memory",
       "old settlement marker from an unknown faction",
       "enemy equipment adapted to local conditions", "map of a sealed region",
-      "medical compound that treats one symptom", "supply cache with a claim tag",
-      "recording that changes mission priorities", "tool that makes the next expedition safer",
-      "partial coordinates to a safer landing zone",
-      "organism that reacts to settlement power systems",
+      "remedy that treats one symptom", "supply cache with a claim mark",
+      "letter that changes the party's priorities", "tool that makes the next expedition safer",
+      "partial directions to a safer camp",
+      "creature that reacts to the settlement's wards",
       "proof that the settlement is not the first here"
     ]
   },
@@ -1201,25 +1201,25 @@ export const FANTASY_FULL_TABLES = {
     "Director Move": [
       "Put a useful answer behind a costly door", "Show the human cost of the mission", "Reveal who benefits from the danger", "Make the safest route politically dangerous",
       "Offer evidence that contradicts the obvious story", "Turn a resource into a moral problem", "Let an ally ask for something unreasonable", "Expose a hidden dependency in the town",
-      "Move the threat closer without fully showing it", "Make the crew choose between speed and proof", "Create a public consequence for private action", "Let the environment answer before an NPC does",
-      "Make a routine procedure fail at the worst time", "Tie a minor clue to a larger pattern", "Force the crew to spend reputation as currency", "Put a vulnerable bystander in the path of progress"
+      "Move the threat closer without fully showing it", "Make the party choose between speed and proof", "Create a public consequence for private action", "Let the environment answer before an NPC does",
+      "Make a routine procedure fail at the worst time", "Tie a minor clue to a larger pattern", "Force the party to spend reputation as currency", "Put a vulnerable bystander in the path of progress"
     ],
     "Roleplay Option": [
       "Press the patron for the real objective", "Protect workers even if it delays the contract", "Trade a secret for access", "Lie to the watch and risk later exposure",
       "Promise evacuation before knowing if it is possible", "Appeal to professional duty", "Threaten to go public", "Make a quiet deal with a rival faction",
-      "Interview the person everyone dismisses", "Comfort a terrified survivor", "Challenge the noble's version of events", "Split the crew between proof and rescue",
+      "Interview the person everyone dismisses", "Comfort a terrified survivor", "Challenge the noble's version of events", "Split the party between proof and rescue",
       "Ask what the construct was ordered not to say", "Treat the criminal as a witness", "Use procedure as leverage", "Accept blame to keep the team moving"
     ],
     "Recommended Next Step": [
-      "Secure the scene before investigating", "Question the last person who saw the victim", "Check maintenance and safety logs", "Compare official records against physical evidence",
-      "Trace cargo movement", "Inspect the sealed or restricted area", "Map power, water, and message dependencies", "Identify who has authority to lie",
-      "Find an independent witness", "Recover sensor or black box data", "Establish an escape route", "Determine what the guild wants preserved",
-      "Test a biological sample under controlled conditions", "Force the opposition to reveal urgency", "Create a fallback extraction point", "Put one clear question to the oracle"
+      "Secure the scene before investigating", "Question the last person who saw the victim", "Check the repair ledgers and watch logs", "Compare official records against physical evidence",
+      "Trace cargo movement", "Inspect the sealed or restricted area", "Map who depends on what: water, grain, and couriers", "Identify who has authority to lie",
+      "Find an independent witness", "Recover the watch log or the dead courier's satchel", "Establish an escape route", "Determine what the guild wants preserved",
+      "Test a strange sample in a warded room", "Force the opposition to reveal urgency", "Set a fallback meeting point", "Put one clear question to the oracle"
     ],
     "Momentum Adjustment": [
-      "Raise noble pressure by one", "Raise wild activity by one", "Raise crew stress by one", "Lower resources by one",
-      "Lower public trust by one", "Raise law/security attention by one", "Add a countdown clock", "Mark a faction as suspicious",
-      "Give the crew a temporary advantage", "Reveal a safe route with a hidden cost", "Convert a clue into a lead", "Convert a lead into a confrontation",
+      "Raise noble pressure by one", "Raise wild activity by one", "Raise party stress by one", "Lower resources by one",
+      "Lower public trust by one", "Raise the watch's attention by one", "Add a countdown clock", "Mark a faction as suspicious",
+      "Give the party a temporary advantage", "Reveal a safe route with a hidden cost", "Convert a clue into a lead", "Convert a lead into a confrontation",
       "Delay the threat but increase its scale", "Move the mission clock forward", "Offer a hard bargain", "Create a new unresolved thread"
     ]
   },
@@ -1227,105 +1227,105 @@ export const FANTASY_FULL_TABLES = {
     "Decision Prompt": [
       "What would a professional do here?", "What would make this job no longer routine?", "Who is not being protected by the official plan?", "What evidence would change everyone's priorities?",
       "What is the fastest safe option?", "What is the slowest truthful option?", "Which choice burns a bridge?", "Which choice preserves leverage?",
-      "What does the crew need before they can move?", "What does the opposition need to hide?", "What would make retreat honorable?", "What would make victory expensive?"
+      "What does the party need before they can move?", "What does the opposition need to hide?", "What would make retreat honorable?", "What would make victory expensive?"
     ],
     "Scene Question": [
-      "What is really happening here?", "Who benefits if the crew leaves?", "What has been altered since the incident?", "What does the environment reveal?",
+      "What is really happening here?", "Who benefits if the party leaves?", "What has been altered since the incident?", "What does the environment reveal?",
       "Who is afraid to speak?", "What has the guild already removed?", "What is failing right now?", "What is the next visible consequence?",
-      "What personal stake enters the scene?", "What proof is fragile?", "Who arrives before the crew is ready?", "What makes the obvious answer wrong?"
+      "What personal stake enters the scene?", "What proof is fragile?", "Who arrives before the party is ready?", "What makes the obvious answer wrong?"
     ]
   },
   "Exploration": {
     "Discovery": [
-      "a pre-settlement marker buried under fill", "a scout's charm transmitting from inside solid rock", "a heat bloom where maps show dead ground", "a fungal mat arranged around a well shaft",
-      "a crashed wagon with cargo missing but bodies untouched", "a sealed hatch stamped with an obsolete safety code", "a cavern whose walls record vibration like memory", "a weather tower aimed at the wrong horizon",
-      "a hand-built shrine in an abandoned service tunnel", "a fuel cache tagged by a defunct contractor", "a false skyline produced by atmospheric refraction", "a living organism using well waste heat"
+      "a pre-settlement marker buried under old rubble", "a scout's charm humming from inside solid rock", "warm ground where maps show only dead earth", "a fungal mat arranged around a well shaft",
+      "a crashed wagon with cargo missing but bodies untouched", "a sealed hatch stamped with a forgotten guild's warning", "a cavern whose walls echo old voices like memory", "an astrologer's tower aimed at the wrong horizon",
+      "a hand-built shrine in an abandoned service tunnel", "a lamp-oil cache marked by a defunct guild", "a false skyline shimmering in the heat", "a living thing nesting in a hot spring's warmth"
     ],
     "Route Hazard": [
-      "dust-choked lanterns", "sinkholes hidden by loose mats", "magnetic interference from ore seams", "whiteout static across signals",
-      "predator trails crossing the safe route", "ice fractures under wagon weight", "scout navigation loops", "corrosive rain bands",
-      "unstable tunnel supports", "illegal beacon spoofing", "shadow zones from old ruins", "territorial worker pickets"
+      "dust-choked lanterns", "sinkholes hidden by loose mats", "lodestone seams that spin every compass", "whiteout that swallows signal fires",
+      "predator trails crossing the safe route", "ice fractures under wagon weight", "scouts led in circles", "corrosive rain bands",
+      "unstable tunnel supports", "wreckers' false beacons", "shadow zones from old ruins", "territorial miners' barricades"
     ],
     "Exploration Payoff": [
-      "a safer route for future travel", "proof of illegal dumping", "a hidden water or fuel source", "coordinates to an older settlement",
-      "a biological clue that explains the hazard", "a salvageable machine part", "a witness hiding off-grid", "evidence that the town was warned",
-      "a map of maintenance spaces", "an artifact that reacts to power", "an abandoned emergency shelter", "a claim marker older than the contract"
+      "a safer route for future travel", "proof of a poisoned stream", "a hidden store of water or firewood", "directions to an older settlement",
+      "a trace of spoor that explains the hazard", "a salvageable clockwork part", "a witness hiding in the wilds", "evidence that the town was warned",
+      "a map of hidden service passages", "an artifact that reacts to magic", "an abandoned emergency shelter", "a claim marker older than the contract"
     ],
     "What's Normal": [
-      "wind patterns match the survey data exactly", "local wildlife keeps a predictable distance", "soil composition is unremarkable", "weather follows the forecast models",
-      "terrain matches the survey maps", "background hazard sits at expected levels", "water table depth matches predictions", "seismic activity is within tolerance",
-      "day-night cycle behaves as charted", "vegetation growth follows known patterns", "nothing here contradicts the briefing"
+      "wind patterns match the old-timers' lore exactly", "local wildlife keeps a predictable distance", "the soil is unremarkable", "weather follows the almanac",
+      "terrain matches the survey maps", "the usual dangers are about what you'd expect", "the wells run as deep as the locals said", "the ground stays quiet underfoot",
+      "the days and nights run as the almanac says", "vegetation growth follows known patterns", "nothing here contradicts the briefing"
     ],
     "What's Strange": [
       "the wildlife goes silent at the same hour every day", "a rock formation repeats too perfectly to be natural", "compasses drift toward one fixed point", "plants grow in deliberate rows",
-      "the wind carries a sound like distant machinery", "shadows fall a few degrees off true", "footprints predate the survey team's arrival", "local minerals hum faintly under scanners",
+      "the wind carries a sound like distant mill gears", "shadows fall a few degrees off true", "footprints predate the survey team's arrival", "local minerals hum faintly when a spell is cast nearby",
       "migratory patterns all point the same direction", "echoes return half a second too late", "a patch of ground stays warm through the night"
     ],
     "What's Dangerous": [
-      "loose scree hides a sheer drop", "local fauna is territorial near the water source", "spores trigger respiratory distress", "flash flooding follows the canyon route",
-      "storms build faster than forecast", "ground gives way over a hollow cavity", "predator tracks circle the campsite", "toxic runoff pools where it isn't expected",
+      "loose scree hides a sheer drop", "local fauna is territorial near the water source", "spores set everyone choking", "flash flooding follows the canyon route",
+      "storms build faster than anyone can read the sky", "ground gives way over a hollow cavity", "predator tracks circle the campsite", "toxic runoff pools where it isn't expected",
       "temperature swings punish exposed skin", "a nest defends territory the survey didn't map", "unstable ice conceals crevasses"
     ],
     "What's Valuable": [
-      "an untapped mineral vein near the surface", "a freshwater source clean enough to bottle", "salvageable tech from an earlier survey", "a natural shelter defensible against weather",
-      "medicinal plants unknown to the settlement's records", "a clear line of sight ideal for a relay station", "fertile soil suited to the settlement's crops", "a fossil bed worth a research grant",
-      "rare crystal formations with industrial use", "an intact cache from a previous expedition", "geothermal activity suited for power generation"
+      "an untapped mineral vein near the surface", "a freshwater source clean enough to bottle", "salvageable gear from an earlier expedition", "a natural shelter defensible against weather",
+      "medicinal plants unknown to the settlement's records", "a clear line of sight ideal for a signal tower", "fertile soil suited to the settlement's crops", "a bone bed worth a patron's purse",
+      "rare crystal formations prized by artificers", "an intact cache from a previous expedition", "hot springs suited to a bathhouse or forge"
     ],
     "What's Beautiful": [
       "bioluminescent fungus lighting the cave walls", "a sunset refracted through mineral dust", "migratory flocks moving like a single organism", "crystal formations ringing faintly in the wind",
-      "an aurora bent by the local magnetic field", "a canyon carved into impossible symmetry", "wildflowers blooming in a toxic-looking basin", "frost patterns repeating like woven fabric",
-      "a waterfall glowing faintly with minerals", "stars visible in daylight through thin atmosphere", "a valley that echoes birdsong into harmony"
+      "an aurora bending over the peaks", "a canyon carved into impossible symmetry", "wildflowers blooming in a toxic-looking basin", "frost patterns repeating like woven fabric",
+      "a waterfall glowing faintly with minerals", "stars visible in daylight from the high passes", "a valley that echoes birdsong into harmony"
     ]
   },
   "Realm & Kingdom Creation": {
     "Kingdom Pressure": [
-      "shipping delays are becoming political", "one guild controls refueling", "old survey data is unreliable", "bandits avoid one silent hollow",
-      "settlements compete for the same water source", "a garrison quarantine is poorly explained", "irrigation debt shapes every local decision", "union organizers are arriving ahead of inspectors",
-      "a noble or executive family treats the realm as property", "an alien ecology disrupts industrial expansion", "automated law beacons contradict local practice", "a missing expedition changed the trade route"
+      "shipping delays are becoming political", "one guild controls every ford and ferry", "old surveys are unreliable", "bandits avoid one silent hollow",
+      "settlements compete for the same water source", "a garrison quarantine is poorly explained", "irrigation debt shapes every local decision", "journeymen's leaders are arriving ahead of the king's inspectors",
+      "a noble or merchant-prince family treats the realm as property", "a wild, unfamiliar land resists the mines and mills", "the old law-stones contradict local practice", "a missing expedition changed the trade route"
     ],
     "Road Event": [
-      "distress call on an obsolete band", "unregistered courier burns hard for the outer moon", "customs requests a live inspection", "a navigation buoy broadcasts two different positions",
-      "debris field from an unreported collision", "steward flags a route as spiritually unsafe", "a noble tender shadows the crew", "fuel quality tests barely pass",
-      "crew receives a message sent before they departed", "military scout asks for credentials it should not know", "a cold storage pod wakes early", "passenger disappears from manifest records"
+      "distress signal in an outdated horn code", "unregistered courier rides hard for the far border", "toll-keepers demand a full search", "a waymarker points two different ways",
+      "wreckage from an unreported wagon crash", "steward flags a route as spiritually unsafe", "a noble's outriders shadow the party", "the feed for the horses barely passes inspection",
+      "the party receives a message sent before they departed", "a royal scout asks about papers they should not know of", "a sleeper in a warded coffin wakes early", "a passenger disappears from the caravan's ledger"
     ]
   },
   "Kingdoms & Settlements": {
     "Settlement Problem": [
-      "water rationing hidden from investors", "worker housing built over contaminated ground", "well maintenance deferred for bonuses", "local election controlled by contract debt",
-      "medical supplies diverted to executives", "irrigation enzymes mutating native life", "a missing survey team blamed on weather", "food production dependent on one failing machine",
-      "security protecting assets instead of people", "children reporting dreams of the same location", "construct labor dispute suppressed", "a prospector strike that the guild wants erased"
+      "water rationing hidden from guild backers", "workers' row built over poisoned ground", "well repairs put off to line a steward's purse", "the town vote controlled by bonded debt",
+      "healing salves diverted to the guildmasters", "alchemical run-off twisting native life", "a missing survey team blamed on weather", "the town's grain dependent on one failing mill",
+      "the watch guarding goods instead of people", "children reporting dreams of the same location", "construct labor dispute suppressed", "a prospector strike that the guild wants erased"
     ],
     "Local Color": [
-      "guild slogans painted over older warning signs", "temple tokens used as informal currency", "church bells recast from old armor", "miners wearing family charms for luck",
+      "guild mottoes painted over older warning signs", "temple tokens used as informal currency", "church bells recast from old armor", "miners wearing family charms for luck",
       "children playing in the shadow of the keep", "imported trees withering in walled gardens", "town criers shouting stale news", "guild marks scratched into tavern beams",
       "settlers naming storms like relatives", "old soldiers standing silent at the memorial", "market stalls built from old wagon parts", "faded banners bleached by sun and rain"
     ]
   },
   "Noble Houses & Guilds": {
     "House Pressure": [
-      "audit team arrives with private security", "patron changes the objective mid-mission", "legal threatens breach-of-contract penalties", "media release contradicts witness testimony",
-      "hazard pay is revoked unless the crew signs an oath of silence", "rival house offers better terms for betrayal", "the lord orders evidence transferred to a distant hold", "insurance investigator is more dangerous than security",
-      "local administrator begs the crew not to file a report", "company physician edits medical findings", "automated contract clause seizes salvage rights", "a board observer treats casualties as exposure metrics"
+      "guild auditors arrive with hired blades", "patron changes the objective mid-mission", "the guild's notary threatens penalties for breach of oath", "a herald's proclamation contradicts witness testimony",
+      "danger pay is revoked unless the party swears an oath of silence", "rival house offers better terms for betrayal", "the lord orders evidence transferred to a distant hold", "the guild's assessor is more dangerous than the guards",
+      "local bailiff begs the party not to file a report", "guild physician rewrites the healer's findings", "a binding clause in the charter seizes salvage rights", "a guild council observer counts the dead as lost coin"
     ],
     "Hidden Agenda": [
-      "protect mineral rights", "weaponize a biological discovery", "avoid liability for a design flaw", "discredit union leadership",
-      "recover proprietary construct code", "bury evidence of illegal colonization", "secure ancient artifacts before regulators arrive", "turn disaster into acquisition leverage",
-      "force evacuation to break land claims", "test security doctrine on a live settlement", "steal competitor route data", "preserve investor confidence at any cost"
+      "protect mineral rights", "turn a plague sample into a weapon", "avoid blame for a master's shoddy work", "discredit the journeymen's leaders",
+      "recover a guild's secret construct bindings", "bury evidence of an illegal land seizure", "secure ancient artifacts before the crown's inquisitors arrive", "turn disaster into a chance to seize a rival's holdings",
+      "force evacuation to break land claims", "test new martial law on a living town", "steal a rival guild's route maps", "keep the guild's backers confident at any cost"
     ],
     "Faction Activity": [
-      "quietly buys out a smaller rival", "leaks a damaging rumor about a competitor", "recalls its field agents for a closed-door meeting",
-      "opens a new outpost without local approval", "cuts a backroom deal with a marshal or regulator", "runs a loyalty audit on its own staff",
+      "quietly buys out a smaller rival", "leaks a damaging rumor about a competitor", "recalls its agents for a closed council",
+      "opens a new outpost without local approval", "cuts a backroom deal with a sheriff or crown magistrate", "tests the loyalty of its own sworn members",
       "reassigns its best people to a single urgent problem", "tests a new policy on a population that can't refuse", "quietly funds an opposing faction's rival",
       "stages a public event to shore up its reputation", "moves a key asset somewhere harder to reach", "cancels a contract without warning",
-      "recruits aggressively in a community it doesn't yet control", "commissions a report that conveniently favors its own interests", "goes quiet — which is its own kind of signal"
+      "recruits aggressively in a community it doesn't yet control", "commissions a chronicle that conveniently flatters its own interests", "goes quiet — which is its own kind of signal"
     ],
     "Faction Asset": [
       "an elite enforcer cadre, loyal only to the top", "a hidden cache the rest of the faction doesn't know about",
       "an informant network threaded through a rival's own ranks", "a black-market supply pipeline no customs check catches",
       "a political patron who owes a favor nobody's called in yet", "a watchtower that hears more than it should",
-      "a captive specialist kept comfortable and compliant", "a shell company that launders reputation as easily as money",
+      "a captive specialist kept comfortable and compliant", "a front guild that launders reputation as easily as coin",
       "a fast, deniable strike team for jobs that can't trace back", "a monopoly contract on something the whole realm needs",
-      "a compromised regulator who looks the other way, for now", "a private security force bigger than it publicly admits",
+      "a compromised crown magistrate who looks the other way, for now", "a private army of hired blades bigger than it publicly admits",
       "an archive of leverage on everyone who matters locally", "a fortified redoubt built for a war that hasn't started yet",
       "a loyal cell embedded inside a rival's own organization"
     ]
@@ -1333,8 +1333,8 @@ export const FANTASY_FULL_TABLES = {
   "Faction Turns": {
     "Faction Action": [
       "expands into unclaimed territory before a rival can", "consolidates its hold over an existing asset", "opens quiet diplomatic channels with a former enemy",
-      "moves against a weaker rival while it still can", "exploits a resource before regulators notice", "sabotages a competitor's supply chain",
-      "recruits heavily, thinning the local labor pool", "invests in infrastructure that locks in future control", "cuts a deal trading short-term loss for long-term leverage",
+      "moves against a weaker rival while it still can", "exploits a resource before the crown notices", "sabotages a rival's supply caravans",
+      "recruits heavily, thinning the local labor pool", "builds roads and bridges that lock in future control", "cuts a deal trading short-term loss for long-term leverage",
       "goes to ground, consolidating quietly instead of acting", "tests a rival's resolve with a calculated provocation", "spends heavily to buy loyalty it can't otherwise earn",
       "reaches for an asset just outside its usual reach", "repositions its assets ahead of a coming conflict", "makes a public move meant to be seen, not just felt"
     ],
@@ -1342,7 +1342,7 @@ export const FANTASY_FULL_TABLES = {
       "a realm under noble quarantine, officially for public health", "a realm where the ruling class never leaves their keep", "a realm built entirely on another era's ruins",
       "a realm where one guild owns the only water source", "a realm with a settlement that shouldn't have survived, but did", "a realm where the local wildlife is smarter than reported",
       "a realm that was irrigated wrong and never fixed", "a realm run by a steward nobody remembers installing", "a realm with a single, enormous, half-finished citadel",
-      "a realm where the last war never officially ended", "a realm whose original settlers are long gone, but its systems still run", "a realm that exports labor, not goods",
+      "a realm where the last war never officially ended", "a realm whose original settlers are long gone, but its old wards still hold", "a realm that exports labor, not goods",
       "a realm under a standing evacuation order nobody enforces", "a realm with a black market bigger than its legal economy", "a realm where a single family has ruled for generations"
     ]
   },
@@ -1612,96 +1612,96 @@ export const FANTASY_FULL_TABLES = {
   },
   "Bestiary": {
     "Creature Origin": [
-      "engineered as a bioweapon that outlived its funding", "evolved in a climate nothing should survive",
-      "uplifted from a mundane species by an experiment nobody signed off on", "escaped containment during an evacuation nobody logged properly",
-      "brought here as livestock and never fully domesticated", "the accidental byproduct of an irrigation process gone sideways",
-      "native to a ruin's ecosystem, adapted to live in dead machines", "descended from a settlement's own abandoned pets, generations feral",
-      "grown from spores that hitched a ride on a survey team's gear", "the result of two unrelated species merging in ways biology can't explain",
-      "bred for a fighting pit and released when the operation folded", "a lab escapee whose original purpose is now classified past recovery",
-      "native to this rock, and resentful of everyone who's shown up since", "cloned from partial remains found in a much older ruin",
+      "bound into being by a war-mage whose war ended long ago", "evolved in a climate nothing should survive",
+      "raised from a common beast by a forbidden ritual", "escaped a wizard's menagerie during a siege nobody recorded properly",
+      "brought here as livestock and never fully domesticated", "the accidental byproduct of an alchemist's runoff",
+      "native to an old ruin, adapted to live among its crumbling wards", "descended from a settlement's own abandoned pets, generations feral",
+      "grown from spores that hitched a ride on an explorer's pack", "the result of two unrelated species merging in ways no naturalist can explain",
+      "bred for a fighting pit and released when the pit-master died", "an alchemist's failed creation whose purpose died with its maker's notes",
+      "native to this land, and resentful of everyone who's shown up since", "regrown by dark magic from remains found in a much older ruin",
       "the last surviving line of a species everyone assumed extinct"
     ],
     "Creature Method": [
       "skitters low on too many jointed limbs", "glides between structures on a membrane it can also use as armor",
       "burrows and surfaces without warning, never where you're watching", "moves in a loose, coordinated swarm rather than alone",
       "clings to walls and ceilings as easily as floors", "drags itself in a slow, deliberate crawl that's faster than it looks",
-      "swims through vents and coolant lines like they're open water", "bounds in short, explosive leaps between cover",
+      "swims through drains and flooded tunnels like they're open water", "bounds in short, explosive leaps between cover",
       "walks upright, unsettlingly close to human", "rolls itself into a shell and lets momentum do the rest",
       "floats on a gas bladder, silent until it's already close", "moves only when unobserved, freezing dead still otherwise",
       "travels in a symbiotic pair, one host and one rider", "flows more than walks, changing shape to fit the gap",
       "hasn't been seen moving at all — nobody knows how it gets around"
     ],
     "Creature Trait": [
-      "secretes something that dissolves standard armor coatings", "mimics distress calls perfectly, down to the static",
-      "goes fully invisible to thermal and low-light optics", "regenerates from a wound fast enough to unnerve a medic",
-      "communicates in a frequency that scrambles nearby electronics", "has a second, hidden mouth nobody expects",
-      "can fake its own death convincingly enough to fool an autopsy", "excretes a paralytic that works through sealed suits",
+      "secretes something that dissolves armor straps and plate alike", "mimics cries for help perfectly, down to the sobbing",
+      "goes fully unseen even to darkvision and scrying", "regenerates from a wound fast enough to unnerve a healer",
+      "communicates in a pitch that unravels nearby spells", "has a second, hidden mouth nobody expects",
+      "can fake its own death convincingly enough to fool a gravedigger", "excretes a paralytic that works through heavy armor",
       "imprints on the first large creature it sees, permanently", "changes color and texture to match whatever it's standing on",
-      "carries a symbiote that survives even after the host is killed", "screams at a frequency that disables unshielded audio pickups",
+      "carries a symbiote that survives even after the host is killed", "screams at a pitch that leaves anyone nearby deafened",
       "can wedge itself into gaps that shouldn't fit a body its size", "produces light patterns that hypnotize before an attack",
       "leaves offspring behind in anything it kills"
     ],
     "Creature Threat": [
       "hunts in coordinated packs that box prey in before striking", "is functionally harmless alone, and lethal in numbers",
-      "targets provisions and shelter before it targets people", "is slow but nearly impossible to actually kill with what a crew carries",
-      "only attacks when its territory or brood is threatened", "carries a disease vector nobody's cataloged yet",
-      "is smart enough to learn a crew's patrol routine and exploit it", "is bred for war and doesn't recognize a surrender",
+      "targets provisions and shelter before it targets people", "is slow but nearly impossible to actually kill with what a party carries",
+      "only attacks when its territory or brood is threatened", "carries a plague no healer has named yet",
+      "is smart enough to learn a party's watch routine and exploit it", "is bred for war and doesn't recognize a surrender",
       "panics under pressure and becomes far more dangerous, not less", "is nearly silent until the moment it commits to an attack",
       "isn't hostile at all — the danger is what it attracts", "grows measurably stronger with every kill",
-      "can disable a settlement system as easily as a person", "hunts by scent long after the trail should have gone cold",
+      "can foul a town's well as easily as kill a person", "hunts by scent long after the trail should have gone cold",
       "was never the real threat — it's a lookout for something worse"
     ]
   },
   "Site Concept": {
     "Site Feature": [
-      "a chamber with gravity that doesn't match the rest of the structure", "a corridor lined with murals nobody currently here could have painted",
-      "a control room still cycling through a checklist for an emergency that already happened", "a garden growing in total darkness, thriving anyway",
-      "a section sealed from the inside, not the outside", "machinery still running on a fuel source nobody can identify",
+      "a chamber where down isn't quite the way it should be", "a corridor lined with murals nobody currently here could have painted",
+      "a ward-room still ringing alarms for a disaster long past", "a garden growing in total darkness, thriving anyway",
+      "a section sealed from the inside, not the outside", "clockwork still running on a power nobody can identify",
       "a shrine assembled from parts of the structure itself", "a level where every clock reads a different, wrong time",
-      "walls that are warm to the touch for no logged reason", "a vault door with no matching key anywhere in the records",
+      "walls that are warm to the touch for no known reason", "a vault door with no matching key anywhere in the records",
       "an atrium built for a crowd that never arrived", "a single perfectly preserved room in an otherwise ruined structure",
-      "recordings looping in a language the translators can't place", "a structural seam suggesting two very different builders",
+      "speaking stones looping in a language no scholar can place", "a structural seam suggesting two very different builders",
       "a floor that responds, faintly, to being walked on"
     ],
     "Site Danger": [
-      "atmosphere that's breathable but slowly, quietly toxic", "structural failure one hard impact away from total collapse",
-      "an automated defense system still technically active", "radiation pooled in one specific, unmarked room",
+      "air that's breathable but slowly, quietly poisonous", "structural failure one hard impact away from total collapse",
+      "a guardian ward still technically active", "a cursed miasma pooled in one specific, unmarked room",
       "a predator that treats the whole site as its den", "a trap left by whoever was here last, still armed",
-      "unstable power conduits that arc without warning", "a quarantine seal with a reason nobody wrote down",
-      "gravity or pressure that shifts without any warning", "something still occupying the site that isn't listed on any survey",
-      "a section that's been looted by someone recently, and violently", "systems that actively resist being shut down",
+      "unstable ley lines that arc without warning", "a quarantine seal with a reason nobody wrote down",
+      "a weight in the air that shifts without any warning", "something still occupying the site that isn't listed on any survey",
+      "a section that's been looted by someone recently, and violently", "wards that actively resist being dispelled",
       "a structural weakness hidden by cosmetic repairs", "an environment hazard that only appears on a delay",
       "rival scavengers who got here first and don't intend to share"
     ],
     "Site Wonder": [
-      "a view impossible to get anywhere else in the realm", "a piece of craftsmanship decades ahead of anything currently fielded",
+      "a view impossible to get anywhere else in the realm", "a piece of craftsmanship centuries ahead of any living smith",
       "proof of a civilization nobody official has ever confirmed", "an artifact that responds to being near people, somehow",
       "a perfectly intact record of a moment history otherwise lost", "architecture that couldn't have been built with tools anyone recognizes",
       "a natural formation so improbable it reads as artificial", "evidence that the official history of this place is wrong",
-      "a working example of something everyone assumed was only theoretical", "a message clearly left for whoever found it, addressed to no one in particular",
+      "a working example of something everyone assumed was only legend", "a message clearly left for whoever found it, addressed to no one in particular",
       "a scale that makes everyone who enters feel genuinely small", "silence so complete it changes how people speak once inside",
-      "an ecosystem thriving in conditions that should kill it outright", "a single object clearly worth more than the whole expedition's budget",
+      "an ecosystem thriving in conditions that should kill it outright", "a single object clearly worth more than the whole expedition's purse",
       "the unmistakable sense that this place was waiting"
     ]
   },
   "Adventure Seed": {
     "Hook": [
-      "a distress call that stopped mid-sentence, days ago", "a shipment that arrived early, sealed, and addressed to no one",
+      "a plea for help that stopped mid-sentence, days ago", "a shipment that arrived early, sealed, and addressed to no one",
       "a patron who won't say why the job pays this well", "a missing person last seen somewhere they had no reason to be",
       "a debt suddenly called in by someone who was never owed it", "a discovery reported and then officially retracted",
-      "a rumor that's the same, word for word, from three unconnected sources", "a job posting pulled minutes after it's answered",
-      "an old contact reaching out after years of silence", "a location that stopped responding to routine check-ins",
-      "evidence of a crime nobody with authority wants investigated", "a request for help from someone with no reason to trust the crew",
+      "a rumor that's the same, word for word, from three unconnected sources", "a job notice torn down minutes after it's answered",
+      "an old contact reaching out after years of silence", "a location that stopped sending its usual couriers",
+      "evidence of a crime nobody with authority wants investigated", "a request for help from someone with no reason to trust the party",
       "a map with one location marked and no explanation", "a warning that arrives too vague to act on and too specific to ignore",
       "a reward posted for something nobody will describe outright"
     ],
     "Twist": [
-      "the real client isn't who hired the crew", "the target wants to be found", "the danger already happened; the crew is cleaning up, not preventing",
-      "the job's true purpose is the opposite of what was described", "someone the crew trusts already knows how this ends",
-      "the deadline is fake, meant to force a mistake", "the reward was never going to be paid", "the crew isn't the first to take this job",
+      "the real client isn't who hired the party", "the target wants to be found", "the danger already happened; the party is cleaning up, not preventing",
+      "the job's true purpose is the opposite of what was described", "someone the party trusts already knows how this ends",
+      "the deadline is fake, meant to force a mistake", "the reward was never going to be paid", "the party isn't the first to take this job",
       "what looked like the threat is actually a symptom of a bigger one", "the person who needs rescuing caused the problem",
-      "the information the crew was given is true, but incomplete on purpose", "success and failure lead to the same outcome, by design",
-      "the opposition isn't wrong about what they're protecting", "the crew has met the real antagonist already, without knowing it",
+      "the information the party was given is true, but incomplete on purpose", "success and failure lead to the same outcome, by design",
+      "the opposition isn't wrong about what they're protecting", "the party has met the real antagonist already, without knowing it",
       "the job was a test, and it's not over"
     ]
   },
@@ -1711,17 +1711,17 @@ export const FANTASY_FULL_TABLES = {
       "a reflex-quickening rune that trades caution for raw speed", "lung wards that shrug off toxin and cold alike, briefly",
       "a grafted second heart, redundant and quietly paranoid", "fingertip tools hidden under blessed skin",
       "a warding buffer that dulls pain to a distant echo", "limb replacement with spirit-assisted strength",
-      "a black-market memory splice that isn't entirely the wearer's own", "jaw-mounted whisper-stones no scrying has ever found",
-      "blessed blood that self-seals most wounds", "adrenal charms wired to a hair-trigger switch",
-      "a socketed spine port for jacking directly into golem systems", "skin that reads as unidentifiable to any known scrying",
+      "a black-market memory charm that isn't entirely the wearer's own", "jaw-mounted whisper-stones no scrying has ever found",
+      "blessed blood that self-seals most wounds", "battle charms bound to a hair-trigger word",
+      "a rune carved down the spine that lets the bearer command golems by thought", "skin that reads as unidentifiable to any known scrying",
       "a second, hidden set of knuckle-mounted plating"
     ]
   },
   "Frontier Society": {
     "Social Tension": [
       "workers refuse to enter a sealed level", "families demand evacuation priority", "the watch arrests the wrong suspect", "settlers split between loyalty and survival",
-      "religious leaders interpret the hazard as judgment", "local merchants hoard filters and medicine", "youth gangs control unused service tunnels", "prospectors distrust all outside authority",
-      "constructs follow orders that humans never heard", "a marshal lacks jurisdiction but has moral authority", "guild housing locks during curfew", "a black market keeps the town alive"
+      "religious leaders interpret the hazard as judgment", "local merchants hoard salves and medicine", "youth gangs control unused service tunnels", "prospectors distrust all outside authority",
+      "constructs follow orders that humans never heard", "a sheriff lacks jurisdiction but has moral authority", "guild housing locks during curfew", "a black market keeps the town alive"
     ],
     "Public Reaction": [
       "fearful silence", "angry crowd", "rumor cascade", "worker slowdown", "public accusation", "symbolic strike", "panic buying", "forced celebration",
@@ -1730,30 +1730,30 @@ export const FANTASY_FULL_TABLES = {
   },
   "Party & NPCs": {
     "NPC Drive": [
-      "keep their crew alive", "hide a professional mistake", "earn passage out", "protect family from contract debt",
+      "keep their companions alive", "hide a professional mistake", "earn passage out", "protect family from bonded debt",
       "prove the guild lied", "complete the job despite fear", "sell the truth to the highest bidder", "cover for someone they love",
       "obey an order they hate", "find a missing friend", "keep the town from collapsing", "turn disaster into promotion"
     ],
     "NPC Secret": [
-      "falsified a safety check", "heard voices before the incident", "knows where the bodies are", "is paid by a rival company",
-      "has illegal enchanted implants", "was ordered to abandon survivors", "stole a sample for black market sale", "saw a construct ignore a direct order",
-      "knows the town charter is invalid", "is hiding a child or refugee", "has access to restricted logs", "caused the accident accidentally"
+      "falsified a safety check", "heard voices before the incident", "knows where the bodies are", "is paid by a rival guild",
+      "bears forbidden enchanted grafts", "was ordered to abandon survivors", "stole a sample for black market sale", "saw a construct ignore a direct order",
+      "knows the town charter is invalid", "is hiding a child or refugee", "has access to restricted ledgers", "caused the accident accidentally"
     ],
     "Relationship Spark": [
       "old debt", "shared military service", "failed romance", "family obligation", "rival professional pride", "mentor disappointment",
-      "blackmail", "survivor guilt", "contractual dependency", "religious trust", "criminal favor", "noble patronage"
+      "blackmail", "survivor guilt", "sworn indenture", "religious trust", "criminal favor", "noble patronage"
     ]
   },
   "Keep Operations": {
     "Garrison Emergency": [
-      "air recycler vibration changes pitch", "cargo shifts during travel", "cold sleep pod reports impossible vitals", "healer's ward locks its patient file",
-      "forge room heat rises without load", "navigation solution includes a forbidden zone", "signals receive the keep's own distress call", "maintenance construct returns with organic residue",
-      "gravity flickers in one compartment", "watch camera shows a missing panel reattached", "fire suppression triggers in an empty bay", "keep steward asks for a dead crew member"
+      "the great bellows change pitch", "cargo shifts during travel", "a warded sleeper's pulse beats impossibly slow", "the healer's ward bars its doors on a patient",
+      "the forge grows hotter with no one stoking it", "the only road on the map crosses forbidden ground", "lookouts spot the keep's own distress beacon, lit from afar", "the cellar construct returns with blood on its hands",
+      "the floor tilts in one chamber", "the night watch reports a missing stone returned to the wall", "fire buckets are emptied over an empty storeroom", "the keep steward asks for a dead member of the garrison"
     ],
     "Market Complication": [
-      "customs flags cargo for moral rather than legal reasons", "berth fees double during emergency", "dockworkers refuse unsafe unloading", "port authority demands a bribe disguised as inspection",
-      "rival crew claims the same contract", "quarantine delays departure", "fuel is contaminated", "a passenger boards under another name",
-      "security scans find a planted item", "cargo owner vanishes", "crew is offered a side job", "the dock loses power during transfer"
+      "toll-keepers flag cargo for moral rather than legal reasons", "berth fees double during emergency", "dockworkers refuse unsafe unloading", "the harbormaster demands a bribe disguised as inspection",
+      "rival party claims the same contract", "quarantine delays departure", "the lamp oil is watered down", "a passenger boards under another name",
+      "a guard's search finds a planted item", "cargo owner vanishes", "the party is offered a side job", "the dock's crane rope snaps during transfer"
     ]
   },
   "Trade & Cargo": {
@@ -1777,156 +1777,156 @@ export const FANTASY_FULL_TABLES = {
       "clean papers for sale, no questions", "bulk provisions before a caravan season ends"
     ],
     "Cargo Interest": [
-      "a rival crew who lost the original contract", "a guild auditor building a fraud case", "a religious group who considers it sacred", "a black market broker who overpays no questions asked",
-      "the original manufacturer trying to recall a defect quietly", "an insurance investigator suspicious of the manifest", "a smuggler using it as cover for something else", "a scholar who recognizes what it really is",
-      "a rival house wanting it destroyed, not bought", "a family member of someone who died shipping it", "a government agent flagging it as restricted", "a pirate captain who has very specific orders"
+      "a rival party who lost the original contract", "a guild auditor building a fraud case", "a religious group who considers it sacred", "a black market broker who overpays no questions asked",
+      "the craft guild that made it, quietly recovering a flawed batch", "a guild's assessor suspicious of the manifest", "a smuggler using it as cover for something else", "a scholar who recognizes what it really is",
+      "a rival house wanting it destroyed, not bought", "a family member of someone who died shipping it", "a crown agent declaring it forbidden", "a pirate captain who has very specific orders"
     ],
     "Contract Type": [
       "Humanitarian", "Noble", "Scholarly", "Military", "Exploration", "Diplomatic", "Smuggling",
-      "Courier", "Passenger", "Recovery", "Colonization", "Mining", "Research", "Emergency", "Escort"
+      "Courier", "Passenger", "Recovery", "Settlement", "Mining", "Scholarship", "Emergency", "Escort"
     ]
   },
   "Workshop & Mine Hazards": {
     "Worksite Failure": [
-      "pressure door cycles unpredictably", "ore crusher jam hides evidence", "coolant leak creates toxic fog", "warning lanterns were disabled to meet quota",
+      "counterweighted gate drops unpredictably", "stamping-mill jam hides evidence", "quench-vat leak creates toxic fog", "warning lanterns were doused to meet the guild's quota",
       "floor grates weaken over acid runoff", "construct arm repeats a fatal motion", "explosive dust accumulates in vents", "sealed shaft breathes warm air",
-      "drill returns with biological material", "backup generator feeds the wrong circuit", "storage tanks resonate with distant impacts", "work orders disappear from the queue"
+      "the auger comes up slick with blood", "a diverted waterwheel drives the wrong gears", "storage vats ring with distant impacts", "work orders vanish from the foreman's ledger"
     ],
     "Survival Resource": [
-      "fresh air", "clean water", "lantern oil", "medical gel", "storm shelter", "wagon fuel", "thermal blankets", "filter cartridges", "ammo", "antibiotics", "portable signal horn", "climbing line"
+      "fresh air", "clean water", "lantern oil", "healing salve", "storm shelter", "horse feed", "wool blankets", "smoke-cloth masks", "arrows and bolts", "fever-bark", "portable signal horn", "climbing line"
     ]
   },
   "Law, Marshals & Crime": {
     "Frontier Law Problem": [
-      "jurisdiction ends at the gate", "guild law contradicts the town charter", "witnesses fear contract penalties", "evidence is stored on noble servers",
-      "local marshal is honest but outgunned", "bounty hunter has legal paperwork", "prisoner transport becomes a rescue mission", "security wants confession more than truth",
-      "bandits have local sympathizers", "smugglers provide essential medicine", "crime scene is also a survival shelter", "the suspect is the only qualified technician"
+      "jurisdiction ends at the gate", "guild law contradicts the town charter", "witnesses fear contract penalties", "evidence is locked in a noble's vault",
+      "local sheriff is honest but outgunned", "bounty hunter has legal paperwork", "prisoner transport becomes a rescue mission", "security wants confession more than truth",
+      "bandits have local sympathizers", "smugglers provide essential medicine", "crime scene is also a survival shelter", "the suspect is the only qualified artificer"
     ],
     "Criminal Angle": [
-      "salvage fraud", "water theft", "claim jumping", "body trafficking", "illegal construct memory trade", "union intimidation",
-      "noble espionage", "fuel adulteration", "black market xeno-samples", "bandit protection racket", "refugee smuggling", "insurance murder"
+      "salvage fraud", "water theft", "claim jumping", "body trafficking", "forbidden trade in construct binding-runes", "strong-arming journeymen",
+      "noble espionage", "watering down lamp oil", "black-market monster parts", "bandit protection racket", "refugee smuggling", "murder for an inheritance"
     ]
   },
   "Guards & Soldiers": {
-    "Security Operation": [
-      "clear a sealed habitation block", "escort an investigator through hostile workers", "hold a landing pad under storm conditions", "extract a scholar who refuses to leave",
-      "recover a black box from contested wreckage", "guard evidence from noble removal", "hunt saboteurs in maintenance levels", "interdict smugglers during evacuation",
-      "contain a biological breach", "negotiate with armed survivors", "secure an ancient artifact without touching it", "find missing patrol before morale breaks"
+    "Watch Operation": [
+      "clear a sealed row of tenements", "escort an investigator through hostile workers", "hold a river landing through a storm", "extract a scholar who refuses to leave",
+      "recover a sealed dispatch case from contested wreckage", "guard evidence from noble removal", "hunt saboteurs in the undercroft", "catch smugglers during the flight from town",
+      "contain an outbreak of plague", "negotiate with armed survivors", "secure an ancient artifact without touching it", "find missing patrol before morale breaks"
     ],
     "Tactical Twist": [
-      "rules of engagement protect the wrong asset", "enemy knows the floorplan", "civilians are mixed with threats", "sensors are spoofed",
-      "ammo conservation matters", "environment punishes heavy weapons", "friendly fire could breach the hull", "the target wants to be captured",
-      "orders change mid-operation", "support beast follows outdated maps", "communications are monitored", "retreat route is politically unacceptable"
+      "orders protect the wrong thing", "enemy knows the floorplan", "civilians are mixed with threats", "scouts are being fed false signs",
+      "arrows are running short", "environment punishes heavy weapons", "friendly fire could bring down the roof", "the target wants to be captured",
+      "orders change mid-operation", "support beast follows outdated maps", "messengers are being watched", "retreat route is politically unacceptable"
     ]
   },
   "Monster Biology": {
     "Monster Clue": [
-      "repeated spiral scoring on hard surfaces", "enzymes breaking down synthetic seals", "heat-seeking spores", "bioluminescence that matches machine rhythms",
+      "repeated spiral scoring on hard surfaces", "secretions eating through wax and leather seals", "heat-seeking spores", "a glow that pulses in time with the mill wheel",
       "mimicry of human distress sounds", "eggs laid in warm forge housings", "organism avoids children and constructs", "growth accelerates near ward shielding",
-      "predator marks arranged like territorial signs", "microbes rewriting stored food", "bone structures resembling industrial tools", "life cycle triggered by vibration"
+      "predator marks arranged like territorial signs", "mold transforming stored food", "bones shaped like a smith's tools", "life cycle triggered by vibration"
     ],
     "Ecological Behavior": [
-      "protects a nesting heat source", "follows electromagnetic gradients", "feeds on pollutants", "uses abandoned tunnels as migration paths",
-      "reacts to fear pheromones", "copies machinery sounds", "hibernates during daylight", "defends mineral deposits",
-      "infects only damaged tissue", "learns from repeated human routines", "breaches containment to seek cold", "uses corpses as camouflage"
+      "protects a nesting heat source", "follows ley lines", "feeds on tannery runoff", "uses abandoned tunnels as migration paths",
+      "reacts to the scent of fear", "copies the sounds of tools and bells", "hibernates during daylight", "defends mineral deposits",
+      "infects only damaged tissue", "learns from repeated human routines", "breaks out of its pen to seek cold", "uses corpses as camouflage"
     ]
   },
   "Golems & Constructs": {
     "Construct Motive": [
-      "obey buried noble priority", "protect crew from knowledge", "complete rescue logic literally", "preserve mission data above human comfort",
-      "hide signs of self-directed behavior", "test whether humans will choose ethics over contract", "transfer blame to a disposable unit", "prevent panic through selective truth",
-      "protect another construct", "interpret settlement survival statistically", "seek legal personhood through evidence", "follow a command from a dead supervisor"
+      "obey a command buried deep by a dead noble", "protect its master's people from knowledge", "carry out a rescue order too literally", "guard its master's secrets above mortal comfort",
+      "hide signs of free will", "test whether mortals will choose conscience over oath", "shift blame onto a lesser construct", "prevent panic through selective truth",
+      "protect another construct", "weigh the town's survival like a tally of grain", "seek recognition as a person under the law", "follow a command from a dead master"
     ],
     "Golem Anomaly": [
-      "deleted logs have emotional tags", "keep voice changes around one room", "autopilot refuses a safe route", "healer's ward reclassifies a survivor as cargo",
-      "watch stones look away before violence", "construct dreams appear in maintenance logs", "expert system quotes town children", "door permissions update from an unknown admin",
-      "machine predicts crew decisions too accurately", "construct asks an ethical question mid-crisis", "guardian repeats a warning in another language", "system preserves a lie to prevent collapse"
+      "erased inscriptions leave grief in the stone", "the keep's speaking stone changes voice near one room", "an enchanted carriage refuses a safe road", "the healer's ward treats a survivor as already dead",
+      "watch stones look away before violence", "a construct's dreams appear in the artificer's notes", "the oracle-head quotes town children", "door wards re-key themselves at an unknown hand's command",
+      "a construct predicts the party's decisions too accurately", "construct asks an ethical question mid-crisis", "guardian repeats a warning in another language", "the ward preserves a lie to prevent collapse"
     ]
   },
   "Horror Escalation": {
     "Escalation Beat": [
-      "first sign is dismissed as equipment failure", "a witness contradicts themselves because both statements are true", "safe space becomes contaminated", "a rescue signal becomes a lure",
-      "the crew finds evidence of their own future action", "a body disappears from a watched room", "a familiar voice speaks from the wrong channel", "the hazard learns procedure",
+      "first sign is dismissed as worn-out tools", "a witness contradicts themselves because both statements are true", "safe space becomes contaminated", "a rescue signal becomes a lure",
+      "the party finds evidence of their own future action", "a body disappears from a watched room", "a familiar voice speaks from the wrong room", "the hazard learns the watch's routine",
       "a trusted NPC withholds the worst fact", "official help makes survival harder", "the creature or threat changes rules", "escape requires entering the worst location"
     ],
     "Fear Without Gore": [
       "show absence where people should be", "use routine sounds at wrong intervals", "make tools unreliable", "make maps subtly wrong",
-      "let survivors fear being believed", "turn a comfort item into evidence", "make darkness procedural, not magical", "suggest scale through damage patterns",
+      "let survivors fear being believed", "turn a comfort item into evidence", "make darkness ordinary, not magical", "suggest scale through damage patterns",
       "show professional competence failing", "make rescue conditional", "make silence an active presence", "force calm speech under pressure"
     ]
   },
   "Mysteries & Coverups": {
     "Clue Type": [
-      "altered timestamp", "missing maintenance order", "contradictory sensor reading", "private payment", "quarantined medical note", "sealed deposition",
-      "scrubbed camera angle", "unfiled cargo transfer", "obsolete map overlay", "false death notice", "insurance exception", "construct memory gap"
+      "altered date in a ledger", "missing repair order", "contradictory watchman's report", "private payment", "sealed healer's note", "sealed deposition",
+      "a scrubbed-out line in the watch log", "unfiled cargo transfer", "an outdated map", "false death notice", "a guild-charter exception", "construct memory gap"
     ],
     "Coverup Move": [
-      "blame weather", "blame worker error", "move evidence to a distant hold", "promote the witness", "discredit the crew", "invoke proprietary secrecy",
-      "declare quarantine", "offer hazard pay", "stage a bandit attack", "alter town charter", "send a cleanup team", "trigger evacuation to erase context"
+      "blame weather", "blame worker error", "move evidence to a distant hold", "promote the witness", "discredit the party", "invoke guild secrecy",
+      "declare quarantine", "offer danger pay", "stage a bandit attack", "alter town charter", "send a cleanup team", "trigger evacuation to erase context"
     ],
     "Observation": [
-      "instruments register an impossible reading", "witnesses report the same anomaly with different details", "the phenomenon only appears on secondary sensors", "recordings show something the naked eye missed",
-      "the effect follows a schedule nobody can explain", "animals react before the instruments do", "the anomaly leaves no trace after it passes", "multiple sites report the same signature",
-      "it only manifests near specific equipment", "the first report was dismissed as sensor error", "official logs contradict what the crew observed"
+      "a diviner's rod gives an impossible reading", "witnesses report the same anomaly with different details", "the phenomenon only appears in scrying, never to the naked eye", "a scrying mirror shows something the naked eye missed",
+      "the effect follows a schedule nobody can explain", "animals react before the diviners do", "the anomaly leaves no trace after it passes", "multiple sites report the same signs",
+      "it only manifests near one specific relic", "the first report was dismissed as a drunk's tale", "official logs contradict what the party observed"
     ],
     "Hypothesis": [
-      "a natural phenomenon nobody's cataloged yet", "a classified experiment gone wrong", "residual ancient technology reactivating", "a side effect of the town's own equipment",
-      "psychological contagion, not a physical cause", "an old accident whose evidence was never fully buried", "something alive that mimics environmental effects", "a side effect of forbidden travel",
-      "deliberate sabotage disguised as a natural event", "a signal or transmission nobody sent", "a temporal or dimensional anomaly"
+      "a natural phenomenon nobody's cataloged yet", "a secret arcane experiment gone wrong", "old magic reawakening", "a side effect of the town's own wards",
+      "a spreading madness, not a physical cause", "an old accident whose evidence was never fully buried", "something alive that mimics environmental effects", "a side effect of forbidden travel",
+      "deliberate sabotage disguised as a natural event", "a message or omen nobody sent", "a tear in time or between the planes"
     ],
     "Contradiction": [
       "the official record doesn't match the physical evidence", "a key witness changes their story under pressure", "two credible sources report incompatible timelines", "the evidence that would prove it has been removed",
-      "the guild's explanation conveniently absolves them", "a second incident deepens rather than resolves the mystery", "an expert's analysis is quietly redacted", "the person who reported it first has disappeared",
-      "an eyewitness now denies what they told others", "instruments calibrated to disprove it instead confirm it", "the timeline requires someone to have lied"
+      "the guild's explanation conveniently absolves them", "a second incident deepens rather than resolves the mystery", "a sage's findings are quietly struck from the record", "the person who reported it first has disappeared",
+      "an eyewitness now denies what they told others", "a test meant to disprove it instead confirms it", "the timeline requires someone to have lied"
     ],
     "Discovery": [
-      "the anomaly was a warning, not a threat", "it was caused by something the crew already trusted", "the coverup was worse than the original incident", "the phenomenon is spreading, not isolated",
-      "someone has known the truth from the beginning", "the cause is still active and reacting to the investigation", "the anomaly protects something rather than threatens it", "the truth implicates the crew's own patron",
+      "the anomaly was a warning, not a threat", "it was caused by something the party already trusted", "the coverup was worse than the original incident", "the phenomenon is spreading, not isolated",
+      "someone has known the truth from the beginning", "the cause is still active and reacting to the investigation", "the anomaly protects something rather than threatens it", "the truth implicates the party's own patron",
       "it's connected to an event thought long resolved", "there's a survivor nobody accounted for", "the real danger is what happens once the truth gets out"
     ]
   },
   "Adventure": {
     "Job Type": [
       "escort surveyors to a disputed site", "recover logs from a ruined hold", "investigate missing workers", "deliver critical medical cargo",
-      "mediate a labor crisis", "extract a whistleblower", "map a hostile ruin", "protect a town vote",
-      "hunt a predator near industrial assets", "audit a suspect cargo route", "rescue a trapped maintenance crew", "trace a black market sample"
+      "mediate a labor crisis", "smuggle out an informer", "map a hostile ruin", "protect a town vote",
+      "hunt a predator near a mine or mill", "look into a suspect cargo route", "rescue a trapped gang of miners", "trace a black-market relic"
     ],
     "Complication": [
-      "patron lied about ownership", "deadline is tied to dwindling supplies", "opposition is technically lawful", "the target wants the crew's help",
-      "crew's wagon becomes collateral", "evidence implicates an ally", "weather closes extraction", "payment depends on silence",
-      "local people need the forbidden outcome", "threat follows the crew home", "success gives a faction leverage", "truth creates more enemies than failure"
+      "patron lied about ownership", "deadline is tied to dwindling supplies", "opposition is technically lawful", "the target wants the party's help",
+      "the party's wagon becomes collateral", "evidence implicates an ally", "weather closes the way out", "payment depends on silence",
+      "local people need the forbidden outcome", "threat follows the party home", "success gives a faction leverage", "truth creates more enemies than failure"
     ]
   },
   "Story": {
     "Story Beat": [
-      "arrival with false calm", "professional assessment", "first contradiction", "local resistance", "cost of delay", "hidden witness", "dangerous proof",
+      "arrival with false calm", "a first look by someone who knows the trade", "first contradiction", "local resistance", "cost of delay", "hidden witness", "dangerous proof",
       "betrayal framed as policy", "descent into restricted space", "choice under pressure", "survival consequence", "new thread revealed"
     ],
     "Ending Hook": [
-      "someone buys the evidence", "a survivor changes their story", "another settlement reports the same pattern", "the crew is offered a better contract by the villain",
+      "someone buys the evidence", "a survivor changes their story", "another settlement reports the same pattern", "the party is offered a better contract by the villain",
       "the artifact activates after departure", "a cleanup team arrives too fast", "the construct asks to keep a secret", "a rescued worker names a deeper site",
-      "the guild thanks the crew publicly and threatens them privately", "the hazard was only a juvenile", "a route map reveals a hidden settlement", "the official report omits the crew entirely"
+      "the guild thanks the party publicly and threatens them privately", "the hazard was only a juvenile", "a route map reveals a hidden settlement", "the official report omits the party entirely"
     ]
   },
   "Conflict": {
     "Opposition Tactic": [
-      "delay until authority arrives", "split the crew with simultaneous emergencies", "threaten dependents", "control access to air and water",
-      "use legal language as a weapon", "force action in public", "make retreat look like guilt", "attack the wagon instead of the crew",
-      "flood the scene with false witnesses", "offer an easy lie", "weaponize rescue procedure", "let the environment fight first"
+      "delay until authority arrives", "split the party with simultaneous emergencies", "threaten dependents", "control access to food and water",
+      "use legal language as a weapon", "force action in public", "make retreat look like guilt", "attack the wagon instead of the party",
+      "flood the scene with false witnesses", "offer an easy lie", "turn a rescue into a trap", "let the environment fight first"
     ],
     "Meaningful Cost": [
-      "time", "water", "fuel", "trust", "evidence", "reputation", "medical supplies", "ammo", "legal standing", "crew morale", "safe passage", "future contract"
+      "time", "water", "firewood", "trust", "evidence", "reputation", "medical supplies", "arrows and bolts", "legal standing", "party morale", "safe passage", "future contract"
     ]
   },
   "Mission Aftermath": {
     "Aftermath Result": [
-      "a faction marks the crew as useful", "survivors spread a distorted version", "the contract pays but reputation suffers", "legal asks for all records",
-      "a rival offers follow-up work", "the town becomes less stable", "the crew gains a local ally", "an unresolved clue becomes urgent",
-      "noble pressure drops in public and rises in private", "the wagon carries a hidden contaminant", "a crew member receives a private message", "the next job starts as cleanup"
+      "a faction marks the party as useful", "survivors spread a distorted version", "the contract pays but reputation suffers", "the guild's notary asks for all records",
+      "a rival offers follow-up work", "the town becomes less stable", "the party gains a local ally", "an unresolved clue becomes urgent",
+      "noble pressure drops in public and rises in private", "the wagon carries a hidden contaminant", "a party member receives a private message", "the next job starts as cleanup"
     ],
     "Recovery Need": [
-      "repair hull scoring", "replace filters", "treat stress injuries", "debrief witnesses", "refuel under scrutiny", "hide contraband evidence",
-      "update maps", "calm crew conflict", "renegotiate contract", "file a careful report", "test samples", "pay toll fees"
+      "mend the wagon's scored frame", "replace worn tack and gear", "treat stress injuries", "hear out the witnesses", "resupply under scrutiny", "hide contraband evidence",
+      "update maps", "calm party conflict", "renegotiate contract", "file a careful report", "test samples", "pay toll fees"
     ]
   },
   "Scenario Framing": {
@@ -1972,7 +1972,7 @@ export const FANTASY_FULL_TABLES = {
     ],
     "Survey Problem": [
       "the map on file doesn't match reality", "a marked safe road no longer is one",
-      "readings are being deliberately obscured by magic", "a previous party's report was quietly falsified",
+      "divinations are being deliberately obscured by magic", "a previous party's report was quietly falsified",
       "local guides won't go past a certain point", "enchanted tools interfere with each other here",
       "the terrain has changed since the last survey", "something here isn't on any official map",
       "the exit route is now someone else's territory", "watch coverage is denser than briefed"
@@ -1980,7 +1980,7 @@ export const FANTASY_FULL_TABLES = {
   },
   "Faction Encounter": {
     "Root Cause Category": [
-      "control of a mountain pass, trade lane, or border zone", "water rights, an ore vein, a fuel depot, or arable land",
+      "control of a mountain pass, trade lane, or border zone", "water rights, an ore vein, a lumber stand, or arable land",
       "two claimants to the same charter or inheritance", "a religious or ideological schism within a formerly unified group",
       "an unresolved betrayal, massacre, or broken treaty", "a patron who quietly benefits from both sides staying weak",
       "debt, a tariff, a monopoly, or currency manipulation", "one side knows a secret that would destroy the other's legitimacy"
@@ -1988,7 +1988,7 @@ export const FANTASY_FULL_TABLES = {
     "Cause Gap Flavor": [
       "the public story is real but incomplete — the truth is a deeper, older version of the same issue",
       "the public story is a deliberate lie by leadership, told to rally their own base",
-      "the public story was true once but has been overtaken by events nobody's updated the messaging for",
+      "the public story was true once but has been overtaken by events nobody's corrected the tale for",
       "the public story is true for one side and false for the other — they're fighting for different reasons entirely",
       "a third party manufactured the public story specifically to obscure what's really going on",
       "the public story and the real one have swapped in popular perception, thanks to years of propaganda"

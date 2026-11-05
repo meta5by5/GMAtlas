@@ -70,7 +70,7 @@ import { findFiveLeaguesEnemyTrait } from '../../data/fiveLeaguesEnemyTraits.js'
 import { findLocationTypeIcon } from '../../data/locationTypeIcons.js';
 import { getSector, listTouchedSectors, adjacentSectors, deriveSectorIcon, generateMissionHooks, gridSizeOf, countInvestigationSites, MAX_INVESTIGATION_SITES, worldTrackerAttentionItems } from '../../domain/worldTracker.js';
 import { WORLD_TRACKER_ICONS, findWorldTrackerIcon } from '../../data/worldTrackerIcons.js';
-import { GENRE_PACKS, bestiaryTerm } from '../../data/genrePacks.js';
+import { GENRE_PACKS, bestiaryTerm, factionPowersGroup, factionActionGroup, isFantasyGenre } from '../../data/genrePacks.js';
 import { ECONOMY_MODELS, economyTypesForModel } from '../../data/economyTypes.js';
 import { biomesForGenrePack } from '../../data/biomes.js';
 import {
@@ -574,7 +574,7 @@ function factionSection(doc, e, ui) {
       </div>
       ${diplomacyFieldsHtml(e)}
       ${factionStatsHtml(e)}
-      ${factionPressureHtml(e, track)}`;
+      ${factionPressureHtml(e, track, doc.settings.genrePack)}`;
   return `
     <div class="faction-card">
       ${partySectionHeaderHtml(cardKey, 'Faction card', cardCollapsed)}
@@ -1272,9 +1272,9 @@ function factionStatsHtml(e) {
     </div>`;
 }
 
-function factionPressureHtml(e, track) {
-  // Two rolls, two flavors: Faction Activity (Hostile-flavored corporate
-  // skullduggery, this app's default) and Faction Action (original content
+function factionPressureHtml(e, track, genrePack) {
+  // Two rolls, two flavors: Faction Activity (corporate or guild skullduggery,
+  // per the active genre pack) and Faction Action (original content
   // inspired by Stars Without Number's faction-turn convention — a more
   // strategic/macro move rather than a narrative beat) — both ordinary
   // oracle tables, not a genre-pack swap, so a GM running any campaign can
@@ -1283,8 +1283,8 @@ function factionPressureHtml(e, track) {
   // against this faction's own Force/Cunning/Wealth — a single-faction turn,
   // distinct from the Journal drawer's bulk "Advance Faction Turns".
   const rollBtns = `
-    <button class="icon-btn" data-roll="Corporate Powers>Faction Activity" title="Roll Faction Activity">🎲</button>
-    <button class="icon-btn" data-roll="Stars Without Number>Faction Action" title="Roll Faction Action (SWN-inspired)">🎲²</button>
+    <button class="icon-btn" data-roll="${esc(factionPowersGroup(genrePack))}>Faction Activity" title="Roll Faction Activity">🎲</button>
+    <button class="icon-btn" data-roll="${esc(factionActionGroup(genrePack))}>Faction Action" title="Roll Faction Action">🎲²</button>
     <button class="icon-btn" data-faction-turn-resolve="${esc(e.id)}" title="Resolve one stat-based turn for this faction (Force/Cunning/Wealth check)">▶ Turn</button>`;
   const head = `<div class="faction-pressure-head"><span class="field-label-static">Pressure Track</span><span class="faction-pressure-rolls">${rollBtns}</span></div>`;
   if (!track) return `${head}<button class="chip" data-faction-pressure-add="${esc(e.id)}">＋ Pressure Track</button>`;
@@ -2753,7 +2753,7 @@ function oracle(doc, ui) {
   // the fantasy pack gets its own genre-appropriate grouping/labeling
   // (ORACLE_GROUPS_FANTASY, data/oracleGroups.js) instead of the default,
   // sci-fi-worded ORACLE_GROUPS every other pack still uses.
-  const tree = buildGroupedOracleTree(tables, genrePack === 'fantasy' ? ORACLE_GROUPS_FANTASY : undefined);
+  const tree = buildGroupedOracleTree(tables, isFantasyGenre(genrePack) ? ORACLE_GROUPS_FANTASY : undefined);
   // A field's 🔮 link (docs/adr/0016-oracle-tags-and-field-links.md) sets
   // oracleTagFilter instead of the free-text oracleFilter — the two modes
   // are mutually exclusive (typing in the search box clears the tag
@@ -3598,7 +3598,7 @@ function factionsSettingsSection(doc, ui) {
     ${factionPacingSection(doc)}
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Faction Oracles', 'settings-faction-oracles')}
-      ${helpBody('settings-faction-oracles', "Hides the Factions/Corporate Powers (or Faction Turns)/Faction Encounter oracle table groups from the Oracle drawer's browse tree. Faction Events and Faction Conflict's own quick-start generator still work regardless — this only affects whether you can browse/roll them directly from the Oracle drawer.", ui)}
+      ${helpBody('settings-faction-oracles', "Hides the faction oracle table groups (Factions, Faction Encounter, and Corporate Powers, or Noble Houses & Guilds and Faction Turns under fantasy) from the Oracle drawer's browse tree. Faction Events and Faction Conflict's own quick-start generator still work regardless — this only affects whether you can browse/roll them directly from the Oracle drawer.", ui)}
       <label class="chip sm"><input type="checkbox" data-faction-oracles-enabled-toggle ${enabled ? 'checked' : ''}> Allow Faction-related Oracles</label>
     </div>`;
 }

@@ -32,3 +32,12 @@ export const ORACLE_TAG_SEEDS = {
   'Location Themes>Site Type': ['site'],
   'Location Themes>Immediate Surroundings': ['surroundings'],
 };
+
+// The same seeds for tables the fantasy packs keep under their own names —
+// each resolves in data/tables-fantasy-full.js, not data/tables.js.
+export const ORACLE_TAG_SEEDS_FANTASY = {
+  'Party & NPCs>NPC Drive': ['character'],
+  'Party & NPCs>NPC Secret': ['secret', 'fear'],
+  'Noble Houses & Guilds>Hidden Agenda': ['secret', 'agenda'],
+  'Ruined Holds>What Happened': ['discovery'],
+};

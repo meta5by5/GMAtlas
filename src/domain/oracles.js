@@ -5,7 +5,7 @@
 import { SCENE_TABLES } from '../data/tables.js';
 import { ORACLE_GROUPS, GROUP_ALIASES } from '../data/oracleGroups.js';
 import { findGenrePack } from '../data/genrePacks.js';
-import { ORACLE_TAG_SEEDS } from '../data/oracleTagSeeds.js';
+import { ORACLE_TAG_SEEDS, ORACLE_TAG_SEEDS_FANTASY } from '../data/oracleTagSeeds.js';
 import { ENTITY_FIELD_ORACLE_LINKS } from '../data/entityFieldOracleLinks.js';
 
 export { SCENE_TABLES };
@@ -149,7 +149,7 @@ export function getOracleTags(campaign, path) {
   const key = path.join('>');
   const stored = (campaign.oracles && campaign.oracles.tags) || {};
   if (Object.prototype.hasOwnProperty.call(stored, key)) return stored[key].slice();
-  return (ORACLE_TAG_SEEDS[key] || []).slice();
+  return (ORACLE_TAG_SEEDS[key] || ORACLE_TAG_SEEDS_FANTASY[key] || []).slice();
 }
 
 /** True if any entity-field link (data/entityFieldOracleLinks.js) depends
@@ -327,10 +327,10 @@ export function buildGroupedOracleTree(tables, groups = ORACLE_GROUPS) {
 // Settings -> Factions tab's "Allow Faction-related Oracles" checkbox
 // (doc.settings.factionOraclesEnabled). These are the real top-level table
 // keys (not display labels) for the Factions-adjacent slots across both
-// ORACLE_GROUPS and ORACLE_GROUPS_FANTASY (data/oracleGroups.js) — 'Faction
-// Turns' is the fantasy pack's own name for the sci-fi pack's 'Corporate
-// Powers' slot.
-const FACTION_ORACLE_TABLE_KEYS = ['Factions', 'Corporate Powers', 'Faction Turns', 'Faction Encounter'];
+// ORACLE_GROUPS and ORACLE_GROUPS_FANTASY (data/oracleGroups.js) — 'Noble
+// Houses & Guilds' and 'Faction Turns' are the fantasy packs' own names for
+// the sci-fi pack's 'Corporate Powers' and 'Stars Without Number' slots.
+const FACTION_ORACLE_TABLE_KEYS = ['Factions', 'Corporate Powers', 'Noble Houses & Guilds', 'Faction Turns', 'Faction Encounter'];
 
 /** Strips the Faction-related table keys out of a genre pack's `tables`
  *  object before it reaches buildGroupedOracleTree, so they vanish from the

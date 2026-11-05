@@ -15,6 +15,8 @@
 // `requirements/design-principles/gameplay-mechanics.md`, redirected by this
 // ADR into "what does the GM get offered right now," not data stored
 // afterward.
+import { findGenrePack, isFantasyGenre } from './genrePacks.js';
+
 export const DISCOVERY_LENSES = [
   { id: 'technology', label: 'Technology', kind: 'discovery' },
   { id: 'history', label: 'History', kind: 'discovery' },
@@ -38,6 +40,14 @@ export const APPROACH_LENSES = [
 ];
 
 export const SUGGESTION_LENSES = [...DISCOVERY_LENSES, ...APPROACH_LENSES];
+
+// The fantasy packs read these lenses in their own vocabulary; the id, which
+// is what's stored and routed on, stays the same.
+const FANTASY_LENS_LABELS = { technology: 'Craft', biology: 'Nature', physics: 'Arcana', science: 'Scholarship', engineering: 'Artifice' };
+
+export function lensLabel(lens, genrePackId) {
+  return (isFantasyGenre(genrePackId) && FANTASY_LENS_LABELS[lens.id]) || lens.label;
+}
 
 export function findLens(id) {
   return SUGGESTION_LENSES.find((l) => l.id === id) || null;
@@ -67,6 +77,47 @@ export const LENS_ORACLE_CATEGORIES = {
   exploration: [['Exploration', 'Discovery'], ['Exploration', 'Exploration Payoff']],
 };
 
-export function lensOracleCategories(lensId) {
-  return LENS_ORACLE_CATEGORIES[lensId] || [];
+// The same lenses over each fantasy pack's own tables (data/tables-fantasy-full.js,
+// data/tables-dnd5e.js), which share few group names with data/tables.js.
+const LENS_ORACLE_CATEGORIES_FANTASY = {
+  technology: [['Workshop & Mine Hazards', 'Worksite Failure'], ['Danger Situations', 'Castle & Workshop Hazards']],
+  history: [['Mysteries & Coverups', 'Clue Type'], ['Scenario Framing', 'Objective']],
+  politics: [['Frontier Society', 'Social Tension'], ['Noble Houses & Guilds', 'Hidden Agenda']],
+  religion: [['Mysteries & Coverups', 'Hypothesis'], ['Party & NPCs', 'NPC Secret']],
+  biology: [['Monster Biology', 'Monster Clue'], ['Monster Biology', 'Ecological Behavior']],
+  physics: [['Exploration', 'Route Hazard'], ['Danger Situations', 'Environmental Dangers']],
+  trade: [['Factions', 'Project'], ['Noble Houses & Guilds', 'House Pressure']],
+  culture: [['Frontier Society', 'Public Reaction'], ['Party & NPCs', 'Relationship Spark']],
+  violence: [['Conflict', 'Opposition Tactic'], ['Guards & Soldiers', 'Tactical Twist']],
+  negotiation: [['Frontier Society', 'Social Tension'], ['Factions', 'Relationship']],
+  stealth: [['Law, Marshals & Crime', 'Criminal Angle'], ['Guards & Soldiers', 'Watch Operation']],
+  science: [['Mysteries & Coverups', 'Observation'], ['Monster Biology', 'Monster Clue']],
+  engineering: [['Workshop & Mine Hazards', 'Worksite Failure'], ['Danger Situations', 'Castle & Workshop Hazards']],
+  economics: [['Factions', 'Project'], ['Noble Houses & Guilds', 'House Pressure']],
+  'social-leverage': [['Noble Houses & Guilds', 'Hidden Agenda'], ['Party & NPCs', 'NPC Secret']],
+  exploration: [['Exploration', 'Discovery'], ['Exploration', 'Exploration Payoff']],
+};
+const LENS_ORACLE_CATEGORIES_DND5E = {
+  technology: [['Scenario Framing', 'Map Feature'], ['Environmental Hazards', 'Environmental Event']],
+  history: [['Miscellaneous', 'Story Clue'], ['Scenario Framing', 'Objective']],
+  politics: [['Factions', 'Faction Goal'], ['Noble Houses & Guilds', 'Hidden Agenda']],
+  religion: [['Plot Engine', 'Plot Target'], ['Miscellaneous', 'Story Clue']],
+  biology: [['Environmental Hazards', 'Environmental Event'], ['Threats', 'Enemy Encounter']],
+  physics: [['Environmental Hazards', 'Survey Problem'], ['Environmental Hazards', 'Environmental Event']],
+  trade: [['Trade & Cargo', 'Trade Opportunity'], ['Noble Houses & Guilds', 'House Pressure']],
+  culture: [['Characters', 'Disposition'], ['Scenario Framing', 'Framing NPCs']],
+  violence: [['Threats', 'Enemy Encounter'], ['Threats', 'Watch Response']],
+  negotiation: [['Factions', 'Faction Goal'], ['Scenario Framing', 'Dilemma']],
+  stealth: [['Plot Engine', 'Plot Method'], ['Threats', 'Watch Response']],
+  science: [['Miscellaneous', 'Story Clue'], ['Environmental Hazards', 'Survey Problem']],
+  engineering: [['Scenario Framing', 'Map Feature'], ['Trade & Cargo', 'Cargo Problem']],
+  economics: [['Trade & Cargo', 'Trade Opportunity'], ['Noble Houses & Guilds', 'House Pressure']],
+  'social-leverage': [['Noble Houses & Guilds', 'Hidden Agenda'], ['Characters', 'Revealed Aspect']],
+  exploration: [['Environmental Hazards', 'Survey Problem'], ['Scenario Framing', 'Map Feature']],
+};
+const LENS_ORACLE_CATEGORIES_BY_PACK = { fantasy: LENS_ORACLE_CATEGORIES_FANTASY, dnd5e: LENS_ORACLE_CATEGORIES_DND5E };
+
+export function lensOracleCategories(lensId, genrePackId) {
+  const byPack = LENS_ORACLE_CATEGORIES_BY_PACK[findGenrePack(genrePackId).id] || LENS_ORACLE_CATEGORIES;
+  return byPack[lensId] || [];
 }

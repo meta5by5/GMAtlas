@@ -11687,3 +11687,89 @@ test('syncModuleTrackers removes a game system\'s Party Trackers once the profil
   assert.deepEqual(syncModuleTrackers(old, sf).party.trackers.map((t) => t.name).sort(), ['Homebrew', 'Momentum', 'Supply']);
   assert.equal(tagLegacyModuleTrackers(old), old, 'idempotent once tagged');
 });
+
+// Genre separation: the fantasy packs keep their own vocabulary and their own
+// table names, and generators running on the raw document get the active genre.
+import { factionPowersGroup, factionActionGroup, isFantasyGenre } from '../src/data/genrePacks.js';
+import { lensLabel } from '../src/data/suggestionLenses.js';
+import { ORACLE_TAG_SEEDS_FANTASY } from '../src/data/oracleTagSeeds.js';
+
+const FANTASY_PACK_IDS = ['fantasy', 'dnd5e'];
+const allEntries = (node) => (Array.isArray(node) ? node : (node && typeof node === 'object' ? Object.values(node).flatMap(allEntries) : [node]));
+
+test('fantasy packs carry no corporate or space vocabulary; mercenary free companies are the one kind of company allowed', () => {
+  const banned = /corporat|megacorp|\bagenc(y|ies)\b|executive|investor|shareholder|insurance|\bunion\b|regulator|contractor|\bsensors?\b|\bserver|scanner|radiation|xeno|starship|\bfuel\b|\bammo\b/i;
+  for (const id of FANTASY_PACK_IDS) {
+    const entries = allEntries(findGenrePack(id).tables).filter((e) => typeof e === 'string');
+    assert.deepEqual(entries.filter((e) => banned.test(e)), [], id);
+    assert.deepEqual(entries.filter((e) => /\bcompan(y|ies)\b/i.test(e) && !/\b(free|mercenary) company\b/i.test(e)), [], id);
+    assert.ok(!Object.keys(findGenrePack(id).tables).some((k) => /corporate/i.test(k)), id);
+  }
+});
+
+test('sci-fi keeps its corporate tables and table names — only the fantasy packs changed', () => {
+  assert.equal(factionPowersGroup('sci-fi-generic'), 'Corporate Powers');
+  assert.equal(factionActionGroup('sci-fi-generic'), 'Stars Without Number');
+  assert.ok(SCENE_TABLES['Corporate Powers']['Faction Asset'].length > 0);
+  assert.equal(isFantasyGenre('sci-fi-generic'), false);
+  assert.equal(isFantasyGenre('dnd5e'), true);
+});
+
+test('each fantasy pack has its own real faction tables behind the groups the faction rolls use', () => {
+  for (const id of FANTASY_PACK_IDS) {
+    const { tables } = findGenrePack(id);
+    assert.ok(tables[factionPowersGroup(id)]['Faction Activity'].length > 0, id);
+    assert.ok(tables[factionPowersGroup(id)]['Faction Asset'].length > 0, id);
+    assert.ok(tables[factionActionGroup(id)]['Faction Action'].length > 0, id);
+  }
+});
+
+test('every Suggestion Lens maps to real tables in each fantasy pack, and reads in fantasy vocabulary there', () => {
+  for (const id of FANTASY_PACK_IDS) {
+    const { tables } = findGenrePack(id);
+    for (const lens of SUGGESTION_LENSES) {
+      const categories = lensOracleCategories(lens.id, id);
+      assert.ok(categories.length > 0, `${id} ${lens.id}`);
+      for (const [group, table] of categories) {
+        const values = getTable(tables, group, table);
+        assert.ok(Array.isArray(values) && values.length > 0, `${id} ${lens.id} -> ${group} > ${table}`);
+      }
+    }
+    assert.equal(lensLabel({ id: 'technology', label: 'Technology' }, id), 'Craft');
+  }
+  assert.equal(lensLabel({ id: 'technology', label: 'Technology' }, 'sci-fi-generic'), 'Technology');
+});
+
+test('every ORACLE_TAG_SEEDS_FANTASY path resolves in the fantasy pack', () => {
+  for (const key of Object.keys(ORACLE_TAG_SEEDS_FANTASY)) {
+    const values = getTable(findGenrePack('fantasy').tables, ...key.split('>'));
+    assert.ok(Array.isArray(values) && values.length > 0, key);
+  }
+});
+
+test('generators given the active genre roll that pack even when the raw document still says sci-fi', () => {
+  let camp = defaultCampaign();
+  assert.notEqual(camp.settings.genrePack, 'fantasy', 'fixture stands in for the raw, un-overlaid document');
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Ashen Hand' }));
+  const fantasy = findGenrePack('fantasy').tables;
+
+  const { asset } = rollFactionAsset(camp, factionId, { rng: makeRng(1), genrePack: 'fantasy' });
+  assert.ok(fantasy['Noble Houses & Guilds']['Faction Asset'].includes(asset));
+
+  const npc = generateNpc(camp, { rng: makeRng(1), genrePack: 'fantasy' });
+  assert.ok(fantasy.Characters.Name.includes(getEntity(npc.campaign, npc.id).name));
+
+  const seed = generateConflictSeed(camp, { rng: makeRng(1), genrePack: 'fantasy' });
+  assert.ok(Object.values(seed).some((v) => typeof v === 'string' && fantasy['Faction Encounter']['Root Cause Category'].some((e) => v.includes(e))));
+
+  const mission = generateMission(camp, { rng: makeRng(1), genrePack: 'fantasy' });
+  assert.ok(fantasy.Miscellaneous['Story Complication'].includes(mission.complication));
+});
+
+test('advanceFactionTurns rolls its rumor from the active fantasy pack', () => {
+  let camp = defaultCampaign();
+  let factionId; ({ campaign: camp, id: factionId } = createEntity(camp, { type: 'faction', name: 'Ashen Hand' }));
+  camp = createPressureTrack(camp, factionId);
+  const { rumors } = advanceFactionTurns(camp, { rng: makeRng(1), genrePack: 'fantasy' });
+  assert.ok(findGenrePack('fantasy').tables['Noble Houses & Guilds']['Faction Activity'].includes(rumors[0].activity));
+});

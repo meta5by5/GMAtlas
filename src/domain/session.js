@@ -9,7 +9,7 @@ import { tablesWithOverrides, rollTable, rollGroup, formatRoll, pick, getTable, 
 import { linkMentions, parseMentions, createEntity, updateEntity, getEntity, LOCATION_SENSORY_ORACLE_PATH, LOCATION_FANTASY_FIELD_ORACLE_PATH } from './entities.js';
 import { linkDocumentMentions, parseDocumentMentions, resolvedDocumentMentionNames } from './documents.js';
 import { resolvedMapMentionNames } from './mapMentions.js';
-import { SUGGESTION_LENSES, findLens, lensOracleCategories } from '../data/suggestionLenses.js';
+import { SUGGESTION_LENSES, findLens, lensLabel, lensOracleCategories } from '../data/suggestionLenses.js';
 import { oracleLinkTagsFor, INTENT_ORACLE_TAGS } from '../data/entityFieldOracleLinks.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
@@ -33,9 +33,9 @@ function addJournal(campaign, text, source) {
 }
 
 /** Generate the next scene, log it, and let consequences nudge the context. */
-export function continueStory(campaign, { toJournal = true } = {}) {
+export function continueStory(campaign, { toJournal = true, genrePack } = {}) {
   const next = clone(campaign);
-  const tables = tablesWithOverrides(next.oracles?.overrides, next.settings?.genrePack);
+  const tables = tablesWithOverrides(next.oracles?.overrides, genrePack || next.settings?.genrePack);
   const scene = generateScene(next, tables);
 
   next.scenes = next.scenes || [];
@@ -143,7 +143,7 @@ export function drawSuggestionLenses(campaign, { rng = Math.random, count = 4, s
     const lens = pool.splice(idx, 1)[0];
     if (seen.has(lens.id)) continue;
     seen.add(lens.id);
-    drawn.push(lens);
+    drawn.push({ ...lens, label: lensLabel(lens, campaign.settings && campaign.settings.genrePack) });
   }
   return drawn;
 }
@@ -258,11 +258,12 @@ export function drawConsequenceOracles(campaign, opts = {}) {
  *  same no-input, immediate-generation behavior as before this ADR. Falls
  *  back to ordinary (lens-less) behavior for an unrecognized lensId,
  *  rather than erroring. */
-export function suggestNextWithLens(campaign, lensId, { toJournal = true, rng = Math.random } = {}) {
+export function suggestNextWithLens(campaign, lensId, { toJournal = true, rng = Math.random, genrePack } = {}) {
   const next = clone(campaign);
   const lens = findLens(lensId);
-  const tables = tablesWithOverrides(next.oracles?.overrides, next.settings?.genrePack);
-  const scene = generateScene(next, tables, rng, lens ? lensOracleCategories(lensId) : []);
+  const activeGenre = genrePack || next.settings?.genrePack;
+  const tables = tablesWithOverrides(next.oracles?.overrides, activeGenre);
+  const scene = generateScene(next, tables, rng, lens ? lensOracleCategories(lensId, activeGenre) : []);
 
   next.scenes = next.scenes || [];
   next.scenes.push(scene);
@@ -272,7 +273,7 @@ export function suggestNextWithLens(campaign, lensId, { toJournal = true, rng = 
   if (/myster|unknown|hidden|strange/i.test(con)) next.context.what.mystery = Math.min(10, (next.context.what.mystery || 0) + 1);
 
   pushTimeline(next, { kind: 'scene', label: `Scene ${scene.number}` });
-  const text = lens ? `${scene.text}\n\nLens: ${lens.label}` : scene.text;
+  const text = lens ? `${scene.text}\n\nLens: ${lensLabel(lens, activeGenre)}` : scene.text;
   if (toJournal) addJournal(next, text, 'Scene');
   bumpFactionPacing(next);
   return next;
@@ -298,10 +299,10 @@ const SHIFT_ORACLE_DEFAULT = {
   'Reward': { path: ['Missions', 'Reward'], wrap: (v) => `The party gains ${v}.` },
 };
 
-function defaultShiftPayload(campaign, shiftName, rng) {
+function defaultShiftPayload(campaign, shiftName, rng, genrePack) {
   const cfg = SHIFT_ORACLE_DEFAULT[shiftName];
   if (!cfg) return undefined;
-  const tables = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides, campaign.settings && campaign.settings.genrePack);
+  const tables = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides, genrePack || (campaign.settings && campaign.settings.genrePack));
   const entries = getTable(tables, ...cfg.path);
   return Array.isArray(entries) && entries.length ? cfg.wrap(pick(entries, rng)) : undefined;
 }
@@ -311,9 +312,9 @@ function defaultShiftPayload(campaign, shiftName, rng) {
  *  otherwise Reveal Clue/Complicate/Reward roll a real oracle entry
  *  (see defaultShiftPayload above) instead of always reusing their one
  *  fixed fallback sentence — every other shift is unaffected. */
-export function applyStoryShift(campaign, shiftName, payload, { rng = Math.random } = {}) {
+export function applyStoryShift(campaign, shiftName, payload, { rng = Math.random, genrePack } = {}) {
   const next = clone(campaign);
-  const resolvedPayload = payload || defaultShiftPayload(next, shiftName, rng);
+  const resolvedPayload = payload || defaultShiftPayload(next, shiftName, rng, genrePack);
   const { context, event } = applyShift(next.context, shiftName, resolvedPayload);
   next.context = context;
   if (event) pushTimeline(next, { kind: 'shift', label: event.label });
@@ -623,9 +624,9 @@ export function editLocationFantasyField(campaign, locationId, field, value) {
  *  roll here; only tests pass a seeded rng. `overview` (shared) gets the
  *  role/disposition/first-look composite; `revealed` (GM-only) gets the
  *  rolled Revealed Aspect, matching the field's existing purpose. */
-export function generateNpc(campaign, { rng = Math.random } = {}) {
+export function generateNpc(campaign, { rng = Math.random, genrePack } = {}) {
   const next = clone(campaign);
-  const tables = tablesWithOverrides(next.oracles?.overrides, next.settings?.genrePack);
+  const tables = tablesWithOverrides(next.oracles?.overrides, genrePack || next.settings?.genrePack);
   const chars = (tables && tables.Characters) || {};
   const roll = (key) => (Array.isArray(chars[key]) && chars[key].length ? pick(chars[key], rng) : '');
 
@@ -655,11 +656,11 @@ export function generateNpc(campaign, { rng = Math.random } = {}) {
  *  aimed at an entity that already exists instead of a new one. No-op
  *  (added: null) on a missing entity, a non-npc entity, or if none of the
  *  three tables have any entries. */
-export function deepenNpc(campaign, entityId, { rng = Math.random } = {}) {
+export function deepenNpc(campaign, entityId, { rng = Math.random, genrePack } = {}) {
   const next = clone(campaign);
   const entity = getEntity(next, entityId);
   if (!entity || entity.type !== 'npc') return { campaign: next, added: null };
-  const tables = tablesWithOverrides(next.oracles?.overrides, next.settings?.genrePack);
+  const tables = tablesWithOverrides(next.oracles?.overrides, genrePack || next.settings?.genrePack);
   const chars = (tables && tables.Characters) || {};
   const roll = (key) => (Array.isArray(chars[key]) && chars[key].length ? pick(chars[key], rng) : '');
   const stereotype = roll('Stereotype');

@@ -242,20 +242,58 @@ export const DND5E_TABLES = {
   },
   "Factions": {
     "Faction Type": [
-      "noble house", "merchant guild", "temple order", "bandit company",
+      "noble house", "merchant guild", "temple order", "bandit clan",
       "arcane academy", "border militia", "druidic circle", "smuggler ring",
       "cult of a forgotten god", "free company of mercenaries"
     ],
     "Faction Goal": [
       "corner the trade in enchanted goods", "protect a sacred site's neutrality",
-      "unionize a guild's indentured workers", "expand territory before a rival does",
+      "free a guild's indentured workers", "expand territory before a rival does",
       "expose a rival house's secrets without being caught", "keep a dangerous bloodline hidden",
       "buy legitimacy through public works", "eliminate a specific political liability",
       "control a region's trade routes", "recruit talent before a rival party does"
     ]
   },
+  "Noble Houses & Guilds": {
+    "House Pressure": [
+      "guild auditors arrive with hired blades", "patron changes the objective mid-mission", "the guild's notary threatens penalties for breach of oath", "a herald's proclamation contradicts witness testimony",
+      "danger pay is revoked unless the party swears an oath of silence", "rival house offers better terms for betrayal", "the lord orders evidence transferred to a distant hold", "the guild's assessor is more dangerous than the guards",
+      "local bailiff begs the party not to file a report", "guild physician rewrites the healer's findings", "a binding clause in the charter seizes salvage rights", "a guild council observer counts the dead as lost coin"
+    ],
+    "Hidden Agenda": [
+      "protect mineral rights", "turn a plague sample into a weapon", "avoid blame for a master's shoddy work", "discredit the journeymen's leaders",
+      "recover a guild's secret construct bindings", "bury evidence of an illegal land seizure", "secure ancient artifacts before the crown's inquisitors arrive", "turn disaster into a chance to seize a rival's holdings",
+      "force evacuation to break land claims", "test new martial law on a living town", "steal a rival guild's route maps", "keep the guild's backers confident at any cost"
+    ],
+    "Faction Activity": [
+      "quietly buys out a smaller rival", "leaks a damaging rumor about a competitor", "recalls its agents for a closed council",
+      "opens a new outpost without local approval", "cuts a backroom deal with a sheriff or crown magistrate", "tests the loyalty of its own sworn members",
+      "reassigns its best people to a single urgent problem", "tests a new policy on a population that can't refuse", "quietly funds an opposing faction's rival",
+      "stages a public event to shore up its reputation", "moves a key asset somewhere harder to reach", "cancels a contract without warning",
+      "recruits aggressively in a community it doesn't yet control", "commissions a chronicle that conveniently flatters its own interests", "goes quiet — which is its own kind of signal"
+    ],
+    "Faction Asset": [
+      "an elite enforcer cadre, loyal only to the top", "a hidden cache the rest of the faction doesn't know about",
+      "an informant network threaded through a rival's own ranks", "a black-market supply pipeline no customs check catches",
+      "a political patron who owes a favor nobody's called in yet", "a watchtower that hears more than it should",
+      "a captive specialist kept comfortable and compliant", "a front guild that launders reputation as easily as coin",
+      "a fast, deniable strike team for jobs that can't trace back", "a monopoly contract on something the whole realm needs",
+      "a compromised crown magistrate who looks the other way, for now", "a private army of hired blades bigger than it publicly admits",
+      "an archive of leverage on everyone who matters locally", "a fortified redoubt built for a war that hasn't started yet",
+      "a loyal cell embedded inside a rival's own organization"
+    ]
+  },
+  "Faction Turns": {
+    "Faction Action": [
+      "expands into unclaimed territory before a rival can", "consolidates its hold over an existing asset", "opens quiet diplomatic channels with a former enemy",
+      "moves against a weaker rival while it still can", "exploits a resource before the crown notices", "sabotages a rival's supply caravans",
+      "recruits heavily, thinning the local labor pool", "builds roads and bridges that lock in future control", "cuts a deal trading short-term loss for long-term leverage",
+      "goes to ground, consolidating quietly instead of acting", "tests a rival's resolve with a calculated provocation", "spends heavily to buy loyalty it can't otherwise earn",
+      "reaches for an asset just outside its usual reach", "repositions its assets ahead of a coming conflict", "makes a public move meant to be seen, not just felt"
+    ]
+  },
   "Threats": {
-    "Security Response": [
+    "Watch Response": [
       "militia patrol with hounds", "a knightly order response, an hour out",
       "a magical ward sealing every exit", "a bounty posted before the party leaves town",
       "a rival mage tracing the working live", "a mercenary company called in on retainer",
@@ -316,7 +354,7 @@ export const DND5E_TABLES = {
     ],
     "Survey Problem": [
       "the map on file doesn't match reality", "a marked safe road no longer is one",
-      "readings are being deliberately obscured by magic", "a previous party's report was quietly falsified",
+      "divinations are being deliberately obscured by magic", "a previous party's report was quietly falsified",
       "local guides won't go past a certain point", "enchanted tools interfere with each other here",
       "the terrain has changed since the last survey", "something here isn't on any official map",
       "the exit route is now someone else's territory", "watch coverage is denser than briefed"

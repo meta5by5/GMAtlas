@@ -67,7 +67,7 @@ export const GENRE_PACKS = [
   // the standalone 'fantasy-full' pack id is retired too, folded into this
   // one rather than kept as a second, now-redundant, easy-to-pick-wrong
   // option.
-  { id: 'fantasy', label: 'Fantasy (generic)', tables: withQuests(FANTASY_FULL_TABLES, 'fantasy'), gameSystemIds: ['fiveleagues'] },
+  { id: 'fantasy', label: 'Fantasy (generic)', tables: withQuests(FANTASY_FULL_TABLES, 'fantasy'), gameSystemIds: ['fiveleagues'], factionPowersGroup: 'Noble Houses & Guilds', factionActionGroup: 'Faction Turns' },
   // Direct request: "associating all of this to the 'Fantasy (D&D-style)'
   // genre pack... everything including the oracles must be independent or
   // a copy allocated to this version so it can be customized to D&D game
@@ -76,7 +76,7 @@ export const GENRE_PACKS = [
   // point on so customizing it (directly, or per-campaign via
   // oracles.overrides) never touches the 'fantasy' pack above or anything
   // else using it.
-  { id: 'dnd5e', label: 'D&D 5e', tables: withQuests(DND5E_TABLES, 'dnd5e'), gameSystemIds: ['dnd5e'] },
+  { id: 'dnd5e', label: 'D&D 5e', tables: withQuests(DND5E_TABLES, 'dnd5e'), gameSystemIds: ['dnd5e'], factionPowersGroup: 'Noble Houses & Guilds', factionActionGroup: 'Faction Turns' },
 ];
 
 // The old 'hostile' pack id, aliased forever (not just for one migration
@@ -95,6 +95,22 @@ const LEGACY_GENRE_PACK_IDS = { hostile: 'sci-fi-generic' };
 export function findGenrePack(id) {
   const resolvedId = LEGACY_GENRE_PACK_IDS[id] || id;
   return GENRE_PACKS.find((p) => p.id === resolvedId) || GENRE_PACKS[0];
+}
+
+// The top-level table groups holding a pack's Faction Activity/Asset and its
+// Faction Action tables — each genre names them its own way.
+export function factionPowersGroup(id) {
+  return findGenrePack(id).factionPowersGroup || 'Corporate Powers';
+}
+export function factionActionGroup(id) {
+  return findGenrePack(id).factionActionGroup || 'Stars Without Number';
+}
+
+// Whether a pack is one of the fantasy genre's — these share the fantasy
+// oracle grouping and lens vocabulary rather than the sci-fi-worded defaults.
+export function isFantasyGenre(id) {
+  const resolved = findGenrePack(id).id;
+  return resolved === 'fantasy' || resolved === 'dnd5e';
 }
 
 // "Bestiary" is a fantasy-genre term (a monster manual); it reads oddly for

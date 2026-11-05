@@ -18,8 +18,8 @@ import { pick, tablesWithOverrides } from './oracles.js';
  *  plain strings ready to hand to entities.js's updateEntity/
  *  addConflictSessionHook — this function never touches the campaign
  *  itself. */
-export function generateConflictSeed(campaign, { rng = Math.random } = {}) {
-  const tables = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides, campaign.settings && campaign.settings.genrePack);
+export function generateConflictSeed(campaign, { rng = Math.random, genrePack } = {}) {
+  const tables = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides, genrePack || (campaign.settings && campaign.settings.genrePack));
   const group = (tables && tables['Faction Encounter']) || {};
   const rootCauseTable = group['Root Cause Category'] || [];
   const gapTable = group['Cause Gap Flavor'] || [];

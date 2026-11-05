@@ -184,7 +184,7 @@ export function findByName(campaign, name) {
 // (Resources/Reputation/Stress/relationship strength); default 3 so a new
 // faction starts capable but unremarkable, not maxed or blank. `assets` is a
 // plain string list the GM curates directly or seeds via the new "Faction
-// Asset" oracle table (Corporate Powers group) — not a bonus-calculating
+// Asset" oracle table (the pack's factionPowersGroup) — not a bonus-calculating
 // sub-mechanism, matching this app's existing "reuse a plain field/list,
 // don't invent a second state machine" discipline.
 function ensureFactionFields(e) {

@@ -71,11 +71,11 @@ function dangerFromFactionGoal(campaign, factionId) {
  *  faction's own current-goal urgency is used instead (Living Faction
  *  Engine Phase C), and the mission's `title`/`sourceFactionId` name the
  *  faction as its patron. Pure/RNG-injectable like every other roll here. */
-export function generateMission(campaign, { danger, rng = Math.random, factionId = null } = {}) {
+export function generateMission(campaign, { danger, rng = Math.random, factionId = null, genrePack } = {}) {
   const faction = factionId ? (campaign.entities && campaign.entities.items || []).find((e) => e.id === factionId && e.type === 'faction') : null;
   const d = danger != null ? danger
     : (faction ? dangerFromFactionGoal(campaign, factionId) : null) ?? ((campaign.context && campaign.context.what && campaign.context.what.threat) || 0);
-  const tables = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides, campaign.settings && campaign.settings.genrePack);
+  const tables = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides, genrePack || (campaign.settings && campaign.settings.genrePack));
   const complicationTable = (tables && tables.Miscellaneous && tables.Miscellaneous['Story Complication']) || [];
   const complication = complicationTable.length ? pick(complicationTable, rng) : '';
   return {

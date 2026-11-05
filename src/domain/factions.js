@@ -22,6 +22,7 @@
 import { getEntity, setFactionStat, addFactionAsset } from './entities.js';
 import { addThread, listThreads, advanceThread } from './threads.js';
 import { tablesWithOverrides, pick } from './oracles.js';
+import { factionPowersGroup } from '../data/genrePacks.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 
@@ -99,16 +100,18 @@ export function formatFactionTurnResult(r) {
   return `${r.factionName} ${r.verb} (${label}, ${r.stat} ${r.statValue} + d10 ${r.roll} = ${r.total}) — ${r.outcome}.`;
 }
 
-/** Roll a Faction Asset (Corporate Powers group) and append it directly to
+/** Roll a Faction Asset (the pack's factionPowersGroup) and append it directly to
  *  the faction's Assets list — the "roll and structurally add" action, same
  *  shape as generateContract/generateMission rolling a table into a
  *  concrete record instead of just journaling flavor text. No-op (returns
  *  the campaign unchanged, empty asset) if the entity isn't a faction. */
-export function rollFactionAsset(campaign, factionId, { rng = Math.random } = {}) {
+export function rollFactionAsset(campaign, factionId, { rng = Math.random, genrePack } = {}) {
   const faction = getEntity(campaign, factionId);
   if (!faction || faction.type !== 'faction') return { campaign, asset: '' };
-  const tables = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides, campaign.settings && campaign.settings.genrePack);
-  const list = (tables && tables['Corporate Powers'] && tables['Corporate Powers']['Faction Asset']) || [];
+  const activeGenre = genrePack || (campaign.settings && campaign.settings.genrePack);
+  const tables = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides, activeGenre);
+  const powers = tables && tables[factionPowersGroup(activeGenre)];
+  const list = (powers && powers['Faction Asset']) || [];
   const asset = list.length ? pick(list, rng) : '';
   if (!asset) return { campaign, asset: '' };
   return { campaign: addFactionAsset(campaign, factionId, asset), asset };
@@ -161,10 +164,12 @@ export function factionsUnderPressure(campaign) {
  *  mechanical setback) — only the flavor text and the stat check are
  *  randomized. Returns the new campaign plus the rumors rolled, for the UI
  *  to journal (formatFactionTurnRumors below). */
-export function advanceFactionTurns(campaign, { rng = Math.random } = {}) {
+export function advanceFactionTurns(campaign, { rng = Math.random, genrePack } = {}) {
   let next = clone(campaign);
-  const tables = tablesWithOverrides(next.oracles && next.oracles.overrides, next.settings && next.settings.genrePack);
-  const activityTable = (tables && tables['Corporate Powers'] && tables['Corporate Powers']['Faction Activity']) || [];
+  const activeGenre = genrePack || (next.settings && next.settings.genrePack);
+  const tables = tablesWithOverrides(next.oracles && next.oracles.overrides, activeGenre);
+  const powers = tables && tables[factionPowersGroup(activeGenre)];
+  const activityTable = (powers && powers['Faction Activity']) || [];
   const tracks = listThreads(next).filter((t) => t.kind === 'faction-pressure' && !t.done);
   const rumors = [];
   for (const track of tracks) {

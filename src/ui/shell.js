@@ -1742,7 +1742,9 @@ function onClick(ev) {
   const edge = hit('[data-drawer-open]');
   if (edge) {
     const id = edge.dataset.drawerOpen;
-    if (FOCUS_ON_REOPEN_DRAWERS.has(id)) return focusDrawerPanel(id);
+    // An anchored panel already lives on the Storyboard — go to it rather
+    // than opening a placeholder tab for it.
+    if (FOCUS_ON_REOPEN_DRAWERS.has(id) || anchoredPanels.includes(id)) return focusDrawerPanel(id);
     return toggleDrawer(id);
   }
   if (hit('[data-close-drawer]')) return closeDrawerTab(activeDrawer);
@@ -1779,10 +1781,12 @@ function onClick(ev) {
   if (hit('[data-drawer-restore]')) { drawerCollapsed = false; return render(); }
   if (hit('[data-toggle-copilot]')) {
     // The right nav's Advisor button is labeled after whatever fills the
-    // Advisor position — when that's Party (FOCUS_ON_REOPEN_DRAWERS), it acts
-    // like the Party button: bring Party to the front and make it active.
+    // Advisor position (Composer, Navigator, Party, ...). Wherever that
+    // position shows as a tab — phone/tablet, or any drawer open on desktop —
+    // it acts like the Party button: bring the tab to the front and make it
+    // active. Only the desktop's standalone panel still toggles.
     const advisorContent = resolvePositionContentId(store.getActiveProfile(), 'advisor');
-    if (FOCUS_ON_REOPEN_DRAWERS.has(advisorContent)) return focusDrawerPanel(advisorContent);
+    if (isCompactTab() || openDrawers.length || FOCUS_ON_REOPEN_DRAWERS.has(advisorContent)) return focusDrawerPanel(advisorContent, 'advisor');
     if (!copilotOpen) endOracleRoutingUnlessKept(advisorContent);
     copilotOpen = !copilotOpen; return render();
   }
@@ -1798,6 +1802,7 @@ function onClick(ev) {
     // section is expanded instead of reopening a second copy as a drawer
     // tab.
     if (factionEventsDockedInWhere) { expandedDashboardSections.add('where'); return render(); }
+    if (anchoredPanels.includes('faction-events')) return focusDrawerPanel('faction-events');
     entityTypeFilter = 'faction';
     entityTagFilters = new Set();
     return toggleDrawer('faction-events');
@@ -2175,7 +2180,7 @@ function onClick(ev) {
   // default for any other caller) — only these two Quick Apply call
   // sites opt out.
   if (hit('[data-continue-story]')) {
-    store.update((d) => continueStory(d, { toJournal: false }));
+    store.update((d) => continueStory(d, { toJournal: false, genrePack: store.get().settings.genrePack }));
     return toast('Scene generated');
   }
   // "Restart Story" (Advisor Quick Apply, direct follow-up request) — a
@@ -2213,12 +2218,12 @@ function onClick(ev) {
     const lensId = lensPick.dataset.lensPick;
     lensPickerOpen = false;
     whyLensPickerOpen = false;
-    store.update((d) => suggestNextWithLens(d, lensId, { toJournal: false }));
+    store.update((d) => suggestNextWithLens(d, lensId, { toJournal: false, genrePack: store.get().settings.genrePack }));
     return toast('Scene generated');
   }
 
   const shift = hit('[data-shift]');
-  if (shift) { store.update((d) => applyStoryShift(d, shift.dataset.shift)); return toast(shift.dataset.shift); }
+  if (shift) { store.update((d) => applyStoryShift(d, shift.dataset.shift, undefined, { genrePack: store.get().settings.genrePack })); return toast(shift.dataset.shift); }
 
   const shiftPrompt = hit('[data-shift-prompt]');
   if (shiftPrompt) {
@@ -4217,7 +4222,7 @@ function onClick(ev) {
   const assetRoll = hit('[data-faction-asset-roll]');
   if (assetRoll) {
     let asset = '';
-    store.update((d) => { const r = rollFactionAsset(d, assetRoll.dataset.factionAssetRoll); asset = r.asset; return r.campaign; });
+    store.update((d) => { const r = rollFactionAsset(d, assetRoll.dataset.factionAssetRoll, { genrePack: store.get().settings.genrePack }); asset = r.asset; return r.campaign; });
     return toast(asset ? `Asset added: ${asset}` : 'No Faction Asset table entries found');
   }
   const assetRemove = hit('[data-faction-asset-remove]');
@@ -4738,7 +4743,7 @@ function onClick(ev) {
   const generateFactionMission = hit('[data-generate-faction-mission]');
   if (generateFactionMission) {
     const factionId = generateFactionMission.dataset.generateFactionMission;
-    store.update((d) => addMission(d, generateMission(d, { factionId })));
+    store.update((d) => addMission(d, generateMission(d, { factionId, genrePack: store.get().settings.genrePack })));
     return toast('Mission generated — see Faction Events → Missions');
   }
   const missionStatus = hit('[data-mission-status]');
@@ -4760,7 +4765,7 @@ function onClick(ev) {
   if (conflictQuickstart) {
     const id = conflictQuickstart.dataset.conflictQuickstart;
     return store.update((d) => {
-      const seed = generateConflictSeed(d, {});
+      const seed = generateConflictSeed(d, { genrePack: store.get().settings.genrePack });
       let next = ensureConflictEscalationTrack(d, id);
       next = updateEntity(next, id, { statedCause: seed.statedCause, rootCause: seed.rootCause, causeGapHook: seed.causeGapHook, thirdPartyCasualty: seed.thirdPartyCasualty });
       if (seed.sessionHook) next = addConflictSessionHook(next, id, seed.sessionHook);
@@ -4920,7 +4925,7 @@ function onClick(ev) {
     let rumorCount = 0;
     let text = '';
     store.update((d) => {
-      const r = advanceFactionTurns(d);
+      const r = advanceFactionTurns(d, { genrePack: store.get().settings.genrePack });
       rumorCount = r.rumors.length;
       text = formatFactionTurnRumors(r.rumors);
       return addNote(r.campaign, text, 'Faction Turn');
@@ -6413,7 +6418,7 @@ function onChange(ev) {
     focusInspectorNameNextRender = true;
     if (value === 'generate-npc') {
       let name = '';
-      store.update((d) => { const r = generateNpc(d); name = r.id && getEntity(r.campaign, r.id) ? getEntity(r.campaign, r.id).name : ''; return r.campaign; });
+      store.update((d) => { const r = generateNpc(d, { genrePack: store.get().settings.genrePack }); name = r.id && getEntity(r.campaign, r.id) ? getEntity(r.campaign, r.id).name : ''; return r.campaign; });
       return toast(name ? `Generated ${name}` : 'NPC generated');
     }
     store.update((d) => createEntity(d, { type: value }).campaign);
@@ -7650,8 +7655,9 @@ function onInput(ev) {
 // panel, keeping its scroll position); anchored to the Storyboard, its card
 // is scrolled into view and focused instead of reopening a placeholder in
 // the drawer (on phone/tablet, where the Storyboard isn't shown, it returns
-// to the tab strip). Not open yet → opens normally.
-function focusDrawerPanel(id) {
+// to the tab strip). Not open yet → opens normally. `positionSlot` names the
+// slot when the caller knows it — the same content can fill two positions.
+function focusDrawerPanel(id, positionSlot) {
   endOracleRoutingUnlessKept(id);
   // Already a tab in the strip (even while it ALSO fills a Storyboard
   // position): that tab moves to the front and becomes active.
@@ -7670,7 +7676,7 @@ function focusDrawerPanel(id) {
   // an anchored panel is covering that slot right now, in which case it
   // opens as an ordinary tab instead); the Advisor panel (or, while drawers
   // are open, the Advisor tab) for the Advisor slot.
-  const slot = BUILTIN_POSITION_IDS.find((sl) => resolvePositionContentId(store.getActiveProfile(), sl) === id);
+  const slot = positionSlot || BUILTIN_POSITION_IDS.find((sl) => resolvePositionContentId(store.getActiveProfile(), sl) === id);
   if (slot && !anchoredPanels.includes(id)) {
     if (isCompactTab() || (slot === 'advisor' && openDrawers.length)) {
       endOracleRoutingUnlessKept(slot);
@@ -9841,7 +9847,7 @@ function render() {
   const settingsWrap = root.querySelector('.settings-menu-wrap');
   if (settingsWrap) settingsWrap.remove();
   edge.innerHTML = computeVisibleEdgeOrder(profile).map((id) => {
-    if (id === 'advisor-toggle') return `<button data-toggle-copilot title="${escapeHtml(advisorMeta.label)}"><span class="glyph">${advisorMeta.glyph}</span><b>${escapeHtml(advisorMeta.label)}</b></button>`;
+    if (id === 'advisor-toggle') return `<button data-toggle-copilot aria-expanded="${(isCompactTab() || openDrawers.length) ? activeDrawer === 'advisor' : copilotOpen}" title="${escapeHtml(advisorMeta.label)}"><span class="glyph">${advisorMeta.glyph}</span><b>${escapeHtml(advisorMeta.label)}</b></button>`;
     // Faction Events (docs/adr/0031/0032) is an ordinary DRAWERS entry now
     // (see renderDrawer()'s switch) — special-cased ONLY because opening it
     // also narrows Cast's own type filter to Faction (see the click
@@ -10378,7 +10384,7 @@ function commitEntityPickerPick(picker, id) {
   const npcRoleModes = picker.mode === 'protagonist' || picker.mode === 'antagonist' || picker.mode === 'bystander' || picker.mode === 'who-add-npc';
   let sceneId = currentSceneId();
   if (!sceneId && npcRoleModes) {
-    store.update((d) => ((d.scenes && d.scenes.length) ? d : continueStory(d, { toJournal: false })));
+    store.update((d) => ((d.scenes && d.scenes.length) ? d : continueStory(d, { toJournal: false, genrePack: store.get().settings.genrePack })));
     sceneId = currentSceneId();
   }
   if (!sceneId) return renderEntityPickerOverlay();

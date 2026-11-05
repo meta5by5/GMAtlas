@@ -31,15 +31,15 @@ export const ORACLE_GROUPS = [
 // renamed most sci-fi-specific CATEGORY keys to fantasy ones (Starships ->
 // "Vessels & Caravans", Xenobestiary -> "Bestiary", etc.) — this is the
 // matching fantasy-flavored GROUPING layer on top of those renamed keys,
-// used instead of ORACLE_GROUPS whenever the active genre pack is
-// 'fantasy' (see drawers/index.js's oracle()). 'Trade & Cargo' itself was
+// used instead of ORACLE_GROUPS whenever the active genre pack is a fantasy
+// one, 'fantasy' or 'dnd5e' (see drawers/index.js's oracle()). 'Trade & Cargo' itself was
 // deliberately NOT renamed at the data-key level (copilot.js's
 // suggestedOraclePath and a domain test both look it up by that exact
 // name across every pack) — its {key, label} entry below only changes what
 // the GM sees, not what anything looks up.
 export const ORACLE_GROUPS_FANTASY = [
   { label: '⭐ Core Solo', children: ['Campaign', 'Core Oracles', 'Core Solo Engine', 'Campaign Intelligence Engine'] },
-  { label: '☠ Threats & Conflict', children: ['Conflict', 'Conflict Architecture', 'Danger Situations', 'Fear and Dread', 'Horror Escalation', 'Miscellaneous', 'Faction Encounter'] },
+  { label: '☠ Threats & Conflict', children: ['Conflict', 'Conflict Architecture', 'Danger Situations', 'Threats', 'Fear and Dread', 'Horror Escalation', 'Miscellaneous', 'Faction Encounter'] },
   { label: '📚 Story Beats', children: ['Plot Engine', 'Story', 'Adventure', 'Adventure Seed', 'Missions', 'Quests', 'Mission Aftermath', 'Mysteries & Coverups', 'Scenario Framing', 'Twist & Gambit Oracles', 'Ironsworn Oracles', 'Ironsworn Delve Oracles'] },
   { label: '👥 Characters & Society', children: ['Characters', 'Factions', 'Frontier Society', 'Noble Houses & Guilds', 'Faction Turns', 'Enchantment', 'Party & NPCs', 'Law, Marshals & Crime', 'Guards & Soldiers', 'Golems & Constructs'] },
   { label: '🗺️ Locations', children: ['Realms', 'Settlements', 'Districts', 'Location Themes', 'Site Concept', 'Realm & Kingdom Creation', 'Kingdoms & Settlements', 'Settlements and Expeditions', 'Vaults / Ruins', 'Ruined Holds'] },
