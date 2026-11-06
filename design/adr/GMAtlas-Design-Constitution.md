@@ -87,7 +87,7 @@ wherever the GM currently is.
 
 ## Part II — Architecture as Built
 
-### The five non-negotiable rules
+### The six non-negotiable rules
 
 These exist to structurally prevent a specific, real failure mode from an
 earlier prototype: patch-on-patch scripts, storage scattered across a dozen
@@ -111,7 +111,15 @@ documented:
    (one database, one key/value object store; each campaign under its own
    `campaign:<id>` key plus a `campaignBackup:<id>` one-slot backup written
    best-effort immediately before every real write, and one `appConfig` key
-   for the campaign/profile registry above). Its public surface: synchronous
+   for the campaign/profile registry above), plus a second object store,
+   `docBlobs`, for bytes: imported documents, loaded sourcebooks, and
+   gallery images and videos. Images used to sit inline in the campaign
+   document as `data:` URLs; `store.js` now moves them into `docBlobs`
+   under a `sha256:<hex>` content key after every load, import and update
+   (`domain/inlineBlobs.js` decides what moves), keeps an in-memory copy
+   so rendering and `export()` stay synchronous, and puts them back
+   inline in every export so an export file keeps the shape older versions
+   read (design/adr/sync-groundwork.md). Its public surface: synchronous
    `get()` (the active campaign doc, with the active Rules Profile's
    ruleset fields — Genre Pack, Stat System, Trade Economy Model, Rules
    Constitution choices, Party headline fields — plus the install-wide
@@ -133,14 +141,18 @@ documented:
    boot only, as a lossless fallback for pre-multi-campaign installs —
    never written to again. Nothing else calls `localStorage` or
    `indexedDB` directly.
-3. **The domain layer (`src/domain/*.js`, 34 files) is pure and DOM-free.**
+3. **The domain layer (`src/domain/*.js`, 54 files) is pure and DOM-free.**
    Every mutator takes a campaign object and returns a new one — no mutation
-   of the input, no side effects, no DOM access. This is what makes 451
+   of the input, no side effects, no DOM access. This is what makes 809
    `node --test` tests exercise real business logic headlessly, and what
    makes `store.update()`'s optimistic-then-rollback persistence model safe.
-4. **Exactly one delegated event listener per browser event type**, bound
-   once on the shell's root element in `mountShell()`
-   (`src/ui/shell.js`): `click`, `dblclick`, `change`, `input`, the
+4. **Exactly one delegated event listener per browser event type per
+   surface root.** There are two surfaces: the campaign shell and the
+   portal (Help centre now; sign-in, account and store later). The portal
+   (`mountPortal()`, `src/ui/portal/index.js`) binds its own `click` and
+   `input` on its root, plus the one window `hashchange` listener that
+   switches surfaces. The shell's are bound once on its root element in
+   `mountShell()` (`src/ui/shell.js`): `click`, `dblclick`, `change`, `input`, the
    drag-and-drop events, a from-scratch touch-gesture equivalent
    (`touchstart`/`touchmove`/`touchend`/`touchcancel`), pan/zoom mouse
    events for the Graph and Battlemap, and `focusout` (commits a pending
@@ -158,6 +170,13 @@ documented:
    pre-rebrand storage keys into the one document and parks anything it
    can't map under `_legacy`. A schema change must keep old exports
    importable.
+6. **No document bytes leave the device through a server.** Imported
+   documents, sourcebooks, images and videos are stored only in this
+   browser's `docBlobs`. Their metadata (ids, titles, content keys) may
+   sync once sync exists (design/ACCOUNTS-SYNC-ROADMAP.md); the bytes move
+   only device to device or by file. `domain/syncOps.js` refuses any
+   `data:` URL in an op, and `data/syncPolicy.js` classifies every stored
+   path so nothing is synced by accident.
 
 Every delegated handler is wrapped so a thrown exception (most often a failed
 persist) becomes a visible toast instead of the interaction silently doing
@@ -193,7 +212,7 @@ needed.
 
 ### The domain layer — what each module owns
 
-Grouped by area (all 34 files, `src/domain/`):
+The main modules by area (54 files in `src/domain/`):
 
 - **Orchestration & context**: `session.js` (top-level user-facing
   operations — Continue Story, journal notes, field edits), `context.js`
@@ -231,13 +250,21 @@ Grouped by area (all 34 files, `src/domain/`):
   Cast/Journal/Oracle/Documents/Party/Colony), `activities.js` (Activity →
   Rules Lens suggestion), `contentPack.js` (inter-campaign portable
   export/import), `titleCase.js`.
+- **Sync groundwork** (design/adr/sync-groundwork.md; nothing syncs yet):
+  `inlineBlobs.js` (which inline bytes move to the blob store, and back
+  for export), `syncOps.js` (field-level ops, hybrid logical clocks and
+  the convergent merge, shared with the future server), `licensing.js`
+  (which licenses count as owned on this device; `entitlements.js` stays
+  the seam for what an install may activate).
+- **Help centre**: `helpCentre.js` (article Markdown rendering, search,
+  portal routes).
 
-Every one of these 34 modules has direct coverage in `tests/domain.test.js`
-(436 tests) or `tests/migrate.test.js` (15 tests) — 451 total.
+The domain modules are covered by `tests/domain.test.js` (783 tests) and
+`tests/migrate.test.js` (26 tests) — 809 total.
 
 ### The content layer
 
-`src/data/` (28 files) is the entire "genre-aware, not genre-locked"
+`src/data/` (54 files) is the entire "genre-aware, not genre-locked"
 guarantee made concrete: oracle tables for 3 genre packs (~49 top-level
 categories in the default Hostile pack alone), the Oracle drawer's grouping
 scheme, per-ruleset character templates and Bestiary/gear statblock
@@ -249,7 +276,9 @@ explicit opt-in gate, one 100% original default), trade economy models and
 commodities, biomes, UWP world-profile decode tables, suggestion lenses,
 enhancement types, battlemap icons, and the Reference Library's committed
 manifest (a permanent catalog independent of whether the PDF bytes are
-actually present on disk).
+actually present on disk). Two non-game data files sit beside them:
+`syncPolicy.js` (where each stored path may travel once sync exists) and
+`helpArticles.js` (the Help centre's articles).
 
 ### The UI layer
 
@@ -269,6 +298,11 @@ actually present on disk).
   Documents/Gallery/Battlemap/Graph/Settings), dispatched through one
   `renderDrawer(id, doc, ui)` switch. `factionEvents.js` is split out
   separately only to avoid a circular import.
+- **`src/ui/portal/index.js`** — the portal surface (rule 4): the Help
+  centre at `#/help`, shown instead of the campaign, in its own layout
+  and stylesheet (`styles/portal.css`, sharing only `tokens.css`).
+  `src/ui/imageSrc.js` resolves a gallery record's displayable source
+  (inline, or from the store's blob cache) for every view.
 - **`src/ui/mentionEditor.js`, `searchPanel.js`, `imageResize.js`,
   `mechanicsScan.js`, `tocScan.js`, `hostileLocationsFetch.js`** — the rich
   text/mention editor, Universal Search's render, and the browser-only,

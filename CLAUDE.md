@@ -65,8 +65,10 @@ non-trivial change; this file only covers day-to-day mechanics.
    `src/core/schema.js`'s `defaultCampaign()` + `schemaVersion`. Everything
    reads/writes through it.
 2. **Exactly one module touches persistence: `src/core/store.js`.**
-   IndexedDB, one DB, one object store, two keys (live doc + a one-slot
-   backup written best-effort before every real write). Public surface:
+   IndexedDB, one DB: a key/value store (each campaign's live doc + a
+   one-slot backup written best-effort before every real write, and
+   appConfig) and a `docBlobs` store for bytes (documents, sourcebooks,
+   gallery images under a `sha256:` content key, re-inlined on export). Public surface:
    sync `get()`, sync-call-shape `update(fn)` (persists in background,
    rolls back + reports via `store.onPersistError(fn)` on failure), `sub
    scribe(fn)`, sync `export()`, async `import()`/`newCampaign()`/
@@ -78,8 +80,10 @@ non-trivial change; this file only covers day-to-day mechanics.
    mutate the input). No side effects. This is what makes `node --test`
    cover real business logic headlessly and makes `store.update()`'s
    optimistic-then-rollback model safe.
-4. **Exactly one delegated event listener per event type**, registered once
-   on the root in `mountShell()` (`src/ui/shell.js`): `click`, `dblclick`,
+4. **Exactly one delegated event listener per event type per surface
+   root.** The portal (`mountPortal()`, `src/ui/portal/index.js`) has its
+   own; the campaign shell's are registered once on the root in
+   `mountShell()` (`src/ui/shell.js`): `click`, `dblclick`,
    `change`, `input`, drag-and-drop, touch-gesture equivalents, pan/zoom
    mouse events, `focusout`. All routing goes through `data-*` attributes
    read via `target.closest(...)` inside those handlers — never a
@@ -89,6 +93,9 @@ non-trivial change; this file only covers day-to-day mechanics.
 5. **Migration never drops data.** `src/core/migrate.js` absorbs legacy
    storage keys into the one document and parks anything unmapped under
    `_legacy`. A schema change must keep old exports importable.
+6. **No document bytes leave the device through a server.** Only metadata
+   may sync (`src/data/syncPolicy.js` classifies every stored path);
+   `src/domain/syncOps.js` refuses `data:` URLs in ops.
 
 Every delegated handler is wrapped so a thrown exception (most commonly a
 failed persist) surfaces as a visible toast instead of the interaction
@@ -103,14 +110,14 @@ src/
     store.js       the ONLY persistence access (IndexedDB); pubsub via subscribe()
     migrate.js     legacy key absorption, lossless
     buildInfo.js   hand-maintained phase/version/changelog (Settings → Build)
-  data/            28 files — every game-content catalog (oracle tables x3 genre
+  data/            54 files — every game-content catalog (oracle tables x3 genre
                    packs, genre pack registry, rulesets, statblock/gear templates,
                    gear catalog, Rules Constitution provider registry, two
                    interchangeable faction content catalogs, trade economy/
                    commodities/biomes, UWP tables, suggestion lenses, enhancement
                    types, battlemap icons, Reference Library manifest). All content
                    is data — no ruleset vocabulary belongs in src/domain/.
-  domain/          34 files, pure/DOM-free, one test file covers all of them.
+  domain/          54 files, pure/DOM-free, covered by tests/domain.test.js.
                    session.js/context.js/scenes.js/copilot.js/recap.js orchestrate
                    the WHO/WHERE/WHAT/WHY/HOW model and Co-Pilot; oracles.js is the
                    roll engine; entities.js/statblocks.js/threads.js/graph.js/
@@ -121,7 +128,9 @@ src/
                    documents.js/guide.js/mechanicsIndex.js/toc.js/worldbuilding.js/
                    hostileLocations.js are content & reference; party.js/colony.js/
                    gallery.js/battlemaps.js round out the rest; search.js/
-                   activities.js/contentPack.js/titleCase.js are cross-cutting.
+                   activities.js/contentPack.js/titleCase.js are cross-cutting;
+                   inlineBlobs.js/syncOps.js/licensing.js are sync groundwork
+                   (design/adr/sync-groundwork.md); helpCentre.js backs Help.
   ui/
     shell.js           mountShell(), every delegated handler, the render loop
     workspace/index.js the Story Dashboard (WHO/WHERE/WHAT/WHY/HOW as collapsible
@@ -129,15 +138,19 @@ src/
     copilotPanel.js     the always-visible Co-Pilot ("decision sandbox")
     drawers/index.js    every drawer's render, dispatched through one switch
                         (factionEvents.js is split out only to avoid a circular import)
+    portal/index.js     the portal surface (#/help Help centre; later account/store),
+                        own layout in styles/portal.css
+    imageSrc.js         a gallery record's displayable src (inline or blob cache)
     mentionEditor.js, searchPanel.js, imageResize.js, mechanicsScan.js, tocScan.js,
     hostileLocationsFetch.js — rich-text editor, search render, and the browser-only
                         impure edges kept out of the domain layer
 styles/
   tokens.css       three-tier design tokens (colors, spacing vars)
-  cockpit.css      layout + component styles
+  cockpit.css      layout + component styles (campaign surface)
+  portal.css       portal surface layout (shares tokens.css only)
 tests/
-  domain.test.js   436 tests — direct coverage of every domain module
-  migrate.test.js  15 tests — legacy-key absorption + round-trip
+  domain.test.js   783 tests — domain modules, incl. sync-merge convergence
+  migrate.test.js  26 tests — legacy-key absorption + round-trip
 scripts/
   build.js         zero-dependency bundler (see below) — re-run after any src/ edit
   save-import.js   standalone CLI: stage an exported campaign JSON for manual use

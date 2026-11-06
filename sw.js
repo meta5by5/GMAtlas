@@ -17,6 +17,7 @@ const SHELL = [
   './styles/cockpit.css',
   './styles/genre-scifi.css',
   './styles/genre-fantasy.css',
+  './styles/portal.css',
   './dist/app.bundle.js',
   './assets/icon-192.png',
   './assets/icon-512.png',

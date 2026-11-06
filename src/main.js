@@ -5,6 +5,7 @@
 
 import { store } from './core/store.js';
 import { mountShell } from './ui/shell.js';
+import { mountPortal } from './ui/portal/index.js';
 
 // load() is async (IndexedDB, docs/adr/0015-indexeddb-persistence.md) — an
 // IIFE, not top-level await, since the bundled output is a classic script
@@ -12,6 +13,7 @@ import { mountShell } from './ui/shell.js';
 (async () => {
   await store.load();
   mountShell(document.getElementById('app'));
+  mountPortal(document.getElementById('portal'), document.getElementById('app'));
 
   // Register the service worker for offline / installable PWA (ignored on file://).
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

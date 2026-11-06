@@ -17,6 +17,7 @@ import {
 import { sortStatblockGroups, getStatblockTemplates } from '../../domain/statblocks.js';
 import { listTemplates } from '../../domain/statblockTemplates.js';
 import { buildGraph, computeLayout, nodeColor } from '../../domain/graph.js';
+import { imageSrc } from '../imageSrc.js';
 import { BUILD } from '../../core/buildInfo.js';
 import { getDocument, listDocuments, listDocumentMentions, allDocumentTags, filterDocuments, listCampaignReferenceDocuments } from '../../domain/documents.js';
 import { listPartyMembers, listPartyTrackers, gaugeWindow, listPartyHeadlineTracks } from '../../domain/party.js';
@@ -1391,7 +1392,7 @@ function entityPhotoHtml(doc, e) {
     return `<div class="inspector-photo">
       <div class="inspector-photo-edit-overlay">
         <button type="button" class="gallery-thumb-circle-btn" title="View full size">
-          <img class="gallery-thumb-circle" data-open-image-lightbox src="${esc(img.dataUrl)}" alt="${esc(e.name || 'Entity')} thumbnail">
+          <img class="gallery-thumb-circle" data-open-image-lightbox src="${esc(imageSrc(img))}" alt="${esc(e.name || 'Entity')} thumbnail">
         </button>
         <label class="icon-btn photo-edit-btn file-btn" title="Replace photo">✎<input type="file" accept="image/*" data-entity-photo-upload="${esc(e.id)}" hidden></label>
       </div>
@@ -4300,7 +4301,7 @@ function partyTrackerAddForm(ui, isStarforged) {
 function partyMemberThumb(doc, e) {
   const img = e.thumbnailId ? getGalleryImage(doc, e.thumbnailId) : null;
   const inner = img
-    ? `<img class="actor-thumb-photo" src="${esc(img.dataUrl)}" alt="">`
+    ? `<img class="actor-thumb-photo" src="${esc(imageSrc(img))}" alt="">`
     : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((e.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
   // draggable/data-drag-entity (direct follow-up request — "just like the
   // Party Roster"): the SAME ENTITY_DRAG_TYPE Cast's own entity list rows
@@ -4319,7 +4320,7 @@ function sharedAssetVehicleThumb(doc, entityId) {
   if (!a) return '';
   const img = a.thumbnailId ? getGalleryImage(doc, a.thumbnailId) : null;
   const photo = img
-    ? `<img class="actor-thumb-photo" src="${esc(img.dataUrl)}" alt="">`
+    ? `<img class="actor-thumb-photo" src="${esc(imageSrc(img))}" alt="">`
     : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((a.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
   return `<div class="actor-thumb-wrap">
     <div class="actor-thumb-circle">
@@ -4665,7 +4666,7 @@ function crewCharacterThumb(doc, rowId, characterId) {
   }
   const img = entity.thumbnailId ? getGalleryImage(doc, entity.thumbnailId) : null;
   const photo = img
-    ? `<img class="actor-thumb-photo" src="${esc(img.dataUrl)}" alt="">`
+    ? `<img class="actor-thumb-photo" src="${esc(imageSrc(img))}" alt="">`
     : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((entity.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
   return `<div class="actor-thumb-wrap">
     <div class="actor-thumb-circle">
@@ -4696,7 +4697,7 @@ function lifeformEncounterThumb(doc, rowId, entityId) {
   }
   const img = entity.thumbnailId ? getGalleryImage(doc, entity.thumbnailId) : null;
   const photo = img
-    ? `<img class="actor-thumb-photo" src="${esc(img.dataUrl)}" alt="">`
+    ? `<img class="actor-thumb-photo" src="${esc(imageSrc(img))}" alt="">`
     : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((entity.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
   return `<div class="actor-thumb-wrap">
     <div class="actor-thumb-circle">
@@ -4855,7 +4856,7 @@ function starshipThumbnailRowHtml(doc) {
     ? (() => {
         const img = entity.thumbnailId ? getGalleryImage(doc, entity.thumbnailId) : null;
         const inner = img
-          ? `<img class="gallery-thumb-circle" src="${esc(img.dataUrl)}" alt="">`
+          ? `<img class="gallery-thumb-circle" src="${esc(imageSrc(img))}" alt="">`
           : `<span class="gallery-thumb-circle gallery-thumb-circle-empty" aria-hidden="true">${esc((entity.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
         return `<div class="inspector-photo"><button type="button" class="gallery-thumb-circle-btn" data-open-entity="${esc(entity.id)}" title="Open ${esc(entity.name || 'Unnamed')}">${inner}</button></div>`;
       })()
@@ -5592,8 +5593,8 @@ function gallery(doc, ui = {}) {
     return `
     <div class="gallery-card">
       ${isGalleryVideo(img)
-        ? `<video class="gallery-original-img" src="${esc(img.dataUrl)}" muted preload="metadata" aria-label="${esc(img.title || 'Gallery video')}"></video>`
-        : `<img class="${img.kind === 'thumbnail' ? 'gallery-thumb-circle' : 'gallery-original-img'}" src="${esc(img.dataUrl)}" alt="${esc(img.title || img.lockedTag || 'Gallery image')}">`}
+        ? `<video class="gallery-original-img" src="${esc(imageSrc(img))}" muted preload="metadata" aria-label="${esc(img.title || 'Gallery video')}"></video>`
+        : `<img class="${img.kind === 'thumbnail' ? 'gallery-thumb-circle' : 'gallery-original-img'}" src="${esc(imageSrc(img))}" alt="${esc(img.title || img.lockedTag || 'Gallery image')}">`}
       <div class="gallery-card-meta">
         <span class="dim small">${isGalleryVideo(img) ? 'Video' : img.kind === 'thumbnail' ? 'Thumbnail' : 'Original'}${owner ? ` · ${esc(owner.name || 'Unnamed')}` : ''}</span>
         <div class="tag-chips">${tagChips}</div>
@@ -5690,7 +5691,7 @@ function battlemap(doc, ui = {}) {
     const thumb = ent && ent.thumbnailId ? getGalleryImage(doc, ent.thumbnailId) : null;
     const name = ent ? (ent.name || 'Unnamed') : (icon.label || 'Unknown');
     return `<div class="battlemap-icon battlemap-token" draggable="true" data-drag-battlemap-icon="${esc(ref)}" ${ent ? `data-open-entity="${esc(ent.id)}"` : ''} style="${posStyle}" title="${esc(name)}">
-      ${thumb ? `<img class="battlemap-token-img" src="${esc(thumb.dataUrl)}" alt="${esc(name)}">` : `<span class="battlemap-token-fallback">${esc((name[0] || '?').toUpperCase())}</span>`}
+      ${thumb ? `<img class="battlemap-token-img" src="${esc(imageSrc(thumb))}" alt="${esc(name)}">` : `<span class="battlemap-token-fallback">${esc((name[0] || '?').toUpperCase())}</span>`}
       <button type="button" class="icon-btn battlemap-icon-remove" data-battlemap-icon-remove="${esc(ref)}" aria-label="Remove">✕</button>
     </div>`;
   }).join('');
@@ -5730,7 +5731,7 @@ function battlemap(doc, ui = {}) {
     </div>
     ${help}
     <div class="battlemap-viewport ${ui.battlemapPlacingIcon ? 'placing' : ''}" data-battlemap-canvas="${esc(active.id)}" data-drop-battlemap="${esc(active.id)}">
-      <div class="battlemap-world" style="transform:translate(${cam.x}px,${cam.y}px) scale(${cam.scale});${bg && !bgVideo ? `background-image:url('${esc(bg.dataUrl)}');` : ''}${active.gridEnabled ? `--battlemap-grid-size:${active.gridSize}px;` : ''}">
+      <div class="battlemap-world" style="transform:translate(${cam.x}px,${cam.y}px) scale(${cam.scale});${bg && !bgVideo ? `background-image:url('${esc(imageSrc(bg))}');` : ''}${active.gridEnabled ? `--battlemap-grid-size:${active.gridSize}px;` : ''}">
         ${!bg ? '<p class="ws-placeholder battlemap-placeholder">No background set — upload or pick an image or MP4 above.</p>' : ''}
         ${bgVideo ? `<video class="battlemap-bg-video" data-battlemap-video="${esc(bg.id)}" muted loop autoplay playsinline disablepictureinpicture></video>` : ''}
         ${active.gridEnabled ? '<div class="battlemap-grid-overlay"></div>' : ''}
@@ -6114,7 +6115,7 @@ function hexcrawlGrid(doc, mapId, ui) {
       const locTypeIcon = loc && !locThumb && loc.locationTypeIcon ? findLocationTypeIcon(loc.locationTypeIcon) : null;
       const centerHtml = loc
         ? `<button type="button" class="hex-center hex-center-filled" data-hex-center="${esc(mapId)}::${q}::${r}" title="${esc(loc.name || 'Unnamed')}">
-            ${locThumb ? `<img class="hex-center-img" src="${esc(locThumb.dataUrl)}" alt="">`
+            ${locThumb ? `<img class="hex-center-img" src="${esc(imageSrc(locThumb))}" alt="">`
               : locTypeIcon ? `<span class="hex-center-type-icon" title="${esc(locTypeIcon.label)}">${locTypeIcon.glyph}</span>`
               : `<span class="hex-center-fallback">${esc((loc.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`}
           </button>`

@@ -9,6 +9,7 @@
 import { contextSummary } from '../../domain/context.js';
 import { listThreads, THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { ACTIVITIES } from '../../domain/activities.js';
+import { imageSrc } from '../imageSrc.js';
 import { isSameDistrict, getEntity, listEntities, LOCATION_OBJECT_TYPES, getSystemForLocation, getStarForLocation, getHexZoneForLocation, getEntityFaction } from '../../domain/entities.js';
 import { getCurrentWhereLocations, factionsInRegion, factionPresenceReasons } from '../../domain/factionTurnEngine.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
@@ -190,7 +191,7 @@ function oracleFieldRow(label, value, rollAttr, fieldAttr, clearAttr) {
 function actorThumb(doc, npc, kind, { expandable = false, expanded = false } = {}) {
   const img = npc.thumbnailId ? getGalleryImage(doc, npc.thumbnailId) : null;
   const photo = img
-    ? `<img class="actor-thumb-photo" src="${esc(img.dataUrl)}" alt="">`
+    ? `<img class="actor-thumb-photo" src="${esc(imageSrc(img))}" alt="">`
     : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((npc.name || '?').trim().slice(0, 1).toUpperCase())}</span>`;
   const removeAttr = kind === 'protagonist' ? 'data-scene-protagonist-remove'
     : kind === 'antagonist' ? 'data-scene-antagonist-remove' : 'data-scene-bystander-remove';
@@ -217,7 +218,7 @@ function actorThumb(doc, npc, kind, { expandable = false, expanded = false } = {
 function entityThumb(doc, entity, { removeAttrHtml = '', expandAttrHtml = '', expanded = false, topLabel = '' } = {}) {
   const img = entity.thumbnailId ? getGalleryImage(doc, entity.thumbnailId) : null;
   const photo = img
-    ? `<img class="actor-thumb-photo" src="${esc(img.dataUrl)}" alt="">`
+    ? `<img class="actor-thumb-photo" src="${esc(imageSrc(img))}" alt="">`
     : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((entity.name || '?').trim().slice(0, 1).toUpperCase())}</span>`;
   return `<div class="actor-thumb-wrap">
     ${topLabel ? `<span class="actor-thumb-toplabel">${esc(topLabel)}</span>` : ''}
@@ -571,7 +572,7 @@ function whereLocationHierarchyBlock(doc, ui) {
     // NPC-thumbnail size.
     const img = system.thumbnailId ? getGalleryImage(doc, system.thumbnailId) : null;
     const photo = img
-      ? `<img class="actor-thumb-photo" src="${esc(img.dataUrl)}" alt="">`
+      ? `<img class="actor-thumb-photo" src="${esc(imageSrc(img))}" alt="">`
       : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((system.name || '?').trim().slice(0, 1).toUpperCase())}</span>`;
     const noStarLabel = `<span class="dim small">No ${esc(terms.star)} linked</span>`;
     systemRow = `<div class="location-hierarchy-row">

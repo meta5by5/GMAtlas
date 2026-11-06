@@ -12,9 +12,14 @@
   <link rel="stylesheet" href="./styles/cockpit.css">
   <link rel="stylesheet" href="./styles/genre-scifi.css">
   <link rel="stylesheet" href="./styles/genre-fantasy.css">
+  <link rel="stylesheet" href="./styles/portal.css">
 </head>
 <body>
   <div id="app"></div>
+  <!-- The portal surface (Help centre; later sign-in, account, store): its
+       own layout in styles/portal.css, shown instead of #app on a #/help
+       route. See src/ui/portal/index.js. -->
+  <div id="portal" class="portal" hidden></div>
   <!-- Vendored PDF.js legacy (UMD) build for the Guide's Game Mechanics
        Index (docs/adr/0014-mechanics-index-pdfjs.md) — a plain classic
        script, same reasoning as the bundle below (file:// blocks ES module
