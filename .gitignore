@@ -9,3 +9,8 @@ assets/data-packs/gmatlas-*.json
 requirements/
 docs/adr/next-request.md
 requirements/gmatlas-2026-08-15T03-27-04.json
+
+# server/ (accounts service): local secrets, wrangler state, deploy assembly
+server/.dev.vars
+server/.wrangler/
+_site/

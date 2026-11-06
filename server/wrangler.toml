@@ -1,0 +1,28 @@
+# Cloudflare deployment for the GMAtlas service (roadmap decision D1).
+# Nothing secret lives here. Set secrets with:
+#   npx wrangler secret put ACCESS_TOKEN_SECRET
+#   npx wrangler secret put CODE_PEPPER
+#   npx wrangler secret put CERT_SIGNING_JWK      (private JWK from `npm run keygen`)
+#   npx wrangler secret put RESEND_API_KEY
+# For local `npm run dev`, put the same names in server/.dev.vars (gitignored)
+# with MAIL_MODE=log so codes print to the console instead of being emailed.
+
+name = "gmatlas"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+CERT_KEY_ID = "k1"
+MAIL_FROM = "GMAtlas <signin@example.com>"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "gmatlas"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+# The browser app is served from the same origin as /api. The deploy
+# workflow assembles it into ../_site the same way deploy-pages.yml does.
+[assets]
+directory = "../_site"
+binding = "ASSETS"
