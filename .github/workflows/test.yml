@@ -23,7 +23,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 22+: server/'s tests use the built-in node:sqlite as a stand-in for D1.
+          node-version: 22
       - name: Core tests (builds the bundle first via pretest)
         run: npm test
       - name: Server tests
