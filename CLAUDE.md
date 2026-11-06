@@ -48,6 +48,9 @@ non-trivial change; this file only covers day-to-day mechanics.
   model and making it work on a phone) — the "how to build it in order"
   detail behind v3's Storyboard section, kept separate so UX work can
   proceed without waiting on unrelated mechanics changes.
+- **`design/ACCOUNTS-SYNC-ROADMAP.md`** — the proposed (unbuilt) plan for
+  sign-in, multi-device sync, account-wide licensing, multiplayer tables,
+  the admin panel and the portal surface, phased S0–S6.
 - **`PROGRESS.md`** — the phase-by-phase status ledger. Check it when a
   phase number is ambiguous.
 - New architectural decisions (a new engine, a schema shape change, a
@@ -170,6 +173,20 @@ after a rebuild.
 worth testing both `file://` and real HTTP when in doubt, since the two
 environments have diverged before (a CORS bug only visible under `file://`;
 a stale-service-worker-cache bug only visible under `http://`).
+
+## Branches
+
+- **`main`** — the core app; the only branch that deploys (GitHub Pages).
+  Core features and fixes always land here first.
+- **`server`** — long-lived branch for the server-side work in
+  `design/ACCOUNTS-SYNC-ROADMAP.md` (`server/`, account/sync/p2p clients,
+  admin). Merge `main` into it regularly (`git merge main`, never rebase).
+  A core fix found while on `server` is made on `main` and merged across,
+  not committed on `server` alone. `server` merges into `main` only when a
+  roadmap phase is complete, via a pull request.
+
+Check `git branch --show-current` before committing, and put the work on
+the branch the table in the roadmap's section 2.3 names.
 
 ## Environment constraints
 
