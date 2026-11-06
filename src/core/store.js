@@ -44,6 +44,8 @@ import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
 import { PLANETFALL_TURN_STEPS } from '../data/turnStepListPlanetfall.js';
 import { TURN_STEPS_FIVE_LEAGUES } from '../data/turnStepListFiveLeagues.js';
 import { CREW_TASKS_5PFH } from '../data/crewTasksDefault5pfh.js';
+import { listInlineBlobs, applyMovedBlobs, blobKeysToInline, inlineBlobsForExport, contentBlobKey } from '../domain/inlineBlobs.js';
+import { effectiveLicenses } from '../domain/licensing.js';
 
 const STORAGE_KEY = 'sagaatlas.campaign'; // legacy localStorage key — read-only fallback for pre-IndexedDB campaigns, never written again
 const BACKUP_KEY = 'sagaatlas.campaign.backup'; // ditto
@@ -139,6 +141,17 @@ function createStore() {
   // (read by every Settings render) stays synchronous — an async IndexedDB
   // read on every render would be a much bigger ripple for no real benefit.
   let backupMeta = { exists: false, bytes: 0 };
+  // Gallery images and legacy uploaded documents keep their bytes in the
+  // docBlobs store under a content hash, not inline in the campaign
+  // document (design/ACCOUNTS-SYNC-ROADMAP.md, Phase S0). This is the
+  // in-memory blobKey -> data: URL copy that keeps rendering and export()
+  // synchronous: warmed before a campaign is first shown, filled as bytes
+  // move out.
+  const blobDataUrls = new Map();
+  // Campaign ids with a move in flight, and ids that changed meanwhile and
+  // need one more pass once it finishes.
+  const moving = new Set();
+  const moveAgain = new Set();
 
   function db() {
     if (!dbPromise) dbPromise = idbOpen();
@@ -183,7 +196,7 @@ function createStore() {
   // (data/rulesConstitution.js) can read it from any doc.
   function overlayProfileWith(rawDoc, profile) {
     if (!rawDoc) return rawDoc;
-    const licenses = appConfig.licenses || {};
+    const licenses = effectiveLicenses({ attested: appConfig.licenses });
     const withLists = { ...rawDoc, turnStepLists: appConfig.turnStepLists || [], settings: { ...rawDoc.settings, licenses } };
     if (!profile) return withLists;
     return { ...withLists, settings: { ...rawDoc.settings, ...profile.ruleset, licenses }, crewTasks: profile.crewTasks };
@@ -239,6 +252,97 @@ function createStore() {
     return (profile && profile.ruleset && profile.ruleset.statRuleset) || null;
   }
 
+  // --- inline bytes -> content-addressed blobs (domain/inlineBlobs.js) ---
+  function dataUrlToBlob(dataUrl) {
+    const comma = dataUrl.indexOf(',');
+    const header = dataUrl.slice(5, comma);
+    const mime = header.split(';')[0] || 'application/octet-stream';
+    const body = dataUrl.slice(comma + 1);
+    if (!/;base64/i.test(header)) return new Blob([decodeURIComponent(body)], { type: mime });
+    const bin = atob(body);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+  }
+
+  // Blob.arrayBuffer() is missing in older Safari; FileReader is everywhere.
+  function blobBytes(blob) {
+    if (typeof blob.arrayBuffer === 'function') return blob.arrayBuffer();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsArrayBuffer(blob);
+    });
+  }
+
+  async function blobToDataUrl(blob) {
+    const bytes = new Uint8Array(await blobBytes(blob));
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return `data:${blob.type || 'application/octet-stream'};base64,${btoa(bin)}`;
+  }
+
+  async function blobKeyFor(blob) {
+    const digest = await crypto.subtle.digest('SHA-256', await blobBytes(blob));
+    return contentBlobKey([...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join(''));
+  }
+
+  /** Loads into memory the bytes a campaign's moved records point at, so
+   *  they render and export synchronously. Bytes missing on this device
+   *  are skipped: the record keeps its link, and shows empty here. Never
+   *  throws, because it runs on the way to showing a campaign at all. */
+  async function warmBlobCache(doc) {
+    const keys = blobKeysToInline(doc).filter((k) => !blobDataUrls.has(k));
+    if (!keys.length) return;
+    try {
+      const database = await db();
+      await Promise.all(keys.map(async (k) => {
+        try {
+          const blob = await idbGet(database, k, DOC_BLOB_STORE);
+          if (blob) blobDataUrls.set(k, await blobToDataUrl(blob));
+        } catch (err) {
+          console.warn('could not load stored image', k, err);
+        }
+      }));
+    } catch (err) {
+      console.warn('could not open the blob store', err);
+    }
+  }
+
+  /** Moves a campaign's inline bytes into docBlobs, then rewrites the
+   *  document to point at them and persists it. Runs in the background
+   *  after every load, import and update that leaves inline bytes behind.
+   *  Any failure leaves the bytes inline, exactly as before. */
+  async function moveInlineBlobs(campaignId) {
+    if (moving.has(campaignId)) { moveAgain.add(campaignId); return; }
+    const pending = listInlineBlobs(docs.get(campaignId));
+    if (!pending.length) return;
+    moving.add(campaignId);
+    try {
+      const database = await db();
+      const moved = [];
+      for (const item of pending) {
+        const blob = dataUrlToBlob(item.dataUrl);
+        const blobKey = await blobKeyFor(blob);
+        await idbPut(database, blobKey, blob, DOC_BLOB_STORE);
+        blobDataUrls.set(blobKey, item.dataUrl);
+        moved.push({ ...item, blobKey });
+      }
+      const current = docs.get(campaignId);
+      if (current) {
+        const next = applyMovedBlobs(current, moved);
+        docs.set(campaignId, next);
+        await persistCampaignDoc(campaignId, current, next);
+      }
+    } catch (err) {
+      console.warn('moving inline images to the blob store failed; they stay inline', err);
+    } finally {
+      moving.delete(campaignId);
+      if (moveAgain.delete(campaignId)) moveInlineBlobs(campaignId);
+    }
+  }
+
   async function refreshBackupMeta(campaignId) {
     const database = await db();
     const backup = await idbGet(database, campaignBackupDocKey(campaignId));
@@ -282,8 +386,10 @@ function createStore() {
       activeDoc = backfillCampaignTurnStepSlots(activeDoc);
       activeDoc = ensureRulesetGuideDefault(activeDoc, resolveActiveStatRuleset(appConfig, activeId));
       docs.set(activeId, activeDoc);
+      await warmBlobCache(activeDoc);
       await refreshBackupMeta(activeId);
       notify();
+      moveInlineBlobs(activeId);
       return get();
     }
 
@@ -311,6 +417,7 @@ function createStore() {
     await idbPut(database, APP_CONFIG_KEY, appConfig);
     await idbPut(database, campaignDocKey(wrapped.campaignDoc.meta.id), wrapped.campaignDoc);
     notify();
+    moveInlineBlobs(wrapped.campaignDoc.meta.id);
     return get();
   }
 
@@ -341,6 +448,7 @@ function createStore() {
       if (docs.get(activeId) === nextDoc) { docs.set(activeId, prev); notify(); }
       notifyPersistError(err);
     });
+    if (listInlineBlobs(nextDoc).length) moveInlineBlobs(activeId);
     return get();
   }
 
@@ -368,7 +476,10 @@ function createStore() {
   }
 
   // --- portability: one serialize path → lossless by construction -------
-  function exportDocument() { return JSON.stringify(get(), null, 2); }
+  // Moved bytes go back inline, so an export file is self-contained and
+  // has the shape older versions wrote (domain/inlineBlobs.js).
+  function forExport(doc) { return inlineBlobsForExport(doc, (k) => blobDataUrls.get(k)); }
+  function exportDocument() { return JSON.stringify(forExport(get()), null, 2); }
 
   // Imported JSON replaces the ACTIVE campaign's content in place — same
   // "Import Campaign JSON" behavior as before multi-campaign existed. It
@@ -383,7 +494,9 @@ function createStore() {
     await persistCampaignDoc(activeId, imported, imported);
     appConfig = renameCampaignEntry(appConfig, activeId, imported.meta.title);
     await persistAppConfig();
+    await warmBlobCache(imported);
     notify();
+    moveInlineBlobs(activeId);
     return get();
   }
 
@@ -418,10 +531,12 @@ function createStore() {
       target = ensureRulesetGuideDefault(target, resolveActiveStatRuleset(appConfig, campaignId));
       docs.set(campaignId, target);
     }
+    await warmBlobCache(target);
     appConfig = setActiveCampaign(appConfig, campaignId);
     await idbPut(database, APP_CONFIG_KEY, appConfig);
     await refreshBackupMeta(campaignId);
     notify();
+    moveInlineBlobs(campaignId);
     return get();
   }
 
@@ -441,7 +556,8 @@ function createStore() {
       if (!raw) return null;
       target = migrateDocument(raw);
     }
-    return JSON.stringify(overlayProfileWith(target, profileForCampaign(campaignId)), null, 2);
+    await warmBlobCache(target);
+    return JSON.stringify(forExport(overlayProfileWith(target, profileForCampaign(campaignId))), null, 2);
   }
 
   /** Loads a campaign's document into memory without switching to it — the
@@ -457,6 +573,8 @@ function createStore() {
       target = ensureRulesetGuideDefault(target, resolveActiveStatRuleset(appConfig, campaignId));
       if (!docs.has(campaignId)) docs.set(campaignId, target);
     }
+    await warmBlobCache(docs.get(campaignId));
+    moveInlineBlobs(campaignId);
     return peekCampaign(campaignId);
   }
 
@@ -487,6 +605,7 @@ function createStore() {
       if (docs.get(campaignId) === nextDoc) { docs.set(campaignId, prev); notify(); }
       throw err;
     }
+    if (listInlineBlobs(nextDoc).length) moveInlineBlobs(campaignId);
     return peekCampaign(campaignId);
   }
 
@@ -658,7 +777,9 @@ function createStore() {
       notify();
       return { ok: false, error: e };
     }
+    await warmBlobCache(restored);
     notify();
+    moveInlineBlobs(activeId);
     return { ok: true };
   }
 
@@ -683,6 +804,9 @@ function createStore() {
     const database = await db();
     await idbDelete(database, key, DOC_BLOB_STORE);
   }
+  /** The in-memory data: URL for a moved image or document, or undefined
+   *  when its bytes aren't on this device. Synchronous, for rendering. */
+  function blobDataUrl(key) { return blobDataUrls.get(key); }
   async function listDocBlobKeys() {
     const database = await db();
     return idbKeys(database, DOC_BLOB_STORE);
@@ -710,7 +834,7 @@ function createStore() {
     export: exportDocument, import: importDocument, newCampaign,
     supportsFileBinding, bindFile, saveBoundFile,
     storageInfo, restoreBackup,
-    putDocBlob, getDocBlob, deleteDocBlob, listDocBlobKeys,
+    putDocBlob, getDocBlob, deleteDocBlob, listDocBlobKeys, blobDataUrl,
     listCampaigns, switchCampaign, renameCampaign, setCampaignProfile, deleteCampaign, exportCampaignById,
     loadCampaign, peekCampaign, updateCampaign,
     listProfiles, getActiveProfile, getAppConfig, createProfile, updateProfile, renameProfile,

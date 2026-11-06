@@ -11773,3 +11773,309 @@ test('advanceFactionTurns rolls its rumor from the active fantasy pack', () => {
   const { rumors } = advanceFactionTurns(camp, { rng: makeRng(1), genrePack: 'fantasy' });
   assert.ok(findGenrePack('fantasy').tables['Noble Houses & Guilds']['Faction Activity'].includes(rumors[0].activity));
 });
+
+// Inline bytes -> blob store (design/ACCOUNTS-SYNC-ROADMAP.md, Phase S0).
+import { listInlineBlobs, applyMovedBlobs, blobKeysToInline, inlineBlobsForExport } from '../src/domain/inlineBlobs.js';
+
+function campaignWithInlineBytes() {
+  let camp = defaultCampaign();
+  ({ campaign: camp } = addGalleryImages(camp, { lockedTag: 'npc', thumbDataUrl: 'data:image/png;base64,AAAA', originalDataUrl: 'data:image/png;base64,BBBB' }));
+  camp.documents.library.push({ id: 'doc_old', kind: 'file', title: 'Old', fileName: 'old.pdf', mimeType: 'application/pdf', dataUrl: 'data:application/pdf;base64,CCCC', tags: [] });
+  camp.documents.library.push({ id: 'doc_new', kind: 'file', title: 'New', fileName: 'new.pdf', mimeType: 'application/pdf', blobKey: 'doc_new', tags: [] });
+  return camp;
+}
+const fakeKey = (dataUrl) => `sha256:${dataUrl.slice(-4)}`;
+const moveAll = (camp) => applyMovedBlobs(camp, listInlineBlobs(camp).map((x) => ({ ...x, blobKey: fakeKey(x.dataUrl) })));
+
+test('listInlineBlobs finds inline gallery bytes and legacy inline documents, not blob-backed ones', () => {
+  const refs = listInlineBlobs(campaignWithInlineBytes()).map((x) => `${x.ref.kind}:${x.dataUrl.slice(-4)}`).sort();
+  assert.deepEqual(refs, ['doc:CCCC', 'gallery:AAAA', 'gallery:BBBB']);
+});
+
+test('applyMovedBlobs swaps inline bytes for blob keys without touching the input', () => {
+  const camp = campaignWithInlineBytes();
+  const moved = moveAll(camp);
+  assert.equal(listInlineBlobs(moved).length, 0);
+  assert.equal(listInlineBlobs(camp).length, 3, 'input untouched');
+  assert.ok(moved.gallery.images.every((img) => img.blobKey && !('dataUrl' in img)));
+  const old = moved.documents.library.find((d) => d.id === 'doc_old');
+  assert.equal(old.blobKey, 'sha256:CCCC');
+  assert.equal(old.inlineOnExport, true);
+  assert.ok(!('dataUrl' in old));
+  assert.deepEqual(blobKeysToInline(moved).sort(), ['sha256:AAAA', 'sha256:BBBB', 'sha256:CCCC']);
+});
+
+test('applyMovedBlobs skips a record whose bytes changed or that was deleted meanwhile', () => {
+  const camp = campaignWithInlineBytes();
+  const pending = listInlineBlobs(camp).map((x) => ({ ...x, blobKey: fakeKey(x.dataUrl) }));
+  const newer = structuredClone(camp);
+  newer.gallery.images[0].dataUrl = 'data:image/png;base64,ZZZZ';
+  newer.documents.library = newer.documents.library.filter((d) => d.id !== 'doc_old');
+  const moved = applyMovedBlobs(newer, pending);
+  assert.equal(moved.gallery.images[0].dataUrl, 'data:image/png;base64,ZZZZ');
+  assert.ok(!moved.gallery.images[0].blobKey);
+  assert.ok(moved.gallery.images[1].blobKey);
+});
+
+test('inlineBlobsForExport restores the exact pre-move shape, and keeps the link when bytes are missing', () => {
+  const camp = campaignWithInlineBytes();
+  const moved = moveAll(camp);
+  const lookup = (k) => ({ 'sha256:AAAA': 'data:image/png;base64,AAAA', 'sha256:BBBB': 'data:image/png;base64,BBBB', 'sha256:CCCC': 'data:application/pdf;base64,CCCC' })[k];
+  assert.deepEqual(inlineBlobsForExport(moved, lookup), camp);
+  const partial = inlineBlobsForExport(moved, (k) => (k === 'sha256:AAAA' ? undefined : lookup(k)));
+  const missing = partial.gallery.images.find((img) => img.blobKey === 'sha256:AAAA');
+  assert.ok(missing && !missing.dataUrl, 'missing bytes keep their blobKey');
+  assert.equal(partial.documents.library.find((d) => d.id === 'doc_new').blobKey, 'doc_new', 'ordinary blob documents are left alone');
+});
+
+// Sync policy + field-level ops (design/ACCOUNTS-SYNC-ROADMAP.md, Phase S0).
+import { CAMPAIGN_SYNC_POLICY, APP_CONFIG_SYNC_POLICY } from '../src/data/syncPolicy.js';
+import { nextHlc, observeHlc, syncScopeFor, diffDoc, applyOps, createReplica, materializeOrder } from '../src/domain/syncOps.js';
+
+test('every top-level campaign and appConfig key has a sync scope', () => {
+  const campaignKeys = [...Object.keys(defaultCampaign()), 'trade', 'mechanicsIndex', 'turnStepLists', 'crewTasks'];
+  assert.deepEqual(campaignKeys.filter((k) => !syncScopeFor(CAMPAIGN_SYNC_POLICY, [k])), []);
+  const appConfigKeys = [...Object.keys(defaultAppConfig()), 'licenses', 'licensesVersion', 'entitlements'];
+  assert.deepEqual(appConfigKeys.filter((k) => !syncScopeFor(APP_CONFIG_SYNC_POLICY, [k])), []);
+  assert.equal(syncScopeFor(CAMPAIGN_SYNC_POLICY, ['settings', 'ui', 'openPanels']), 'local', 'longest prefix wins');
+  assert.equal(syncScopeFor(CAMPAIGN_SYNC_POLICY, ['settings', 'genrePack']), 'gm');
+  assert.equal(syncScopeFor(CAMPAIGN_SYNC_POLICY, ['entities', 'items', { id: 'npc_1' }, 'name']), 'gm');
+});
+
+test('HLCs sort as text, never go backwards, and pass remote clocks', () => {
+  const a = nextHlc(null, 1000, 'devA');
+  const b = nextHlc(a, 1000, 'devA');
+  const c = nextHlc(b, 500, 'devA');
+  assert.ok(a < b && b < c, 'same or earlier wall time still advances');
+  const remote = nextHlc(null, 9000, 'devB');
+  const seen = observeHlc(c, remote, 1000, 'devA');
+  assert.ok(nextHlc(seen, 1000, 'devA') > remote);
+});
+
+test('diffDoc skips device-local paths and refuses inline bytes', () => {
+  const base = defaultCampaign();
+  const next = structuredClone(base);
+  next.journalDraft = 'typing...';
+  next.drawers = { ...next.drawers, width: 999 };
+  next.settings.ui = { ...next.settings.ui, someOpenPanel: true };
+  next.meta.title = 'Renamed';
+  const ops = diffDoc(createReplica(base), next, { hlc: nextHlc(null, 1, 'd'), policy: CAMPAIGN_SYNC_POLICY });
+  assert.deepEqual(ops.map((o) => o.p.join('.')), ['meta.title']);
+  const withBytes = structuredClone(base);
+  withBytes.gallery.images = [{ id: 'img_1', dataUrl: 'data:image/png;base64,AAAA' }];
+  assert.throws(() => diffDoc(createReplica(base), withBytes, { hlc: 'x', policy: CAMPAIGN_SYNC_POLICY }), /Inline bytes/);
+});
+
+test('materializeOrder lists the register first, then the unlisted ids sorted', () => {
+  assert.deepEqual(materializeOrder(['c', 'gone', 'a'], ['a', 'b', 'c', 'd']), ['c', 'a', 'b', 'd']);
+});
+
+// A random edit of the kinds a GM actually makes: field edits, record
+// adds/deletes/reorders, nested objects appearing and disappearing, plain
+// arrays (tags) replaced. A record can be a partial placeholder here: shuffled
+// delivery can bring an edit before the op that created its record.
+function randomEdit(doc, rng, replicaName, counter) {
+  const items = doc.entities.items;
+  const pick = () => items[Math.floor(rng() * items.length)];
+  const roll = Math.floor(rng() * 10);
+  if (roll === 0 || !items.length) items.push({ id: `e_${replicaName}_${counter}`, name: `New ${counter}`, tags: [], notes: '' });
+  else if (roll === 1) items.splice(Math.floor(rng() * items.length), 1);
+  else if (roll === 2) { const [x] = items.splice(Math.floor(rng() * items.length), 1); items.splice(Math.floor(rng() * (items.length + 1)), 0, x); }
+  else if (roll === 3) pick().name = `${replicaName} name ${counter}`;
+  else if (roll === 4) { const e = pick(); e.tags = [...(e.tags || []).slice(0, 2), `t${counter % 5}`]; }
+  else if (roll === 5) pick().stats = { hp: counter, nested: { deep: `${replicaName}${counter}` } };
+  else if (roll === 6) delete pick().stats;
+  else if (roll === 7) doc.context.where = `${replicaName} place ${counter}`;
+  else if (roll === 8) doc.journal.push({ id: `j_${replicaName}_${counter}`, text: `entry ${counter}`, at: counter });
+  else { const e = pick(); if (e.stats) e.stats.nested = { deep: `${replicaName}-${counter}` }; else e.notes = `note ${counter}`; }
+  return doc;
+}
+
+test('applying a diff reproduces the next document exactly, and replicas converge whatever the delivery order', () => {
+  for (const seed of [1, 2, 3, 4]) {
+    const rng = makeRng(seed);
+    const base = defaultCampaign();
+    base.entities.items = Array.from({ length: 6 }, (_, i) => ({ id: `e_base_${i}`, name: `Base ${i}`, tags: [], notes: '' }));
+    const names = ['A', 'B', 'C'];
+    // Device clocks drift apart, which is when a delete can carry an
+    // earlier clock than an edit made concurrently elsewhere.
+    const skew = { A: 0, B: 37, C: -23 };
+    const reps = names.map((name) => ({ name, replica: createReplica(base), clock: null, inbox: [] }));
+    const batches = [];
+    let counter = 0;
+    for (let round = 0; round < 30; round++) {
+      const wall = (r) => 100 + round * 10 + skew[r.name];
+      for (const r of reps) {
+        for (let n = 0; n < 4; n++) {
+          counter++;
+          const next = randomEdit(structuredClone(r.replica.doc), rng, r.name, counter);
+          r.clock = nextHlc(r.clock, wall(r), r.name);
+          const ops = diffDoc(r.replica, next, { hlc: r.clock });
+          r.replica = applyOps(r.replica, ops);
+          assert.deepStrictEqual(r.replica.doc, next, `local apply, seed ${seed} round ${round}`);
+          batches.push(ops);
+          for (const other of reps) if (other !== r) other.inbox.push(ops);
+        }
+      }
+      // Partial, shuffled delivery, so later edits build on merged state and
+      // really conflict.
+      for (const r of reps) {
+        const deliverNow = r.inbox.filter(() => rng() < 0.5);
+        r.inbox = r.inbox.filter((b) => !deliverNow.includes(b));
+        for (const ops of deliverNow.sort(() => rng() - 0.5)) {
+          r.replica = applyOps(r.replica, ops);
+          for (const op of ops) r.clock = observeHlc(r.clock, op.t, wall(r), r.name);
+        }
+      }
+    }
+    // Everything to everyone, shuffled, with duplicates.
+    for (const r of reps) {
+      const all = [...batches, ...batches.filter(() => rng() < 0.3)].sort(() => rng() - 0.5);
+      for (const ops of all) r.replica = applyOps(r.replica, ops);
+    }
+    assert.deepStrictEqual(reps[1].replica.doc, reps[0].replica.doc, `B = A, seed ${seed}`);
+    assert.deepStrictEqual(reps[2].replica.doc, reps[0].replica.doc, `C = A, seed ${seed}`);
+  }
+});
+
+test('a record deleted anywhere stays deleted, whichever arrives first', () => {
+  const base = defaultCampaign();
+  base.entities.items = [{ id: 'e_1', name: 'One' }];
+  const r = createReplica(base);
+  const edit = diffDoc(r, { ...base, entities: { ...base.entities, items: [{ id: 'e_1', name: 'Edited later' }] } }, { hlc: nextHlc(null, 9, 'B') });
+  const del = diffDoc(r, { ...base, entities: { ...base.entities, items: [] } }, { hlc: nextHlc(null, 1, 'A') });
+  assert.deepEqual(applyOps(applyOps(r, edit), del).doc.entities.items, []);
+  assert.deepEqual(applyOps(applyOps(r, del), edit).doc.entities.items, []);
+});
+
+test('every three concurrent edits on overlapping paths converge, for every clock order and every delivery order', () => {
+  const base = { list: [{ id: 'a', name: 'x', sub: { k: 1 } }, { id: 'b', name: 'y' }], obj: { p: { q: 1 } }, flat: 1 };
+  const edits = {
+    deleteRecord: (d) => { d.list = d.list.filter((x) => x.id !== 'a'); },
+    editField: (d) => { d.list[0].name = 'edited'; },
+    replaceNested: (d) => { d.list[0].sub = { k: 2, extra: true }; },
+    editNested: (d) => { d.list[0].sub.k = 3; },
+    removeNested: (d) => { delete d.list[0].sub; },
+    reorder: (d) => { d.list.reverse(); },
+    addRecord: (d) => { d.list.push({ id: 'c', name: 'z' }); },
+    deleteKey: (d) => { delete d.obj.p; },
+    setDeep: (d) => { d.obj.p.q = 9; },
+    scalarOverObject: (d) => { d.obj.p = 'flat now'; },
+    plainArrayOverRecords: (d) => { d.list = ['just', 'strings']; },
+    dropWholeList: (d) => { delete d.list; },
+  };
+  const names = Object.keys(edits);
+  const perms = (xs) => (xs.length <= 1 ? [xs] : xs.flatMap((x, i) => perms([...xs.slice(0, i), ...xs.slice(i + 1)]).map((p) => [x, ...p])));
+  const failures = [];
+  for (const i of names) for (const j of names) for (const k of names) {
+    for (const clocks of perms([1, 2, 3])) {
+      const batches = [i, j, k].map((name, n) => {
+        const next = structuredClone(base);
+        edits[name](next);
+        return diffDoc(createReplica(base), next, { hlc: nextHlc(null, clocks[n], 'ABC'[n]) });
+      });
+      let first = null;
+      for (const order of perms([0, 1, 2])) {
+        // Delivered in this order, then every batch again (duplicates).
+        const doc = [...order, ...order].reduce((r, x) => applyOps(r, batches[x]), createReplica(base)).doc;
+        if (!first) first = doc;
+        else if (!isDeepStrictEqual(doc, first)) failures.push(`${i}@${clocks[0]} ${j}@${clocks[1]} ${k}@${clocks[2]}`);
+      }
+    }
+  }
+  assert.deepEqual([...new Set(failures)], []);
+});
+
+import { isDeepStrictEqual } from 'node:util';
+
+test('diffing a ~1 MB campaign for a one-field change stays fast and yields one op', () => {
+  const doc = defaultCampaign();
+  doc.entities.items = Array.from({ length: 1500 }, (_, i) => ({ id: `npc_${i.toString(36)}`, type: 'npc', name: `NPC ${i}`, notes: 'x'.repeat(300), tags: ['a', 'b'], relationships: [{ to: 'npc_1', label: 'knows', type: 'linked', strength: 2 }] }));
+  doc.journal = Array.from({ length: 800 }, (_, i) => ({ id: `j_${i.toString(36)}`, text: 'y'.repeat(200), at: i }));
+  const replica = createReplica(doc);
+  const times = [];
+  for (let n = 0; n < 9; n++) {
+    const next = structuredClone(replica.doc);
+    next.entities.items[700].name = `Changed ${n}`;
+    const t0 = performance.now();
+    const ops = diffDoc(replica, next, { hlc: nextHlc(null, n, 'd'), policy: CAMPAIGN_SYNC_POLICY });
+    times.push(performance.now() - t0);
+    assert.equal(ops.length, 1);
+  }
+  // ~8 ms measured (store.update's own structuredClone is ~5 ms); the
+  // ceiling is loose for slow CI runners and catches an O(n^2) regression.
+  assert.ok(times.sort((a, b) => a - b)[4] < 60, `median ${times[4].toFixed(1)} ms`);
+});
+
+// Effective licenses (design/ACCOUNTS-SYNC-ROADMAP.md section 4, Phase S0).
+import { effectiveLicenses, certStatus } from '../src/domain/licensing.js';
+
+test('signed out, effective licenses are exactly the install\'s own ticks', () => {
+  const attested = { fiveleagues: true, hostile: false, swn: true };
+  assert.deepEqual(effectiveLicenses({ attested }), attested);
+  assert.deepEqual(effectiveLicenses({}), {});
+  assert.notEqual(effectiveLicenses({ attested }), attested, 'a copy, never the stored object');
+});
+
+test('signed in, the account\'s licenses apply on every device unless this device opts out', () => {
+  const cert = { licenses: ['fiveleagues', 'hostile', 'swn'] };
+  const local = { traveller: true };
+  assert.deepEqual(effectiveLicenses({ attested: local, cert }), { fiveleagues: true, hostile: true, swn: true }, 'local ticks are lifted into the account at sign-in, not merged');
+  assert.deepEqual(effectiveLicenses({ cert, devicePolicy: { mode: 'follow', excluded: ['hostile'] } }), { fiveleagues: true, swn: true });
+  assert.deepEqual(effectiveLicenses({ cert, devicePolicy: { mode: 'focused', only: ['swn', 'planetfall'] } }), { swn: true }, 'focused lists only owned ids');
+  assert.deepEqual(effectiveLicenses({ cert: { licenses: [] } }), {}, 'deactivated everywhere');
+});
+
+test('certStatus: valid, then a grace period, then expired', () => {
+  const cert = { expiresAt: '2026-12-01T00:00:00Z' };
+  const day = 86400000;
+  const expires = Date.parse(cert.expiresAt);
+  assert.equal(certStatus(null, expires), 'none');
+  assert.equal(certStatus(cert, expires - 1), 'valid');
+  assert.equal(certStatus(cert, expires + 13 * day), 'grace');
+  assert.equal(certStatus(cert, expires + 15 * day), 'expired');
+});
+
+// Help centre (portal surface, design/ACCOUNTS-SYNC-ROADMAP.md Phase S0).
+import { HELP_ARTICLES, HELP_CATEGORIES } from '../src/data/helpArticles.js';
+import { renderHelpMarkdown, searchHelp, parsePortalRoute } from '../src/domain/helpCentre.js';
+
+test('help Markdown renders headings, lists and inline marks, and lists headings for the page outline', () => {
+  const { html, headings } = renderHelpMarkdown('Intro **bold** and `code`.\n\n## First part\n\n- one\n- two\n\n1. step\n\n### Detail\nText.');
+  assert.match(html, /<p>Intro <strong>bold<\/strong> and <code>code<\/code>\.<\/p>/);
+  assert.match(html, /<h2 id="first-part">First part<\/h2>/);
+  assert.match(html, /<ul><li>one<\/li><li>two<\/li><\/ul>/);
+  assert.match(html, /<ol><li>step<\/li><\/ol>/);
+  assert.deepEqual(headings.map((h) => [h.id, h.level]), [['first-part', 2], ['detail', 3]]);
+});
+
+test('help Markdown escapes markup and only links to in-app routes or https', () => {
+  const { html } = renderHelpMarkdown('<img src=x onerror=alert(1)> [ok](#/help/storage) [web](https://example.com) [bad](javascript:alert(1))');
+  assert.ok(!html.includes('<img'), 'raw markup is escaped');
+  assert.match(html, /<a href="#\/help\/storage">ok<\/a>/);
+  assert.match(html, /<a href="https:\/\/example.com" target="_blank" rel="noreferrer">web ↗<\/a>/);
+  assert.ok(!html.includes('href="javascript'), 'no script link');
+  assert.match(html, /bad/, 'the label survives as plain text');
+});
+
+test('every help article is in a real category and every in-app link points at a real article', () => {
+  const slugs = new Set(HELP_ARTICLES.map((a) => a.slug));
+  assert.equal(slugs.size, HELP_ARTICLES.length, 'unique slugs');
+  for (const a of HELP_ARTICLES) {
+    assert.ok(HELP_CATEGORIES.some((c) => c.id === a.category), a.slug);
+    for (const [, target] of a.body.matchAll(/\]\(#\/help\/([a-z0-9-]+)\)/g)) assert.ok(slugs.has(target), `${a.slug} -> ${target}`);
+  }
+  for (const c of HELP_CATEGORIES) assert.ok(HELP_ARTICLES.some((a) => a.category === c.id), `${c.id} has articles`);
+});
+
+test('help search matches every word, title hits first; routes parse from the hash', () => {
+  assert.equal(searchHelp(HELP_ARTICLES, 'backup')[0].slug, 'back-up-a-campaign', 'the article about it beats a passing mention');
+  assert.equal(searchHelp(HELP_ARTICLES, 'moving device')[0].slug, 'move-to-another-device');
+  assert.deepEqual(searchHelp(HELP_ARTICLES, 'zzzz-no-such-word'), []);
+  assert.equal(searchHelp(HELP_ARTICLES, '').length, HELP_ARTICLES.length);
+  assert.deepEqual(parsePortalRoute('#/help'), { view: 'help' });
+  assert.deepEqual(parsePortalRoute('#/help/storage'), { view: 'article', slug: 'storage' });
+  assert.equal(parsePortalRoute(''), null);
+  assert.equal(parsePortalRoute('#/'), null);
+  assert.equal(parsePortalRoute('#/account'), null, 'later phases add their own routes');
+});

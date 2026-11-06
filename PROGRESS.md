@@ -14,6 +14,18 @@ reorganized — treat them as history, not current pointers.
 
 ## Status Summary
 
+**2026-11-05 Accounts & sync, Phase S0: groundwork**
+(`design/ACCOUNTS-SYNC-ROADMAP.md`, `design/adr/sync-groundwork.md`) — direct
+request. Gallery images and videos moved out of the campaign document into
+the blob store under content-hash keys (re-inlined on every export, so
+export files are unchanged). Pure `syncOps.js` (field-level ops, hybrid
+logical clocks, a convergent merge with an exhaustive 62,208-case
+three-edit test), `syncPolicy.js`, `licensing.js`, and a Help centre on a
+new portal surface. Constitution rule 4 now per surface root, new rule 6.
+809 tests, clean build, headless smoke runs of the built bundle (image
+move/reload/export, Help routes) with no console errors. Not yet checked in
+a real browser. S1 (sign-in) is next and lives on the `server` branch.
+
 **2026-08-30 Phase 15 follow-up: Ruleset Profile Editor split + draft/save,
 bundler bug fix** — direct follow-up. Fixed a real bug where the previous
 entry's build failed to execute at all (blank page): the bundler doesn't

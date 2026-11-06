@@ -1,9 +1,12 @@
 # GMAtlas — Accounts, Sync, Licensing & Multiplayer Roadmap
 
-**Status: Proposed (2026-11-05).** Nothing here is built. Each phase becomes
+**Status: Phase S0 built (2026-11-05, v0.98.0,
+`design/adr/sync-groundwork.md`); S1–S6 proposed.** Each later phase becomes
 an ADR in `design/adr/` when it is accepted, and the Design Constitution's
 Part IV ("Multi-user access, authentication, or any cloud-hosted shared
-campaign database") stays true until Phase S1 ships.
+campaign database") stays true until Phase S1 ships. Where S0 as built
+differs from what this plan first said, the text below has been updated to
+match.
 
 Scope:
 - Server-hosted sign-in.
@@ -96,7 +99,7 @@ src/core/account.js       REST client: sign-in, session refresh, devices, entitl
 src/core/sync.js          WebSocket transport + outbox flushing; calls store.js, never IndexedDB
 src/core/p2p.js           WebRTC document transfer (browser-only impure edge)
 src/domain/syncOps.js     diff -> ops, apply ops, HLC clock, merge rules   (pure, shared with server)
-src/domain/licensing.js   effective licenses from cert + device policy     (pure; absorbs entitlements.js)
+src/domain/licensing.js   effective licenses from cert + device policy     (pure; entitlements.js stays beside it)
 src/domain/visibility.js  partition projection, reveal/hide rules          (pure)
 src/data/syncPolicy.js    path -> local | account | gm | table | player    (data)
 src/data/features.js      feature-flag ids + defaults                      (data)
@@ -104,7 +107,7 @@ src/ui/portal/            portal surface: sign-in, account, devices, licenses, s
 styles/portal.css         portal layout (shares tokens.css)
 admin.html + src/admin/   separate admin entry, own bundle (dist/admin.bundle.js)
 server/                   Worker + Durable Objects + D1 migrations; own package.json (dev deps OK)
-help/                     help-centre articles (markdown, bundled at build time)
+src/data/helpArticles.js  help-centre articles (Markdown subset, rendered by src/domain/helpCentre.js)
 ```
 
 `scripts/build.js` gains a second entry point, `src/admin/main.js` →
@@ -225,9 +228,9 @@ effectiveLicenses(cert, devicePolicy, localAttestations, signedIn) =
 `overlayProfileWith()` in `store.js` swaps `appConfig.licenses` for
 `effectiveLicenses(...)`. Every existing reader (`isLicensed`,
 `isGameSystemActivated`, Docs-library scoping, `isPackInUse`) keeps working
-untouched. `canAccessGameSystem()` reads the same certificate's
-allow/deny map. `entitlements.js` folds into `licensing.js`, and its
-exports are kept as re-exports.
+untouched. `canAccessGameSystem()` (`entitlements.js`, which stays the seam
+for what an install may activate) reads the same certificate's allow/deny
+map.
 
 ### 4.3 The entitlement certificate (works offline)
 
@@ -332,8 +335,8 @@ the store notifies subscribers, then it persists. That gives two snapshots,
 `prev` and `next`, for every change, which is exactly what a diff needs.
 
 **Choice: diff each update into field-level ops, merged by per-field
-last-writer-wins (LWW) on a hybrid logical clock, with id-keyed collections
-and add-wins sets.**
+last-writer-wins (LWW) on a hybrid logical clock, with id-keyed
+collections.**
 - No domain module changes. The ~100 `store.update` call sites stay as they
   are.
 - Zero dependencies, pure, and testable in `node --test`. The server runs
@@ -358,23 +361,32 @@ Rejected alternatives:
 ### 5.2 The op model (`src/domain/syncOps.js`)
 
 ```
-Op = { p: Path, k: 'set' | 'del' | 'add' | 'rem' | 'move', v?: any, t: HLC, d: deviceId }
-Path = ['entities','items',{id:'npc_lq3k_x9'},'name']   // array-of-objects addressed by id, never by index
-HLC  = { ms, counter, deviceId }                        // total order, survives clock skew
+Op   = { p: Path, k: 'set' | 'del', v?: any, t: HLC }
+Path = ['entities','items',{id:'npc_lq3k_x9'},'name']   // records addressed by id, never by index
+HLC  = '<ms base36>.<counter base36>.<deviceId>'         // sorts as text; the device id breaks ties
 ```
 
-- **`diffCampaign(prev, next, policy)` → Op[]**
-  - Walks only branches that differ by reference first, so cost tracks the
-    change, not the doc size.
-  - id-keyed arrays become per-item ops.
-  - Tag-like string arrays become add-wins `add`/`rem` ops.
-  - Ordered lists (scenes, turn steps, tabs) get a fractional `order` key,
-    so a reorder is one `move` op.
-  - Any other array is a whole-value register.
-- **`applyOps(doc, ops)` → doc:** pure. For each path it keeps the op with
-  the highest HLC (a `del` is a tombstone with its own HLC). It is
-  commutative, associative and idempotent. That is the whole convergence
-  argument, and it gets a seeded fuzz test (section 9).
+- **`diffDoc(replica, next, {hlc, policy})` → Op[]** (built in S0)
+  - Deep-compares, because `store.update()` hands over a full clone with
+    no shared structure: about 8 ms for a ~1 MB campaign.
+  - Arrays of records become per-record ops.
+  - A record array's order is its own last-writer-wins register (the list
+    of ids), sent only when the order actually changed. Records it doesn't
+    list follow, sorted by id.
+  - Any other array (tags included) and any scalar is one value. Add-wins
+    sets for tags can come later if real use shows concurrent tag edits
+    clashing.
+- **`applyOps(replica, ops)` → replica:** pure. A replica is the document
+  plus a clock tree recording when each path was last written.
+  - The latest clock wins per path. A write to an ancestor keeps any newer
+    descendant.
+  - A record delete is absolute.
+  - A container recreated only to hold newer values disappears again when
+    they do.
+  - Convergence is tested exhaustively for every three concurrent edits
+    across 12 kinds of overlapping change, in every clock and delivery
+    order, plus a random three-replica fuzzer with drifting clocks
+    (section 14).
 - **Paths are classified by `src/data/syncPolicy.js`:**
   - `local`: never leaves the device. `drawers` widths, open panels,
     `activeCampaignId`, bound file handle, scroll and collapse UI state.
@@ -383,11 +395,13 @@ HLC  = { ms, counter, deviceId }                        // total order, survives
   - `gm`: the campaign's GM partition.
   - `table`: the shared partition.
   - `player:<uid>`: per-player.
-  - `blob-meta`: document metadata, no bytes (section 6).
+  - `overlay`: never stored in the campaign at all (`store.get()` splices it
+    in from appConfig).
 
-  New schema fields default to `gm` unless listed. A test fails if a
-  top-level campaign key has no policy, so nothing is synced or leaked by
-  accident.
+  `table` and `player` (S5) are chosen per record by a `visibility` field,
+  not by path. A test fails if a top-level campaign or appConfig key has no
+  policy, so nothing is synced or leaked by accident. Bytes are kept out by
+  `diffDoc` refusing any `data:` URL, not by a scope.
 
 ### 5.3 Editing-time behaviour (what the GM feels)
 
@@ -492,18 +506,15 @@ plaintext op log later is not.
   unchanged. A link therefore resolves on every instance whether or not the
   bytes are there.
 - **Migration (rule 5, lossless):**
-  - Existing `blobKey`s are re-hashed lazily into the new key, with an
-    `aliases` map so the old key still resolves.
-  - Legacy inline `dataUrl` documents and **gallery images, which are
-    currently inline `dataUrl`s inside the campaign doc** (`domain/
-    gallery.js`), are moved into `docBlobs` before a campaign can be synced.
-
-  Without this step a synced campaign *would* upload images through the op
-  log. As a side benefit, the doc gets much smaller and every local save
-  gets faster, even for users who never sign in.
-- `syncPolicy` marks `blobKey`, `bytes` and `mime` as `blob-meta` and
-  forbids any `data:` URL in a synced op. `diffCampaign` throws if one
-  appears, and a test covers it.
+  - **Built in S0:** gallery images and videos and legacy inline `dataUrl`
+    documents move into `docBlobs` under `sha256:` keys after every load,
+    import and update. Every export puts them back inline, so export files
+    keep their old shape. Without this, a synced campaign *would* upload
+    images through the op log; as a side benefit every save is cheaper.
+  - **S3:** uploaded documents already in `docBlobs` keep their existing
+    keys until S3. S3 re-keys them by content, with an `aliases` map so the
+    old key still resolves, since hash matching is first needed there.
+- `diffDoc` refuses any `data:` URL in an op (built in S0, tested).
 
 ### 6.2 "Not on this device" UX
 
@@ -738,27 +749,28 @@ Each phase ships on its own and follows the Testing posture: pure domain
 functions with `node --test` coverage first, then a thin view, then a jsdom
 smoke run of the built bundle.
 
-### S0 — Groundwork, no server (benefits every user immediately)
+### S0 — Groundwork, no server (built, v0.98.0)
 
-1. Content-addressed blob keys with lossless aliasing. Move gallery images,
-   battlemap images and legacy `dataUrl` documents into `docBlobs`.
-   (Smaller docs, faster saves.)
-2. `src/data/syncPolicy.js`, plus a test that every top-level doc key and
+Recorded in `design/adr/sync-groundwork.md`.
+
+1. Gallery images and videos (which battlemaps and portraits use) and
+   legacy inline documents move into `docBlobs` under `sha256:` content
+   keys. Exports re-inline them. Re-keying existing uploaded documents
+   moved to S3.
+2. `src/data/syncPolicy.js`, with a test that every top-level campaign and
    appConfig key is classified.
-3. `src/domain/syncOps.js`: HLC, `diffCampaign`, `applyOps`.
-   - A **seeded convergence fuzzer**: 3 replicas, 500 random domain
-     mutations, random delivery order with duplicates, which must reach
-     deep-equal states.
-   - A diff-performance budget test (< 5 ms for a 1 MB doc with a one-field
-     change).
-4. `src/domain/licensing.js` with `effectiveLicenses()`.
-   `entitlements.js` exports stay as re-exports. `overlayProfileWith` is
-   switched to it with signed-out behaviour byte-identical, and existing
-   tests prove it.
-5. Portal surface skeleton: `portal.css`, hash router, `mountPortal()`,
-   help centre with the first articles (works signed out and offline).
-6. Constitution amendments: rule 4 "per surface root"; new rule 6 "no
-   document bytes leave the device through the server".
+3. `src/domain/syncOps.js`: HLC, `diffDoc`, `applyOps`. Tests:
+   - the exhaustive three-edit convergence test (62,208 cases);
+   - a seeded three-replica fuzzer with drifting clocks;
+   - local-apply exactness;
+   - a 1 MB diff timing ceiling.
+4. `src/domain/licensing.js` (`effectiveLicenses`, `certStatus`) beside
+   `entitlements.js`. The store's overlay reads it, and signed-out output
+   equals the install's ticks.
+5. Portal surface: `portal.css`, hash router, `mountPortal()`, and the Help
+   centre with eight articles. Reached from gear menu → Help & guides; works
+   signed out and offline.
+6. Constitution amended: rule 4 per surface root; new rule 6.
 
 ### S1 — Accounts and account-wide licensing
 
@@ -825,7 +837,7 @@ it's needed, help-centre guides with checklists, and admin metrics.
 | Edit → visible on another open device, same region | p50 < 250 ms, p95 < 600 ms (≤ 100 ms batching + one hop) |
 | Reconnect after 1 hour offline, 300 local edits | < 1 s to upload and fully catch up |
 | Cold open of a synced 1 MB campaign on a new device | < 2 s (snapshot + tail, gzip) |
-| `diffCampaign` per update, 1 MB doc | < 5 ms |
+| `diffDoc` per update, 1 MB doc | < 15 ms (≈ 8 ms measured in S0) |
 | Server cost of an idle open table | ~0 (hibernated sockets) |
 | Data loss on server outage | None. Every device holds a full local copy plus an outbox |
 
@@ -886,10 +898,11 @@ Kept as-is:
 - Rule 5: lossless migration (blob aliasing; signed-out behaviour
   byte-identical).
 
-Amendments to write into the Constitution when S0 lands:
-1. **Rule 4:** "one delegated listener per event type **per surface root**
-   (campaign shell, portal, admin page)."
-2. **New rule 6:** "No document bytes leave the device through the server.
-   Only metadata syncs; bytes move device-to-device or by file."
-3. **Part IV** keeps "Multi-user access, authentication ..." until S1 ships,
-   then moves the built parts into Part III.
+Amendments, made in the Constitution with S0:
+1. **Rule 4:** one delegated listener per event type **per surface root**
+   (campaign shell and portal now; the admin page in S1).
+2. **New rule 6:** no document bytes leave the device through a server.
+   Only metadata syncs; bytes move device to device or by file.
+
+Still to do: **Part IV** keeps "Multi-user access, authentication ..." until
+S1 ships, then moves the built parts into Part III.

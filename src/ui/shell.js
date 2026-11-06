@@ -4,6 +4,7 @@
 // pure domain function via store.update().
 
 import { store } from '../core/store.js';
+import { imageSrc, setBlobResolver } from './imageSrc.js';
 import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { continueStory, restartStory, applyStoryShift, rollOracle, addNote, setJournalDraft, submitJournalDraft, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField, rollLocationFantasyField, editLocationFantasyField, rollWhereDetailField, addContextEntity, removeContextEntity } from '../domain/session.js';
@@ -1513,6 +1514,7 @@ let locationProximity = null; // ephemeral — { locationId, locationName } for 
 
 export function mountShell(el) {
   root = el;
+  setBlobResolver(store.blobDataUrl);
   el.innerHTML = `
     <div class="cockpit">
       <div class="startup-screen" data-startup-screen aria-label="GMAtlas">
@@ -1541,6 +1543,7 @@ export function mountShell(el) {
             <div class="settings-menu" data-settings-menu hidden>
               <button type="button" data-menu-open-settings>Settings</button>
               <button type="button" data-menu-open-about>About</button>
+              <button type="button" data-menu-help>Help &amp; guides</button>
             </div>
           </div>
         </div>
@@ -1817,6 +1820,8 @@ function onClick(ev) {
   if (hit('[data-settings-menu-toggle]')) { settingsMenuOpen = !settingsMenuOpen; return render(); }
   if (hit('[data-menu-open-settings]')) { settingsMenuOpen = false; toggleDrawer('settings'); return render(); }
   if (hit('[data-menu-open-about]')) { settingsMenuOpen = false; aboutOpen = true; return render(); }
+  // The Help centre is the portal surface (ui/portal), switched by the hash.
+  if (hit('[data-menu-help]')) { settingsMenuOpen = false; render(); location.hash = '#/help'; return; }
   if (hit('[data-about-close]')) { aboutOpen = false; return render(); }
   // D&D 5e PDF import's review step (direct request, phase 4) — Confirm
   // is the only path that ever writes a parsed PDF's values to the
@@ -8613,7 +8618,7 @@ function syncBattlemapVideos() {
       const img = getGalleryImage(store.get(), id);
       if (!img) return;
       placeholder.muted = true;
-      placeholder.src = img.dataUrl;
+      placeholder.src = imageSrc(img);
       if (!seen.has(id)) battlemapVideoEls.set(id, placeholder);
       el = placeholder;
     } else {
