@@ -600,8 +600,9 @@ unprioritized future work, not part of this roadmap.
 - **Real-time collaborative editing is the single feature LegendKeeper
   wins on hardest** against its competitors, per direct comparisons. It's a
   large architectural change (this app is currently single-user/local-
-  first by design) and explicitly out of scope here — but worth knowing
-  it's the most-cited gap category if multi-user support is ever revisited.
+  first by design) and out of scope for this roadmap. Multi-device sync and
+  multiplayer tables are planned separately in
+  `design/ACCOUNTS-SYNC-ROADMAP.md` (proposed, not built).
 
 ---
 
