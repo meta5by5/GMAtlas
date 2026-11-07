@@ -1,0 +1,73 @@
+/* tokens.css — design tokens. The THREE VISUAL TIERS are encoded here as
+   variables so hierarchy is a system property, not a per-screen decision.
+   No !important anywhere in this codebase (the v0.53 specificity wars are over). */
+
+:root {
+  color-scheme: dark;
+
+  /* Palette */
+  --bg:            #0b1120;
+  --bg-raised:     #0f172a;
+  --bg-inset:      #111c33;
+  --border:        rgba(148, 163, 184, 0.28);
+  --border-strong: rgba(148, 163, 184, 0.45);
+  --text:          #e8eef8;
+  --text-dim:      #93a2bb;
+  --accent:        #7dd3fc;
+  --accent-strong: #38bdf8;
+  --danger:        #f87171;
+  --warn:          #fbbf24;
+  --ok:            #4ade80;
+
+  /* Tier surfaces — Primary reads brightest, Tertiary recedes. */
+  --tier1-bg:     linear-gradient(180deg, #16233d, #0f1b30);
+  --tier1-border: var(--border-strong);
+  --tier2-bg:     rgba(15, 23, 42, 0.55);
+  --tier2-border: var(--border);
+  --tier3-bg:     rgba(9, 14, 26, 0.92);
+  --tier3-border: var(--border);
+
+  /* Direct follow-up request: "the 70% gray background should be opaque
+     but meant to be a '70% gray' like a dark gray" — a print-style "70%
+     gray" (70% black ink coverage, i.e. 30% white) rather than 70% alpha:
+     fully opaque so it doesn't blend with whatever sits behind it, and
+     deliberately neutral (not the app's usual blue-tinted tier surfaces),
+     one shared token so all three floating tool panels read as one
+     visual family. */
+  --tool-panel-bg: rgb(77, 77, 77);
+
+  /* Spacing / shape / type */
+  --sp-1: 0.25rem; --sp-2: 0.5rem; --sp-3: 0.75rem; --sp-4: 1rem; --sp-6: 1.5rem;
+  --radius: 0.7rem; --radius-sm: 0.45rem;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+
+  /* Layout */
+  --header-h: 3rem;
+  --strip-h: 3.25rem;
+  /* 420px — one token for both .mc-drawer's own width AND the Advisor
+     column's grid track (cockpit.css), so their left edges align by
+     construction instead of by two separately-maintained values happening
+     to match (direct follow-up request — a real reported misalignment).
+     shell.js no longer overrides this per-drawer; every drawer is this
+     one width now. */
+  --drawer-w: 26.25rem;
+  --edge-w: 3.25rem;
+}
+
+/* Phone tier (docs/adr/0032) — a denser spacing scale, scoped to this one
+   media query rather than redefining the tokens globally, so a phone
+   screen doesn't lose vertical space to desktop-sized gaps between rows.
+   Every rule in cockpit.css that reads var(--sp-*) picks this up for free —
+   no per-component overrides needed. */
+@media (max-width: 480px) {
+  :root {
+    --sp-1: 0.15rem; --sp-2: 0.35rem; --sp-3: 0.5rem; --sp-4: 0.65rem; --sp-6: 1rem;
+    /* Direct request: the header row (Party/Colony/World/Journal tabs +
+       Settings gear) felt too compressed on a phone once every tab shows
+       an icon+label pair — 10% taller (3rem -> 3.3rem) gives those a more
+       comfortable tap target now that cockpit.css also drops the label
+       text at this width (see .header-drawer-tabs .btn-label below). */
+    --header-h: 3.3rem;
+  }
+}

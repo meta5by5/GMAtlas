@@ -1,0 +1,683 @@
+{
+  "app": "GMAtlas",
+  "kind": "content-pack",
+  "schemaVersion": 1,
+  "entities": [
+    {
+      "id": "ent_mtqp2t9vys3g",
+      "type": "lifeform",
+      "name": "Converted Acquisition",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.083Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": "A"
+            },
+            {
+              "key": "Weapon",
+              "value": "2B (see Weapons list)"
+            },
+            {
+              "key": "Special",
+              "value": "Number modifier +1. Careless: +1 to Seize the Initiative. Built-in: counts as stationary when firing. Invasion Threat, 6+ Saving Throw."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2t9vmtfl",
+      "type": "lifeform",
+      "name": "Converted Infiltrators",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.083Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": "A"
+            },
+            {
+              "key": "Weapon",
+              "value": "1A (see Weapons list)"
+            },
+            {
+              "key": "Special",
+              "value": "Number modifier +0. Invasion Threat. 6+ Saving Throw."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2t9wepmm",
+      "type": "lifeform",
+      "name": "Abductor Raiders",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.084Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": "A"
+            },
+            {
+              "key": "Weapon",
+              "value": "2A (see Weapons list)"
+            },
+            {
+              "key": "Special",
+              "value": "Number modifier +3. Invasion Threat."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2t9wyipy",
+      "type": "lifeform",
+      "name": "Swarm Brood",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.084Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": "B"
+            },
+            {
+              "key": "Weapon",
+              "value": "Claws (Damage +1)"
+            },
+            {
+              "key": "Special",
+              "value": "Number modifier +2. Pack hunters: Brawls initiated by Swarm resolve at the end of the Enemy Actions phase; will always try to gang up on prey. Invasion Threat."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2t9x0lpm",
+      "type": "lifeform",
+      "name": "Haywire Robots",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.085Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 3,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": "R"
+            },
+            {
+              "key": "Weapon",
+              "value": "Smash (Damage +0)"
+            },
+            {
+              "key": "Special",
+              "value": "Number modifier +2. Careless: +1 to Seize the Initiative. 6+ Saving Throw."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2t9xmsc4",
+      "type": "lifeform",
+      "name": "Razor Lizards",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.085Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": "B"
+            },
+            {
+              "key": "Weapon",
+              "value": "Fangs (Damage +0)"
+            },
+            {
+              "key": "Special",
+              "value": "Number modifier +2. Needle fangs: Armor Saving Throws are ignored."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2t9xmwr9",
+      "type": "lifeform",
+      "name": "Sand Runners",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.085Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 7,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": "B"
+            },
+            {
+              "key": "Weapon",
+              "value": "Fangs (Damage +1)"
+            },
+            {
+              "key": "Special",
+              "value": "Number modifier +1. Leap: may leap into contact as a Free Action if ending a move within 3\" of a Human."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2t9xgegz",
+      "type": "lifeform",
+      "name": "Void Rippers",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.085Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": "R"
+            },
+            {
+              "key": "Weapon",
+              "value": "Fangs (Damage +0)"
+            },
+            {
+              "key": "Special",
+              "value": "Number modifier +0. Gruesome: post-battle Injury rolls take a -5 penalty."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2t9ymte1",
+      "type": "lifeform",
+      "name": "Krorg",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.086Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 6,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": "R"
+            },
+            {
+              "key": "Weapon",
+              "value": "Claws (Damage +2)"
+            },
+            {
+              "key": "Special",
+              "value": "Number modifier +0. Ferocious: +1 to Brawling when initiating combat. Easy targets: +1 to hit. 5+ Saving Throw. Tough fight: a random survivor gains +1 XP."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2t9ygrio",
+      "type": "lifeform",
+      "name": "Large Bugs",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.086Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": "R"
+            },
+            {
+              "key": "Weapon",
+              "value": "Mandibles (Damage +1)"
+            },
+            {
+              "key": "Special",
+              "value": "Number modifier +2. Easy targets: +1 to hit. Stubborn: ignore the first casualty of the battle for Morale checks."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2t9zok9f",
+      "type": "lifeform",
+      "name": "Carnivore Chasers",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.087Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": "B"
+            },
+            {
+              "key": "Weapon",
+              "value": "Fangs (Damage +0)"
+            },
+            {
+              "key": "Special",
+              "value": "Number modifier +2. Alert: -1 to Seize the Initiative."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2t9zvkjc",
+      "type": "lifeform",
+      "name": "Vent Crawlers",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.087Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": "R"
+            },
+            {
+              "key": "Weapon",
+              "value": "Claws (Damage +0)"
+            },
+            {
+              "key": "Special",
+              "value": "Number modifier +0. Fate worse than death: a death result on the post-battle Injury roll cannot be saved or rerolled for any reason."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2t9z39dj",
+      "type": "lifeform",
+      "name": "Distorts",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.087Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": "B"
+            },
+            {
+              "key": "Weapon",
+              "value": "Touch (Damage +3)"
+            },
+            {
+              "key": "Special",
+              "value": "Number modifier +0. Extra-dimensional horrors, rumored remnants of sapient beings lost in teleport accidents."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

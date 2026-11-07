@@ -1,0 +1,839 @@
+{
+  "app": "GMAtlas",
+  "kind": "content-pack",
+  "schemaVersion": 1,
+  "entities": [
+    {
+      "id": "ent_mtqp2ta20adv",
+      "type": "lifeform",
+      "name": "Vent-crawlers",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.090Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": ""
+            },
+            {
+              "key": "Weapon",
+              "value": "Damage +2"
+            },
+            {
+              "key": "Special",
+              "value": "Numbers 1D3+2. When firing at Vent-crawlers within or directly behind cover, do not add Combat Skill."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2ta2dsic",
+      "type": "lifeform",
+      "name": "Acid Blobs",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.090Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 3,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": ""
+            },
+            {
+              "key": "Weapon",
+              "value": "Damage +3"
+            },
+            {
+              "key": "Special",
+              "value": "Numbers 1D6. When an Acid Blob is killed, roll 1D6 immediately — on a 1-2, place new Blobs equal to the die roll randomly 2\" from the slain Blob."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2ta286eg",
+      "type": "lifeform",
+      "name": "Face-rippers",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.090Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": ""
+            },
+            {
+              "key": "Weapon",
+              "value": "Damage +2"
+            },
+            {
+              "key": "Special",
+              "value": "Numbers 1D3+2. Trooper armor only saves on a roll of a 6."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2ta2rxy4",
+      "type": "lifeform",
+      "name": "Slithering Horrors",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.090Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": ""
+            },
+            {
+              "key": "Weapon",
+              "value": "Damage +2"
+            },
+            {
+              "key": "Special",
+              "value": "Numbers 1D6+1. Troopers with melee weapons can only claim a +1 bonus to Brawling rolls against them."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2ta2vhml",
+      "type": "lifeform",
+      "name": "Tentacle Creepers",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.090Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 3,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 3,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": ""
+            },
+            {
+              "key": "Weapon",
+              "value": "Damage +1"
+            },
+            {
+              "key": "Special",
+              "value": "Numbers 1D3+1. Creepers receive a 5+ Saving Throw, except when struck by an Area weapon."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2ta2grmq",
+      "type": "lifeform",
+      "name": "Shambling Reanimations",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.090Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 3,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": ""
+            },
+            {
+              "key": "Weapon",
+              "value": "Damage +1"
+            },
+            {
+              "key": "Special",
+              "value": "Numbers 1D6+2. Any grunt defeated is immediately replaced by another Reanimation figure."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2ta3q5xp",
+      "type": "lifeform",
+      "name": "Razor Lizards (Bug Hunt)",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.091Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": ""
+            },
+            {
+              "key": "Weapon",
+              "value": "Damage +2"
+            },
+            {
+              "key": "Special",
+              "value": "Numbers 1D6+1. Defeated troopers rolling for post-battle Injuries must add 1 campaign turn to all recovery times (not the Lost Marine column)."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2ta3gjx4",
+      "type": "lifeform",
+      "name": "Berserk Robots",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.091Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": ""
+            },
+            {
+              "key": "Weapon",
+              "value": "Damage +2"
+            },
+            {
+              "key": "Special",
+              "value": "Numbers 1D3+1. 5+ Saving Throw against all sources of damage."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2ta35pjx",
+      "type": "lifeform",
+      "name": "Converted Assault Team",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.091Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": ""
+            },
+            {
+              "key": "Weapon",
+              "value": "Damage +2"
+            },
+            {
+              "key": "Special",
+              "value": "Numbers 1D6+1. 5+ Saving Throw against ranged attacks."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2ta3jwsn",
+      "type": "lifeform",
+      "name": "Dimensional Distorts",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.091Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 5,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": ""
+            },
+            {
+              "key": "Weapon",
+              "value": "Damage +2"
+            },
+            {
+              "key": "Special",
+              "value": "Numbers 1D6+1. At the end of each round, select a random Distort figure and move it to the center of the battlefield."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2ta4g3n6",
+      "type": "lifeform",
+      "name": "The Swarm",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.092Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 6,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 2,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": ""
+            },
+            {
+              "key": "Weapon",
+              "value": "Damage +3"
+            },
+            {
+              "key": "Special",
+              "value": "Numbers 1D3+1. Attacks ignore trooper Saving Throws."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2ta4lf0d",
+      "type": "lifeform",
+      "name": "Horde Invasion Force",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.092Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": ""
+            },
+            {
+              "key": "Weapon",
+              "value": "Damage +1"
+            },
+            {
+              "key": "Special",
+              "value": "Numbers 2D3+1. At the end of each round, if any Horde figures are on the table, 1 additional figure is placed at the center of a random battlefield edge."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2ta46nos",
+      "type": "lifeform",
+      "name": "Converted Infiltration Team",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.092Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 5,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": ""
+            },
+            {
+              "key": "Weapon",
+              "value": "Damage +2"
+            },
+            {
+              "key": "Special",
+              "value": "Numbers 1D6+1. Each time a group is revealed, one figure is instead set up on the closest Objective."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2ta5ki9w",
+      "type": "lifeform",
+      "name": "Shatter-forms",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.093Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": ""
+            },
+            {
+              "key": "Weapon",
+              "value": "Damage +3"
+            },
+            {
+              "key": "Special",
+              "value": "Numbers 1D6+1. When killed, all figures within 2\" take a Damage 0 hit (including other Shatter-forms)."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2ta5hzdg",
+      "type": "lifeform",
+      "name": "Strangle Worms",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.093Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 0,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 3,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": ""
+            },
+            {
+              "key": "Weapon",
+              "value": "Damage +1"
+            },
+            {
+              "key": "Special",
+              "value": "Numbers 1D6+4. At the end of each round, roll 1D6 for every Worm on the table — on a 6, another Worm is placed adjacent to it."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_mtqp2ta64upo",
+      "type": "lifeform",
+      "name": "Gripper Weeds",
+      "tags": [],
+      "overview": "",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-09-07T03:42:20.094Z",
+      "statblocks": [
+        {
+          "kind": "npc",
+          "templateId": "5pfh-lifeform",
+          "fields": [
+            {
+              "key": "Speed",
+              "value": 4,
+              "attribute": true,
+              "rollMethod": "none",
+              "format": "inches"
+            },
+            {
+              "key": "Combat",
+              "value": 1,
+              "attribute": true,
+              "rollMethod": "flat",
+              "format": "sign",
+              "target": 6
+            },
+            {
+              "key": "Toughness",
+              "value": 4,
+              "max": 5,
+              "track": true,
+              "rollMethod": "none"
+            },
+            {
+              "key": "AI",
+              "value": ""
+            },
+            {
+              "key": "Weapon",
+              "value": "Damage +1"
+            },
+            {
+              "key": "Special",
+              "value": "Numbers 1D6+1. Troopers within 2\" of a Gripper Weed cannot move, but may fire normally."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

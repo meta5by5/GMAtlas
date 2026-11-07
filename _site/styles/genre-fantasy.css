@@ -1,0 +1,63 @@
+/* genre-fantasy.css — the fantasy genre's look (Fantasy (generic), D&D 5e,
+   and any Ironsworn profile). Applied automatically: shell.js sets
+   <html data-genre="fantasy"> from the profile's Genre Pack
+   (data/genrePacks.js's genreStyleFamily). Weathered parchment with ink-brown
+   text and oxblood/forest accents — every panel follows because cockpit.css
+   reads these tokens; the few hard-coded sci-fi blues are restyled below. */
+
+:root[data-genre="fantasy"] {
+  color-scheme: light;
+
+  --bg:            #e6d5b0;
+  --bg-raised:     #efe2c4;
+  --bg-inset:      #dcc89f;
+  --border:        rgba(92, 62, 30, 0.30);
+  --border-strong: rgba(92, 62, 30, 0.55);
+  --text:          #2e2112;
+  --text-dim:      #6b5436;
+  --accent:        #8a2f1c;   /* oxblood ink */
+  --accent-strong: #6b2213;
+  --danger:        #a3261b;
+  --warn:          #9a5f0e;
+  --ok:            #3d6a2a;   /* forest green */
+
+  --tier1-bg:     linear-gradient(180deg, #d6be8e, #c8ac78);
+  --tier1-border: rgba(92, 62, 30, 0.55);
+  --tier2-bg:     rgba(246, 236, 211, 0.72);
+  --tier2-border: var(--border);
+  --tier3-bg:     rgba(240, 228, 200, 0.96);
+  --tier3-border: var(--border);
+  --tool-panel-bg: #d9c49c;
+
+  --font: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  --shadow: 0 8px 28px rgba(70, 45, 20, 0.35);
+}
+
+/* Weathered parchment: a warm base, a faint fibre grain, lighter worn patches,
+   and darker age-stained edges. All CSS — no image files to fetch. */
+:root[data-genre="fantasy"] body {
+  background-color: #e3cfa5;
+  background-image:
+    radial-gradient(ellipse at 18% 12%, rgba(255, 249, 230, 0.55), transparent 55%),
+    radial-gradient(ellipse at 78% 68%, rgba(255, 246, 222, 0.35), transparent 50%),
+    radial-gradient(ellipse at 88% 8%, rgba(120, 78, 34, 0.18), transparent 45%),
+    radial-gradient(ellipse at 6% 92%, rgba(110, 70, 30, 0.22), transparent 50%),
+    radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(96, 62, 28, 0.32) 100%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.36  0 0 0 0 0.24  0 0 0 0 0.11  0 0 0 0.16 0'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>");
+  background-attachment: fixed;
+}
+
+:root[data-genre="fantasy"] h1,
+:root[data-genre="fantasy"] h2,
+:root[data-genre="fantasy"] h3 { letter-spacing: 0.01em; }
+
+/* Sci-fi blues hard-coded in cockpit.css, re-inked for parchment. */
+:root[data-genre="fantasy"] .btn.primary { background: linear-gradient(180deg, #9a3a24, #7a2a17); border-color: #6b2213; color: #fbf3e2; }
+:root[data-genre="fantasy"] .btn.primary:hover { background: linear-gradient(180deg, #a8452c, #8a2f1c); }
+:root[data-genre="fantasy"] .chip.active,
+:root[data-genre="fantasy"] .party-stat-pill-expanded,
+:root[data-genre="fantasy"] .drop-hover,
+:root[data-genre="fantasy"] .doc-badge { background: rgba(138, 47, 28, 0.10); }
+:root[data-genre="fantasy"] .dice-outcome-neutral { background: rgba(138, 47, 28, 0.10); border-color: rgba(138, 47, 28, 0.35); }
+:root[data-genre="fantasy"] .combat-tracker-row.combat-defender { background: rgba(61, 106, 42, 0.14); outline-color: var(--ok); }
+:root[data-genre="fantasy"] .startup-screen { background: #c9b07f; }
