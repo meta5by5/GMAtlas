@@ -129,7 +129,7 @@ rooms, signing key, secrets and accounts (`wrangler.toml`):
 |---|---|---|
 | URL | `https://dev.gmatlas.online` | `https://gmatlas.online` |
 | Worker | `gmatlas` | `gmatlas-production` |
-| D1 | `db_gmatlas` | `db_gmatlas_production` |
+| D1 | `db_gmatlas` | `db_gmatlas_prod` |
 | Cert key | `k1` | `p1` |
 | Ships with | `npm run deploy` (any branch) | `npm run release:production -- --confirm gmatlas.online` |
 
@@ -165,18 +165,25 @@ done:
 - secrets set (key `k1`, public half in `keys/cert-k1.public.json`);
 - email through Resend from `info@gmatlas.online` (`RESEND_API_KEY`).
 
-### Production (one-time setup, not done yet)
+### Production (one-time setup)
 
-1. `npx wrangler d1 create db_gmatlas_production`, then paste its
-   `database_id` into `[[env.production.d1_databases]]`.
-2. `npm run secrets:production`. This sets the production secrets and
-   writes `keys/cert-p1.public.json`. Commit that file, and add the key to
-   `src/data/certKeys.js` (on `main`).
-3. `npx wrangler secret put RESEND_API_KEY --env production`.
-4. Make sure no other DNS record holds `gmatlas.online`; the first deploy
+Done:
+- D1 `db_gmatlas_prod` created, its `database_id` in
+  `[[env.production.d1_databases]]` (the release applies its migrations);
+- `npm run secrets:production`: secrets set, key `p1` in
+  `keys/cert-p1.public.json` and pinned in `src/data/certKeys.js`.
+
+Still to do:
+1. `npx wrangler secret put RESEND_API_KEY --env production`.
+2. Make sure no other DNS record holds `gmatlas.online`; the first deploy
    creates its custom-domain record.
-5. Merge to `main`, push, then run
+3. Merge to `main`, push, then run
    `npm run release:production -- --confirm gmatlas.online`.
+
+`src/data/certKeys.js` pins only the production key, matching the app's
+default service URL (`gmatlas.online`). `scripts/site.js` swaps in the dev
+key for a dev build, so a certificate from one environment never unlocks
+anything in the other.
 
 On Windows PowerShell, use `npx.cmd`/`npm.cmd` if script execution is
 disabled.

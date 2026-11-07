@@ -81,12 +81,12 @@ GMATLAS_ENV = "production"
 CERT_KEY_ID = "p1"
 MAIL_FROM = "GMAtlas <info@gmatlas.online>"
 
-# One-time: `npx wrangler d1 create db_gmatlas_production`, then paste its
+# One-time: `npx wrangler d1 create db_gmatlas_prod`, then paste its
 # database_id here. release.js refuses while this is still the placeholder.
 [[env.production.d1_databases]]
 binding = "DB"
-database_name = "db_gmatlas_production"
-database_id = "SET-ME-production-d1-id"
+database_name = "db_gmatlas_prod"
+database_id = "c063d408-4f7a-4615-bef1-a9e7cab8764d"
 migrations_dir = "migrations"
 
 [[env.production.durable_objects.bindings]]

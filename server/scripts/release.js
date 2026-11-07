@@ -48,7 +48,7 @@ if (git('rev-parse HEAD') !== git('rev-parse origin/main')) fail('HEAD is not or
 // Configuration.
 const toml = readFileSync(join(serverDir, 'wrangler.toml'), 'utf8');
 const prod = toml.slice(toml.indexOf('[env.production]'));
-if (prod.includes('SET-ME')) fail('set the production D1 database_id in wrangler.toml (npx wrangler d1 create db_gmatlas_production).');
+if (prod.includes('SET-ME')) fail('set the production D1 database_id in wrangler.toml (npx wrangler d1 create db_gmatlas_prod).');
 const kid = (/^CERT_KEY_ID\s*=\s*"([^"]+)"/m.exec(prod.slice(prod.indexOf('[env.production.vars]'))) || [])[1];
 if (!kid) fail('CERT_KEY_ID missing from [env.production.vars].');
 if (!existsSync(join(serverDir, 'keys', `cert-${kid}.public.json`))) fail(`no keys/cert-${kid}.public.json: run npm run secrets:production first.`);
@@ -67,7 +67,8 @@ git(`tag -a ${tag} -m "Production release ${tag}"`);
 git(`push origin ${tag}`);
 console.log(`\nTagged ${tag}.`);
 
-run('npx --yes wrangler@4 d1 migrations apply db_gmatlas_production --remote --env production');
+// By binding, so the database's name in Cloudflare can be anything.
+run('npx --yes wrangler@4 d1 migrations apply DB --remote --env production');
 run('node scripts/site.js --production');
 run('npx --yes wrangler@4 deploy --env production');
 console.log(`\nReleased ${tag} to https://gmatlas.online`);
