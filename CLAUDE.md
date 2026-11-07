@@ -189,8 +189,9 @@ a stale-service-worker-cache bug only visible under `http://`).
 
 ## Branches
 
-- **`main`** — the core app; the only branch that deploys (GitHub Pages).
-  Core features and fixes always land here first.
+- **`main`** — the core app. Core features and fixes always land here
+  first. Pushes deploy the static app to GitHub Pages, and it's the only
+  branch production releases come from.
 - **`server`** — long-lived branch for the server-side work in
   `design/ACCOUNTS-SYNC-ROADMAP.md` (`server/`, account/sync/p2p clients,
   admin). Merge `main` into it regularly (`git merge main`, never rebase).
@@ -200,6 +201,18 @@ a stale-service-worker-cache bug only visible under `http://`).
 
 Check `git branch --show-current` before committing, and put the work on
 the branch the table in the roadmap's section 2.3 names.
+
+**Deployments** (the accounts/sync service, `server/` on the `server`
+branch; details in `server/README.md`):
+- **dev**, `https://dev.gmatlas.online`, is where every ordinary deploy
+  goes: `npm run deploy` in `server/`, from any branch.
+- **production**, `https://gmatlas.online`, only ever gets a deliberate
+  release: `npm run release:production -- --confirm gmatlas.online`, from a
+  clean `main` at `origin/main` with passing tests, tagged
+  `prod-YYYYMMDD-HHMM`.
+
+Never deploy to production unless the user explicitly asks for a
+production release.
 
 ## Environment constraints
 
