@@ -4,6 +4,7 @@
 // pure domain function via store.update().
 
 import { store } from '../core/store.js';
+import { account } from '../core/account.js';
 import { imageSrc, setBlobResolver } from './imageSrc.js';
 import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
@@ -1544,6 +1545,7 @@ export function mountShell(el) {
               <button type="button" data-menu-open-settings>Settings</button>
               <button type="button" data-menu-open-about>About</button>
               <button type="button" data-menu-help>Help &amp; guides</button>
+              <button type="button" data-menu-account>${account.getState().status === 'signed-in' ? 'Account' : 'Sign in'}</button>
             </div>
           </div>
         </div>
@@ -1822,6 +1824,11 @@ function onClick(ev) {
   if (hit('[data-menu-open-about]')) { settingsMenuOpen = false; aboutOpen = true; return render(); }
   // The Help centre is the portal surface (ui/portal), switched by the hash.
   if (hit('[data-menu-help]')) { settingsMenuOpen = false; render(); location.hash = '#/help'; return; }
+  if (hit('[data-menu-account]')) {
+    settingsMenuOpen = false; render();
+    location.hash = account.getState().status === 'signed-in' ? '#/account' : '#/account/sign-in';
+    return;
+  }
   if (hit('[data-about-close]')) { aboutOpen = false; return render(); }
   // D&D 5e PDF import's review step (direct request, phase 4) — Confirm
   // is the only path that ever writes a parsed PDF's values to the
@@ -6913,6 +6920,21 @@ function onChange(ev) {
   const licenseToggle = t.closest('[data-license-toggle]');
   if (licenseToggle) {
     const id = licenseToggle.dataset.licenseToggle;
+    // Signed in, the account decides ownership (licensing.js): a tick is an
+    // account-wide "I own this", an untick deactivates it on every device.
+    // The install's own tick is still recorded, for when it's signed out.
+    if (account.getState().status === 'signed-in') {
+      if (!t.checked && !window.confirm('Remove this license from your account? It turns off on every device you’re signed in on.')) {
+        t.checked = true;
+        return;
+      }
+      const owned = t.checked;
+      store.updateAppConfig((cfg) => setLicense(cfg, id, owned));
+      (owned ? account.attest([id]) : account.deactivate(id))
+        .then(() => toast(owned ? 'Added to your account on every device.' : 'Removed from your account.'))
+        .catch((err) => { toast(err.message || 'Couldn’t update your account.'); render(); });
+      return;
+    }
     return store.updateAppConfig((cfg) => setLicense(cfg, id, t.checked));
   }
   if (t.closest('[data-rpe-show-all-genre-packs]')) {

@@ -1,5 +1,6 @@
 // portal/index.js — the portal surface: the non-campaign screens (Help
-// centre now; sign-in, account, store and cart in later phases), with
+// centre; sign-in and Account in portal/account.js; store and cart in
+// later phases), with
 // their own layout and stylesheet (styles/portal.css), distinct from the
 // campaign cockpit (design/ACCOUNTS-SYNC-ROADMAP.md section 8).
 //
@@ -11,6 +12,11 @@
 
 import { HELP_ARTICLES, HELP_CATEGORIES } from '../../data/helpArticles.js';
 import { renderHelpMarkdown, searchHelp, parsePortalRoute } from '../../domain/helpCentre.js';
+import { account } from '../../core/account.js';
+import {
+  bindAccountScreens, signInView, signInRedirect, accountView, enterAccountSection,
+  onAccountSubmit, onAccountClick, onAccountChange,
+} from './account.js';
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -24,9 +30,16 @@ export function mountPortal(portalEl, appEl) {
   appRoot = appEl;
   portalEl.addEventListener('input', onInput);
   portalEl.addEventListener('click', onClick);
+  portalEl.addEventListener('submit', onSubmit);
+  portalEl.addEventListener('change', onChange);
   window.addEventListener('hashchange', route);
+  // Account events repaint only the account screens, so a background
+  // session refresh never wipes a half-typed Help search.
+  bindAccountScreens(() => { if (current && (current.view === 'account' || current.view === 'sign-in')) paint(false); });
   route();
 }
+
+let current = null;
 
 function route() {
   const r = parsePortalRoute(location.hash);
@@ -34,16 +47,48 @@ function route() {
     if (!portalRoot.hidden) document.title = campaignTitle;
     portalRoot.hidden = true;
     appRoot.hidden = false;
+    current = null;
     return;
+  }
+  if (r.view === 'sign-in') {
+    const to = signInRedirect();
+    if (to) { location.replace(to); return; }
   }
   if (portalRoot.hidden) campaignTitle = document.title;
   appRoot.hidden = true;
   portalRoot.hidden = false;
   if (r.view === 'help') query = '';
-  portalRoot.innerHTML = frame(r.view === 'article' ? articleView(r.slug) : r.view === 'help' ? helpHome() : accountUnavailable());
-  portalRoot.scrollTop = 0;
+  if (r.view === 'account') enterAccountSection(r.section);
+  current = r;
+  paint(true);
+}
+
+/** Draws the current route. `fresh` is a navigation (scroll to the top);
+ *  otherwise an in-place repaint after an account call. */
+function paint(fresh) {
+  const r = current;
+  if (!r) return;
+  const area = r.view === 'sign-in' || r.view === 'account' ? 'account' : 'help';
+  const content = r.view === 'article' ? articleView(r.slug)
+    : r.view === 'help' ? helpHome()
+      : r.view === 'sign-in' ? signInView()
+        : accountView(r.section);
+  portalRoot.innerHTML = frame(content, area);
+  if (fresh) portalRoot.scrollTop = 0;
+  // innerHTML ignores `autofocus`; honour it so each sign-in step is ready
+  // to type into.
+  const focus = portalRoot.querySelector('[autofocus]');
+  if (focus) focus.focus();
   const h1 = portalRoot.querySelector('h1');
-  document.title = `${h1 ? h1.textContent : 'Help'} · GMAtlas Help`;
+  document.title = `${h1 ? h1.textContent : 'Help'} · GMAtlas ${area === 'account' ? 'Account' : 'Help'}`;
+}
+
+function onSubmit(e) {
+  onAccountSubmit(e);
+}
+
+function onChange(e) {
+  onAccountChange(e);
 }
 
 function onInput(e) {
@@ -55,6 +100,7 @@ function onInput(e) {
 }
 
 function onClick(e) {
+  if (onAccountClick(e)) return;
   const jump = e.target.closest('[data-help-jump]');
   if (jump) {
     const target = portalRoot.querySelector(`#${CSS.escape(jump.dataset.helpJump)}`);
@@ -62,22 +108,23 @@ function onClick(e) {
   }
 }
 
-function frame(content) {
+function frame(content, area) {
+  const s = account.getState();
+  const who = s.status === 'signed-in'
+    ? `<a class="portal-who" href="#/account" title="${esc(s.user.email)}">${esc(s.user.displayName || s.user.email)}</a>`
+    : s.status === 'unavailable' ? '' : '<a class="portal-who" href="#/account/sign-in">Sign in</a>';
+  const here = (a) => (a === area ? 'aria-current="page"' : '');
   return `
     <header class="portal-topbar">
-      <a class="portal-brand" href="#/help">GMAtlas <span>Help</span></a>
+      <a class="portal-brand" href="#/help">GMAtlas <span>${area === 'account' ? 'Account' : 'Help'}</span></a>
       <nav class="portal-nav" aria-label="Portal">
-        <a href="#/help" aria-current="page">Help centre</a>
+        <a href="#/help" ${here('help')}>Help centre</a>
+        <a href="#/account" ${here('account')}>Account</a>
       </nav>
+      ${who}
       <a class="portal-back" href="#/">← Back to campaign</a>
     </header>
     <main class="portal-main">${content}</main>`;
-}
-
-// Account routes (#/account/*) parse on every build; the sign-in and account
-// screens arrive with Phase S1 (server branch). Until then, say so plainly.
-function accountUnavailable() {
-  return `<div class="portal-article-wrap"><article class="portal-article"><h1>Accounts aren’t available yet</h1><p>This version of GMAtlas works without an account: everything stays on this device. <a href="#/help">Browse help</a>.</p></article></div>`;
 }
 
 const articlesIn = (categoryId) => HELP_ARTICLES.filter((a) => a.category === categoryId);

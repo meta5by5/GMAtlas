@@ -33,11 +33,36 @@ Built and tested (`npm test`, 8 end-to-end tests against real SQL):
 - **Cross-site refusal:** state-changing requests from another origin get
   a 403, on top of the SameSite cookie.
 
+Browser side (tested by `test/client.test.js`, which drives the real client
+against this Worker, plus a jsdom smoke run of the built bundle):
+- **`src/core/account.js`**, the REST client:
+  - it keeps the device id, the user and the last signed certificate in
+    `appConfig.account` (sync scope `local`) through `store.js`;
+  - the access token stays in memory;
+  - refreshes are serialized across tabs with a Web Lock, so rotation never
+    trips reuse detection;
+  - a remote sign-out drops the browser back to the signed-out app.
+- **The certificate** is verified offline against the pinned key
+  (`src/data/certKeys.js`) before `store.setCertificate()` lets it decide
+  owned licenses. A forged or edited one is ignored, and offline the cached
+  one keeps working.
+- **Portal screens** (`src/ui/portal/account.js`):
+  - `#/account/sign-in`: email, then code, then a name for a new account,
+    then "bring this device's licenses?";
+  - `#/account`: Profile, and sign out;
+  - `#/account/devices`: rename, and remote sign-out;
+  - `#/account/licenses`: owned licenses, this device's install policy,
+    "I own this", and Deactivate.
+- **Settings → Licenses** ticks attest to the account while signed in, and
+  unticks deactivate (after a confirm).
+- **Without the service:** under `file://` or on a static copy, the screens
+  point to `https://dev.gmatlas.online` and make no calls.
+
 Still to do in S1:
 - passkeys and OAuth sign-in;
 - device key pairs, plus the request-signing challenge they enable;
-- the browser side (`src/core/account.js`, sign-in and account pages on the
-  portal, the certificate feeding `effectiveLicenses`);
+- the account menu in the campaign top bar (the gear menu has "Sign in" /
+  "Account" for now), and a help article on accounts;
 - admin v1;
 - moving third-party PDF loading to "import my copy";
 - a per-IP rate limit on code requests.
@@ -57,7 +82,8 @@ scripts/keygen.js             new certificate signing key pair (printed only)
 scripts/secrets.js            generates all secrets: --local (.dev.vars) or --remote (Cloudflare)
 scripts/site.js               builds the app and assembles ../_site for wrangler
 keys/                         committed public halves of the certificate signing keys
-test/                         node:sqlite D1 shim + end-to-end tests
+test/                         node:sqlite D1 shim + end-to-end tests (server, and the
+                              browser client src/core/account.js against it)
 ```
 
 ## Running it
