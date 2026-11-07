@@ -59,7 +59,9 @@ if (mode === 'local') {
     process.exit(1);
   }
   for (const [name, value] of Object.entries(secrets)) {
-    const run = spawnSync('npx', ['--yes', 'wrangler@4', 'secret', 'put', name], { cwd: serverDir, input: value, stdio: ['pipe', 'inherit', 'inherit'], shell: process.platform === 'win32' });
+    // One command string (name is one of the fixed keys above), so the
+    // shell needed for npx on Windows has nothing to concatenate.
+    const run = spawnSync(`npx --yes wrangler@4 secret put ${name}`, { cwd: serverDir, input: value, stdio: ['pipe', 'inherit', 'inherit'], shell: true });
     if (run.status !== 0) {
       console.error(`wrangler secret put ${name} failed. Fix the error and re-run; it makes a fresh set.`);
       process.exit(1);

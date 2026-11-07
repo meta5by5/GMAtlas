@@ -18,7 +18,7 @@ compatibility_date = "2026-10-01"
 
 [vars]
 CERT_KEY_ID = "k1"
-MAIL_FROM = "GMAtlas <gmatlasonline@gmail.com>"
+MAIL_FROM = "GMAtlas <info@gmatlas.online>"
 
 [[d1_databases]]
 binding = "DB"

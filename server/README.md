@@ -41,7 +41,8 @@ Still to do in S1:
 - admin v1;
 - moving third-party PDF loading to "import my copy";
 - a per-IP rate limit on code requests;
-- deployment (needs a Cloudflare login and a mail domain; steps below).
+- email delivery in production (deployed, but no `RESEND_API_KEY` yet, so
+  live sign-in can't send codes; see "Deploying" below).
 
 ## Layout
 
@@ -70,15 +71,14 @@ test/                         node:sqlite D1 shim + end-to-end tests
   (`scripts/site.js`, the same files the Pages deploy publishes) and runs
   `wrangler dev` (fetched on demand by `npx`) at `http://localhost:8787`, with
   the app and `/api` on one origin. Sign-in codes print to the console.
-- **Deploying.** The D1 database `db_gmatlas` exists and is in
-  `wrangler.toml`. The remaining steps, once:
-  1. `npx wrangler login`;
-  2. `npm run migrate:remote`;
-  3. `npm run secrets:remote`, then commit the
-     `keys/cert-<id>.public.json` it writes (the app pins it);
-  4. verify a sending domain with Resend, set `MAIL_FROM` to an address on
-     it, and `npx wrangler secret put RESEND_API_KEY`;
-  5. `npm run deploy`.
+- **Deploying.** Live at `https://gmatlas.gmatlas-server.workers.dev`,
+  on the D1 database `db_gmatlas`. The one-time setup is done: migrations
+  applied (`npm run migrate:remote`), secrets set (`npm run
+  secrets:remote`, key `k1`, public half in `keys/cert-k1.public.json`).
+  Still needed: verify `gmatlas.online` as a Resend sending domain, then
+  `npx wrangler secret put RESEND_API_KEY`. After that, a later change
+  ships with `npm run deploy` (plus `npm run migrate:remote` when a
+  migration is added).
 
 ### Rotating the signing key
 
