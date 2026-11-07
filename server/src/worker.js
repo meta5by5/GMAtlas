@@ -36,14 +36,26 @@ const ROUTES = [
   ['DELETE', /^\/api\/entitlements\/licenses\/([\w-]+)$/, deactivateLicense, true],
 ];
 
+// The imported signing key, cached per isolate (keyed by the secret's text,
+// so a test or a rotated secret gets its own).
+const signingKeys = new Map();
+function signingKeyFor(jwkText) {
+  if (!jwkText) throw new HttpError(500, 'not_configured', 'Certificate signing key is not configured.');
+  if (!signingKeys.has(jwkText)) {
+    const pending = Promise.resolve().then(() => importSigningKey(JSON.parse(jwkText)));
+    pending.catch(() => signingKeys.delete(jwkText));
+    signingKeys.set(jwkText, pending);
+  }
+  return signingKeys.get(jwkText);
+}
+
 /** Wraps the raw bindings with what handlers need: a clock, the mailer, and
- *  the signing key (imported once per isolate). */
+ *  the signing key. */
 function context(env) {
-  let signingKey = null;
   const wrapped = {
     ...env,
     MAILER: env.MAILER || mailerFrom(env),
-    certSigningKey: async () => (signingKey ||= await importSigningKey(JSON.parse(env.CERT_SIGNING_JWK))),
+    certSigningKey: () => signingKeyFor(env.CERT_SIGNING_JWK),
   };
   return { env: wrapped, now: env.now || (() => Date.now()) };
 }

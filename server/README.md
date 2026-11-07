@@ -41,7 +41,7 @@ Still to do in S1:
 - admin v1;
 - moving third-party PDF loading to "import my copy";
 - a per-IP rate limit on code requests;
-- deployment.
+- deployment (needs a Cloudflare login and a mail domain; steps below).
 
 ## Layout
 
@@ -54,7 +54,10 @@ src/account.js                /api/me, /api/devices
 src/entitlements.js           certificate, attest, deactivate
 src/crypto.js                 WebCrypto only: tokens, hashes, HS256, ECDSA P-256
 src/http.js, src/mail.js      helpers; mail provider adapters
-scripts/keygen.js             new certificate signing key pair
+scripts/keygen.js             new certificate signing key pair (printed only)
+scripts/secrets.js            generates all secrets: --local (.dev.vars) or --remote (Cloudflare)
+scripts/site.js               builds the app and assembles ../_site for wrangler
+keys/                         committed public halves of the certificate signing keys
 test/                         node:sqlite D1 shim + end-to-end tests
 ```
 
@@ -62,15 +65,27 @@ test/                         node:sqlite D1 shim + end-to-end tests
 
 - **Tests:** `npm test` (Node 22+; no dependencies, since `node:sqlite`
   stands in for D1).
-- **Local server:** `npm run dev` runs `wrangler dev`, fetched on demand by
-  `npx`. Put `ACCESS_TOKEN_SECRET`, `CODE_PEPPER`, `CERT_SIGNING_JWK` (from
-  `npm run keygen`) and `MAIL_MODE=log` in `server/.dev.vars`, which is
-  gitignored. Then run `npm run migrate:local`.
-- **Deploying:** not done yet. It needs:
-  - a Cloudflare account;
-  - a D1 database (its id goes in `wrangler.toml`);
-  - the secrets listed at the top of `wrangler.toml`;
-  - a mail sender.
+- **Local server** (first time: `npm run secrets:local`, then
+  `npm run migrate:local`): `npm run dev` builds the app into `../_site`
+  (`scripts/site.js`, the same files the Pages deploy publishes) and runs
+  `wrangler dev` (fetched on demand by `npx`) at `http://localhost:8787`, with
+  the app and `/api` on one origin. Sign-in codes print to the console.
+- **Deploying.** The D1 database `db_gmatlas` exists and is in
+  `wrangler.toml`. The remaining steps, once:
+  1. `npx wrangler login`;
+  2. `npm run migrate:remote`;
+  3. `npm run secrets:remote`, then commit the
+     `keys/cert-<id>.public.json` it writes (the app pins it);
+  4. verify a sending domain with Resend, set `MAIL_FROM` to an address on
+     it, and `npx wrangler secret put RESEND_API_KEY`;
+  5. `npm run deploy`.
+
+### Rotating the signing key
+
+Only if the private key is exposed. Set `CERT_KEY_ID` in `wrangler.toml` to
+a new id (`k2`), run `npm run secrets:remote`, add the new public key to the
+app beside the old one, and deploy both. Certificates signed with the old
+key keep verifying until they expire (30 days); then drop the old key.
 
 ## Ground rules
 

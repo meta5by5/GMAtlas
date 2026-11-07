@@ -1,11 +1,16 @@
 # Cloudflare deployment for the GMAtlas service (roadmap decision D1).
-# Nothing secret lives here. Set secrets with:
-#   npx wrangler secret put ACCESS_TOKEN_SECRET
-#   npx wrangler secret put CODE_PEPPER
-#   npx wrangler secret put CERT_SIGNING_JWK      (private JWK from `npm run keygen`)
+# Nothing secret lives here. After `npx wrangler login`:
+#   npm run secrets:remote   sets ACCESS_TOKEN_SECRET, CODE_PEPPER and
+#                            CERT_SIGNING_JWK, and writes the public key to
+#                            keys/cert-<CERT_KEY_ID>.public.json (commit it)
 #   npx wrangler secret put RESEND_API_KEY
-# For local `npm run dev`, put the same names in server/.dev.vars (gitignored)
-# with MAIL_MODE=log so codes print to the console instead of being emailed.
+# For local `npm run dev`, `npm run secrets:local` writes server/.dev.vars
+# (gitignored) with MAIL_MODE=log, so codes print to the console.
+#
+# CERT_KEY_ID is a label you choose for the certificate signing key, not a
+# Cloudflare value. Change it only when replacing the key (README.md).
+# MAIL_FROM must be an address on a domain verified with the mail provider;
+# Resend can't send as a @gmail.com address.
 
 name = "gmatlas"
 main = "src/worker.js"
@@ -13,16 +18,17 @@ compatibility_date = "2026-10-01"
 
 [vars]
 CERT_KEY_ID = "k1"
-MAIL_FROM = "GMAtlas <signin@example.com>"
+MAIL_FROM = "GMAtlas <gmatlasonline@gmail.com>"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "gmatlas"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_name = "db_gmatlas"
+database_id = "d9e690e6-44c7-45e4-9193-9f16ccf6acc9"
 migrations_dir = "migrations"
 
-# The browser app is served from the same origin as /api. The deploy
-# workflow assembles it into ../_site the same way deploy-pages.yml does.
+# The browser app is served from the same origin as /api. `npm run dev` and
+# `npm run deploy` assemble it into ../_site first (scripts/site.js), the same
+# files deploy-pages.yml publishes.
 [assets]
 directory = "../_site"
 binding = "ASSETS"
