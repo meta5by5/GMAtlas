@@ -1357,7 +1357,9 @@ function syncPartyModuleTrackers() {
   const settings = doc.settings;
   const before = JSON.stringify((doc.party && doc.party.trackers) || []);
   const after = JSON.stringify((syncModuleTrackers(doc, settings).party || {}).trackers || []);
-  if (before !== after) store.update((d) => syncModuleTrackers(d, settings));
+  // The app's own housekeeping, not the GM's work: doesn't mark a blank
+  // campaign as edited (store.update's `system` option).
+  if (before !== after) store.update((d) => syncModuleTrackers(d, settings), { system: true });
 }
 
 // The Battlemap's width controls, shown on the panel's own title row (the
