@@ -12059,7 +12059,7 @@ test('verifyCertificate accepts the signed bytes and rejects edits, other keys a
   assert.equal(await verifyCertificate(await sign(JSON.stringify({ ...body, v: 2 })), [jwk]), null);
   assert.equal(await verifyCertificate(null, [jwk]), null);
   assert.equal(await verifyCertificate({ payload: 'not json', sig: cert.sig }, [jwk]), null);
-  assert.equal(CERT_PUBLIC_KEYS[0].kid, 'k1', 'the production key is pinned');
+  assert.deepEqual(CERT_PUBLIC_KEYS.map((k) => k.kid), ['p1'], 'only the production key is pinned');
 });
 
 // Help centre (portal surface, design/ACCOUNTS-SYNC-ROADMAP.md Phase S0).
