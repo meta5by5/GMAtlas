@@ -12106,7 +12106,76 @@ test('help search matches every word, title hits first; routes parse from the ha
   assert.deepEqual(parsePortalRoute('#/account'), { view: 'account', section: 'profile' });
   assert.deepEqual(parsePortalRoute('#/account/devices'), { view: 'account', section: 'devices' });
   assert.deepEqual(parsePortalRoute('#/account/licenses/'), { view: 'account', section: 'licenses' });
+  assert.deepEqual(parsePortalRoute('#/account/sync'), { view: 'account', section: 'sync' });
   assert.deepEqual(parsePortalRoute('#/account/sign-in'), { view: 'sign-in' });
   assert.equal(parsePortalRoute('#/account/nope'), null);
   assert.equal(parsePortalRoute('#/store'), null, 'later phases add their own routes');
+});
+
+// Sync encryption and views (design/ACCOUNTS-SYNC-ROADMAP.md 5.5, Phase S2).
+import {
+  generateDeviceKeyPair, approvalCode, wrapToDevice, unwrapOnDevice, generateRecoveryKey, parseRecoveryKey,
+  wrapWithRecovery, unwrapWithRecovery, importAesKey, sealCampaignKey, openCampaignKey, sealJson, openJson, randomBytes,
+} from '../src/domain/syncCrypto.js';
+import { syncedView, withLocalPaths, withoutInlineBytes, hasInlineBytes } from '../src/domain/syncOps.js';
+
+test('a vault key wrapped to a device opens only with that device\'s private key', async () => {
+  const phone = await generateDeviceKeyPair();
+  const laptop = await generateDeviceKeyPair();
+  assert.equal(phone.privateKey.extractable, false, 'the private half never leaves the device');
+  const vault = randomBytes(32);
+  const wrapped = await wrapToDevice(vault, phone.publicJwk, 'vault');
+  assert.deepEqual(await unwrapOnDevice(wrapped, phone.privateKey, phone.publicJwk, 'vault'), vault);
+  await assert.rejects(unwrapOnDevice(wrapped, laptop.privateKey, laptop.publicJwk, 'vault'));
+  await assert.rejects(unwrapOnDevice(wrapped, phone.privateKey, phone.publicJwk, 'other-purpose'), 'bound to its context');
+  assert.match(await approvalCode(phone.publicJwk), /^\d{6}$/);
+  assert.equal(await approvalCode(phone.publicJwk), await approvalCode({ ...phone.publicJwk }), 'stable');
+  assert.notEqual(await approvalCode(phone.publicJwk), await approvalCode(laptop.publicJwk));
+});
+
+test('recovery keys round-trip through sloppy typing and unwrap the vault', async () => {
+  const key = generateRecoveryKey();
+  assert.match(key, /^([0-9A-HJKMNP-TV-Z]{4}-){7}[0-9A-HJKMNP-TV-Z]{4}$/);
+  const bytes = parseRecoveryKey(key);
+  assert.equal(bytes.length, 20);
+  assert.deepEqual(parseRecoveryKey(` ${key.toLowerCase().replace(/-/g, ' ')} `), bytes);
+  assert.deepEqual(parseRecoveryKey(key.replace(/0/g, 'O').replace(/1/g, 'I')), bytes, 'O and I read as 0 and 1');
+  assert.equal(parseRecoveryKey('too short'), null);
+  const vault = randomBytes(32);
+  const wrapped = await wrapWithRecovery(vault, bytes);
+  assert.deepEqual(await unwrapWithRecovery(wrapped, bytes), vault);
+  await assert.rejects(unwrapWithRecovery(wrapped, parseRecoveryKey(generateRecoveryKey())));
+});
+
+test('campaign keys and envelopes are bound to their campaign and purpose', async () => {
+  const vault = await importAesKey(randomBytes(32));
+  const raw = randomBytes(32);
+  const sealed = await sealCampaignKey(raw, vault, 'cmp_a');
+  assert.deepEqual(await openCampaignKey(sealed, vault, 'cmp_a'), raw);
+  await assert.rejects(openCampaignKey(sealed, vault, 'cmp_b'), 'a key moved to another campaign fails');
+  const key = await importAesKey(raw);
+  const ops = [{ p: ['entities', 'items', { id: 'npc_1' }, 'name'], k: 'set', v: 'Kel', t: '0000.0000.dev' }];
+  const env = await sealJson(key, ops, 'cmp_a', 'ops');
+  assert.ok(!JSON.stringify(env).includes('Kel'), 'ciphertext only');
+  assert.deepEqual(await openJson(key, env, 'cmp_a', 'ops'), ops);
+  await assert.rejects(openJson(key, env, 'cmp_a', 'snapshot'));
+  await assert.rejects(openJson(key, env, 'cmp_b', 'ops'));
+});
+
+test('syncedView drops device-only paths; withLocalPaths puts this device\'s back', () => {
+  const policy = { settings: 'gm', 'settings.ui': 'local', drawers: 'local', journalDraft: 'local', turnStepLists: 'overlay', meta: 'gm' };
+  const doc = { meta: { id: 'c1' }, settings: { theme: 'dark', ui: { open: ['a'] } }, drawers: { w: 300 }, journalDraft: 'half', turnStepLists: [1] };
+  assert.deepEqual(syncedView(doc, policy), { meta: { id: 'c1' }, settings: { theme: 'dark' } });
+  assert.deepEqual(doc.settings.ui, { open: ['a'] }, 'input untouched');
+  const remote = { meta: { id: 'c1' }, settings: { theme: 'light' } };
+  assert.deepEqual(withLocalPaths(remote, doc, policy), { meta: { id: 'c1' }, settings: { theme: 'light', ui: { open: ['a'] } }, drawers: { w: 300 }, journalDraft: 'half' });
+});
+
+test('withoutInlineBytes strips data: URLs and is a no-op (same object) otherwise', () => {
+  const clean = { gallery: [{ id: 'g1', blobKey: 'sha256:ab' }] };
+  assert.equal(withoutInlineBytes(clean), clean);
+  const dirty = { gallery: [{ id: 'g1', title: 'Map', data: 'data:image/png;base64,AAAA' }], tags: ['x', 'data:text/plain,hi'] };
+  assert.equal(hasInlineBytes(dirty), true);
+  assert.deepEqual(withoutInlineBytes(dirty), { gallery: [{ id: 'g1', title: 'Map' }], tags: ['x'] });
+  assert.equal(dirty.gallery[0].data.startsWith('data:'), true, 'input untouched');
 });
