@@ -185,15 +185,43 @@ export function createAccountClient(options = {}) {
     const { cert } = await api('GET', '/api/entitlements');
     const payload = await applyCertificate(cert);
     if (!payload) throw new AccountError('bad_certificate', 'The license certificate from the server didn’t verify. Your licenses on this device are unchanged.');
+    lastCertAt = Date.now();
     save({ cert });
     return payload;
   }
 
   /** Boot: restore the last session from appConfig.account (works offline,
    *  from the cached certificate), then confirm it with the server. */
+  // The certificate is re-fetched every RENEW_MS while signed in, and on
+  // coming back to the tab (at most every RENEW_MIN_MS), so an admin grant,
+  // revoke or feature flag reaches an open app without a reload, and a
+  // long-open tab never runs on an expiring certificate.
+  const RENEW_MS = 10 * 60 * 1000;
+  const RENEW_MIN_MS = 2 * 60 * 1000;
+  let lastCertAt = 0;
+  let renewing = false;
+  async function renewCertificate(force = false) {
+    if (state.status !== 'signed-in' || renewing) return;
+    if (!force && Date.now() - lastCertAt < RENEW_MIN_MS) return;
+    renewing = true;
+    try { await fetchCertificate(); set({ offline: false }); } catch { /* kept the cached one */ } finally { renewing = false; }
+  }
+  let renewalStarted = false;
+  function startRenewal() {
+    if (renewalStarted) return;
+    renewalStarted = true;
+    if (globalThis.setInterval) {
+      const timer = globalThis.setInterval(() => renewCertificate(true), RENEW_MS);
+      if (timer && timer.unref) timer.unref(); // Node (tests) only
+    }
+    const doc = globalThis.document;
+    if (doc && doc.addEventListener) doc.addEventListener('visibilitychange', () => { if (doc.visibilityState === 'visible') renewCertificate(); });
+  }
+
   async function start(store) {
     if (store) deps.store = store;
     if (!available()) { set({ ...SIGNED_OUT, status: 'unavailable' }); return state; }
+    startRenewal();
     const s = saved();
     if (!s.user) { set({ ...SIGNED_OUT }); return state; }
     set({ status: 'signed-in', user: s.user, device: s.device || null, cert: null, offline: false });

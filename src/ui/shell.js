@@ -11771,6 +11771,7 @@ const SYNC_MENU_TEXT = {
   offline: 'Offline · changes saved here',
   locked: 'Sync: this device needs approval',
   error: 'Sync problem · see Sync',
+  disabled: 'Sync is turned off for this account',
 };
 
 /** Names of this account's other devices that have the open campaign
@@ -11781,7 +11782,7 @@ function otherDevicesHere(s) {
 }
 
 // The sync dot's look per sync status ('off' hides it).
-const SYNC_DOT = { live: 'ok', connecting: 'busy', offline: 'warn', locked: 'warn', error: 'error' };
+const SYNC_DOT = { live: 'ok', connecting: 'busy', offline: 'warn', locked: 'warn', error: 'error', disabled: 'warn' };
 
 /** The sync-status dot on the logo and the conflict chip in the header,
  *  painted in place (never a full render). */

@@ -144,6 +144,9 @@ src/
     mentionEditor.js, searchPanel.js, imageResize.js, mechanicsScan.js, tocScan.js,
     hostileLocationsFetch.js — rich-text editor, search render, and the browser-only
                         impure edges kept out of the domain layer
+  admin/main.js     the admin page (admin.html), its own bundle (dist/admin.bundle.js),
+                    never in app.bundle.js; served only beside the service
+                    (design/adr/admin-v1.md)
 styles/
   tokens.css       three-tier design tokens (colors, spacing vars)
   cockpit.css      layout + component styles (campaign surface)
@@ -152,7 +155,8 @@ tests/
   domain.test.js   783 tests — domain modules, incl. sync-merge convergence
   migrate.test.js  26 tests — legacy-key absorption + round-trip
 scripts/
-  build.js         zero-dependency bundler (see below) — re-run after any src/ edit
+  build.js         zero-dependency bundler (see below) — re-run after any src/ edit;
+                   two entries: src/main.js -> app.bundle.js, src/admin/main.js -> admin.bundle.js
   save-import.js   standalone CLI: stage an exported campaign JSON for manual use
 dist/
   app.bundle.js    build output, gitignored, regenerate with `npm run build`

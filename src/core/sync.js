@@ -19,6 +19,8 @@ import { sealJson, openJson } from '../domain/syncCrypto.js';
 import { readPath, writePath } from '../domain/syncOps.js';
 import { findLostEdits, describePath, describeValue, pathKey } from '../domain/syncConflicts.js';
 import { createSyncKeys } from './syncKeys.js';
+import { FEATURES } from '../data/features.js';
+import { certHasFeature } from '../domain/features.js';
 
 const BACKOFF_MS = [1000, 2000, 5000, 10000, 30000];
 const HOLD_RETRY_MS = 750;
@@ -58,6 +60,9 @@ export function createSyncClient(options = {}) {
   }
 
   const signedIn = () => deps.account.getState().status === 'signed-in';
+  // The `sync.devices` feature (admin feature flags, S1): off in the
+  // account's certificate means no syncing here; the server refuses too.
+  const syncAllowed = () => certHasFeature(deps.account.getState().cert, 'sync.devices', FEATURES);
   const deviceId = () => deps.account.getState().device && deps.account.getState().device.id;
   const activeId = () => deps.store.getAppConfig().activeCampaignId;
 
@@ -94,6 +99,7 @@ export function createSyncClient(options = {}) {
   async function reconcile() {
     if (!deps.store || !deps.account) return;
     if (!signedIn()) { close(); set({ status: 'off', campaignId: null, error: null }); return; }
+    if (!syncAllowed()) { close(); set({ status: 'disabled', campaignId: null, error: null }); return; }
     const cid = activeId();
     const synced = cid && deps.store.syncStatus(cid);
     if (!synced) { close(); set({ status: 'off', campaignId: null, error: null }); return; }
@@ -443,7 +449,7 @@ export function createSyncClient(options = {}) {
   let settingsTimer = null;
 
   function syncSettings() {
-    if (!deps.store || !deps.account || !keys || !signedIn() || !deps.store.mergeAccountSettings) return Promise.resolve();
+    if (!deps.store || !deps.account || !keys || !signedIn() || !deps.store.mergeAccountSettings || !syncAllowed()) return Promise.resolve();
     if (settingsRunning) { settingsAgain = true; return settingsRunning; }
     settingsRunning = (async () => {
       do { settingsAgain = false; await syncSettingsOnce(); } while (settingsAgain);
@@ -505,6 +511,7 @@ export function createSyncClient(options = {}) {
 
   function autoSync() {
     if (!deps.store || !deps.account || !keys || !signedIn()) return Promise.resolve();
+    if (!syncAllowed()) { reconcile(); return Promise.resolve(); }
     if (autoRunning) { autoAgain = true; return autoRunning; }
     autoRunning = (async () => {
       do { autoAgain = false; await autoSyncOnce(); } while (autoAgain);
@@ -646,17 +653,23 @@ export function createSyncClient(options = {}) {
     // while the app is in view (campaign changes arrive live).
     const online = deps.location && /^https?:$/.test(deps.location.protocol || '');
     if (online && globalThis.setInterval) {
-      globalThis.setInterval(() => {
+      const timer = globalThis.setInterval(() => {
         const doc = globalThis.document;
         if (doc && doc.visibilityState && doc.visibilityState !== 'visible') return;
         if (signedIn()) syncSettings();
       }, SETTINGS_POLL_MS);
+      if (timer && timer.unref) timer.unref(); // Node (tests) only
     }
     let lastSignedIn = signedIn();
+    let lastAllowed = syncAllowed();
     deps.account.subscribe(() => {
       const now = signedIn();
-      if (now === lastSignedIn) return;
+      const allowed = syncAllowed();
+      if (now === lastSignedIn && allowed === lastAllowed) return;
+      const onlyFeature = now === lastSignedIn;
       lastSignedIn = now;
+      lastAllowed = allowed;
+      if (onlyFeature) { reconcile(); if (allowed) autoSync(); return; }
       remote = null;
       if (!now) { lastSetup = null; recent.clear(); sentOps.clear(); deviceNames = new Map(); set({ conflicts: [], presence: [] }); keys.forget().catch(() => {}); }
       reconcile();
