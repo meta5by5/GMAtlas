@@ -440,22 +440,29 @@ function createStore() {
     // Profile legacy-absorption logic exactly, just wrapped into the new
     // registry afterward instead of written straight to CAMPAIGN_KEY).
     let legacyDoc = await idbGet(database, CAMPAIGN_KEY);
+    // A brand-new install's blank campaign starts as not edited (see
+    // noteEdited); anything brought forward from older storage counts as
+    // edited.
+    let blank = false;
     if (!legacyDoc) {
       const existing = safeParse(localStorage.getItem(STORAGE_KEY));
       if (existing) {
         legacyDoc = existing;
       } else if (!localStorage.getItem(MIGRATED_FLAG)) {
         const legacy = readLegacyKeys(localStorage);
-        legacyDoc = Object.keys(legacy).length ? migrateFromLegacyKeys(legacy) : defaultCampaign();
+        blank = !Object.keys(legacy).length;
+        legacyDoc = blank ? defaultCampaign() : migrateFromLegacyKeys(legacy);
         localStorage.setItem(MIGRATED_FLAG, new Date().toISOString());
       } else if (typeof window !== 'undefined' && window.__importedCampaign) {
-        try { legacyDoc = window.__importedCampaign; } catch (e) { legacyDoc = defaultCampaign(); }
+        try { legacyDoc = window.__importedCampaign; } catch (e) { legacyDoc = defaultCampaign(); blank = true; }
       } else {
         legacyDoc = defaultCampaign();
+        blank = true;
       }
     }
     const wrapped = wrapLegacyCampaignIntoAppConfig(legacyDoc);
     appConfig = migrateLicensesV2(migrateLicensesFromActivations(wrapped.appConfig));
+    appConfig = { ...appConfig, campaigns: appConfig.campaigns.map((c) => ({ ...c, edited: !blank })) };
     docs.set(wrapped.campaignDoc.meta.id, wrapped.campaignDoc);
     await idbPut(database, APP_CONFIG_KEY, appConfig);
     await idbPut(database, campaignDocKey(wrapped.campaignDoc.meta.id), wrapped.campaignDoc);
@@ -485,6 +492,7 @@ function createStore() {
     const nextDoc = next || prev;
     nextDoc.meta.updatedAt = new Date().toISOString();
     docs.set(activeId, nextDoc);
+    noteEdited(activeId, prev, nextDoc);
     if (!silent) notify();
     persistCampaignDoc(activeId, prev, nextDoc).catch((err) => {
       console.warn('persist failed (IndexedDB)', err);
@@ -544,6 +552,7 @@ function createStore() {
     docs.set(activeId, imported);
     await persistCampaignDoc(activeId, imported, imported);
     appConfig = renameCampaignEntry(appConfig, activeId, imported.meta.title);
+    appConfig = { ...appConfig, campaigns: appConfig.campaigns.map((c) => (c.id === activeId ? { ...c, edited: true } : c)) };
     await persistAppConfig();
     await warmBlobCache(imported);
     notify();
@@ -558,6 +567,7 @@ function createStore() {
     const chosenProfile = chosenProfileId && appConfig.profiles.find((p) => p.id === chosenProfileId);
     const created = createCampaign(appConfig, { title, profileId: chosenProfileId });
     appConfig = setActiveCampaign(created.appConfig, created.doc.meta.id);
+    appConfig = { ...appConfig, campaigns: appConfig.campaigns.map((c) => (c.id === created.doc.meta.id ? { ...c, edited: false } : c)) };
     let newDoc = backfillCampaignTurnStepSlots(created.doc);
     newDoc = ensureRulesetGuideDefault(newDoc, chosenProfile && chosenProfile.ruleset && chosenProfile.ruleset.statRuleset);
     docs.set(created.doc.meta.id, newDoc);
@@ -651,6 +661,7 @@ function createStore() {
     const nextDoc = mutator(structuredCloneSafe(prev)) || prev;
     nextDoc.meta.updatedAt = new Date().toISOString();
     docs.set(campaignId, nextDoc);
+    noteEdited(campaignId, prev, nextDoc);
     notify();
     try {
       await persistCampaignDoc(campaignId, prev, nextDoc);
@@ -704,6 +715,7 @@ function createStore() {
       await idbPut(database, campaignDocKey(campaignId), renamedDoc);
     }
     appConfig = renameCampaignEntry(appConfig, campaignId, title);
+    appConfig = { ...appConfig, campaigns: appConfig.campaigns.map((c) => (c.id === campaignId ? { ...c, edited: true } : c)) };
     await persistAppConfig();
     notify();
     return get();
@@ -812,6 +824,32 @@ function createStore() {
   // runs for a campaign that isn't synced.
 
   const isSyncedEntry = (id) => !!(appConfig.campaigns.find((c) => c.id === id) || {}).sync;
+
+  // Whether a campaign's content has ever been changed (`edited` on its
+  // appConfig entry): false for a campaign created blank, set true on its
+  // first change to any synced path. Device-only state (open panels,
+  // drafts) and the updatedAt stamp don't count, so just looking around a
+  // new install doesn't make its blank campaign "edited". Sync by default
+  // (core/sync.js) leaves unedited campaigns local, so blanks don't
+  // multiply across devices. Entries from before this flag have none.
+  function noteEdited(id, prevDoc, nextDoc) {
+    const entry = appConfig.campaigns.find((c) => c.id === id);
+    if (!entry || entry.edited !== false || !prevDoc || !nextDoc || prevDoc === nextDoc) return;
+    let changed = true;
+    try {
+      const same = { ...nextDoc, meta: { ...nextDoc.meta, updatedAt: prevDoc.meta && prevDoc.meta.updatedAt } };
+      changed = diffDoc({ doc: withoutInlineBytes(prevDoc), meta: createReplica({}).meta }, withoutInlineBytes(same), { hlc: '0', policy: CAMPAIGN_SYNC_POLICY }).length > 0;
+    } catch { /* treat as edited */ }
+    if (!changed) return;
+    appConfig = { ...appConfig, campaigns: appConfig.campaigns.map((c) => (c.id === id ? { ...c, edited: true } : c)) };
+    persistAppConfig().catch((err) => console.warn('appConfig persist failed', err));
+  }
+
+  /** true / false, or undefined for a campaign from before the flag. */
+  function campaignEdited(id) {
+    const entry = appConfig.campaigns.find((c) => c.id === id);
+    return entry ? entry.edited : undefined;
+  }
 
   function scheduleSyncFlush(id) {
     if (!syncStates.has(id)) return;
@@ -1002,7 +1040,7 @@ function createStore() {
     if (!existing) {
       const now = new Date().toISOString();
       const profileId = (appConfig.profiles[0] && appConfig.profiles[0].id) || null;
-      appConfig = { ...appConfig, campaigns: [...appConfig.campaigns, { id, title: title || doc.meta.title, profileId, createdAt: now, updatedAt: now }] };
+      appConfig = { ...appConfig, campaigns: [...appConfig.campaigns, { id, title: title || doc.meta.title, profileId, createdAt: now, updatedAt: now, edited: true }] };
     }
     setEntrySync(id, true);
     appConfig = renameCampaignEntry(appConfig, id, title || doc.meta.title);
@@ -1160,7 +1198,7 @@ function createStore() {
     loadCampaign, peekCampaign, updateCampaign,
     listProfiles, getActiveProfile, getAppConfig, createProfile, updateProfile, renameProfile,
     addTurnStepList, updateAppConfig, setCertificate,
-    syncStatus, enableSync, disableSync, pendingBatches, ackBatch, applyRemote, syncSnapshot,
+    campaignEdited, syncStatus, enableSync, disableSync, pendingBatches, ackBatch, applyRemote, syncSnapshot,
     adoptSyncedCampaign, forkCampaign, onLocalOps, getSyncKeys, setSyncKeys,
     STORAGE_KEY, BACKUP_KEY, LEGACY_KEYS,
   };
