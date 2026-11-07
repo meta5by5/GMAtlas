@@ -682,7 +682,11 @@ function createStore() {
     clearTimeout(syncTimers.get(campaignId));
     syncStates.delete(campaignId);
     docs.delete(campaignId);
+    // A synced campaign deleted here stays on the account for the other
+    // devices; remember not to download it here again.
+    const wasSynced = isSyncedEntry(campaignId);
     appConfig = { ...appConfig, campaigns: appConfig.campaigns.filter((c) => c.id !== campaignId) };
+    if (wasSynced) appConfig = { ...appConfig, syncDeclined: [...new Set([...(appConfig.syncDeclined || []), campaignId])] };
     await persistAppConfig();
     notify();
     return { ok: true };
