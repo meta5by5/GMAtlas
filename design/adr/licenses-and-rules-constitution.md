@@ -69,15 +69,22 @@ covers its rules, its Turn Steps and its sourcebooks.
      and tag chips. Mention resolution, import matching and export use the
      full catalog, so an existing link never breaks.
 6. **Every sourcebook is listed under its license in Settings → Licenses,
-   with Load available once that license is activated.** Load fetches the
-   PDF from the web server into this browser's document store, once. After
-   that the row shows "☁ Loaded" with an Overwrite button, which asks first
-   and replaces the same stored copy. It is keyed by its `assets/docs/`
-   path, so a second copy is never stored. A license with several unstored
-   books also gets "Load all" (one at a time). This is an admin function
-   that access controls will isolate later. The row also shows
-   the PDF's Sourcebook Inventory status. This replaces both the Modules
-   tab's per-module Load button and its Sourcebook Inventory list.
+   with a way in once that license is owned.** Where it comes from depends
+   on the book (`domain/permissions.js` `referenceDocSource`; roadmap 4.5):
+   - an openly licensed book, or any book when GMAtlas runs on your own
+     machine (localhost or `file://`): **Load** fetches the PDF from the site
+     into this browser's document store, once;
+   - any other publisher's book on the hosted site: **Import my copy**, a
+     file picker for the GM's own PDF (checked to be a PDF; a different
+     file name asks first). The hosted site never serves those books.
+
+   Either way the copy is keyed by its `assets/docs/` path, so a second copy
+   is never stored, and mentions, the TOC library and the Mechanics Index
+   keep resolving. Once stored, the row shows "☁ Loaded" with Overwrite (or
+   Replace). A license with several unstored books also gets "Load all" or
+   "Import my copies" (matched by file name). The row also shows the PDF's
+   Sourcebook Inventory status. This replaces both the Modules tab's
+   per-module Load button and its Sourcebook Inventory list.
 7. **Migrations** run at store load:
    - `migrateLicensesFromActivations` runs while `appConfig.licenses` is
      absent. Every activated book becomes owned, and each profile gets the
@@ -108,8 +115,9 @@ covers its rules, its Turn Steps and its sourcebooks.
   per-game subfolders) belong to no license, so they no longer appear in any
   campaign's Docs library. A blob loaded under one of those old keys is kept,
   just not listed.
-- The D&D 5e license is open because of the SRD, but it also lists the
-  Monster Manual, which is a commercial book.
+- The D&D 5e license is open because of the SRD. The Monster Manual, a
+  commercial book, is its own owned license (`dnd5e-mm`), so it's imported
+  like any other publisher's book and never served.
 - `store.update()` mutators see the raw doc, which has no `licenses` and no
   profile overlay. In-use checks inside a mutator must be given the
   overlaid settings explicitly.

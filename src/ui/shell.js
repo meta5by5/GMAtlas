@@ -145,7 +145,7 @@ import { genrePackIdForRuleset } from '../data/rulesConstitution.js';
 import { LICENSES } from '../data/licenses.js';
 import { RULESET_GENRE_PACK_HINTS, findRuleset } from '../data/rulesets.js';
 import { locationHierarchyTerms, genreStyleFamily } from '../data/genrePacks.js';
-import { canLoadRulesetReference } from '../domain/permissions.js';
+import { canLoadRulesetReference, referenceDocSource, checkImportedPdf, matchPickedPdfs } from '../domain/permissions.js';
 import { fetchRulesetReferenceBlob } from './rulesetReferenceFetch.js';
 import { DRAWER_META, drawerMeta } from './drawerMeta.js';
 import { setLicense } from '../domain/entitlements.js';
@@ -1336,6 +1336,10 @@ function fitHeaderToOneRow(root) {
 // success; never rejects (a failure is toasted).
 function loadLicenseDoc(file, { quiet = false } = {}) {
   if (!canLoadRulesetReference() || licenseDocLoading.has(file)) return Promise.resolve(false);
+  // The hosted service never serves another publisher's book (permissions.js
+  // referenceDocSource); those come in through "Import my copy" instead.
+  const lic = LICENSES.find((l) => l.docs.includes(file));
+  if (referenceDocSource(lic, location) !== 'server') { toast('Import your own copy of this book: it isn’t downloadable from this site.'); return Promise.resolve(false); }
   licenseDocLoading = new Set(licenseDocLoading).add(file);
   renderDrawerBody();
   const done = () => { licenseDocLoading = new Set(licenseDocLoading); licenseDocLoading.delete(file); renderDrawerBody(); };
@@ -1348,6 +1352,45 @@ function loadLicenseDoc(file, { quiet = false } = {}) {
       return true;
     })
     .catch((err) => { done(); toast(`Load failed (${file.split('/').pop()}) — ${err.message}`); return false; });
+}
+
+// "Import my copy": stores a PDF the GM picked under the book's own key
+// (the same key Load used), so mentions, the TOC library and the Mechanics
+// Index keep resolving. Checks it's a PDF; a different file name asks first.
+// A blob's first bytes. Blob.arrayBuffer() is missing in older Safari;
+// FileReader is everywhere (same fallback as store.js's blobBytes).
+function blobHead(blob, n) {
+  const part = blob.slice(0, n);
+  if (typeof part.arrayBuffer === 'function') return part.arrayBuffer().then((b) => new Uint8Array(b));
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(new Uint8Array(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsArrayBuffer(part);
+  });
+}
+
+async function importLicenseDoc(file, picked, { quiet = false, confirmName = true } = {}) {
+  if (!canLoadRulesetReference() || licenseDocLoading.has(file)) return false;
+  const check = checkImportedPdf(file, picked.name, await blobHead(picked, 4));
+  const expected = file.split('/').pop();
+  if (!check.isPdf) { toast(`${picked.name} isn’t a PDF.`); return false; }
+  if (confirmName && !check.nameMatches && !window.confirm(`You picked “${picked.name}”, but this book is usually “${expected}”. Use it as ${expected} anyway?`)) return false;
+  licenseDocLoading = new Set(licenseDocLoading).add(file);
+  renderDrawerBody();
+  try {
+    await store.putDocBlob(file, picked);
+    refreshRefDocBlobKeys();
+    if (!quiet) toast(`${expected} saved in this browser — it shows in the Docs library of campaigns that use this game`);
+    return true;
+  } catch (err) {
+    toast(`Couldn’t save ${picked.name} — ${err.message}`);
+    return false;
+  } finally {
+    licenseDocLoading = new Set(licenseDocLoading);
+    licenseDocLoading.delete(file);
+    renderDrawerBody();
+  }
 }
 
 // Adds/removes module-owned Party Trackers to match the active profile
@@ -6941,6 +6984,29 @@ function onChange(ev) {
     }
     return render();
   }
+  // "Import my copy" (one book) and "Import my copies" (several, matched by
+  // file name) under a license (drawers/index.js licenseRow).
+  const licenseDocFile = t.closest('[data-license-doc-file]');
+  if (licenseDocFile) {
+    const picked = licenseDocFile.files && licenseDocFile.files[0];
+    licenseDocFile.value = '';
+    if (picked) importLicenseDoc(licenseDocFile.dataset.licenseDocFile, picked);
+    return;
+  }
+  const licenseDocsFiles = t.closest('[data-license-docs-files]');
+  if (licenseDocsFiles) {
+    const lic = LICENSES.find((l) => l.id === licenseDocsFiles.dataset.licenseDocsFiles);
+    const files = [...(licenseDocsFiles.files || [])];
+    licenseDocsFiles.value = '';
+    if (!lic || !files.length) return;
+    const { matched, unmatched } = matchPickedPdfs(lic.docs, files.map((f) => f.name));
+    (async () => {
+      let saved = 0;
+      for (const m of matched) if (await importLicenseDoc(m.file, files.find((f) => f.name === m.picked), { quiet: true, confirmName: false })) saved += 1;
+      toast(`${saved} of ${lic.label}’s sourcebooks saved in this browser${unmatched.length ? `. Not recognised (import these one at a time): ${unmatched.join(', ')}` : ''}`);
+    })();
+    return;
+  }
   // Licenses: install-wide ownership, written straight to appConfig (not a profile draft).
   const licenseToggle = t.closest('[data-license-toggle]');
   if (licenseToggle) {
@@ -11492,7 +11558,8 @@ function buildDrawerUi() {
     battlemapPlacingIcon, battlemapCamera,
     hexcrawlPlacingIcon, hexcrawlPaletteMenu, battlemapSpan, hexcrawlCamera, hexcrawlSelectedHex, hexcrawlRange, hexcrawlRiverStart, hexcrawlRoadStart,
     dungeonCrawlPending, dungeonCrawlSelected, dungeonCrawlDetailZoom, dungeonCrawlMergeMode, dungeonCrawlMergeSelection, dungeonCrawlArmedDressing,
-    contentPackFlags, contentPackImporting, dataPackImporting, licenseDocLoading, canLoadReference: canLoadRulesetReference(), exportIncludeAttachments, exportAttachmentsPreview,
+    contentPackFlags, contentPackImporting, dataPackImporting, licenseDocLoading, canLoadReference: canLoadRulesetReference(),
+    refDocLocation: { protocol: location.protocol, hostname: location.hostname }, exportIncludeAttachments, exportAttachmentsPreview,
     worldTrackerTab, worldTrackerSelectedSector, worldTrackerMigrateOpen,
     expandedTurnStepGroups, editingTurnStepListId, turnStepListsCollapsed, turnStepMoveEditOpen, turnStepBranchEditOpen, colonyPanelTab,
     // Faction Events' own docked-in-WHERE state (see factionEventsDockedInWhere's

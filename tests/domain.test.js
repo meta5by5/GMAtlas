@@ -12377,3 +12377,38 @@ test('normalizeFlag / resolveFeatures / certHasFeature', () => {
   assert.equal(certHasFeature({ licenses: [] }, 'sync.devices', FEATURES), true, 'a certificate from before flags: the catalog default');
   assert.equal(certHasFeature(null, 'tables', FEATURES), false);
 });
+
+// --- "Import my copy" (roadmap 4.5): third-party sourcebooks never come from the server --------
+import { referenceDocSource, checkImportedPdf, matchPickedPdfs } from '../src/domain/permissions.js';
+
+test('referenceDocSource: the hosted site serves open (CC-BY) books only; your own machine serves everything', () => {
+  const hosted = { protocol: 'https:', hostname: 'gmatlas.online' };
+  const open = LICENSES.find((l) => l.open);
+  const owned = LICENSES.find((l) => !l.open);
+  assert.equal(referenceDocSource(open, hosted), 'server');
+  assert.equal(referenceDocSource(owned, hosted), 'import', 'another publisher’s book: import your own copy');
+  assert.equal(referenceDocSource(owned, { protocol: 'https:', hostname: 'dev.gmatlas.online' }), 'import');
+  assert.equal(referenceDocSource(owned, { protocol: 'http:', hostname: 'localhost' }), 'server', 'npm run serve reads your own disk');
+  assert.equal(referenceDocSource(owned, { protocol: 'http:', hostname: '127.0.0.1' }), 'server');
+  assert.equal(referenceDocSource(owned, { protocol: 'file:', hostname: '' }), 'server');
+  assert.equal(referenceDocSource(null, hosted), 'import');
+});
+
+test('open licenses list only openly licensed PDFs (the Monster Manual is its own owned license)', () => {
+  const openDocs = LICENSES.filter((l) => l.open).flatMap((l) => l.docs);
+  assert.ok(!openDocs.some((f) => /Monster Manual/i.test(f)), 'not CC-BY: never served');
+  const mm = LICENSES.find((l) => l.id === 'dnd5e-mm');
+  assert.ok(mm && !mm.open && mm.systems.includes('dnd5e') && mm.docs.some((f) => /Monster Manual/.test(f)));
+  assert.equal(new Set(LICENSES.map((l) => l.id)).size, LICENSES.length);
+});
+
+test('checkImportedPdf / matchPickedPdfs', () => {
+  const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
+  assert.deepEqual(checkImportedPdf('assets/docs/X/Book.pdf', 'book.PDF', pdf), { isPdf: true, nameMatches: true });
+  assert.deepEqual(checkImportedPdf('assets/docs/X/Book.pdf', 'other.pdf', pdf), { isPdf: true, nameMatches: false });
+  assert.equal(checkImportedPdf('assets/docs/X/Book.pdf', 'Book.pdf', new Uint8Array([0x50, 0x4b, 3, 4])).isPdf, false, 'a zip renamed .pdf');
+  assert.deepEqual(matchPickedPdfs(['assets/docs/A/One.pdf', 'assets/docs/A/Two.pdf'], ['two.pdf', 'Three.pdf', 'ONE.pdf']), {
+    matched: [{ file: 'assets/docs/A/Two.pdf', picked: 'two.pdf' }, { file: 'assets/docs/A/One.pdf', picked: 'ONE.pdf' }],
+    unmatched: ['Three.pdf'],
+  });
+});

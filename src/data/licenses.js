@@ -133,6 +133,15 @@ export const LICENSES = [
     text: 'The System Reference Document is Creative Commons (CC-BY 4.0). Available to any campaign that designates D&D 5e.',
     docs: [
       'assets/docs/dnd5e/SRD_CC_v5.2.1.pdf',
+    ],
+  },
+  {
+    // Wizards of the Coast's own book, not part of the CC-BY SRD: owned and
+    // imported like any other publisher's (roadmap 4.5), never served.
+    id: 'dnd5e-mm', label: 'Monster Manual', family: 'D&D 5e',
+    systems: ['dnd5e'],
+    text: 'I own the D&D 5e Monster Manual, for my own personal GM reference.',
+    docs: [
       'assets/docs/dnd5e/Monster Manual.pdf',
     ],
   },

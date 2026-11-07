@@ -8,6 +8,7 @@ import {
   filterOracleTreeByTags,
 } from '../../domain/oracles.js';
 import { ORACLE_TABLE_SOURCES, ORACLE_GROUPS_FANTASY } from '../../data/oracleGroups.js';
+import { referenceDocSource } from '../../domain/permissions.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import {
   listEntities, filterEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, entityTypeLabel, listTagVocabulary, listEntityTagVocabulary,
@@ -3620,19 +3621,37 @@ function sourcebookInventoryFor(file) {
   return SOURCEBOOK_INVENTORY.find((e) => e.file === file) || inventoryByBasename.get(file.split('/').pop()) || null;
 }
 
-function licenseDocRow(file, owned, ui) {
+// "Import my copy" (design/ACCOUNTS-SYNC-ROADMAP.md 4.5): a file picker,
+// opened by its label, so no click handler is needed; shell.js's delegated
+// change handler stores the picked PDF under the book's own key.
+function importMyCopyControl(file, label, title) {
+  return '<label class="btn ghost sm license-doc-import" title="' + esc(title) + '">' + label
+    + '<input type="file" accept="application/pdf,.pdf" hidden data-license-doc-file="' + esc(file) + '"></label>';
+}
+
+function licenseDocRow(file, owned, ui, source, alsoImport = false) {
   const title = LICENSE_FILE_TITLES.get(file) || file.split('/').pop();
   const loaded = (ui.refDocBlobKeys || new Set()).has(file);
   const loading = (ui.licenseDocLoading || new Set()).has(file);
   const inv = sourcebookInventoryFor(file);
   const status = inv ? (inv.status + (inv.note ? ' — ' + inv.note : '')) : 'not yet reviewed';
   const canLoad = owned && ui.canLoadReference;
+  const fromServer = source === 'server';
   let action = '';
   if (loading) action = '<button type="button" class="btn ghost sm" disabled>Loading…</button>';
   else if (loaded) {
-    action = '<span class="dim small" title="Stored in this browser — shown in the Docs library of every campaign that uses this game">☁ Loaded</span>'
-      + (canLoad ? ' <button type="button" class="btn ghost sm" data-license-doc-reload="' + esc(file) + '" title="Replace the copy in this browser with a fresh one from the server (never a second copy)">↻ Overwrite</button>' : '');
-  } else if (canLoad) action = '<button type="button" class="btn ghost sm" data-license-doc-load="' + esc(file) + '">⬇ Load</button>';
+    action = '<span class="dim small" title="Stored in this browser — shown in the Docs library of every campaign that uses this game">☁ Loaded</span>';
+    if (canLoad) {
+      action += fromServer
+        ? ' <button type="button" class="btn ghost sm" data-license-doc-reload="' + esc(file) + '" title="Replace the copy in this browser with a fresh one from the server (never a second copy)">↻ Overwrite</button>'
+        : ' ' + importMyCopyControl(file, '↻ Replace', 'Replace the copy in this browser with another file of yours (never a second copy)');
+    }
+  } else if (canLoad) {
+    action = fromServer
+      ? '<button type="button" class="btn ghost sm" data-license-doc-load="' + esc(file) + '">⬇ Load</button>'
+        + (alsoImport ? ' ' + importMyCopyControl(file, '⬆ Import', 'Or pick a copy you already have (the biggest free PDFs aren’t hosted here)') : '')
+      : importMyCopyControl(file, '⬆ Import my copy', 'Pick your own copy of ' + file.split('/').pop() + ' from this device');
+  }
   return `
         <li class="license-doc-row"><span class="license-doc-title" title="${esc(status)}">📄 ${esc(title)}</span> ${action}</li>`;
 }
@@ -3672,18 +3691,28 @@ function licenseRow(doc, lic, ui) {
   const inUse = isLicenseInUse(doc.settings, lic.id)
     ? ' <span class="chip sm" title="This campaign\'s profile designates it — its sourcebooks are in the Docs library">In this campaign</span>'
     : '';
-  const docs = lic.docs.map((f) => licenseDocRow(f, owned, ui)).join('');
+  const source = referenceDocSource(lic, ui.refDocLocation);
+  // Open books on the hosted site: Load, or Import a copy (some are too big to host).
+  const alsoImport = !!lic.open && referenceDocSource({ open: false }, ui.refDocLocation) === 'import';
+  const docs = lic.docs.map((f) => licenseDocRow(f, owned, ui, source, alsoImport)).join('');
   const stored = ui.refDocBlobKeys || new Set();
   const notLoaded = lic.docs.filter((f) => !stored.has(f)).length;
-  const loadAll = owned && ui.canLoadReference && notLoaded > 1
-    ? '<button type="button" class="btn ghost sm license-load-all" data-license-load-all="' + esc(lic.id) + '">⬇ Load all (' + notLoaded + ')</button>'
+  let loadAll = '';
+  if (owned && ui.canLoadReference && notLoaded > 1) {
+    loadAll = source === 'server'
+      ? '<button type="button" class="btn ghost sm license-load-all" data-license-load-all="' + esc(lic.id) + '">⬇ Load all (' + notLoaded + ')</button>'
+      : '<label class="btn ghost sm license-load-all" title="Pick several of your files at once; each is matched to its book by file name">⬆ Import my copies (' + notLoaded + ')'
+        + '<input type="file" accept="application/pdf,.pdf" multiple hidden data-license-docs-files="' + esc(lic.id) + '"></label>';
+  }
+  const importNote = owned && source === 'import' && lic.docs.length
+    ? '<p class="dim small">Sourcebooks aren’t downloadable from this site: they’re the publisher’s. Import your own copy of each PDF; it stays in this browser.</p>'
     : '';
   const extra = lic.id === 'hostile' && owned ? hostileWorldInformationSection(doc, ui) : '';
   const packs = licensePacksHtml(doc, lic, owned, ui);
   return `
       <div class="license-row">
         <p><label>${control} <b>${esc(lic.label)}</b>${inUse} — <span class="dim small">${esc(lic.text)}</span></label></p>
-        ${loadAll}
+        ${loadAll}${importNote}
         <ul class="license-doc-list">${docs}</ul>
         ${packs}
         ${extra}
