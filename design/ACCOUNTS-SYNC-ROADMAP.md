@@ -783,7 +783,7 @@ Recorded in `design/adr/sync-groundwork.md`.
    - Per-device Installed / Focused policy.
    - Deactivate.
 4. Admin v1: users, entitlements (grant/revoke/trial), feature flags, audit
-   log.
+   log. **Built** (`design/adr/admin-v1.md`).
 5. Third-party PDF handling change (section 4.5): "Import my copy" replaces
    public `assets/docs` loads for non-open licenses.
 
@@ -802,8 +802,9 @@ Recorded in `design/adr/sync-groundwork.md`.
 - conflict chips (exact: each batch carries the sender's cursor),
   presence-lite from the campaign room, and the sync-status dot.
 
-Still to do: the `sync.devices` gate, which needs admin feature flags
-(S1 item 4).
+- the `sync.devices` gate (server refuses sync writes; the app says so).
+
+S2 is built; it moves to `main` by pull request.
 
 1. Campaign room and account room, the wire protocol, outbox and cursors,
    reconnect catch-up, compaction.

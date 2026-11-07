@@ -12324,3 +12324,49 @@ test('findLostEdits ignores the updatedAt stamp every edit writes', () => {
   assert.deepEqual(findLostEdits([{ seq: null, ops: [stamp('0001')] }], { seen: 0, ops: [stamp('0002')] }), []);
   assert.deepEqual(findLostEdits([{ seq: null, ops: [stamp('0001')] }], { seen: 0, ops: [{ p: ['meta'], k: 'set', v: {}, t: '0002' }] }), []);
 });
+
+// --- feature flags (S1 admin v1) -------------------------------------------------------
+import { rolloutBucket, normalizeFlag, featureState, resolveFeatures, certHasFeature } from '../src/domain/features.js';
+import { FEATURES, FEATURE_IDS } from '../src/data/features.js';
+
+test('feature catalog: unique ids, a default and a phase each; sync is on by default, later phases off', () => {
+  assert.equal(new Set(FEATURE_IDS).size, FEATURE_IDS.length);
+  assert.ok(FEATURES.every((f) => typeof f.default === 'boolean' && /^S\d$/.test(f.phase) && f.label));
+  assert.equal(FEATURES.find((f) => f.id === 'sync.devices').default, true);
+  assert.equal(FEATURES.find((f) => f.id === 'tables').default, false);
+});
+
+test('featureState: kill > override > granted > default > rollout', () => {
+  const tables = { id: 'tables', default: false };
+  assert.deepEqual(featureState(tables, null, 'u1', []), { on: false, why: 'off' });
+  assert.deepEqual(featureState(tables, null, 'u1', ['tables']), { on: true, why: 'granted' });
+  assert.deepEqual(featureState(tables, { overrides: { u1: false } }, 'u1', ['tables']), { on: false, why: 'override' });
+  assert.deepEqual(featureState(tables, { kill: true, overrides: { u1: true } }, 'u1', ['tables']), { on: false, why: 'kill' });
+  assert.deepEqual(featureState(tables, { defaultValue: true }, 'u1', []), { on: true, why: 'default' });
+  assert.deepEqual(featureState({ id: 'sync', default: true }, { defaultValue: false }, 'u1', []), { on: false, why: 'off' });
+  assert.deepEqual(featureState(tables, { rollout: 100 }, 'u1', []), { on: true, why: 'rollout' });
+  assert.deepEqual(featureState(tables, { rollout: 0 }, 'u1', []), { on: false, why: 'off' });
+});
+
+test('rollout buckets are stable, spread out, and grow monotonically with the percentage', () => {
+  assert.equal(rolloutBucket('tables', 'usr_a'), rolloutBucket('tables', 'usr_a'));
+  const ids = Array.from({ length: 2000 }, (_, i) => `usr_${i.toString(36)}`);
+  const at = (pct) => ids.filter((id) => featureState({ id: 'tables', default: false }, { rollout: pct }, id, []).on);
+  const ten = at(10);
+  const thirty = at(30);
+  assert.ok(ten.length > 120 && ten.length < 280, `about 10% (${ten.length})`);
+  assert.ok(ten.every((id) => thirty.includes(id)), 'everyone in at 10% is still in at 30%');
+  const same = ids.filter((id) => rolloutBucket('tables', id) === rolloutBucket('p2p.transfer', id)).length;
+  assert.ok(same < 100, 'each feature picks its own accounts, not the same ones every time');
+});
+
+test('normalizeFlag / resolveFeatures / certHasFeature', () => {
+  assert.deepEqual(normalizeFlag({ rollout: '250', overrides: { a: 1, b: 0 }, kill: 'yes' }), { defaultValue: null, rollout: 100, kill: true, overrides: { a: true, b: false } });
+  assert.deepEqual(normalizeFlag(undefined), { defaultValue: null, rollout: null, kill: false, overrides: {} });
+  assert.deepEqual(resolveFeatures({ features: FEATURES, flags: {}, userId: 'u', granted: [] }), ['sync.devices']);
+  assert.deepEqual(resolveFeatures({ features: FEATURES, flags: { 'sync.devices': { kill: true } }, userId: 'u', granted: ['tables'] }), ['tables']);
+  assert.equal(certHasFeature({ enabledFeatures: [] }, 'sync.devices', FEATURES), false);
+  assert.equal(certHasFeature({ enabledFeatures: ['sync.devices'] }, 'sync.devices', FEATURES), true);
+  assert.equal(certHasFeature({ licenses: [] }, 'sync.devices', FEATURES), true, 'a certificate from before flags: the catalog default');
+  assert.equal(certHasFeature(null, 'tables', FEATURES), false);
+});

@@ -235,6 +235,7 @@ const SYNC_STATUS_TEXT = {
   offline: 'Offline. Changes are saved on this device and sync when you’re back online.',
   locked: 'This device needs approving first.',
   off: 'Not synced',
+  disabled: 'Sync is turned off for this account.',
 };
 
 function syncSection() {
@@ -243,6 +244,9 @@ function syncSection() {
     <h1>Sync</h1>
     <p class="portal-dim">Sync is on whenever you’re signed in: campaigns stay the same on every device you sign in on. They’re encrypted on this device before they’re sent. Uploaded documents and images stay on the device they were added on.</p>
     ${alertBox()}`;
+  if (sync.getState().status === 'disabled') {
+    return `${intro}<div class="portal-alert" data-sync-disabled>Sync is turned off for this account right now. Everything stays saved on this device, and nothing already synced is lost. Contact support if you think this is a mistake.</div>`;
+  }
   if (!st) return `${intro}<p class="portal-dim">${ui.syncLoading ? 'Checking sync…' : ''}</p>`;
   const auto = sync.lastSetup();
   const shownKey = ui.recoveryKey || (auto && auto.recoveryKey);

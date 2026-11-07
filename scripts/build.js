@@ -15,6 +15,7 @@ import { REFERENCE_LIBRARY_MANIFEST } from '../src/data/referenceLibraryManifest
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ENTRY = 'src/main.js';
+const ADMIN_ENTRY = 'src/admin/main.js';
 
 // Git LFS pointer files (what a checkout without `git lfs pull`/`checkout
 // --lfs` leaves on disk for an LFS-tracked path — CI's Pages deploy, or
@@ -96,9 +97,6 @@ function normalizeKey(importerKey, spec) {
   return posix.normalize(posix.join(dir, spec));
 }
 
-const modules = new Map(); // key -> transformed body
-const queue = [ENTRY];
-
 // If a developer has placed an imported campaign in data/imported-campaign.json
 // include it in the bundle as a global `window.__importedCampaign` so the
 // app can synchronously load it at startup (useful for persisting imports
@@ -109,6 +107,14 @@ if (existsSync(join(ROOT, IMPORTED_PATH))) {
   try { importedCampaignJson = readFileSync(join(ROOT, IMPORTED_PATH), 'utf8'); } catch (e) { importedCampaignJson = null; }
 }
 
+// Two entry points: the app, and the admin page (admin.html), which gets
+// its own bundle so admin code never ships to ordinary users.
+buildBundle(ENTRY, 'app.bundle.js', { embedImported: true });
+buildBundle(ADMIN_ENTRY, 'admin.bundle.js', { embedImported: false });
+
+function buildBundle(entry, outFile, { embedImported }) {
+const modules = new Map(); // key -> transformed body
+const queue = [entry];
 while (queue.length) {
   const key = queue.shift();
   if (modules.has(key)) continue;
@@ -154,7 +160,7 @@ const registrations = [...modules.entries()]
   // Build-time embedding: serialize the imported campaign into a small JS
   // snippet so it can be synchronously available to the app at runtime.
   let __embeddedImportedCampaign = '';
-  if (importedCampaignJson) {
+  if (embedImported && importedCampaignJson) {
     __embeddedImportedCampaign = `;(function(){ try{ const data = ${importedCampaignJson}; if (typeof window !== 'undefined') window.__importedCampaign = data; }catch(e){} })();\n`;
   }
 
@@ -174,10 +180,11 @@ ${__embeddedImportedCampaign}
 
 ${registrations}
 
-  require(${JSON.stringify(ENTRY)});
+  require(${JSON.stringify(entry)});
 })();
 `;
 
 mkdirSync(join(ROOT, 'dist'), { recursive: true });
-writeFileSync(join(ROOT, 'dist', 'app.bundle.js'), bundle);
-console.log(`bundled ${modules.size} modules -> dist/app.bundle.js (${bundle.length} bytes)`);
+writeFileSync(join(ROOT, 'dist', outFile), bundle);
+console.log(`bundled ${modules.size} modules -> dist/${outFile} (${bundle.length} bytes)`);
+}

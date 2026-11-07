@@ -47,6 +47,8 @@ self.addEventListener('fetch', (e) => {
   // per-user and must never be cached or served offline from a cache.
   const url = new URL(e.request.url);
   if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) return;
+  // The admin page (admin.html + its own bundle) is never cached or offline.
+  if (url.origin === self.location.origin && /\/admin(\.html|\.bundle\.js)?$/.test(url.pathname)) return;
   e.respondWith(
     fetch(e.request).then((res) => {
       const copy = res.clone();
