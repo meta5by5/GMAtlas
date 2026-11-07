@@ -45,8 +45,8 @@ MAIL_FROM = "GMAtlas <info@gmatlas.online>"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "db_gmatlas"
-database_id = "d9e690e6-44c7-45e4-9193-9f16ccf6acc9"
+database_name = "db_gmatlas_dev"
+database_id = "304b9b83-7d6c-4da3-a068-29871993c705"
 migrations_dir = "migrations"
 
 # One CampaignRoom per synced campaign (src/room.js): its ordered,
