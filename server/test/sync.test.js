@@ -112,7 +112,7 @@ test('room: push, ack, fan-out, dedupe, catch-up in frames, resets, compaction',
   const desk = rooms.connect('cmp_r', 'devA');
   const phone = rooms.connect('cmp_r', 'devB');
   await desk.deliver({ t: 'hello', v: 1, cursor: 0 });
-  assert.deepEqual(desk.take(), [{ t: 'welcome', head: 0 }, { t: 'caughtUp', head: 0 }]);
+  assert.deepEqual(desk.take(), [{ t: 'welcome', head: 0 }, { t: 'caughtUp', head: 0 }, { t: 'presence', devices: ['devA'] }], 'then who has it open');
 
   await desk.deliver({ t: 'push', batchId: 'b1', env: 'E1' });
   assert.deepEqual(desk.take(), [{ t: 'ack', batchId: 'b1', seq: 1 }]);
@@ -132,7 +132,8 @@ test('room: push, ack, fan-out, dedupe, catch-up in frames, resets, compaction',
   desk.take();
   const late = rooms.connect('cmp_r', 'devC');
   await late.deliver({ t: 'hello', v: 1, cursor: 1 });
-  const frames = late.take();
+  const frames = late.take().filter((f) => f.t !== 'presence');
+  assert.deepEqual(desk.take(), [{ t: 'presence', devices: ['devA', 'devC'] }], 'the others hear who joined');
   assert.deepEqual(frames[0], { t: 'welcome', head: 7 });
   assert.deepEqual(frames.at(-1), { t: 'caughtUp', head: 7 });
   const opsFrames = frames.filter((f) => f.t === 'ops');
@@ -148,8 +149,13 @@ test('room: push, ack, fan-out, dedupe, catch-up in frames, resets, compaction',
   assert.equal((await rooms.get('cmp_r').fetch(new Request('https://room/snapshot?upto=7', { method: 'PUT', body: 'SNAP' }))).status, 200);
   await late.deliver({ t: 'hello', v: 1, cursor: 3 });
   assert.deepEqual(late.take(), [{ t: 'reset', snapshotUpto: 7 }]);
+  assert.deepEqual(desk.take(), [{ t: 'presence', devices: ['devA'] }], 'a device that must reset drops out until it catches up');
   await late.deliver({ t: 'hello', v: 1, cursor: 7 });
-  assert.deepEqual(late.take(), [{ t: 'welcome', head: 7 }, { t: 'caughtUp', head: 7 }]);
+  assert.deepEqual(late.take(), [{ t: 'welcome', head: 7 }, { t: 'caughtUp', head: 7 }, { t: 'presence', devices: ['devA', 'devC'] }]);
+  desk.take();
+  // Leaving tells the others.
+  await rooms.room('cmp_r').webSocketClose(late, 1000);
+  assert.deepEqual(desk.take(), [{ t: 'presence', devices: ['devA'] }], 'the others hear who left');
 
   // Every COMPACT_EVERY ops past the snapshot, the pusher is asked for one.
   let asked = 0;

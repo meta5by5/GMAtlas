@@ -82,11 +82,21 @@ against this Worker and room.
   resends, catch-up from a cursor in frames under 512 KB, and snapshots
   over HTTP with compaction.
 - **REST** (`src/sync.js`): the vault and device approval, the
-  synced-campaign index, snapshots, and 60-second socket tickets.
+  synced-campaign index, snapshots, 60-second socket tickets, and the
+  account settings record (`GET`/`PUT /api/account/settings`, versioned).
+- **Presence-lite:** the room tells every open socket which devices have
+  the campaign open (`{t:'presence', devices}`), on join and leave.
 - **Browser:**
   - `src/core/sync.js` (transport) and `src/core/syncKeys.js`;
   - the sync base and outbox in `store.js`;
+  - account settings sync (profiles, Storyboard positions, Turn Step
+    Lists, TOC library);
+  - a sync-status dot on the logo, "Also open on …" in the logo menu,
+    and conflict chips with "Keep mine";
   - Account › Sync, and approval on Account › Devices.
+
+Still to do in S2: the `sync.devices` gate, which waits for admin feature
+flags (S1 admin v1).
 
 ## Layout
 
@@ -94,6 +104,7 @@ against this Worker and room.
 migrations/0001_accounts.sql  D1 schema (SQLite): users, identities, email_codes,
                               devices, sessions, entitlements, audit_log
 migrations/0002_sync.sql      devices.ecdh_pub, vault_keys, campaigns (all ciphertext/metadata)
+migrations/0003_account_settings.sql  account_settings (one encrypted, versioned record per account)
 src/worker.js                 entry: routes /api/*, everything else to the static app;
                               exports the CampaignRoom Durable Object
 src/sync.js                   vault, synced-campaign index, snapshots, socket tickets
