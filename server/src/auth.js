@@ -116,15 +116,23 @@ export async function verifyEmailSignIn(request, { env, now }) {
   if (!/^\d{6}$/.test(code) || !safeEqual(await codeHash(email, code, env), row.code_hash)) { await record(env, now(), guessBucket); throw wrong; }
   await env.DB.prepare('UPDATE email_codes SET used_at = ? WHERE id = ?').bind(iso(now()), row.id).run();
 
+  const { user, created } = await findOrCreateUser(env, email, iso(now()));
+  const done = await startSession(env, now, user, body.device, body.deviceId);
+  return json({ ...done.body, newAccount: created }, 200, { 'set-cookie': done.cookie });
+}
+
+/** The end of every sign-in (email code, passkey, OAuth): this browser's
+ *  device record (reused when it signed in before), a session, and the
+ *  refresh cookie. Returns {body, cookie, device}. */
+export async function startSession(env, now, user, deviceInfo, deviceId) {
+  if (user.status !== 'active') throw new HttpError(403, 'account_disabled', 'This account is disabled.');
   const nowIso = iso(now());
-  const { user, created } = await findOrCreateUser(env, email, nowIso);
-  // Signing in again on the same browser reuses its device record.
   let device = null;
-  if (body.deviceId) {
-    device = await env.DB.prepare('SELECT * FROM devices WHERE id = ? AND user_id = ? AND revoked_at IS NULL').bind(String(body.deviceId), user.id).first();
+  if (deviceId) {
+    device = await env.DB.prepare('SELECT * FROM devices WHERE id = ? AND user_id = ? AND revoked_at IS NULL').bind(String(deviceId), user.id).first();
   }
   if (!device) {
-    const { name, platform } = cleanDevice(body.device);
+    const { name, platform } = cleanDevice(deviceInfo);
     const id = newId('dev');
     await env.DB.prepare('INSERT INTO devices (id, user_id, name, platform, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)')
       .bind(id, user.id, name, platform, nowIso, nowIso).run();
@@ -133,12 +141,16 @@ export async function verifyEmailSignIn(request, { env, now }) {
     await env.DB.prepare('UPDATE devices SET last_seen_at = ? WHERE id = ?').bind(nowIso, device.id).run();
   }
   const { accessToken, refresh } = await issueSession(env, now, user, device);
-  return json(
-    { accessToken, newAccount: created, user: publicUser(user), device: publicDevice(device, device.id) },
-    200,
-    { 'set-cookie': cookie(REFRESH_COOKIE, refresh, { maxAgeSeconds: SESSION_TTL_MS / 1000 }) },
-  );
+  return {
+    device,
+    body: { accessToken, user: publicUser(user), device: publicDevice(device, device.id) },
+    cookie: cookie(REFRESH_COOKIE, refresh, { maxAgeSeconds: SESSION_TTL_MS / 1000 }),
+  };
 }
+
+/** The account for an email address, created (with its email identity)
+ *  on first use. Exported for OAuth sign-in. */
+export { findOrCreateUser };
 
 export async function refreshSession(request, { env, now }) {
   const token = readCookie(request, REFRESH_COOKIE);

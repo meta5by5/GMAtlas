@@ -67,12 +67,28 @@ against this Worker, plus a jsdom smoke run of the built bundle):
   `npm run admin:role -- --email you@example.com --role owner` (add
   `--env production` for production; sign in once first).
 
+- **Passkeys** (`src/passkeys.js`, `src/webauthn.js`) and **Continue with
+  Google / Discord** (`src/oauth.js`, PKCE); see
+  `design/adr/passkeys-oauth.md`. Passkeys work as soon as this is
+  deployed. A provider appears only once its secrets are set:
+  1. Register an OAuth app with the provider. Redirect URI:
+     `https://dev.gmatlas.online/api/auth/oauth/google/callback` (or
+     `.../discord/callback`; production uses `https://gmatlas.online/...`).
+     Google: Cloud Console › APIs & Services › Credentials › OAuth client
+     (Web), scopes `openid email profile`. Discord: Developer Portal ›
+     Applications › OAuth2, scopes `identify email`.
+  2. `npx wrangler secret put GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
+     (or `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`); add
+     `--env production` for production.
+- **Per-network limits:** 20 sign-in codes and 30 wrong codes per client IP
+  per hour (`src/rateLimit.js`; IPs stored hashed), on top of the
+  per-address limits.
+
 Still to do in S1:
-- passkeys and OAuth sign-in;
+- Apple sign-in;
 - device key pairs, plus the request-signing challenge they enable;
 - a help article on accounts;
-- moving third-party PDF loading to "import my copy";
-- a per-IP rate limit on code requests.
+- moving third-party PDF loading to "import my copy".
 
 ## Status: Phase S2 (personal sync) in progress
 
@@ -115,6 +131,10 @@ migrations/0001_accounts.sql  D1 schema (SQLite): users, identities, email_codes
 migrations/0002_sync.sql      devices.ecdh_pub, vault_keys, campaigns (all ciphertext/metadata)
 migrations/0003_account_settings.sql  account_settings (one encrypted, versioned record per account)
 migrations/0004_admin.sql     feature_flags; audit_log indexes
+migrations/0005_rate_limits.sql  rate_events (per-client sign-in limits)
+migrations/0006_passkeys.sql  passkeys, webauthn_challenges
+src/passkeys.js, src/webauthn.js  passkey sign-in (WebCrypto + a small CBOR decoder)
+src/oauth.js                  Continue with Google / Discord (PKCE)
 src/admin.js                  /api/admin/*: users, entitlements, flags, audit (role-checked)
 src/features.js               feature flags: load, resolve per account, requireFeature
 scripts/admin-role.js         set an admin role from the command line (first owner)
