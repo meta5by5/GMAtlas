@@ -34,6 +34,7 @@ const ui = {
   syncLoading: false,
   synced: null,         // sync.listSynced()
   recoveryKey: null,    // shown once, right after turning sync on
+  recoveryEmailedTo: null,
   recoverySaved: false,
   collision: null,      // campaign id whose "Sync this campaign" hit an existing synced copy
 };
@@ -159,7 +160,8 @@ function licenseLabel(id) {
 
 function finishSignIn() {
   ui.step = 'email';
-  location.hash = '#/account';
+  // The Sync page: a device that needs approving shows its code there.
+  location.hash = '#/account/sync';
 }
 
 function afterName() {
@@ -211,6 +213,9 @@ async function loadSync(withList) {
   ui.syncLoading = true;
   rerender();
   try {
+    // Let sync-by-default finish first (setting up, syncing, downloading),
+    // so the page shows the outcome rather than a moment before it.
+    await sync.autoSync();
     ui.syncStatus = await keys.status();
     if (withList && ui.syncStatus.state === 'ready') ui.synced = await sync.listSynced();
     if (ui.syncStatus.state === 'ready') sync.retryNow();
@@ -236,15 +241,21 @@ function syncSection() {
   const st = ui.syncStatus;
   const intro = `
     <h1>Sync</h1>
-    <p class="portal-dim">Keep campaigns the same on every device you sign in on. Everything is encrypted on this device before it’s sent, so GMAtlas’s servers can’t read your campaigns. Uploaded documents and images stay on the device they were added on.</p>
+    <p class="portal-dim">Sync is on whenever you’re signed in: campaigns stay the same on every device you sign in on. They’re encrypted on this device before they’re sent. Uploaded documents and images stay on the device they were added on.</p>
     ${alertBox()}`;
   if (!st) return `${intro}<p class="portal-dim">${ui.syncLoading ? 'Checking sync…' : ''}</p>`;
-  if (ui.recoveryKey) {
+  const auto = sync.lastSetup();
+  const shownKey = ui.recoveryKey || (auto && auto.recoveryKey);
+  const emailedTo = ui.recoveryKey ? ui.recoveryEmailedTo : auto && auto.emailedTo;
+  if (shownKey) {
     return `${intro}
       <div class="portal-panel portal-panel-accent">
-        <h2>Save your recovery key</h2>
-        <p>If you ever lose every device you’ve signed in on, this key is the only way to get your synced campaigns back. GMAtlas can’t recover it for you. Write it down, or keep it in a password manager.</p>
-        <p class="portal-recovery" data-recovery-key>${esc(ui.recoveryKey)}</p>
+        <h2>Your recovery key</h2>
+        <p>A new device can read your synced campaigns once one of your other devices approves it, or with this key. If you ever lose every device, it’s the only way back to your synced copies.</p>
+        <p class="portal-recovery" data-recovery-key>${esc(shownKey)}</p>
+        <p class="${emailedTo ? 'portal-dim' : 'portal-alert'}" data-recovery-emailed>${emailedTo
+    ? `We’ve emailed it to <strong>${esc(emailedTo)}</strong>. Keep that email, or save the key somewhere safe and delete it. Anyone who can read that inbox can sign in to your account, so protect it.`
+    : 'We couldn’t email it to you. Copy it now and keep it somewhere safe.'}</p>
         <p><button type="button" class="portal-btn" data-account-action="sync-copy">Copy</button></p>
         <label class="portal-toggle"><input type="checkbox" data-sync-saved ${ui.recoverySaved ? 'checked' : ''}> I’ve saved my recovery key</label>
         <p><button type="button" class="portal-btn primary" data-account-action="sync-recovery-done" ${ui.recoverySaved ? '' : 'disabled'}>Done</button></p>
@@ -282,6 +293,9 @@ function syncSection() {
   const activeId = store.getAppConfig().activeCampaignId;
   const local = store.listCampaigns();
   const elsewhere = (ui.synced || []).filter((c) => !c.onThisDevice);
+  // A local campaign whose id is already synced from another device: the
+  // GM chooses (replace or keep both); sync by default never guesses.
+  const waiting = new Set((ui.synced || []).filter((c) => c.onThisDevice && !c.syncingHere).map((c) => c.id));
   const statusLine = live.status === 'error' ? `Problem: ${esc(live.error || 'sync stopped')}` : esc(SYNC_STATUS_TEXT[live.status] || '');
   return `${intro}
     ${live.notice ? `<p class="portal-notice" role="status">${esc(live.notice)}</p>` : ''}
@@ -292,6 +306,8 @@ function syncSection() {
           <div class="portal-row-main">
             <strong>${esc(c.title)}</strong>${c.sync ? ' <span class="portal-badge">Synced</span>' : ''}
             ${c.id === activeId && c.sync ? `<span class="portal-dim">Open now · ${statusLine}</span>` : ''}
+            ${!c.sync && c.syncOptOut && !waiting.has(c.id) ? '<span class="portal-dim">Sync was stopped for this campaign. It stays on this device only.</span>' : ''}
+            ${!c.sync && !c.syncOptOut && !waiting.has(c.id) ? '<span class="portal-dim">Starts syncing once it’s been edited.</span>' : ''}
           </div>
           <div class="portal-row-actions">
             ${c.sync
@@ -299,7 +315,7 @@ function syncSection() {
     : `<button type="button" class="portal-btn primary" data-account-action="sync-campaign" data-campaign-id="${esc(c.id)}" ${disabled()}>Sync this campaign</button>`}
           </div>
         </li>
-        ${ui.collision === c.id ? `
+        ${ui.collision === c.id || (waiting.has(c.id) && ui.collision !== `dismissed:${c.id}`) ? `
         <li class="portal-row portal-row-note">
           <div class="portal-row-main">
             <strong>This campaign is already synced from another device.</strong>
@@ -308,7 +324,7 @@ function syncSection() {
           <div class="portal-row-actions">
             <button type="button" class="portal-btn primary" data-account-action="sync-replace" data-campaign-id="${esc(c.id)}" ${disabled()}>Use the synced copy</button>
             <button type="button" class="portal-btn" data-account-action="sync-keep-both" data-campaign-id="${esc(c.id)}" ${disabled()}>Keep both</button>
-            <button type="button" class="portal-link" data-account-action="sync-collision-cancel">Cancel</button>
+            <button type="button" class="portal-link" data-account-action="sync-collision-cancel" data-campaign-id="${esc(c.id)}">Not now</button>
           </div>
         </li>` : ''}`).join('')}</ul>
     </div>
@@ -321,6 +337,11 @@ function syncSection() {
             <div class="portal-row-actions"><button type="button" class="portal-btn primary" data-account-action="sync-open" data-campaign-id="${esc(c.id)}" ${disabled()}>${ui.busy ? 'Downloading…' : 'Open on this device'}</button></div>
           </li>`).join('')}</ul>
       </div>` : ''}
+    <div class="portal-panel">
+      <h2>Recovery key</h2>
+      <p class="portal-dim">Lost it? Get a new one by email. The old key stops working.</p>
+      <button type="button" class="portal-btn" data-account-action="sync-new-recovery" ${disabled()}>Email me a new recovery key</button>
+    </div>
     <div class="portal-panel">
       <h2>Reset sync</h2>
       <p class="portal-dim">Only if your recovery key is lost and no device can approve another. Deletes every synced copy from the server and turns sync off. Campaigns on your devices are kept.</p>
@@ -596,7 +617,9 @@ export function onAccountClick(e) {
     }
     case 'sync-setup':
       run(async () => {
-        ui.recoveryKey = await sync.keys().setUp();
+        const made = await sync.keys().setUp();
+        ui.recoveryKey = made.recoveryKey;
+        ui.recoveryEmailedTo = made.emailedTo;
         ui.recoverySaved = false;
         await afterSyncChange();
       });
@@ -611,11 +634,21 @@ export function onAccountClick(e) {
     case 'sync-recovery-done':
       if (!ui.recoverySaved) break;
       ui.recoveryKey = null;
+      sync.clearLastSetup();
       resetMessages();
       rerender();
       break;
     case 'sync-check':
       loadSync(true);
+      break;
+    case 'sync-new-recovery':
+      if (!window.confirm('Email you a new recovery key?\n\nThe old one stops working straight away.')) break;
+      run(async () => {
+        const made = await sync.keys().newRecoveryKey();
+        ui.recoveryKey = made.recoveryKey;
+        ui.recoveryEmailedTo = made.emailedTo;
+        ui.recoverySaved = false;
+      });
       break;
     case 'sync-approve': {
       const row = ui.syncStatus && ui.syncStatus.devices.find((x) => x.id === deviceId);
@@ -638,7 +671,7 @@ export function onAccountClick(e) {
       break;
     }
     case 'sync-collision-cancel':
-      ui.collision = null; rerender();
+      ui.collision = `dismissed:${btn.dataset.campaignId}`; rerender();
       break;
     case 'sync-replace': {
       const cid = btn.dataset.campaignId;

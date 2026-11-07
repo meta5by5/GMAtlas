@@ -144,6 +144,8 @@ export function createSyncClient(options = {}) {
   async function stoppedElsewhere(cid) {
     if (conn && conn.cid === cid) { conn.closed = true; conn = null; }
     await deps.store.disableSync(cid);
+    setOptOut(cid, true);
+    remote = null;
     set({ status: 'off', campaignId: null, error: null, notice: 'Sync was turned off for this campaign on another device. This copy is kept here.' });
   }
 
@@ -261,9 +263,10 @@ export function createSyncClient(options = {}) {
 
   /** Starts syncing a local campaign. Rejects with code 'campaign_exists'
    *  if the account already syncs one with the same id (5.6). */
-  async function syncCampaign(cid) {
+  async function syncCampaign(cid, { auto = false } = {}) {
     const entry = deps.store.listCampaigns().find((c) => c.id === cid);
     if (!entry) throw new Error('Unknown campaign');
+    if (!auto && entry.syncOptOut) setOptOut(cid, false);
     if ((await remoteCampaigns(true)).has(cid)) throw Object.assign(new Error('This campaign is already synced from another device.'), { code: 'campaign_exists' });
     const { key, sealed } = await keys.newCampaignKey(cid);
     await deps.account.request('POST', '/api/campaigns', { id: cid, sealedKey: sealed, metaEnv: await sealJson(key, { title: entry.title }, cid, 'meta') });
@@ -280,13 +283,104 @@ export function createSyncClient(options = {}) {
     reconcile();
   }
 
+  /** Marks a campaign as one this device shouldn't sync by default (it was
+   *  stopped on purpose), or clears that. */
+  function setOptOut(cid, on) {
+    deps.store.updateAppConfig((cfg) => ({ ...cfg, campaigns: cfg.campaigns.map((c) => (c.id === cid ? { ...c, syncOptOut: on || undefined } : c)) }));
+  }
+
   /** Stops syncing everywhere: the server copy is deleted; every device
-   *  keeps its own local copy. */
+   *  keeps its own local copy, and none starts syncing it again by itself. */
   async function stopSyncing(cid) {
     await deps.account.request('DELETE', `/api/campaigns/${encodeURIComponent(cid)}`);
     remote = null;
     if (conn && conn.cid === cid) close();
     await deps.store.disableSync(cid);
+    setOptOut(cid, true);
+    reconcile();
+  }
+
+  // --- sync by default ----------------------------------------------------------
+  // While signed in, every device keeps everything in step without being
+  // asked: sync is set up on the first device (recovery key emailed), each
+  // campaign that has been worked on starts syncing, and campaigns from the
+  // account's other devices are brought here. Exceptions:
+  //   - an untouched campaign (never edited: a fresh install's blank one)
+  //     stays local until it's edited, so blanks don't multiply;
+  //   - a campaign stopped on purpose (`syncOptOut`) stays local;
+  //   - a synced campaign deleted on this device (`syncDeclined`) isn't
+  //     downloaded again;
+  //   - a local campaign whose id is already synced from elsewhere waits
+  //     for the GM's choice on Account › Sync (replace or keep both).
+
+  let autoRunning = null;
+  let autoAgain = false;
+  let lastSetup = null;
+
+  // A campaign that has never been edited (store.campaignEdited). For one
+  // from before that flag existed, fall back to "never saved after it was
+  // created".
+  const untouched = (doc) => {
+    if (!doc || !doc.meta) return true;
+    const edited = deps.store.campaignEdited(doc.meta.id);
+    if (edited !== undefined) return !edited;
+    return !doc.meta.updatedAt || doc.meta.updatedAt === doc.meta.createdAt;
+  };
+
+  function autoSync() {
+    if (!deps.store || !deps.account || !keys || !signedIn()) return Promise.resolve();
+    if (autoRunning) { autoAgain = true; return autoRunning; }
+    autoRunning = (async () => {
+      do { autoAgain = false; await autoSyncOnce(); } while (autoAgain);
+    })().catch((err) => {
+      console.warn('automatic sync failed', err);
+      if (err.code !== 'offline' && err.code !== 'no_service') set({ error: err.message });
+    }).finally(() => { autoRunning = null; });
+    return autoRunning;
+  }
+
+  async function autoSyncOnce() {
+    let st = await keys.status();
+    if (st.state === 'off') {
+      try {
+        lastSetup = await keys.setUp();
+      } catch (err) {
+        if (err.code !== 'vault_exists') throw err; // another device just did it
+      }
+      st = await keys.status();
+    }
+    if (st.state !== 'ready') {
+      if (!conn) set({ status: 'locked', campaignId: activeId() });
+      return;
+    }
+    const known = await remoteCampaigns(true);
+    for (const c of deps.store.listCampaigns()) {
+      if (c.sync || c.syncOptOut || known.has(c.id)) continue;
+      if (untouched(await deps.store.loadCampaign(c.id))) continue;
+      try {
+        await syncCampaign(c.id, { auto: true });
+      } catch (err) {
+        if (err.code !== 'campaign_exists') throw err;
+      }
+    }
+    const declined = new Set(deps.store.getAppConfig().syncDeclined || []);
+    const here = new Set(deps.store.listCampaigns().map((c) => c.id));
+    const arrived = [];
+    for (const row of (await remoteCampaigns(true)).values()) {
+      if (here.has(row.id) || declined.has(row.id)) continue;
+      await openHere(row.id);
+      arrived.push(row);
+    }
+    // A fresh device: show the most recently changed synced campaign rather
+    // than the blank one it started with.
+    if (arrived.length) {
+      const active = activeId();
+      const entry = deps.store.listCampaigns().find((c) => c.id === active);
+      if (entry && !entry.sync && untouched(await deps.store.loadCampaign(active))) {
+        const newest = [...arrived].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))[0];
+        await deps.store.switchCampaign(newest.id);
+      }
+    }
     reconcile();
   }
 
@@ -306,6 +400,8 @@ export function createSyncClient(options = {}) {
   /** Brings a synced campaign here: new, or replacing the local copy with
    *  the same id. Resolves to its id. */
   async function openHere(cid) {
+    const declined = deps.store.getAppConfig().syncDeclined || [];
+    if (declined.includes(cid)) deps.store.updateAppConfig((cfg) => ({ ...cfg, syncDeclined: (cfg.syncDeclined || []).filter((id) => id !== cid) }));
     const { replica, upto, title } = await downloadSnapshot(cid);
     await deps.store.adoptSyncedCampaign({ id: cid, title, replica, cursor: upto, deviceId: deviceId() });
     titles.set(cid, title);
@@ -344,10 +440,19 @@ export function createSyncClient(options = {}) {
     // Reconnect only when the open campaign, or whether it syncs, changes;
     // not on every edit.
     const wanted = () => { const a = activeId(); return `${a}|${!!(a && deps.store.syncStatus(a))}`; };
+    // Sync by default re-runs when the set of campaigns changes, or the
+    // open one is edited for the first time.
+    const campaignsShape = () => {
+      const doc = deps.store.get();
+      return deps.store.listCampaigns().map((c) => `${c.id}:${c.sync ? 1 : 0}${c.syncOptOut ? 1 : 0}`).join(',') + (untouched(doc) ? '' : `|${activeId()}`);
+    };
     let lastWanted = wanted();
+    let lastShape = campaignsShape();
     deps.store.subscribe(() => {
       const now = wanted();
       if (now !== lastWanted) { lastWanted = now; reconcile(); }
+      const shape = campaignsShape();
+      if (shape !== lastShape) { lastShape = shape; autoSync(); }
       pushTitles();
     });
     let lastSignedIn = signedIn();
@@ -356,10 +461,20 @@ export function createSyncClient(options = {}) {
       if (now === lastSignedIn) return;
       lastSignedIn = now;
       remote = null;
-      if (!now) keys.forget().catch(() => {});
+      if (!now) { lastSetup = null; keys.forget().catch(() => {}); }
       reconcile();
+      if (now) autoSync();
     });
+    // Coming back to the tab, or back online: catch up on what the other
+    // devices did meanwhile.
+    if (globalThis.addEventListener) {
+      globalThis.addEventListener('online', () => retryNow());
+    }
+    if (globalThis.document && globalThis.document.addEventListener) {
+      globalThis.document.addEventListener('visibilitychange', () => { if (globalThis.document.visibilityState === 'visible') autoSync(); });
+    }
     reconcile();
+    autoSync();
   }
 
   /** Retry now (after approving this device, or coming back online). */
@@ -367,12 +482,17 @@ export function createSyncClient(options = {}) {
     clearTimeout(retryTimer);
     retryTimer = null;
     retry = 0;
+    autoSync();
     if (conn && !conn.ws) return;
     if (!conn) reconcile();
   }
 
   return {
-    start, reconcile, retryNow, syncCampaign, stopSyncing, listSynced, openHere, keepBoth,
+    start, reconcile, retryNow, autoSync, syncCampaign,
+    /** The recovery key from sync's automatic set-up this session (shown
+     *  once on Account › Sync), and where it was emailed. */
+    lastSetup: () => lastSetup,
+    clearLastSetup: () => { lastSetup = null; }, stopSyncing, listSynced, openHere, keepBoth,
     keys: () => keys,
     getState: () => state,
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },

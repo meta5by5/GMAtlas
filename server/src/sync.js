@@ -113,6 +113,45 @@ export async function putOwnWrap(request, { env, now }, { user, device }) {
   return json({ ok: true });
 }
 
+const RECOVERY_KEY = /^([0-9A-HJKMNP-TV-Z]{4}-){7}[0-9A-HJKMNP-TV-Z]{4}$/;
+
+/** Emails a recovery key to the account's own address. The key passes
+ *  through here once, in memory, and is never stored or logged. This is a
+ *  deliberate trade (design/adr/personal-sync.md): the inbox now holds the
+ *  key, so whoever controls the inbox can sign in AND unlock synced
+ *  campaigns. Only an approved device can ask, so a stranger can't use it
+ *  to spam an address. */
+export async function emailRecoveryKey(request, { env }, { user, device }) {
+  await requireApproved(env, user, device);
+  const key = String((await readJson(request)).recoveryKey || '').trim().toUpperCase();
+  if (!RECOVERY_KEY.test(key)) throw new HttpError(400, 'bad_key', 'That isn’t a recovery key.');
+  await env.MAILER.send({
+    to: user.email,
+    subject: 'Your GMAtlas recovery key',
+    text: [
+      'Your GMAtlas recovery key is:',
+      '',
+      `    ${key}`,
+      '',
+      'Your synced campaigns are encrypted on your devices. A new device can read them once one of your other devices approves it, or with this key.',
+      '',
+      'Keep this email, or copy the key somewhere safe and delete the email. Anyone who can read this inbox can also sign in to your account, so protect it.',
+      '',
+      'A newer recovery key replaces this one. If you didn’t turn on sync for GMAtlas, you can ignore this email.',
+    ].join('\n'),
+  });
+  return json({ ok: true, email: user.email });
+}
+
+/** Replaces the recovery key's wrap (a new key; the old one stops working). */
+export async function putRecovery(request, { env, now }, { user, device }) {
+  await requireApproved(env, user, device);
+  const wrapped = blob((await readJson(request)).wrapped, 'wrapped');
+  await env.DB.prepare("UPDATE vault_keys SET wrapped = ?, wrapped_by = ?, created_at = ? WHERE user_id = ? AND slot = 'recovery'")
+    .bind(wrapped, device.id, iso(now()), user.id).run();
+  return json({ ok: true });
+}
+
 const room = (env, campaignId) => env.CAMPAIGN_ROOMS.get(env.CAMPAIGN_ROOMS.idFromName(campaignId));
 const roomUrl = (path) => `https://room${path}`;
 

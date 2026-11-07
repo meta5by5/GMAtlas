@@ -5,6 +5,7 @@
 
 import { store } from '../core/store.js';
 import { account } from '../core/account.js';
+import { sync } from '../core/sync.js';
 import { imageSrc, setBlobResolver } from './imageSrc.js';
 import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
@@ -1518,6 +1519,10 @@ let locationProximity = null; // ephemeral — { locationId, locationName } for 
 export function mountShell(el) {
   root = el;
   setBlobResolver(store.blobDataUrl);
+  // The logo menu shows sign-in and sync state: keep it current while open
+  // (only then, so a sync status change never re-renders the campaign).
+  account.subscribe(() => { if (settingsMenuOpen) render(); });
+  sync.subscribe(() => { if (settingsMenuOpen) render(); });
   el.innerHTML = `
     <div class="cockpit">
       <div class="startup-screen" data-startup-screen aria-label="GMAtlas">
@@ -1531,7 +1536,8 @@ export function mountShell(el) {
       </div>
       <header class="mc-header">
         <div class="brand">
-          <h1 aria-label="GMAtlas"><svg class="brand-planet" viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><circle cx="10" cy="10" r="9"/><ellipse cx="10" cy="10" rx="4" ry="9"/><path d="M10 1v18M1 10h18M2.2 5.5h15.6M2.2 14.5h15.6"/></svg><span class="brand-name">GMAtlas</span></h1>
+          <h1><button type="button" class="brand-menu-toggle" data-settings-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-label="GMAtlas menu: account, settings and help" title="Account, settings and help"><svg class="brand-planet" viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><circle cx="10" cy="10" r="9"/><ellipse cx="10" cy="10" rx="4" ry="9"/><path d="M10 1v18M1 10h18M2.2 5.5h15.6M2.2 14.5h15.6"/></svg><span class="brand-name">GMAtlas</span><span class="brand-caret" aria-hidden="true">▾</span></button></h1>
+          <div class="settings-menu" data-settings-menu role="menu" hidden></div>
           <span class="brand-sep" aria-hidden="true">|</span>
           <div class="campaign-switcher-wrap">
             <button type="button" class="campaign-title" data-campaign-switcher-toggle title="Switch campaign"></button>
@@ -1541,15 +1547,6 @@ export function mountShell(el) {
         <div class="header-actions">
           <button class="btn ghost sm" data-search-toggle title="Search everything (Cast, Journal, Oracle, Documents, Party, Colony) — Ctrl/Cmd+K"><span class="icon-mono">🔍</span> <span class="btn-label">Search</span></button>
           <div class="header-drawer-tabs" data-header-drawer-tabs></div>
-          <div class="settings-menu-wrap">
-            <button class="btn ghost sm" data-settings-menu-toggle title="Menu" aria-label="Menu"><span class="glyph">⚙</span><b>Settings</b></button>
-            <div class="settings-menu" data-settings-menu hidden>
-              <button type="button" data-menu-open-settings>Settings</button>
-              <button type="button" data-menu-open-about>About</button>
-              <button type="button" data-menu-help>Help &amp; guides</button>
-              <button type="button" data-menu-account>${account.getState().status === 'signed-in' ? 'Account' : 'Sign in'}</button>
-            </div>
-          </div>
         </div>
       </header>
       <div class="mc-about-overlay" data-about-overlay hidden aria-label="About GMAtlas">
@@ -1815,13 +1812,20 @@ function onClick(ev) {
     return toggleDrawer('faction-events');
   }
 
-  // Header gear menu (Settings / About — "USER CHANGES" QoL batch,
-  // replacing the old bare campaign-title-is-the-settings-button). New
+  // The GMAtlas logo/title menu (account, sign in/out, sync, Settings,
+  // Help, About; it replaced the separate ⚙ Settings button). New
   // Campaign lives in the header campaign switcher's menu
   // (data-campaign-switcher-new), not here. Matches this app's existing convention
   // (lensPickerOpen etc.): only an explicit toggle or picking an item
   // closes it, no click-outside handler.
   if (hit('[data-settings-menu-toggle]')) { settingsMenuOpen = !settingsMenuOpen; return render(); }
+  if (hit('[data-menu-sync]')) { settingsMenuOpen = false; render(); location.hash = '#/account/sync'; return; }
+  if (hit('[data-menu-sign-out]')) {
+    settingsMenuOpen = false;
+    render();
+    account.signOut().then(() => toast('Signed out. Your campaigns stay on this device.'), (err) => toast(err.message || 'Couldn’t sign out.'));
+    return;
+  }
   if (hit('[data-menu-open-settings]')) { settingsMenuOpen = false; toggleDrawer('settings'); return render(); }
   if (hit('[data-menu-open-about]')) { settingsMenuOpen = false; aboutOpen = true; return render(); }
   // The Help centre is the portal surface (ui/portal), switched by the hash.
@@ -9863,18 +9867,6 @@ function render() {
   renderCombatTrackerPanel();
 
   const edge = root.querySelector('[data-edge]');
-  // The header's Settings gear (.settings-menu-wrap) physically relocates
-  // to the bottom of the edge nav, below Advisor, on phone-width screens
-  // (direct request) — detached first (rather than left as an edge-nav
-  // child) so the innerHTML rebuild just below can't destroy the live DOM
-  // node; delegated click handling (rule 4) doesn't care which parent it
-  // ends up under, and the dropdown itself (.settings-menu, still the
-  // ONE instance — no duplicate menu markup anywhere) automatically opens
-  // upward instead of off the bottom of the screen there via
-  // `.mc-edge .settings-menu` in cockpit.css, scoped off the actual DOM
-  // relationship rather than a second copy of the same media query.
-  const settingsWrap = root.querySelector('.settings-menu-wrap');
-  if (settingsWrap) settingsWrap.remove();
   edge.innerHTML = computeVisibleEdgeOrder(profile).map((id) => {
     if (id === 'advisor-toggle') return `<button data-toggle-copilot aria-expanded="${(isCompactTab() || openDrawers.length) ? activeDrawer === 'advisor' : copilotOpen}" title="${escapeHtml(advisorMeta.label)}"><span class="glyph">${advisorMeta.glyph}</span><b>${escapeHtml(advisorMeta.label)}</b></button>`;
     // Faction Events (docs/adr/0031/0032) is an ordinary DRAWERS entry now
@@ -9892,10 +9884,6 @@ function render() {
       <span class="glyph">${d.glyph}</span><b>${d.label}</b>
     </button>`;
   }).join('');
-  if (settingsWrap) {
-    const target = isPhoneWidth() ? edge : root.querySelector('.header-actions');
-    if (target) target.appendChild(settingsWrap);
-  }
 
   // Party/Colony/Journal's own small tab group in the header ("USER
   // CHANGES" QoL batch) — same [data-drawer-open] routing as the edge nav
@@ -9936,28 +9924,20 @@ function render() {
   const settingsMenuEl = root.querySelector('[data-settings-menu]');
   if (settingsMenuEl) {
     settingsMenuEl.hidden = !settingsMenuOpen;
-    // position:fixed (styles/cockpit.css's own comment on .settings-menu
-    // explains why: escaping .mc-edge's overflow-y:auto clipping, which a
-    // z-index alone can't do) needs real viewport pixels, not the CSS
-    // top:100%/bottom:100% percentages a position:absolute-relative-to-its-
-    // wrapper approach could rely on — computed fresh from the toggle
-    // button's CURRENT position every time the menu opens, since that
-    // button may have just been relocated into .mc-edge (phone) or left in
-    // the header (desktop/tablet) by the relocation logic just above.
+    const toggleBtn = root.querySelector('[data-settings-menu-toggle]');
+    if (toggleBtn) toggleBtn.setAttribute('aria-expanded', String(settingsMenuOpen));
+    // Built fresh each time it opens, so the account and sync lines are
+    // current. position:fixed (styles/cockpit.css's comment on
+    // .settings-menu explains why: no ancestor's overflow can clip it),
+    // anchored under the logo from its real on-screen position.
     if (settingsMenuOpen) {
-      const toggleBtn = root.querySelector('[data-settings-menu-toggle]');
+      settingsMenuEl.innerHTML = brandMenuHtml();
       if (toggleBtn) {
         const rect = toggleBtn.getBoundingClientRect();
-        const openUpward = rect.bottom + 200 > window.innerHeight;
-        settingsMenuEl.style.right = `${Math.max(4, window.innerWidth - rect.right)}px`;
-        settingsMenuEl.style.left = '';
-        if (openUpward) {
-          settingsMenuEl.style.bottom = `${window.innerHeight - rect.top + 4}px`;
-          settingsMenuEl.style.top = '';
-        } else {
-          settingsMenuEl.style.top = `${rect.bottom + 4}px`;
-          settingsMenuEl.style.bottom = '';
-        }
+        settingsMenuEl.style.left = `${Math.max(4, rect.left)}px`;
+        settingsMenuEl.style.right = '';
+        settingsMenuEl.style.top = `${rect.bottom + 4}px`;
+        settingsMenuEl.style.bottom = '';
       }
     }
   }
@@ -11765,6 +11745,45 @@ function guarded(fn) {
 }
 
 // ---- helpers ------------------------------------------------------------
+const SYNC_MENU_TEXT = {
+  live: 'Synced · up to date',
+  connecting: 'Syncing…',
+  offline: 'Offline · changes saved here',
+  locked: 'Sync: this device needs approval',
+  error: 'Sync problem · see Sync',
+};
+
+/** The GMAtlas logo/title menu: who's signed in (and how sync is doing),
+ *  then account, Settings, Help, About and sign-out. */
+function brandMenuHtml() {
+  const a = account.getState();
+  const s = sync.getState();
+  const signedIn = a.status === 'signed-in';
+  let head;
+  if (signedIn) {
+    const name = a.user.displayName || a.user.email;
+    const syncLine = SYNC_MENU_TEXT[s.status] || (store.syncStatus(store.getAppConfig().activeCampaignId) ? 'Syncing…' : 'This campaign isn’t synced');
+    head = `<strong>${escapeHtml(name)}</strong>${a.user.displayName ? `<span>${escapeHtml(a.user.email)}</span>` : ''}<span class="brand-menu-sync" data-sync-state="${escapeHtml(s.status)}">${escapeHtml(syncLine)}</span>`;
+  } else if (a.status === 'unavailable') {
+    head = '<strong>Not signed in</strong><span>Everything is saved on this device.</span>';
+  } else {
+    head = '<strong>Not signed in</strong><span>Sign in to sync campaigns across your devices.</span>';
+  }
+  const items = [];
+  if (signedIn) {
+    items.push('<button type="button" role="menuitem" data-menu-account>Account</button>');
+    items.push('<button type="button" role="menuitem" data-menu-sync>Sync</button>');
+  } else if (a.status !== 'unavailable') {
+    items.push('<button type="button" role="menuitem" data-menu-account>Sign in</button>');
+  }
+  items.push('<hr>');
+  items.push('<button type="button" role="menuitem" data-menu-open-settings>Settings</button>');
+  items.push('<button type="button" role="menuitem" data-menu-help>Help &amp; guides</button>');
+  items.push('<button type="button" role="menuitem" data-menu-open-about>About</button>');
+  if (signedIn) items.push('<hr>', '<button type="button" role="menuitem" data-menu-sign-out>Sign out</button>');
+  return `<div class="brand-menu-account">${head}</div>${items.join('')}`;
+}
+
 function toast(msg) {
   const el = root.querySelector('[data-toast]');
   if (!el) return;

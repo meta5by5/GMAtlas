@@ -120,24 +120,73 @@ test/                         node:sqlite D1 shim + end-to-end tests (server, an
   (`scripts/site.js`, the same files the Pages deploy publishes) and runs
   `wrangler dev` (fetched on demand by `npx`) at `http://localhost:8787`, with
   the app and `/api` on one origin. Sign-in codes print to the console.
-- **Deploying.** Live at `https://dev.gmatlas.online` (custom domain in
-  `wrangler.toml`; `https://gmatlas.gmatlas-server.workers.dev` also still
-  serves it), on the D1 database `db_gmatlas`. The one-time setup is done:
-  - migrations applied (`npm run migrate:remote`);
-  - secrets set (`npm run secrets:remote`, key `k1`, public half in
-    `keys/cert-k1.public.json`);
-  - email through Resend from `info@gmatlas.online` (`RESEND_API_KEY`).
+## Environments: dev and production
 
-  A live email sign-in has been run end to end. A later change ships with
-  `npm run deploy`, plus `npm run migrate:remote` when a migration is added.
-  On Windows PowerShell, use `npx.cmd`/`npm.cmd` if script execution is
-  disabled.
+Two separate deployments, each with its own Worker, D1 database, campaign
+rooms, signing key, secrets and accounts (`wrangler.toml`):
+
+| | dev | production |
+|---|---|---|
+| URL | `https://dev.gmatlas.online` | `https://gmatlas.online` |
+| Worker | `gmatlas` | `gmatlas-production` |
+| D1 | `db_gmatlas` | `db_gmatlas_production` |
+| Cert key | `k1` | `p1` |
+| Ships with | `npm run deploy` (any branch) | `npm run release:production -- --confirm gmatlas.online` |
+
+**Everyday deploys go to dev only.** `npm run deploy` (or `deploy:dev`)
+builds the site for dev and deploys the default environment. Add
+`npm run migrate:remote` when a migration is added. Nothing in the
+everyday workflow can reach production.
+
+**Production is a deliberate release** (`scripts/release.js`). It refuses
+unless:
+- you're on `main`, with a clean tree, exactly at `origin/main`;
+- core and server tests pass;
+- production is configured.
+
+It then:
+1. tags the release `prod-YYYYMMDD-HHMM` and pushes the tag;
+2. applies migrations to the production database;
+3. builds the site for production and deploys it.
+
+`npm run release:check` runs the same checks without releasing. Server
+work reaches `main` by pull request when a phase is complete
+(`CLAUDE.md`, Branches), so production only ever runs merged, tagged code.
+
+`GET /api/health` answers `{ok, env}`, so you can see which environment
+served a request.
+
+### Dev (set up)
+
+Live at `https://dev.gmatlas.online`, with
+`https://gmatlas.gmatlas-server.workers.dev` as a fallback. One-time setup,
+done:
+- migrations applied;
+- secrets set (key `k1`, public half in `keys/cert-k1.public.json`);
+- email through Resend from `info@gmatlas.online` (`RESEND_API_KEY`).
+
+### Production (one-time setup, not done yet)
+
+1. `npx wrangler d1 create db_gmatlas_production`, then paste its
+   `database_id` into `[[env.production.d1_databases]]`.
+2. `npm run secrets:production`. This sets the production secrets and
+   writes `keys/cert-p1.public.json`. Commit that file, and add the key to
+   `src/data/certKeys.js` (on `main`).
+3. `npx wrangler secret put RESEND_API_KEY --env production`.
+4. Make sure no other DNS record holds `gmatlas.online`; the first deploy
+   creates its custom-domain record.
+5. Merge to `main`, push, then run
+   `npm run release:production -- --confirm gmatlas.online`.
+
+On Windows PowerShell, use `npx.cmd`/`npm.cmd` if script execution is
+disabled.
 
 ### Rotating the signing key
 
-Only if the private key is exposed. Set `CERT_KEY_ID` in `wrangler.toml` to
-a new id (`k2`), run `npm run secrets:remote`, add the new public key to the
-app beside the old one, and deploy both. Certificates signed with the old
+Only if the private key is exposed. Set that environment's `CERT_KEY_ID` in
+`wrangler.toml` to a new id (`k2`, or `p2` for production), run
+`npm run secrets:remote` (or `secrets:production`), add the new public key
+to the app beside the old one, and deploy both. Certificates signed with the old
 key keep verifying until they expire (30 days); then drop the old key.
 
 ## Ground rules

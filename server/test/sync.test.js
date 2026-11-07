@@ -161,3 +161,34 @@ test('room: push, ack, fan-out, dedupe, catch-up in frames, resets, compaction',
   await desk.deliver({ t: 'nonsense' });
   assert.equal(desk.take()[0].code, 'unknown_frame');
 });
+
+test('recovery key email: approved devices only, to the account address, never stored; a new key replaces the old', async () => {
+  const server = await makeServer();
+  const desk = await syncDevice(server, 'GM@Example.com', 'Desk', 1);
+  const key = '7K3M-ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-2345';
+  assert.equal((await desk.call('POST', '/api/vault/recovery/email', { recoveryKey: key })).data.error, 'not_approved');
+  await desk.call('POST', '/api/vault', { mine: wrapped(1), recovery: wrapped('r') });
+  assert.equal((await desk.call('POST', '/api/vault/recovery/email', { recoveryKey: 'not-a-key' })).data.error, 'bad_key');
+  const sent = await desk.call('POST', '/api/vault/recovery/email', { recoveryKey: key.toLowerCase() });
+  assert.equal(sent.status, 200);
+  assert.equal(sent.data.email, 'gm@example.com');
+  const mail = server.mail.at(-1);
+  assert.equal(mail.to, 'gm@example.com');
+  assert.match(mail.subject, /recovery key/i);
+  assert.ok(mail.text.includes(key));
+  const everything = JSON.stringify(server.sqlite.prepare("SELECT * FROM vault_keys").all()) + JSON.stringify(server.sqlite.prepare('SELECT * FROM audit_log').all());
+  assert.ok(!everything.includes(key), 'the key itself is never stored');
+
+  const phone = await syncDevice(server, 'gm@example.com', 'Phone', 2);
+  assert.equal((await phone.call('PUT', '/api/vault/recovery', { wrapped: wrapped('r2') })).data.error, 'not_approved');
+  assert.equal((await desk.call('PUT', '/api/vault/recovery', { wrapped: wrapped('r2') })).status, 200);
+  assert.deepEqual((await phone.call('GET', '/api/vault/recovery')).data.wrapped, wrapped('r2'));
+});
+
+test('health says which environment answered', async () => {
+  const server = await makeServer();
+  const b = browser(server);
+  assert.deepEqual((await b.call('GET', '/api/health')).data, { ok: true, env: 'dev' });
+  server.env.GMATLAS_ENV = 'production';
+  assert.deepEqual((await b.call('GET', '/api/health')).data, { ok: true, env: 'production' });
+});

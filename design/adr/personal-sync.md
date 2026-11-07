@@ -30,6 +30,15 @@ of the first slice, not a later one.
    - **Envelopes:** every op batch, snapshot and title is AES-GCM bound to
      its campaign id and purpose. The server stores only ciphertext,
      wrapped keys and metadata, titles included.
+   - **The recovery key is emailed** to the account's address when sync
+     is set up, and again whenever the GM asks for a replacement key, at
+     the user's request.
+     - It passes through the server once, in memory, and is never stored
+       or logged.
+     - This is a deliberate trade against strict end-to-end encryption:
+       whoever controls that inbox can both sign in (email codes) and
+       unlock synced campaigns. The server itself still holds nothing
+       readable.
    - **Approval:**
      - A new device shows a 6-digit code derived from its public key.
      - An approved device sees the same code on Account › Devices and
@@ -76,7 +85,22 @@ of the first slice, not a later one.
 5. **Editing-time behaviour.** Incoming frames apply strictly in order, and
    wait while a text field in the campaign has focus. A remote change never
    re-renders the field being typed in, and lands when the field is left.
-6. **Starting to sync (roadmap 5.6):**
+6. **Sync is on by default** whenever a GM is signed in (`core/sync.js`
+   `autoSync`):
+   - The first device sets up the vault without asking.
+   - Every campaign whose content has been edited starts syncing. The
+     store's `edited` flag ignores device-only state and the app's own
+     housekeeping, so blank campaigns stay local.
+   - Campaigns from the account's other devices are downloaded.
+   - A fresh device opens the most recently changed synced campaign
+     instead of its blank one.
+   - Exceptions:
+     - campaigns stopped on purpose (`syncOptOut`);
+     - synced campaigns deleted on that device (`appConfig.syncDeclined`);
+     - id collisions, which wait for the GM's choice.
+   - It re-runs at boot, at sign-in, when campaigns are added or first
+     edited, and when the tab comes back into view or back online.
+7. **Starting to sync by hand (roadmap 5.6):**
    - "Sync this campaign" registers the campaign and uploads a snapshot as
      seq 0.
    - "Open on this device" downloads the snapshot plus the tail.

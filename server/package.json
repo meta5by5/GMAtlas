@@ -9,11 +9,15 @@
     "keygen": "node scripts/keygen.js",
     "secrets:local": "node scripts/secrets.js --local",
     "secrets:remote": "node scripts/secrets.js --remote",
+    "secrets:production": "node scripts/secrets.js --remote --env production",
     "site": "node scripts/site.js",
     "migrate:local": "npx --yes wrangler@4 d1 migrations apply db_gmatlas --local",
     "migrate:remote": "npx --yes wrangler@4 d1 migrations apply db_gmatlas --remote",
     "dev": "node scripts/site.js && npx --yes wrangler@4 dev",
-    "deploy": "node scripts/site.js && npx --yes wrangler@4 deploy"
+    "deploy": "node scripts/site.js && npx --yes wrangler@4 deploy",
+    "deploy:dev": "node scripts/site.js && npx --yes wrangler@4 deploy",
+    "release:check": "node scripts/release.js --dry-run",
+    "release:production": "node scripts/release.js"
   },
   "license": "UNLICENSED"
 }

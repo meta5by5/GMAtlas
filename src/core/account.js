@@ -24,8 +24,10 @@ import { LICENSES } from '../data/licenses.js';
 import { verifyCertificate, licensesToLiftIn } from '../domain/licensing.js';
 
 /** Where the hosted, sign-in-capable GMAtlas lives, for copies that can't
- *  sign in themselves (file://, a static mirror). */
-export const ACCOUNT_SERVICE_URL = 'https://dev.gmatlas.online/';
+ *  sign in themselves (file://, a static mirror): production. A dev deploy
+ *  (server/scripts/site.js without --production) rewrites this line to
+ *  the dev site, so dev never sends people to production or back. */
+export const ACCOUNT_SERVICE_URL = 'https://gmatlas.online/';
 
 const OWNABLE_IDS = LICENSES.filter((l) => !l.open).map((l) => l.id);
 

@@ -13,7 +13,7 @@ const TEXT_INPUT = /^(text|search|email|url|tel|number|password|date|datetime-lo
 
 /** True while a text field inside the campaign surface has focus. */
 function isTypingInCampaign() {
-  const el = document.activeElement;
+  const el = globalThis.document && document.activeElement;
   if (!el || !el.closest || !el.closest('#app')) return false;
   if (el.isContentEditable || el.tagName === 'TEXTAREA') return true;
   return el.tagName === 'INPUT' && TEXT_INPUT.test(el.type || 'text');

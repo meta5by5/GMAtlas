@@ -20,7 +20,7 @@ import { getCertificate, attestLicenses, deactivateLicense } from './entitlement
 import { importSigningKey } from './crypto.js';
 import { mailerFrom } from './mail.js';
 import {
-  putDeviceKey, getVault, createVault, approveDevice, getRecovery, putOwnWrap, resetVault,
+  putDeviceKey, getVault, createVault, approveDevice, getRecovery, putOwnWrap, resetVault, emailRecoveryKey, putRecovery,
   listCampaigns, createCampaign, updateCampaignMeta, deleteCampaign, getSnapshot, putSnapshot,
   issueTicket, openSocket,
 } from './sync.js';
@@ -29,7 +29,13 @@ import {
 export { CampaignRoom } from './room.js';
 
 // [method, pattern, handler, needsAuth]
+/** GET /api/health -> which environment answered (deploy checks). */
+async function health(request, { env }) {
+  return json({ ok: true, env: env.GMATLAS_ENV || 'dev' });
+}
+
 const ROUTES = [
+  ['GET', /^\/api\/health$/, health, false],
   ['POST', /^\/api\/auth\/email\/start$/, startEmailSignIn, false],
   ['POST', /^\/api\/auth\/email\/verify$/, verifyEmailSignIn, false],
   ['POST', /^\/api\/auth\/refresh$/, refreshSession, false],
@@ -50,6 +56,8 @@ const ROUTES = [
   ['PUT', /^\/api\/vault\/devices\/([\w-]+)$/, approveDevice, true],
   ['GET', /^\/api\/vault\/recovery$/, getRecovery, true],
   ['PUT', /^\/api\/vault\/mine$/, putOwnWrap, true],
+  ['PUT', /^\/api\/vault\/recovery$/, putRecovery, true],
+  ['POST', /^\/api\/vault\/recovery\/email$/, emailRecoveryKey, true],
   ['GET', /^\/api\/campaigns$/, listCampaigns, true],
   ['POST', /^\/api\/campaigns$/, createCampaign, true],
   ['PATCH', /^\/api\/campaigns\/([\w-]+)$/, updateCampaignMeta, true],

@@ -71,8 +71,21 @@ export function createSyncKeys({ store, account }) {
     return cachedStatus;
   }
 
-  /** First device: makes the vault key and the recovery key. Resolves to
-   *  the recovery key text, to show once. */
+  /** Emails a recovery key to the account's address. Resolves to the
+   *  address, or null if the email couldn't be sent (the key is still
+   *  shown on screen). */
+  async function emailRecovery(recovery) {
+    try {
+      return (await account.request('POST', '/api/vault/recovery/email', { recoveryKey: recovery })).email;
+    } catch (err) {
+      console.warn('recovery key email failed', err);
+      return null;
+    }
+  }
+
+  /** First device: makes the vault key and the recovery key, and emails
+   *  the recovery key to the account's address. Resolves to
+   *  `{recoveryKey, emailedTo}`; the key is also shown once on screen. */
   async function setUp() {
     const device = await deviceKey();
     const raw = randomBytes(32);
@@ -82,7 +95,16 @@ export function createSyncKeys({ store, account }) {
       recovery: await wrapWithRecovery(raw, parseRecoveryKey(recovery)),
     });
     await storeVault(raw);
-    return recovery;
+    return { recoveryKey: recovery, emailedTo: await emailRecovery(recovery) };
+  }
+
+  /** A new recovery key (the old one stops working), emailed like the
+   *  first. Needs this device to be approved. */
+  async function newRecoveryKey() {
+    const raw = await vaultRaw();
+    const recovery = generateRecoveryKey();
+    await account.request('PUT', '/api/vault/recovery', { wrapped: await wrapWithRecovery(raw, parseRecoveryKey(recovery)) });
+    return { recoveryKey: recovery, emailedTo: await emailRecovery(recovery) };
   }
 
   /** Unlocks this device with the recovery key, then saves its own copy
@@ -141,5 +163,5 @@ export function createSyncKeys({ store, account }) {
     await store.setSyncKeys({ vaultRaw: null });
   }
 
-  return { status, setUp, unlockWithRecovery, approve, newCampaignKey, campaignKey, forget, lastStatus: () => cachedStatus };
+  return { status, setUp, newRecoveryKey, unlockWithRecovery, approve, newCampaignKey, campaignKey, forget, lastStatus: () => cachedStatus };
 }
