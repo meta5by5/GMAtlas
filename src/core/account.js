@@ -58,6 +58,24 @@ export function describeDevice(userAgent) {
   return { name, platform: platform || null };
 }
 
+// WebAuthn speaks ArrayBuffers; the server speaks base64url.
+function toB64url(buf) {
+  let bin = '';
+  for (const b of new Uint8Array(buf)) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function fromB64url(text) {
+  const b64 = String(text).replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+  return Uint8Array.from(bin, (c) => c.charCodeAt(0)).buffer;
+}
+/** The browser's passkey errors, in words (cancelling is the common one). */
+function passkeyCancelled(err) {
+  if (err && (err.name === 'NotAllowedError' || err.name === 'AbortError')) return new AccountError('passkey_cancelled', 'No passkey was used. Try again, or sign in with your email.');
+  if (err && err.name === 'InvalidStateError') return new AccountError('passkey_exists', 'This device already has a passkey for your account.');
+  return new AccountError('passkey_failed', (err && err.message) || 'The passkey didn’t work.');
+}
+
 const SIGNED_OUT = Object.freeze({ status: 'signed-out', user: null, device: null, cert: null, offline: false });
 
 export function createAccountClient(options = {}) {
@@ -69,6 +87,7 @@ export function createAccountClient(options = {}) {
     userAgent: options.userAgent !== undefined ? options.userAgent : (globalThis.navigator && globalThis.navigator.userAgent),
     locks: options.locks !== undefined ? options.locks : (globalThis.navigator && globalThis.navigator.locks),
     store: options.store || null,
+    credentials: options.credentials || null, // tests: a WebAuthn stand-in
   };
   let state = { ...SIGNED_OUT, status: 'idle' };
   let accessToken = null;
@@ -223,7 +242,18 @@ export function createAccountClient(options = {}) {
     if (!available()) { set({ ...SIGNED_OUT, status: 'unavailable' }); return state; }
     startRenewal();
     const s = saved();
-    if (!s.user) { set({ ...SIGNED_OUT }); return state; }
+    if (!s.user) {
+      // Back from "Continue with Google/Discord": the callback left a
+      // session cookie; pick it up.
+      const hash = (deps.location && deps.location.hash) || '';
+      if (hash.startsWith('#/account/oauth/')) {
+        set({ ...SIGNED_OUT, status: 'idle' });
+        try { await refreshNow(); await fetchCertificate(); } catch { if (state.status !== 'signed-in') set({ ...SIGNED_OUT }); }
+        return state;
+      }
+      set({ ...SIGNED_OUT });
+      return state;
+    }
     set({ status: 'signed-in', user: s.user, device: s.device || null, cert: null, offline: false });
     if (s.cert) await applyCertificate(s.cert);
     try {
@@ -301,6 +331,89 @@ export function createAccountClient(options = {}) {
     return fetchCertificate();
   }
 
+  // --- passkeys and OAuth (server/src/passkeys.js, server/src/oauth.js) ----
+
+  /** {oauth: [{id, label}], passkeys} this service offers. */
+  async function providers() { return raw('GET', '/api/auth/providers'); }
+
+  /** Where "Continue with <provider>" goes (a full-page navigation). */
+  function oauthStartUrl(providerId) {
+    const p = new URLSearchParams();
+    const id = saved().deviceId;
+    if (id) p.set('deviceId', id);
+    p.set('name', describeDevice(deps.userAgent).name);
+    return `${deps.baseUrl}/api/auth/oauth/${encodeURIComponent(providerId)}/start?${p}`;
+  }
+
+  /** Connects a provider to the signed-in account: resolves to the URL to
+   *  navigate to. */
+  async function linkProviderUrl(providerId) {
+    const { url } = await api('POST', `/api/auth/oauth/${encodeURIComponent(providerId)}/link`, {});
+    return `${deps.baseUrl}${url}`;
+  }
+  async function listIdentities() { return api('GET', '/api/auth/identities'); }
+  async function unlinkProvider(providerId) { return api('DELETE', `/api/auth/identities/${encodeURIComponent(providerId)}`); }
+
+  const webauthn = () => deps.credentials || (globalThis.navigator && globalThis.navigator.credentials);
+  /** Whether this browser can use passkeys at all. */
+  function passkeysSupported() {
+    return !!((deps.credentials || globalThis.PublicKeyCredential) && webauthn() && typeof webauthn().create === 'function') && available();
+  }
+
+  async function addPasskey(name) {
+    const opts = await api('POST', '/api/auth/passkeys/register/options', {});
+    const pk = opts.publicKey;
+    let cred;
+    try {
+      cred = await webauthn().create({
+        publicKey: {
+          ...pk,
+          challenge: fromB64url(pk.challenge),
+          user: { ...pk.user, id: fromB64url(pk.user.id) },
+          excludeCredentials: (pk.excludeCredentials || []).map((c) => ({ ...c, id: fromB64url(c.id) })),
+        },
+      });
+    } catch (err) { throw passkeyCancelled(err); }
+    const r = cred.response;
+    await api('POST', '/api/auth/passkeys/register', {
+      challengeId: opts.challengeId,
+      name: name || describeDevice(deps.userAgent).name,
+      credential: {
+        id: toB64url(cred.rawId), type: cred.type,
+        transports: typeof r.getTransports === 'function' ? r.getTransports() : [],
+        response: { clientDataJSON: toB64url(r.clientDataJSON), attestationObject: toB64url(r.attestationObject) },
+      },
+    });
+  }
+
+  /** Signs in with a passkey (no email). Resolves like verifyCode. */
+  async function signInWithPasskey() {
+    const opts = await raw('POST', '/api/auth/passkeys/login/options', {});
+    let cred;
+    try {
+      cred = await webauthn().get({ publicKey: { ...opts.publicKey, challenge: fromB64url(opts.publicKey.challenge), allowCredentials: [] } });
+    } catch (err) { throw passkeyCancelled(err); }
+    const r = cred.response;
+    const data = await raw('POST', '/api/auth/passkeys/login', {
+      challengeId: opts.challengeId,
+      device: describeDevice(deps.userAgent),
+      deviceId: saved().deviceId || undefined,
+      credential: {
+        id: toB64url(cred.rawId), type: cred.type,
+        response: {
+          clientDataJSON: toB64url(r.clientDataJSON), authenticatorData: toB64url(r.authenticatorData),
+          signature: toB64url(r.signature), userHandle: r.userHandle ? toB64url(r.userHandle) : null,
+        },
+      },
+    });
+    accessToken = data.accessToken;
+    adopt(data);
+    await fetchCertificate();
+    return { newAccount: false };
+  }
+  async function listPasskeys() { return api('GET', '/api/auth/passkeys'); }
+  async function removePasskey(id) { return api('DELETE', `/api/auth/passkeys/${encodeURIComponent(id)}`); }
+
   /** This install's ticks that the account doesn't own yet. */
   function liftInCandidates() {
     if (state.status !== 'signed-in' || !state.cert) return [];
@@ -311,6 +424,8 @@ export function createAccountClient(options = {}) {
     start, available, requestCode, verifyCode, signOut, updateProfile,
     listDevices, renameDevice, revokeDevice, setDevicePolicy,
     attest, deactivate, fetchCertificate, liftInCandidates,
+    providers, oauthStartUrl, linkProviderUrl, listIdentities, unlinkProvider,
+    passkeysSupported, addPasskey, signInWithPasskey, listPasskeys, removePasskey,
     /** An authenticated call for other core clients (core/sync.js). */
     request: api,
     getState: () => state,

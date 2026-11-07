@@ -775,7 +775,8 @@ Recorded in `design/adr/sync-groundwork.md`.
 ### S1 — Accounts and account-wide licensing
 
 1. `server/` scaffold: Worker, D1 migrations, email-code + passkey + OAuth
-   sign-in, sessions, devices.
+   sign-in, sessions, devices. **Built**, apart from Apple sign-in
+   (`design/adr/passkeys-oauth.md`).
 2. `account.js`, the sign-in flow, Account → Profile / Devices / Licenses /
    Privacy.
 3. Entitlement certificate: issue, verify, cache, account-room push.

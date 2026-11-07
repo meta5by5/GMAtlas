@@ -88,7 +88,13 @@ export function searchHelp(articles, query) {
 /** The portal route a location hash names, or null for the campaign. */
 export function parsePortalRoute(hash) {
   const text = String(hash || '');
-  if (/^#\/account\/sign-in\/?$/.test(text)) return { view: 'sign-in' };
+  const signIn = /^#\/account\/sign-in(?:\/error\/([a-z_-]+))?\/?$/.exec(text);
+  if (signIn) return signIn[1] ? { view: 'sign-in', error: signIn[1] } : { view: 'sign-in' };
+  // Back from "Continue with Google/Discord" (server/src/oauth.js).
+  const oauth = /^#\/account\/oauth\/(new|back)\/?$/.exec(text);
+  if (oauth) return { view: 'oauth', outcome: oauth[1] };
+  const security = /^#\/account\/security(?:\/(linked|error\/[a-z_-]+))?\/?$/.exec(text);
+  if (security) return security[1] ? { view: 'account', section: 'security', outcome: security[1] } : { view: 'account', section: 'security' };
   const account = /^#\/account(?:\/(devices|licenses|sync))?\/?$/.exec(text);
   if (account) return { view: 'account', section: account[1] || 'profile' };
   const m = /^#\/help(?:\/([a-z0-9-]+))?\/?$/.exec(text);
