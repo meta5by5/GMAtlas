@@ -62,6 +62,25 @@ test('codes: wrong, reused, expired and brute-forced codes all fail; requests ar
   assert.equal((await b.call('POST', '/api/auth/email/start', { email: other })).status, 200, 'the limit resets after an hour');
 });
 
+test('per-network limits: code requests and wrong guesses across many addresses; private; other networks unaffected', async () => {
+  const server = await makeServer();
+  const from = (ip) => ({ headers: { 'cf-connecting-ip': ip } });
+  const b = browser(server);
+  for (let i = 0; i < 20; i++) assert.equal((await b.call('POST', '/api/auth/email/start', { email: `gm${i}@example.com` }, from('203.0.113.7'))).status, 200);
+  const blocked = await b.call('POST', '/api/auth/email/start', { email: 'gm99@example.com' }, from('203.0.113.7'));
+  assert.deepEqual([blocked.status, blocked.data.error], [429, 'too_many_codes'], 'a 21st address from one network is refused');
+  assert.equal((await b.call('POST', '/api/auth/email/start', { email: 'gm99@example.com' }, from('198.51.100.2'))).status, 200, 'another network is fine');
+  assert.ok(!server.sqlite.prepare('SELECT bucket FROM rate_events').all().some((r) => r.bucket.includes('203.0.113')), 'IPs are stored hashed');
+
+  // 30 wrong guesses (6 addresses x 5) from one network, then even a right code is refused for an hour.
+  for (let i = 0; i < 30; i++) await b.call('POST', '/api/auth/email/verify', { email: `gm${Math.floor(i / 5)}@example.com`, code: '000000' }, from('203.0.113.7'));
+  const right = lastCode(server, 'gm10@example.com');
+  assert.equal((await b.call('POST', '/api/auth/email/verify', { email: 'gm10@example.com', code: right }, from('203.0.113.7'))).data.error, 'too_many_attempts');
+  assert.equal((await b.call('POST', '/api/auth/email/verify', { email: 'gm10@example.com', code: right }, from('198.51.100.2'))).status, 200, 'the right code from elsewhere still works');
+  server.clock.ms += 61 * 60 * 1000;
+  assert.equal((await b.call('POST', '/api/auth/email/start', { email: 'gm50@example.com' }, from('203.0.113.7'))).status, 200, 'resets after an hour');
+});
+
 test('access tokens expire; refresh rotates the cookie; replaying an old cookie ends the session', async () => {
   const server = await makeServer();
   const b = browser(server);
