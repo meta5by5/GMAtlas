@@ -84,11 +84,15 @@ against this Worker, plus a jsdom smoke run of the built bundle):
   per hour (`src/rateLimit.js`; IPs stored hashed), on top of the
   per-address limits.
 
+- **"Import my copy":** the hosted service serves only openly licensed
+  (CC-BY) sourcebook PDFs, and only those under 25 MiB (`scripts/site.js`);
+  every other book is imported from the GM's own file. Running locally,
+  Load still reads `assets/docs/`.
+- **Help:** Account & sync articles (signing in, syncing, importing books).
+
 Still to do in S1:
 - Apple sign-in;
-- device key pairs, plus the request-signing challenge they enable;
-- a help article on accounts;
-- moving third-party PDF loading to "import my copy".
+- device key pairs, plus the request-signing challenge they enable.
 
 ## Status: Phase S2 (personal sync) in progress
 
