@@ -13,6 +13,7 @@
     "site": "node scripts/site.js",
     "migrate:local": "npx --yes wrangler@4 d1 migrations apply DB --local",
     "migrate:remote": "npx --yes wrangler@4 d1 migrations apply DB --remote",
+    "admin:role": "node scripts/admin-role.js",
     "dev": "node scripts/site.js && npx --yes wrangler@4 dev",
     "deploy": "node scripts/site.js && npx --yes wrangler@4 deploy",
     "deploy:dev": "node scripts/site.js && npx --yes wrangler@4 deploy",

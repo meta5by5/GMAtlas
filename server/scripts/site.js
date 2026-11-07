@@ -37,8 +37,11 @@ if (!production) {
   bundle = bundle.replace(KEYS, () => `CERT_PUBLIC_KEYS = [${JSON.stringify(key)}];`);
 }
 writeFileSync(join(site, 'app.bundle.js'), bundle);
-for (const file of ['index.html', 'sw.js']) {
-  const text = readFileSync(join(root, file), 'utf8').replace(/\.\/dist\/app\.bundle\.js/g, './app.bundle.js');
+// The admin page (admin.html + its own bundle) ships only beside the
+// service, never to the static Pages copy. It talks to its own origin.
+cpSync(join(root, 'dist', 'admin.bundle.js'), join(site, 'admin.bundle.js'));
+for (const file of ['index.html', 'sw.js', 'admin.html']) {
+  const text = readFileSync(join(root, file), 'utf8').replace(/\.\/dist\/(app|admin)\.bundle\.js/g, './$1.bundle.js');
   writeFileSync(join(site, file), text);
 }
 console.log(`Assembled ${site} for ${production ? 'production (gmatlas.online)' : 'dev (dev.gmatlas.online)'}`);

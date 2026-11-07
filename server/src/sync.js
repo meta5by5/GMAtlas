@@ -21,6 +21,7 @@
 
 import { HttpError, json, readJson } from './http.js';
 import { signAccessToken, verifyAccessToken } from './crypto.js';
+import { requireFeature } from './features.js';
 
 const iso = (ms) => new Date(ms).toISOString();
 const MAX_SNAPSHOT_CHARS = 60 * 1024 * 1024;
@@ -70,6 +71,7 @@ export async function getVault(request, { env }, { user, device }) {
 }
 
 export async function createVault(request, { env, now }, { user, device }) {
+  await requireFeature(env, iso(now()), user.id, 'sync.devices');
   const body = await readJson(request);
   const mine = blob(body.mine, 'mine');
   const recovery = blob(body.recovery, 'recovery');
@@ -197,6 +199,7 @@ export async function getAccountSettings(request, { env }, { user }) {
 /** PUT /api/account/settings {baseVersion, sealedKey, env} -> {version}.
  *  The sealed key is set by the first write and kept after that. */
 export async function putAccountSettings(request, { env, now }, { user, device }) {
+  await requireFeature(env, iso(now()), user.id, 'sync.devices');
   await requireApproved(env, user, device);
   const body = await readJson(request, MAX_SETTINGS_CHARS + 16 * 1024);
   const base = Number(body.baseVersion);
@@ -230,6 +233,7 @@ export async function listCampaigns(request, { env }, { user }) {
 }
 
 export async function createCampaign(request, { env, now }, { user, device }) {
+  await requireFeature(env, iso(now()), user.id, 'sync.devices');
   await requireApproved(env, user, device);
   const body = await readJson(request);
   const id = String(body.id || '');
@@ -279,6 +283,7 @@ export async function putSnapshot(request, { env, now }, { user, device }, id) {
 const TICKET_SECONDS = 60;
 
 export async function issueTicket(request, { env, now }, { user, device }) {
+  await requireFeature(env, iso(now()), user.id, 'sync.devices');
   const { campaignId } = await readJson(request);
   await ownCampaign(env, user, String(campaignId || ''));
   await requireApproved(env, user, device);

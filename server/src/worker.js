@@ -25,6 +25,12 @@ import {
   issueTicket, openSocket, getAccountSettings, putAccountSettings,
 } from './sync.js';
 
+import {
+  adminMe, searchUsers, getUser, setUserStatus, revokeSessions, setUserRoles,
+  grantEntitlement, bulkGrant, revokeEntitlement, extendEntitlement, convertEntitlement,
+  listFlags, putFlag, listAudit,
+} from './admin.js';
+
 // The Durable Object class must be exported from the Worker's entry module.
 export { CampaignRoom } from './room.js';
 
@@ -67,6 +73,21 @@ const ROUTES = [
   ['GET', /^\/api\/account\/settings$/, getAccountSettings, true],
   ['PUT', /^\/api\/account\/settings$/, putAccountSettings, true],
   ['POST', /^\/api\/sync\/ticket$/, issueTicket, true],
+  // Admin v1 (src/admin.js; every handler checks the caller's role)
+  ['GET', /^\/api\/admin\/me$/, adminMe, true],
+  ['GET', /^\/api\/admin\/users$/, searchUsers, true],
+  ['GET', /^\/api\/admin\/users\/([\w-]+)$/, getUser, true],
+  ['POST', /^\/api\/admin\/users\/([\w-]+)\/status$/, setUserStatus, true],
+  ['POST', /^\/api\/admin\/users\/([\w-]+)\/sessions\/revoke$/, revokeSessions, true],
+  ['PUT', /^\/api\/admin\/users\/([\w-]+)\/roles$/, setUserRoles, true],
+  ['POST', /^\/api\/admin\/users\/([\w-]+)\/entitlements$/, grantEntitlement, true],
+  ['POST', /^\/api\/admin\/entitlements\/bulk$/, bulkGrant, true],
+  ['POST', /^\/api\/admin\/entitlements\/([\w-]+)\/revoke$/, revokeEntitlement, true],
+  ['POST', /^\/api\/admin\/entitlements\/([\w-]+)\/extend$/, extendEntitlement, true],
+  ['POST', /^\/api\/admin\/entitlements\/([\w-]+)\/convert$/, convertEntitlement, true],
+  ['GET', /^\/api\/admin\/flags$/, listFlags, true],
+  ['PUT', /^\/api\/admin\/flags\/([\w.-]+)$/, putFlag, true],
+  ['GET', /^\/api\/admin\/audit$/, listAudit, true],
   ['GET', /^\/api\/sync\/socket$/, openSocket, false],
 ];
 

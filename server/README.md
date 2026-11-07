@@ -58,12 +58,19 @@ against this Worker, plus a jsdom smoke run of the built bundle):
 - **Without the service:** under `file://` or on a static copy, the screens
   point to `https://dev.gmatlas.online` and make no calls.
 
+- **Admin v1** (`src/admin.js`, `design/adr/admin-v1.md`): roles (owner,
+  admin, support, content), users, entitlements (grant, trial, end date,
+  revoke, convert, bulk CSV), feature flags (kill switch, overrides,
+  default, rollout; shipped in the certificate as `enabledFeatures`), and
+  the audit log. Every write needs a note and is audited. The page is
+  `/admin.html` on the service (its own bundle); make the first owner with
+  `npm run admin:role -- --email you@example.com --role owner` (add
+  `--env production` for production; sign in once first).
+
 Still to do in S1:
 - passkeys and OAuth sign-in;
 - device key pairs, plus the request-signing challenge they enable;
-- the account menu in the campaign top bar (the gear menu has "Sign in" /
-  "Account" for now), and a help article on accounts;
-- admin v1;
+- a help article on accounts;
 - moving third-party PDF loading to "import my copy";
 - a per-IP rate limit on code requests.
 
@@ -95,8 +102,10 @@ against this Worker and room.
     and conflict chips with "Keep mine";
   - Account › Sync, and approval on Account › Devices.
 
-Still to do in S2: the `sync.devices` gate, which waits for admin feature
-flags (S1 admin v1).
+- **The `sync.devices` gate:** sync writes are refused (403 `feature_off`)
+  while the feature is off for the account; the app says so and stops.
+
+S2 is complete apart from moving it to `main` (by pull request).
 
 ## Layout
 
@@ -105,6 +114,10 @@ migrations/0001_accounts.sql  D1 schema (SQLite): users, identities, email_codes
                               devices, sessions, entitlements, audit_log
 migrations/0002_sync.sql      devices.ecdh_pub, vault_keys, campaigns (all ciphertext/metadata)
 migrations/0003_account_settings.sql  account_settings (one encrypted, versioned record per account)
+migrations/0004_admin.sql     feature_flags; audit_log indexes
+src/admin.js                  /api/admin/*: users, entitlements, flags, audit (role-checked)
+src/features.js               feature flags: load, resolve per account, requireFeature
+scripts/admin-role.js         set an admin role from the command line (first owner)
 src/worker.js                 entry: routes /api/*, everything else to the static app;
                               exports the CampaignRoom Durable Object
 src/sync.js                   vault, synced-campaign index, snapshots, socket tickets
