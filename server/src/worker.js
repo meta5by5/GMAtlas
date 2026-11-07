@@ -22,7 +22,7 @@ import { mailerFrom } from './mail.js';
 import {
   putDeviceKey, getVault, createVault, approveDevice, getRecovery, putOwnWrap, resetVault, emailRecoveryKey, putRecovery,
   listCampaigns, createCampaign, updateCampaignMeta, deleteCampaign, getSnapshot, putSnapshot,
-  issueTicket, openSocket,
+  issueTicket, openSocket, getAccountSettings, putAccountSettings,
 } from './sync.js';
 
 // The Durable Object class must be exported from the Worker's entry module.
@@ -64,6 +64,8 @@ const ROUTES = [
   ['DELETE', /^\/api\/campaigns\/([\w-]+)$/, deleteCampaign, true],
   ['GET', /^\/api\/campaigns\/([\w-]+)\/snapshot$/, getSnapshot, true],
   ['PUT', /^\/api\/campaigns\/([\w-]+)\/snapshot$/, putSnapshot, true],
+  ['GET', /^\/api\/account\/settings$/, getAccountSettings, true],
+  ['PUT', /^\/api\/account\/settings$/, putAccountSettings, true],
   ['POST', /^\/api\/sync\/ticket$/, issueTicket, true],
   ['GET', /^\/api\/sync\/socket$/, openSocket, false],
 ];

@@ -14,6 +14,8 @@
 //   DELETE /api/campaigns/:id             stops syncing it (server copy deleted)
 //   GET    /api/campaigns/:id/snapshot    -> {upto, env}
 //   PUT    /api/campaigns/:id/snapshot?upto=N   body: env text
+//   GET    /api/account/settings?known=N  -> {version, sealedKey, env} | {version, unchanged} | {version: 0}
+//   PUT    /api/account/settings          {baseVersion, sealedKey, env} -> {version}  (409 if stale)
 //   POST   /api/sync/ticket               {campaignId} -> {ticket}  (60 s, one campaign)
 //   GET    /api/sync/socket?ticket=...    WebSocket upgrade into the campaign's room
 
@@ -167,9 +169,51 @@ export async function resetVault(request, { env }, { user }) {
   for (const c of results) await destroyRoom(env, c.id);
   await env.DB.batch([
     env.DB.prepare('DELETE FROM campaigns WHERE owner_id = ?').bind(user.id),
+    env.DB.prepare('DELETE FROM account_settings WHERE user_id = ?').bind(user.id),
     env.DB.prepare('DELETE FROM vault_keys WHERE user_id = ?').bind(user.id),
   ]);
   return json({ ok: true, campaigns: results.length });
+}
+
+// --- account settings ---------------------------------------------------------
+// One encrypted record per account: the settings every device shares. A
+// write names the version it merged (`baseVersion`, 0 for the first), and
+// is refused with 409 version_conflict if another device wrote since.
+
+const MAX_SETTINGS_CHARS = 1900 * 1000; // under D1's 2 MB row limit
+
+/** GET /api/account/settings?known=N -> {version: 0} (none yet),
+ *  {version, unchanged: true, sealedKey} when N is current, else
+ *  {version, sealedKey, env}. */
+export async function getAccountSettings(request, { env }, { user }) {
+  const row = await env.DB.prepare('SELECT sealed_key, env, version FROM account_settings WHERE user_id = ?').bind(user.id).first();
+  if (!row) return json({ version: 0 });
+  const known = Number(new URL(request.url).searchParams.get('known'));
+  const sealedKey = JSON.parse(row.sealed_key);
+  if (known === row.version) return json({ version: row.version, unchanged: true, sealedKey });
+  return json({ version: row.version, sealedKey, env: JSON.parse(row.env) });
+}
+
+/** PUT /api/account/settings {baseVersion, sealedKey, env} -> {version}.
+ *  The sealed key is set by the first write and kept after that. */
+export async function putAccountSettings(request, { env, now }, { user, device }) {
+  await requireApproved(env, user, device);
+  const body = await readJson(request, MAX_SETTINGS_CHARS + 16 * 1024);
+  const base = Number(body.baseVersion);
+  if (!Number.isInteger(base) || base < 0) throw new HttpError(400, 'bad_request', 'baseVersion must be a whole number.');
+  const envText = blob(body.env, 'env', MAX_SETTINGS_CHARS);
+  const at = iso(now());
+  let result;
+  if (base === 0) {
+    const sealed = blob(body.sealedKey, 'sealedKey');
+    result = await env.DB.prepare('INSERT INTO account_settings (user_id, sealed_key, env, version, updated_by, updated_at) VALUES (?, ?, ?, 1, ?, ?) ON CONFLICT (user_id) DO NOTHING')
+      .bind(user.id, sealed, envText, device.id, at).run();
+  } else {
+    result = await env.DB.prepare('UPDATE account_settings SET env = ?, version = version + 1, updated_by = ?, updated_at = ? WHERE user_id = ? AND version = ?')
+      .bind(envText, device.id, at, user.id, base).run();
+  }
+  if (!result.meta || !result.meta.changes) throw new HttpError(409, 'version_conflict', 'Settings changed on another device; fetch and merge first.');
+  return json({ version: base + 1 });
 }
 
 const publicCampaign = (c) => ({ id: c.id, sealedKey: JSON.parse(c.sealed_key), metaEnv: JSON.parse(c.meta_env), createdAt: c.created_at, updatedAt: c.updated_at });

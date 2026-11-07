@@ -192,3 +192,35 @@ test('health says which environment answered', async () => {
   server.env.GMATLAS_ENV = 'production';
   assert.deepEqual((await b.call('GET', '/api/health')).data, { ok: true, env: 'production' });
 });
+
+test('account settings: one encrypted record per account; writes name the version they merged', async () => {
+  const server = await makeServer();
+  const desk = await syncDevice(server, 'gm@example.com', 'Desk', 1);
+  assert.deepEqual((await desk.call('GET', '/api/account/settings?known=-1')).data, { version: 0 });
+  const first = { baseVersion: 0, sealedKey: wrapped('sk'), env: wrapped('s1') };
+  assert.equal((await desk.call('PUT', '/api/account/settings', first)).data.error, 'not_approved', 'sync must be set up first');
+  await desk.call('POST', '/api/vault', { mine: wrapped(1), recovery: wrapped('r') });
+  assert.deepEqual((await desk.call('PUT', '/api/account/settings', first)).data, { version: 1 });
+  assert.equal((await desk.call('PUT', '/api/account/settings', first)).data.error, 'version_conflict', 'a second first write loses');
+
+  const got = (await desk.call('GET', '/api/account/settings?known=0')).data;
+  assert.deepEqual(got, { version: 1, sealedKey: wrapped('sk'), env: wrapped('s1') });
+  assert.deepEqual((await desk.call('GET', '/api/account/settings?known=1')).data, { version: 1, unchanged: true, sealedKey: wrapped('sk') }, 'cheap when nothing changed');
+
+  // Two devices both merged version 1: the first to write wins, the other must re-merge.
+  assert.deepEqual((await desk.call('PUT', '/api/account/settings', { baseVersion: 1, sealedKey: wrapped('other'), env: wrapped('s2') })).data, { version: 2 });
+  assert.equal((await desk.call('PUT', '/api/account/settings', { baseVersion: 1, env: wrapped('s2b') })).status, 409);
+  assert.deepEqual((await desk.call('GET', '/api/account/settings?known=1')).data.sealedKey, wrapped('sk'), 'the sealed key is kept after the first write');
+  assert.equal((await desk.call('PUT', '/api/account/settings', { baseVersion: -1, env: wrapped('x') })).data.error, 'bad_request');
+
+  // Big enough for real settings (past the 16 KB default body limit), but capped.
+  const big = { v: 1, iv: 'i', ct: 'x'.repeat(200 * 1000) };
+  assert.deepEqual((await desk.call('PUT', '/api/account/settings', { baseVersion: 2, env: big })).data, { version: 3 });
+  assert.equal((await desk.call('PUT', '/api/account/settings', { baseVersion: 3, env: { ct: 'x'.repeat(2000 * 1000) } })).status, 413);
+
+  // Another account can't see it; resetting sync removes it.
+  const other = await syncDevice(server, 'other@example.com', 'Other', 2);
+  assert.deepEqual((await other.call('GET', '/api/account/settings')).data, { version: 0 });
+  assert.equal((await desk.call('DELETE', '/api/vault')).status, 200);
+  assert.deepEqual((await desk.call('GET', '/api/account/settings')).data, { version: 0 });
+});
