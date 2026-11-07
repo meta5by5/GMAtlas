@@ -225,6 +225,21 @@ function deleteAt(doc, path) {
   }
 }
 
+/** The value at an op path (`[key, {id}, ...]`) in a document, or undefined. */
+export function readPath(doc, path) {
+  return readAt(doc, path);
+}
+
+/** A copy of `doc` with `value` written at an op path (undefined deletes),
+ *  creating containers on the way. For restoring a value as a new local
+ *  edit, which the next diff turns into ops. */
+export function writePath(doc, path, value) {
+  const out = clone(doc);
+  if (value === undefined) deleteAt(out, path);
+  else writeAt(out, path, clone(value));
+  return out;
+}
+
 /** Puts an array's records in materialized order. An array can hold plain
  *  values and records at once only after a type change raced with record
  *  edits; the plain values then stay first, in their own order. */

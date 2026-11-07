@@ -119,6 +119,36 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .brand-menu-account .brand-menu-sync[data-sync-state="live"] { color: var(--ok); }
 .brand-menu-account .brand-menu-sync[data-sync-state="error"], .brand-menu-account .brand-menu-sync[data-sync-state="locked"] { color: var(--warn); }
 .settings-menu hr { border: 0; border-top: 1px solid var(--border); margin: 0.2rem 0; }
+.brand-menu-account .brand-menu-presence { font-size: 0.8rem; }
+/* Sync-status dot (S2): sits on the logo's planet, so it survives compact
+   headers that hide the name. Colour carries the state; the title and
+   aria-label carry it in words. */
+.brand-menu-toggle { position: relative; }
+.brand-sync-dot {
+  position: absolute; left: 1.05rem; top: 0.05rem; width: 0.5rem; height: 0.5rem;
+  border-radius: 50%; border: 1.5px solid var(--bg); background: var(--text-dim);
+}
+.brand-sync-dot[hidden] { display: none; }
+.brand-sync-dot[data-sync-look="ok"] { background: var(--ok); }
+.brand-sync-dot[data-sync-look="busy"] { background: var(--accent-strong); }
+.brand-sync-dot[data-sync-look="warn"] { background: var(--warn); }
+.brand-sync-dot[data-sync-look="error"] { background: var(--danger); }
+/* Conflict chip + panel (S2): edits another device overwrote at once. */
+.sync-conflicts-wrap { position: relative; }
+.sync-conflicts-wrap[hidden] { display: none; }
+.sync-conflict-chip { color: var(--warn); border-color: var(--warn); white-space: nowrap; }
+.sync-conflicts-panel {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 65;
+  width: min(22rem, calc(100vw - 16px)); max-height: 60vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3);
+  background: var(--tier3-bg); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); box-shadow: var(--shadow);
+}
+.sync-conflicts-panel[hidden] { display: none; }
+.sync-conflicts-panel > p { margin: 0; }
+.sync-conflict { border-top: 1px solid var(--border); padding-top: var(--sp-2); }
+.sync-conflict-label { font-weight: 600; overflow-wrap: anywhere; }
+.sync-conflict q { overflow-wrap: anywhere; }
+.sync-conflict-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-2); }
 /* Real reported bug (still visible after giving .mc-edge its own z-index,
    see that rule's own comment below): .mc-edge got `overflow-y: auto` a
    while back so a tall edge-nav button list could scroll instead of

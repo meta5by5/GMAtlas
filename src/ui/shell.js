@@ -509,6 +509,7 @@ let expandedOracleGroups = new Set(); // ephemeral UI state — never persisted
 let docFilter = '';
 let graphFilter = ''; // ephemeral — highlights/dims graph-svg nodes by name substring, never removes them
 let helpOpen = new Set(); // ephemeral — which collapsible "?" tip icons are currently expanded, keyed by a stable per-instance string
+let syncConflictsOpen = false; // ephemeral — the header conflict chip's panel (paintSyncIndicators)
 let settingsMenuOpen = false; // ephemeral — the header gear's Settings/About dropdown (New Campaign lives only in the Settings drawer now, not this menu)
 // Campaign switcher (direct follow-up request): clicking the campaign
 // name in the top nav pops up a list of every campaign to switch between
@@ -1521,8 +1522,10 @@ export function mountShell(el) {
   setBlobResolver(store.blobDataUrl);
   // The logo menu shows sign-in and sync state: keep it current while open
   // (only then, so a sync status change never re-renders the campaign).
-  account.subscribe(() => { if (settingsMenuOpen) render(); });
-  sync.subscribe(() => { if (settingsMenuOpen) render(); });
+  account.subscribe(() => { if (settingsMenuOpen) render(); else paintSyncIndicators(); });
+  // The sync dot and conflict chip repaint on their own; the campaign
+  // surface never re-renders for a sync status change.
+  sync.subscribe(() => { if (settingsMenuOpen) render(); else paintSyncIndicators(); });
   el.innerHTML = `
     <div class="cockpit">
       <div class="startup-screen" data-startup-screen aria-label="GMAtlas">
@@ -1536,7 +1539,7 @@ export function mountShell(el) {
       </div>
       <header class="mc-header">
         <div class="brand">
-          <h1><button type="button" class="brand-menu-toggle" data-settings-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-label="GMAtlas menu: account, settings and help" title="Account, settings and help"><svg class="brand-planet" viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><circle cx="10" cy="10" r="9"/><ellipse cx="10" cy="10" rx="4" ry="9"/><path d="M10 1v18M1 10h18M2.2 5.5h15.6M2.2 14.5h15.6"/></svg><span class="brand-name">GMAtlas</span><span class="brand-caret" aria-hidden="true">▾</span></button></h1>
+          <h1><button type="button" class="brand-menu-toggle" data-settings-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-label="GMAtlas menu: account, settings and help" title="Account, settings and help"><svg class="brand-planet" viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><circle cx="10" cy="10" r="9"/><ellipse cx="10" cy="10" rx="4" ry="9"/><path d="M10 1v18M1 10h18M2.2 5.5h15.6M2.2 14.5h15.6"/></svg><span class="brand-sync-dot" data-brand-sync-dot hidden></span><span class="brand-name">GMAtlas</span><span class="brand-caret" aria-hidden="true">▾</span></button></h1>
           <div class="settings-menu" data-settings-menu role="menu" hidden></div>
           <span class="brand-sep" aria-hidden="true">|</span>
           <div class="campaign-switcher-wrap">
@@ -1545,6 +1548,10 @@ export function mountShell(el) {
           </div>
         </div>
         <div class="header-actions">
+          <div class="sync-conflicts-wrap" data-sync-conflicts-wrap hidden>
+            <button type="button" class="btn ghost sm sync-conflict-chip" data-sync-conflicts-toggle aria-expanded="false" aria-haspopup="dialog"></button>
+            <div class="sync-conflicts-panel" data-sync-conflicts-panel role="dialog" aria-label="Edits overwritten by another device" hidden></div>
+          </div>
           <button class="btn ghost sm" data-search-toggle title="Search everything (Cast, Journal, Oracle, Documents, Party, Colony) — Ctrl/Cmd+K"><span class="icon-mono">🔍</span> <span class="btn-label">Search</span></button>
           <div class="header-drawer-tabs" data-header-drawer-tabs></div>
         </div>
@@ -1819,6 +1826,18 @@ function onClick(ev) {
   // (lensPickerOpen etc.): only an explicit toggle or picking an item
   // closes it, no click-outside handler.
   if (hit('[data-settings-menu-toggle]')) { settingsMenuOpen = !settingsMenuOpen; return render(); }
+  // Conflict chip (S2): edits of mine another device overwrote at the same
+  // time. Same toggle-only convention as the logo menu.
+  if (hit('[data-sync-conflicts-toggle]')) { syncConflictsOpen = !syncConflictsOpen; paintSyncIndicators(); return; }
+  if (hit('[data-sync-conflict-keep]')) {
+    const id = hit('[data-sync-conflict-keep]').getAttribute('data-sync-conflict-keep');
+    sync.keepMine(id).then(() => toast('Your version is back, and syncing.'), (err) => toast(err.message || 'Couldn’t restore it.'));
+    return;
+  }
+  if (hit('[data-sync-conflict-dismiss]')) {
+    sync.dismissConflict(hit('[data-sync-conflict-dismiss]').getAttribute('data-sync-conflict-dismiss') || null);
+    return;
+  }
   if (hit('[data-menu-sync]')) { settingsMenuOpen = false; render(); location.hash = '#/account/sync'; return; }
   if (hit('[data-menu-sign-out]')) {
     settingsMenuOpen = false;
@@ -9919,6 +9938,7 @@ function render() {
     }
   }
 
+  paintSyncIndicators();
   fitHeaderToOneRow(root);
 
   const settingsMenuEl = root.querySelector('[data-settings-menu]');
@@ -11753,6 +11773,64 @@ const SYNC_MENU_TEXT = {
   error: 'Sync problem · see Sync',
 };
 
+/** Names of this account's other devices that have the open campaign
+ *  open right now (presence-lite). */
+function otherDevicesHere(s) {
+  const me = account.getState().device && account.getState().device.id;
+  return (s.presence || []).filter((id) => id !== me).map((id) => sync.deviceName(id));
+}
+
+// The sync dot's look per sync status ('off' hides it).
+const SYNC_DOT = { live: 'ok', connecting: 'busy', offline: 'warn', locked: 'warn', error: 'error' };
+
+/** The sync-status dot on the logo and the conflict chip in the header,
+ *  painted in place (never a full render). */
+function paintSyncIndicators() {
+  if (!root) return;
+  const s = sync.getState();
+  const signedIn = account.getState().status === 'signed-in';
+  const dot = root.querySelector('[data-brand-sync-dot]');
+  if (dot) {
+    const look = signedIn ? SYNC_DOT[s.status] : null;
+    dot.hidden = !look;
+    if (look) {
+      dot.setAttribute('data-sync-look', look);
+      const others = otherDevicesHere(s);
+      const label = `${SYNC_MENU_TEXT[s.status]}${others.length ? ` · also open on ${others.join(', ')}` : ''}`;
+      dot.setAttribute('title', label);
+      dot.setAttribute('aria-label', label);
+      dot.setAttribute('role', 'img');
+    }
+  }
+  const wrap = root.querySelector('[data-sync-conflicts-wrap]');
+  if (!wrap) return;
+  const list = signedIn ? (s.conflicts || []) : [];
+  wrap.hidden = !list.length;
+  if (!list.length) syncConflictsOpen = false;
+  const chip = wrap.querySelector('[data-sync-conflicts-toggle]');
+  chip.textContent = `⚠ ${list.length} edit${list.length === 1 ? '' : 's'} overwritten`;
+  chip.setAttribute('title', 'Changed on another device at the same time');
+  chip.setAttribute('aria-expanded', String(syncConflictsOpen));
+  const panel = wrap.querySelector('[data-sync-conflicts-panel]');
+  panel.hidden = !syncConflictsOpen;
+  if (!syncConflictsOpen) return;
+  const rows = list.slice().reverse().map((c) => {
+    const who = escapeHtml(c.from ? sync.deviceName(c.from) : 'another device');
+    const detail = c.deleted
+      ? `Deleted on ${who} while you were editing it.`
+      : `Yours: <q>${escapeHtml(c.mineText)}</q><br>Now: <q>${escapeHtml(c.theirsText)}</q> (from ${who})`;
+    return `<div class="sync-conflict" data-sync-conflict="${escapeHtml(c.id)}">
+      <div class="sync-conflict-label">${escapeHtml(c.label)}</div>
+      <div class="small dim">${detail}</div>
+      <div class="sync-conflict-actions">
+        ${c.deleted ? '' : `<button type="button" class="btn sm" data-sync-conflict-keep="${escapeHtml(c.id)}">Keep mine</button>`}
+        <button type="button" class="btn ghost sm" data-sync-conflict-dismiss="${escapeHtml(c.id)}">${c.deleted ? 'OK' : 'Keep theirs'}</button>
+      </div>
+    </div>`;
+  }).join('');
+  panel.innerHTML = `<p class="small">Changed on another device at the same time. Their version is in place; you can put yours back.</p>${rows}${list.length > 1 ? '<button type="button" class="btn ghost sm" data-sync-conflict-dismiss="">Keep theirs for all</button>' : ''}`;
+}
+
 /** The GMAtlas logo/title menu: who's signed in (and how sync is doing),
  *  then account, Settings, Help, About and sign-out. */
 function brandMenuHtml() {
@@ -11763,7 +11841,9 @@ function brandMenuHtml() {
   if (signedIn) {
     const name = a.user.displayName || a.user.email;
     const syncLine = SYNC_MENU_TEXT[s.status] || (store.syncStatus(store.getAppConfig().activeCampaignId) ? 'Syncing…' : 'This campaign isn’t synced');
-    head = `<strong>${escapeHtml(name)}</strong>${a.user.displayName ? `<span>${escapeHtml(a.user.email)}</span>` : ''}<span class="brand-menu-sync" data-sync-state="${escapeHtml(s.status)}">${escapeHtml(syncLine)}</span>`;
+    const others = otherDevicesHere(s);
+    const presence = others.length ? `<span class="brand-menu-presence" data-sync-presence>Also open on ${escapeHtml(others.join(', '))}</span>` : '';
+    head = `<strong>${escapeHtml(name)}</strong>${a.user.displayName ? `<span>${escapeHtml(a.user.email)}</span>` : ''}<span class="brand-menu-sync" data-sync-state="${escapeHtml(s.status)}">${escapeHtml(syncLine)}</span>${presence}`;
   } else if (a.status === 'unavailable') {
     head = '<strong>Not signed in</strong><span>Everything is saved on this device.</span>';
   } else {
