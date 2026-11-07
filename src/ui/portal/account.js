@@ -37,6 +37,21 @@ const ui = {
   recoveryEmailedTo: null,
   recoverySaved: false,
   collision: null,      // campaign id whose "Sync this campaign" hit an existing synced copy
+  // Passkeys and OAuth (S1)
+  providers: null,      // [{id, label}] the service offers ("Continue with ...")
+  security: null,       // {identities, available, passkeys}
+  securityLoading: false,
+  oauthOutcome: null,   // 'new' | 'back' while finishing an OAuth sign-in
+};
+
+// Why an OAuth sign-in came back without signing in (server/src/oauth.js).
+const OAUTH_ERRORS = {
+  cancelled: 'Sign-in was cancelled.',
+  unverified: 'That account’s email address isn’t verified with the provider. Sign in with your email code instead.',
+  expired: 'That sign-in was interrupted or took too long. Try again.',
+  provider: 'The sign-in provider didn’t answer properly. Try again, or use your email.',
+  disabled: 'This account is disabled.',
+  taken: 'That account is already connected to a different GMAtlas account.',
 };
 
 let rerender = () => {};
@@ -150,7 +165,50 @@ function signInStep() {
       ${alertBox()}
       <button class="portal-btn primary block" type="submit" ${disabled()}>${ui.busy ? 'Sending…' : 'Email me a code'}</button>
     </form>
+    ${otherSignIns()}
     <p class="portal-auth-foot">No password needed: we’ll email you a 6-digit code.<br>Everything in GMAtlas also works without an account. <a href="#/">Back to campaign</a></p>`;
+}
+
+/** Passkey and "Continue with ..." buttons under the email form. */
+function otherSignIns() {
+  const buttons = [];
+  if (account.passkeysSupported()) buttons.push(`<button type="button" class="portal-btn block" data-account-action="passkey-sign-in" ${disabled()}>Sign in with a passkey</button>`);
+  for (const p of ui.providers || []) buttons.push(`<a class="portal-btn block" href="${esc(account.oauthStartUrl(p.id))}" data-oauth-provider="${esc(p.id)}">Continue with ${esc(p.label)}</a>`);
+  return buttons.length ? `<div class="portal-or"><span>or</span></div><div class="portal-alt-signins">${buttons.join('')}</div>` : '';
+}
+
+/** Called by the router on entering sign-in: offered providers, and an
+ *  error carried back from an OAuth attempt. */
+export function enterSignIn(errorCode) {
+  if (errorCode) { ui.step = 'email'; ui.error = OAUTH_ERRORS[errorCode] || 'That sign-in didn’t work. Try again.'; }
+  if (!ui.providers && account.getState().status !== 'unavailable') {
+    account.providers().then((r) => { ui.providers = r.oauth || []; rerender(); }, () => { ui.providers = []; });
+  }
+}
+
+// --- back from OAuth ---------------------------------------------------------------
+
+export function oauthView() {
+  const s = account.getState();
+  const card = (h, p) => `<div class="portal-auth"><div class="portal-auth-card"><h1>${h}</h1>${p}</div></div>`;
+  if (s.status === 'signed-in') return card('Signed in', '<p class="portal-dim">One moment…</p>');
+  if (s.status === 'idle') return card('Signing you in…', '<p class="portal-dim">One moment…</p>');
+  return card('That didn’t sign you in', '<p class="portal-dim">Try again from the sign-in page.</p><a class="portal-btn primary block" href="#/account/sign-in">Sign in</a>');
+}
+
+/** Finishes an OAuth sign-in once the session is picked up: a new account
+ *  goes on to "bring this device's licenses?", a returning one to Sync. */
+export function enterOauth(outcome) {
+  ui.oauthOutcome = outcome;
+  const go = () => {
+    if (ui.oauthOutcome !== outcome || account.getState().status !== 'signed-in') return false;
+    ui.oauthOutcome = null;
+    if (account.liftInCandidates().length) { ui.step = 'lift'; location.hash = '#/account/sign-in'; } else finishSignIn();
+    return true;
+  };
+  if (!go()) {
+    const off = account.subscribe(() => { if (go() || account.getState().status === 'signed-out') off(); });
+  }
 }
 
 function licenseLabel(id) {
@@ -170,7 +228,7 @@ function afterName() {
 
 // --- account pages -------------------------------------------------------------
 
-const SECTIONS = [['profile', 'Profile', '#/account'], ['sync', 'Sync', '#/account/sync'], ['devices', 'Devices', '#/account/devices'], ['licenses', 'Licenses', '#/account/licenses']];
+const SECTIONS = [['profile', 'Profile', '#/account'], ['security', 'Sign-in', '#/account/security'], ['sync', 'Sync', '#/account/sync'], ['devices', 'Devices', '#/account/devices'], ['licenses', 'Licenses', '#/account/licenses']];
 
 export function accountView(section) {
   const s = account.getState();
@@ -183,7 +241,7 @@ export function accountView(section) {
         <a class="portal-btn primary block" href="#/account/sign-in">Sign in</a>
       </div></div>`;
   }
-  const body = section === 'devices' ? devicesSection() : section === 'licenses' ? licensesSection() : section === 'sync' ? syncSection() : profileSection();
+  const body = section === 'devices' ? devicesSection() : section === 'licenses' ? licensesSection() : section === 'sync' ? syncSection() : section === 'security' ? securitySection() : profileSection();
   return `
     <div class="portal-account">
       <nav class="portal-account-nav" aria-label="Account">
@@ -197,12 +255,73 @@ export function accountView(section) {
 }
 
 /** Called by the router on entering a section, to load what it shows. */
-export function enterAccountSection(section) {
+export function enterAccountSection(section, outcome) {
   resetMessages();
   ui.renaming = null;
   if (account.getState().status !== 'signed-in') return;
   if (section === 'devices') { loadDevices(); loadSync(false); }
   if (section === 'sync') loadSync(true);
+  if (section === 'security') {
+    if (outcome === 'linked') ui.notice = 'Connected. You can sign in with it from now on.';
+    else if (outcome && outcome.startsWith('error/')) ui.error = OAUTH_ERRORS[outcome.slice(6)] || 'That didn’t connect. Try again.';
+    loadSecurity();
+  }
+  if ((section === 'profile' || section === 'sync') && ui.security === null && account.passkeysSupported()) loadSecurity();
+}
+
+// --- sign-in methods ------------------------------------------------------------
+
+async function loadSecurity() {
+  if (ui.securityLoading) return;
+  ui.securityLoading = true;
+  try {
+    const [ids, keys] = await Promise.all([account.listIdentities(), account.listPasskeys()]);
+    ui.security = { identities: ids.identities, available: ids.available, passkeys: keys.passkeys };
+  } catch (err) {
+    ui.error = err.message;
+  } finally {
+    ui.securityLoading = false;
+    rerender();
+  }
+}
+
+const PROVIDER_LABELS = { email: 'Email code', google: 'Google', discord: 'Discord' };
+
+function securitySection() {
+  const sec = ui.security;
+  const intro = `<h1>Sign-in methods</h1>
+    <p class="portal-dim">Ways to sign in to this account. Your email code always works, and is how you get back in if you lose everything else.</p>${alertBox()}`;
+  if (!sec) return `${intro}<p class="portal-dim">Loading…</p>`;
+  const have = new Set(sec.identities.map((i) => i.provider));
+  const rows = [`<div class="portal-row"><div><strong>Email code</strong><div class="portal-dim">${esc(account.getState().user.email)}</div></div><span class="portal-dim">Always on</span></div>`];
+  for (const id of new Set([...sec.available, ...[...have].filter((p) => p !== 'email')])) {
+    const label = PROVIDER_LABELS[id] || id;
+    rows.push(`<div class="portal-row"><div><strong>${esc(label)}</strong><div class="portal-dim">${have.has(id) ? 'Connected' : 'Not connected'}</div></div>
+      ${have.has(id)
+        ? `<button type="button" class="portal-btn" data-account-action="unlink-provider" data-provider="${esc(id)}" ${disabled()}>Disconnect</button>`
+        : sec.available.includes(id) ? `<button type="button" class="portal-btn" data-account-action="link-provider" data-provider="${esc(id)}" ${disabled()}>Connect</button>` : ''}</div>`);
+  }
+  const keys = sec.passkeys.map((p) => `<div class="portal-row"><div><strong>${esc(p.name)}</strong><div class="portal-dim">Added ${when(p.createdAt)}${p.lastUsedAt ? ` · last used ${when(p.lastUsedAt)}` : ' · not used yet'}</div></div>
+    <button type="button" class="portal-btn" data-account-action="remove-passkey" data-passkey-id="${esc(p.id)}" ${disabled()}>Remove</button></div>`).join('');
+  return `${intro}
+    <div class="portal-rows">${rows.join('')}</div>
+    <h2>Passkeys</h2>
+    <p class="portal-dim">Sign in with your fingerprint, face or device PIN instead of a code. A passkey works on this site only, and its secret never leaves your device.</p>
+    <div class="portal-rows">${keys || '<p class="portal-dim">No passkeys yet.</p>'}</div>
+    ${account.passkeysSupported()
+      ? `<button type="button" class="portal-btn primary" data-account-action="add-passkey" ${disabled()}>${ui.busy ? 'Waiting for your device…' : 'Add a passkey'}</button>`
+      : '<p class="portal-dim">This browser can’t create passkeys.</p>'}`;
+}
+
+/** "Sign in faster next time": offered on Profile and Sync until the
+ *  account has a passkey or it's dismissed on this device. */
+function passkeyOffer() {
+  if (!account.passkeysSupported() || !ui.security || ui.security.passkeys.length) return '';
+  if ((store.getAppConfig().account || {}).passkeyOfferDismissed) return '';
+  return `<div class="portal-notice portal-offer" data-passkey-offer>
+    <strong>Sign in faster next time.</strong> Add a passkey and use your fingerprint, face or device PIN instead of an email code.
+    <div class="portal-offer-actions"><button type="button" class="portal-btn primary" data-account-action="add-passkey" ${disabled()}>Add a passkey</button>
+    <button type="button" class="portal-link" data-account-action="dismiss-passkey-offer">Not now</button></div></div>`;
 }
 
 // --- sync ----------------------------------------------------------------------
@@ -243,7 +362,7 @@ function syncSection() {
   const intro = `
     <h1>Sync</h1>
     <p class="portal-dim">Sync is on whenever you’re signed in: campaigns stay the same on every device you sign in on. They’re encrypted on this device before they’re sent. Uploaded documents and images stay on the device they were added on.</p>
-    ${alertBox()}`;
+    ${alertBox()}${passkeyOffer()}`;
   if (sync.getState().status === 'disabled') {
     return `${intro}<div class="portal-alert" data-sync-disabled>Sync is turned off for this account right now. Everything stays saved on this device, and nothing already synced is lost. Contact support if you think this is a mistake.</div>`;
   }
@@ -363,6 +482,7 @@ function profileSection() {
   const { user } = account.getState();
   return `
     <h1>Profile</h1>
+    ${passkeyOffer()}
     <form class="portal-panel" data-account-form="profile" novalidate>
       <label class="portal-field"><span>Name</span>
         <input class="portal-input" name="displayName" maxlength="60" value="${esc(user.displayName || '')}" autocomplete="name">
@@ -599,6 +719,37 @@ export function onAccountClick(e) {
       break;
     case 'lift-skip':
       finishSignIn();
+      break;
+    case 'passkey-sign-in':
+      run(async () => { await account.signInWithPasskey(); afterName(); });
+      break;
+    case 'add-passkey':
+      run(async () => {
+        await account.addPasskey();
+        await loadSecurity();
+        ui.notice = 'Passkey added. Next time, choose “Sign in with a passkey”.';
+      });
+      break;
+    case 'remove-passkey': {
+      const id = btn.getAttribute('data-passkey-id');
+      if (!globalThis.confirm('Remove this passkey? You can still sign in with your email code.')) break;
+      run(async () => { await account.removePasskey(id); await loadSecurity(); ui.notice = 'Passkey removed. Also delete it from your device’s password manager.'; });
+      break;
+    }
+    case 'link-provider': {
+      const id = btn.getAttribute('data-provider');
+      run(async () => { location.assign(await account.linkProviderUrl(id)); });
+      break;
+    }
+    case 'unlink-provider': {
+      const id = btn.getAttribute('data-provider');
+      if (!globalThis.confirm(`Disconnect ${PROVIDER_LABELS[id] || id}? You can still sign in with your email code.`)) break;
+      run(async () => { await account.unlinkProvider(id); await loadSecurity(); ui.notice = 'Disconnected.'; });
+      break;
+    }
+    case 'dismiss-passkey-offer':
+      store.updateAppConfig((cfg) => ({ ...cfg, account: { ...(cfg.account || {}), passkeyOfferDismissed: true } }));
+      rerender();
       break;
     case 'sign-out':
       run(async () => { await account.signOut(); ui.devices = null; location.hash = '#/account/sign-in'; });

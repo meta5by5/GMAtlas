@@ -168,6 +168,13 @@
 .portal .portal-btn.primary { background: var(--accent-strong); border-color: var(--accent-strong); color: var(--bg); }
 .portal .portal-btn.primary:hover { filter: brightness(1.08); }
 .portal .portal-btn.block { display: flex; width: 100%; box-sizing: border-box; }
+/* Passkey and "Continue with ..." under the email form (S1). */
+.portal .portal-or { display: flex; align-items: center; gap: var(--sp-3); margin: var(--sp-4) 0 var(--sp-3); color: var(--text-dim); font-size: 0.85rem; }
+.portal .portal-or::before, .portal .portal-or::after { content: ''; flex: 1; border-top: 1px solid var(--border); }
+.portal .portal-alt-signins { display: flex; flex-direction: column; gap: var(--sp-2); }
+.portal a.portal-btn.block { justify-content: center; text-decoration: none; }
+.portal .portal-offer { display: flex; flex-direction: column; gap: var(--sp-2); }
+.portal .portal-offer-actions { display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; }
 .portal .portal-btn:disabled { opacity: 0.55; cursor: progress; }
 .portal .portal-link { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; }
 .portal .portal-link:hover { text-decoration: underline; }

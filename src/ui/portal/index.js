@@ -14,7 +14,7 @@ import { HELP_ARTICLES, HELP_CATEGORIES } from '../../data/helpArticles.js';
 import { renderHelpMarkdown, searchHelp, parsePortalRoute } from '../../domain/helpCentre.js';
 import { account } from '../../core/account.js';
 import {
-  bindAccountScreens, signInView, signInRedirect, accountView, enterAccountSection,
+  bindAccountScreens, signInView, signInRedirect, accountView, enterAccountSection, enterSignIn, oauthView, enterOauth,
   onAccountSubmit, onAccountClick, onAccountChange,
 } from './account.js';
 
@@ -35,7 +35,7 @@ export function mountPortal(portalEl, appEl) {
   window.addEventListener('hashchange', route);
   // Account events repaint only the account screens, so a background
   // session refresh never wipes a half-typed Help search.
-  bindAccountScreens(() => { if (current && (current.view === 'account' || current.view === 'sign-in')) paint(false); });
+  bindAccountScreens(() => { if (current && (current.view === 'account' || current.view === 'sign-in' || current.view === 'oauth')) paint(false); });
   route();
 }
 
@@ -58,7 +58,9 @@ function route() {
   appRoot.hidden = true;
   portalRoot.hidden = false;
   if (r.view === 'help') query = '';
-  if (r.view === 'account') enterAccountSection(r.section);
+  if (r.view === 'account') enterAccountSection(r.section, r.outcome);
+  if (r.view === 'sign-in') enterSignIn(r.error);
+  if (r.view === 'oauth') enterOauth(r.outcome);
   current = r;
   paint(true);
 }
@@ -68,10 +70,11 @@ function route() {
 function paint(fresh) {
   const r = current;
   if (!r) return;
-  const area = r.view === 'sign-in' || r.view === 'account' ? 'account' : 'help';
+  const area = r.view === 'sign-in' || r.view === 'account' || r.view === 'oauth' ? 'account' : 'help';
   const content = r.view === 'article' ? articleView(r.slug)
     : r.view === 'help' ? helpHome()
       : r.view === 'sign-in' ? signInView()
+        : r.view === 'oauth' ? oauthView()
         : accountView(r.section);
   portalRoot.innerHTML = frame(content, area);
   if (fresh) portalRoot.scrollTop = 0;

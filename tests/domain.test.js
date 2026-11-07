@@ -12110,6 +12110,13 @@ test('help search matches every word, title hits first; routes parse from the ha
   assert.deepEqual(parsePortalRoute('#/account/sign-in'), { view: 'sign-in' });
   assert.equal(parsePortalRoute('#/account/nope'), null);
   assert.equal(parsePortalRoute('#/store'), null, 'later phases add their own routes');
+  assert.deepEqual(parsePortalRoute('#/account/sign-in/error/unverified'), { view: 'sign-in', error: 'unverified' });
+  assert.deepEqual(parsePortalRoute('#/account/oauth/new'), { view: 'oauth', outcome: 'new' });
+  assert.deepEqual(parsePortalRoute('#/account/oauth/back'), { view: 'oauth', outcome: 'back' });
+  assert.equal(parsePortalRoute('#/account/oauth/other'), null);
+  assert.deepEqual(parsePortalRoute('#/account/security'), { view: 'account', section: 'security' });
+  assert.deepEqual(parsePortalRoute('#/account/security/linked'), { view: 'account', section: 'security', outcome: 'linked' });
+  assert.deepEqual(parsePortalRoute('#/account/security/error/taken'), { view: 'account', section: 'security', outcome: 'error/taken' });
 });
 
 // Sync encryption and views (design/ACCOUNTS-SYNC-ROADMAP.md 5.5, Phase S2).
