@@ -19,6 +19,14 @@ import { getMe, updateMe, listDevices, updateDevice, revokeDevice } from './acco
 import { getCertificate, attestLicenses, deactivateLicense } from './entitlements.js';
 import { importSigningKey } from './crypto.js';
 import { mailerFrom } from './mail.js';
+import {
+  putDeviceKey, getVault, createVault, approveDevice, getRecovery, putOwnWrap, resetVault,
+  listCampaigns, createCampaign, updateCampaignMeta, deleteCampaign, getSnapshot, putSnapshot,
+  issueTicket, openSocket,
+} from './sync.js';
+
+// The Durable Object class must be exported from the Worker's entry module.
+export { CampaignRoom } from './room.js';
 
 // [method, pattern, handler, needsAuth]
 const ROUTES = [
@@ -34,6 +42,22 @@ const ROUTES = [
   ['GET', /^\/api\/entitlements$/, getCertificate, true],
   ['POST', /^\/api\/entitlements\/attest$/, attestLicenses, true],
   ['DELETE', /^\/api\/entitlements\/licenses\/([\w-]+)$/, deactivateLicense, true],
+  // Personal sync (Phase S2)
+  ['PUT', /^\/api\/devices\/key$/, putDeviceKey, true],
+  ['GET', /^\/api\/vault$/, getVault, true],
+  ['POST', /^\/api\/vault$/, createVault, true],
+  ['DELETE', /^\/api\/vault$/, resetVault, true],
+  ['PUT', /^\/api\/vault\/devices\/([\w-]+)$/, approveDevice, true],
+  ['GET', /^\/api\/vault\/recovery$/, getRecovery, true],
+  ['PUT', /^\/api\/vault\/mine$/, putOwnWrap, true],
+  ['GET', /^\/api\/campaigns$/, listCampaigns, true],
+  ['POST', /^\/api\/campaigns$/, createCampaign, true],
+  ['PATCH', /^\/api\/campaigns\/([\w-]+)$/, updateCampaignMeta, true],
+  ['DELETE', /^\/api\/campaigns\/([\w-]+)$/, deleteCampaign, true],
+  ['GET', /^\/api\/campaigns\/([\w-]+)\/snapshot$/, getSnapshot, true],
+  ['PUT', /^\/api\/campaigns\/([\w-]+)\/snapshot$/, putSnapshot, true],
+  ['POST', /^\/api\/sync\/ticket$/, issueTicket, true],
+  ['GET', /^\/api\/sync\/socket$/, openSocket, false],
 ];
 
 // The imported signing key, cached per isolate (keyed by the secret's text,

@@ -34,6 +34,16 @@ database_name = "db_gmatlas"
 database_id = "d9e690e6-44c7-45e4-9193-9f16ccf6acc9"
 migrations_dir = "migrations"
 
+# One CampaignRoom per synced campaign (src/room.js): its ordered,
+# encrypted op log and snapshots, in the object's own SQLite storage.
+[[durable_objects.bindings]]
+name = "CAMPAIGN_ROOMS"
+class_name = "CampaignRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["CampaignRoom"]
+
 # The browser app is served from the same origin as /api. `npm run dev` and
 # `npm run deploy` assemble it into ../_site first (scripts/site.js), the same
 # files deploy-pages.yml publishes.

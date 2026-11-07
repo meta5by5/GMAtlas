@@ -9,6 +9,8 @@
 //   #/account/licenses  Licenses: owned, this device's install, add, deactivate
 
 import { account, ACCOUNT_SERVICE_URL } from '../../core/account.js';
+import { sync } from '../../core/sync.js';
+import { store } from '../../core/store.js';
 import { LICENSES } from '../../data/licenses.js';
 import { certStatus } from '../../domain/licensing.js';
 
@@ -27,6 +29,13 @@ const ui = {
   devices: null,
   devicesLoading: false,
   renaming: null,
+  // Sync (Phase S2)
+  syncStatus: null,     // core/syncKeys.js status(): {state, code, devices}
+  syncLoading: false,
+  synced: null,         // sync.listSynced()
+  recoveryKey: null,    // shown once, right after turning sync on
+  recoverySaved: false,
+  collision: null,      // campaign id whose "Sync this campaign" hit an existing synced copy
 };
 
 let rerender = () => {};
@@ -34,6 +43,7 @@ let rerender = () => {};
 export function bindAccountScreens(render) {
   rerender = render;
   account.subscribe(() => rerender());
+  sync.subscribe(() => rerender());
 }
 
 function resetMessages() { ui.error = ''; ui.notice = ''; }
@@ -158,7 +168,7 @@ function afterName() {
 
 // --- account pages -------------------------------------------------------------
 
-const SECTIONS = [['profile', 'Profile', '#/account'], ['devices', 'Devices', '#/account/devices'], ['licenses', 'Licenses', '#/account/licenses']];
+const SECTIONS = [['profile', 'Profile', '#/account'], ['sync', 'Sync', '#/account/sync'], ['devices', 'Devices', '#/account/devices'], ['licenses', 'Licenses', '#/account/licenses']];
 
 export function accountView(section) {
   const s = account.getState();
@@ -171,7 +181,7 @@ export function accountView(section) {
         <a class="portal-btn primary block" href="#/account/sign-in">Sign in</a>
       </div></div>`;
   }
-  const body = section === 'devices' ? devicesSection() : section === 'licenses' ? licensesSection() : profileSection();
+  const body = section === 'devices' ? devicesSection() : section === 'licenses' ? licensesSection() : section === 'sync' ? syncSection() : profileSection();
   return `
     <div class="portal-account">
       <nav class="portal-account-nav" aria-label="Account">
@@ -188,7 +198,140 @@ export function accountView(section) {
 export function enterAccountSection(section) {
   resetMessages();
   ui.renaming = null;
-  if (section === 'devices' && account.getState().status === 'signed-in') loadDevices();
+  if (account.getState().status !== 'signed-in') return;
+  if (section === 'devices') { loadDevices(); loadSync(false); }
+  if (section === 'sync') loadSync(true);
+}
+
+// --- sync ----------------------------------------------------------------------
+
+async function loadSync(withList) {
+  const keys = sync.keys();
+  if (!keys) return;
+  ui.syncLoading = true;
+  rerender();
+  try {
+    ui.syncStatus = await keys.status();
+    if (withList && ui.syncStatus.state === 'ready') ui.synced = await sync.listSynced();
+    if (ui.syncStatus.state === 'ready') sync.retryNow();
+  } catch (err) {
+    ui.error = err.message;
+  } finally {
+    ui.syncLoading = false;
+    rerender();
+  }
+}
+
+const groupedCode = (code) => (code ? `${code.slice(0, 3)} ${code.slice(3)}` : '');
+
+const SYNC_STATUS_TEXT = {
+  live: 'Up to date',
+  connecting: 'Connecting…',
+  offline: 'Offline. Changes are saved on this device and sync when you’re back online.',
+  locked: 'This device needs approving first.',
+  off: 'Not synced',
+};
+
+function syncSection() {
+  const st = ui.syncStatus;
+  const intro = `
+    <h1>Sync</h1>
+    <p class="portal-dim">Keep campaigns the same on every device you sign in on. Everything is encrypted on this device before it’s sent, so GMAtlas’s servers can’t read your campaigns. Uploaded documents and images stay on the device they were added on.</p>
+    ${alertBox()}`;
+  if (!st) return `${intro}<p class="portal-dim">${ui.syncLoading ? 'Checking sync…' : ''}</p>`;
+  if (ui.recoveryKey) {
+    return `${intro}
+      <div class="portal-panel portal-panel-accent">
+        <h2>Save your recovery key</h2>
+        <p>If you ever lose every device you’ve signed in on, this key is the only way to get your synced campaigns back. GMAtlas can’t recover it for you. Write it down, or keep it in a password manager.</p>
+        <p class="portal-recovery" data-recovery-key>${esc(ui.recoveryKey)}</p>
+        <p><button type="button" class="portal-btn" data-account-action="sync-copy">Copy</button></p>
+        <label class="portal-toggle"><input type="checkbox" data-sync-saved ${ui.recoverySaved ? 'checked' : ''}> I’ve saved my recovery key</label>
+        <p><button type="button" class="portal-btn primary" data-account-action="sync-recovery-done" ${ui.recoverySaved ? '' : 'disabled'}>Done</button></p>
+      </div>`;
+  }
+  if (st.state === 'off') {
+    return `${intro}
+      <div class="portal-panel">
+        <h2>Turn on sync</h2>
+        <p class="portal-dim">You’ll get a recovery key to keep safe. Then pick which campaigns to sync.</p>
+        <button type="button" class="portal-btn primary" data-account-action="sync-setup" ${disabled()}>${ui.busy ? 'Setting up…' : 'Turn on sync'}</button>
+      </div>`;
+  }
+  if (st.state === 'locked') {
+    const me = account.getState().device;
+    return `${intro}
+      <div class="portal-panel portal-panel-accent">
+        <h2>Approve this device</h2>
+        <p>Sync is on for your account, but this device needs approving before it can read your campaigns.</p>
+        <p>On a device that already syncs, open <strong>Account › Devices</strong> and approve <strong>${esc(me ? me.name : 'this device')}</strong>. Check it shows this code:</p>
+        <p class="portal-code-display">${esc(groupedCode(st.code))}</p>
+        <button type="button" class="portal-btn" data-account-action="sync-check" ${disabled()}>${ui.syncLoading ? 'Checking…' : 'I’ve approved it'}</button>
+      </div>
+      <div class="portal-panel">
+        <h2>Or use your recovery key</h2>
+        <form data-account-form="recovery" novalidate>
+          <label class="portal-field"><span>Recovery key</span>
+            <input class="portal-input" name="recovery" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX">
+          </label>
+          <button class="portal-btn primary" type="submit" ${disabled()}>Unlock</button>
+        </form>
+      </div>`;
+  }
+  const live = sync.getState();
+  const activeId = store.getAppConfig().activeCampaignId;
+  const local = store.listCampaigns();
+  const elsewhere = (ui.synced || []).filter((c) => !c.onThisDevice);
+  const statusLine = live.status === 'error' ? `Problem: ${esc(live.error || 'sync stopped')}` : esc(SYNC_STATUS_TEXT[live.status] || '');
+  return `${intro}
+    ${live.notice ? `<p class="portal-notice" role="status">${esc(live.notice)}</p>` : ''}
+    <div class="portal-panel">
+      <h2>Campaigns on this device</h2>
+      <ul class="portal-rows">${local.map((c) => `
+        <li class="portal-row">
+          <div class="portal-row-main">
+            <strong>${esc(c.title)}</strong>${c.sync ? ' <span class="portal-badge">Synced</span>' : ''}
+            ${c.id === activeId && c.sync ? `<span class="portal-dim">Open now · ${statusLine}</span>` : ''}
+          </div>
+          <div class="portal-row-actions">
+            ${c.sync
+    ? `<button type="button" class="portal-btn" data-account-action="sync-stop" data-campaign-id="${esc(c.id)}" ${disabled()}>Stop syncing</button>`
+    : `<button type="button" class="portal-btn primary" data-account-action="sync-campaign" data-campaign-id="${esc(c.id)}" ${disabled()}>Sync this campaign</button>`}
+          </div>
+        </li>
+        ${ui.collision === c.id ? `
+        <li class="portal-row portal-row-note">
+          <div class="portal-row-main">
+            <strong>This campaign is already synced from another device.</strong>
+            <span class="portal-dim">The two copies have separate histories, so they can’t be merged. Replacing keeps this copy in the backup slot first.</span>
+          </div>
+          <div class="portal-row-actions">
+            <button type="button" class="portal-btn primary" data-account-action="sync-replace" data-campaign-id="${esc(c.id)}" ${disabled()}>Use the synced copy</button>
+            <button type="button" class="portal-btn" data-account-action="sync-keep-both" data-campaign-id="${esc(c.id)}" ${disabled()}>Keep both</button>
+            <button type="button" class="portal-link" data-account-action="sync-collision-cancel">Cancel</button>
+          </div>
+        </li>` : ''}`).join('')}</ul>
+    </div>
+    ${elsewhere.length ? `
+      <div class="portal-panel">
+        <h2>Synced from your other devices</h2>
+        <ul class="portal-rows">${elsewhere.map((c) => `
+          <li class="portal-row">
+            <div class="portal-row-main"><strong>${esc(c.title)}</strong><span class="portal-dim">Last changed ${esc(when(c.updatedAt))}</span></div>
+            <div class="portal-row-actions"><button type="button" class="portal-btn primary" data-account-action="sync-open" data-campaign-id="${esc(c.id)}" ${disabled()}>${ui.busy ? 'Downloading…' : 'Open on this device'}</button></div>
+          </li>`).join('')}</ul>
+      </div>` : ''}
+    <div class="portal-panel">
+      <h2>Reset sync</h2>
+      <p class="portal-dim">Only if your recovery key is lost and no device can approve another. Deletes every synced copy from the server and turns sync off. Campaigns on your devices are kept.</p>
+      <button type="button" class="portal-btn" data-account-action="sync-reset" ${disabled()}>Reset sync…</button>
+    </div>`;
+}
+
+async function afterSyncChange(notice) {
+  ui.syncStatus = await sync.keys().status();
+  ui.synced = ui.syncStatus.state === 'ready' ? await sync.listSynced() : null;
+  if (notice) ui.notice = notice;
 }
 
 function profileSection() {
@@ -229,6 +372,24 @@ async function loadDevices() {
   }
 }
 
+/** A device's sync standing, from the vault status: approved, waiting
+ *  (asked to sync; this device can approve it), or nothing. */
+function deviceSyncCell(d) {
+  const st = ui.syncStatus;
+  const row = st && st.devices.find((x) => x.id === d.id);
+  if (!row || !row.ecdhPub) return '';
+  if (row.approved) return ' <span class="portal-badge">Syncs</span>';
+  if (d.current || st.state !== 'ready') return ' <span class="portal-badge portal-badge-warn">Waiting for approval</span>';
+  return ` <span class="portal-badge portal-badge-warn">Wants to sync · code ${esc(groupedCode(row.code))}</span>`;
+}
+
+function deviceApproveButton(d) {
+  const st = ui.syncStatus;
+  const row = st && st.devices.find((x) => x.id === d.id);
+  if (!row || !row.ecdhPub || row.approved || d.current || st.state !== 'ready') return '';
+  return `<button type="button" class="portal-btn primary" data-account-action="sync-approve" data-device-id="${esc(d.id)}" ${disabled()}>Approve for sync</button>`;
+}
+
 function devicesSection() {
   const list = ui.devices;
   const rows = !list
@@ -242,10 +403,11 @@ function devicesSection() {
               <button type="button" class="portal-btn" data-account-action="rename-cancel">Cancel</button>
             </form>` : `
             <div class="portal-row-main">
-              <strong>${esc(d.name)}</strong>${d.current ? ' <span class="portal-badge">This device</span>' : ''}
+              <strong>${esc(d.name)}</strong>${d.current ? ' <span class="portal-badge">This device</span>' : ''}${deviceSyncCell(d)}
               <span class="portal-dim">${esc([d.platform, d.lastSeenAt ? `last seen ${when(d.lastSeenAt)}` : '', `added ${when(d.createdAt)}`].filter(Boolean).join(' · '))}</span>
             </div>
             <div class="portal-row-actions">
+              ${deviceApproveButton(d)}
               <button type="button" class="portal-btn" data-account-action="rename" data-device-id="${esc(d.id)}" ${disabled()}>Rename</button>
               <button type="button" class="portal-btn" data-account-action="revoke" data-device-id="${esc(d.id)}" data-current="${d.current ? '1' : ''}" ${disabled()}>Sign out</button>
             </div>`}
@@ -364,6 +526,15 @@ export function onAccountSubmit(e) {
     case 'profile':
       run(async () => { await account.updateProfile({ displayName: value('displayName') }); ui.notice = 'Saved.'; });
       return true;
+    case 'recovery': {
+      const text = value('recovery');
+      run(async () => {
+        await sync.keys().unlockWithRecovery(text);
+        await afterSyncChange('This device is unlocked and can sync.');
+        sync.retryNow();
+      });
+      return true;
+    }
     case 'rename': {
       const id = form.dataset.deviceId;
       const name = value('name');
@@ -423,6 +594,87 @@ export function onAccountClick(e) {
       });
       break;
     }
+    case 'sync-setup':
+      run(async () => {
+        ui.recoveryKey = await sync.keys().setUp();
+        ui.recoverySaved = false;
+        await afterSyncChange();
+      });
+      break;
+    case 'sync-copy': {
+      const text = ui.recoveryKey;
+      if (text && navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => { ui.notice = 'Recovery key copied.'; rerender(); }, () => { ui.error = 'Couldn’t copy. Select the key and copy it by hand.'; rerender(); });
+      }
+      break;
+    }
+    case 'sync-recovery-done':
+      if (!ui.recoverySaved) break;
+      ui.recoveryKey = null;
+      resetMessages();
+      rerender();
+      break;
+    case 'sync-check':
+      loadSync(true);
+      break;
+    case 'sync-approve': {
+      const row = ui.syncStatus && ui.syncStatus.devices.find((x) => x.id === deviceId);
+      if (!row) break;
+      if (!window.confirm(`Approve ${row.name} for sync?\n\nOnly if its screen shows the code ${groupedCode(row.code)}. If the codes differ, don’t approve it.`)) break;
+      run(async () => { await sync.keys().approve(row); await afterSyncChange(`${row.name} can now sync.`); });
+      break;
+    }
+    case 'sync-campaign': {
+      const cid = btn.dataset.campaignId;
+      run(async () => {
+        try {
+          await sync.syncCampaign(cid);
+          await afterSyncChange('Syncing. Open this campaign on your other devices from Account › Sync.');
+        } catch (err) {
+          if (err.code === 'campaign_exists') { ui.collision = cid; return; }
+          throw err;
+        }
+      });
+      break;
+    }
+    case 'sync-collision-cancel':
+      ui.collision = null; rerender();
+      break;
+    case 'sync-replace': {
+      const cid = btn.dataset.campaignId;
+      run(async () => { await sync.openHere(cid); ui.collision = null; await afterSyncChange('Replaced with the synced copy. The previous copy is in this campaign’s backup slot.'); });
+      break;
+    }
+    case 'sync-keep-both': {
+      const cid = btn.dataset.campaignId;
+      run(async () => { await sync.keepBoth(cid); ui.collision = null; await afterSyncChange('Both kept: this device’s copy is renamed “(this device)”.'); });
+      break;
+    }
+    case 'sync-stop': {
+      const cid = btn.dataset.campaignId;
+      if (!window.confirm('Stop syncing this campaign?\n\nThe synced copy is deleted from the server. Every device keeps the copy it has now, but they stop updating each other.')) break;
+      run(async () => { await sync.stopSyncing(cid); await afterSyncChange('Sync stopped. This device keeps its copy.'); });
+      break;
+    }
+    case 'sync-open': {
+      const cid = btn.dataset.campaignId;
+      run(async () => {
+        await sync.openHere(cid);
+        await store.switchCampaign(cid);
+        location.hash = '#/';
+      });
+      break;
+    }
+    case 'sync-reset':
+      if (!window.confirm('Reset sync?\n\nThis deletes every synced copy from the server and turns sync off for your account. Campaigns on your devices are kept. You’ll get a new recovery key if you turn sync on again.')) break;
+      run(async () => {
+        await account.request('DELETE', '/api/vault');
+        for (const c of store.listCampaigns()) if (c.sync) await store.disableSync(c.id);
+        await sync.keys().forget();
+        sync.reconcile();
+        await afterSyncChange('Sync is reset.');
+      });
+      break;
     case 'attest':
       run(async () => { await account.attest([licenseId]); ui.notice = `${licenseLabel(licenseId)} added to your account.`; });
       break;
@@ -438,6 +690,8 @@ export function onAccountClick(e) {
 
 /** A `change` on the portal root. Returns true when handled. */
 export function onAccountChange(e) {
+  const saved = e.target.closest('[data-sync-saved]');
+  if (saved) { ui.recoverySaved = saved.checked; rerender(); return true; }
   const mode = e.target.closest('[data-account-policy-mode]');
   const box = e.target.closest('[data-account-device-license]');
   if (!mode && !box) return false;

@@ -5,6 +5,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 import worker from '../src/worker.js';
+import { CampaignRoom } from '../src/room.js';
 import { generateSigningKeyPair } from '../src/crypto.js';
 
 const MIGRATIONS = new URL('../migrations/', import.meta.url);
@@ -27,6 +28,62 @@ export function d1(sqlite) {
   };
 }
 
+/** Durable Object storage over node:sqlite: `sql.exec(...).toArray()`,
+ *  `transactionSync`, `deleteAll`. */
+function roomStorage() {
+  let db = new DatabaseSync(':memory:');
+  return {
+    sql: { exec: (query, ...args) => ({ toArray: () => db.prepare(query).all(...args) }) },
+    transactionSync(fn) {
+      db.exec('BEGIN');
+      try { const out = fn(); db.exec('COMMIT'); return out; } catch (e) { db.exec('ROLLBACK'); throw e; }
+    },
+    async deleteAll() { db.close(); db = new DatabaseSync(':memory:'); },
+  };
+}
+
+/** A hibernatable server-side socket stand-in: records what it's sent. */
+export function fakeSocket() {
+  return {
+    inbox: [], closed: null, att: null,
+    send(text) { if (this.closed) throw new Error('closed'); this.inbox.push(JSON.parse(text)); },
+    close(code) { this.closed = code || 1000; },
+    serializeAttachment(a) { this.att = a; },
+    deserializeAttachment() { return this.att; },
+    take() { const out = this.inbox; this.inbox = []; return out; },
+  };
+}
+
+/** The CAMPAIGN_ROOMS namespace: one CampaignRoom per name, in memory. */
+export function fakeRooms(env) {
+  const rooms = new Map();
+  const roomFor = (name) => {
+    if (!rooms.has(name)) {
+      const sockets = new Set();
+      const ctx = {
+        storage: roomStorage(),
+        acceptWebSocket: (ws) => sockets.add(ws),
+        getWebSockets: () => [...sockets].filter((s) => !s.closed),
+      };
+      rooms.set(name, new CampaignRoom(ctx, env));
+    }
+    return rooms.get(name);
+  };
+  return {
+    idFromName: (name) => name,
+    get: (name) => ({ fetch: (request) => roomFor(name).fetch(request) }),
+    room: roomFor,
+    /** Joins a room as `deviceId`: `send(frame)` delivers a client frame. */
+    connect(name, deviceId) {
+      const room = roomFor(name);
+      const ws = fakeSocket();
+      room.accept(ws, deviceId);
+      ws.deliver = (frame) => room.webSocketMessage(ws, JSON.stringify(frame));
+      return ws;
+    },
+  };
+}
+
 export async function makeServer() {
   const sqlite = new DatabaseSync(':memory:');
   for (const file of readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort()) sqlite.exec(readFileSync(new URL(file, MIGRATIONS), 'utf8'));
@@ -42,7 +99,8 @@ export async function makeServer() {
     MAILER: { async send(message) { mail.push(message); } },
     now: () => clock.ms,
   };
-  return { env, sqlite, mail, clock, publicJwk: keys.publicJwk };
+  env.CAMPAIGN_ROOMS = fakeRooms(env);
+  return { env, sqlite, mail, clock, publicJwk: keys.publicJwk, rooms: env.CAMPAIGN_ROOMS };
 }
 
 /** A browser: remembers its refresh cookie and access token. */

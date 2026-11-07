@@ -67,12 +67,37 @@ Still to do in S1:
 - moving third-party PDF loading to "import my copy";
 - a per-IP rate limit on code requests.
 
+## Status: Phase S2 (personal sync) in progress
+
+S2a is built (`design/adr/personal-sync.md`). The tests are
+`test/sync.test.js` here, plus jsdom smoke runs of two and three browsers
+against this Worker and room.
+- **End-to-end encrypted campaign sync** between one user's devices:
+  - per-device ECDH keys;
+  - an account vault key, wrapped per device and to a recovery key;
+  - per-campaign keys;
+  - every op, snapshot and title encrypted in the browser.
+- **One `CampaignRoom` Durable Object per campaign** (`src/room.js`,
+  `src/roomCore.js`): an ordered op log, ack and fan-out, deduplicated
+  resends, catch-up from a cursor in frames under 512 KB, and snapshots
+  over HTTP with compaction.
+- **REST** (`src/sync.js`): the vault and device approval, the
+  synced-campaign index, snapshots, and 60-second socket tickets.
+- **Browser:**
+  - `src/core/sync.js` (transport) and `src/core/syncKeys.js`;
+  - the sync base and outbox in `store.js`;
+  - Account › Sync, and approval on Account › Devices.
+
 ## Layout
 
 ```
 migrations/0001_accounts.sql  D1 schema (SQLite): users, identities, email_codes,
                               devices, sessions, entitlements, audit_log
-src/worker.js                 entry: routes /api/*, everything else to the static app
+migrations/0002_sync.sql      devices.ecdh_pub, vault_keys, campaigns (all ciphertext/metadata)
+src/worker.js                 entry: routes /api/*, everything else to the static app;
+                              exports the CampaignRoom Durable Object
+src/sync.js                   vault, synced-campaign index, snapshots, socket tickets
+src/room.js, src/roomCore.js  CampaignRoom: the per-campaign encrypted op log
 src/auth.js                   sign-in, refresh, sign-out, requireAuth
 src/account.js                /api/me, /api/devices
 src/entitlements.js           certificate, attest, deactivate

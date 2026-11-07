@@ -281,6 +281,8 @@ export function createAccountClient(options = {}) {
     start, available, requestCode, verifyCode, signOut, updateProfile,
     listDevices, renameDevice, revokeDevice, setDevicePolicy,
     attest, deactivate, fetchCertificate, liftInCandidates,
+    /** An authenticated call for other core clients (core/sync.js). */
+    request: api,
     getState: () => state,
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   };

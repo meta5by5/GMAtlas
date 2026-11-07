@@ -66,6 +66,9 @@ export async function revokeDevice(request, { env, now }, { user }, id) {
   await env.DB.batch([
     env.DB.prepare('UPDATE devices SET revoked_at = ? WHERE id = ?').bind(at, id),
     env.DB.prepare('UPDATE sessions SET revoked_at = ? WHERE device_id = ? AND revoked_at IS NULL').bind(at, id),
+    // Its copy of the vault key goes too, so it can't be re-approved
+    // silently. (Rotating the vault key itself is Phase S6 hardening.)
+    env.DB.prepare('DELETE FROM vault_keys WHERE user_id = ? AND slot = ?').bind(user.id, id),
   ]);
   return json({ ok: true });
 }

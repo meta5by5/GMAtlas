@@ -173,7 +173,8 @@ export async function requireAuth(request, { env, now }) {
   const header = request.headers.get('authorization') || '';
   const claims = header.startsWith('Bearer ') ? await verifyAccessToken(header.slice(7), env.ACCESS_TOKEN_SECRET, now()) : null;
   const unauthorized = new HttpError(401, 'signed_out', 'Please sign in again.');
-  if (!claims) throw unauthorized;
+  // A socket ticket (typ 'ws') is not an access token.
+  if (!claims || claims.typ) throw unauthorized;
   const session = await env.DB.prepare('SELECT revoked_at FROM sessions WHERE id = ?').bind(claims.sid).first();
   if (!session || session.revoked_at) throw unauthorized;
   const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(claims.sub).first();

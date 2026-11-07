@@ -243,6 +243,23 @@
 .portal .portal-row-main .portal-dim { font-size: 0.86rem; }
 .portal .portal-row-actions { display: flex; align-items: center; gap: var(--sp-2); flex-shrink: 0; }
 .portal .portal-row-form { display: flex; gap: var(--sp-2); width: 100%; }
+.portal .portal-badge-warn { color: var(--warn); border-color: var(--warn); }
+.portal .portal-row-note { background: var(--bg-inset); border-radius: var(--radius); padding: var(--sp-3); }
+/* The recovery key and an approval code: big, monospaced, selectable. */
+.portal .portal-recovery,
+.portal .portal-code-display {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  user-select: all;
+  padding: var(--sp-3);
+  background: var(--bg-inset);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  overflow-wrap: anywhere;
+}
+.portal .portal-recovery { font-size: 1.05rem; }
+.portal .portal-code-display { font-size: 1.8rem; text-align: center; letter-spacing: 0.2em; }
 .portal .portal-toggle { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.88rem; white-space: nowrap; }
 
 /* Phone and narrow tablet: one column, 16px gutters, no horizontal scroll. */
