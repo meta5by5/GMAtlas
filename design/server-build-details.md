@@ -1,0 +1,316 @@
+# Server build details
+
+The replies Claude gave while planning, building and deploying the GMAtlas
+accounts, sync and licensing service, in order, under the request each one
+answered. Short progress notes made while working are listed before the full
+reply. Decisions recorded here are superseded by
+`ACCOUNTS-SYNC-ROADMAP.md` and `server/README.md` wherever they differ;
+this file is a record of how the work went, not the current design.
+
+## 1. Create the detailed plan for the most efficient, future-proof server-h…
+
+*2026-11-06*
+
+> Create the detailed plan for the most efficient, future-proof server-hosted authentication and synchronization solution for GMAtlas to remain browser-based in its current form but synchronize across multiple devices seamlessly and quickly when used on different machines simultaneously and when sharing content with others in a multi-player environment. It must incorporate a licensing and modular component model already initiated while expanding to include an administrative panel for license and feature management. Documents stored in the local browser must be transferrable to other instances without breaking links but not uploading tho the server. Licenses activated on one device must apply to all instances until deactivated or optionally not installed on a specific device for reason of privacy or a focused installation. The workflows for login, user administration and other GMAtlas help, guides or shopping carts need to be familiar like other apps while having distinct CSS layouts from campaign layouts.
+
+Added mid-turn:
+
+> update the GitHub code repository to properly manage the server-side design as a separate branch that will allow core functionality to be added or revised while testing and building the server-side features.
+
+**Progress notes**
+
+- Reading the existing license, profile and storage design so the sync/auth plan builds on what's there rather than replacing it.
+- Plan is written. Before setting up the server branch, I'm checking the repo's state: earlier work is still uncommitted on `main`, and I need to see what remote and CI exist.
+- The earlier work is already committed; only the new plan file is untracked. Next I'm checking whether `main` is in sync with GitHub and how the Pages deploy is triggered.
+- Next I'm committing the plan, branch rules and CI to `main`. Then I'll create `server` from it with a starter `server/README.md`. Tests run first.
+- The test-summary filter didn't match node's output format, so the chain stopped before committing. Re-running without the filter:
+- Committing the scaffold on `server`, then pushing both branches to GitHub:
+- Both branches are on GitHub. I'm switching the working copy back to `main` so the next core change doesn't land on `server`, and checking that CI started on both branches:
+
+**Reply**
+
+Written for: you, and whoever builds the server later (including future Claude sessions in this repo).
+
+I wrote the plan at [design/ACCOUNTS-SYNC-ROADMAP.md](ACCOUNTS-SYNC-ROADMAP.md) and set up a separate `server` branch on GitHub. The new test workflow passed on both branches; the GitHub Pages deploy of `main` was still running when I last checked.
+
+#### The plan, in short
+- **The app doesn't change shape.** It's still one HTML page and one bundled script, and it works signed out exactly as it does today. The server adds sign-in, sync and a store; each device keeps its own full copy and stays the source of truth.
+- **Sync:** each edit is turned into small field-level changes. Edits apply on your device instantly, as now, and reach other open devices in roughly a quarter of a second. Two people editing different things never conflict. Offline edits merge when the device reconnects.
+- **Nothing in the app needs rewriting for sync.** The ~100 existing save points stay as they are, and the browser and server use the same merge code.
+- **Encryption:** campaign content is encrypted on the device, so the server and the admin panel can't read it. A printable recovery key covers losing every device.
+- **Licensing** keeps today's model: the account just becomes where ownership lives.
+  - A license follows you to every device until it's deactivated, and the change shows up on open instances within about a second.
+  - Each device can switch off "Installed on this device" for privacy, or use a "Focused install" that shows only chosen licenses.
+  - Licenses work offline for 30 days, plus a 14-day grace period. After that only paid sync features pause; campaign data is never locked.
+- **Documents never go to the server.** Each stored file is identified by a fingerprint of its contents, so links still work on a device that doesn't have the file yet. It shows a "not on this device" card offering to copy it directly from one of your other devices, or to import it from a file.
+- **Multiplayer:** players see only what the GM chooses to "Reveal to table" and can edit only their own character and notes. The server enforces this.
+- **Separate screens:** sign-in, account, store, cart and help get their own layout and stylesheet, styled like a normal web app rather than the campaign layout. The admin panel is a separate page whose code never ships to ordinary users.
+- **Delivery is in seven phases, S0–S6.** S0 needs no server and helps everyone right away: it moves images out of the campaign file, which makes saves faster.
+
+#### Worth knowing
+- **Gallery images would leak without S0.** They're currently stored inside the campaign file, so syncing that file would send them to the server. S0 moves them out first.
+- **Third-party sourcebook PDFs can't be served from a public multi-user server**, because that would be redistribution. "I own this book" stays a self-declaration that now follows your account. The store sells only GMAtlas's own products unless a publisher deal exists.
+- **Section 15 lists eight decisions for you, each with my recommendation.** The main ones:
+  - hosting on Cloudflare;
+  - no sign-in when the app is opened by double-clicking the file;
+  - encryption from the first sync release;
+  - a payment provider that handles sales tax for you, such as Paddle.
+
+#### Branches
+- **`main`** is still the only branch that deploys. Core features and fixes, plus all of S0, land here first.
+- **`server`** is a long-lived branch with a starter [server/README.md](../server/README.md). Core changes flow into it with `git merge main`. A core bug found while working there gets fixed on `main` and merged across, so the two never disagree. `server` merges back into `main` through a pull request when a phase is finished.
+- **CI:** a new [test.yml](../.github/workflows/test.yml) runs the tests on pushes and pull requests to both branches. Once the server folder has its own tests, those run too.
+- **Recorded in two places:** the rules are in [CLAUDE.md](../CLAUDE.md) under "Branches" and in section 2.3 of the plan.
+
+I pushed three commits to `main` and one to `server`. All 790 tests pass, and your working copy is back on `main`.
+
+I can also publish the plan as a shareable page if you want to show it to anyone.
+
+## 2. start S0
+
+*2026-11-06*
+
+> start S0
+
+**Progress notes**
+
+- Starting S0 on `main`. Item 1 (moving image bytes into the blob store) touches rendering, so I'm reading how images and blobs are handled today.
+- Two more spots to look at: the battlemap video background and the lightbox placeholder at `shell.js:8616`.
+- Only `shell.js` imports the store, and I'll keep it that way: drawers and workspace get a tiny `imageSrc()` helper whose resolver the shell plugs in. Writing the pure domain module first:
+- Now the `store.js` side: the in-memory cache, hashing, extraction after loads, imports and updates, and re-inlining on export.
+- Now wiring it into every place a campaign document enters memory, and into the exports:
+- Now the render side: a small resolver module, then every `img.dataUrl` render site switched to it.
+- I miscounted: there are 11 sites in drawers, not 12. The script aborted before writing anything, so I'm re-running it with the right count.
+- Next, tests for the new domain module, appended to `tests/domain.test.js`:
+- All 794 tests pass. Now a headless smoke run against the built bundle to check the real store behaviour: - an inline image moves out; - export restores it; - a reload renders it from the blob store.
+- The defaults don't list every key: some top-level keys are added lazily by domain modules. Finding all of them so the policy test can't miss any:
+- Lazy top-level keys are `trade` and `mechanicsIndex`. `get()` also overlays `turnStepLists`, `crewTasks` and `settings.licenses`, which are never stored in the campaign. Writing the policy data file:
+- Checking that no other appConfig keys get written anywhere:
+- Fewer divergences, but the delete-record + edit + drop-list combination remains. Printing each delivery order's result for one failing triple to see exactly where they split:
+- Item 3 is done: 802 tests pass. Item 4 is the licensing resolution seam. First, checking how ownership is read today, especially for open (CC-BY) licenses:
+- Tests for the licensing matrix (signed out, follow, focused, certificate states), plus a check that signed-out output is identical to today's ticks:
+- Item 4 is done: 805 tests pass, and signed-out ownership is unchanged. Item 5 is the portal surface. Checking the page structure, how the app boots, and whether anything already uses the URL hash:
+- The settings menu in the header is the natural home for a "Help & guides" entry, and it's the closest thing to the account menu the plan describes. Finding its markup:
+- Before going further I'm fact-checking a few article claims: the About location, an "active" marker in the Campaigns list, and the save-failure message.
+- Confirmed: Campaigns marks the active one "(active)", and a failed save shows a "Couldn't save" message. One fix: About sits directly in the gear menu, not under Settings.
+- On phones that layout would push "More in…" above the article, which is backwards. Fixing so the aside follows the article:
+- That `:first-child` rule would wrongly hide "More in…" on articles with no sections. Using an explicit class instead:
+- Now the wiring: page markup and stylesheet, boot, the menu entry, and the offline cache list. First the existing About handler, to mirror it:
+- All 809 pass. One assertion I wrote in the escaping test is muddled and redundant with the line after it, so I'm removing it:
+- The Constitution's file and test counts are already stale. Getting the real numbers so I can correct them while amending:
+- The counts are well out of date: 54 domain files, not 34, and 809 tests, not 451. I'll correct them while amending rules 2, 3 and 4, adding rule 6, and adding the new modules to the map.
+- Now the short ADR for S0, and CLAUDE.md's copy of the rules and counts:
+- Next, the roadmap: mark S0 built and correct the places where the build deliberately differs from the plan, so the two documents don't disagree. Locating those passages:
+- Bash's heredoc parsing choked on the quoting in that script, a problem I hit earlier this session too. Writing the same script to a scratch file instead:
+- Roadmap updated. Last bookkeeping: the in-app build info, plus README/PROGRESS if they track this kind of work. Checking their formats:
+- PROGRESS.md and the README phase list both take a short new entry. Adding those and the build-info note together:
+- The build info and README updated; PROGRESS.md failed only because it has Windows line endings. Applying that one entry with the Edit tool:
+
+**Reply**
+
+S0 is built on `main`, all 809 tests pass, and nothing is committed yet. I haven't checked it in a real browser, so the new Help screens' layout is unverified on desktop and phone. Only automated runs on the built bundle cover it, and they reported no console errors.
+
+**What changes for a GM**
+- **Faster saves:** portraits, gallery images and battlemaps are no longer stored inside the campaign, so every save is lighter. Existing images move automatically, once, in the background on first load. Exported files are unchanged and still include every image, so they stay readable by older versions.
+- **Help centre:** gear menu → **Help & guides** opens a help area with its own conventional layout (search, categories, articles with an "On this page" outline). It has eight articles, all checked against the app's actual labels. "← Back to campaign" returns you, and links like `#/help/back-up-a-campaign` open an article directly.
+- Nothing else looks different. The sync engine and licensing seam aren't used by anything yet.
+
+**What's underneath**
+- **Sync merge:** this is the core S1–S2 will build on. An exhaustive test runs every combination of three conflicting edits in every order: 62,208 cases. It caught four real bugs that random testing missed, where two devices would have ended up with different campaigns after the same edits. All four are fixed.
+- **Sync rules:** every stored part of a campaign is labelled with where it may sync. Images and documents can never go into a sync message.
+- **Licensing:** a single place now decides which licenses count on this device. Signed out, it gives exactly what you have today.
+- **Docs:**
+  - the Design Constitution gains a rule 6 (document bytes never pass through a server), and rule 4 now allows each screen area its own event listeners;
+  - a new ADR, [sync-groundwork.md](adr/sync-groundwork.md);
+  - CLAUDE.md, PROGRESS and the README updated, with the version bumped to 0.98.0.
+
+**Where it differs from the plan**
+I updated [the roadmap](ACCOUNTS-SYNC-ROADMAP.md) to match:
+- Re-keying already-imported documents by content moved to S3, the first phase that needs it.
+- If two devices edit the same tag list at once, the later edit wins. Smarter tag merging can come later if that turns out to matter.
+- Comparing a ~1 MB campaign takes about 8 ms per change, not the 5 ms I first planned. That's about the same cost as the copy every save already makes.
+- `entitlements.js` stays where it is, with the new licensing module beside it.
+
+**Worth knowing**
+- If the browser blocks the hashing it needs (opening the app over plain `http://` from another machine's address, for example), images simply stay inside the campaign as before. Nothing is lost.
+- An image whose stored file is missing in this browser shows blank but keeps its link. That can only happen if the browser's storage is partly cleared.
+
+Under the new branch rules this belongs on `main`. Should I commit and push it?
+
+## 3. continue
+
+*2026-11-06*
+
+> continue
+
+**Progress notes**
+
+- "Continue" answers my question, so I'll commit and push S0 to `main`, then merge it into `server` and start S1 there.
+- You've already committed and pushed S0 yourself (`3250532 Server S0`), so there's nothing to commit. Checking what that commit holds and where `server` stands:
+- Your commit has all 24 S0 files. `server` is one commit behind `main`, so I'm switching to `server` and merging `main` in as the branch rules say:
+- Now the HTTP helpers: JSON responses, a size-limited body reader, cookies, and a small error type, so every route fails the same way.
+- Now the package files, the deploy config (no secrets in it), and a key-generation script for the certificate key:
+- Node 24 on Windows doesn't treat a directory as a test target, so I'm switching to a glob pattern:
+- 7 of 8 pass. The failure is a test-helper bug: the server correctly lower-cases `GM@Example.com`, but the helper looked up the code under the original casing.
+- Now `server/README.md`: what exists, how to run it, and what's left in S1.
+- Pushed. Checking that CI passes on `server`, which now also runs the server tests:
+
+**Reply**
+
+S1 has started on the `server` branch: the sign-in and licensing service core is built, its 8 end-to-end tests pass, and CI is green on `server`. Nothing is deployed and the browser app doesn't use any of it yet.
+
+You'd already committed and pushed S0 as `Server S0`, so I merged that into `server` and built there.
+
+**What the service does now** (in [server/](../server/README.md))
+- **Sign-in by emailed 6-digit code**, which also creates the account the first time. Codes expire after 10 minutes, burn after 5 wrong guesses, are limited to 5 per address per hour, and are only stored hashed. It answers the same whether or not an account exists.
+- **Sessions:** a short-lived access token plus a sign-in cookie that rotates on every use. If a stolen cookie is replayed, that session ends. Signing out, or signing out one of your other devices from this one, takes effect at once.
+- **Devices:** one record per browser, which you can rename. Each carries the per-device install setting: everything the account owns minus some, or a focused set.
+- **Licenses:** "I own this book" becomes account-wide, and deactivating a license removes it from every device. Every change is written to an audit log.
+- **Signed license certificate:** valid 30 days, carrying the device's install setting. The browser can verify it offline, and a doctored certificate fails.
+- **Requests from other sites** that would change anything are refused.
+
+The code is written for Cloudflare Workers with a D1 database, the plan's recommended hosting. The tests run against real SQL using Node's built-in SQLite, so the server has no dependencies. It reads the license list straight from the app's own `src/data/licenses.js`, so the two can't drift apart.
+
+**One fix outside the server folder:** CI was pinned to Node 20, which lacks the built-in SQLite the server tests need. Under our branch rules I changed it to Node 22 on `main` and merged that into `server`. All 809 core tests still pass.
+
+**Still to do in S1:**
+- the browser side: sign-in and account pages in the Help area's portal layout, with the certificate driving which licenses count on the device;
+- passkey and Google/Apple/Discord sign-in;
+- device keys;
+- the admin panel;
+- switching third-party PDFs to "import my copy";
+- a per-IP limit on code requests.
+
+**Deploying needs you.** It needs a Cloudflare account, a D1 database, a few secrets (the steps are listed at the top of [wrangler.toml](../server/wrangler.toml)), and an email sender: I wired up Resend, and another provider is one small adapter. I can't do that part from here.
+
+Your working copy is on `server`, ready for the browser side of sign-in next.
+
+## 4. do i create a cert key in cloudflare to substitute for k1 in 'CERT_KEY…
+
+*2026-11-07*
+
+> do i create a cert key in cloudflare to substitute for k1 in 'CERT_KEY_ID = "k1"' variable?
+
+**Reply**
+
+No. Leave `CERT_KEY_ID = "k1"` as it is. It isn't a key and nothing in Cloudflare creates it. It's just a label you choose for your signing key, stamped into every license certificate so the app knows which public key to check it against.
+
+The key itself you make on your own machine:
+
+1. In `server/`, run `npm run keygen`. It prints two lines and saves nothing to disk:
+   - a **private key**, which signs the certificates;
+   - a **public key**, which the browser app will use to check them.
+2. Store the private key in Cloudflare as a secret: run `npx wrangler secret put CERT_SIGNING_JWK` and paste the private key line when asked. This is the only part that involves Cloudflare.
+3. Keep the public key somewhere safe. It isn't secret, but the browser app will need it built in, labelled `k1`. That part of the app isn't written yet; it's in the remaining S1 work.
+
+**When to change the label:** only when you replace the key, for example if the private key leaks. Then you'd run keygen again, store the new private key, set `CERT_KEY_ID = "k2"`, and add the new public key to the app as `k2`. Devices could still check certificates signed with the old key until those expire (30 days), so nobody is cut off during the switch.
+
+## 5. if wrangler.toml has the info you need, continue as possible
+
+*2026-11-07*
+
+> if wrangler.toml has the info you need, continue as possible
+
+**Progress notes**
+
+- Now the setup scripts: one to assemble the static site Wrangler serves, one to generate and install secrets.
+- Local database is set up. Now starting the server under Wrangler's real Workers runtime.
+- Writing an end-to-end check that drives the running server like a browser would:
+- PowerShell stripped the quotes from the key argument. Passing it as a file instead:
+- Every check passes against Wrangler's real Workers runtime, not just the test shim. Stopping the local server:
+- Now updating the docs to the new workflow, then committing.
+- The header was already updated. I'll fix the one stale line at the bottom, then commit.
+
+**Reply**
+
+The server now runs for real on your machine against your database, but I couldn't put it on Cloudflare: Wrangler isn't signed in to your account on this machine. Signing in opens a browser window, so it's a step for you.
+
+**What changed** (pushed to `server` as `4668dc7`)
+- **Your database:** `db_gmatlas` is wired in everywhere it's used, including the commands that set up its tables. The tables are already created in the local copy.
+- **`npm run secrets:remote`:** generates and stores all three secrets in Cloudflare. It saves the public half of the signing key as `server/keys/cert-k1.public.json` for you to commit. It won't run twice under the same key label, so you can't accidentally swap the key and invalidate every device's certificate.
+- **`npm run secrets:local`:** made `server/.dev.vars`, which is gitignored and holds test-only keys, never used in production.
+- **`npm run dev` and `npm run deploy`** now build the app first and serve it from the same address as the server, using the same files the GitHub Pages deploy publishes.
+
+**Tested under Cloudflare's own runtime:** I ran a full sign-in against the local server and every step behaved as intended:
+- the app loaded and the reference PDFs were correctly absent;
+- the emailed code signed me in and set a secure sign-in cookie;
+- refresh, account and device lookups, and a "fivepfh" license claim all worked;
+- the signed license certificate checked out against the public key;
+- a request from another site was refused;
+- reusing an old sign-in cookie ended the session.
+
+The 8 server tests still pass.
+
+**The email sender won't work as set.** `gmatlasonline@gmail.com` can't be the "From" address: the mail service only sends from a domain you own and have verified with it, and nobody can verify gmail.com. You'll need your own domain (e.g. `signin@gmatlas.app`) verified in Resend.
+
+**To go live**, from the `server` folder, once:
+1. `npx wrangler login`
+2. `npm run migrate:remote` (creates the tables in the live database)
+3. `npm run secrets:remote`, then commit the `keys/cert-k1.public.json` it writes
+4. Set up the mail domain in Resend, change `MAIL_FROM` in [wrangler.toml](../server/wrangler.toml), then `npx wrangler secret put RESEND_API_KEY`
+5. `npm run deploy`
+
+After step 1 I can run steps 2, 3 and 5 for you. Step 4 needs your domain.
+
+While that's pending, I'll start the browser side of sign-in on the `server` branch: the sign-in and account pages in the Help area, with the app checking the certificate against `k1`. Any changes the core app needs go on `main` first, per the branch rules.
+
+## 6. try connecting again and continue
+
+*2026-11-07*
+
+> try connecting again and continue
+
+**Progress notes**
+
+- Still not signed in. I'll start the Cloudflare sign-in myself; it opens a browser page for you to approve.
+- Signed in. Creating the tables in the live database:
+- Tables created. Deploying first, so the Worker exists before its secrets are stored:
+- Live at https://gmatlas.gmatlas-server.workers.dev. Now storing the secrets:
+- All three secrets are stored. Fixing a harmless warning in the script, then checking the live site:
+- The new `workers.dev` address isn't in DNS yet, which is normal for the first few minutes. Retrying until it resolves:
+- The live site responds correctly. Recording the deployment in the README and committing the public key:
+
+**Reply**
+
+Wrangler opened a Cloudflare sign-in page in your default browser. Sign in there and click **Allow** to let Wrangler use your account. If no page appeared, here's the link:
+
+*(one-time Cloudflare sign-in link, since used and expired)*
+
+It only works on this computer, because it reports back to Wrangler here.
+
+Once you approve, I'll carry on automatically:
+1. **Create the tables** in the live `db_gmatlas` database.
+2. **Generate and store the secrets** in Cloudflare, then commit the public signing key.
+3. **Deploy** to Cloudflare's free `workers.dev` address, then run the same sign-in check against the live site.
+
+I saw you changed the sender to `info@gmatlas.online`. Live sign-in emails still need two things from you:
+- **Verify the domain:** add `gmatlas.online` as a sending domain in Resend and add the DNS records it gives you.
+- **Store the key:** run `npx wrangler secret put RESEND_API_KEY` and paste your Resend API key.
+
+Until then, the live server is up but can't email sign-in codes.
+
+**Reply**
+
+The sign-in service is live at **https://gmatlas.gmatlas-server.workers.dev**, but it can't send sign-in emails yet, so nobody can actually sign in there.
+
+What I did after your approval:
+1. **Database:** created the tables in the live `db_gmatlas` database.
+2. **Deploy:** built the app and deployed it with the server, so both share that address.
+3. **Secrets:** generated the three secrets and stored them in Cloudflare. The private signing key never touched disk. Its public half is committed as [cert-k1.public.json](../server/keys/cert-k1.public.json) for the app to check certificates against.
+
+Checks against the live site all passed:
+- the app loads, and the reference PDFs are correctly absent;
+- account requests without a sign-in are refused (401);
+- a request from another site is blocked (403).
+
+I couldn't run a real sign-in there, because that needs email working. The full sign-in flow did pass earlier under the same runtime on your machine.
+
+**To turn on sign-in emails:**
+1. In Resend, add `gmatlas.online` as a sending domain and add the DNS records it gives you where the domain is registered.
+2. Once Resend shows the domain as verified, run `npx wrangler secret put RESEND_API_KEY` in the `server` folder and paste your Resend API key. No redeploy is needed; secrets apply straight away.
+
+Tell me when that's done and I'll do a real sign-in against the live site.
+
+GitHub Pages still serves the app from `main` as before; this new address is a separate copy. Everything is pushed to the `server` branch (`00305ac`). The `server` folder's README has the deploy commands for later updates.
+
+Next is the browser side of sign-in: the sign-in and account pages in the Help area, and the app checking license certificates against that key.

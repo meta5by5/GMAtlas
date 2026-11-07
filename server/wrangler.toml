@@ -1,0 +1,102 @@
+# Cloudflare deployment for the GMAtlas service (roadmap decision D1).
+# Nothing secret lives here.
+#
+# Two environments, fully separate (Worker, D1 database, Durable Object
+# rooms, signing key, secrets, accounts):
+#   dev         (the default, top of this file) -> https://dev.gmatlas.online
+#               Every everyday deploy goes here: `npm run deploy`.
+#   production  ([env.production] below)        -> https://gmatlas.online
+#               Only through `npm run release:production` (scripts/release.js),
+#               which refuses unless on a clean, pushed `main` with passing
+#               tests, and tags the release.
+#
+# Secrets, per environment (after `npx wrangler login`):
+#   npm run secrets:remote       dev: ACCESS_TOKEN_SECRET, CODE_PEPPER,
+#   npm run secrets:production   CERT_SIGNING_JWK; writes the public key to
+#                                keys/cert-<CERT_KEY_ID>.public.json (commit it)
+#   npx wrangler secret put RESEND_API_KEY [--env production]
+# For local `npm run dev`, `npm run secrets:local` writes server/.dev.vars
+# (gitignored) with MAIL_MODE=log, so codes print to the console.
+#
+# CERT_KEY_ID is a label you choose for the certificate signing key, not a
+# Cloudflare value. Each environment has its own key; the browser app pins
+# every public key it accepts (src/data/certKeys.js). Change an id only when
+# replacing that key (README.md). MAIL_FROM must be an address on a domain
+# verified with the mail provider.
+
+name = "gmatlas"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+# --- dev ----------------------------------------------------------------------
+
+# Served at dev.gmatlas.online (Cloudflare creates its DNS record and
+# certificate on deploy; the gmatlas.online zone must be in this account).
+# The workers.dev address stays on as a fallback.
+workers_dev = true
+routes = [
+  { pattern = "dev.gmatlas.online", custom_domain = true },
+]
+
+[vars]
+GMATLAS_ENV = "dev"
+CERT_KEY_ID = "k1"
+MAIL_FROM = "GMAtlas <info@gmatlas.online>"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "db_gmatlas_dev"
+database_id = "304b9b83-7d6c-4da3-a068-29871993c705"
+migrations_dir = "migrations"
+
+# One CampaignRoom per synced campaign (src/room.js): its ordered,
+# encrypted op log and snapshots, in the object's own SQLite storage.
+[[durable_objects.bindings]]
+name = "CAMPAIGN_ROOMS"
+class_name = "CampaignRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["CampaignRoom"]
+
+# The browser app is served from the same origin as /api. Deploys assemble
+# it into ../_site first (scripts/site.js), the same files deploy-pages.yml
+# publishes.
+[assets]
+directory = "../_site"
+binding = "ASSETS"
+
+# --- production ------------------------------------------------------------------
+# Bindings don't inherit into an environment, so each is repeated here.
+
+[env.production]
+name = "gmatlas-production"
+workers_dev = false
+routes = [
+  { pattern = "gmatlas.online", custom_domain = true },
+]
+
+[env.production.vars]
+GMATLAS_ENV = "production"
+CERT_KEY_ID = "p1"
+MAIL_FROM = "GMAtlas <info@gmatlas.online>"
+
+# One-time: `npx wrangler d1 create db_gmatlas_prod`, then paste its
+# database_id here. release.js refuses while this is still the placeholder.
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "db_gmatlas_prod"
+database_id = "c063d408-4f7a-4615-bef1-a9e7cab8764d"
+migrations_dir = "migrations"
+
+[[env.production.durable_objects.bindings]]
+name = "CAMPAIGN_ROOMS"
+class_name = "CampaignRoom"
+
+[[env.production.migrations]]
+tag = "v1"
+new_sqlite_classes = ["CampaignRoom"]
+
+[env.production.assets]
+directory = "../_site"
+binding = "ASSETS"

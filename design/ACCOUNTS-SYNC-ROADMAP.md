@@ -789,6 +789,17 @@ Recorded in `design/adr/sync-groundwork.md`.
 
 ### S2 — Personal sync across one user's devices
 
+**In progress.** Slice S2a is built on the `server` branch
+(`design/adr/personal-sync.md`):
+- the campaign room, the wire protocol (simplified to one `gm` partition),
+  the outbox and cursors, reconnect catch-up, and snapshots;
+- all of item 2, with one key per campaign standing in for partition keys;
+- "Sync this campaign", "Open on this device", and replace-or-keep-both;
+- holding remote changes while a field is being typed in.
+
+Still to do: the account room and appConfig sync, conflict chips,
+presence-lite, the sync-status dot, and the `sync.devices` gate.
+
 1. Campaign room and account room, the wire protocol, outbox and cursors,
    reconnect catch-up, compaction.
 2. E2E: device key pairs, partition keys, new-device approval, recovery

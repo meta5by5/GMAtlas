@@ -63,7 +63,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .mc-header h1, .mc-header .brand-sep { flex: 0 0 auto; white-space: nowrap; }
 .mc-header-measuring .brand { flex-shrink: 0; }
 .mc-header-measuring .campaign-title { max-width: none; }
-.mc-header-compact .brand h1, .mc-header-compact .brand-sep { display: none; }
+/* Compact: the wordmark and "|" drop out, but the logo and its caret stay,
+   since they open the GMAtlas menu (account, Settings, Help). */
+.mc-header-compact .brand-name, .mc-header-compact .brand-sep { display: none; }
 .mc-header h1 { font-size: 1.05rem; margin: 0; letter-spacing: 0.02em; }
 .mc-header .tagline { font-size: 0.72rem; color: var(--text-dim); }
 .mc-header .brand-sep { color: var(--text-dim); }
@@ -71,7 +73,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* Phone: the "GMAtlas" wordmark and "|" give way to a wireframe-planet
    icon to save space — kept even when fitHeaderToOneRow goes compact,
    since it costs barely more than nothing. */
-.mc-header .brand-planet { display: none; color: var(--accent); }
+.mc-header .brand-planet { display: block; flex: 0 0 auto; color: var(--accent); }
 @media (max-width: 480px) {
   .mc-header .brand { align-items: center; }
   .mc-header .brand h1, .mc-header-compact .brand h1 { display: flex; align-items: center; }
@@ -100,24 +102,23 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .campaign-switcher-row-title { font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .campaign-switcher-new { width: 100%; }
 
-/* Header gear menu (New Campaign / Settings / About — replaces the old
-   click-the-campaign-title-to-open-Settings convention). */
-.settings-menu-wrap { position: relative; }
-/* The gear's label stays hidden in its normal header spot (icon-only, by
-   direct earlier request) and only appears once shell.js physically
-   relocates .settings-menu-wrap into .mc-edge on phone widths, where it
-   should look like every other edge-nav tile. .mc-edge button's own
-   descendant-selector rules are too low-specificity to beat the button's
-   own .btn.ghost.sm classes (2 classes beats 1 class + 1 type), so this
-   restyles it explicitly instead of relying on inheriting that rule. */
-.settings-menu-wrap b { display: none; }
-.mc-edge .settings-menu-wrap [data-settings-menu-toggle] {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  background: none; border: none; padding: var(--sp-2) 0; width: 100%;
-  color: var(--text-dim); font-size: 0.6rem;
+/* The GMAtlas logo/title is the menu button (account, sign in/out, sync,
+   Settings, Help, About); it replaced the separate gear button. */
+.brand-menu-toggle {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  background: none; border: none; padding: 0.15rem 0.3rem; margin: 0 -0.3rem;
+  font: inherit; color: inherit; letter-spacing: inherit; cursor: pointer; border-radius: var(--radius-sm);
 }
-.mc-edge .settings-menu-wrap [data-settings-menu-toggle] .glyph { font-size: 1.1rem; }
-.mc-edge .settings-menu-wrap b { display: block; }
+.brand-menu-toggle:hover, .brand-menu-toggle[aria-expanded="true"] { background: var(--tier2-bg); }
+.brand-menu-toggle:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 1px; }
+.brand-caret { font-size: 0.7rem; color: var(--text-dim); }
+.brand-menu-account { display: flex; flex-direction: column; gap: 0.1rem; padding: 0.7rem 0.9rem 0.6rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+.brand-menu-account strong { font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brand-menu-account span { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; }
+.brand-menu-account .brand-menu-sync { margin-top: 0.2rem; }
+.brand-menu-account .brand-menu-sync[data-sync-state="live"] { color: var(--ok); }
+.brand-menu-account .brand-menu-sync[data-sync-state="error"], .brand-menu-account .brand-menu-sync[data-sync-state="locked"] { color: var(--warn); }
+.settings-menu hr { border: 0; border-top: 1px solid var(--border); margin: 0.2rem 0; }
 /* Real reported bug (still visible after giving .mc-edge its own z-index,
    see that rule's own comment below): .mc-edge got `overflow-y: auto` a
    while back so a tall edge-nav button list could scroll instead of
@@ -146,7 +147,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
      .startup-screen (90) sits above this — that's a full-screen takeover
      shown before the cockpit is even reachable, not a competing panel. */
   position: fixed; z-index: 70;
-  display: flex; flex-direction: column; min-width: 9rem;
+  display: flex; flex-direction: column; min-width: 15rem; max-width: min(20rem, calc(100vw - 8px));
   background: var(--tier3-bg); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
   box-shadow: var(--shadow); overflow: hidden;
 }
