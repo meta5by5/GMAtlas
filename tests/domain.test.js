@@ -11835,7 +11835,7 @@ import { nextHlc, observeHlc, syncScopeFor, diffDoc, applyOps, createReplica, ma
 test('every top-level campaign and appConfig key has a sync scope', () => {
   const campaignKeys = [...Object.keys(defaultCampaign()), 'trade', 'mechanicsIndex', 'turnStepLists', 'crewTasks'];
   assert.deepEqual(campaignKeys.filter((k) => !syncScopeFor(CAMPAIGN_SYNC_POLICY, [k])), []);
-  const appConfigKeys = [...Object.keys(defaultAppConfig()), 'licenses', 'licensesVersion', 'entitlements'];
+  const appConfigKeys = [...Object.keys(defaultAppConfig()), 'licenses', 'licensesVersion', 'entitlements', 'account'];
   assert.deepEqual(appConfigKeys.filter((k) => !syncScopeFor(APP_CONFIG_SYNC_POLICY, [k])), []);
   assert.equal(syncScopeFor(CAMPAIGN_SYNC_POLICY, ['settings', 'ui', 'openPanels']), 'local', 'longest prefix wins');
   assert.equal(syncScopeFor(CAMPAIGN_SYNC_POLICY, ['settings', 'genrePack']), 'gm');
@@ -12036,6 +12036,32 @@ test('certStatus: valid, then a grace period, then expired', () => {
   assert.equal(certStatus(cert, expires + 15 * day), 'expired');
 });
 
+import { licensesToLiftIn, verifyCertificate } from '../src/domain/licensing.js';
+import { CERT_PUBLIC_KEYS } from '../src/data/certKeys.js';
+
+test('licensesToLiftIn offers only ticked, ownable licenses the account lacks', () => {
+  const ownable = ['fiveleagues', 'hostile', 'swn', 'traveller'];
+  assert.deepEqual(licensesToLiftIn({ swn: true, hostile: true, traveller: false, starforged: true, bogus: true }, ['hostile'], ownable), ['swn']);
+  assert.deepEqual(licensesToLiftIn(undefined, null, ownable), []);
+});
+
+test('verifyCertificate accepts the signed bytes and rejects edits, other keys and bad shapes', async () => {
+  const b64url = (bytes) => Buffer.from(bytes).toString('base64url');
+  const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+  const jwk = { kid: 'kt', ...(await crypto.subtle.exportKey('jwk', pair.publicKey)) };
+  const sign = async (text) => ({ payload: text, sig: b64url(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, pair.privateKey, new TextEncoder().encode(text))) });
+  const body = { v: 1, kid: 'kt', accountId: 'usr_1', deviceId: 'dev_1', licenses: ['swn'], policy: { mode: 'follow', excluded: [], only: [] }, expiresAt: '2026-12-01T00:00:00Z' };
+  const cert = await sign(JSON.stringify(body));
+  assert.deepEqual(await verifyCertificate(cert, [jwk]), body);
+  assert.equal(await verifyCertificate({ ...cert, payload: cert.payload.replace('"swn"', '"swn","hostile"') }, [jwk]), null, 'an edited payload fails');
+  assert.equal(await verifyCertificate(cert, CERT_PUBLIC_KEYS), null, 'an unknown key id fails');
+  assert.equal(await verifyCertificate(cert, [{ ...CERT_PUBLIC_KEYS[0], kid: 'kt' }]), null, 'the wrong key fails');
+  assert.equal(await verifyCertificate(await sign(JSON.stringify({ ...body, v: 2 })), [jwk]), null);
+  assert.equal(await verifyCertificate(null, [jwk]), null);
+  assert.equal(await verifyCertificate({ payload: 'not json', sig: cert.sig }, [jwk]), null);
+  assert.equal(CERT_PUBLIC_KEYS[0].kid, 'k1', 'the production key is pinned');
+});
+
 // Help centre (portal surface, design/ACCOUNTS-SYNC-ROADMAP.md Phase S0).
 import { HELP_ARTICLES, HELP_CATEGORIES } from '../src/data/helpArticles.js';
 import { renderHelpMarkdown, searchHelp, parsePortalRoute } from '../src/domain/helpCentre.js';
@@ -12077,5 +12103,10 @@ test('help search matches every word, title hits first; routes parse from the ha
   assert.deepEqual(parsePortalRoute('#/help/storage'), { view: 'article', slug: 'storage' });
   assert.equal(parsePortalRoute(''), null);
   assert.equal(parsePortalRoute('#/'), null);
-  assert.equal(parsePortalRoute('#/account'), null, 'later phases add their own routes');
+  assert.deepEqual(parsePortalRoute('#/account'), { view: 'account', section: 'profile' });
+  assert.deepEqual(parsePortalRoute('#/account/devices'), { view: 'account', section: 'devices' });
+  assert.deepEqual(parsePortalRoute('#/account/licenses/'), { view: 'account', section: 'licenses' });
+  assert.deepEqual(parsePortalRoute('#/account/sign-in'), { view: 'sign-in' });
+  assert.equal(parsePortalRoute('#/account/nope'), null);
+  assert.equal(parsePortalRoute('#/store'), null, 'later phases add their own routes');
 });
