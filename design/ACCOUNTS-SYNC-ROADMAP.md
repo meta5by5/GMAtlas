@@ -795,10 +795,15 @@ Recorded in `design/adr/sync-groundwork.md`.
   the outbox and cursors, reconnect catch-up, and snapshots;
 - all of item 2, with one key per campaign standing in for partition keys;
 - "Sync this campaign", "Open on this device", and replace-or-keep-both;
-- holding remote changes while a field is being typed in.
+- holding remote changes while a field is being typed in;
+- appConfig sync: Rules Profiles, Turn Step Lists, the TOC library and
+  each campaign's profile, as one encrypted, versioned account record over
+  REST (polled every 30 s) rather than an account room;
+- conflict chips (exact: each batch carries the sender's cursor),
+  presence-lite from the campaign room, and the sync-status dot.
 
-Still to do: the account room and appConfig sync, conflict chips,
-presence-lite, the sync-status dot, and the `sync.devices` gate.
+Still to do: the `sync.devices` gate, which needs admin feature flags
+(S1 item 4).
 
 1. Campaign room and account room, the wire protocol, outbox and cursors,
    reconnect catch-up, compaction.

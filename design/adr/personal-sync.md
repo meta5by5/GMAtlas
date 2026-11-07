@@ -132,6 +132,27 @@ of the first slice, not a later one.
      same-named one, instead of duplicating, when it has the same content or
      is still exactly the app's own seed; campaigns pointing at it are moved
      over. Same-named records edited on both sides are both kept.
+9. **Conflicts, presence and the status dot:**
+   - *Conflict chips* (`domain/syncConflicts.js`): last-writer-wins still
+     decides every race; a chip appears only when an edit of mine lost.
+     That is an incoming op on an overlapping path that is newer (or
+     deletes a record mine edited inside), from a device that hadn't seen
+     mine. "Hadn't seen" is exact: every pushed batch carries the sender's
+     cursor (`{ops, seen}` inside the encryption), and my batches learn
+     their seq on ack (kept 15 minutes, at most 300). The `meta.updatedAt`
+     stamp is ignored. The chip offers "Keep mine" (my value written back
+     as a new edit, which then wins everywhere) or "Keep theirs". A record
+     deleted elsewhere can't be restored by id (tombstones are absolute),
+     so that chip only says so. Older clients' batches (a bare op array,
+     no `seen`) are read, and only my unacked edits are checked against
+     them.
+   - *Presence-lite:* the room sends `{t:'presence', devices}` to every
+     caught-up socket on each hello and each close. The logo menu shows
+     "Also open on …", naming devices from `GET /api/devices`.
+   - *Status dot:* on the logo's planet (so it survives compact headers):
+     green live, blue syncing, amber offline or awaiting approval, red
+     error; hidden signed out. It and the chip repaint in place; a sync
+     status change never re-renders the campaign.
 
 ## Consequences
 
@@ -148,10 +169,12 @@ of the first slice, not a later one.
   The sync state holds a second copy of the document (the base). Structural
   sharing in `update()` is the lever if this ever matters.
 - **Not yet built:**
-  - **Sync status and conflicts:** a status dot on the campaign surface,
-    and conflict chips for a lost last-writer-wins race.
-  - **More of the data:** presence. Account settings arrive within 30 s
-    (or on returning to the tab), not live like campaign changes.
+  - **Conflicts:** chips are in memory only (gone on reload), and cover
+    campaigns, not account settings.
+  - **More of the data:** full presence (who is looking at what) is S5.
+    Account settings arrive within 30 s (or on returning to the tab), not
+    live like campaign changes.
+  - **The `sync.devices` gate**, which needs admin feature flags.
   - **Hardening:**
     - closing a revoked device's open socket at once;
     - rotating the vault key after a revoke;

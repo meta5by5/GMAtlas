@@ -16,11 +16,17 @@
 // retry), 'error' (with `error`).
 
 import { sealJson, openJson } from '../domain/syncCrypto.js';
+import { readPath, writePath } from '../domain/syncOps.js';
+import { findLostEdits, describePath, describeValue, pathKey } from '../domain/syncConflicts.js';
 import { createSyncKeys } from './syncKeys.js';
 
 const BACKOFF_MS = [1000, 2000, 5000, 10000, 30000];
 const HOLD_RETRY_MS = 750;
 const MAX_PUSH_CHARS = 900 * 1024;
+// How long an acknowledged batch of mine is remembered for conflict checks
+// (domain/syncConflicts.js), and how many at most per campaign.
+const RECENT_MS = 15 * 60 * 1000;
+const RECENT_MAX = 300;
 
 export function createSyncClient(options = {}) {
   const deps = {
@@ -32,7 +38,13 @@ export function createSyncClient(options = {}) {
     setTimeout: options.setTimeout || ((fn, ms) => setTimeout(fn, ms)),
   };
   let keys = options.keys || null;
-  let state = { status: 'off', campaignId: null, error: null };
+  // presence: device ids with the open campaign open (this one included);
+  // conflicts: edits of mine another device overwrote (see handle 'ops').
+  let state = { status: 'off', campaignId: null, error: null, presence: [], conflicts: [] };
+  const recent = new Map();      // campaign id -> [{seq, ops, at}] my acked batches
+  const sentOps = new Map();     // batch id -> ops, until acked
+  let deviceNames = new Map();   // device id -> name (GET /api/devices)
+  let conflictSeq = 0;
   const listeners = new Set();
   let conn = null;          // {cid, ws, key, inflight:Set, queue:[], draining, closed}
   let retry = 0;
@@ -74,6 +86,7 @@ export function createSyncClient(options = {}) {
       try { conn.ws.close(1000, 'done'); } catch { /* already closed */ }
     }
     conn = null;
+    if (state.presence.length) set({ presence: [] });
   }
 
   /** Brings the connection in line with the world: the open campaign, if
@@ -132,7 +145,7 @@ export function createSyncClient(options = {}) {
     if (conn !== mine) return;
     conn = null;
     const offline = !err || err.code === 'offline' || err.code === 'no_service';
-    set({ status: offline ? 'offline' : 'error', error: err && !offline ? err.message : null });
+    set({ status: offline ? 'offline' : 'error', error: err && !offline ? err.message : null, presence: [] });
     const wait = BACKOFF_MS[Math.min(retry, BACKOFF_MS.length - 1)];
     retry += 1;
     clearTimeout(retryTimer);
@@ -149,12 +162,93 @@ export function createSyncClient(options = {}) {
     set({ status: 'off', campaignId: null, error: null, notice: 'Sync was turned off for this campaign on another device. This copy is kept here.' });
   }
 
+  // --- conflicts and presence ------------------------------------------------
+
+  /** My acked batches still worth checking, oldest dropped. */
+  function remember(cid, batch) {
+    const cutoff = Date.now() - RECENT_MS;
+    const list = (recent.get(cid) || []).filter((b) => b.at >= cutoff);
+    list.push(batch);
+    recent.set(cid, list.slice(-RECENT_MAX));
+  }
+
+  /** Before incoming batches apply: which of my edits they override, with
+   *  my value as it stands now (what would be lost). */
+  async function findConflicts(cid, batches) {
+    const cutoff = Date.now() - RECENT_MS;
+    const mineList = [
+      ...(recent.get(cid) || []).filter((b) => b.at >= cutoff),
+      ...(await deps.store.pendingBatches(cid)).map((b) => ({ seq: null, ops: b.ops })),
+    ];
+    if (!mineList.length) return [];
+    const before = deps.store.peekCampaign(cid);
+    const found = [];
+    for (const b of batches) {
+      if (b.from && b.from === deviceId()) continue; // my own, replayed
+      for (const x of findLostEdits(mineList, b)) {
+        found.push({ ...x, from: b.from, mine: readPath(before, x.path), label: describePath(before, x.path) });
+      }
+    }
+    return found;
+  }
+
+  /** After they apply: keep the ones where my value really was replaced. */
+  function recordConflicts(cid, found) {
+    const after = deps.store.peekCampaign(cid);
+    let list = state.conflicts.slice();
+    for (const x of found) {
+      const theirs = readPath(after, x.path);
+      if (!x.deleted && JSON.stringify(theirs) === JSON.stringify(x.mine)) continue;
+      const key = `${cid}|${pathKey(x.path)}`;
+      list = list.filter((c) => c.key !== key);
+      list.push({
+        id: `cf${++conflictSeq}`, key, campaignId: cid, path: x.path, deleted: x.deleted,
+        label: x.label || 'A field', mine: x.mine, mineText: describeValue(x.mine), theirsText: x.deleted ? '' : describeValue(theirs),
+        from: x.from || null, at: new Date().toISOString(),
+      });
+    }
+    if (list.length !== state.conflicts.length || list.some((c, i) => c !== state.conflicts[i])) set({ conflicts: list.slice(-20) });
+    if (list.some((c) => c.from && !deviceNames.has(c.from))) loadDeviceNames();
+  }
+
+  /** Puts my overwritten value back, as a new edit (which then syncs). */
+  async function keepMine(conflictId) {
+    const c = state.conflicts.find((x) => x.id === conflictId);
+    if (!c || c.deleted) return;
+    await deps.store.updateCampaign(c.campaignId, (doc) => writePath(doc, c.path, c.mine));
+    set({ conflicts: state.conflicts.filter((x) => x.id !== conflictId) });
+  }
+
+  function dismissConflict(conflictId) {
+    set({ conflicts: conflictId ? state.conflicts.filter((x) => x.id !== conflictId) : [] });
+  }
+
+  let namesLoading = null;
+  function loadDeviceNames() {
+    if (namesLoading || !signedIn()) return namesLoading;
+    namesLoading = deps.account.request('GET', '/api/devices').then(({ devices }) => {
+      deviceNames = new Map((devices || []).map((d) => [d.id, d.name || 'Another device']));
+      set({});
+    }).catch(() => { /* names are cosmetic */ }).finally(() => { namesLoading = null; });
+    return namesLoading;
+  }
+
+  /** A device's name, for presence and conflict chips. */
+  function deviceName(id) {
+    if (id && id === deviceId()) return 'This device';
+    return deviceNames.get(id) || 'Another device';
+  }
+
   async function pushAll(mine) {
     if (conn !== mine || !mine.ws || mine.ws.readyState !== 1) return;
     const batches = await deps.store.pendingBatches(mine.cid);
     for (const b of batches) {
       if (conn !== mine || mine.inflight.has(b.batchId)) continue;
-      const env = await sealJson(mine.key, b.ops, mine.cid, 'ops');
+      // `seen`: the last server seq applied here, so a receiver can tell
+      // which of its own edits this one was made without knowing about.
+      const status = deps.store.syncStatus(mine.cid);
+      const env = await sealJson(mine.key, { ops: b.ops, seen: status ? status.cursor : 0 }, mine.cid, 'ops');
+      sentOps.set(b.batchId, b.ops);
       const frame = JSON.stringify({ t: 'push', batchId: b.batchId, env: JSON.stringify(env) });
       if (frame.length > MAX_PUSH_CHARS) {
         set({ status: 'error', error: 'One change is too large to sync (over about 600 KB of text). It’s saved on this device.' });
@@ -199,21 +293,36 @@ export function createSyncClient(options = {}) {
         break;
       case 'ops': {
         const all = [];
+        const batches = [];
         let seq = 0;
         for (const op of frame.ops || []) {
-          all.push(...await openJson(mine.key, JSON.parse(op.env), cid, 'ops'));
+          const body = await openJson(mine.key, JSON.parse(op.env), cid, 'ops');
+          // Older clients sent the op array itself, with no `seen`.
+          const batch = Array.isArray(body) ? { ops: body, seen: null } : { ops: body.ops || [], seen: body.seen };
+          batches.push({ ...batch, from: op.from });
+          all.push(...batch.ops);
           seq = Math.max(seq, op.seq);
         }
+        const lostEdits = await findConflicts(cid, batches);
         await deps.store.applyRemote(cid, all, seq);
+        if (lostEdits.length) recordConflicts(cid, lostEdits);
         break;
       }
       case 'caughtUp':
         set({ status: 'live', error: null });
         pushAll(mine);
         break;
-      case 'ack':
+      case 'ack': {
         mine.inflight.delete(frame.batchId);
+        const ops = sentOps.get(frame.batchId);
+        sentOps.delete(frame.batchId);
+        if (ops) remember(cid, { seq: frame.seq, ops, at: Date.now() });
         await deps.store.ackBatch(cid, frame.batchId, frame.seq);
+        break;
+      }
+      case 'presence':
+        set({ presence: Array.isArray(frame.devices) ? frame.devices : [] });
+        if ((frame.devices || []).some((id) => !deviceNames.has(id))) loadDeviceNames();
         break;
       case 'snapshotReq':
         uploadSnapshot(cid, mine.key).catch((err) => console.warn('snapshot upload failed', err));
@@ -549,7 +658,7 @@ export function createSyncClient(options = {}) {
       if (now === lastSignedIn) return;
       lastSignedIn = now;
       remote = null;
-      if (!now) { lastSetup = null; keys.forget().catch(() => {}); }
+      if (!now) { lastSetup = null; recent.clear(); sentOps.clear(); deviceNames = new Map(); set({ conflicts: [], presence: [] }); keys.forget().catch(() => {}); }
       reconcile();
       if (now) autoSync();
     });
@@ -577,6 +686,7 @@ export function createSyncClient(options = {}) {
 
   return {
     start, reconcile, retryNow, autoSync, syncCampaign, syncSettings,
+    keepMine, dismissConflict, deviceName,
     /** The recovery key from sync's automatic set-up this session (shown
      *  once on Account › Sync), and where it was emailed. */
     lastSetup: () => lastSetup,

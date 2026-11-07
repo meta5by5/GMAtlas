@@ -12273,3 +12273,54 @@ test('joinAccountSettings folds a local record still exactly like its seed into 
   const edited = { ...local, turnStepLists: [{ ...seed, id: 'lHere', groups: [{ id: 'g1', steps: [{ id: 's1', text: 'Edited here' }] }] }] };
   assert.deepEqual(joinAccountSettings(account, edited, { seeds: { profiles: [], turnStepLists: [seed] } }).view.turnStepLists.map((l) => l.id), ['lAcct', 'lHere'], 'edited on both sides: both kept');
 });
+
+// --- sync conflicts (S2: conflict chips) -------------------------------------------
+import { findLostEdits, describePath, describeValue, pathKey } from '../src/domain/syncConflicts.js';
+import { readPath, writePath } from '../src/domain/syncOps.js';
+
+test('findLostEdits: only my edits a newer, unaware edit overrode', () => {
+  const P = ['entities', 'items', { id: 'npc1' }, 'name'];
+  const mine = [{ seq: 5, ops: [{ p: P, k: 'set', v: 'Mine', t: '0001' }] }];
+  const theirs = (over) => ({ seen: 4, ops: [{ p: P, k: 'set', v: 'Theirs', t: '0002', ...over }] });
+  assert.deepEqual(findLostEdits(mine, theirs()), [{ path: P, deleted: false }], 'they had not seen seq 5, and are newer');
+  assert.deepEqual(findLostEdits(mine, { ...theirs(), seen: 5 }), [], 'they had seen mine: an ordinary later edit');
+  assert.deepEqual(findLostEdits(mine, theirs({ t: '0000' })), [], 'mine is newer, so mine stands');
+  assert.deepEqual(findLostEdits(mine, theirs({ v: 'Mine' })), [], 'same value: nothing lost');
+  assert.deepEqual(findLostEdits(mine, theirs({ p: ['entities', 'items', { id: 'npc2' }, 'name'] })), [], 'another record');
+  assert.deepEqual(findLostEdits([{ seq: null, ops: mine[0].ops }], { ...theirs(), seen: 99 }), [{ path: P, deleted: false }], 'unacked: certainly unseen');
+  assert.deepEqual(findLostEdits(mine, { ops: theirs().ops, seen: null }), [], 'an old client without `seen`: only unacked ones count');
+  const parent = theirs({ p: ['entities', 'items', { id: 'npc1' }], v: { id: 'npc1', name: 'Theirs' } });
+  assert.deepEqual(findLostEdits(mine, parent), [{ path: P, deleted: false }], 'a newer write of the whole record covers my field');
+});
+
+test('findLostEdits: a record deleted elsewhere wins whatever its clock, and covers my fields in it', () => {
+  const rec = ['entities', 'items', { id: 'npc1' }];
+  const mine = [{ seq: null, ops: [{ p: [...rec, 'name'], k: 'set', v: 'A', t: '0009' }, { p: [...rec, 'notes'], k: 'set', v: 'B', t: '0009' }] }];
+  assert.deepEqual(findLostEdits(mine, { seen: 0, ops: [{ p: rec, k: 'del', t: '0001' }] }), [{ path: rec, deleted: true }]);
+  assert.deepEqual(findLostEdits([{ seq: null, ops: [{ p: rec, k: 'del', t: '0005' }] }], { seen: 0, ops: [{ p: rec, k: 'del', t: '0001' }] }), [], 'both deleted it');
+});
+
+test('describePath/describeValue/readPath/writePath read and restore by op path', () => {
+  const doc = { entities: { items: [{ id: 'npc1', name: 'Kel Varro', stats: { hp: 3 } }] }, threads: [{ id: 't1', title: 'The Heist' }] };
+  assert.equal(describePath(doc, ['entities', 'items', { id: 'npc1' }, 'name']), 'Entities › Kel Varro › Name');
+  assert.equal(describePath(doc, ['threads', { id: 't1' }, 'dueAt']), 'Threads › The Heist › Due At');
+  assert.equal(describePath(doc, ['threads', { id: 'gone' }]), 'Threads › an item');
+  assert.equal(describeValue('<p>Hello   <b>there</b></p>'), 'Hello there');
+  assert.equal(describeValue(undefined), '(empty)');
+  assert.equal(describeValue([1, 2]), '2 items');
+  assert.equal(describeValue({ name: 'Kel' }), 'Kel');
+  assert.equal(describeValue('x'.repeat(200)).length, 80);
+  assert.equal(pathKey(['a', { id: 'b' }, 'c']), 'a.[b].c');
+  const P = ['entities', 'items', { id: 'npc1' }, 'stats', 'hp'];
+  assert.equal(readPath(doc, P), 3);
+  const next = writePath(doc, P, 7);
+  assert.equal(readPath(next, P), 7);
+  assert.equal(readPath(doc, P), 3, 'input untouched');
+  assert.equal(readPath(writePath(doc, P, undefined), P), undefined, 'undefined removes');
+  assert.equal(readPath(writePath(doc, ['entities', 'items', { id: 'npc9' }], { id: 'npc9', name: 'New' }), ['entities', 'items', { id: 'npc9' }, 'name']), 'New');
+});
+test('findLostEdits ignores the updatedAt stamp every edit writes', () => {
+  const stamp = (t) => ({ p: ['meta', 'updatedAt'], k: 'set', v: `2026-${t}`, t });
+  assert.deepEqual(findLostEdits([{ seq: null, ops: [stamp('0001')] }], { seen: 0, ops: [stamp('0002')] }), []);
+  assert.deepEqual(findLostEdits([{ seq: null, ops: [stamp('0001')] }], { seen: 0, ops: [{ p: ['meta'], k: 'set', v: {}, t: '0002' }] }), []);
+});
