@@ -11835,7 +11835,7 @@ import { nextHlc, observeHlc, syncScopeFor, diffDoc, applyOps, createReplica, ma
 test('every top-level campaign and appConfig key has a sync scope', () => {
   const campaignKeys = [...Object.keys(defaultCampaign()), 'trade', 'mechanicsIndex', 'turnStepLists', 'crewTasks'];
   assert.deepEqual(campaignKeys.filter((k) => !syncScopeFor(CAMPAIGN_SYNC_POLICY, [k])), []);
-  const appConfigKeys = [...Object.keys(defaultAppConfig()), 'licenses', 'licensesVersion', 'entitlements', 'account'];
+  const appConfigKeys = [...Object.keys(defaultAppConfig()), 'licenses', 'licensesVersion', 'entitlements', 'account', 'syncDeclined'];
   assert.deepEqual(appConfigKeys.filter((k) => !syncScopeFor(APP_CONFIG_SYNC_POLICY, [k])), []);
   assert.equal(syncScopeFor(CAMPAIGN_SYNC_POLICY, ['settings', 'ui', 'openPanels']), 'local', 'longest prefix wins');
   assert.equal(syncScopeFor(CAMPAIGN_SYNC_POLICY, ['settings', 'genrePack']), 'gm');

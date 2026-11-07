@@ -80,4 +80,7 @@ export const APP_CONFIG_SYNC_POLICY = {
   // user and device, and the last entitlement certificate. It describes
   // this device, so it never syncs.
   account: 'local',
+  // Synced campaigns removed from this device on purpose, so sync-by-
+  // default (Phase S2) doesn't download them again. Per device.
+  syncDeclined: 'local',
 };
