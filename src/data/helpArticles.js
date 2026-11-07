@@ -11,6 +11,7 @@
 export const HELP_CATEGORIES = [
   { id: 'start', label: 'Getting started', summary: 'What GMAtlas is and how to run it.' },
   { id: 'data', label: 'Campaigns & your data', summary: 'Backups, moving devices, and where things are stored.' },
+  { id: 'account', label: 'Account & sync', summary: 'Signing in, and keeping your devices in step.' },
   { id: 'licenses', label: 'Licenses & game systems', summary: 'Books you own and how a campaign uses them.' },
   { id: 'trouble', label: 'Troubleshooting', summary: 'When something doesn’t look right.' },
 ];
@@ -25,15 +26,17 @@ export const HELP_ARTICLES = [
 
 ## Your data stays with you
 
-Everything you create is stored in **this browser on this device**. There is no account and nothing is sent to a server. That also means:
+Everything you create is stored in **this browser on this device**. You don't need an account. Without one, nothing is sent to a server, and:
 
 - It works offline once it has loaded.
 - Another browser or device doesn't see your campaigns until you move them there. See [Moving to another device](#/help/move-to-another-device).
 - Clearing this site's data in your browser deletes your campaigns, so keep a backup. See [Backing up a campaign](#/help/back-up-a-campaign).
 
+Signed in on the online version, your campaigns can also sync, end-to-end encrypted, between your own devices. See [Your account and signing in](#/help/account-and-sign-in).
+
 ## Where to start
 
-Open **Settings** from the gear at the top right. **Campaigns** is where you create, switch and rename campaigns, and **Modules** sets which game system a campaign plays.`,
+Click the **GMAtlas** logo at the top left and choose **Settings**. **Campaigns** is where you create, switch and rename campaigns, and **Modules** sets which game system a campaign plays.`,
   },
   {
     slug: 'install-and-offline',
@@ -79,7 +82,7 @@ GMAtlas keeps one automatic backup: the campaign as it was just before the lates
     category: 'data',
     title: 'Moving to another device',
     summary: 'Carry a campaign and its documents to another browser.',
-    body: `Each browser keeps its own copy of your campaigns. To continue somewhere else:
+    body: `Each browser keeps its own copy of your campaigns. The easiest way to continue somewhere else is to sign in on both and let them sync: see [Syncing between your devices](#/help/syncing-devices). Without an account:
 
 1. On the old device, export the campaign with **Include DOC library related to this campaign in this export** ticked. See [Backing up a campaign](#/help/back-up-a-campaign).
 2. On the new device, create or switch to an empty campaign, then use **Import Campaign JSON**.
@@ -110,6 +113,92 @@ In Chrome and Edge, **Bind Save File / OneDrive** writes the campaign to a file 
 Clearing site data, cookies or storage for GMAtlas removes all of the above. Export your campaigns first. See [Backing up a campaign](#/help/back-up-a-campaign).`,
   },
   {
+    slug: 'account-and-sign-in',
+    category: 'account',
+    title: 'Your account and signing in',
+    summary: 'What an account adds, and the ways to sign in.',
+    body: `An account is optional. Everything in GMAtlas works without one. Signing in adds:
+
+- **Sync** between your own devices, end-to-end encrypted. See [Syncing between your devices](#/help/syncing-devices).
+- **Your licenses everywhere**: books you tick as owned follow you to every device you sign in on.
+
+To sign in, click the **GMAtlas** logo at the top left and choose **Sign in**. The same steps create an account the first time.
+
+## Ways to sign in
+
+There are no passwords. Use whichever of these you like:
+
+- **Email code**: we email you a 6-digit code. This always works, and it's how you get back in if you lose everything else.
+- **Passkey**: your fingerprint, face or device PIN. Add one under **Account → Sign-in → Add a passkey**, then choose **Sign in with a passkey** next time. A passkey's secret never leaves your device.
+- **Continue with Google** or **Discord**, where the site offers them. Signing in this way the first time joins the account that has the same email address, if the provider has verified it. Connect or disconnect them under **Account → Sign-in**.
+
+## Devices and signing out
+
+**Account → Devices** lists every browser you're signed in on. Rename them so they're easy to tell apart, or sign one out from here if it's lost. **Sign out** in the logo menu signs out this browser only. Your campaigns stay on it.
+
+## The file version
+
+Opened as a file (double-clicking \`index.html\`), GMAtlas can't sign in: browsers don't allow it there. Open the online version to use your account, and export and import a campaign to move it across. See [Moving to another device](#/help/move-to-another-device).`,
+  },
+  {
+    slug: 'syncing-devices',
+    category: 'account',
+    title: 'Syncing between your devices',
+    summary: 'Turned on by signing in; approve each new device once.',
+    body: `While you're signed in, your campaigns, Rules Profiles (including Storyboard positions) and Turn Step lists stay the same on every device you sign in on.
+
+## Encrypted on your device
+
+Everything is encrypted in your browser before it's sent, so the GMAtlas service stores only data it can't read. That's why a new device needs your say-so before it can open your campaigns.
+
+## Setting it up
+
+1. Sign in on your first device. Sync turns on by itself, and your **recovery key** is shown once and emailed to you. Keep it somewhere safe.
+2. Sign in on another device. It shows a 6-digit code and waits.
+3. On a device that's already syncing, open **Account → Devices**, check the code matches, and choose **Approve for sync**. Or type your recovery key on the new device instead.
+
+A campaign starts syncing once you've edited it, so untouched blank campaigns stay local.
+
+## Seeing how it's doing
+
+The small dot on the **GMAtlas** logo shows sync: green when up to date, blue while syncing, amber when offline or waiting for approval, red when something needs a look. The logo menu also says which of your other devices have the same campaign open.
+
+## When two devices change the same thing
+
+If you and another device change the same field at the same moment, the later change wins, and the device whose edit was overwritten shows **⚠ 1 edit overwritten** at the top. Open it to see both versions, and choose **Keep mine** to put yours back.
+
+## Offline
+
+Keep working: changes are saved on the device and sync when it's back online.
+
+## Stopping
+
+**Account → Sync** has **Stop syncing** for each campaign. Every device keeps its own copy.`,
+  },
+  {
+    slug: 'import-my-copy',
+    category: 'licenses',
+    title: 'Adding your own sourcebook PDFs',
+    summary: 'Publishers’ books come from your own files, never from the site.',
+    body: `GMAtlas can show sourcebook PDFs beside your campaign, in the Docs library and the Guide. The site itself only hands out the openly licensed ones (Ironsworn, Ironsworn: Starforged and the D&D 5e SRD). Every other book belongs to its publisher, so you bring your own copy.
+
+## Importing a book
+
+1. Tick the book as owned under **Settings → Licenses**.
+2. Under it, choose **⬆ Import my copy** next to the book, and pick the PDF you bought.
+3. To add several at once, choose **⬆ Import my copies** and select them together. Each file is matched to its book by name. One that isn't recognised is listed, so you can import it on its own.
+
+The PDF is kept in this browser and shared by all your campaigns here. Picking a file with a different name asks first, and a file that isn't a PDF is refused.
+
+## Other devices
+
+Imported PDFs stay on the device they were added on: sync never uploads them. Import them again on another device, or carry them across with **⬇ Export Library** and **⬆ Import Library** (Settings → General). See [Moving to another device](#/help/move-to-another-device).
+
+## Running GMAtlas yourself
+
+On your own machine (\`npm run serve\`, or a copy opened from your disk), **⬇ Load** reads the books from your own \`assets/docs\` folder as before.`,
+  },
+  {
     slug: 'licenses-and-modules',
     category: 'licenses',
     title: 'Licenses, modules and game systems',
@@ -131,7 +220,7 @@ Only then do its rules, Turn Steps and sourcebooks show up in that campaign.
 
 ## Sourcebooks in the Docs library
 
-A campaign's Docs library lists a sourcebook only when its license is owned, the book is loaded into this browser, and its game system is in use in that campaign. Where the book's file is available from the server you opened GMAtlas from, **Load** under its license copies it into this browser. Otherwise, import your own PDF.`,
+A campaign's Docs library lists a sourcebook only when its license is owned, the book is loaded into this browser, and its game system is in use in that campaign. Open-licensed books have **⬇ Load** under their license, which copies the PDF into this browser. Every other publisher's book needs your own copy: see [Adding your own sourcebook PDFs](#/help/import-my-copy).`,
   },
   {
     slug: 'not-seeing-latest-version',
@@ -143,7 +232,7 @@ A campaign's Docs library lists a sourcebook only when its license is owned, the
 1. Reload the page.
 2. If that doesn't help, close **every** GMAtlas tab and window (including an installed app window), then open it again.
 
-To see which version you're running, choose **About** in the gear menu.`,
+To see which version you're running, click the **GMAtlas** logo at the top left and choose **About**.`,
   },
   {
     slug: 'a-change-went-missing',

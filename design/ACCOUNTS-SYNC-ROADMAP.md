@@ -786,7 +786,10 @@ Recorded in `design/adr/sync-groundwork.md`.
 4. Admin v1: users, entitlements (grant/revoke/trial), feature flags, audit
    log. **Built** (`design/adr/admin-v1.md`).
 5. Third-party PDF handling change (section 4.5): "Import my copy" replaces
-   public `assets/docs` loads for non-open licenses.
+   public `assets/docs` loads for non-open licenses. **Built**
+   (`domain/permissions.js` `referenceDocSource`; the hosted site ships
+   open PDFs under 25 MiB only; the Monster Manual is now its own owned
+   license, `dnd5e-mm`, since it isn't part of the CC-BY SRD).
 
 ### S2 — Personal sync across one user's devices
 
