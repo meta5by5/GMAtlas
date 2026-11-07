@@ -484,15 +484,17 @@ function createStore() {
    *  outcome to throw from anymore). `{silent: true}` skips the immediate
    *  notify — for a value the screen already shows (the Journal compose
    *  box's draft, saved on blur), where a re-render would only get in the
-   *  way of the click that caused the blur. A rollback still notifies. */
-  function update(mutator, { silent = false } = {}) {
+   *  way of the click that caused the blur. A rollback still notifies.
+   *  `{system: true}` marks the app's own housekeeping (defaults it fills
+   *  in), which doesn't count as editing the campaign (noteEdited). */
+  function update(mutator, { silent = false, system = false } = {}) {
     const activeId = appConfig.activeCampaignId;
     const prev = docs.get(activeId);
     const next = mutator(structuredCloneSafe(prev));
     const nextDoc = next || prev;
     nextDoc.meta.updatedAt = new Date().toISOString();
     docs.set(activeId, nextDoc);
-    noteEdited(activeId, prev, nextDoc);
+    if (!system) noteEdited(activeId, prev, nextDoc);
     if (!silent) notify();
     persistCampaignDoc(activeId, prev, nextDoc).catch((err) => {
       console.warn('persist failed (IndexedDB)', err);
