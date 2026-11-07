@@ -1,4 +1,4 @@
-# server/ — GMAtlas accounts, sync and licensing service
+﻿# server/ â€” GMAtlas accounts, sync and licensing service
 
 Lives on the **`server`** branch only, until a roadmap phase is complete and
 merged into `main`. The design is `design/ACCOUNTS-SYNC-ROADMAP.md`. Read
@@ -71,7 +71,7 @@ test/                         node:sqlite D1 shim + end-to-end tests
   (`scripts/site.js`, the same files the Pages deploy publishes) and runs
   `wrangler dev` (fetched on demand by `npx`) at `http://localhost:8787`, with
   the app and `/api` on one origin. Sign-in codes print to the console.
-- **Deploying.** Live at `https://gmatlas.gmatlas-server.workers.dev`,
+- **Deploying.** Live at `https://dev.gmatlas.online` (custom domain in `wrangler.toml`; `https://gmatlas.gmatlas-server.workers.dev` also still serves it),
   on the D1 database `db_gmatlas`. The one-time setup is done: migrations
   applied (`npm run migrate:remote`), secrets set (`npm run
   secrets:remote`, key `k1`, public half in `keys/cert-k1.public.json`).

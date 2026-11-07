@@ -16,6 +16,14 @@ name = "gmatlas"
 main = "src/worker.js"
 compatibility_date = "2026-10-01"
 
+# Served at dev.gmatlas.online (Cloudflare creates its DNS record and
+# certificate on deploy; the gmatlas.online zone must be in this account).
+# The workers.dev address stays on as a fallback.
+workers_dev = true
+routes = [
+  { pattern = "dev.gmatlas.online", custom_domain = true },
+]
+
 [vars]
 CERT_KEY_ID = "k1"
 MAIL_FROM = "GMAtlas <info@gmatlas.online>"
