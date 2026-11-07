@@ -40,9 +40,7 @@ Still to do in S1:
   portal, the certificate feeding `effectiveLicenses`);
 - admin v1;
 - moving third-party PDF loading to "import my copy";
-- a per-IP rate limit on code requests;
-- email delivery in production (deployed, but no `RESEND_API_KEY` yet, so
-  live sign-in can't send codes; see "Deploying" below).
+- a per-IP rate limit on code requests.
 
 ## Layout
 
@@ -71,14 +69,18 @@ test/                         node:sqlite D1 shim + end-to-end tests
   (`scripts/site.js`, the same files the Pages deploy publishes) and runs
   `wrangler dev` (fetched on demand by `npx`) at `http://localhost:8787`, with
   the app and `/api` on one origin. Sign-in codes print to the console.
-- **Deploying.** Live at `https://dev.gmatlas.online` (custom domain in `wrangler.toml`; `https://gmatlas.gmatlas-server.workers.dev` also still serves it),
-  on the D1 database `db_gmatlas`. The one-time setup is done: migrations
-  applied (`npm run migrate:remote`), secrets set (`npm run
-  secrets:remote`, key `k1`, public half in `keys/cert-k1.public.json`).
-  Still needed: verify `gmatlas.online` as a Resend sending domain, then
-  `npx wrangler secret put RESEND_API_KEY`. After that, a later change
-  ships with `npm run deploy` (plus `npm run migrate:remote` when a
-  migration is added).
+- **Deploying.** Live at `https://dev.gmatlas.online` (custom domain in
+  `wrangler.toml`; `https://gmatlas.gmatlas-server.workers.dev` also still
+  serves it), on the D1 database `db_gmatlas`. The one-time setup is done:
+  - migrations applied (`npm run migrate:remote`);
+  - secrets set (`npm run secrets:remote`, key `k1`, public half in
+    `keys/cert-k1.public.json`);
+  - email through Resend from `info@gmatlas.online` (`RESEND_API_KEY`).
+
+  A live email sign-in has been run end to end. A later change ships with
+  `npm run deploy`, plus `npm run migrate:remote` when a migration is added.
+  On Windows PowerShell, use `npx.cmd`/`npm.cmd` if script execution is
+  disabled.
 
 ### Rotating the signing key
 
