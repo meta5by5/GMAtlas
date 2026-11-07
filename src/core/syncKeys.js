@@ -143,15 +143,20 @@ export function createSyncKeys({ store, account }) {
     const raw = randomBytes(32);
     const sealed = await sealCampaignKey(raw, await vaultKey(), campaignId);
     const key = await importAesKey(raw);
-    campaignKeys.set(campaignId, key);
+    campaignKeys.set(cacheId(campaignId, sealed), key);
     return { key, sealed };
   }
 
+  // Cached by id AND sealed form: if two devices race to create a key for
+  // the same id, the one that lost never keeps using its own.
+  const cacheId = (campaignId, sealed) => `${campaignId}|${JSON.stringify(sealed)}`;
+
   /** A synced campaign's key, from its sealed form (server list). */
   async function campaignKey(campaignId, sealed) {
-    if (campaignKeys.has(campaignId)) return campaignKeys.get(campaignId);
+    const id = cacheId(campaignId, sealed);
+    if (campaignKeys.has(id)) return campaignKeys.get(id);
     const key = await importAesKey(await openCampaignKey(sealed, await vaultKey(), campaignId));
-    campaignKeys.set(campaignId, key);
+    campaignKeys.set(id, key);
     return key;
   }
 

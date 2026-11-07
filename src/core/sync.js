@@ -317,6 +317,73 @@ export function createSyncClient(options = {}) {
   let autoAgain = false;
   let lastSetup = null;
 
+  // --- account settings ---------------------------------------------------------
+  // Rules Profiles (Storyboard positions, modules, ruleset), Turn Step
+  // Lists, the TOC library and each synced campaign's profile: one
+  // encrypted record per account (domain/accountSettings.js). Fetched and
+  // merged on every sync-by-default pass, a moment after a change here,
+  // and every 30 s while the app is in view. Each upload names the version
+  // it merged, so two devices can't overwrite each other: the one that
+  // loses re-fetches, merges again and retries.
+
+  const SETTINGS_ID = '~account';
+  const SETTINGS_POLL_MS = 30000;
+  const SETTINGS_DEBOUNCE_MS = 1500;
+  let settingsRunning = null;
+  let settingsAgain = false;
+  let settingsTimer = null;
+
+  function syncSettings() {
+    if (!deps.store || !deps.account || !keys || !signedIn() || !deps.store.mergeAccountSettings) return Promise.resolve();
+    if (settingsRunning) { settingsAgain = true; return settingsRunning; }
+    settingsRunning = (async () => {
+      do { settingsAgain = false; await syncSettingsOnce(); } while (settingsAgain);
+    })().catch((err) => {
+      console.warn('account settings sync failed', err);
+      if (err.code !== 'offline' && err.code !== 'no_service') set({ error: `Settings didn’t sync: ${err.message}` });
+    }).finally(() => { settingsRunning = null; });
+    return settingsRunning;
+  }
+
+  function syncSettingsSoon() {
+    clearTimeout(settingsTimer);
+    settingsTimer = deps.setTimeout(() => { settingsTimer = null; syncSettings(); }, SETTINGS_DEBOUNCE_MS);
+  }
+
+  async function syncSettingsOnce() {
+    const user = deps.account.getState().user;
+    if (!user) return;
+    if ((await keys.status()).state !== 'ready') return;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const status = await deps.store.accountSettingsStatus(user.id);
+      const res = await deps.account.request('GET', `/api/account/settings?known=${status ? status.version : -1}`);
+      let remote = null;
+      if (res.version && res.unchanged) {
+        if (!status.pending) return;
+        remote = 'same';
+      } else if (res.version) {
+        const key = await keys.campaignKey(SETTINGS_ID, res.sealedKey);
+        remote = { version: res.version, replica: await openJson(key, res.env, SETTINGS_ID, 'settings') };
+      }
+      const merged = await deps.store.mergeAccountSettings({ userId: user.id, deviceId: deviceId(), remote });
+      if (!merged.upload) return;
+      let key;
+      let sealedKey = res.sealedKey;
+      if (res.version) key = await keys.campaignKey(SETTINGS_ID, res.sealedKey);
+      else ({ key, sealed: sealedKey } = await keys.newCampaignKey(SETTINGS_ID));
+      const env = await sealJson(key, merged.replica, SETTINGS_ID, 'settings');
+      try {
+        const put = await deps.account.request('PUT', '/api/account/settings', { baseVersion: merged.baseVersion, sealedKey, env });
+        await deps.store.ackAccountSettings(put.version);
+        return;
+      } catch (err) {
+        if (err.code !== 'version_conflict') throw err;
+        // Another device saved first: fetch theirs, merge, try again.
+      }
+    }
+    throw new Error('Settings kept changing on another device; will try again.');
+  }
+
   // A campaign that has never been edited (store.campaignEdited). For one
   // from before that flag existed, fall back to "never saved after it was
   // created".
@@ -353,6 +420,9 @@ export function createSyncClient(options = {}) {
       if (!conn) set({ status: 'locked', campaignId: activeId() });
       return;
     }
+    // Settings first, so campaigns arriving below pick up the account's
+    // profiles and Turn Step Lists rather than this device's defaults.
+    await syncSettings();
     const known = await remoteCampaigns(true);
     for (const c of deps.store.listCampaigns()) {
       if (c.sync || c.syncOptOut || known.has(c.id)) continue;
@@ -448,13 +518,31 @@ export function createSyncClient(options = {}) {
     };
     let lastWanted = wanted();
     let lastShape = campaignsShape();
+    // Account settings re-sync shortly after any of them changes here.
+    const settingsShape = () => {
+      const cfg = deps.store.getAppConfig();
+      return [cfg.profiles, cfg.turnStepLists, cfg.tocLibrary, (cfg.campaigns || []).map((c) => `${c.id}:${c.profileId}:${c.sync ? 1 : 0}`).join(',')];
+    };
+    let lastSettings = settingsShape();
     deps.store.subscribe(() => {
       const now = wanted();
       if (now !== lastWanted) { lastWanted = now; reconcile(); }
       const shape = campaignsShape();
       if (shape !== lastShape) { lastShape = shape; autoSync(); }
+      const settings = settingsShape();
+      if (settings.some((v, i) => v !== lastSettings[i])) { lastSettings = settings; if (signedIn()) syncSettingsSoon(); }
       pushTitles();
     });
+    // Another device's settings changes arrive within SETTINGS_POLL_MS
+    // while the app is in view (campaign changes arrive live).
+    const online = deps.location && /^https?:$/.test(deps.location.protocol || '');
+    if (online && globalThis.setInterval) {
+      globalThis.setInterval(() => {
+        const doc = globalThis.document;
+        if (doc && doc.visibilityState && doc.visibilityState !== 'visible') return;
+        if (signedIn()) syncSettings();
+      }, SETTINGS_POLL_MS);
+    }
     let lastSignedIn = signedIn();
     deps.account.subscribe(() => {
       const now = signedIn();
@@ -488,7 +576,7 @@ export function createSyncClient(options = {}) {
   }
 
   return {
-    start, reconcile, retryNow, autoSync, syncCampaign,
+    start, reconcile, retryNow, autoSync, syncCampaign, syncSettings,
     /** The recovery key from sync's automatic set-up this session (shown
      *  once on Account › Sync), and where it was emailed. */
     lastSetup: () => lastSetup,

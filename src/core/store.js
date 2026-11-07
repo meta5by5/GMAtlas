@@ -48,6 +48,7 @@ import { listInlineBlobs, applyMovedBlobs, blobKeysToInline, inlineBlobsForExpor
 import { effectiveLicenses } from '../domain/licensing.js';
 import { diffDoc, applyOps, nextHlc, observeHlc, createReplica, syncedView, withLocalPaths, withoutInlineBytes } from '../domain/syncOps.js';
 import { CAMPAIGN_SYNC_POLICY } from '../data/syncPolicy.js';
+import { accountSettingsView, withAccountSettings, joinAccountSettings, remapCampaignProfiles, remapTurnStepSlots } from '../domain/accountSettings.js';
 const STORAGE_KEY = 'sagaatlas.campaign'; // legacy localStorage key — read-only fallback for pre-IndexedDB campaigns, never written again
 const BACKUP_KEY = 'sagaatlas.campaign.backup'; // ditto
 const MIGRATED_FLAG = 'sagaatlas.migratedFromLegacy';
@@ -153,6 +154,9 @@ function idbPutMany(db, entries, storeName = STORE_NAME) {
 // The base is persisted, so a change made just before a crash or reload is
 // still found on the next load: the diff then runs against the stored base.
 const SYNC_KEYS_KEY = 'syncKeys';
+// Account settings sync state (domain/accountSettings.js):
+// {v, userId, deviceId, base, meta, hlc, version, outbox}.
+const SYNC_ACCOUNT_KEY = 'syncAccount';
 const syncStateKey = (id) => `sync:${id}`;
 const SYNC_FLUSH_MS = 100;
 
@@ -391,6 +395,28 @@ function createStore() {
     backupMeta = { exists: !!backup, bytes: byteSize(JSON.stringify(backup || null)) };
   }
 
+  /** The idempotent appConfig backfills every boot runs (load() below). */
+  function bootBackfills(cfg) {
+    let backfilled = hoistLegacyProfileTurnSteps(cfg);
+    backfilled = backfillTurnStepListInventory(backfilled, TURN_STEPS_5PFH, PLANETFALL_TURN_STEPS, TURN_STEPS_FIVE_LEAGUES);
+    backfilled = fixPlanetfallBranching(backfilled);
+    backfilled = backfillDefaultCrewTasks(backfilled, CREW_TASKS_5PFH);
+    backfilled = grandfatherCampaignPanelActivation(backfilled);
+    backfilled = migrateLicensesV2(migrateLicensesFromActivations(backfilled));
+    backfilled = backfillDnd5eStoryboardProfile(backfilled);
+    backfilled = backfillFiveLeaguesStoryboardProfile(backfilled);
+    backfilled = backfillGenrePackRename(backfilled);
+    return backfilled;
+  }
+
+  /** The profiles and Turn Step Lists a brand-new install starts with: an
+   *  account settings join folds a record still exactly like its seed into
+   *  the account's same-named one (domain/accountSettings.js). */
+  function freshSeeds() {
+    const fresh = bootBackfills(migrateLicensesV2(migrateLicensesFromActivations(wrapLegacyCampaignIntoAppConfig(defaultCampaign()).appConfig)));
+    return { profiles: fresh.profiles || [], turnStepLists: fresh.turnStepLists || [] };
+  }
+
   /** Load on boot: absorb legacy keys once, else read our own registry.
    *  Async now (IndexedDB) — main.js awaits this before mounting the shell. */
   async function load() {
@@ -409,15 +435,7 @@ function createStore() {
       // "Planetfall" lists exist regardless (seeding from this app's own
       // default content if either is still missing) — both idempotent, run
       // every boot, cheap no-ops once already done.
-      let backfilled = hoistLegacyProfileTurnSteps(appConfig);
-      backfilled = backfillTurnStepListInventory(backfilled, TURN_STEPS_5PFH, PLANETFALL_TURN_STEPS, TURN_STEPS_FIVE_LEAGUES);
-      backfilled = fixPlanetfallBranching(backfilled);
-      backfilled = backfillDefaultCrewTasks(backfilled, CREW_TASKS_5PFH);
-      backfilled = grandfatherCampaignPanelActivation(backfilled);
-      backfilled = migrateLicensesV2(migrateLicensesFromActivations(backfilled));
-      backfilled = backfillDnd5eStoryboardProfile(backfilled);
-      backfilled = backfillFiveLeaguesStoryboardProfile(backfilled);
-      backfilled = backfillGenrePackRename(backfilled);
+      const backfilled = bootBackfills(appConfig);
       if (backfilled !== appConfig) {
         appConfig = backfilled;
         await idbPut(database, APP_CONFIG_KEY, appConfig);
@@ -1041,7 +1059,9 @@ function createStore() {
     if (local) await idbPut(database, campaignBackupDocKey(id), local);
     if (!existing) {
       const now = new Date().toISOString();
-      const profileId = (appConfig.profiles[0] && appConfig.profiles[0].id) || null;
+      // The profile the account uses for it, when account settings know.
+      const chosen = accountSync && accountSync.base && accountSync.base.campaignProfiles && accountSync.base.campaignProfiles[id];
+      const profileId = (chosen && appConfig.profiles.some((p) => p.id === chosen) && chosen) || (appConfig.profiles[0] && appConfig.profiles[0].id) || null;
       appConfig = { ...appConfig, campaigns: [...appConfig.campaigns, { id, title: title || doc.meta.title, profileId, createdAt: now, updatedAt: now, edited: true }] };
     }
     setEntrySync(id, true);
@@ -1082,6 +1102,113 @@ function createStore() {
     docs.set(fresh, forked);
     notify();
     return fresh;
+  }
+
+  // --- account settings sync (domain/accountSettings.js) ----------------
+  // Profiles, Turn Step Lists, the TOC library and each synced campaign's
+  // profile, shared by every device of the account. core/sync.js fetches
+  // the account's copy (a replica: document + per-field clocks), this
+  // merges it with what changed here since the last sync, and sync.js
+  // uploads the result if anything here was new.
+
+  let accountSync = null;
+  let accountSyncLoaded = false;
+
+  async function loadAccountSync() {
+    if (accountSyncLoaded) return;
+    const database = await db();
+    accountSync = (await idbGet(database, SYNC_ACCOUNT_KEY)) || null;
+    accountSyncLoaded = true;
+  }
+
+  /** The account settings sync state: the server version last merged, and
+   *  whether changes made here wait to be uploaded. Null before the first
+   *  sync, or for another account. */
+  async function accountSettingsStatus(userId) {
+    await loadAccountSync();
+    if (!accountSync || accountSync.userId !== userId) return null;
+    const view = accountSettingsView(appConfig, accountSync.base);
+    let pending = accountSync.outbox.length > 0;
+    if (!pending) {
+      try { pending = diffDoc({ doc: accountSync.base, meta: accountSync.meta }, view, { hlc: '0' }).length > 0; } catch { pending = true; }
+    }
+    return { version: accountSync.version, pending };
+  }
+
+  /** Merges the account's settings into this device's.
+   *  `remote`: `{version, replica}` from the server, `'same'` when the
+   *  server still has the version this device last merged, or null when
+   *  the account has none yet. The first merge for an account joins: the
+   *  account's settings win, this device's extras are added, and its
+   *  untouched seeds fold into the account's (campaigns pointing at them
+   *  are moved over). Resolves to `{upload, replica, baseVersion}`:
+   *  `upload` is true when the account copy lacks something from here. */
+  async function mergeAccountSettings({ userId, deviceId, remote }) {
+    await loadAccountSync();
+    const st = accountSync && accountSync.userId === userId ? accountSync : null;
+    if (remote === 'same' && !st) throw new Error('Account settings were never synced here.');
+    const hlc = nextHlc(st && st.hlc, Date.now(), deviceId);
+    let start;
+    let version;
+    if (remote === 'same') { start = { doc: st.base, meta: st.meta }; version = st.version; }
+    else if (remote) { start = remote.replica; version = remote.version; }
+    else { start = createReplica({}); version = 0; }
+
+    let ops;
+    let remap = null;
+    if (st && remote) {
+      // Steady state: what changed here since the last merge (plus anything
+      // merged before but not yet uploaded), on top of the account's copy.
+      ops = [...st.outbox, ...diffDoc({ doc: st.base, meta: st.meta }, accountSettingsView(appConfig, st.base), { hlc })];
+    } else if (remote) {
+      const joined = joinAccountSettings(remote.replica.doc, accountSettingsView(appConfig), { seeds: freshSeeds() });
+      remap = joined.remap;
+      ops = diffDoc(start, joined.view, { hlc });
+    } else {
+      // The account has none (first device, or sync was reset): all of it.
+      ops = diffDoc(start, accountSettingsView(appConfig), { hlc });
+    }
+    const merged = applyOps(start, ops);
+
+    const before = JSON.stringify(accountSettingsView(appConfig, merged.doc));
+    let nextConfig = remap ? remapCampaignProfiles(appConfig, remap.profiles) : appConfig;
+    nextConfig = withAccountSettings(nextConfig, merged.doc);
+    const changed = !!remap || JSON.stringify(accountSettingsView(nextConfig, merged.doc)) !== before;
+    accountSync = { v: 1, userId, deviceId, base: merged.doc, meta: merged.meta, hlc, version, outbox: ops };
+    const database = await db();
+    if (changed) {
+      appConfig = nextConfig;
+      await idbPutMany(database, [[APP_CONFIG_KEY, appConfig], [SYNC_ACCOUNT_KEY, accountSync]]);
+      if (remap && Object.keys(remap.turnStepLists).length) await remapCampaignSlots(remap.turnStepLists);
+      notify();
+    } else {
+      await idbPut(database, SYNC_ACCOUNT_KEY, accountSync);
+    }
+    return { upload: ops.length > 0 || !remote, replica: merged, baseVersion: version };
+  }
+
+  /** The server stored the merged settings as `version`. */
+  async function ackAccountSettings(version) {
+    await loadAccountSync();
+    if (!accountSync) return;
+    accountSync = { ...accountSync, version, outbox: [] };
+    const database = await db();
+    await idbPut(database, SYNC_ACCOUNT_KEY, accountSync);
+  }
+
+  /** After joining: every campaign here whose Turn Step slots pointed at a
+   *  seed list that folded into the account's points at the account's. */
+  async function remapCampaignSlots(listRemap) {
+    const database = await db();
+    for (const c of appConfig.campaigns) {
+      const prev = docs.get(c.id) || await idbGet(database, campaignDocKey(c.id));
+      if (!prev) continue;
+      const next = remapTurnStepSlots(prev, listRemap);
+      if (next === prev) continue;
+      if (docs.has(c.id)) docs.set(c.id, next);
+      if (docs.has(c.id)) await persistCampaignDoc(c.id, prev, next);
+      else await idbPut(database, campaignDocKey(c.id), next);
+    }
   }
 
   /** Called with a campaign id whenever a new outbox batch is ready. */
@@ -1202,6 +1329,7 @@ function createStore() {
     addTurnStepList, updateAppConfig, setCertificate,
     campaignEdited, syncStatus, enableSync, disableSync, pendingBatches, ackBatch, applyRemote, syncSnapshot,
     adoptSyncedCampaign, forkCampaign, onLocalOps, getSyncKeys, setSyncKeys,
+    accountSettingsStatus, mergeAccountSettings, ackAccountSettings,
     STORAGE_KEY, BACKUP_KEY, LEGACY_KEYS,
   };
 }

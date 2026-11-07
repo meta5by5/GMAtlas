@@ -110,6 +110,28 @@ of the first slice, not a later one.
      - *Keep both:* the local copy gets a new id.
    - Stop syncing deletes the server copy. Other devices are told
      (`revoked`), and every device keeps its local copy.
+8. **Account settings** (`domain/accountSettings.js`, `account_settings`
+   table): the settings every device of the account shares.
+   - What: Rules Profiles (Storyboard positions, modules, ruleset, crew
+     tasks), the Turn Step List inventory, the Reference TOC library, and
+     which profile each synced campaign uses (`campaignProfiles`). A device
+     speaks only for the campaigns it syncs; other entries are carried over.
+   - How: one record per account, encrypted with a settings key sealed by
+     the vault key (context `~account`). It holds a replica (document plus
+     per-field clocks), merged with the same `syncOps` as campaigns. The
+     store keeps `syncAccount` (base, clocks, outbox, server version).
+   - Writes name the version they merged (`baseVersion`). A stale write is
+     refused (409 `version_conflict`); the device re-fetches, merges and
+     retries, so concurrent edits on two devices both survive.
+   - When: before campaigns in every sync-by-default pass (so arriving
+     campaigns get the account's profile and lists), 1.5 s after a change
+     here, and every 30 s while the app is in view over http(s). Polling
+     is cheap: `?known=<version>` answers `unchanged` without the record.
+   - A device's first join keeps everything the account has and adds what
+     only this device has. A local profile or list folds into the account's
+     same-named one, instead of duplicating, when it has the same content or
+     is still exactly the app's own seed; campaigns pointing at it are moved
+     over. Same-named records edited on both sides are both kept.
 
 ## Consequences
 
@@ -128,10 +150,8 @@ of the first slice, not a later one.
 - **Not yet built:**
   - **Sync status and conflicts:** a status dot on the campaign surface,
     and conflict chips for a lost last-writer-wins race.
-  - **More of the data:** presence, and appConfig (Rules Profiles, Turn
-    Step Lists) syncing through an account partition. Until then a newly
-    opened campaign uses that device's first Rules Profile, and Turn Step
-    slot assignments can point at lists the device doesn't have.
+  - **More of the data:** presence. Account settings arrive within 30 s
+    (or on returning to the tab), not live like campaign changes.
   - **Hardening:**
     - closing a revoked device's open socket at once;
     - rotating the vault key after a revoke;

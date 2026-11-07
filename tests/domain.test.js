@@ -12179,3 +12179,97 @@ test('withoutInlineBytes strips data: URLs and is a no-op (same object) otherwis
   assert.deepEqual(withoutInlineBytes(dirty), { gallery: [{ id: 'g1', title: 'Map' }], tags: ['x'] });
   assert.equal(dirty.gallery[0].data.startsWith('data:'), true, 'input untouched');
 });
+
+
+// --- account settings (Phase S2: profiles, Turn Step Lists, TOC library) -------
+import { accountSettingsView, withAccountSettings, joinAccountSettings, remapCampaignProfiles, remapTurnStepSlots } from '../src/domain/accountSettings.js';
+
+const acctCfg = () => ({
+  activeCampaignId: 'c1',
+  campaigns: [
+    { id: 'c1', title: 'One', profileId: 'pA', sync: true },
+    { id: 'c2', title: 'Local', profileId: 'pA' },
+  ],
+  profiles: [{ id: 'pA', name: 'Default', createdAt: 't1', updatedAt: 't1', storyboardPositions: { composer: 'dashboard' } }],
+  turnStepLists: [{ id: 'lA', name: '5PFH', createdAt: 't1', updatedAt: 't1', groups: [{ id: 'g1', steps: [{ id: 's1', text: 'Roll' }] }] }],
+  tocLibrary: { 'book.pdf': { docTitle: 'Book', entries: [] } },
+});
+
+test('accountSettingsView carries profiles, lists, the TOC library and synced campaigns’ profiles only', () => {
+  const view = accountSettingsView(acctCfg());
+  assert.deepEqual(Object.keys(view).sort(), ['campaignProfiles', 'profiles', 'tocLibrary', 'turnStepLists']);
+  assert.deepEqual(view.campaignProfiles, { c1: 'pA' }, 'a local-only campaign’s choice stays here');
+  const kept = accountSettingsView(acctCfg(), { campaignProfiles: { elsewhere: 'pZ', c1: 'pOld' } });
+  assert.deepEqual(kept.campaignProfiles, { elsewhere: 'pZ', c1: 'pA' }, 'other devices’ campaigns are carried over, this device speaks for its own');
+});
+
+test('withAccountSettings applies the view and moves named campaigns to existing profiles only', () => {
+  const cfg = acctCfg();
+  const view = { ...accountSettingsView(cfg), profiles: [...cfg.profiles, { id: 'pB', name: 'Five Leagues' }], campaignProfiles: { c1: 'pB', c2: 'pB', ghost: 'pB' } };
+  const next = withAccountSettings(cfg, view);
+  assert.equal(next.profiles.length, 2);
+  assert.equal(next.campaigns.find((c) => c.id === 'c1').profileId, 'pB');
+  assert.equal(next.campaigns.length, 2, 'campaigns not on this device are not created');
+  const missing = withAccountSettings(cfg, { ...view, campaignProfiles: { c1: 'nope' } });
+  assert.equal(missing.campaigns.find((c) => c.id === 'c1').profileId, 'pA', 'an unknown profile id is ignored');
+  assert.equal(cfg.profiles.length, 1, 'input untouched');
+});
+
+test('joinAccountSettings keeps the account’s, adds this device’s extras, and folds untouched seeds into the account’s', () => {
+  const account = accountSettingsView(acctCfg());
+  const local = {
+    profiles: [
+      { id: 'pLocalSeed', name: 'Default', createdAt: 't9', updatedAt: 't9', storyboardPositions: { composer: 'dashboard' } },
+      { id: 'pMine', name: 'Mine', storyboardPositions: { composer: 'colony' } },
+    ],
+    turnStepLists: [
+      { id: 'lLocalSeed', name: '5PFH', createdAt: 't9', updatedAt: 't9', groups: [{ id: 'g1', steps: [{ id: 's1', text: 'Roll' }] }] },
+      { id: 'lEdited', name: '5PFH', groups: [{ id: 'g1', steps: [{ id: 's1', text: 'Roll twice' }] }] },
+    ],
+    tocLibrary: { 'other.pdf': { docTitle: 'Other' }, 'book.pdf': { docTitle: 'Local title' } },
+    campaignProfiles: { cLocal: 'pLocalSeed', c1: 'pMine' },
+  };
+  const { view, remap } = joinAccountSettings(account, local);
+  assert.deepEqual(view.profiles.map((p) => p.id), ['pA', 'pMine'], 'same-name, same-content seed folded; custom one added after');
+  assert.deepEqual(view.turnStepLists.map((l) => l.id), ['lA', 'lEdited'], 'a same-name list with edits is kept, never dropped');
+  assert.deepEqual(remap, { profiles: { pLocalSeed: 'pA' }, turnStepLists: { lLocalSeed: 'lA' } });
+  assert.equal(view.tocLibrary['book.pdf'].docTitle, 'Book', 'the account wins a shared key');
+  assert.ok(view.tocLibrary['other.pdf'], 'local-only scans are added');
+  assert.deepEqual(view.campaignProfiles, { c1: 'pA', cLocal: 'pA' }, 'the account’s choice wins; a local one follows its folded profile');
+  const cfg = remapCampaignProfiles({ campaigns: [{ id: 'x', profileId: 'pLocalSeed' }, { id: 'y', profileId: 'pMine' }] }, remap.profiles);
+  assert.deepEqual(cfg.campaigns.map((c) => c.profileId), ['pA', 'pMine']);
+  const doc = { turnStepSlotAssignments: { starship: 'lLocalSeed', colony: 'lOther', warband: null } };
+  assert.deepEqual(remapTurnStepSlots(doc, remap.turnStepLists).turnStepSlotAssignments, { starship: 'lA', colony: 'lOther', warband: null });
+  assert.equal(remapTurnStepSlots(doc, {}), doc, 'unchanged doc returned as is');
+});
+
+test('account settings from two devices converge through syncOps without losing either side’s edits', () => {
+  // Device A creates the account copy; B joins; both edit; each merges the other's.
+  const a0 = accountSettingsView(acctCfg());
+  const acct1 = applyOps(createReplica({}), diffDoc(createReplica({}), a0, { hlc: nextHlc(null, 1000, 'devA') }));
+  const join = joinAccountSettings(acct1.doc, { profiles: [{ id: 'pB', name: 'B only' }], turnStepLists: [], tocLibrary: {}, campaignProfiles: {} });
+  const acct2 = applyOps(acct1, diffDoc(acct1, join.view, { hlc: nextHlc(null, 2000, 'devB') }));
+  // A (last saw acct1) moves the Storyboard composer; B (saw acct2) renames a step.
+  const aView = JSON.parse(JSON.stringify(acct1.doc));
+  aView.profiles[0].storyboardPositions.composer = 'trade';
+  const aOps = diffDoc(acct1, aView, { hlc: nextHlc(null, 3000, 'devA') });
+  const bView = JSON.parse(JSON.stringify(acct2.doc));
+  bView.turnStepLists[0].groups[0].steps[0].text = 'Roll 2d6';
+  const bOps = diffDoc(acct2, bView, { hlc: nextHlc(null, 3001, 'devB') });
+  const viaA = applyOps(applyOps(acct2, bOps), aOps);
+  const viaB = applyOps(applyOps(acct2, aOps), bOps);
+  assert.deepEqual(viaA.doc, viaB.doc, 'order doesn’t matter');
+  assert.equal(viaA.doc.profiles.find((p) => p.id === 'pA').storyboardPositions.composer, 'trade');
+  assert.equal(viaA.doc.turnStepLists[0].groups[0].steps[0].text, 'Roll 2d6');
+  assert.ok(viaA.doc.profiles.some((p) => p.id === 'pB'), 'B’s profile survived A’s edit');
+});
+test('joinAccountSettings folds a local record still exactly like its seed into the account’s same-named one, even an edited one', () => {
+  const seed = { id: 'seedX', name: '5PFH', createdAt: 's', updatedAt: 's', groups: [{ id: 'g1', steps: [{ id: 's1', text: 'Roll' }] }] };
+  const account = { profiles: [], turnStepLists: [{ ...seed, id: 'lAcct', groups: [{ id: 'g1', steps: [{ id: 's1', text: 'Edited on A' }] }] }], tocLibrary: {}, campaignProfiles: {} };
+  const local = { profiles: [], turnStepLists: [{ ...seed, id: 'lHere' }, { ...seed, id: 'lHere2', name: 'Planetfall' }], tocLibrary: {}, campaignProfiles: {} };
+  const withSeeds = joinAccountSettings(account, local, { seeds: { profiles: [], turnStepLists: [seed] } });
+  assert.deepEqual(withSeeds.view.turnStepLists.map((l) => l.id), ['lAcct', 'lHere2'], 'the untouched 5PFH folds; a list with no account twin stays');
+  assert.deepEqual(withSeeds.remap.turnStepLists, { lHere: 'lAcct' });
+  const edited = { ...local, turnStepLists: [{ ...seed, id: 'lHere', groups: [{ id: 'g1', steps: [{ id: 's1', text: 'Edited here' }] }] }] };
+  assert.deepEqual(joinAccountSettings(account, edited, { seeds: { profiles: [], turnStepLists: [seed] } }).view.turnStepLists.map((l) => l.id), ['lAcct', 'lHere'], 'edited on both sides: both kept');
+});
