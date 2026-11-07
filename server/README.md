@@ -1,4 +1,4 @@
-﻿# server/ â€” GMAtlas accounts, sync and licensing service
+# server/ â€” GMAtlas accounts, sync and licensing service
 
 Lives on the **`server`** branch only, until a roadmap phase is complete and
 merged into `main`. The design is `design/ACCOUNTS-SYNC-ROADMAP.md`. Read
