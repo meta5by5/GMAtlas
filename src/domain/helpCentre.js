@@ -87,7 +87,11 @@ export function searchHelp(articles, query) {
 
 /** The portal route a location hash names, or null for the campaign. */
 export function parsePortalRoute(hash) {
-  const m = /^#\/help(?:\/([a-z0-9-]+))?\/?$/.exec(String(hash || ''));
+  const text = String(hash || '');
+  if (/^#\/account\/sign-in\/?$/.test(text)) return { view: 'sign-in' };
+  const account = /^#\/account(?:\/(devices|licenses))?\/?$/.exec(text);
+  if (account) return { view: 'account', section: account[1] || 'profile' };
+  const m = /^#\/help(?:\/([a-z0-9-]+))?\/?$/.exec(text);
   if (!m) return null;
   return m[1] ? { view: 'article', slug: m[1] } : { view: 'help' };
 }

@@ -76,4 +76,8 @@ export const APP_CONFIG_SYNC_POLICY = {
   // Today's local allow/deny map; Phase S1 derives it from the signed
   // entitlement certificate instead.
   entitlements: 'local',
+  // This install's sign-in state (Phase S1): its device id, the signed-in
+  // user and device, and the last entitlement certificate. It describes
+  // this device, so it never syncs.
+  account: 'local',
 };

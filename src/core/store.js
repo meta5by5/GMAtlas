@@ -141,6 +141,11 @@ function createStore() {
   // (read by every Settings render) stays synchronous — an async IndexedDB
   // read on every render would be a much bigger ripple for no real benefit.
   let backupMeta = { exists: false, bytes: 0 };
+  // The signed-in account's entitlement certificate payload, once its
+  // signature has been checked (Phase S1, by the account client), or null
+  // when signed out. In memory only: the signed certificate itself is kept
+  // in appConfig.account and re-verified on each boot.
+  let accountCert = null;
   // Gallery images and legacy uploaded documents keep their bytes in the
   // docBlobs store under a content hash, not inline in the campaign
   // document (design/ACCOUNTS-SYNC-ROADMAP.md, Phase S0). This is the
@@ -196,7 +201,7 @@ function createStore() {
   // (data/rulesConstitution.js) can read it from any doc.
   function overlayProfileWith(rawDoc, profile) {
     if (!rawDoc) return rawDoc;
-    const licenses = effectiveLicenses({ attested: appConfig.licenses });
+    const licenses = effectiveLicenses({ attested: appConfig.licenses, cert: accountCert, devicePolicy: accountCert && accountCert.policy });
     const withLists = { ...rawDoc, turnStepLists: appConfig.turnStepLists || [], settings: { ...rawDoc.settings, licenses } };
     if (!profile) return withLists;
     return { ...withLists, settings: { ...rawDoc.settings, ...profile.ruleset, licenses }, crewTasks: profile.crewTasks };
@@ -739,6 +744,14 @@ function createStore() {
     return get();
   }
 
+  /** Sets the verified certificate payload that decides owned licenses
+   *  (licensing.js effectiveLicenses), or clears it with null to fall back
+   *  to this install's own ticks. Callers verify the signature first. */
+  function setCertificate(payload) {
+    accountCert = payload || null;
+    notify();
+  }
+
   // --- storage visibility + recovery (ADR 0005 follow-up) ----------------
   // Byte counts via Blob (UTF-8) rather than .length (UTF-16 code units) —
   // meaningfully different once a campaign has any non-ASCII text (accented
@@ -838,7 +851,7 @@ function createStore() {
     listCampaigns, switchCampaign, renameCampaign, setCampaignProfile, deleteCampaign, exportCampaignById,
     loadCampaign, peekCampaign, updateCampaign,
     listProfiles, getActiveProfile, getAppConfig, createProfile, updateProfile, renameProfile,
-    addTurnStepList, updateAppConfig,
+    addTurnStepList, updateAppConfig, setCertificate,
     STORAGE_KEY, BACKUP_KEY, LEGACY_KEYS,
   };
 }

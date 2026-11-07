@@ -44,6 +44,46 @@ export function effectiveLicenses({ attested = {}, cert = null, devicePolicy = D
   return out;
 }
 
+/** The install's own ticks that the account doesn't own yet: what the
+ *  first-sign-in "Bring this device's licenses into your account?" offers
+ *  to attest. Open licenses and unknown ids are never offered. */
+export function licensesToLiftIn(attested, certLicenses, ownableIds) {
+  const owned = new Set(certLicenses || []);
+  const ownable = new Set(ownableIds || []);
+  return Object.entries(attested || {})
+    .filter(([id, ticked]) => ticked && ownable.has(id) && !owned.has(id))
+    .map(([id]) => id)
+    .sort();
+}
+
+function fromBase64url(text) {
+  const b64 = String(text).replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+}
+
+/** A signed certificate `{payload, sig}` (payload is the exact JSON text the
+ *  server signed with ECDSA P-256) checked against the pinned public keys
+ *  (data/certKeys.js). Resolves to the parsed payload, or null if the
+ *  signature, the key id or the shape is wrong. Expiry is NOT checked here:
+ *  certStatus() decides what an old certificate still allows. Deterministic
+ *  and side-effect free; async only because WebCrypto is. */
+export async function verifyCertificate(cert, publicKeys) {
+  if (!cert || typeof cert.payload !== 'string' || typeof cert.sig !== 'string') return null;
+  const subtle = globalThis.crypto && globalThis.crypto.subtle;
+  if (!subtle) return null;
+  let payload;
+  try { payload = JSON.parse(cert.payload); } catch { return null; }
+  if (!payload || payload.v !== 1 || !Array.isArray(payload.licenses)) return null;
+  const jwk = (publicKeys || []).find((k) => k.kid === payload.kid);
+  if (!jwk) return null;
+  try {
+    const key = await subtle.importKey('jwk', { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y }, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+    const ok = await subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, fromBase64url(cert.sig), new TextEncoder().encode(cert.payload));
+    return ok ? payload : null;
+  } catch { return null; }
+}
+
 /** Where a certificate stands at `nowMs`: 'valid' until it expires, then
  *  'grace' for `graceDays`, then 'expired'. 'none' when there isn't one.
  *  Only paid features pause once expired; owned licenses and campaign data

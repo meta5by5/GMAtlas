@@ -40,7 +40,7 @@ function route() {
   appRoot.hidden = true;
   portalRoot.hidden = false;
   if (r.view === 'help') query = '';
-  portalRoot.innerHTML = frame(r.view === 'article' ? articleView(r.slug) : helpHome());
+  portalRoot.innerHTML = frame(r.view === 'article' ? articleView(r.slug) : r.view === 'help' ? helpHome() : accountUnavailable());
   portalRoot.scrollTop = 0;
   const h1 = portalRoot.querySelector('h1');
   document.title = `${h1 ? h1.textContent : 'Help'} · GMAtlas Help`;
@@ -72,6 +72,12 @@ function frame(content) {
       <a class="portal-back" href="#/">← Back to campaign</a>
     </header>
     <main class="portal-main">${content}</main>`;
+}
+
+// Account routes (#/account/*) parse on every build; the sign-in and account
+// screens arrive with Phase S1 (server branch). Until then, say so plainly.
+function accountUnavailable() {
+  return `<div class="portal-article-wrap"><article class="portal-article"><h1>Accounts aren’t available yet</h1><p>This version of GMAtlas works without an account: everything stays on this device. <a href="#/help">Browse help</a>.</p></article></div>`;
 }
 
 const articlesIn = (categoryId) => HELP_ARTICLES.filter((a) => a.category === categoryId);

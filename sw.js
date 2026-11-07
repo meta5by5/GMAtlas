@@ -43,6 +43,10 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+  // Account API responses (when served beside the GMAtlas service) are
+  // per-user and must never be cached or served offline from a cache.
+  const url = new URL(e.request.url);
+  if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) return;
   e.respondWith(
     fetch(e.request).then((res) => {
       const copy = res.clone();
