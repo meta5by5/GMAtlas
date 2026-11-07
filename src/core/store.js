@@ -46,7 +46,8 @@ import { TURN_STEPS_FIVE_LEAGUES } from '../data/turnStepListFiveLeagues.js';
 import { CREW_TASKS_5PFH } from '../data/crewTasksDefault5pfh.js';
 import { listInlineBlobs, applyMovedBlobs, blobKeysToInline, inlineBlobsForExport, contentBlobKey } from '../domain/inlineBlobs.js';
 import { effectiveLicenses } from '../domain/licensing.js';
-
+import { diffDoc, applyOps, nextHlc, observeHlc, createReplica, syncedView, withLocalPaths, withoutInlineBytes } from '../domain/syncOps.js';
+import { CAMPAIGN_SYNC_POLICY } from '../data/syncPolicy.js';
 const STORAGE_KEY = 'sagaatlas.campaign'; // legacy localStorage key — read-only fallback for pre-IndexedDB campaigns, never written again
 const BACKUP_KEY = 'sagaatlas.campaign.backup'; // ditto
 const MIGRATED_FLAG = 'sagaatlas.migratedFromLegacy';
@@ -127,14 +128,50 @@ function idbKeys(db, storeName) {
   });
 }
 
+/** Several puts in ONE transaction: all land or none do. */
+function idbPutMany(db, entries, storeName = STORE_NAME) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const os = tx.objectStore(storeName);
+    for (const [key, value] of entries) os.put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error || new Error('IndexedDB write failed'));
+    tx.onabort = () => reject(tx.error || new Error('IndexedDB write aborted'));
+  });
+}
+
+// Sync (design/ACCOUNTS-SYNC-ROADMAP.md 5.3, Phase S2). Per synced campaign,
+// `sync:<id>` holds:
+//   base      the document as last diffed (the synced view: no inline bytes)
+//   meta      the merge clock tree (domain/syncOps.js) describing `base`
+//   hlc       this device's last clock
+//   cursor    the highest server seq applied here
+//   outbox    op batches not yet acknowledged by the server
+// Every change to a synced campaign, by any path (update, import, rename,
+// image moves, restore, a rollback), is found by diffing `base` against the
+// live document a moment later, so nothing needs to remember to record ops.
+// The base is persisted, so a change made just before a crash or reload is
+// still found on the next load: the diff then runs against the stored base.
+const SYNC_KEYS_KEY = 'syncKeys';
+const syncStateKey = (id) => `sync:${id}`;
+const SYNC_FLUSH_MS = 100;
+
 function createStore() {
   const subs = new Set();
   const persistErrorSubs = new Set();
   // appConfig: { activeCampaignId, campaigns: [{id,title,profileId,...}], profiles: [...] }
   let appConfig = defaultAppConfig();
+  const syncStates = new Map();
+  const syncTimers = new Map();
+  const syncWrites = new Map();
+  const localOpsSubs = new Set();
   // Loaded campaign documents, keyed by campaign id — the active one is
   // always present once load() resolves; others load lazily on switch.
-  const docs = new Map();
+  // Every set() also tells sync that the campaign may have changed.
+  class DocMap extends Map {
+    set(id, doc) { super.set(id, doc); scheduleSyncFlush(id); return this; }
+  }
+  const docs = new DocMap();
   let dbPromise = null;
   let boundFileHandle = null;
   // Kept in sync with the ACTIVE campaign's backup record so storageInfo()
@@ -391,6 +428,7 @@ function createStore() {
       activeDoc = backfillCampaignTurnStepSlots(activeDoc);
       activeDoc = ensureRulesetGuideDefault(activeDoc, resolveActiveStatRuleset(appConfig, activeId));
       docs.set(activeId, activeDoc);
+      await loadSyncState(activeId);
       await warmBlobCache(activeDoc);
       await refreshBackupMeta(activeId);
       notify();
@@ -472,6 +510,14 @@ function createStore() {
     } catch (e) {
       console.warn('backup write skipped (quota?)', e);
     }
+    // A synced campaign's document is always written together with its
+    // sync state (the change diffed into the outbox first), so the stored
+    // base never runs ahead of the stored document.
+    if (syncStates.has(campaignId)) {
+      flushSync(campaignId);
+      await persistSync(campaignId);
+      return;
+    }
     await idbPut(database, campaignDocKey(campaignId), nextDoc);
   }
 
@@ -536,6 +582,7 @@ function createStore() {
       target = ensureRulesetGuideDefault(target, resolveActiveStatRuleset(appConfig, campaignId));
       docs.set(campaignId, target);
     }
+    await loadSyncState(campaignId);
     await warmBlobCache(target);
     appConfig = setActiveCampaign(appConfig, campaignId);
     await idbPut(database, APP_CONFIG_KEY, appConfig);
@@ -578,6 +625,7 @@ function createStore() {
       target = ensureRulesetGuideDefault(target, resolveActiveStatRuleset(appConfig, campaignId));
       if (!docs.has(campaignId)) docs.set(campaignId, target);
     }
+    await loadSyncState(campaignId);
     await warmBlobCache(docs.get(campaignId));
     moveInlineBlobs(campaignId);
     return peekCampaign(campaignId);
@@ -630,6 +678,9 @@ function createStore() {
     const database = await db();
     await idbDelete(database, campaignDocKey(campaignId));
     await idbDelete(database, campaignBackupDocKey(campaignId));
+    await idbDelete(database, syncStateKey(campaignId));
+    clearTimeout(syncTimers.get(campaignId));
+    syncStates.delete(campaignId);
     docs.delete(campaignId);
     appConfig = { ...appConfig, campaigns: appConfig.campaigns.filter((c) => c.id !== campaignId) };
     await persistAppConfig();
@@ -752,6 +803,259 @@ function createStore() {
     notify();
   }
 
+  // --- sync (Phase S2; see the block comment above createStore) -----------
+  // core/sync.js does the networking and calls only these. Nothing here
+  // runs for a campaign that isn't synced.
+
+  const isSyncedEntry = (id) => !!(appConfig.campaigns.find((c) => c.id === id) || {}).sync;
+
+  function scheduleSyncFlush(id) {
+    if (!syncStates.has(id)) return;
+    clearTimeout(syncTimers.get(id));
+    syncTimers.set(id, setTimeout(() => {
+      syncTimers.delete(id);
+      if (flushSync(id)) persistSync(id).catch((err) => console.warn('sync state write failed', err));
+    }, SYNC_FLUSH_MS));
+  }
+
+  /** Diffs the campaign's sync base against its live document into a new
+   *  outbox batch. In memory only; returns whether a batch was added. */
+  function flushSync(id) {
+    clearTimeout(syncTimers.get(id));
+    syncTimers.delete(id);
+    const st = syncStates.get(id);
+    const current = docs.get(id);
+    if (!st || !current) return false;
+    const view = withoutInlineBytes(current);
+    if (view === st.base) return false;
+    let next;
+    try {
+      const hlc = nextHlc(st.hlc, Date.now(), st.deviceId);
+      const ops = diffDoc({ doc: st.base, meta: st.meta }, view, { hlc, policy: CAMPAIGN_SYNC_POLICY });
+      if (!ops.length) { syncStates.set(id, { ...st, base: view }); return false; }
+      const { meta } = applyOps({ doc: st.base, meta: st.meta }, ops);
+      const batchId = `b${Date.now().toString(36)}.${st.nextBatch}`;
+      next = { ...st, base: view, meta, hlc, outbox: [...st.outbox, { batchId, ops }], nextBatch: st.nextBatch + 1 };
+    } catch (err) {
+      // A diff that can't be made (it never should) leaves the base alone,
+      // so the change is retried with the next one rather than lost.
+      console.warn('sync diff failed', err);
+      return false;
+    }
+    syncStates.set(id, next);
+    for (const fn of localOpsSubs) {
+      try { fn(id); } catch (e) { console.error('sync subscriber failed', e); }
+    }
+    return true;
+  }
+
+  /** Writes the campaign's live document and its sync state in ONE
+   *  transaction, chained per campaign so a later write never lands before
+   *  an earlier one. Both values are read when the write starts, so the
+   *  last write always carries the latest of each. */
+  function persistSync(id) {
+    const prev = syncWrites.get(id) || Promise.resolve();
+    const run = prev.catch(() => {}).then(async () => {
+      const st = syncStates.get(id);
+      const current = docs.get(id);
+      if (!st) return;
+      const database = await db();
+      const entries = [[syncStateKey(id), st]];
+      if (current) entries.push([campaignDocKey(id), current]);
+      await idbPutMany(database, entries);
+    });
+    syncWrites.set(id, run);
+    return run;
+  }
+
+  async function loadSyncState(id) {
+    if (syncStates.has(id) || !isSyncedEntry(id)) return;
+    const database = await db();
+    const st = await idbGet(database, syncStateKey(id));
+    if (!st) return;
+    syncStates.set(id, st);
+    // A change saved just before the last reload or crash, but not yet
+    // diffed, is found now: the stored base predates it.
+    scheduleSyncFlush(id);
+  }
+
+  function setEntrySync(id, on) {
+    appConfig = { ...appConfig, campaigns: appConfig.campaigns.map((c) => (c.id === id ? { ...c, sync: on || undefined } : c)) };
+  }
+
+  /** Whether a campaign syncs, and how far along it is. */
+  function syncStatus(id) {
+    if (!isSyncedEntry(id)) return null;
+    const st = syncStates.get(id);
+    return { synced: true, loaded: !!st, cursor: st ? st.cursor : 0, pending: st ? st.outbox.length : 0 };
+  }
+
+  /** Starts syncing a local campaign. Resolves to the first snapshot to
+   *  upload: `{replica: {doc, meta}, cursor: 0}`. */
+  async function enableSync(id, { deviceId }) {
+    if (!(await loadCampaign(id))) throw new Error('Unknown campaign');
+    const current = docs.get(id);
+    syncStates.set(id, {
+      v: 1, deviceId, base: withoutInlineBytes(current), meta: createReplica({}).meta,
+      hlc: null, cursor: 0, outbox: [], nextBatch: 0,
+    });
+    setEntrySync(id, true);
+    await persistAppConfig();
+    await persistSync(id);
+    return syncSnapshot(id);
+  }
+
+  /** Stops syncing a campaign on this device. The local copy is untouched. */
+  async function disableSync(id) {
+    clearTimeout(syncTimers.get(id));
+    syncStates.delete(id);
+    setEntrySync(id, false);
+    const database = await db();
+    await idbDelete(database, syncStateKey(id));
+    await persistAppConfig();
+    notify();
+  }
+
+  /** The op batches waiting for the server, newest change included. */
+  async function pendingBatches(id) {
+    await loadSyncState(id);
+    if (flushSync(id)) await persistSync(id);
+    const st = syncStates.get(id);
+    return st ? st.outbox.map((b) => ({ batchId: b.batchId, ops: b.ops })) : [];
+  }
+
+  /** The server stored a batch as `seq`. */
+  async function ackBatch(id, batchId, seq) {
+    const st = syncStates.get(id);
+    if (!st) return;
+    syncStates.set(id, { ...st, outbox: st.outbox.filter((b) => b.batchId !== batchId), cursor: Math.max(st.cursor, seq || 0) });
+    await persistSync(id);
+  }
+
+  /** Merges ops from another device (server seq `seq`) into a synced
+   *  campaign, persists, and notifies like any other change. A local change
+   *  not yet diffed is diffed first, so it can't be mistaken for part of
+   *  the remote one. */
+  async function applyRemote(id, ops, seq) {
+    if (!docs.has(id) && !(await loadCampaign(id))) throw new Error('Unknown campaign');
+    await loadSyncState(id);
+    if (!syncStates.has(id)) throw new Error('Campaign is not synced');
+    flushSync(id);
+    const st = syncStates.get(id);
+    const current = docs.get(id);
+    let nextDoc = current;
+    let meta = st.meta;
+    let hlc = st.hlc;
+    let base = st.base;
+    if (ops && ops.length) {
+      const merged = applyOps({ doc: current, meta: st.meta }, ops);
+      nextDoc = merged.doc;
+      meta = merged.meta;
+      base = withoutInlineBytes(nextDoc);
+      const latest = ops.reduce((m, op) => (op.t > m ? op.t : m), '');
+      hlc = observeHlc(hlc, latest, Date.now(), st.deviceId);
+    }
+    syncStates.set(id, { ...st, base, meta, hlc, cursor: Math.max(st.cursor, seq || 0) });
+    if (nextDoc !== current) {
+      Map.prototype.set.call(docs, id, nextDoc);
+      const entry = appConfig.campaigns.find((c) => c.id === id);
+      if (entry && nextDoc.meta && nextDoc.meta.title && entry.title !== nextDoc.meta.title) {
+        appConfig = renameCampaignEntry(appConfig, id, nextDoc.meta.title);
+        persistAppConfig().catch((err) => console.warn('appConfig persist failed', err));
+      }
+    }
+    await persistSync(id);
+    if (nextDoc !== current) {
+      await warmBlobCache(nextDoc);
+      notify();
+    }
+  }
+
+  /** What another device needs to start from: the synced view of the base
+   *  and its clocks, plus the seq they include. */
+  async function syncSnapshot(id) {
+    await loadSyncState(id);
+    if (flushSync(id)) await persistSync(id);
+    const st = syncStates.get(id);
+    if (!st) throw new Error('Campaign is not synced');
+    return { replica: { doc: syncedView(st.base, CAMPAIGN_SYNC_POLICY), meta: st.meta }, cursor: st.cursor };
+  }
+
+  /** Brings a synced campaign onto this device from its snapshot, as a new
+   *  campaign or replacing the local copy with the same id. A replaced copy
+   *  goes to the backup slot first, and its device-only state (drafts,
+   *  open panels) is kept. */
+  async function adoptSyncedCampaign({ id, title, replica, cursor, deviceId }) {
+    const database = await db();
+    const existing = appConfig.campaigns.some((c) => c.id === id);
+    const local = existing ? (docs.get(id) || await idbGet(database, campaignDocKey(id))) : null;
+    let doc = migrateDocument(structuredCloneSafe(replica.doc));
+    if (local) doc = withLocalPaths(doc, local, CAMPAIGN_SYNC_POLICY);
+    doc.meta.id = id;
+    doc = backfillCampaignTurnStepSlots(doc);
+    doc = ensureRulesetGuideDefault(doc, resolveActiveStatRuleset(appConfig, id));
+    if (local) await idbPut(database, campaignBackupDocKey(id), local);
+    if (!existing) {
+      const now = new Date().toISOString();
+      const profileId = (appConfig.profiles[0] && appConfig.profiles[0].id) || null;
+      appConfig = { ...appConfig, campaigns: [...appConfig.campaigns, { id, title: title || doc.meta.title, profileId, createdAt: now, updatedAt: now }] };
+    }
+    setEntrySync(id, true);
+    appConfig = renameCampaignEntry(appConfig, id, title || doc.meta.title);
+    syncStates.set(id, { v: 1, deviceId, base: replica.doc, meta: replica.meta, hlc: null, cursor: cursor || 0, outbox: [], nextBatch: 0 });
+    Map.prototype.set.call(docs, id, doc);
+    await persistAppConfig();
+    // Anything this device's migrations or backfills changed is diffed
+    // into the outbox here, and written with the document.
+    flushSync(id);
+    await persistSync(id);
+    await warmBlobCache(doc);
+    if (id === appConfig.activeCampaignId) await refreshBackupMeta(id);
+    notify();
+    return id;
+  }
+
+  /** "Keep both": gives a local campaign a new id (and a title suffix) so a
+   *  synced campaign with its old id can come in beside it. Resolves to the
+   *  new id. */
+  async function forkCampaign(id, suffix = ' (this device)') {
+    const database = await db();
+    const local = docs.get(id) || await idbGet(database, campaignDocKey(id));
+    if (!local) throw new Error('Unknown campaign');
+    const fresh = defaultCampaign().meta.id;
+    const title = `${local.meta.title || 'Campaign'}${suffix}`;
+    const forked = { ...structuredCloneSafe(local), meta: { ...local.meta, id: fresh, title } };
+    await idbPut(database, campaignDocKey(fresh), forked);
+    appConfig = {
+      ...appConfig,
+      activeCampaignId: appConfig.activeCampaignId === id ? fresh : appConfig.activeCampaignId,
+      campaigns: appConfig.campaigns.map((c) => (c.id === id ? { ...c, id: fresh, title, sync: undefined } : c)),
+    };
+    await persistAppConfig();
+    await idbDelete(database, campaignDocKey(id));
+    await idbDelete(database, campaignBackupDocKey(id));
+    docs.delete(id);
+    docs.set(fresh, forked);
+    notify();
+    return fresh;
+  }
+
+  /** Called with a campaign id whenever a new outbox batch is ready. */
+  function onLocalOps(fn) { localOpsSubs.add(fn); return () => localOpsSubs.delete(fn); }
+
+  /** This device's sync keys (core/syncKeys.js): its key pair, the unlocked
+   *  vault key and campaign keys, as CryptoKeys IndexedDB holds natively. */
+  async function getSyncKeys() {
+    const database = await db();
+    return (await idbGet(database, SYNC_KEYS_KEY)) || {};
+  }
+  async function setSyncKeys(patch) {
+    const database = await db();
+    const next = { ...((await idbGet(database, SYNC_KEYS_KEY)) || {}), ...patch };
+    await idbPut(database, SYNC_KEYS_KEY, next);
+    return next;
+  }
+
   // --- storage visibility + recovery (ADR 0005 follow-up) ----------------
   // Byte counts via Blob (UTF-8) rather than .length (UTF-16 code units) —
   // meaningfully different once a campaign has any non-ASCII text (accented
@@ -852,6 +1156,8 @@ function createStore() {
     loadCampaign, peekCampaign, updateCampaign,
     listProfiles, getActiveProfile, getAppConfig, createProfile, updateProfile, renameProfile,
     addTurnStepList, updateAppConfig, setCertificate,
+    syncStatus, enableSync, disableSync, pendingBatches, ackBatch, applyRemote, syncSnapshot,
+    adoptSyncedCampaign, forkCampaign, onLocalOps, getSyncKeys, setSyncKeys,
     STORAGE_KEY, BACKUP_KEY, LEGACY_KEYS,
   };
 }

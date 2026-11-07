@@ -89,7 +89,7 @@ export function searchHelp(articles, query) {
 export function parsePortalRoute(hash) {
   const text = String(hash || '');
   if (/^#\/account\/sign-in\/?$/.test(text)) return { view: 'sign-in' };
-  const account = /^#\/account(?:\/(devices|licenses))?\/?$/.exec(text);
+  const account = /^#\/account(?:\/(devices|licenses|sync))?\/?$/.exec(text);
   if (account) return { view: 'account', section: account[1] || 'profile' };
   const m = /^#\/help(?:\/([a-z0-9-]+))?\/?$/.exec(text);
   if (!m) return null;

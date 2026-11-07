@@ -403,6 +403,76 @@ function applyOne(doc, meta, op) {
   if (op.k === 'del') dropEmptiedAncestors(doc, meta, path);
 }
 
+// --- views ------------------------------------------------------------------
+
+const localPolicyPaths = (policy) => Object.entries(policy || {})
+  .filter(([, scope]) => LOCAL_SCOPES.has(scope))
+  .map(([dotted]) => dotted.split('.'));
+
+function deletePath(doc, segs) {
+  let cur = doc;
+  for (let i = 0; i < segs.length - 1; i++) {
+    if (!isPlainObject(cur[segs[i]])) return;
+    cur = cur[segs[i]];
+  }
+  delete cur[segs[segs.length - 1]];
+}
+
+/** A copy of `doc` as other devices may see it: every path the policy
+ *  scopes `local` or `overlay` removed. This is what a sync snapshot
+ *  carries. (A policy entry nested under a local one isn't re-included;
+ *  none exists.) */
+export function syncedView(doc, policy) {
+  const out = clone(doc);
+  for (const segs of localPolicyPaths(policy)) deletePath(out, segs);
+  return out;
+}
+
+/** `syncedDoc` with this device's own `local`-scoped paths copied in from
+ *  `localDoc` (drafts, open panels, drawer widths): what replacing a local
+ *  campaign with its synced copy keeps. Overlay paths are left out, since
+ *  store.get() splices those in itself. */
+export function withLocalPaths(syncedDoc, localDoc, policy) {
+  const out = clone(syncedDoc);
+  for (const [dotted, scope] of Object.entries(policy || {})) {
+    if (scope !== 'local') continue;
+    const segs = dotted.split('.');
+    const value = readAt(localDoc, segs);
+    if (value === undefined) continue;
+    let cur = out;
+    for (let i = 0; i < segs.length - 1; i++) {
+      if (!isPlainObject(cur[segs[i]])) cur[segs[i]] = {};
+      cur = cur[segs[i]];
+    }
+    cur[segs[segs.length - 1]] = clone(value);
+  }
+  return out;
+}
+
+/** Whether any value in `doc` is a `data:` URL (bytes not yet moved to the
+ *  blob store). */
+export function hasInlineBytes(doc) {
+  return containsInlineBytes(doc);
+}
+
+/** `doc` without any value that is a `data:` URL, for diffing while an
+ *  image's bytes are still on their way into the blob store: the record
+ *  syncs now, its blob key a moment later, and the bytes never. Returns
+ *  `doc` itself when there's nothing to strip. */
+export function withoutInlineBytes(doc) {
+  if (!containsInlineBytes(doc)) return doc;
+  const strip = (v) => {
+    if (Array.isArray(v)) return v.filter((x) => !(typeof x === 'string' && INLINE_BYTES.test(x))).map(strip);
+    if (isPlainObject(v)) {
+      const o = {};
+      for (const [k, x] of Object.entries(v)) if (!(typeof x === 'string' && INLINE_BYTES.test(x))) o[k] = strip(x);
+      return o;
+    }
+    return v;
+  };
+  return strip(doc);
+}
+
 /** A fresh replica of a document nobody has written ops against yet. */
 export function createReplica(doc) {
   return { doc: clone(doc), meta: { root: newNode() } };
