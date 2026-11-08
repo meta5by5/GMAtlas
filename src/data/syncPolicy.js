@@ -83,4 +83,7 @@ export const APP_CONFIG_SYNC_POLICY = {
   // Synced campaigns removed from this device on purpose, so sync-by-
   // default (Phase S2) doesn't download them again. Per device.
   syncDeclined: 'local',
+  // Device-to-device transfer settings (Phase S3): "Direct connections
+  // only" is a choice about this device's network, so it stays here.
+  p2p: 'local',
 };

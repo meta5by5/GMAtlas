@@ -822,10 +822,13 @@ S2 is built; it moves to `main` by pull request.
 
 ### S3 — Document transfer without upload
 
-**In progress** (`design/adr/document-transfer.md`). Built: uploads keyed by
-content with old keys aliased (the 6.1 S3 step), the badges and card with
-Import, hash-matched re-import, and hash-carrying bundles (items 1 and 3,
-apart from "Get all missing" over the network). Next: item 2.
+**Built** (`design/adr/document-transfer.md`), behind `p2p.transfer`
+(off by default): uploads keyed by content with old keys aliased (the 6.1
+S3 step), the badges and card, WebRTC transfer between the owner's open
+devices (signalling sealed through the campaign room rather than an
+account room; 64 KiB chunks; TURN only when configured; "Direct
+connections only"), hash-matched re-import, and hash-carrying bundles.
+Not yet: sourcebook PDFs device to device.
 
 1. "Not on this device" badges and cards, and "Get all missing".
 2. WebRTC P2P via account-room signalling, chunked with hash verification.

@@ -134,6 +134,8 @@ export function createSyncClient(options = {}) {
         if (conn !== mine) return;
         let frame;
         try { frame = JSON.parse(typeof ev.data === 'string' ? ev.data : ''); } catch { return; }
+        // Transfer set-up never waits behind typing: it changes nothing here.
+        if (frame.t === 'signal' || frame.t === 'signal-gone') { receiveSignal(mine, frame); return; }
         mine.queue.push(frame);
         drain(mine);
       };
@@ -243,6 +245,34 @@ export function createSyncClient(options = {}) {
   function deviceName(id) {
     if (id && id === deviceId()) return 'This device';
     return deviceNames.get(id) || 'Another device';
+  }
+
+  // --- device-to-device transfer set-up (S3, core/p2p.js) --------------------
+  // Relayed by the campaign room, sealed with the campaign key: the server
+  // sees only which device a message is for.
+  const signalListeners = new Set();
+
+  async function receiveSignal(mine, frame) {
+    let event;
+    if (frame.t === 'signal-gone') {
+      event = { cid: mine.cid, gone: frame.to, ref: frame.ref || null };
+    } else {
+      let body;
+      try { body = await openJson(mine.key, JSON.parse(frame.data), mine.cid, 'signal'); } catch { return; }
+      event = { cid: mine.cid, from: frame.from, body };
+    }
+    for (const fn of signalListeners) { try { fn(event); } catch (e) { console.error('signal listener failed', e); } }
+  }
+
+  /** Sends a set-up message to one of this campaign's open devices, or to
+   *  all of them (`to` '*'). False when the campaign isn't connected. */
+  async function sendSignal(to, body, ref = null) {
+    const mine = conn;
+    if (!mine || !mine.ws || mine.ws.readyState !== 1 || !mine.key) return false;
+    const env = await sealJson(mine.key, body, mine.cid, 'signal');
+    if (conn !== mine) return false;
+    try { mine.ws.send(JSON.stringify({ t: 'signal', to, data: JSON.stringify(env), ref })); } catch { return false; }
+    return true;
   }
 
   async function pushAll(mine) {
@@ -699,7 +729,12 @@ export function createSyncClient(options = {}) {
 
   return {
     start, reconcile, retryNow, autoSync, syncCampaign, syncSettings,
-    keepMine, dismissConflict, deviceName,
+    keepMine, dismissConflict, deviceName, sendSignal,
+    /** fn({cid, from, body}) for each set-up message; fn({cid, gone, ref})
+     *  when one found nobody to deliver to. */
+    onSignal(fn) { signalListeners.add(fn); return () => signalListeners.delete(fn); },
+    /** This device's id, once signed in. */
+    deviceId,
     /** The recovery key from sync's automatic set-up this session (shown
      *  once on Account › Sync), and where it was emailed. */
     lastSetup: () => lastSetup,

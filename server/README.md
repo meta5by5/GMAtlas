@@ -125,7 +125,28 @@ against this Worker and room.
 - **The `sync.devices` gate:** sync writes are refused (403 `feature_off`)
   while the feature is off for the account; the app says so and stops.
 
-S2 is complete apart from moving it to `main` (by pull request).
+S2 is complete and merged to `main`.
+
+## Status: Phase S3 (document transfer) in progress
+
+`design/adr/document-transfer.md`. Tests: `test/p2p.test.js`, plus jsdom
+runs of two browsers with an in-memory WebRTC stand-in.
+- **Signalling relay:** the campaign room passes `{t:'signal', to, data}`
+  between the owner's open devices (`to` a device id, or `'*'`). `data` is
+  sealed with the campaign key in the browser; the room sees only who it's
+  for. Sockets carry a `p2p` flag from their ticket, set when the account
+  has `p2p.transfer`; without it a socket can't send or receive signals.
+- **`GET /api/p2p/ice`** (`src/p2p.js`): ICE servers. Cloudflare's public
+  STUN always; a TURN relay only when `TURN_KEY_ID` and
+  `TURN_KEY_API_TOKEN` are set (Cloudflare Realtime › TURN; short-lived
+  credentials minted per request, 4 h). Without them, transfers work
+  wherever a direct path exists.
+- **The bytes never come here:** they go device to device over a WebRTC
+  data channel, and each file is checked against its content hash.
+
+`p2p.transfer` is **off by default** (`src/data/features.js`). To try it on
+dev, turn it on in the admin page (Feature flags › Device-to-device
+document transfer: default on, or an override for your account).
 
 ## Layout
 

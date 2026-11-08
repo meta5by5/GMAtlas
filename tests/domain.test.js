@@ -12472,3 +12472,91 @@ test('resolveBlobAlias and rekeyTocLibrary', () => {
   assert.equal(out['sha256:xxx'].docTitle, 'X new', 'an existing scan under the new key wins');
   assert.ok(lib.doc_a, 'input untouched');
 });
+
+// --- S3 item 2: device-to-device transfer, the pure half ---------------------
+import {
+  servableKeys, wantedKeys, answerWant, chooseSource, chunkRanges, createAssembler,
+  parseControl, parseSignal, iceConfig, relayPossible, CHUNK_BYTES,
+} from '../src/domain/blobTransfer.js';
+
+const K = (c) => `sha256:${c.repeat(64)}`;
+function p2pCampaign() {
+  const c = defaultCampaign();
+  c.documents.library = [
+    { id: 'd1', kind: 'file', title: 'One', blobKey: K('a') },
+    { id: 'd2', kind: 'file', title: 'Two', blobKey: K('b') },
+    { id: 'd3', kind: 'file', title: 'Old', blobKey: 'doc_old' },
+    { id: 'n', kind: 'note', title: 'Note' },
+  ];
+  c.gallery = { ...(c.gallery || {}), images: [{ id: 'g1', blobKey: K('c') }, { id: 'g2', dataUrl: 'data:image/png;base64,AA==' }] };
+  return c;
+}
+
+test('servableKeys: only content keys the campaign points at', () => {
+  assert.deepEqual([...servableKeys(p2pCampaign())].sort(), [K('a'), K('b'), K('c')]);
+});
+
+test('wantedKeys: missing uploads, then missing gallery images, never inline or old keys', () => {
+  const c = p2pCampaign();
+  assert.deepEqual(wantedKeys(c, new Set([K('a')])), [K('b'), K('c')]);
+  assert.deepEqual(wantedKeys(c, new Set([K('a'), K('b'), K('c')])), []);
+});
+
+test('answerWant: only what this device may hand out AND holds', () => {
+  const servable = servableKeys(p2pCampaign());
+  assert.deepEqual(answerWant([K('a'), K('b'), K('z'), 'assets/docs/X.pdf'], servable, new Set([K('a'), K('z'), 'assets/docs/X.pdf'])), [K('a')]);
+});
+
+test('chooseSource: the device holding the most of what is wanted', () => {
+  const haves = new Map([['d1', new Set([K('a')])], ['d2', new Set([K('a'), K('b')])], ['d3', new Set()]]);
+  assert.equal(chooseSource(haves, [K('a'), K('b')]), 'd2');
+  assert.equal(chooseSource(haves, [K('z')]), null);
+  assert.equal(chooseSource(new Map(), [K('a')]), null);
+});
+
+test('chunkRanges and the assembler put a file back together exactly', () => {
+  assert.deepEqual(chunkRanges(0), []);
+  assert.deepEqual(chunkRanges(10, 4), [[0, 4], [4, 8], [8, 10]]);
+  assert.equal(chunkRanges(CHUNK_BYTES * 2 + 1).length, 3);
+  const data = Uint8Array.from({ length: 10 }, (_, i) => i);
+  const asm = createAssembler({ size: 10 });
+  for (const [s, e] of chunkRanges(10, 4)) assert.equal(asm.add(data.slice(s, e)), true);
+  assert.equal(asm.complete(), true);
+  assert.deepEqual([...asm.bytes()], [...data]);
+  const over = createAssembler({ size: 3 });
+  assert.equal(over.add(new Uint8Array(4)), false, 'more than announced is refused');
+  assert.equal(over.complete(), false);
+});
+
+test('parseControl / parseSignal accept only known, well-formed messages', () => {
+  assert.deepEqual(parseControl(JSON.stringify({ t: 'get', key: K('a') })), { t: 'get', key: K('a') });
+  assert.equal(parseControl(JSON.stringify({ t: 'get', key: 'assets/docs/X.pdf' })), null, 'only content keys travel');
+  assert.equal(parseControl(JSON.stringify({ t: 'meta', key: K('a'), size: -1 })), null);
+  assert.deepEqual(parseControl(JSON.stringify({ t: 'meta', key: K('a'), size: 5, mime: 'application/pdf' })), { t: 'meta', key: K('a'), size: 5, mime: 'application/pdf' });
+  assert.equal(parseControl('not json'), null);
+  assert.deepEqual(parseSignal({ k: 'want', keys: [K('a'), 'junk'] }), { k: 'want', keys: [K('a')] });
+  assert.deepEqual(parseSignal({ k: 'offer', sid: 's1', sdp: 'v=0' }), { k: 'offer', sid: 's1', sdp: 'v=0', direct: false });
+  assert.equal(parseSignal({ k: 'offer', sid: 's1' }), null);
+  assert.equal(parseSignal({ k: 'evil' }), null);
+  assert.equal(parseSignal(null), null);
+});
+
+test('iceConfig: "Direct connections only" drops every relay, keeps STUN', () => {
+  const servers = [{ urls: ['stun:stun.cloudflare.com:3478'] }, { urls: ['turn:t:3478', 'turns:t:443', 'stun:t:3478'], username: 'u', credential: 'c' }];
+  assert.deepEqual(iceConfig(servers), { iceServers: servers });
+  assert.deepEqual(iceConfig(servers, { directOnly: true }), { iceServers: [{ urls: ['stun:stun.cloudflare.com:3478'] }, { urls: ['stun:t:3478'], username: 'u', credential: 'c' }] });
+  assert.equal(relayPossible(servers), true);
+  assert.equal(relayPossible(servers, { directOnly: true }), false);
+  assert.equal(relayPossible([{ urls: 'stun:x' }]), false);
+});
+
+test('relay candidates are recognised and stripped for direct-only sessions', async () => {
+  const { isRelayCandidate, stripRelayCandidates } = await import('../src/domain/blobTransfer.js');
+  assert.equal(isRelayCandidate('candidate:1 1 udp 2113937151 192.168.1.2 54321 typ host'), false);
+  assert.equal(isRelayCandidate({ candidate: 'candidate:3 1 udp 33562623 203.0.113.9 3478 typ relay raddr 0.0.0.0 rport 0' }), true);
+  assert.equal(isRelayCandidate('candidate:2 1 udp 1686052607 198.51.100.4 50000 typ srflx raddr 192.168.1.2 rport 54321'), false);
+  const sdp = ['v=0', 'a=candidate:1 1 udp 1 10.0.0.1 1 typ host', 'a=candidate:3 1 udp 1 203.0.113.9 3478 typ relay raddr 0.0.0.0 rport 0', 'a=end-of-candidates'].join('\r\n');
+  assert.equal(stripRelayCandidates(sdp), ['v=0', 'a=candidate:1 1 udp 1 10.0.0.1 1 typ host', 'a=end-of-candidates'].join('\r\n'));
+  assert.equal(parseSignal({ k: 'offer', sid: 's', sdp: 'x', direct: true }).direct, true);
+  assert.equal(parseSignal({ k: 'offer', sid: 's', sdp: 'x', direct: 'yes' }).direct, false, 'only a real true');
+});

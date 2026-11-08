@@ -6,6 +6,8 @@
 import { store } from '../core/store.js';
 import { account } from '../core/account.js';
 import { sync } from '../core/sync.js';
+import { p2p } from '../core/p2p.js';
+import { wantedKeys, chooseSource } from '../domain/blobTransfer.js';
 import { imageSrc, setBlobResolver } from './imageSrc.js';
 import { BUILD } from '../core/buildInfo.js';
 import { CONTEXT_QUESTIONS } from '../core/schema.js';
@@ -1625,6 +1627,9 @@ export function mountShell(el) {
   // The sync dot and conflict chip repaint on their own; the campaign
   // surface never re-renders for a sync status change.
   sync.subscribe(() => { if (settingsMenuOpen) render(); else paintSyncIndicators(); });
+  // Which online devices hold this campaign's missing files, and transfers
+  // in progress (Phase S3): the card, the Docs library and the logo menu.
+  p2p.subscribe(() => p2pRenderSoon());
   el.innerHTML = `
     <div class="cockpit">
       <div class="startup-screen" data-startup-screen aria-label="GMAtlas">
@@ -4621,6 +4626,19 @@ function onClick(ev) {
   // filename (so a re-download/re-upload can't guess wrong) and opens
   // Documents, where the real "Import File(s)" control already lives —
   // no new upload flow invented, just pointed at the existing one.
+  // Device-to-device transfer (Phase S3): one file from the card, or every
+  // missing file the best-stocked online device has.
+  const p2pGetOne = hit('[data-doc-p2p-get]');
+  if (p2pGetOne) {
+    ev.preventDefault();
+    return p2pGet({ keys: [p2pGetOne.dataset.docP2pGet], from: p2pGetOne.dataset.p2pFrom || null });
+  }
+  if (hit('[data-p2p-get-all]')) {
+    ev.preventDefault();
+    settingsMenuOpen = false;
+    return p2pGet({});
+  }
+
   const mentionUploadNeeded = hit('[data-mention-upload-needed]');
   if (mentionUploadNeeded) {
     ev.preventDefault();
@@ -10360,9 +10378,15 @@ function render() {
           empty.innerHTML = `<div class="doc-missing-card">
             <p><strong>${escapeHtml(resolvedActive.title)}</strong> isn’t on this device yet.</p>
             <p class="dim small">The document is part of this campaign, but its file was added on another device. Import the same file here and it fills in.</p>
+            <div class="doc-missing-p2p" data-doc-missing-p2p></div>
             <label class="btn">Import file…<input type="file" hidden data-doc-missing-import="${escapeHtml(missingDocId)}"></label>
           </div>`;
         }
+        // The device-to-device part changes as devices come and go and files
+        // arrive; it's repainted alone, so the file input above is kept.
+        const p2pPart = empty.querySelector('[data-doc-missing-p2p]');
+        const p2pHtml = p2pCardHtml(blobKey);
+        if (p2pPart && p2pPart.innerHTML !== p2pHtml) p2pPart.innerHTML = p2pHtml;
       } else {
         delete empty.dataset.missingFor;
         empty.textContent = pendingBlob
@@ -11640,7 +11664,7 @@ function buildDrawerUi() {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, oracleRouteToNavigator: oracleRoutingActive(), navigatorStepMapLink, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, docSort, docSortMenuOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     fiveLeaguesInfoOpen, fiveLeaguesItemNotesOpen,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, tocOfferOpen, tocLibrary: store.getAppConfig().tocLibrary || {}, canScanToc: canScanToc(), lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, refDocBlobKeysLoaded, expandedWhatConflicts,
+    enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, tocOfferOpen, tocLibrary: store.getAppConfig().tocLibrary || {}, canScanToc: canScanToc(), lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, refDocBlobKeysLoaded, p2pOffer: p2pOffer(), expandedWhatConflicts,
     advisorOracleResults, advisorDrafts, advisorConsequenceDraw, sceneSummaryOverride,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName, partyTrackersEditOpen, collapsedPartySections,
@@ -11933,6 +11957,56 @@ const SYNC_MENU_TEXT = {
   disabled: 'Sync is turned off for this account',
 };
 
+/** What another online device can send this one for the open campaign
+ *  (Phase S3): {from, name, count} for whichever holds the most missing
+ *  files, plus `busy`/`progress` while files are coming in; or null. */
+function p2pOffer() {
+  if (!p2p.available()) return null;
+  const ps = p2p.getState();
+  const wanted = wantedKeys(store.get(), refDocBlobKeys);
+  const online = new Set(sync.getState().presence || []);
+  const from = chooseSource(new Map([...ps.haves].filter(([id]) => online.has(id))), wanted);
+  const count = from ? wanted.filter((k) => ps.haves.get(from).has(k)).length : 0;
+  const active = Object.values(ps.transfers).filter((t) => t.status === 'waiting' || t.status === 'receiving');
+  if (!count && !ps.busy) return null;
+  const doneNow = Object.values(ps.transfers).filter((t) => t.status === 'done').length;
+  return {
+    from, name: from ? sync.deviceName(from) : '', count, busy: ps.busy,
+    progress: ps.busy ? `Getting files from ${sync.deviceName((active[0] || {}).from)}… ${doneNow} of ${doneNow + active.length}` : '',
+  };
+}
+
+/** The "Get it from …" part of a missing document's card. */
+function p2pCardHtml(key) {
+  if (!p2p.available()) return '';
+  const t = p2p.getState().transfers[key];
+  if (t && (t.status === 'waiting' || t.status === 'receiving')) {
+    const pct = t.size ? Math.floor((100 * (t.received || 0)) / t.size) : 0;
+    return `<p class="small">Getting it from ${escapeHtml(sync.deviceName(t.from))}… ${pct}%</p>`;
+  }
+  const sources = p2p.sourcesFor(key);
+  const failed = t && t.status === 'failed' ? `<p class="small doc-missing-error">${escapeHtml(t.error || 'That didn’t work.')}</p>` : '';
+  if (!sources.length) return failed;
+  const others = sources.slice(1).map((id) => sync.deviceName(id));
+  return `${failed}<button type="button" class="btn" data-doc-p2p-get="${escapeHtml(key)}" data-p2p-from="${escapeHtml(sources[0])}">Get it from ${escapeHtml(sync.deviceName(sources[0]))}</button>${others.length ? `<p class="small dim">Also on ${escapeHtml(others.join(', '))}</p>` : ''}`;
+}
+
+// Chunks arrive many times a second: one render per 150 ms is plenty.
+let p2pRenderTimer = null;
+function p2pRenderSoon() {
+  if (p2pRenderTimer) return;
+  p2pRenderTimer = setTimeout(() => { p2pRenderTimer = null; render(); }, 150);
+}
+
+/** Gets missing files from another device and says how it went. */
+function p2pGet(opts) {
+  return p2p.fetchMissing(opts).then((r) => {
+    if (r.got) refreshRefDocBlobKeys();
+    if (r.error && !r.got) toast(r.error);
+    else toast(`Got ${r.got} file${r.got === 1 ? '' : 's'}${r.failed ? `; ${r.failed} didn’t arrive` : ''}`);
+  });
+}
+
 /** Names of this account's other devices that have the open campaign
  *  open right now (presence-lite). */
 function otherDevicesHere(s) {
@@ -12003,7 +12077,11 @@ function brandMenuHtml() {
     const syncLine = SYNC_MENU_TEXT[s.status] || (store.syncStatus(store.getAppConfig().activeCampaignId) ? 'Syncing…' : 'This campaign isn’t synced');
     const others = otherDevicesHere(s);
     const presence = others.length ? `<span class="brand-menu-presence" data-sync-presence>Also open on ${escapeHtml(others.join(', '))}</span>` : '';
-    head = `<strong>${escapeHtml(name)}</strong>${a.user.displayName ? `<span>${escapeHtml(a.user.email)}</span>` : ''}<span class="brand-menu-sync" data-sync-state="${escapeHtml(s.status)}">${escapeHtml(syncLine)}</span>${presence}`;
+    const offer = p2pOffer();
+    const files = !offer ? '' : offer.busy
+      ? `<span class="brand-menu-presence" data-p2p-progress>${escapeHtml(offer.progress)}</span>`
+      : `<button type="button" class="btn sm" data-p2p-get-all>Get ${offer.count} missing file${offer.count === 1 ? '' : 's'} from ${escapeHtml(offer.name)}</button>`;
+    head = `<strong>${escapeHtml(name)}</strong>${a.user.displayName ? `<span>${escapeHtml(a.user.email)}</span>` : ''}<span class="brand-menu-sync" data-sync-state="${escapeHtml(s.status)}">${escapeHtml(syncLine)}</span>${presence}${files}`;
   } else if (a.status === 'unavailable') {
     head = '<strong>Not signed in</strong><span>Everything is saved on this device.</span>';
   } else {

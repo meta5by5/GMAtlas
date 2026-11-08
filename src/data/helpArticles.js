@@ -173,9 +173,14 @@ Keep working: changes are saved on the device and sync when it's back online.
 
 ## Documents and PDFs
 
-Files never sync: the PDFs and documents you import stay on the device they were added on. Their entries in the Docs library do sync, so on another device a document added elsewhere shows **☁̸** and opens to an **isn't on this device yet** card.
+Files never pass through the GMAtlas service: the PDFs, documents and images you add stay on the device they were added on. Their entries do sync, so on another device a document added elsewhere shows **☁̸** and opens to an **isn't on this device yet** card.
 
-Choose **Import file…** on the card, or **Import files…** in the Docs library for all of them at once, and pick the same files. Each one is recognised by its contents, so it fills in even if it was renamed. You can also carry them across with **⬇ Export Library** and **⬆ Import Library** (Settings → General).
+To bring the file over:
+- **Get it from…** (on the card, in the Docs library, or in the logo menu) sends it straight from your other device while both have the campaign open. It's encrypted on the way, and each file is checked when it arrives. If your account doesn't have this yet, the button doesn't appear.
+- **Import file…** on the card, or **Import files…** in the Docs library for all of them at once: pick the same files. Each is recognised by its contents, so it fills in even if it was renamed.
+- **⬇ Export Library** and **⬆ Import Library** (Settings → General) carry them in a zip.
+
+When two devices can't reach each other directly, a transfer may go through a relay that only passes the encrypted stream along. To never use one from a device, tick **Direct connections only** under **Account → Sync** there.
 
 ## Stopping
 

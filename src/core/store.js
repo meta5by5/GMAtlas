@@ -1336,6 +1336,12 @@ function createStore() {
     // its content key now rather than at the next load.
     const activeId = appConfig.activeCampaignId;
     if (documentsToRekey(docs.get(activeId)).some((r) => r.oldKey === key)) moveInlineBlobs(activeId);
+    // A gallery image that arrived from another device (S3): show it now.
+    const doc = docs.get(activeId);
+    if (doc && !blobDataUrls.has(key) && blobKeysToInline(doc).includes(key)) {
+      blobDataUrls.set(key, await blobToDataUrl(blob));
+      notify();
+    }
   }
   /** The content key (`sha256:<hex>`) some bytes would be stored under. */
   function contentKeyFor(blob) { return blobKeyFor(blob); }

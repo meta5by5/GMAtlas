@@ -10,6 +10,9 @@
 
 import { account, ACCOUNT_SERVICE_URL } from '../../core/account.js';
 import { sync } from '../../core/sync.js';
+import { p2p } from '../../core/p2p.js';
+import { FEATURES } from '../../data/features.js';
+import { certHasFeature } from '../../domain/features.js';
 import { store } from '../../core/store.js';
 import { LICENSES } from '../../data/licenses.js';
 import { certStatus } from '../../domain/licensing.js';
@@ -460,6 +463,14 @@ function syncSection() {
             <div class="portal-row-actions"><button type="button" class="portal-btn primary" data-account-action="sync-open" data-campaign-id="${esc(c.id)}" ${disabled()}>${ui.busy ? 'Downloading…' : 'Open on this device'}</button></div>
           </li>`).join('')}</ul>
       </div>` : ''}
+    ${certHasFeature(account.getState().cert, 'p2p.transfer', FEATURES) ? `
+    <div class="portal-panel">
+      <h2>Files between your devices</h2>
+      <p class="portal-dim">A PDF or image added on one device can be sent to another while both have the campaign open: look for <strong>Get it from…</strong> on a document that isn’t on this device. It goes straight from device to device, encrypted, and never passes through or rests on the GMAtlas service.</p>
+      <p class="portal-dim">When two devices can’t reach each other directly (some office, school and mobile networks block it), the transfer can go through a relay instead. The relay only passes the encrypted stream along and can’t read it.</p>
+      <label class="portal-toggle"><input type="checkbox" data-p2p-direct-only ${p2p.directOnly() ? 'checked' : ''}> Direct connections only</label>
+      <p class="portal-dim">Never use a relay from this device. Some transfers then won’t connect.</p>
+    </div>` : ''}
     <div class="portal-panel">
       <h2>Recovery key</h2>
       <p class="portal-dim">Lost it? Get a new one by email. The old key stops working.</p>
@@ -880,6 +891,8 @@ export function onAccountClick(e) {
 export function onAccountChange(e) {
   const saved = e.target.closest('[data-sync-saved]');
   if (saved) { ui.recoverySaved = saved.checked; rerender(); return true; }
+  const direct = e.target.closest('[data-p2p-direct-only]');
+  if (direct) { p2p.setDirectOnly(direct.checked); rerender(); return true; }
   const mode = e.target.closest('[data-account-policy-mode]');
   const box = e.target.closest('[data-account-device-license]');
   if (!mode && !box) return false;

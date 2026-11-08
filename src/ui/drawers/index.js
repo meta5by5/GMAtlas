@@ -5572,8 +5572,10 @@ function documents(doc, ui = {}) {
     <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Reference Library</h4>${helpToggle('documents-reflib')}</div>
     ${missingVisible ? `<div class="drawer-note doc-missing-note">
       <span>☁̸ ${missingVisible} document${missingVisible === 1 ? ' isn’t' : 's aren’t'} on this device yet.</span>
+      ${ui.p2pOffer && ui.p2pOffer.busy ? `<span class="small">${esc(ui.p2pOffer.progress)}</span>` : ''}
+      ${ui.p2pOffer && !ui.p2pOffer.busy ? `<button type="button" class="btn sm" data-p2p-get-all>Get ${ui.p2pOffer.count} from ${esc(ui.p2pOffer.name)}</button>` : ''}
       <label class="btn sm">Import files…<input type="file" multiple hidden data-doc-missing-import-all></label>
-      <span class="dim small">Pick the same files; each fills in by its contents, whatever its name.</span>
+      <span class="dim small">${ui.p2pOffer && !ui.p2pOffer.busy ? 'Sent straight from that device, never through the server. Or pick' : 'Pick'} the same files; each fills in by its contents, whatever its name.</span>
     </div>` : ''}
     ${helpBody('documents-reflib', 'This campaign\'s sourcebooks: only those whose license you own (Settings → Licenses) and whose game system this campaign\'s profile designates (Module for Profile or Rules Constitution), plus anything you import yourself. "Import File(s)" reads real files off your device into this browser\'s own storage: a filename matching a catalog entry joins the Reference Library so it opens even when assets/docs/ is empty on this machine; anything else becomes a new personal document (no size limit). Bulk "Export Library"/"Import Library" (a zip of every such doc, to carry to another browser) live in Settings → General → Data.', ui)}
     <div class="drawer-note ref-doc-transfer-row">

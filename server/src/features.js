@@ -27,12 +27,16 @@ export async function enabledFeaturesFor(env, userId, entitlements) {
   return resolveFeatures({ features: FEATURES, flags: await loadFlags(env), userId, granted });
 }
 
-/** Throws 403 feature_off unless the feature is on for this account. */
-export async function requireFeature(env, nowIso, userId, featureId) {
+/** Whether the feature is on for this account right now. */
+export async function hasFeature(env, nowIso, userId, featureId) {
   const { results } = await env.DB.prepare("SELECT ref, kind FROM entitlements WHERE user_id = ? AND kind = 'feature' AND revoked_at IS NULL AND starts_at <= ? AND (ends_at IS NULL OR ends_at > ?)")
     .bind(userId, nowIso, nowIso).all();
-  const on = await enabledFeaturesFor(env, userId, results);
-  if (!on.includes(featureId)) {
+  return (await enabledFeaturesFor(env, userId, results)).includes(featureId);
+}
+
+/** Throws 403 feature_off unless the feature is on for this account. */
+export async function requireFeature(env, nowIso, userId, featureId) {
+  if (!(await hasFeature(env, nowIso, userId, featureId))) {
     const f = FEATURES.find((x) => x.id === featureId);
     throw new HttpError(403, 'feature_off', `${f ? f.label : featureId} is turned off for this account.`);
   }

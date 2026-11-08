@@ -8,6 +8,7 @@ import { mountShell } from './ui/shell.js';
 import { mountPortal } from './ui/portal/index.js';
 import { account } from './core/account.js';
 import { sync } from './core/sync.js';
+import { p2p } from './core/p2p.js';
 
 const TEXT_INPUT = /^(text|search|email|url|tel|number|password|date|datetime-local|month|time|week)$/;
 
@@ -34,6 +35,9 @@ function isTypingInCampaign() {
   // an approved device with a synced campaign open. Remote changes wait
   // while a text field in the campaign is being typed in.
   sync.start({ store, account, canApply: () => !isTypingInCampaign() });
+  // Device-to-device file transfer (Phase S3): inert unless the account has
+  // p2p.transfer and the open synced campaign is open on another device.
+  p2p.start({ store, sync, account });
 
   // Register the service worker for offline / installable PWA (ignored on file://).
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

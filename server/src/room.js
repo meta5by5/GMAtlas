@@ -10,6 +10,10 @@
 
 import { createRoomCore } from './roomCore.js';
 
+// An SDP offer with its candidates is a few KB; sealed and base64'd, well
+// under this.
+const MAX_SIGNAL_CHARS = 64 * 1024;
+
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
 
 export class CampaignRoom {
@@ -26,7 +30,7 @@ export class CampaignRoom {
       if (url.pathname === '/socket') {
         if (request.headers.get('upgrade') !== 'websocket') return json({ error: 'upgrade_required' }, 426);
         const pair = new WebSocketPair();
-        this.accept(pair[1], deviceId);
+        this.accept(pair[1], deviceId, { p2p: request.headers.get('x-p2p') === '1' });
         return new Response(null, { status: 101, webSocket: pair[0] });
       }
       if (url.pathname === '/snapshot' && request.method === 'GET') {
@@ -51,10 +55,11 @@ export class CampaignRoom {
     }
   }
 
-  /** Takes a server-side socket into the room (hibernatable). */
-  accept(ws, deviceId) {
+  /** Takes a server-side socket into the room (hibernatable). `p2p`: the
+   *  account has device-to-device transfer on (checked by the Worker). */
+  accept(ws, deviceId, { p2p = false } = {}) {
     this.ctx.acceptWebSocket(ws);
-    ws.serializeAttachment({ deviceId });
+    ws.serializeAttachment({ deviceId, p2p });
   }
 
   ensureCore() {
@@ -76,16 +81,19 @@ export class CampaignRoom {
       send(ws, { t: 'error', code: 'bad_json', message: 'Frames must be JSON.' });
       return;
     }
-    const { deviceId } = ws.deserializeAttachment() || {};
+    const att = ws.deserializeAttachment() || {};
+    const { deviceId } = att;
     const core = this.ensureCore();
     if (msg.t === 'hello') {
       const frames = core.hello(msg);
       for (const frame of frames) send(ws, frame);
       // A socket told to reset reloads first; it counts once it's caught up.
       const live = !frames.length || frames[0].t !== 'reset';
-      const was = !!(ws.deserializeAttachment() || {}).live;
-      ws.serializeAttachment({ deviceId, live });
+      const was = !!att.live;
+      ws.serializeAttachment({ ...att, live });
       if (live || was) this.presence();
+    } else if (msg.t === 'signal') {
+      this.signal(ws, att, msg, send);
     } else if (msg.t === 'push') {
       const { reply, fanout } = core.push(deviceId, msg);
       for (const frame of reply) send(ws, frame);
@@ -97,6 +105,27 @@ export class CampaignRoom {
     } else {
       send(ws, { t: 'error', code: 'unknown_frame', message: `Unknown frame: ${msg.t}` });
     }
+  }
+
+  /** Device-to-device transfer set-up (roadmap S3 item 2): relays an opaque
+   *  message between this campaign's open devices, all the owner's own. The
+   *  payload is sealed with the campaign key on the device, so the room sees
+   *  only who it's for: `to` a device id, or '*' for every other device.
+   *  `ref` is echoed back in `signal-gone` when nobody is there to get it. */
+  signal(ws, att, msg, send) {
+    if (!att.p2p) { send(ws, { t: 'error', code: 'feature_off', message: 'Device-to-device transfer is turned off for this account.' }); return; }
+    if (typeof msg.data !== 'string' || msg.data.length > MAX_SIGNAL_CHARS || typeof msg.to !== 'string') {
+      send(ws, { t: 'error', code: 'bad_signal', message: 'Transfer set-up message refused.' });
+      return;
+    }
+    const targets = this.ctx.getWebSockets().filter((s) => {
+      if (s === ws) return false;
+      const a = s.deserializeAttachment() || {};
+      return a.live && a.p2p && a.deviceId && (msg.to === '*' ? a.deviceId !== att.deviceId : a.deviceId === msg.to);
+    });
+    if (!targets.length) { if (msg.to !== '*') send(ws, { t: 'signal-gone', to: msg.to, ref: msg.ref || null }); return; }
+    const frame = { t: 'signal', from: att.deviceId, data: msg.data };
+    for (const s of targets) send(s, frame);
   }
 
   /** Presence-lite (roadmap S2 item 4): tells every socket which devices

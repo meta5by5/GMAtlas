@@ -21,7 +21,7 @@
 
 import { HttpError, json, readJson } from './http.js';
 import { signAccessToken, verifyAccessToken } from './crypto.js';
-import { requireFeature } from './features.js';
+import { requireFeature, hasFeature } from './features.js';
 
 const iso = (ms) => new Date(ms).toISOString();
 const MAX_SNAPSHOT_CHARS = 60 * 1024 * 1024;
@@ -287,7 +287,11 @@ export async function issueTicket(request, { env, now }, { user, device }) {
   const { campaignId } = await readJson(request);
   await ownCampaign(env, user, String(campaignId || ''));
   await requireApproved(env, user, device);
-  const ticket = await signAccessToken({ sub: user.id, did: device.id, cid: String(campaignId), typ: 'ws' }, env.ACCESS_TOKEN_SECRET, now(), TICKET_SECONDS);
+  // Whether this socket may relay device-to-device transfer set-up (S3).
+  // Decided when the socket opens: a flag turned off reaches open sockets
+  // at their next reconnect.
+  const p2p = await hasFeature(env, iso(now()), user.id, 'p2p.transfer');
+  const ticket = await signAccessToken({ sub: user.id, did: device.id, cid: String(campaignId), typ: 'ws', p2p }, env.ACCESS_TOKEN_SECRET, now(), TICKET_SECONDS);
   return json({ ticket });
 }
 
@@ -307,5 +311,6 @@ export async function openSocket(request, ctx) {
   const claims = await checkTicket(new URL(request.url).searchParams.get('ticket'), ctx);
   const headers = new Headers(request.headers);
   headers.set('x-device-id', claims.did);
+  headers.set('x-p2p', claims.p2p ? '1' : '0');
   return room(ctx.env, claims.cid).fetch(new Request(roomUrl('/socket'), { headers }));
 }

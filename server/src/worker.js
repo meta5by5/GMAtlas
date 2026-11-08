@@ -12,6 +12,7 @@
 //   CERT_SIGNING_JWK     secret: ECDSA P-256 private JWK (npm run keygen)
 //   CERT_KEY_ID          id of that key, pinned with its public half in the app
 //   RESEND_API_KEY, MAIL_FROM   email delivery (or MAIL_MODE=log in development)
+//   TURN_KEY_ID, TURN_KEY_API_TOKEN   optional: Cloudflare TURN relay (src/p2p.js)
 
 import { HttpError, json, errorResponse } from './http.js';
 import { startEmailSignIn, verifyEmailSignIn, refreshSession, signOut, requireAuth } from './auth.js';
@@ -33,6 +34,7 @@ import {
 
 import { passkeyRegisterOptions, passkeyRegister, passkeyLoginOptions, passkeyLogin, listPasskeys, deletePasskey } from './passkeys.js';
 import { listProviders, oauthStart, oauthLink, oauthCallback, listIdentities, unlinkIdentity } from './oauth.js';
+import { getIceServers } from './p2p.js';
 
 // The Durable Object class must be exported from the Worker's entry module.
 export { CampaignRoom } from './room.js';
@@ -89,6 +91,8 @@ const ROUTES = [
   ['GET', /^\/api\/account\/settings$/, getAccountSettings, true],
   ['PUT', /^\/api\/account\/settings$/, putAccountSettings, true],
   ['POST', /^\/api\/sync\/ticket$/, issueTicket, true],
+  // Device-to-device document transfer (Phase S3, src/p2p.js)
+  ['GET', /^\/api\/p2p\/ice$/, getIceServers, true],
   // Admin v1 (src/admin.js; every handler checks the caller's role)
   ['GET', /^\/api\/admin\/me$/, adminMe, true],
   ['GET', /^\/api\/admin\/users$/, searchUsers, true],

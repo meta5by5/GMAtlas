@@ -74,10 +74,10 @@ export function fakeRooms(env) {
     get: (name) => ({ fetch: (request) => roomFor(name).fetch(request) }),
     room: roomFor,
     /** Joins a room as `deviceId`: `send(frame)` delivers a client frame. */
-    connect(name, deviceId) {
+    connect(name, deviceId, opts = {}) {
       const room = roomFor(name);
       const ws = fakeSocket();
-      room.accept(ws, deviceId);
+      room.accept(ws, deviceId, opts);
       ws.deliver = (frame) => room.webSocketMessage(ws, JSON.stringify(frame));
       return ws;
     },

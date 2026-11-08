@@ -1,8 +1,10 @@
 # Document transfer without upload (S3)
 
-**Status:** Accepted in part. Item 1 (content keys and "not on this device")
-and item 3 (hash-carrying bundles, hash-matched import) are built; item 2
-(WebRTC transfer between a user's own devices) is next.
+**Status:** Accepted. Built: item 1 (content keys and "not on this
+device"), item 2 (WebRTC transfer between a user's own devices, behind the
+`p2p.transfer` feature) and item 3 (hash-carrying bundles, hash-matched
+import). Sourcebook PDFs don't travel device to device yet (see
+Consequences).
 
 ## Context
 
@@ -45,6 +47,35 @@ file brought in on two devices had two unrelated keys.
    gives each file's `sha256`; library-zip and campaign-bundle imports check
    it and skip a damaged file instead of storing it under the wrong key. Older
    zips (no hash) import as before.
+6. **Device to device over WebRTC** (roadmap 6.3 channel 1; `core/p2p.js`
+   for the network, `domain/blobTransfer.js` for the decisions):
+   - **Who has what:** while a synced campaign is open on several devices,
+     each asks the others which of its missing files they hold (`want` →
+     `have`). A device answers only with files the open campaign points at
+     (`servableKeys`: its uploads and gallery images) that it has.
+   - **Signalling goes through the campaign room, not an account room**
+     (roadmap 6.3 said account room; none exists, and the files belong to
+     a campaign anyway). Every message is sealed with the campaign key, so
+     the server sees only which device it's for, never SDP, addresses or
+     file hashes. The room admits only the owner's devices, so transfer is
+     within one account by construction. Each socket's ticket says whether
+     the account has `p2p.transfer`; the room relays nothing for a socket
+     without it, so the admin kill switch takes effect at each device's
+     next reconnect.
+   - **Transfer:** a data channel from the device that's missing the
+     files; one file at a time, announced with its size, in 64 KiB chunks
+     (not the roadmap's 256 KB, which older Safari can't take in one
+     message) with backpressure; the receiver checks the whole file against
+     its content key and stores nothing that doesn't match.
+   - **Relay (TURN)** is offered by the server only when configured
+     (`GET /api/p2p/ice`); it carries the DTLS-encrypted stream, never
+     readable. **"Direct connections only"** (Account › Sync, decision D7)
+     is per device (`appConfig.p2p.directOnly`, local) and makes the whole
+     session direct: it drops relay servers here, asks the other device to
+     do the same in the offer, and both ends drop relay candidates.
+   - **UI:** the missing-document card's **Get it from …**, the Docs
+     library's **Get N from …**, and the logo menu's **Get N missing files
+     from …** (which also covers gallery images).
 
 ## Consequences
 
@@ -54,5 +85,11 @@ file brought in on two devices had two unrelated keys.
   pause, not a second copy.
 - The alias record is per device and only ever grows by one entry per old
   upload.
-- "Get it from <device>" on the card, and "Get all missing" over the network,
-  come with item 2, which also needs each device to say which blobs it holds.
+- Both devices must have the campaign open at once; there is no "send it
+  when it comes online" queue.
+- Sourcebook PDFs (keyed by their `assets/docs/` path, not by content) don't
+  travel this way yet: the receiving device needs the license too, and
+  which books a campaign wants isn't the same as which it points at. Until
+  then they come by Load, Import my copy, or a library zip.
+- A device whose `p2p.transfer` is switched off mid-session keeps relaying
+  until its socket reconnects (tickets last 60 s; sockets longer).
