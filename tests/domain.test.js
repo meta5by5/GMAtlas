@@ -12412,3 +12412,63 @@ test('checkImportedPdf / matchPickedPdfs', () => {
     unmatched: ['Three.pdf'],
   });
 });
+// --- S3: content-keyed uploads, missing documents, hash-matched import -----
+import {
+  documentsToRekey, rekeyDocumentBlobs, missingDocuments, classifyImportedFile, resolveBlobAlias,
+} from '../src/domain/documents.js';
+import { rekeyTocLibrary } from '../src/domain/toc.js';
+
+function s3Campaign() {
+  const c = defaultCampaign();
+  c.documents.library = [
+    { id: 'doc_a', kind: 'file', title: 'A', fileName: 'a.pdf', blobKey: 'doc_a' },
+    { id: 'doc_b', kind: 'file', title: 'B', fileName: 'b.pdf', blobKey: 'sha256:bbb' },
+    { id: 'doc_c', kind: 'file', title: 'C', fileName: 'c.png', dataUrl: 'data:image/png;base64,AA==' },
+    { id: 'n1', kind: 'note', title: 'Note', content: 'x' },
+  ];
+  c.documents.tocDeclined = ['doc_a', 'assets/docs/X.pdf'];
+  c.guide = { ...(c.guide || {}), docs: [...((c.guide && c.guide.docs) || []), { id: 'g1', title: 'A', tocSourceKey: 'doc_a' }] };
+  return c;
+}
+
+test('documentsToRekey lists only uploads on a non-content key', () => {
+  assert.deepEqual(documentsToRekey(s3Campaign()), [{ id: 'doc_a', oldKey: 'doc_a' }]);
+});
+
+test('rekeyDocumentBlobs moves uploads, TOC stamps and declines to the new key, without mutating', () => {
+  const c = s3Campaign();
+  const before = JSON.stringify(c);
+  const next = rekeyDocumentBlobs(c, { doc_a: 'sha256:aaa' });
+  assert.equal(JSON.stringify(c), before, 'input untouched');
+  assert.equal(next.documents.library.find((d) => d.id === 'doc_a').blobKey, 'sha256:aaa');
+  assert.equal(next.documents.library.find((d) => d.id === 'doc_b').blobKey, 'sha256:bbb');
+  assert.equal(next.guide.docs.find((g) => g.id === 'g1').tocSourceKey, 'sha256:aaa');
+  assert.deepEqual(next.documents.tocDeclined, ['sha256:aaa', 'assets/docs/X.pdf']);
+  assert.deepEqual(documentsToRekey(next), []);
+});
+
+test('missingDocuments: an upload whose key is not stored here, never an inline one', () => {
+  const c = rekeyDocumentBlobs(s3Campaign(), { doc_a: 'sha256:aaa' });
+  assert.deepEqual(missingDocuments(c, new Set(['sha256:aaa'])).map((d) => d.id), ['doc_b']);
+  assert.deepEqual(missingDocuments(c, new Set(['sha256:aaa', 'sha256:bbb'])), []);
+  assert.deepEqual(missingDocuments(c, new Set()).map((d) => d.id), ['doc_a', 'doc_b']);
+});
+
+test('classifyImportedFile: fill a missing link, skip a present one, else new', () => {
+  const c = s3Campaign();
+  assert.equal(classifyImportedFile(c, 'sha256:bbb', new Set()).action, 'fill');
+  assert.deepEqual(classifyImportedFile(c, 'sha256:bbb', new Set()).docs.map((d) => d.id), ['doc_b']);
+  assert.equal(classifyImportedFile(c, 'sha256:bbb', new Set(['sha256:bbb'])).action, 'exists');
+  assert.equal(classifyImportedFile(c, 'sha256:zzz', new Set()).action, 'new');
+});
+
+test('resolveBlobAlias and rekeyTocLibrary', () => {
+  assert.equal(resolveBlobAlias({ doc_a: 'sha256:aaa' }, 'doc_a'), 'sha256:aaa');
+  assert.equal(resolveBlobAlias({ doc_a: 'sha256:aaa' }, 'other'), 'other');
+  assert.equal(resolveBlobAlias(null, 'k'), 'k');
+  const lib = { doc_a: { docTitle: 'A', entries: [] }, doc_x: { docTitle: 'X old', entries: [] }, 'sha256:xxx': { docTitle: 'X new', entries: [] } };
+  const out = rekeyTocLibrary(lib, { doc_a: 'sha256:aaa', doc_x: 'sha256:xxx' });
+  assert.deepEqual(Object.keys(out).sort(), ['sha256:aaa', 'sha256:xxx']);
+  assert.equal(out['sha256:xxx'].docTitle, 'X new', 'an existing scan under the new key wins');
+  assert.ok(lib.doc_a, 'input untouched');
+});

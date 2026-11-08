@@ -171,6 +171,12 @@ If you and another device change the same field at the same moment, the later ch
 
 Keep working: changes are saved on the device and sync when it's back online.
 
+## Documents and PDFs
+
+Files never sync: the PDFs and documents you import stay on the device they were added on. Their entries in the Docs library do sync, so on another device a document added elsewhere shows **☁̸** and opens to an **isn't on this device yet** card.
+
+Choose **Import file…** on the card, or **Import files…** in the Docs library for all of them at once, and pick the same files. Each one is recognised by its contents, so it fills in even if it was renamed. You can also carry them across with **⬇ Export Library** and **⬆ Import Library** (Settings → General).
+
 ## Stopping
 
 **Account → Sync** has **Stop syncing** for each campaign. Every device keeps its own copy.`,

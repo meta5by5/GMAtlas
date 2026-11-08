@@ -45,6 +45,8 @@ import { PLANETFALL_TURN_STEPS } from '../data/turnStepListPlanetfall.js';
 import { TURN_STEPS_FIVE_LEAGUES } from '../data/turnStepListFiveLeagues.js';
 import { CREW_TASKS_5PFH } from '../data/crewTasksDefault5pfh.js';
 import { listInlineBlobs, applyMovedBlobs, blobKeysToInline, inlineBlobsForExport, contentBlobKey } from '../domain/inlineBlobs.js';
+import { documentsToRekey, rekeyDocumentBlobs, resolveBlobAlias } from '../domain/documents.js';
+import { rekeyTocLibrary } from '../domain/toc.js';
 import { effectiveLicenses } from '../domain/licensing.js';
 import { diffDoc, applyOps, nextHlc, observeHlc, createReplica, syncedView, withLocalPaths, withoutInlineBytes } from '../domain/syncOps.js';
 import { CAMPAIGN_SYNC_POLICY } from '../data/syncPolicy.js';
@@ -77,6 +79,9 @@ const CAMPAIGN_BACKUP_KEY = 'campaignBackup';
 // New scheme: one appConfig record (the campaign index + Rules Profiles),
 // each campaign's actual document under its own key.
 const APP_CONFIG_KEY = 'appConfig';
+// {oldKey: 'sha256:…'}: uploads re-keyed by content (S3) keep resolving by
+// the key they had before. This device's own record, never synced.
+const BLOB_ALIASES_KEY = 'blobAliases';
 const campaignDocKey = (id) => `campaign:${id}`;
 const campaignBackupDocKey = (id) => `campaignBackup:${id}`;
 
@@ -363,29 +368,73 @@ function createStore() {
   async function moveInlineBlobs(campaignId) {
     if (moving.has(campaignId)) { moveAgain.add(campaignId); return; }
     const pending = listInlineBlobs(docs.get(campaignId));
-    if (!pending.length) return;
+    const toRekey = documentsToRekey(docs.get(campaignId));
+    if (!pending.length && !toRekey.length) return;
     moving.add(campaignId);
     try {
       const database = await db();
-      const moved = [];
-      for (const item of pending) {
-        const blob = dataUrlToBlob(item.dataUrl);
-        const blobKey = await blobKeyFor(blob);
-        await idbPut(database, blobKey, blob, DOC_BLOB_STORE);
-        blobDataUrls.set(blobKey, item.dataUrl);
-        moved.push({ ...item, blobKey });
+      if (pending.length) {
+        const moved = [];
+        for (const item of pending) {
+          const blob = dataUrlToBlob(item.dataUrl);
+          const blobKey = await blobKeyFor(blob);
+          await idbPut(database, blobKey, blob, DOC_BLOB_STORE);
+          blobDataUrls.set(blobKey, item.dataUrl);
+          moved.push({ ...item, blobKey });
+        }
+        const current = docs.get(campaignId);
+        if (current) {
+          const next = applyMovedBlobs(current, moved);
+          docs.set(campaignId, next);
+          await persistCampaignDoc(campaignId, current, next);
+        }
       }
-      const current = docs.get(campaignId);
-      if (current) {
-        const next = applyMovedBlobs(current, moved);
-        docs.set(campaignId, next);
-        await persistCampaignDoc(campaignId, current, next);
-      }
+      if (toRekey.length) await rekeyUploads(database, campaignId, toRekey);
     } catch (err) {
-      console.warn('moving inline images to the blob store failed; they stay inline', err);
+      console.warn('moving bytes to content keys failed; they stay where they were', err);
     } finally {
       moving.delete(campaignId);
       if (moveAgain.delete(campaignId)) moveInlineBlobs(campaignId);
+    }
+  }
+
+  let blobAliases = null;
+  async function loadBlobAliases(database) {
+    if (!blobAliases) blobAliases = (await idbGet(database, BLOB_ALIASES_KEY)) || {};
+    return blobAliases;
+  }
+
+  /** Moves uploads stored under their document id (before S3) to content
+   *  keys: copy, record the alias, then drop the old copy, so the bytes are
+   *  never stored twice and never missing. An upload whose bytes aren't on
+   *  this device keeps its old key until they arrive. Rewrites the campaign
+   *  (and the app-wide TOC library) to the new keys. */
+  async function rekeyUploads(database, campaignId, toRekey) {
+    const aliases = await loadBlobAliases(database);
+    const map = {};
+    for (const { oldKey } of toRekey) {
+      if (map[oldKey]) continue;
+      if (aliases[oldKey]) { map[oldKey] = aliases[oldKey]; continue; }
+      const blob = await idbGet(database, oldKey, DOC_BLOB_STORE);
+      if (!blob) continue;
+      const key = await blobKeyFor(blob);
+      await idbPut(database, key, blob, DOC_BLOB_STORE);
+      aliases[oldKey] = key;
+      await idbPut(database, BLOB_ALIASES_KEY, aliases);
+      await idbDelete(database, oldKey, DOC_BLOB_STORE);
+      map[oldKey] = key;
+    }
+    if (!Object.keys(map).length) return;
+    const current = docs.get(campaignId);
+    if (current) {
+      const next = rekeyDocumentBlobs(current, map);
+      docs.set(campaignId, next);
+      await persistCampaignDoc(campaignId, current, next);
+    }
+    if (appConfig.tocLibrary && Object.keys(map).some((k) => appConfig.tocLibrary[k])) {
+      updateAppConfig((c) => ({ ...c, tocLibrary: rekeyTocLibrary(c.tocLibrary, map) }));
+    } else {
+      notify();
     }
   }
 
@@ -1283,10 +1332,25 @@ function createStore() {
   async function putDocBlob(key, blob) {
     const database = await db();
     await idbPut(database, key, blob, DOC_BLOB_STORE);
+    // An old export's attachment arriving under its pre-S3 key: move it to
+    // its content key now rather than at the next load.
+    const activeId = appConfig.activeCampaignId;
+    if (documentsToRekey(docs.get(activeId)).some((r) => r.oldKey === key)) moveInlineBlobs(activeId);
+  }
+  /** The content key (`sha256:<hex>`) some bytes would be stored under. */
+  function contentKeyFor(blob) { return blobKeyFor(blob); }
+  /** Stores bytes under their content key and resolves to that key. */
+  async function putContentBlob(blob) {
+    const key = await blobKeyFor(blob);
+    const database = await db();
+    await idbPut(database, key, blob, DOC_BLOB_STORE);
+    return key;
   }
   async function getDocBlob(key) {
     const database = await db();
-    return idbGet(database, key, DOC_BLOB_STORE);
+    const aliases = await loadBlobAliases(database);
+    const resolved = resolveBlobAlias(aliases, key);
+    return (await idbGet(database, resolved, DOC_BLOB_STORE)) || (resolved !== key ? idbGet(database, key, DOC_BLOB_STORE) : undefined);
   }
   async function deleteDocBlob(key) {
     const database = await db();
@@ -1295,9 +1359,15 @@ function createStore() {
   /** The in-memory data: URL for a moved image or document, or undefined
    *  when its bytes aren't on this device. Synchronous, for rendering. */
   function blobDataUrl(key) { return blobDataUrls.get(key); }
-  async function listDocBlobKeys() {
+  /** Every stored key, plus each old key whose re-keyed bytes are here
+   *  (`withAliases: false` for just the stored keys, as an export wants). */
+  async function listDocBlobKeys({ withAliases = true } = {}) {
     const database = await db();
-    return idbKeys(database, DOC_BLOB_STORE);
+    const keys = await idbKeys(database, DOC_BLOB_STORE);
+    if (!withAliases) return keys;
+    const aliases = await loadBlobAliases(database);
+    const present = new Set(keys);
+    return [...keys, ...Object.keys(aliases).filter((k) => !present.has(k) && present.has(aliases[k]))];
   }
 
   // --- optional File System Access binding (OneDrive-synced folder) -----
@@ -1322,7 +1392,7 @@ function createStore() {
     export: exportDocument, import: importDocument, newCampaign,
     supportsFileBinding, bindFile, saveBoundFile,
     storageInfo, restoreBackup,
-    putDocBlob, getDocBlob, deleteDocBlob, listDocBlobKeys, blobDataUrl,
+    putDocBlob, putContentBlob, contentKeyFor, getDocBlob, deleteDocBlob, listDocBlobKeys, blobDataUrl,
     listCampaigns, switchCampaign, renameCampaign, setCampaignProfile, deleteCampaign, exportCampaignById,
     loadCampaign, peekCampaign, updateCampaign,
     listProfiles, getActiveProfile, getAppConfig, createProfile, updateProfile, renameProfile,

@@ -68,7 +68,7 @@ non-trivial change; this file only covers day-to-day mechanics.
    IndexedDB, one DB: a key/value store (each campaign's live doc + a
    one-slot backup written best-effort before every real write, and
    appConfig) and a `docBlobs` store for bytes (documents, sourcebooks,
-   gallery images under a `sha256:` content key, re-inlined on export). Public surface:
+   gallery images and uploads under a `sha256:` content key, re-inlined on export). Public surface:
    sync `get()`, sync-call-shape `update(fn)` (persists in background,
    rolls back + reports via `store.onPersistError(fn)` on failure), `sub
    scribe(fn)`, sync `export()`, async `import()`/`newCampaign()`/

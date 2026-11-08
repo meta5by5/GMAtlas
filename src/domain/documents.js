@@ -750,6 +750,64 @@ export function resolveDocumentTab(campaign, tabKey) {
   return { title: entry.title || entry.fileName, src: withPageAnchor(entry.dataUrl || '', page), kind: 'lib', page, blobKey: entry.blobKey || null };
 }
 
+// --- Content-keyed uploads (design/ACCOUNTS-SYNC-ROADMAP.md 6.1, S3) --------
+// An uploaded document's bytes are stored under `sha256:<hex>` of their
+// contents, so the same file has the same key on every device and a link
+// resolves wherever the bytes turn up. Uploads from before S3 were keyed by
+// their document id; store.js moves those to content keys and keeps an
+// alias, so the old key still finds the bytes.
+
+const isContentKey = (k) => typeof k === 'string' && k.startsWith('sha256:');
+const uploadedFiles = (campaign) => ((campaign && campaign.documents && campaign.documents.library) || []).filter((d) => d && d.kind === 'file');
+
+/** Uploaded documents still on an old (non-content) key: [{id, oldKey}]. */
+export function documentsToRekey(campaign) {
+  return uploadedFiles(campaign).filter((d) => d.blobKey && !isContentKey(d.blobKey)).map((d) => ({ id: d.id, oldKey: d.blobKey }));
+}
+
+/** Points every record that used an old blob key at its new one: uploaded
+ *  documents' `blobKey`, TOC Guide docs' `tocSourceKey`, and the campaign's
+ *  `tocDeclined`. `map` is {oldKey: newKey}. A document whose key changed
+ *  meanwhile is left alone. */
+export function rekeyDocumentBlobs(campaign, map) {
+  const next = clone(campaign);
+  const m = map || {};
+  for (const d of uploadedFiles(next)) if (m[d.blobKey]) d.blobKey = m[d.blobKey];
+  for (const g of ((next.guide && next.guide.docs) || [])) if (g && m[g.tocSourceKey]) g.tocSourceKey = m[g.tocSourceKey];
+  if (next.documents && Array.isArray(next.documents.tocDeclined)) {
+    next.documents.tocDeclined = [...new Set(next.documents.tocDeclined.map((k) => m[k] || k))];
+  }
+  return next;
+}
+
+/** Uploaded documents whose bytes aren't on this device: a `blobKey` not in
+ *  `presentKeys` (a Set of stored keys) and no legacy inline copy. */
+export function missingDocuments(campaign, presentKeys) {
+  const present = presentKeys || new Set();
+  return uploadedFiles(campaign).filter((d) => d.blobKey && !present.has(d.blobKey) && !(typeof d.dataUrl === 'string' && d.dataUrl.startsWith('data:')));
+}
+
+/** Uploaded documents stored under `blobKey`. */
+export function documentsWithBlobKey(campaign, blobKey) {
+  return uploadedFiles(campaign).filter((d) => d.blobKey === blobKey);
+}
+
+/** What importing a file with content key `key` (and name `fileName`) should
+ *  do in this campaign: 'fill' a document whose bytes are missing here,
+ *  'exists' when a document already has those bytes, or 'new'. `docs` lists
+ *  the matched documents. */
+export function classifyImportedFile(campaign, key, presentKeys) {
+  const docs = documentsWithBlobKey(campaign, key);
+  if (!docs.length) return { action: 'new', docs: [] };
+  const present = presentKeys || new Set();
+  return { action: present.has(key) ? 'exists' : 'fill', docs };
+}
+
+/** The blob key a lookup should use: an old key's alias, else itself. */
+export function resolveBlobAlias(aliases, key) {
+  return (aliases && aliases[key]) || key;
+}
+
 /** Every IndexedDB blob-store key this campaign actually points at right
  *  now — every uploaded library document's `blobKey`, plus every
  *  Reference Library `file` path this campaign has an override for or

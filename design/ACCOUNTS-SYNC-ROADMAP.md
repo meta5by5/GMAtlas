@@ -511,9 +511,9 @@ plaintext op log later is not.
     import and update. Every export puts them back inline, so export files
     keep their old shape. Without this, a synced campaign *would* upload
     images through the op log; as a side benefit every save is cheaper.
-  - **S3:** uploaded documents already in `docBlobs` keep their existing
-    keys until S3. S3 re-keys them by content, with an `aliases` map so the
-    old key still resolves, since hash matching is first needed there.
+  - **Built in S3:** uploaded documents are hashed on import, and older ones
+    are re-keyed by content in the background, with a per-device alias so the
+    old key still resolves (`design/adr/document-transfer.md`).
 - `diffDoc` refuses any `data:` URL in an op (built in S0, tested).
 
 ### 6.2 "Not on this device" UX
@@ -821,6 +821,11 @@ S2 is built; it moves to `main` by pull request.
 5. Gate: `sync.devices` feature.
 
 ### S3 — Document transfer without upload
+
+**In progress** (`design/adr/document-transfer.md`). Built: uploads keyed by
+content with old keys aliased (the 6.1 S3 step), the badges and card with
+Import, hash-matched re-import, and hash-carrying bundles (items 1 and 3,
+apart from "Get all missing" over the network). Next: item 2.
 
 1. "Not on this device" badges and cards, and "Get all missing".
 2. WebRTC P2P via account-room signalling, chunked with hash verification.

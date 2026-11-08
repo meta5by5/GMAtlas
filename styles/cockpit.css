@@ -2712,6 +2712,12 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
   padding: var(--sp-4); text-align: center; color: var(--text-dim); font-size: 0.9rem;
 }
 .doc-viewer-empty[hidden] { display: none; }
+/* An upload whose file is on another device (roadmap 6.2). */
+.doc-missing-card { max-width: 28rem; display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); color: var(--text); }
+.doc-missing-card p { margin: 0; }
+.doc-missing-badge { color: var(--text-dim); cursor: help; }
+.doc-missing .doc-card-title-link { color: var(--text-dim); }
+.doc-missing-note { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
 .mc-doc-viewer iframe { flex: 1; border: none; width: 100%; background: #fff; }
 .mc-doc-viewer iframe[hidden] { display: none; }
 

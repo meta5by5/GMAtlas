@@ -132,6 +132,19 @@ export function rememberToc(library, sourceKey, { docTitle = '', entries = [] } 
   return { ...(library || {}), [sourceKey]: { docTitle, entries: (entries || []).map((e) => ({ title: e.title, page: e.page, depth: e.depth || 0 })), scannedAt: new Date().toISOString() } };
 }
 
+/** Moves remembered scans from old blob keys to new ones (`map` is
+ *  {oldKey: newKey}), when an upload is re-keyed by content. A scan already
+ *  remembered under the new key wins. Returns a new library object. */
+export function rekeyTocLibrary(library, map) {
+  const out = { ...(library || {}) };
+  for (const [oldKey, newKey] of Object.entries(map || {})) {
+    if (!out[oldKey]) continue;
+    if (!out[newKey]) out[newKey] = out[oldKey];
+    delete out[oldKey];
+  }
+  return out;
+}
+
 /** Every PDF this campaign's Docs library shows (sourcebooks pulled into
  *  this browser for its game system, plus its own uploaded PDFs), as
  *  {sourceKey, docTitle, tabKey} — the set the TOC prompt, the remembered-

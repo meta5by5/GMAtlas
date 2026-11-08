@@ -85,7 +85,7 @@ import {
   addDocument, updateDocument, removeDocument, getDocument, addDocumentTag, removeDocumentTag, renameDocument,
   openDocumentTab, closeDocumentTab, setActiveDocumentTab, resolveDocumentTab,
   listReferenceDocuments, listCampaignReferenceDocuments, renameRefDocument, addRefDocumentTag, removeRefDocumentTag, hideRefDocument, listDocuments,
-  sanitizeExternalLinkUrl, mergeRefOverrides, referencedBlobKeys,
+  sanitizeExternalLinkUrl, mergeRefOverrides, referencedBlobKeys, classifyImportedFile, missingDocuments,
 } from '../domain/documents.js';
 import { addPartyTracker, updatePartyTracker, stepPartyTracker, removePartyTracker, setPartyTrackerValue, setGaugeTrackerValue, ensurePartyStarforgedTrackers, ensurePartyFiveLeaguesTrackers, syncModuleTrackers, setPartySharedGear, addPartySharedAsset, removePartySharedAsset, addPartySharedAssetEntity, removePartySharedAssetEntity, reconcilePartySharedAssetVehicleTag, listPartyMembers, addPartyRelationship, removePartyRelationship, updatePartyRelationshipLabel, updatePartyRelationshipType, updatePartyRelationshipStrength, setPartyStarship, clearPartyStarship } from '../domain/party.js';
 import { setColonyField, getColonyFields, addCrewRow, updateCrewRow, removeCrewRow, listCrewRows, updateColonyEncounter, detachColonyEncounterEntity, listColonyEncounters, advanceCampaignTurnWithAccrual, formatTurnAdvanceNote, incrementCampaignMilestones, decrementCampaignMilestones, syncCrewRosterWithParty, createGeneratedLifeform, listLifeformEncounters } from '../domain/colony.js';
@@ -1314,6 +1314,9 @@ let docBlobCheckedKeys = new Set();
 // drawer's "☁ Imported" badge (drawers/index.js) can render without the
 // pure drawer-render functions needing to touch IndexedDB themselves.
 let refDocBlobKeys = new Set();
+// Until the first listing lands, nothing is known to be missing, so no
+// "not on this device" badge shows.
+let refDocBlobKeysLoaded = false;
 // The top nav stays on one row at every width: measured with the campaign
 // name at full width and nothing allowed to shrink (.mc-header-measuring);
 // if that overflows, the "GMAtlas |" title is dropped (.mc-header-compact)
@@ -1393,6 +1396,41 @@ async function importLicenseDoc(file, picked, { quiet = false, confirmName = tru
   }
 }
 
+// Brings picked files into this browser by their contents (roadmap 6.3,
+// "re-import the same file"). A file named like a Reference Library book is
+// stored under that book's key. Any other file is hashed: if a document in
+// this campaign is missing exactly those bytes it fills that link, if one
+// already has them it's skipped, and otherwise (`createNew`) it becomes a new
+// document keyed by its contents. Resolves to the counts and the new docs.
+async function importFilesByContent(files, { createNew }) {
+  const byBasename = createNew ? new Map(listReferenceDocuments(store.get()).map((r) => [r.file.split('/').pop().toLowerCase(), r.file])) : new Map();
+  const present = new Set(await store.listDocBlobKeys());
+  const result = { matched: 0, filled: 0, already: 0, unmatched: 0, added: [] };
+  for (const file of files) {
+    const catalogKey = byBasename.get(file.name.toLowerCase());
+    if (catalogKey) {
+      await store.putDocBlob(catalogKey, file);
+      result.matched += 1;
+      continue;
+    }
+    const key = await store.contentKeyFor(file);
+    const { action, docs } = classifyImportedFile(store.get(), key, present);
+    if (action === 'exists') { result.already += 1; continue; }
+    if (action === 'new' && !createNew) { result.unmatched += 1; continue; }
+    await store.putDocBlob(key, file);
+    present.add(key);
+    if (action === 'fill') { result.filled += docs.length; continue; }
+    const id = 'doc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    // The display title is derived from the filename (titleCase.js);
+    // fileName itself stays the exact original filename.
+    const title = titleFromFilename(file.name);
+    store.update((d) => addDocument(d, { id, kind: 'file', title, fileName: file.name, mimeType: file.type, blobKey: key }));
+    result.added.push({ id, title, file, blobKey: key });
+  }
+  refreshRefDocBlobKeys();
+  return result;
+}
+
 // Adds/removes module-owned Party Trackers to match the active profile
 // (party.js's syncModuleTrackers) — only touching the store when the result
 // actually differs. A store.update() mutator sees the raw doc, so the
@@ -1420,7 +1458,19 @@ function battlemapSpanControlsHtml() {
 }
 
 function refreshRefDocBlobKeys() {
-  store.listDocBlobKeys().then((keys) => { refDocBlobKeys = new Set(keys); render(); });
+  store.listDocBlobKeys().then((keys) => {
+    refDocBlobKeys = new Set(keys);
+    refDocBlobKeysLoaded = true;
+    // A key looked up earlier and found empty may have just arrived.
+    for (const k of [...docBlobCheckedKeys]) if (!docBlobUrls.has(k)) docBlobCheckedKeys.delete(k);
+    render();
+  });
+}
+// Whether some bytes are what a content key (sha256:…) names. Any other key
+// (an assets/docs/ path, an old document id) names nothing to check.
+async function bytesMatchKey(blob, key) {
+  if (!String(key || '').startsWith('sha256:')) return true;
+  return (await store.contentKeyFor(blob)) === key;
 }
 // blob.arrayBuffer() + manual base64 (not FileReader.readAsDataURL) —
 // avoids a real cross-realm gotcha FileReader's strict Blob type-checking
@@ -1447,7 +1497,7 @@ async function blobToDataUrl(blob) {
 // File(s)"-added doc (no such path) uses library/<its real filename>
 // instead, deduped against a collision by prefixing the store key.
 async function exportRefLibrary() {
-  const keys = await store.listDocBlobKeys();
+  const keys = await store.listDocBlobKeys({ withAliases: false });
   if (!keys.length) return toast('No imported Reference Library docs to export yet — use "Import File(s)" first.');
   const refDocs = listReferenceDocuments(store.get());
   const library = listDocuments(store.get());
@@ -1459,14 +1509,20 @@ async function exportRefLibrary() {
     if (!blob) continue;
     const ref = refDocs.find((r) => r.key === key);
     const libDoc = library.find((d) => d.blobKey === key);
-    let path = ref ? ref.file : (libDoc ? `library/${libDoc.fileName || libDoc.title}` : `unknown/${key}`);
-    if (usedPaths.has(path)) path = `${key}-${path}`;
+    // A content key (sha256:…) has a colon, which isn't allowed in a file
+    // name on Windows.
+    const safeKey = String(key).replace(/[:\\/]/g, '-');
+    let path = ref ? ref.file : (libDoc ? `library/${libDoc.fileName || libDoc.title}` : `unknown/${safeKey}`);
+    if (usedPaths.has(path)) path = `${safeKey}-${path}`;
     usedPaths.add(path);
     files.push({ name: path, data: new Uint8Array(await blob.arrayBuffer()) });
-    docsIndex.push({ key, path, mimeType: blob.type || 'application/octet-stream' });
+    // Each file's content hash travels with it (version 3), so an import
+    // can check the bytes and fill any link to them (roadmap 6.3).
+    const sha256 = String(key).startsWith('sha256:') ? key : await store.contentKeyFor(blob);
+    docsIndex.push({ key, path, mimeType: blob.type || 'application/octet-stream', sha256 });
   }
   const refOverrides = (store.get().documents && store.get().documents.refOverrides) || {};
-  const index = { kind: 'gmatlas-reflib-export', version: 2, exportedAt: new Date().toISOString(), refOverrides, docs: docsIndex };
+  const index = { kind: 'gmatlas-reflib-export', version: 3, exportedAt: new Date().toISOString(), refOverrides, docs: docsIndex };
   files.push({ name: 'index.json', data: new TextEncoder().encode(JSON.stringify(index, null, 2)) });
   const blobUrl = URL.createObjectURL(new Blob([buildZip(files)], { type: 'application/zip' }));
   const a = document.createElement('a');
@@ -7436,12 +7492,18 @@ function onChange(ev) {
         const parsed = JSON.parse(reader.result);
         if (parsed && parsed.kind === 'gmatlas-campaign-export' && Array.isArray(parsed.attachments)) {
           await store.import(JSON.stringify(parsed.campaign));
+          let stored = 0;
           for (const entry of parsed.attachments) {
             const blob = await (await fetch(entry.dataUrl)).blob();
+            // A content key names its own bytes: one that doesn't match was
+            // damaged on the way, and is left out rather than misfiled.
+            if (!(await bytesMatchKey(blob, entry.key))) continue;
             await store.putDocBlob(entry.key, blob);
+            stored += 1;
           }
           refreshRefDocBlobKeys();
-          toast(`Campaign imported with ${parsed.attachments.length} attached file${parsed.attachments.length === 1 ? '' : 's'}`);
+          const skipped = parsed.attachments.length - stored;
+          toast(`Campaign imported with ${stored} attached file${stored === 1 ? '' : 's'}${skipped ? ` (${skipped} damaged, skipped)` : ''}`);
         } else {
           await store.import(reader.result);
           toast('Campaign imported');
@@ -7559,36 +7621,46 @@ function onChange(ev) {
   // a dead-end "no matching catalog entry" error, generating its own
   // stable id up front (addDocument's optional `patch.id`) so that SAME id
   // can be used as this file's blob-store key.
+  // A document missing its bytes on this device: the GM picks the file. The
+  // same contents fill the link silently; a different file asks first.
+  const missingImport = t.closest('[data-doc-missing-import]');
+  if (missingImport) {
+    const file = (t.files || [])[0];
+    const docId = missingImport.dataset.docMissingImport;
+    t.value = '';
+    if (!file) return;
+    (async () => {
+      const entry = getDocument(store.get(), docId);
+      if (!entry) return;
+      const key = await store.contentKeyFor(file);
+      if (key !== entry.blobKey && !window.confirm(`“${file.name}” isn’t the same file as the original “${entry.fileName || entry.title}”: its contents differ. Use it for this document anyway?`)) return;
+      await store.putDocBlob(key, file);
+      if (key !== entry.blobKey) store.update((d) => updateDocument(d, docId, { blobKey: key, mimeType: file.type || entry.mimeType }));
+      refreshRefDocBlobKeys();
+      toast(`${entry.title || entry.fileName} is on this device now`);
+    })().catch((err) => toast(`Couldn’t import ${file.name} — ${err.message}`));
+    return;
+  }
+  if (t.closest('[data-doc-missing-import-all]')) {
+    const files = Array.from(t.files || []);
+    t.value = '';
+    if (!files.length) return;
+    importFilesByContent(files, { createNew: false })
+      .then((r) => toast(`Filled ${r.filled} document${r.filled === 1 ? '' : 's'}${r.unmatched ? `; ${r.unmatched} file${r.unmatched === 1 ? '' : 's'} matched nothing missing` : ''}`))
+      .catch((err) => toast(`Import failed — ${err.message}`));
+    return;
+  }
+
   if (t.closest('[data-ref-doc-import]')) {
     const files = Array.from(t.files || []);
     if (!files.length) return;
-    const byBasename = new Map(listReferenceDocuments(store.get()).map((r) => [r.file.split('/').pop().toLowerCase(), r.file]));
-    let matched = 0;
-    const added = [];
-    const puts = [];
-    for (const file of files) {
-      const catalogKey = byBasename.get(file.name.toLowerCase());
-      if (catalogKey) {
-        matched += 1;
-        puts.push(store.putDocBlob(catalogKey, file));
-        continue;
-      }
-      const id = 'doc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-      // The display title is derived from the filename (extension/hyphens
-      // stripped, ALL-CAPS segments proper-cased — see titleCase.js,
-      // shared with the Reference Library's own build-time titles) —
-      // fileName itself is untouched, still the exact original filename.
-      const title = titleFromFilename(file.name);
-      store.update((d) => addDocument(d, { id, kind: 'file', title, fileName: file.name, mimeType: file.type, blobKey: id }));
-      added.push({ id, title, file });
-      puts.push(store.putDocBlob(id, file));
-    }
-    Promise.all(puts).then(() => {
+    t.value = '';
+    importFilesByContent(files, { createNew: true }).then(({ matched, added, filled, already }) => {
       const parts = [];
       if (matched) parts.push(`${matched} to the Reference Library`);
+      if (filled) parts.push(`${filled} filling missing document${filled === 1 ? '' : 's'}`);
       if (added.length) parts.push(`${added.length} as new document${added.length === 1 ? '' : 's'}`);
-      toast(`Imported ${parts.join(', ') || '0 files'}`);
-      refreshRefDocBlobKeys();
+      toast(`Imported ${parts.join(', ') || '0 files'}${already ? ` (${already} already in the library)` : ''}`);
       // Reference Table of Contents (design/adr/reference-toc-library.md) —
       // per the user's explicit choice, this is prompted per upload, not
       // silent/automatic: a real bookmark scan is real work (and needs npm
@@ -7599,7 +7671,7 @@ function onChange(ev) {
       // remembered for this campaign, same as that open-a-PDF prompt.
       const pdfSources = added
         .filter(({ file }) => file.type === 'application/pdf')
-        .map(({ id, title }) => ({ sourceKey: id, docTitle: title, tabKey: `lib:${id}` }));
+        .map(({ id, title, blobKey }) => ({ sourceKey: blobKey, docTitle: title, tabKey: `lib:${id}` }));
       if (pdfSources.length && canScanToc()) {
         const accepted = pdfSources.filter((s) => {
           if (window.confirm(`Generate a Table of Contents entry for "${s.docTitle}"? (scans its PDF bookmarks)`)) return true;
@@ -7608,8 +7680,7 @@ function onChange(ev) {
         });
         if (accepted.length) runTocScan(accepted);
       }
-    });
-    t.value = '';
+    }).catch((err) => toast(`Import failed — ${err.message}`));
     return;
   }
 
@@ -7628,6 +7699,7 @@ function onChange(ev) {
         const isZip = file.name.toLowerCase().endsWith('.zip') || file.type === 'application/zip';
         let refOverrides = null;
         let count = 0;
+        let damaged = 0;
         if (isZip) {
           const entries = readZip(new Uint8Array(await file.arrayBuffer()));
           const indexEntry = entries.find((e) => e.name === 'index.json');
@@ -7637,7 +7709,9 @@ function onChange(ev) {
           for (const docEntry of index.docs) {
             const fileEntry = entries.find((e) => e.name === docEntry.path);
             if (!fileEntry) continue;
-            await store.putDocBlob(docEntry.key, new Blob([fileEntry.data], { type: docEntry.mimeType }));
+            const blob = new Blob([fileEntry.data], { type: docEntry.mimeType });
+            if (!(await bytesMatchKey(blob, docEntry.sha256))) { damaged += 1; continue; }
+            await store.putDocBlob(docEntry.key, blob);
             count += 1;
           }
           refOverrides = index.refOverrides;
@@ -7652,7 +7726,7 @@ function onChange(ev) {
           refOverrides = bundle.refOverrides;
         }
         if (refOverrides) store.update((d) => mergeRefOverrides(d, refOverrides));
-        toast(`Imported ${count} doc${count === 1 ? '' : 's'} into the Reference Library`);
+        toast(`Imported ${count} doc${count === 1 ? '' : 's'} into the Reference Library${damaged ? ` (${damaged} skipped: damaged in the file)` : ''}`);
         refreshRefDocBlobKeys();
       } catch (e) {
         toast(`Couldn't import Reference Library — ${e.message}`);
@@ -10274,11 +10348,29 @@ function render() {
       frame.hidden = true;
       frame.removeAttribute('src');
       empty.hidden = false;
-      empty.textContent = pendingBlob
-        ? `Loading "${resolvedActive.title}"…`
-        : resolvedActive
-          ? `"${resolvedActive.title}" couldn't be loaded — it may have failed to save (browser storage limits). Try re-adding it, or for large rulebooks add the PDF to assets/docs/ and rebuild.`
-          : 'This document is no longer available.';
+      // An upload whose bytes are on another device (synced, or from an
+      // export without its files): its link is fine, only the file is
+      // missing here (roadmap 6.2). Built once per document, so a re-render
+      // never swaps out the file input while its picker is open.
+      const missingDocId = !pendingBlob && resolvedActive && resolvedActive.kind === 'lib' && blobKey && !resolvedActive.src
+        && refDocBlobKeysLoaded && !refDocBlobKeys.has(blobKey) ? activeTab.slice('lib:'.length) : null;
+      if (missingDocId) {
+        if (empty.dataset.missingFor !== missingDocId) {
+          empty.dataset.missingFor = missingDocId;
+          empty.innerHTML = `<div class="doc-missing-card">
+            <p><strong>${escapeHtml(resolvedActive.title)}</strong> isn’t on this device yet.</p>
+            <p class="dim small">The document is part of this campaign, but its file was added on another device. Import the same file here and it fills in.</p>
+            <label class="btn">Import file…<input type="file" hidden data-doc-missing-import="${escapeHtml(missingDocId)}"></label>
+          </div>`;
+        }
+      } else {
+        delete empty.dataset.missingFor;
+        empty.textContent = pendingBlob
+          ? `Loading "${resolvedActive.title}"…`
+          : resolvedActive
+            ? `"${resolvedActive.title}" couldn't be loaded — it may have failed to save (browser storage limits). Try re-adding it, or for large rulebooks add the PDF to assets/docs/ and rebuild.`
+            : 'This document is no longer available.';
+      }
       lastDocViewerSrc = null;
     }
   }
@@ -11548,7 +11640,7 @@ function buildDrawerUi() {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, oracleRouteToNavigator: oracleRoutingActive(), navigatorStepMapLink, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, docSort, docSortMenuOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     fiveLeaguesInfoOpen, fiveLeaguesItemNotesOpen,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, tocOfferOpen, tocLibrary: store.getAppConfig().tocLibrary || {}, canScanToc: canScanToc(), lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, expandedWhatConflicts,
+    enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, tocOfferOpen, tocLibrary: store.getAppConfig().tocLibrary || {}, canScanToc: canScanToc(), lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, refDocBlobKeysLoaded, expandedWhatConflicts,
     advisorOracleResults, advisorDrafts, advisorConsequenceDraw, sceneSummaryOverride,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName, partyTrackersEditOpen, collapsedPartySections,

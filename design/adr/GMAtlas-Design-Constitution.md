@@ -119,7 +119,10 @@ documented:
    (`domain/inlineBlobs.js` decides what moves), keeps an in-memory copy
    so rendering and `export()` stay synchronous, and puts them back
    inline in every export so an export file keeps the shape older versions
-   read (design/adr/sync-groundwork.md). Its public surface: synchronous
+   read (design/adr/sync-groundwork.md). Uploaded documents are keyed by
+   their content hash too, and older ones keyed by document id are re-keyed
+   in the same pass, behind a per-device `blobAliases` record so the old key
+   still resolves (design/adr/document-transfer.md). Its public surface: synchronous
    `get()` (the active campaign doc, with the active Rules Profile's
    ruleset fields — Genre Pack, Stat System, Trade Economy Model, Rules
    Constitution choices, Party headline fields — plus the install-wide

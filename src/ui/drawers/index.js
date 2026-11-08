@@ -20,7 +20,7 @@ import { listTemplates } from '../../domain/statblockTemplates.js';
 import { buildGraph, computeLayout, nodeColor } from '../../domain/graph.js';
 import { imageSrc } from '../imageSrc.js';
 import { BUILD } from '../../core/buildInfo.js';
-import { getDocument, listDocuments, listDocumentMentions, allDocumentTags, filterDocuments, listCampaignReferenceDocuments } from '../../domain/documents.js';
+import { getDocument, listDocuments, listDocumentMentions, allDocumentTags, filterDocuments, listCampaignReferenceDocuments, missingDocuments } from '../../domain/documents.js';
 import { listPartyMembers, listPartyTrackers, gaugeWindow, listPartyHeadlineTracks } from '../../domain/party.js';
 import { COLONY_FIELDS, getColonyFields, listCrewRows, listLifeformEncounters, CREW_ROLES, listColonyEncounters } from '../../domain/colony.js';
 import { lifeformEncounterRangeLabel } from '../../domain/lifeforms.js';
@@ -5489,14 +5489,19 @@ function documents(doc, ui = {}) {
   }).join('');
   const mentionSummary = mentions.length ? `<p class="dim small">Mentioned in Journal or dashboard fields: ${mentions.map((m) => esc(m.name)).join(', ')}</p>` : '';
 
+  // Uploads whose file was added on another device (roadmap 6.2). Unknown
+  // until the blob-key listing has landed, so nothing is flagged before then.
+  const missingIds = ui.refDocBlobKeysLoaded ? new Set(missingDocuments(doc, storedRefKeys).map((d) => d.id)) : new Set();
+  const missingVisible = missingIds.size;
   function uploadedFileRowHtml(d) {
     return `
-    <div class="doc-card ref-doc-card">
+    <div class="doc-card ref-doc-card${missingIds.has(d.id) ? ' doc-missing' : ''}">
       <div class="doc-card-head">
         ${renameOpen.has(d.id)
           ? `<input class="doc-rename-input" data-doc-rename-input="${esc(d.id)}" value="${esc(d.title)}" placeholder="Untitled document" autofocus>`
           : `<a href="#" class="doc-card-title-link" data-doc-open="lib:${esc(d.id)}" data-drag-document="lib:${esc(d.id)}" draggable="true" title="Open in viewer">${esc(d.title || d.fileName)}</a>`}
         <div class="doc-card-actions">
+          ${missingIds.has(d.id) ? '<span class="doc-missing-badge" title="Not on this device: its file was added on another device. Open it to import the file here.">☁̸</span>' : ''}
           <button class="icon-btn" data-doc-tag-toggle="${esc(d.id)}" title="Tags">🏷</button>
           <button class="icon-btn" data-doc-rename="${esc(d.id)}" title="${renameOpen.has(d.id) ? 'Save' : 'Rename entry'}">${renameOpen.has(d.id) ? '💾' : '✎'}</button>
           <button class="icon-btn" data-doc-delete="${esc(d.id)}" title="Delete document">✕</button>
@@ -5565,6 +5570,11 @@ function documents(doc, ui = {}) {
     <div class="statblock-head"><h4>Notes</h4></div>
     <div class="doc-list">${rows}</div>` : ''}
     <div class="statblock-head" style="margin-top: var(--sp-4);"><h4>Reference Library</h4>${helpToggle('documents-reflib')}</div>
+    ${missingVisible ? `<div class="drawer-note doc-missing-note">
+      <span>☁̸ ${missingVisible} document${missingVisible === 1 ? ' isn’t' : 's aren’t'} on this device yet.</span>
+      <label class="btn sm">Import files…<input type="file" multiple hidden data-doc-missing-import-all></label>
+      <span class="dim small">Pick the same files; each fills in by its contents, whatever its name.</span>
+    </div>` : ''}
     ${helpBody('documents-reflib', 'This campaign\'s sourcebooks: only those whose license you own (Settings → Licenses) and whose game system this campaign\'s profile designates (Module for Profile or Rules Constitution), plus anything you import yourself. "Import File(s)" reads real files off your device into this browser\'s own storage: a filename matching a catalog entry joins the Reference Library so it opens even when assets/docs/ is empty on this machine; anything else becomes a new personal document (no size limit). Bulk "Export Library"/"Import Library" (a zip of every such doc, to carry to another browser) live in Settings → General → Data.', ui)}
     <div class="drawer-note ref-doc-transfer-row">
       <label class="btn ghost sm file-btn">📥 Import File(s)<input type="file" data-ref-doc-import multiple hidden></label>
