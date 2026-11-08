@@ -22,8 +22,17 @@ import { mailerFrom } from './mail.js';
 import {
   putDeviceKey, getVault, createVault, approveDevice, getRecovery, putOwnWrap, resetVault, emailRecoveryKey, putRecovery,
   listCampaigns, createCampaign, updateCampaignMeta, deleteCampaign, getSnapshot, putSnapshot,
-  issueTicket, openSocket,
+  issueTicket, openSocket, getAccountSettings, putAccountSettings,
 } from './sync.js';
+
+import {
+  adminMe, searchUsers, getUser, setUserStatus, revokeSessions, setUserRoles,
+  grantEntitlement, bulkGrant, revokeEntitlement, extendEntitlement, convertEntitlement,
+  listFlags, putFlag, listAudit,
+} from './admin.js';
+
+import { passkeyRegisterOptions, passkeyRegister, passkeyLoginOptions, passkeyLogin, listPasskeys, deletePasskey } from './passkeys.js';
+import { listProviders, oauthStart, oauthLink, oauthCallback, listIdentities, unlinkIdentity } from './oauth.js';
 
 // The Durable Object class must be exported from the Worker's entry module.
 export { CampaignRoom } from './room.js';
@@ -40,6 +49,19 @@ const ROUTES = [
   ['POST', /^\/api\/auth\/email\/verify$/, verifyEmailSignIn, false],
   ['POST', /^\/api\/auth\/refresh$/, refreshSession, false],
   ['POST', /^\/api\/auth\/signout$/, signOut, false],
+  // Passkeys and OAuth (src/passkeys.js, src/oauth.js)
+  ['GET', /^\/api\/auth\/providers$/, listProviders, false],
+  ['POST', /^\/api\/auth\/passkeys\/register\/options$/, passkeyRegisterOptions, true],
+  ['POST', /^\/api\/auth\/passkeys\/register$/, passkeyRegister, true],
+  ['POST', /^\/api\/auth\/passkeys\/login\/options$/, passkeyLoginOptions, false],
+  ['POST', /^\/api\/auth\/passkeys\/login$/, passkeyLogin, false],
+  ['GET', /^\/api\/auth\/passkeys$/, listPasskeys, true],
+  ['DELETE', /^\/api\/auth\/passkeys\/([\w-]+)$/, deletePasskey, true],
+  ['GET', /^\/api\/auth\/oauth\/(\w+)\/start$/, oauthStart, false],
+  ['POST', /^\/api\/auth\/oauth\/(\w+)\/link$/, oauthLink, true],
+  ['GET', /^\/api\/auth\/oauth\/(\w+)\/callback$/, oauthCallback, false],
+  ['GET', /^\/api\/auth\/identities$/, listIdentities, true],
+  ['DELETE', /^\/api\/auth\/identities\/(\w+)$/, unlinkIdentity, true],
   ['GET', /^\/api\/me$/, getMe, true],
   ['PATCH', /^\/api\/me$/, updateMe, true],
   ['GET', /^\/api\/devices$/, listDevices, true],
@@ -64,7 +86,24 @@ const ROUTES = [
   ['DELETE', /^\/api\/campaigns\/([\w-]+)$/, deleteCampaign, true],
   ['GET', /^\/api\/campaigns\/([\w-]+)\/snapshot$/, getSnapshot, true],
   ['PUT', /^\/api\/campaigns\/([\w-]+)\/snapshot$/, putSnapshot, true],
+  ['GET', /^\/api\/account\/settings$/, getAccountSettings, true],
+  ['PUT', /^\/api\/account\/settings$/, putAccountSettings, true],
   ['POST', /^\/api\/sync\/ticket$/, issueTicket, true],
+  // Admin v1 (src/admin.js; every handler checks the caller's role)
+  ['GET', /^\/api\/admin\/me$/, adminMe, true],
+  ['GET', /^\/api\/admin\/users$/, searchUsers, true],
+  ['GET', /^\/api\/admin\/users\/([\w-]+)$/, getUser, true],
+  ['POST', /^\/api\/admin\/users\/([\w-]+)\/status$/, setUserStatus, true],
+  ['POST', /^\/api\/admin\/users\/([\w-]+)\/sessions\/revoke$/, revokeSessions, true],
+  ['PUT', /^\/api\/admin\/users\/([\w-]+)\/roles$/, setUserRoles, true],
+  ['POST', /^\/api\/admin\/users\/([\w-]+)\/entitlements$/, grantEntitlement, true],
+  ['POST', /^\/api\/admin\/entitlements\/bulk$/, bulkGrant, true],
+  ['POST', /^\/api\/admin\/entitlements\/([\w-]+)\/revoke$/, revokeEntitlement, true],
+  ['POST', /^\/api\/admin\/entitlements\/([\w-]+)\/extend$/, extendEntitlement, true],
+  ['POST', /^\/api\/admin\/entitlements\/([\w-]+)\/convert$/, convertEntitlement, true],
+  ['GET', /^\/api\/admin\/flags$/, listFlags, true],
+  ['PUT', /^\/api\/admin\/flags\/([\w.-]+)$/, putFlag, true],
+  ['GET', /^\/api\/admin\/audit$/, listAudit, true],
   ['GET', /^\/api\/sync\/socket$/, openSocket, false],
 ];
 

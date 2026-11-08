@@ -112,7 +112,7 @@ test('room: push, ack, fan-out, dedupe, catch-up in frames, resets, compaction',
   const desk = rooms.connect('cmp_r', 'devA');
   const phone = rooms.connect('cmp_r', 'devB');
   await desk.deliver({ t: 'hello', v: 1, cursor: 0 });
-  assert.deepEqual(desk.take(), [{ t: 'welcome', head: 0 }, { t: 'caughtUp', head: 0 }]);
+  assert.deepEqual(desk.take(), [{ t: 'welcome', head: 0 }, { t: 'caughtUp', head: 0 }, { t: 'presence', devices: ['devA'] }], 'then who has it open');
 
   await desk.deliver({ t: 'push', batchId: 'b1', env: 'E1' });
   assert.deepEqual(desk.take(), [{ t: 'ack', batchId: 'b1', seq: 1 }]);
@@ -132,7 +132,8 @@ test('room: push, ack, fan-out, dedupe, catch-up in frames, resets, compaction',
   desk.take();
   const late = rooms.connect('cmp_r', 'devC');
   await late.deliver({ t: 'hello', v: 1, cursor: 1 });
-  const frames = late.take();
+  const frames = late.take().filter((f) => f.t !== 'presence');
+  assert.deepEqual(desk.take(), [{ t: 'presence', devices: ['devA', 'devC'] }], 'the others hear who joined');
   assert.deepEqual(frames[0], { t: 'welcome', head: 7 });
   assert.deepEqual(frames.at(-1), { t: 'caughtUp', head: 7 });
   const opsFrames = frames.filter((f) => f.t === 'ops');
@@ -148,8 +149,13 @@ test('room: push, ack, fan-out, dedupe, catch-up in frames, resets, compaction',
   assert.equal((await rooms.get('cmp_r').fetch(new Request('https://room/snapshot?upto=7', { method: 'PUT', body: 'SNAP' }))).status, 200);
   await late.deliver({ t: 'hello', v: 1, cursor: 3 });
   assert.deepEqual(late.take(), [{ t: 'reset', snapshotUpto: 7 }]);
+  assert.deepEqual(desk.take(), [{ t: 'presence', devices: ['devA'] }], 'a device that must reset drops out until it catches up');
   await late.deliver({ t: 'hello', v: 1, cursor: 7 });
-  assert.deepEqual(late.take(), [{ t: 'welcome', head: 7 }, { t: 'caughtUp', head: 7 }]);
+  assert.deepEqual(late.take(), [{ t: 'welcome', head: 7 }, { t: 'caughtUp', head: 7 }, { t: 'presence', devices: ['devA', 'devC'] }]);
+  desk.take();
+  // Leaving tells the others.
+  await rooms.room('cmp_r').webSocketClose(late, 1000);
+  assert.deepEqual(desk.take(), [{ t: 'presence', devices: ['devA'] }], 'the others hear who left');
 
   // Every COMPACT_EVERY ops past the snapshot, the pusher is asked for one.
   let asked = 0;
@@ -191,4 +197,36 @@ test('health says which environment answered', async () => {
   assert.deepEqual((await b.call('GET', '/api/health')).data, { ok: true, env: 'dev' });
   server.env.GMATLAS_ENV = 'production';
   assert.deepEqual((await b.call('GET', '/api/health')).data, { ok: true, env: 'production' });
+});
+
+test('account settings: one encrypted record per account; writes name the version they merged', async () => {
+  const server = await makeServer();
+  const desk = await syncDevice(server, 'gm@example.com', 'Desk', 1);
+  assert.deepEqual((await desk.call('GET', '/api/account/settings?known=-1')).data, { version: 0 });
+  const first = { baseVersion: 0, sealedKey: wrapped('sk'), env: wrapped('s1') };
+  assert.equal((await desk.call('PUT', '/api/account/settings', first)).data.error, 'not_approved', 'sync must be set up first');
+  await desk.call('POST', '/api/vault', { mine: wrapped(1), recovery: wrapped('r') });
+  assert.deepEqual((await desk.call('PUT', '/api/account/settings', first)).data, { version: 1 });
+  assert.equal((await desk.call('PUT', '/api/account/settings', first)).data.error, 'version_conflict', 'a second first write loses');
+
+  const got = (await desk.call('GET', '/api/account/settings?known=0')).data;
+  assert.deepEqual(got, { version: 1, sealedKey: wrapped('sk'), env: wrapped('s1') });
+  assert.deepEqual((await desk.call('GET', '/api/account/settings?known=1')).data, { version: 1, unchanged: true, sealedKey: wrapped('sk') }, 'cheap when nothing changed');
+
+  // Two devices both merged version 1: the first to write wins, the other must re-merge.
+  assert.deepEqual((await desk.call('PUT', '/api/account/settings', { baseVersion: 1, sealedKey: wrapped('other'), env: wrapped('s2') })).data, { version: 2 });
+  assert.equal((await desk.call('PUT', '/api/account/settings', { baseVersion: 1, env: wrapped('s2b') })).status, 409);
+  assert.deepEqual((await desk.call('GET', '/api/account/settings?known=1')).data.sealedKey, wrapped('sk'), 'the sealed key is kept after the first write');
+  assert.equal((await desk.call('PUT', '/api/account/settings', { baseVersion: -1, env: wrapped('x') })).data.error, 'bad_request');
+
+  // Big enough for real settings (past the 16 KB default body limit), but capped.
+  const big = { v: 1, iv: 'i', ct: 'x'.repeat(200 * 1000) };
+  assert.deepEqual((await desk.call('PUT', '/api/account/settings', { baseVersion: 2, env: big })).data, { version: 3 });
+  assert.equal((await desk.call('PUT', '/api/account/settings', { baseVersion: 3, env: { ct: 'x'.repeat(2000 * 1000) } })).status, 413);
+
+  // Another account can't see it; resetting sync removes it.
+  const other = await syncDevice(server, 'other@example.com', 'Other', 2);
+  assert.deepEqual((await other.call('GET', '/api/account/settings')).data, { version: 0 });
+  assert.equal((await desk.call('DELETE', '/api/vault')).status, 200);
+  assert.deepEqual((await desk.call('GET', '/api/account/settings')).data, { version: 0 });
 });

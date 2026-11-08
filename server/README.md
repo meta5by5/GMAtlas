@@ -58,14 +58,41 @@ against this Worker, plus a jsdom smoke run of the built bundle):
 - **Without the service:** under `file://` or on a static copy, the screens
   point to `https://dev.gmatlas.online` and make no calls.
 
+- **Admin v1** (`src/admin.js`, `design/adr/admin-v1.md`): roles (owner,
+  admin, support, content), users, entitlements (grant, trial, end date,
+  revoke, convert, bulk CSV), feature flags (kill switch, overrides,
+  default, rollout; shipped in the certificate as `enabledFeatures`), and
+  the audit log. Every write needs a note and is audited. The page is
+  `/admin.html` on the service (its own bundle); make the first owner with
+  `npm run admin:role -- --email you@example.com --role owner` (add
+  `--env production` for production; sign in once first).
+
+- **Passkeys** (`src/passkeys.js`, `src/webauthn.js`) and **Continue with
+  Google / Discord** (`src/oauth.js`, PKCE); see
+  `design/adr/passkeys-oauth.md`. Passkeys work as soon as this is
+  deployed. A provider appears only once its secrets are set:
+  1. Register an OAuth app with the provider. Redirect URI:
+     `https://dev.gmatlas.online/api/auth/oauth/google/callback` (or
+     `.../discord/callback`; production uses `https://gmatlas.online/...`).
+     Google: Cloud Console › APIs & Services › Credentials › OAuth client
+     (Web), scopes `openid email profile`. Discord: Developer Portal ›
+     Applications › OAuth2, scopes `identify email`.
+  2. `npx wrangler secret put GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
+     (or `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`); add
+     `--env production` for production.
+- **Per-network limits:** 20 sign-in codes and 30 wrong codes per client IP
+  per hour (`src/rateLimit.js`; IPs stored hashed), on top of the
+  per-address limits.
+
+- **"Import my copy":** the hosted service serves only openly licensed
+  (CC-BY) sourcebook PDFs, and only those under 25 MiB (`scripts/site.js`);
+  every other book is imported from the GM's own file. Running locally,
+  Load still reads `assets/docs/`.
+- **Help:** Account & sync articles (signing in, syncing, importing books).
+
 Still to do in S1:
-- passkeys and OAuth sign-in;
-- device key pairs, plus the request-signing challenge they enable;
-- the account menu in the campaign top bar (the gear menu has "Sign in" /
-  "Account" for now), and a help article on accounts;
-- admin v1;
-- moving third-party PDF loading to "import my copy";
-- a per-IP rate limit on code requests.
+- Apple sign-in;
+- device key pairs, plus the request-signing challenge they enable.
 
 ## Status: Phase S2 (personal sync) in progress
 
@@ -82,11 +109,23 @@ against this Worker and room.
   resends, catch-up from a cursor in frames under 512 KB, and snapshots
   over HTTP with compaction.
 - **REST** (`src/sync.js`): the vault and device approval, the
-  synced-campaign index, snapshots, and 60-second socket tickets.
+  synced-campaign index, snapshots, 60-second socket tickets, and the
+  account settings record (`GET`/`PUT /api/account/settings`, versioned).
+- **Presence-lite:** the room tells every open socket which devices have
+  the campaign open (`{t:'presence', devices}`), on join and leave.
 - **Browser:**
   - `src/core/sync.js` (transport) and `src/core/syncKeys.js`;
   - the sync base and outbox in `store.js`;
+  - account settings sync (profiles, Storyboard positions, Turn Step
+    Lists, TOC library);
+  - a sync-status dot on the logo, "Also open on …" in the logo menu,
+    and conflict chips with "Keep mine";
   - Account › Sync, and approval on Account › Devices.
+
+- **The `sync.devices` gate:** sync writes are refused (403 `feature_off`)
+  while the feature is off for the account; the app says so and stops.
+
+S2 is complete apart from moving it to `main` (by pull request).
 
 ## Layout
 
@@ -94,6 +133,15 @@ against this Worker and room.
 migrations/0001_accounts.sql  D1 schema (SQLite): users, identities, email_codes,
                               devices, sessions, entitlements, audit_log
 migrations/0002_sync.sql      devices.ecdh_pub, vault_keys, campaigns (all ciphertext/metadata)
+migrations/0003_account_settings.sql  account_settings (one encrypted, versioned record per account)
+migrations/0004_admin.sql     feature_flags; audit_log indexes
+migrations/0005_rate_limits.sql  rate_events (per-client sign-in limits)
+migrations/0006_passkeys.sql  passkeys, webauthn_challenges
+src/passkeys.js, src/webauthn.js  passkey sign-in (WebCrypto + a small CBOR decoder)
+src/oauth.js                  Continue with Google / Discord (PKCE)
+src/admin.js                  /api/admin/*: users, entitlements, flags, audit (role-checked)
+src/features.js               feature flags: load, resolve per account, requireFeature
+scripts/admin-role.js         set an admin role from the command line (first owner)
 src/worker.js                 entry: routes /api/*, everything else to the static app;
                               exports the CampaignRoom Durable Object
 src/sync.js                   vault, synced-campaign index, snapshots, socket tickets

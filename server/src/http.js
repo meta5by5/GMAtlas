@@ -24,12 +24,12 @@ export function errorResponse(err) {
 const MAX_BODY_BYTES = 16 * 1024;
 
 /** The request's JSON body as an object. Rejects non-JSON, oversized or
- *  non-object bodies with 400/413. */
-export async function readJson(request) {
+ *  non-object bodies with 400/413. `max` (characters) defaults to 16 KB. */
+export async function readJson(request, max = MAX_BODY_BYTES) {
   const type = request.headers.get('content-type') || '';
   if (!type.includes('application/json')) throw new HttpError(415, 'unsupported_media_type', 'Send JSON.');
   const text = await request.text();
-  if (text.length > MAX_BODY_BYTES) throw new HttpError(413, 'body_too_large', 'Request body is too large.');
+  if (text.length > max) throw new HttpError(413, 'body_too_large', 'Request body is too large.');
   let data;
   try { data = JSON.parse(text || '{}'); } catch { throw new HttpError(400, 'bad_json', 'Request body is not valid JSON.'); }
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new HttpError(400, 'bad_json', 'Request body must be a JSON object.');

@@ -79,7 +79,13 @@ export class CampaignRoom {
     const { deviceId } = ws.deserializeAttachment() || {};
     const core = this.ensureCore();
     if (msg.t === 'hello') {
-      for (const frame of core.hello(msg)) send(ws, frame);
+      const frames = core.hello(msg);
+      for (const frame of frames) send(ws, frame);
+      // A socket told to reset reloads first; it counts once it's caught up.
+      const live = !frames.length || frames[0].t !== 'reset';
+      const was = !!(ws.deserializeAttachment() || {}).live;
+      ws.serializeAttachment({ deviceId, live });
+      if (live || was) this.presence();
     } else if (msg.t === 'push') {
       const { reply, fanout } = core.push(deviceId, msg);
       for (const frame of reply) send(ws, frame);
@@ -93,11 +99,27 @@ export class CampaignRoom {
     }
   }
 
+  /** Presence-lite (roadmap S2 item 4): tells every socket which devices
+   *  have this campaign open, `{t:'presence', devices:[id...]}`. Sent after
+   *  each hello and whenever a socket leaves. Device ids only; the client
+   *  knows its own devices' names. */
+  presence(leaving = null) {
+    const open = this.ctx.getWebSockets().filter((s) => s !== leaving);
+    const devices = [...new Set(open.map((s) => (s.deserializeAttachment() || {})).filter((a) => a.live && a.deviceId).map((a) => a.deviceId))].sort();
+    const frame = JSON.stringify({ t: 'presence', devices });
+    for (const s of open) {
+      if (!(s.deserializeAttachment() || {}).live) continue;
+      try { s.send(frame); } catch { /* closed */ }
+    }
+  }
+
   async webSocketClose(ws, code) {
     try { ws.close(code === 1005 ? 1000 : code, 'closing'); } catch { /* already closed */ }
+    this.presence(ws);
   }
 
   async webSocketError(ws) {
     try { ws.close(1011, 'error'); } catch { /* already closed */ }
+    this.presence(ws);
   }
 }

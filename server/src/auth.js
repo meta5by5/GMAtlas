@@ -12,11 +12,15 @@
 
 import { HttpError, json, readJson, readCookie, cookie } from './http.js';
 import { newId, randomCode, randomToken, sha256Hex, safeEqual, signAccessToken, verifyAccessToken } from './crypto.js';
+import { clientKey, enforce, record } from './rateLimit.js';
 
 export const REFRESH_COOKIE = 'gm_refresh';
 const CODE_TTL_MS = 10 * 60 * 1000;
 const CODE_MAX_ATTEMPTS = 5;
 const CODES_PER_EMAIL_PER_HOUR = 5;
+const CODES_PER_IP_PER_HOUR = 20;
+const WRONG_CODES_PER_IP_PER_HOUR = 30;
+const HOUR_MS = 60 * 60 * 1000;
 const SESSION_TTL_MS = 60 * 24 * 60 * 60 * 1000;
 
 const iso = (ms) => new Date(ms).toISOString();
@@ -34,10 +38,15 @@ function codeHash(email, code, env) {
 export async function startEmailSignIn(request, { env, now }) {
   const { email: raw } = await readJson(request);
   const email = normalizeEmail(raw);
+  // Per client as well as per address, so one machine can't mail codes to
+  // a long list of addresses.
+  const ipBucket = `code:${await clientKey(request, env)}`;
+  await enforce(env, now(), ipBucket, CODES_PER_IP_PER_HOUR, HOUR_MS, 'too_many_codes', 'Too many sign-in codes requested from this network. Try again in an hour.');
   const since = iso(now() - 60 * 60 * 1000);
   const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM email_codes WHERE email = ? AND created_at > ?').bind(email, since).first();
   if (recent.n >= CODES_PER_EMAIL_PER_HOUR) throw new HttpError(429, 'too_many_codes', 'Too many codes requested. Try again in an hour.');
   const code = randomCode();
+  await record(env, now(), ipBucket);
   await env.DB.prepare('INSERT INTO email_codes (id, email, code_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)')
     .bind(newId('code'), email, await codeHash(email, code, env), iso(now() + CODE_TTL_MS), iso(now())).run();
   await env.MAILER.send({
@@ -97,21 +106,33 @@ export async function verifyEmailSignIn(request, { env, now }) {
   const row = await env.DB.prepare('SELECT * FROM email_codes WHERE email = ? AND used_at IS NULL AND expires_at > ? ORDER BY created_at DESC LIMIT 1')
     .bind(email, iso(now())).first();
   const wrong = new HttpError(400, 'bad_code', 'That code is wrong or has expired. Request a new one.');
-  if (!row) throw wrong;
+  // Wrong guesses are counted per client too, so guessing across many
+  // addresses (5 tries each) is capped as well.
+  const guessBucket = `guess:${await clientKey(request, env)}`;
+  await enforce(env, now(), guessBucket, WRONG_CODES_PER_IP_PER_HOUR, HOUR_MS, 'too_many_attempts', 'Too many wrong codes from this network. Try again in an hour.');
+  if (!row) { await record(env, now(), guessBucket); throw wrong; }
   if (row.attempts >= CODE_MAX_ATTEMPTS) throw new HttpError(429, 'too_many_attempts', 'Too many wrong codes. Request a new one.');
   await env.DB.prepare('UPDATE email_codes SET attempts = attempts + 1 WHERE id = ?').bind(row.id).run();
-  if (!/^\d{6}$/.test(code) || !safeEqual(await codeHash(email, code, env), row.code_hash)) throw wrong;
+  if (!/^\d{6}$/.test(code) || !safeEqual(await codeHash(email, code, env), row.code_hash)) { await record(env, now(), guessBucket); throw wrong; }
   await env.DB.prepare('UPDATE email_codes SET used_at = ? WHERE id = ?').bind(iso(now()), row.id).run();
 
+  const { user, created } = await findOrCreateUser(env, email, iso(now()));
+  const done = await startSession(env, now, user, body.device, body.deviceId);
+  return json({ ...done.body, newAccount: created }, 200, { 'set-cookie': done.cookie });
+}
+
+/** The end of every sign-in (email code, passkey, OAuth): this browser's
+ *  device record (reused when it signed in before), a session, and the
+ *  refresh cookie. Returns {body, cookie, device}. */
+export async function startSession(env, now, user, deviceInfo, deviceId) {
+  if (user.status !== 'active') throw new HttpError(403, 'account_disabled', 'This account is disabled.');
   const nowIso = iso(now());
-  const { user, created } = await findOrCreateUser(env, email, nowIso);
-  // Signing in again on the same browser reuses its device record.
   let device = null;
-  if (body.deviceId) {
-    device = await env.DB.prepare('SELECT * FROM devices WHERE id = ? AND user_id = ? AND revoked_at IS NULL').bind(String(body.deviceId), user.id).first();
+  if (deviceId) {
+    device = await env.DB.prepare('SELECT * FROM devices WHERE id = ? AND user_id = ? AND revoked_at IS NULL').bind(String(deviceId), user.id).first();
   }
   if (!device) {
-    const { name, platform } = cleanDevice(body.device);
+    const { name, platform } = cleanDevice(deviceInfo);
     const id = newId('dev');
     await env.DB.prepare('INSERT INTO devices (id, user_id, name, platform, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)')
       .bind(id, user.id, name, platform, nowIso, nowIso).run();
@@ -120,12 +141,16 @@ export async function verifyEmailSignIn(request, { env, now }) {
     await env.DB.prepare('UPDATE devices SET last_seen_at = ? WHERE id = ?').bind(nowIso, device.id).run();
   }
   const { accessToken, refresh } = await issueSession(env, now, user, device);
-  return json(
-    { accessToken, newAccount: created, user: publicUser(user), device: publicDevice(device, device.id) },
-    200,
-    { 'set-cookie': cookie(REFRESH_COOKIE, refresh, { maxAgeSeconds: SESSION_TTL_MS / 1000 }) },
-  );
+  return {
+    device,
+    body: { accessToken, user: publicUser(user), device: publicDevice(device, device.id) },
+    cookie: cookie(REFRESH_COOKIE, refresh, { maxAgeSeconds: SESSION_TTL_MS / 1000 }),
+  };
 }
+
+/** The account for an email address, created (with its email identity)
+ *  on first use. Exported for OAuth sign-in. */
+export { findOrCreateUser };
 
 export async function refreshSession(request, { env, now }) {
   const token = readCookie(request, REFRESH_COOKIE);

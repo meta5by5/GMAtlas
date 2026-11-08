@@ -13,6 +13,7 @@
 import { HttpError, json, readJson } from './http.js';
 import { newId, signCertificate } from './crypto.js';
 import { LICENSES } from '../../src/data/licenses.js';
+import { enabledFeaturesFor } from './features.js';
 
 const iso = (ms) => new Date(ms).toISOString();
 const OWNABLE = new Set(LICENSES.filter((l) => !l.open).map((l) => l.id));
@@ -25,7 +26,9 @@ export async function activeEntitlements(env, userId, nowIso) {
   return results;
 }
 
-async function audit(env, at, actorId, action, targetKind, targetId, before, after, note = null) {
+/** Appends to the audit log (roadmap section 9: every admin write and
+ *  every entitlement change; actor, action, target, before/after, note). */
+export async function audit(env, at, actorId, action, targetKind, targetId, before, after, note = null) {
   await env.DB.prepare('INSERT INTO audit_log (id, at, actor_id, action, target_kind, target_id, before_json, after_json, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(newId('aud'), at, actorId, action, targetKind, targetId, before === null ? null : JSON.stringify(before), after === null ? null : JSON.stringify(after), note).run();
 }
@@ -33,7 +36,7 @@ async function audit(env, at, actorId, action, targetKind, targetId, before, aft
 /** The certificate payload for one device: what the account owns, plus
  *  that device's install policy, which the client applies through
  *  effectiveLicenses() (src/domain/licensing.js). */
-export function certificatePayload({ user, device, entitlements, nowMs, keyId }) {
+export function certificatePayload({ user, device, entitlements, nowMs, keyId, enabledFeatures }) {
   const refs = (kind) => [...new Set(entitlements.filter((e) => e.kind === kind).map((e) => e.ref))].sort();
   return {
     v: 1,
@@ -41,7 +44,10 @@ export function certificatePayload({ user, device, entitlements, nowMs, keyId })
     accountId: user.id,
     deviceId: device.id,
     licenses: refs('license'),
+    // `features`: granted feature entitlements; `enabledFeatures`: what's
+    // actually on after feature flags (src/domain/features.js).
     features: refs('feature'),
+    ...(enabledFeatures ? { enabledFeatures } : {}),
     modules: refs('module'),
     policy: JSON.parse(device.policy),
     issuedAt: iso(nowMs),
@@ -51,7 +57,8 @@ export function certificatePayload({ user, device, entitlements, nowMs, keyId })
 
 export async function getCertificate(request, { env, now }, { user, device }) {
   const entitlements = await activeEntitlements(env, user.id, iso(now()));
-  const payload = certificatePayload({ user, device, entitlements, nowMs: now(), keyId: env.CERT_KEY_ID });
+  const enabledFeatures = await enabledFeaturesFor(env, user.id, entitlements);
+  const payload = certificatePayload({ user, device, entitlements, nowMs: now(), keyId: env.CERT_KEY_ID, enabledFeatures });
   return json({ cert: await signCertificate(payload, await env.certSigningKey()) });
 }
 
