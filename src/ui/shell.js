@@ -1731,6 +1731,22 @@ export function mountShell(el) {
     </div>
     <div class="toast" data-toast hidden></div>`;
 
+  // A file picker stays open while the page keeps living: sync, presence or
+  // a certificate refresh (all on returning to a hidden page, which is what
+  // opening a picker on a phone does) can re-render the panel that holds
+  // the <input type=file>. The picked files then land on the old, detached
+  // input, whose 'change' never reaches this root, and the import silently
+  // does nothing. So the input the picker was opened from is put back in
+  // place of its freshly-rendered twin (same markup) after any re-render.
+  // Not an event listener: an observer that only acts while a picker's
+  // input has gone missing.
+  new MutationObserver(() => {
+    if (!pickerInput || pickerInput.isConnected) return;
+    const twin = [...el.querySelectorAll('input[type="file"]')].find((n) => n.outerHTML === pickerInput.outerHTML);
+    if (twin) twin.replaceWith(pickerInput);
+    else pickerInput = null;
+  }).observe(el, { childList: true, subtree: true });
+
   el.addEventListener('click', guarded(onClick));
   el.addEventListener('dblclick', guarded(onDblClick));
   el.addEventListener('change', guarded(onChange));
@@ -1814,9 +1830,16 @@ export function mountShell(el) {
 }
 
 // ---- interaction --------------------------------------------------------
+// The <input type=file> whose picker was opened last (see mountShell's
+// MutationObserver): kept until its 'change' arrives.
+let pickerInput = null;
+
 function onClick(ev) {
   const t = ev.target;
   const hit = (sel) => t.closest(sel);
+  // A label's click reaches here first, then the input's own; only the
+  // input's opens the picker, and it must not be re-rendered away.
+  if (t.matches && t.matches('input[type="file"]')) pickerInput = t;
   if (hexcrawlPaletteMenu && !hit('.hexcrawl-menu-wrap')) { hexcrawlPaletteMenu = null; renderDrawerBody(); }
   if (docSortMenuOpen && !hit('.doc-sort-wrap')) { docSortMenuOpen = false; renderDrawerBody(); }
   if (hit('[data-doc-sort-menu-toggle]')) { docSortMenuOpen = !docSortMenuOpen; return renderDrawerBody(); }
@@ -6386,6 +6409,7 @@ function commitEntityTagValue(value) {
 
 function onChange(ev) {
   const t = ev.target;
+  if (t === pickerInput) pickerInput = null;
   // Docs library sort/filter (direct follow-up request) — a <select> only
   // ever fires 'change', never the Documents search box's own live
   // 'input' (data-doc-filter, onInput above), so these two belong here,
