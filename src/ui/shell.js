@@ -1397,13 +1397,18 @@ async function importLicenseDoc(file, picked, { quiet = false, confirmName = tru
 }
 
 // Brings picked files into this browser by their contents (roadmap 6.3,
-// "re-import the same file"). A file named like a Reference Library book is
-// stored under that book's key. Any other file is hashed: if a document in
+// "re-import the same file"). A file named like a Reference Library book
+// this campaign lists (its license owned, its game system designated) is
+// stored under that book's key. Any other file, including one named like a
+// book this campaign doesn't list (stored as that book it would import and
+// then never show), is hashed: if a document in
 // this campaign is missing exactly those bytes it fills that link, if one
 // already has them it's skipped, and otherwise (`createNew`) it becomes a new
 // document keyed by its contents. Resolves to the counts and the new docs.
 async function importFilesByContent(files, { createNew }) {
-  const byBasename = createNew ? new Map(listReferenceDocuments(store.get()).map((r) => [r.file.split('/').pop().toLowerCase(), r.file])) : new Map();
+  const doc = store.get();
+  const shownBooks = createNew ? listCampaignReferenceDocuments(doc, new Set(listReferenceDocuments(doc).map((r) => r.file))) : [];
+  const byBasename = new Map(shownBooks.map((r) => [r.file.split('/').pop().toLowerCase(), r.file]));
   const present = new Set(await store.listDocBlobKeys());
   const result = { matched: 0, filled: 0, already: 0, unmatched: 0, added: [] };
   for (const file of files) {
