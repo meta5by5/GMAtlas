@@ -28,8 +28,8 @@ SameSite=Strict refresh cookie plus a 15-minute access token.
      that doesn't go up (when the authenticator keeps one) is refused as a
      cloned key. The relying party is the site's own host, so dev and
      production passkeys are separate.
-3. **OAuth** (`server/src/oauth.js`): Google and Discord, authorization code
-   with PKCE (S256). A provider is offered only once its client id and
+3. **OAuth** (`server/src/oauth.js`): Google, Apple and Discord,
+   authorization code with PKCE (S256) for Google and Discord. A provider is offered only once its client id and
    secret are set. The flow's state (CSRF state, verifier, device) rides in
    a ten-minute signed cookie, SameSite=Lax because the provider sends the
    browser back from its own site.
@@ -42,10 +42,29 @@ SameSite=Strict refresh cookie plus a 15-minute access token.
    - The callback redirects into the app: `#/account/oauth/new|back` (the
      app picks up the session cookie and continues the usual sign-in
      steps), or `#/account/sign-in/error/<reason>` with the reason in words.
-4. **Apple waits.** It posts its answer back cross-site, which this
-   service's origin check refuses for every state-changing request, and it
-   needs a client secret signed with an Apple key. Both are solvable (a
-   GET-only response mode isn't offered with email scope), but separately.
+4. **Apple** differs from the other two in three ways:
+   - **It answers with a cross-site form POST** (`response_mode=form_post`
+     is the only mode Apple allows when the email is asked for).
+     - The origin check lets exactly one request through: a POST to
+       `/api/auth/oauth/apple/callback` from `https://appleid.apple.com`.
+     - That POST checks nothing, sets nothing and carries no cookie (the
+       state cookie is Lax). It only answers 303 to the GET callback on
+       this origin, carrying `code`, `state` and the name.
+     - On that top-level GET the Lax state cookie does arrive, so the state
+       check and everything after it are the same as for Google.
+   - **Its client secret** is a five-minute ES256 JWT (team id, key id,
+     Services ID), signed per token request with the team's `.p8` key.
+   - **There's no userinfo endpoint.** Who signed in is the ID token from
+     the token response. It came straight from Apple over TLS, so its
+     signature isn't re-checked (OIDC core 3.1.3.7). Its issuer, audience,
+     expiry and nonce are checked.
+     - The nonce is made at start and kept in the state cookie. It stands
+       in for PKCE, which Apple doesn't document.
+     - Apple sends the name only on the first sign-in, in that form post.
+     - "Hide My Email" gives a relay address, which the token marks
+       verified. Signing in with it the first time makes a new account
+       unless Apple was connected from an existing one first; the help
+       article says so.
 
 ## Consequences
 
@@ -55,5 +74,6 @@ SameSite=Strict refresh cookie plus a 15-minute access token.
   and secret set as Worker secrets.
 - Removing a passkey here doesn't delete it from the device's password
   manager; the page says so.
-- Not built: Apple sign-in; device key pairs signing the refresh (section
-  3.2), which would stop a stolen cookie being used elsewhere.
+- Apple needs a paid Apple Developer membership: an App ID with Sign in
+  with Apple, a Services ID (the client id) with the domain and redirect
+  URI, and a key (`.p8`). The key text goes in `APPLE_PRIVATE_KEY`.

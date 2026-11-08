@@ -68,7 +68,7 @@ against this Worker, plus a jsdom smoke run of the built bundle):
   `--env production` for production; sign in once first).
 
 - **Passkeys** (`src/passkeys.js`, `src/webauthn.js`) and **Continue with
-  Google / Discord** (`src/oauth.js`, PKCE); see
+  Google / Apple / Discord** (`src/oauth.js`); see
   `design/adr/passkeys-oauth.md`. Passkeys work as soon as this is
   deployed. A provider appears only once its secrets are set:
   1. Register an OAuth app with the provider. Redirect URI:
@@ -80,6 +80,21 @@ against this Worker, plus a jsdom smoke run of the built bundle):
   2. `npx wrangler secret put GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
      (or `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`); add
      `--env production` for production.
+  3. **Apple** (needs a paid Apple Developer membership), in Certificates,
+     Identifiers & Profiles:
+     - an App ID with **Sign in with Apple** ticked;
+     - a **Services ID** (this is the client id, e.g.
+       `online.gmatlas.dev`): enable Sign in with Apple, primary App ID the
+       one above, domain `dev.gmatlas.online`, return URL
+       `https://dev.gmatlas.online/api/auth/oauth/apple/callback`;
+     - a **Key** with Sign in with Apple, downloaded once as `AuthKey_<id>.p8`.
+
+     Then `npx wrangler secret put` each of `APPLE_CLIENT_ID` (the Services
+     ID), `APPLE_TEAM_ID` (top right of the developer site), `APPLE_KEY_ID`
+     (the key's id) and `APPLE_PRIVATE_KEY` (pipe the file in:
+     `Get-Content AuthKey_X.p8 -Raw | npx wrangler secret put APPLE_PRIVATE_KEY`).
+     Apple answers with a cross-site form post, which the origin check
+     lets through for that one path only.
 - **Per-network limits:** 20 sign-in codes and 30 wrong codes per client IP
   per hour (`src/rateLimit.js`; IPs stored hashed), on top of the
   per-address limits.
@@ -159,7 +174,7 @@ migrations/0004_admin.sql     feature_flags; audit_log indexes
 migrations/0005_rate_limits.sql  rate_events (per-client sign-in limits)
 migrations/0006_passkeys.sql  passkeys, webauthn_challenges
 src/passkeys.js, src/webauthn.js  passkey sign-in (WebCrypto + a small CBOR decoder)
-src/oauth.js                  Continue with Google / Discord (PKCE)
+src/oauth.js                  Continue with Google / Apple / Discord
 src/admin.js                  /api/admin/*: users, entitlements, flags, audit (role-checked)
 src/features.js               feature flags: load, resolve per account, requireFeature
 scripts/admin-role.js         set an admin role from the command line (first owner)

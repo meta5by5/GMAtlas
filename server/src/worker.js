@@ -13,6 +13,7 @@
 //   CERT_KEY_ID          id of that key, pinned with its public half in the app
 //   RESEND_API_KEY, MAIL_FROM   email delivery (or MAIL_MODE=log in development)
 //   TURN_KEY_ID, TURN_KEY_API_TOKEN   optional: Cloudflare TURN relay (src/p2p.js)
+//   GOOGLE_*, DISCORD_*, APPLE_*      optional: sign-in providers (src/oauth.js)
 
 import { HttpError, json, errorResponse } from './http.js';
 import { startEmailSignIn, verifyEmailSignIn, refreshSession, signOut, requireAuth } from './auth.js';
@@ -33,7 +34,7 @@ import {
 } from './admin.js';
 
 import { passkeyRegisterOptions, passkeyRegister, passkeyLoginOptions, passkeyLogin, listPasskeys, deletePasskey } from './passkeys.js';
-import { listProviders, oauthStart, oauthLink, oauthCallback, listIdentities, unlinkIdentity } from './oauth.js';
+import { listProviders, oauthStart, oauthLink, oauthCallback, oauthFormPost, listIdentities, unlinkIdentity, APPLE_ISSUER } from './oauth.js';
 import { getIceServers } from './p2p.js';
 
 // The Durable Object class must be exported from the Worker's entry module.
@@ -62,6 +63,7 @@ const ROUTES = [
   ['GET', /^\/api\/auth\/oauth\/(\w+)\/start$/, oauthStart, false],
   ['POST', /^\/api\/auth\/oauth\/(\w+)\/link$/, oauthLink, true],
   ['GET', /^\/api\/auth\/oauth\/(\w+)\/callback$/, oauthCallback, false],
+  ['POST', /^\/api\/auth\/oauth\/(\w+)\/callback$/, oauthFormPost, false],
   ['GET', /^\/api\/auth\/identities$/, listIdentities, true],
   ['DELETE', /^\/api\/auth\/identities\/(\w+)$/, unlinkIdentity, true],
   ['GET', /^\/api\/me$/, getMe, true],
@@ -138,9 +140,12 @@ function context(env) {
 export async function handleApi(request, env) {
   const url = new URL(request.url);
   // State-changing calls from another site are refused outright (the
-  // SameSite cookie already blocks them; this is the second lock).
+  // SameSite cookie already blocks them; this is the second lock). The one
+  // exception is Apple's sign-in form post, which changes nothing: it only
+  // bounces the browser to the GET callback (oauth.js oauthFormPost).
   const origin = request.headers.get('origin');
-  if (request.method !== 'GET' && origin && origin !== url.origin) {
+  const appleBounce = request.method === 'POST' && origin === APPLE_ISSUER && url.pathname === '/api/auth/oauth/apple/callback';
+  if (request.method !== 'GET' && origin && origin !== url.origin && !appleBounce) {
     return errorResponse(new HttpError(403, 'bad_origin', 'Cross-site request refused.'));
   }
   const ctx = context(env);

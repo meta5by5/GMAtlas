@@ -288,7 +288,7 @@ async function loadSecurity() {
   }
 }
 
-const PROVIDER_LABELS = { email: 'Email code', google: 'Google', discord: 'Discord' };
+const PROVIDER_LABELS = { email: 'Email code', google: 'Google', apple: 'Apple', discord: 'Discord' };
 
 function securitySection() {
   const sec = ui.security;

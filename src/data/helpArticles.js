@@ -130,7 +130,7 @@ There are no passwords. Use whichever of these you like:
 
 - **Email code**: we email you a 6-digit code. This always works, and it's how you get back in if you lose everything else.
 - **Passkey**: your fingerprint, face or device PIN. Add one under **Account → Sign-in → Add a passkey**, then choose **Sign in with a passkey** next time. A passkey's secret never leaves your device.
-- **Continue with Google** or **Discord**, where the site offers them. Signing in this way the first time joins the account that has the same email address, if the provider has verified it. Connect or disconnect them under **Account → Sign-in**.
+- **Continue with Google**, **Apple** or **Discord**, where the site offers them. Signing in this way the first time joins the account that has the same email address, if the provider has verified it. With Apple's **Hide My Email**, Apple gives a private relay address instead, so that becomes a separate account unless you first connect Apple from the account you already have. Connect or disconnect them under **Account → Sign-in**.
 
 ## Devices and signing out
 
