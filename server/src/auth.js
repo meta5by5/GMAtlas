@@ -9,9 +9,18 @@
 // memory. The refresh token is an HttpOnly cookie, stored server-side only
 // as a hash and rotated on every use; presenting an already-rotated token
 // means it was copied, so the whole session ends.
+//
+// Device-bound sessions (roadmap 3.2, design/adr/device-bound-sessions.md):
+// a sign-in may name `deviceKey`, the public half of a P-256 key the
+// browser generated and can't export. The session is then bound to it, and
+// every refresh must carry `proof` = {ts, sig}: an ECDSA signature over
+// `gmatlas-refresh:v1:<ts>` with a ts later than the last one accepted. A
+// copied cookie alone can't renew the session; a copied proof can't be
+// replayed. A session from before this (or from a browser without
+// WebCrypto) binds at its first refresh that carries a key and a proof.
 
 import { HttpError, json, readJson, readCookie, cookie } from './http.js';
-import { newId, randomCode, randomToken, sha256Hex, safeEqual, signAccessToken, verifyAccessToken } from './crypto.js';
+import { newId, randomCode, randomToken, sha256Hex, safeEqual, signAccessToken, verifyAccessToken, fromBase64url } from './crypto.js';
 import { clientKey, enforce, record } from './rateLimit.js';
 
 export const REFRESH_COOKIE = 'gm_refresh';
@@ -78,11 +87,33 @@ async function findOrCreateUser(env, email, nowIso) {
   return { user: await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(id).first(), created: true };
 }
 
-async function issueSession(env, now, user, device) {
+// --- device keys ---------------------------------------------------------------
+
+const B64URL_32 = /^[A-Za-z0-9_-]{43}$/;
+/** A browser's public session key as stored: {kty, crv, x, y} of a P-256
+ *  key, or null if `jwk` isn't one. */
+export function cleanDeviceKey(jwk) {
+  if (!jwk || typeof jwk !== 'object' || jwk.kty !== 'EC' || jwk.crv !== 'P-256') return null;
+  if (!B64URL_32.test(String(jwk.x)) || !B64URL_32.test(String(jwk.y))) return null;
+  return { kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y };
+}
+
+export const proofMessage = (ts) => `gmatlas-refresh:v1:${ts}`;
+
+async function proofSigned(jwk, proof) {
+  if (!proof || !Number.isSafeInteger(proof.ts) || proof.ts <= 0 || typeof proof.sig !== 'string') return false;
+  try {
+    const key = await crypto.subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+    return await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, fromBase64url(proof.sig), new TextEncoder().encode(proofMessage(proof.ts)));
+  } catch { return false; }
+}
+
+async function issueSession(env, now, user, device, deviceKey = null) {
   const refresh = randomToken(32);
   const sessionId = newId('ses');
-  await env.DB.prepare('INSERT INTO sessions (id, device_id, user_id, refresh_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(sessionId, device.id, user.id, await sha256Hex(refresh), iso(now() + SESSION_TTL_MS), iso(now())).run();
+  const bound = cleanDeviceKey(deviceKey);
+  await env.DB.prepare('INSERT INTO sessions (id, device_id, user_id, refresh_hash, expires_at, created_at, bound_key) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(sessionId, device.id, user.id, await sha256Hex(refresh), iso(now() + SESSION_TTL_MS), iso(now()), bound ? JSON.stringify(bound) : null).run();
   const accessToken = await signAccessToken({ sub: user.id, did: device.id, sid: sessionId }, env.ACCESS_TOKEN_SECRET, now());
   return { accessToken, refresh };
 }
@@ -117,14 +148,15 @@ export async function verifyEmailSignIn(request, { env, now }) {
   await env.DB.prepare('UPDATE email_codes SET used_at = ? WHERE id = ?').bind(iso(now()), row.id).run();
 
   const { user, created } = await findOrCreateUser(env, email, iso(now()));
-  const done = await startSession(env, now, user, body.device, body.deviceId);
+  const done = await startSession(env, now, user, body.device, body.deviceId, body.deviceKey);
   return json({ ...done.body, newAccount: created }, 200, { 'set-cookie': done.cookie });
 }
 
 /** The end of every sign-in (email code, passkey, OAuth): this browser's
- *  device record (reused when it signed in before), a session, and the
- *  refresh cookie. Returns {body, cookie, device}. */
-export async function startSession(env, now, user, deviceInfo, deviceId) {
+ *  device record (reused when it signed in before), a session (bound to
+ *  `deviceKey` when the browser sent one), and the refresh cookie. Returns
+ *  {body, cookie, device}. */
+export async function startSession(env, now, user, deviceInfo, deviceId, deviceKey = null) {
   if (user.status !== 'active') throw new HttpError(403, 'account_disabled', 'This account is disabled.');
   const nowIso = iso(now());
   let device = null;
@@ -140,7 +172,7 @@ export async function startSession(env, now, user, deviceInfo, deviceId) {
   } else {
     await env.DB.prepare('UPDATE devices SET last_seen_at = ? WHERE id = ?').bind(nowIso, device.id).run();
   }
-  const { accessToken, refresh } = await issueSession(env, now, user, device);
+  const { accessToken, refresh } = await issueSession(env, now, user, device, deviceKey);
   return {
     device,
     body: { accessToken, user: publicUser(user), device: publicDevice(device, device.id) },
@@ -169,10 +201,29 @@ export async function refreshSession(request, { env, now }) {
   const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(session.user_id).first();
   if (!device || device.revoked_at || !user || user.status !== 'active') throw expired;
 
+  // The device's proof: required once the session is bound; an unbound
+  // session binds to the key its first signed refresh names. A refusal
+  // leaves the session alone (the real device can still refresh), and the
+  // cookie isn't rotated, so nothing about the session changes.
+  let body = {};
+  try { const text = await request.text(); body = (text && text.length <= 4096 && JSON.parse(text)) || {}; } catch { body = {}; }
+  const proof = body.proof || null;
+  let boundKey = session.bound_key ? JSON.parse(session.bound_key) : null;
+  if (boundKey || (proof && cleanDeviceKey(body.deviceKey))) {
+    const key = boundKey || cleanDeviceKey(body.deviceKey);
+    if (!(await proofSigned(key, proof))) throw new HttpError(401, 'device_proof', 'This session belongs to another device. Please sign in again.');
+    if (session.proof_at && proof.ts <= session.proof_at) {
+      // Already used (a replay), or this device's clock is behind: it may
+      // sign again with a later ts.
+      throw new HttpError(409, 'stale_proof', 'Sign the refresh again with a later time.', { after: session.proof_at });
+    }
+    boundKey = key;
+  }
+
   const next = randomToken(32);
   await env.DB.batch([
-    env.DB.prepare('UPDATE sessions SET refresh_hash = ?, prev_hash = ?, expires_at = ? WHERE id = ?')
-      .bind(await sha256Hex(next), hash, iso(now() + SESSION_TTL_MS), session.id),
+    env.DB.prepare('UPDATE sessions SET refresh_hash = ?, prev_hash = ?, expires_at = ?, bound_key = ?, proof_at = ? WHERE id = ?')
+      .bind(await sha256Hex(next), hash, iso(now() + SESSION_TTL_MS), boundKey ? JSON.stringify(boundKey) : null, boundKey ? proof.ts : null, session.id),
     env.DB.prepare('UPDATE devices SET last_seen_at = ? WHERE id = ?').bind(iso(now()), device.id),
   ]);
   const accessToken = await signAccessToken({ sub: user.id, did: device.id, sid: session.id }, env.ACCESS_TOKEN_SECRET, now());

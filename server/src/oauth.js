@@ -38,7 +38,7 @@
 
 import { HttpError, json, readCookie } from './http.js';
 import { base64url, fromBase64url, randomToken, signAccessToken, verifyAccessToken } from './crypto.js';
-import { startSession, findOrCreateUser } from './auth.js';
+import { startSession, findOrCreateUser, cleanDeviceKey } from './auth.js';
 import { audit } from './entitlements.js';
 
 const iso = (ms) => new Date(ms).toISOString();
@@ -163,6 +163,8 @@ export async function oauthStart(request, { env, now }, id) {
     typ: 'oauth', p: id, st: state, v: verifier, n: nonce,
     did: (url.searchParams.get('deviceId') || '').slice(0, 80) || null,
     dn: (url.searchParams.get('name') || '').slice(0, 60) || null,
+    // This browser's session key (device-bound sessions): "<x>.<y>" of its P-256 public key.
+    dk: cleanDeviceKey({ kty: 'EC', crv: 'P-256', x: (url.searchParams.get('key') || '').split('.')[0], y: (url.searchParams.get('key') || '').split('.')[1] }),
     lt: linkTo,
   }, env.ACCESS_TOKEN_SECRET, now(), STATE_SECONDS);
   const auth = new URL(p.authorize);
@@ -272,7 +274,7 @@ export async function oauthCallback(request, ctx, id) {
       await audit(env, at, user.id, 'identity.link', 'identity', `${id}:${info.subject}`, null, { provider: id, via: 'sign-in' });
     }
     if (!user || user.status !== 'active') return failTo('disabled');
-    const done = await startSession(env, now, user, { name: claims.dn || `${p.label} sign-in` }, claims.did);
+    const done = await startSession(env, now, user, { name: claims.dn || `${p.label} sign-in` }, claims.did, claims.dk || null);
     return back(created ? '/account/oauth/new' : '/account/oauth/back', [done.cookie]);
   } catch (err) {
     if (err instanceof HttpError && err.code === 'account_disabled') return failTo('disabled');

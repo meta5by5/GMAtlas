@@ -167,8 +167,10 @@ password option can be added later if users ask for it.
 - **Device record:** each instance (browser profile × origin) gets a
   `deviceId` and a non-extractable WebCrypto key pair generated on first
   sign-in. `store.js` persists the key handle; IndexedDB can hold
-  `CryptoKey` objects. The device signs a server challenge at refresh, so a
-  stolen cookie alone can't impersonate the device.
+  `CryptoKey` objects. The device signs every refresh, so a stolen cookie
+  alone can't impersonate the device. **Built**
+  (`design/adr/device-bound-sessions.md`): a signed, ever-later timestamp
+  rather than a server challenge, so a refresh stays one round trip.
 
 ### 3.3 `file://` mode
 

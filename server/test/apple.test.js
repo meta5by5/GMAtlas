@@ -57,8 +57,8 @@ async function fakeApple(server) {
     return new Response(JSON.stringify({ access_token: 'at', id_token: unsignedJwt({ iss: APPLE, aud: grant.aud || 'online.gmatlas.web', exp: Math.floor(server.env.now() / 1000) + 600, nonce: grant.nonce, ...grant.person }) }), { status: 200 });
   };
   /** The browser's round trip: /start, Apple's page, Apple's form post, the bounce. */
-  async function consent(b, person, { name, tamperNonce = false, aud, linkUrl } = {}) {
-    const start = await send(server, b, 'GET', linkUrl || `/api/auth/oauth/apple/start?deviceId=${b.state.deviceId || ''}&name=Phone`);
+  async function consent(b, person, { name, tamperNonce = false, aud, linkUrl, key } = {}) {
+    const start = await send(server, b, 'GET', linkUrl || `/api/auth/oauth/apple/start?deviceId=${b.state.deviceId || ''}&name=Phone${key ? `&key=${key}` : ''}`);
     if (start.status !== 302) return { start };
     const to = new URL(start.headers.get('location'));
     const code = `a${issued.size}`;
@@ -100,8 +100,12 @@ test('Apple: offered once configured; form post bounced through the origin check
   assert.equal(me.data.user.email, 'rae@example.com');
   assert.equal(me.data.user.displayName, 'Rae Doe', 'named from Apple’s first post');
 
-  // Coming back (Apple sends no name the second time).
-  assert.equal((await consent(mk(), { sub: 'apl-1', email: 'rae@example.com', email_verified: true })).back.headers.get('location'), '/#/account/oauth/back');
+  // Coming back (Apple sends no name the second time), from a browser that
+  // names its session key: the new session is bound to it.
+  const x = 'A'.repeat(43);
+  const y = 'B'.repeat(43);
+  assert.equal((await consent(mk(), { sub: 'apl-1', email: 'rae@example.com', email_verified: true }, { key: `${x}.${y}` })).back.headers.get('location'), '/#/account/oauth/back');
+  assert.deepEqual(JSON.parse(server.sqlite.prepare('SELECT bound_key FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get().bound_key), { kty: 'EC', crv: 'P-256', x, y });
   assert.equal(server.sqlite.prepare('SELECT COUNT(*) AS n FROM users').get().n, 1);
 
   // The ID token must carry this flow's nonce and be for this app.

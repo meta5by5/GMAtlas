@@ -95,6 +95,11 @@ against this Worker, plus a jsdom smoke run of the built bundle):
      `Get-Content AuthKey_X.p8 -Raw | npx wrangler secret put APPLE_PRIVATE_KEY`).
      Apple answers with a cross-site form post, which the origin check
      lets through for that one path only.
+- **Device-bound sessions** (`design/adr/device-bound-sessions.md`): each
+  session is bound to a key its browser can't export, and every
+  `/api/auth/refresh` carries a signature from it, so a copied refresh
+  cookie renews nothing elsewhere. Sessions from before bind at their next
+  refresh. Needs migration 0007 (`npm run migrate:remote`).
 - **Per-network limits:** 20 sign-in codes and 30 wrong codes per client IP
   per hour (`src/rateLimit.js`; IPs stored hashed), on top of the
   per-address limits.
@@ -173,6 +178,7 @@ migrations/0003_account_settings.sql  account_settings (one encrypted, versioned
 migrations/0004_admin.sql     feature_flags; audit_log indexes
 migrations/0005_rate_limits.sql  rate_events (per-client sign-in limits)
 migrations/0006_passkeys.sql  passkeys, webauthn_challenges
+migrations/0007_device_bound_sessions.sql  sessions.bound_key, proof_at (signed refreshes)
 src/passkeys.js, src/webauthn.js  passkey sign-in (WebCrypto + a small CBOR decoder)
 src/oauth.js                  Continue with Google / Apple / Discord
 src/admin.js                  /api/admin/*: users, entitlements, flags, audit (role-checked)

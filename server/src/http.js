@@ -1,10 +1,12 @@
 // http.js — request/response helpers shared by every route.
 
 export class HttpError extends Error {
-  constructor(status, code, message) {
+  /** `extra`: more fields for the error body (e.g. {after} on stale_proof). */
+  constructor(status, code, message, extra = null) {
     super(message || code);
     this.status = status;
     this.code = code;
+    this.extra = extra;
   }
 }
 
@@ -16,7 +18,7 @@ export function json(data, status = 200, headers = {}) {
 }
 
 export function errorResponse(err) {
-  if (err instanceof HttpError) return json({ error: err.code, message: err.message }, err.status);
+  if (err instanceof HttpError) return json({ ...(err.extra || {}), error: err.code, message: err.message }, err.status);
   console.error('unhandled server error', err);
   return json({ error: 'server_error', message: 'Something went wrong.' }, 500);
 }

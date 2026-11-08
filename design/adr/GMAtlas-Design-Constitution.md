@@ -137,7 +137,10 @@ documented:
    `import()`/`newCampaign()`/`switchCampaign()`/`renameCampaign()`/
    `bindFile()`/`restoreBackup()`, plus profile-registry surface
    (`listProfiles()`/`getActiveProfile()`/`createProfile()`/
-   `updateProfile()`/`renameProfile()`). `newCampaign()` no longer replaces
+   `updateProfile()`/`renameProfile()`). Beside the `store` instance it
+   exports one standalone read, `readDeviceKeys()`, so the admin page can
+   sign its refreshes with this browser's session key without loading a
+   campaign (design/adr/device-bound-sessions.md). `newCampaign()` no longer replaces
    the current campaign — it registers an additional one. A handful of
    legacy `localStorage` keys, plus the old pre-Rules-Profile fixed
    `campaign`/`campaignBackup` IndexedDB keys, are read once, on first

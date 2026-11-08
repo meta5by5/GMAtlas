@@ -104,7 +104,7 @@ export const passkeyLogin = asHttp(async (request, { env, now }) => {
   const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(stored.user_id).first();
   if (!user) throw unknown;
   await env.DB.prepare('UPDATE passkeys SET sign_count = ?, last_used_at = ? WHERE id = ?').bind(result.signCount, iso(now()), stored.id).run();
-  const done = await startSession(env, now, user, body.device, body.deviceId);
+  const done = await startSession(env, now, user, body.device, body.deviceId, body.deviceKey);
   return json({ ...done.body, newAccount: false }, 200, { 'set-cookie': done.cookie });
 });
 

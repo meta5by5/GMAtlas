@@ -1416,3 +1416,14 @@ function structuredCloneSafe(o) {
 }
 
 export const store = createStore();
+
+/** This browser's device keys record (sync keys and the session key,
+ *  core/account.js), read on its own without loading any campaign: for the
+ *  pages beside the app that share its signed-in session (admin.html), so
+ *  their refreshes carry the same device proof. Read-only: the app makes
+ *  the keys. Empty where there's no IndexedDB. */
+export async function readDeviceKeys() {
+  if (typeof indexedDB === 'undefined') return {};
+  const database = await idbOpen();
+  try { return (await idbGet(database, SYNC_KEYS_KEY)) || {}; } finally { database.close(); }
+}

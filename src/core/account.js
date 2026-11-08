@@ -32,10 +32,11 @@ export const ACCOUNT_SERVICE_URL = 'https://gmatlas.online/';
 const OWNABLE_IDS = LICENSES.filter((l) => !l.open).map((l) => l.id);
 
 class AccountError extends Error {
-  constructor(code, message, status = 0) {
+  constructor(code, message, status = 0, data = null) {
     super(message || code);
     this.code = code;
     this.status = status;
+    this.data = data;
   }
 }
 export { AccountError };
@@ -128,8 +129,42 @@ export function createAccountClient(options = {}) {
       throw new AccountError('no_service', 'This copy of GMAtlas has no account service.', res.status);
     }
     const data = await res.json();
-    if (!res.ok) throw new AccountError(data.error || 'error', data.message || 'Something went wrong.', res.status);
+    if (!res.ok) throw new AccountError(data.error || 'error', data.message || 'Something went wrong.', res.status, data);
     return data;
+  }
+
+  // --- device-bound sessions (roadmap 3.2; design/adr/device-bound-sessions.md)
+  // One P-256 key pair per browser, made on first need. Its private half is
+  // non-extractable and kept in IndexedDB beside the sync keys (through
+  // store.js); the public half goes with every sign-in, and every refresh
+  // is signed with it, so the refresh cookie alone can't renew the session
+  // anywhere else. Without WebCrypto (an insecure http origin) sessions just
+  // aren't bound.
+  const subtle = () => (globalThis.crypto && globalThis.crypto.subtle) || null;
+  let sessionKeyLoad = null;
+  let loadedSessionKey = null;
+  function sessionKey() {
+    if (!sessionKeyLoad) {
+      const load = async () => {
+        if (!deps.store || typeof deps.store.getSyncKeys !== 'function' || !subtle()) return null;
+        const kept = (await deps.store.getSyncKeys()).sessionKey;
+        if (kept && kept.privateKey && kept.publicJwk) return kept;
+        const pair = await subtle().generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign', 'verify']);
+        const jwk = await subtle().exportKey('jwk', pair.publicKey);
+        const made = { privateKey: pair.privateKey, publicJwk: { kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y } };
+        await deps.store.setSyncKeys({ sessionKey: made });
+        return made;
+      };
+      // Under a lock, so two tabs opening at once can't each make a key.
+      sessionKeyLoad = (deps.locks ? deps.locks.request('gmatlas-session-key', load) : load())
+        .then((k) => { loadedSessionKey = k; return k; })
+        .catch(() => { sessionKeyLoad = null; return null; });
+    }
+    return sessionKeyLoad;
+  }
+  async function signProof(key, ts) {
+    const sig = await subtle().sign({ name: 'ECDSA', hash: 'SHA-256' }, key.privateKey, new TextEncoder().encode(`gmatlas-refresh:v1:${ts}`));
+    return { ts, sig: toB64url(sig) };
   }
 
   // Refreshes rotate the cookie, and presenting a rotated one ends the
@@ -137,7 +172,19 @@ export function createAccountClient(options = {}) {
   // Web Lock serializes them across tabs; the second tab's request then
   // carries the cookie the first one just received.
   async function refreshNow() {
-    const run = () => raw('POST', '/api/auth/refresh');
+    const run = async () => {
+      const key = await sessionKey();
+      if (!key) return raw('POST', '/api/auth/refresh');
+      try {
+        return await raw('POST', '/api/auth/refresh', { deviceKey: key.publicJwk, proof: await signProof(key, Date.now()) });
+      } catch (err) {
+        // This device's clock is behind the last proof the server took:
+        // sign once more just after it.
+        const after = err && err.code === 'stale_proof' && err.data && err.data.after;
+        if (!Number.isSafeInteger(after)) throw err;
+        return raw('POST', '/api/auth/refresh', { deviceKey: key.publicJwk, proof: await signProof(key, after + 1) });
+      }
+    };
     const data = deps.locks ? await deps.locks.request('gmatlas-account-refresh', run) : await run();
     accessToken = data.accessToken;
     adopt(data);
@@ -241,6 +288,7 @@ export function createAccountClient(options = {}) {
     if (store) deps.store = store;
     if (!available()) { set({ ...SIGNED_OUT, status: 'unavailable' }); return state; }
     startRenewal();
+    sessionKey(); // ready before a "Continue with …" link is drawn
     const s = saved();
     if (!s.user) {
       // Back from "Continue with Google/Discord": the callback left a
@@ -274,8 +322,10 @@ export function createAccountClient(options = {}) {
   /** Finishes email sign-in (creating the account on first use) and loads
    *  the certificate. Resolves to `{newAccount}`. */
   async function verifyCode(email, code) {
+    const key = await sessionKey();
     const data = await raw('POST', '/api/auth/email/verify', {
       email, code, device: describeDevice(deps.userAgent), deviceId: saved().deviceId || undefined,
+      deviceKey: key ? key.publicJwk : undefined,
     });
     accessToken = data.accessToken;
     adopt(data);
@@ -342,6 +392,9 @@ export function createAccountClient(options = {}) {
     const id = saved().deviceId;
     if (id) p.set('deviceId', id);
     p.set('name', describeDevice(deps.userAgent).name);
+    // The session key, if it's ready (start() loads it); otherwise the
+    // session binds at its first refresh.
+    if (loadedSessionKey) p.set('key', `${loadedSessionKey.publicJwk.x}.${loadedSessionKey.publicJwk.y}`);
     return `${deps.baseUrl}/api/auth/oauth/${encodeURIComponent(providerId)}/start?${p}`;
   }
 
@@ -394,10 +447,12 @@ export function createAccountClient(options = {}) {
       cred = await webauthn().get({ publicKey: { ...opts.publicKey, challenge: fromB64url(opts.publicKey.challenge), allowCredentials: [] } });
     } catch (err) { throw passkeyCancelled(err); }
     const r = cred.response;
+    const key = await sessionKey();
     const data = await raw('POST', '/api/auth/passkeys/login', {
       challengeId: opts.challengeId,
       device: describeDevice(deps.userAgent),
       deviceId: saved().deviceId || undefined,
+      deviceKey: key ? key.publicJwk : undefined,
       credential: {
         id: toB64url(cred.rawId), type: cred.type,
         response: {

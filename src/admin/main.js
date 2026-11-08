@@ -11,17 +11,21 @@
 // listener per event type on the page root, routed by data-action.
 
 import { createAccountClient } from '../core/account.js';
+import { readDeviceKeys } from '../core/store.js';
 import { LICENSES } from '../data/licenses.js';
 import { FEATURES } from '../data/features.js';
 import { GATEABLE_MODULES } from '../core/schema.js';
 
 // The account client keeps its state in the app's store; this page only
-// needs it in memory.
+// needs it in memory. The session key is the app's own (read through
+// store.js), since the session is bound to it: this page never makes one.
 const memStore = {
   cfg: { account: {} },
   getAppConfig() { return this.cfg; },
   updateAppConfig(fn) { this.cfg = fn(this.cfg) || this.cfg; return this.cfg; },
   setCertificate() {},
+  getSyncKeys: () => readDeviceKeys().catch(() => ({})),
+  setSyncKeys: async () => { throw new Error('the admin page never makes a session key'); },
 };
 const client = createAccountClient({ store: memStore });
 const api = (method, path, body) => client.request(method, path, body);
