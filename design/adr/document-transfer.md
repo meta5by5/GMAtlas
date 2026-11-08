@@ -3,8 +3,7 @@
 **Status:** Accepted. Built: item 1 (content keys and "not on this
 device"), item 2 (WebRTC transfer between a user's own devices, behind the
 `p2p.transfer` feature) and item 3 (hash-carrying bundles, hash-matched
-import). Sourcebook PDFs don't travel device to device yet (see
-Consequences).
+import), including sourcebook PDFs between one account's devices.
 
 ## Context
 
@@ -76,6 +75,23 @@ file brought in on two devices had two unrelated keys.
    - **UI:** the missing-document card's **Get it from …**, the Docs
      library's **Get N from …**, and the logo menu's **Get N missing files
      from …** (which also covers gallery images).
+7. **Sourcebooks travel too, between one account's devices.** A Reference
+   Library book is keyed by its catalog path (`assets/docs/…`), not its
+   contents, and books are app-wide rather than per campaign:
+   - **Which:** a device asks for the books of every license owned here
+     that it doesn't hold (`wantedBookKeys`), alongside the open campaign's
+     files, and hands out only owned licenses' books (`servableKeys`). Only
+     paths some license lists count as book keys, so nothing else on the
+     device can be named.
+   - **Checking:** the key says nothing about the bytes, so the sender
+     announces their sha256 in `meta` and the receiver stores nothing that
+     doesn't match (`receivedBytesOk`). That catches damage, not a lying
+     sender; the sender is the same account's own device.
+   - **UI:** Settings › Licenses, beside Load / Import my copy: **⇄ Get from
+     <device>** per book and **⇄ Get N from <device>** per license. The
+     Docs library's counts stay about the campaign's own files.
+   - Across accounts (tables, S5) a third-party book must never travel
+     (roadmap 6.4); that needs the transfer tickets S5 brings.
 
 ## Consequences
 
@@ -87,9 +103,8 @@ file brought in on two devices had two unrelated keys.
   upload.
 - Both devices must have the campaign open at once; there is no "send it
   when it comes online" queue.
-- Sourcebook PDFs (keyed by their `assets/docs/` path, not by content) don't
-  travel this way yet: the receiving device needs the license too, and
-  which books a campaign wants isn't the same as which it points at. Until
-  then they come by Load, Import my copy, or a library zip.
+- A sourcebook's hash is computed by its sender on every send (one read of
+  the file); nothing records what a book's bytes should be, so two devices
+  holding different printings of one book each keep their own.
 - A device whose `p2p.transfer` is switched off mid-session keeps relaying
   until its socket reconnects (tickets last 60 s; sockets longer).

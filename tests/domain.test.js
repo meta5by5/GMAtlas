@@ -12493,7 +12493,39 @@ function p2pCampaign() {
 }
 
 test('servableKeys: only content keys the campaign points at', () => {
-  assert.deepEqual([...servableKeys(p2pCampaign())].sort(), [K('a'), K('b'), K('c')]);
+  assert.deepEqual([...servableKeys(p2pCampaign())].filter((k) => k.startsWith('sha256:')).sort(), [K('a'), K('b'), K('c')]);
+});
+
+const OPEN_BOOK = 'assets/docs/Starforged/Starforged-reference-guide.pdf';
+const OWNED_BOOK = 'assets/docs/WithoutNumber/CitiesWithoutNumber_Deluxe.pdf';
+test('sourcebooks: owned licenses’ books are servable and wanted; others never', async () => {
+  const { ownedBookKeys, wantedBookKeys, isBookKey } = await import('../src/domain/blobTransfer.js');
+  const { licenseForDoc } = await import('../src/data/rulesConstitution.js');
+  const c = p2pCampaign();
+  const lic = licenseForDoc(OWNED_BOOK);
+  assert.ok(lic && !lic.open, 'the test book is a paid license’s');
+  assert.equal(isBookKey(OPEN_BOOK), true);
+  assert.equal(isBookKey('assets/docs/Not-a-book.pdf'), false, 'only paths a license lists');
+  // Open licenses are always owned; a paid one only when ticked.
+  assert.ok(servableKeys(c).has(OPEN_BOOK));
+  assert.ok(!servableKeys(c).has(OWNED_BOOK), 'a book whose license isn’t owned is never handed out');
+  assert.ok(!ownedBookKeys(c.settings).includes(OWNED_BOOK));
+  c.settings.licenses = { ...(c.settings.licenses || {}), [lic.id]: true };
+  assert.ok(servableKeys(c).has(OWNED_BOOK));
+  assert.ok(wantedBookKeys(c.settings, new Set([OPEN_BOOK])).includes(OWNED_BOOK));
+  assert.ok(!wantedBookKeys(c.settings, new Set([OPEN_BOOK])).includes(OPEN_BOOK), 'not wanted once stored');
+  assert.deepEqual(answerWant([OWNED_BOOK, OPEN_BOOK, 'assets/docs/Not-a-book.pdf'], servableKeys(c), new Set([OWNED_BOOK])), [OWNED_BOOK]);
+});
+
+test('receivedBytesOk: content keys name their bytes; books match the announced hash', async () => {
+  const { receivedBytesOk } = await import('../src/domain/blobTransfer.js');
+  const h = 'e'.repeat(64);
+  assert.equal(receivedBytesOk(K('a'), K('a'), null), true);
+  assert.equal(receivedBytesOk(K('a'), K('b'), null), false);
+  assert.equal(receivedBytesOk(OPEN_BOOK, `sha256:${h}`, h), true);
+  assert.equal(receivedBytesOk(OPEN_BOOK, `sha256:${h}`, 'f'.repeat(64)), false, 'bytes that don’t match what the sender said');
+  assert.equal(receivedBytesOk(OPEN_BOOK, `sha256:${h}`, null), false, 'a book without an announced hash is refused');
+  assert.equal(receivedBytesOk('assets/docs/Not-a-book.pdf', `sha256:${h}`, h), false);
 });
 
 test('wantedKeys: missing uploads, then missing gallery images, never inline or old keys', () => {
@@ -12530,9 +12562,12 @@ test('chunkRanges and the assembler put a file back together exactly', () => {
 
 test('parseControl / parseSignal accept only known, well-formed messages', () => {
   assert.deepEqual(parseControl(JSON.stringify({ t: 'get', key: K('a') })), { t: 'get', key: K('a') });
-  assert.equal(parseControl(JSON.stringify({ t: 'get', key: 'assets/docs/X.pdf' })), null, 'only content keys travel');
+  assert.equal(parseControl(JSON.stringify({ t: 'get', key: 'assets/docs/X.pdf' })), null, 'only content keys and real sourcebook keys travel');
+  assert.deepEqual(parseControl(JSON.stringify({ t: 'get', key: OPEN_BOOK })), { t: 'get', key: OPEN_BOOK });
   assert.equal(parseControl(JSON.stringify({ t: 'meta', key: K('a'), size: -1 })), null);
-  assert.deepEqual(parseControl(JSON.stringify({ t: 'meta', key: K('a'), size: 5, mime: 'application/pdf' })), { t: 'meta', key: K('a'), size: 5, mime: 'application/pdf' });
+  assert.deepEqual(parseControl(JSON.stringify({ t: 'meta', key: K('a'), size: 5, mime: 'application/pdf' })), { t: 'meta', key: K('a'), size: 5, mime: 'application/pdf', sha: null });
+  assert.deepEqual(parseControl(JSON.stringify({ t: 'meta', key: OPEN_BOOK, size: 5, sha: 'd'.repeat(64) })), { t: 'meta', key: OPEN_BOOK, size: 5, mime: '', sha: 'd'.repeat(64) });
+  assert.equal(parseControl(JSON.stringify({ t: 'meta', key: OPEN_BOOK, size: 5, sha: 'nope' })).sha, null);
   assert.equal(parseControl('not json'), null);
   assert.deepEqual(parseSignal({ k: 'want', keys: [K('a'), 'junk'] }), { k: 'want', keys: [K('a')] });
   assert.deepEqual(parseSignal({ k: 'offer', sid: 's1', sdp: 'v=0' }), { k: 'offer', sid: 's1', sdp: 'v=0', direct: false });

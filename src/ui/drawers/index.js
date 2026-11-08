@@ -3652,6 +3652,14 @@ function licenseDocRow(file, owned, ui, source, alsoImport = false) {
         + (alsoImport ? ' ' + importMyCopyControl(file, '⬆ Import', 'Or pick a copy you already have (the biggest free PDFs aren’t hosted here)') : '')
       : importMyCopyControl(file, '⬆ Import my copy', 'Pick your own copy of ' + file.split('/').pop() + ' from this device');
   }
+  // Another of this account's devices has it (Phase S3): straight across.
+  const peer = !loaded && !loading && owned && typeof ui.p2pBook === 'function' ? ui.p2pBook(file) : null;
+  if (peer && peer.busy) action = '<span class="dim small">Getting it from ' + esc(peer.name) + '… ' + peer.pct + '%</span>';
+  else if (peer) {
+    action = '<button type="button" class="btn ghost sm" data-doc-p2p-get="' + esc(file) + '" data-p2p-from="' + esc(peer.from) + '" title="Sent straight from that device, never through the server">⇄ Get from ' + esc(peer.name) + '</button>'
+      + (action ? ' ' + action : '')
+      + (peer.error ? ' <span class="small doc-missing-error">' + esc(peer.error) + '</span>' : '');
+  }
   return `
         <li class="license-doc-row"><span class="license-doc-title" title="${esc(status)}">📄 ${esc(title)}</span> ${action}</li>`;
 }
@@ -3703,6 +3711,13 @@ function licenseRow(doc, lic, ui) {
       ? '<button type="button" class="btn ghost sm license-load-all" data-license-load-all="' + esc(lic.id) + '">⬇ Load all (' + notLoaded + ')</button>'
       : '<label class="btn ghost sm license-load-all" title="Pick several of your files at once; each is matched to its book by file name">⬆ Import my copies (' + notLoaded + ')'
         + '<input type="file" accept="application/pdf,.pdf" multiple hidden data-license-docs-files="' + esc(lic.id) + '"></label>';
+  }
+  // Several of its books on another online device: get them in one go.
+  if (owned && typeof ui.p2pBook === 'function') {
+    const offers = lic.docs.filter((f) => !stored.has(f)).map((f) => ui.p2pBook(f)).filter((p) => p && !p.busy);
+    const from = offers.length ? offers[0].from : null;
+    const n = offers.filter((p) => p.from === from).length;
+    if (n > 1) loadAll = '<button type="button" class="btn ghost sm license-load-all" data-p2p-get-books="' + esc(lic.id) + '" data-p2p-from="' + esc(from) + '" title="Sent straight from that device, never through the server">⇄ Get ' + n + ' from ' + esc(offers[0].name) + '</button>' + (loadAll ? ' ' + loadAll : '');
   }
   const importNote = owned && source === 'import' && lic.docs.length
     ? '<p class="dim small">Sourcebooks aren’t downloadable from this site: they’re the publisher’s. Import your own copy of each PDF; it stays in this browser.</p>'

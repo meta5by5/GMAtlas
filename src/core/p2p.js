@@ -11,16 +11,18 @@
 //      the offer, answer and ICE candidates go through the campaign room,
 //      sealed with the campaign key. The bytes go directly between the two
 //      devices, DTLS-encrypted, and never through the server.
-//   3. Each file comes in 64 KiB chunks and is checked against its own
-//      content key before it's stored.
+//   3. Each file comes in 64 KiB chunks and is checked before it's stored:
+//      against its own content key, or, for a sourcebook (keyed by its
+//      catalog path), against the sha256 its sender announced.
 //
-// A device only ever hands out files the open campaign points at
-// (blobTransfer.servableKeys), and only to the same account's devices (the
-// room only admits the owner's).
+// A device only ever hands out files the open campaign points at and the
+// books of licenses it owns (blobTransfer.servableKeys), and only to the
+// same account's devices (the room only admits the owner's).
 
 import {
-  servableKeys, wantedKeys, answerWant, chooseSource, chunkRanges, createAssembler,
+  servableKeys, wantedKeys, wantedBookKeys, answerWant, chooseSource, chunkRanges, createAssembler,
   parseControl, parseSignal, iceConfig, relayPossible, isRelayCandidate, stripRelayCandidates,
+  isBookKey, receivedBytesOk,
 } from '../domain/blobTransfer.js';
 import { FEATURES } from '../data/features.js';
 import { certHasFeature } from '../domain/features.js';
@@ -97,7 +99,8 @@ export function createP2P(options = {}) {
     if (haves.size !== state.haves.size) set({ haves });
     if (!others.length) return;
     await refreshPresent();
-    const wanted = wantedKeys(campaign(), present);
+    // The open campaign's missing files, then any owned sourcebook not here.
+    const wanted = [...wantedKeys(campaign(), present), ...wantedBookKeys((campaign() || {}).settings, present)];
     const shape = `${cid}|${others.join(',')}|${wanted.join(',')}`;
     if (!wanted.length || (!force && shape === lastAsk)) return;
     lastAsk = shape;
@@ -215,7 +218,9 @@ export function createP2P(options = {}) {
     const blob = await deps.store.getDocBlob(key);
     if (!blob) { dc.send(JSON.stringify({ t: 'nope', key })); return; }
     const bytes = new Uint8Array(await blob.arrayBuffer());
-    dc.send(JSON.stringify({ t: 'meta', key, size: bytes.length, mime: blob.type || '' }));
+    // A book's key doesn't name its bytes: say what they hash to.
+    const sha = isBookKey(key) ? String(await deps.store.contentKeyFor(blob)).slice('sha256:'.length) : undefined;
+    dc.send(JSON.stringify({ t: 'meta', key, size: bytes.length, mime: blob.type || '', sha }));
     for (const [start, end] of chunkRanges(bytes.length)) {
       await drained(dc);
       dc.send(bytes.slice(start, end).buffer);
@@ -293,6 +298,7 @@ export function createP2P(options = {}) {
     return new Promise((resolve, reject) => {
       let asm = null;
       let mime = '';
+      let sha = null;
       const timer = deps.setTimeout(() => finish(new Error('That device stopped sending.')), FILE_TIMEOUT_MS);
       const finish = (err) => {
         deps.clearTimeout(timer);
@@ -310,13 +316,13 @@ export function createP2P(options = {}) {
         const m = parseControl(ev.data);
         if (!m || m.key !== key) return;
         if (m.t === 'nope') { finish(new Error('That device doesn’t have it any more.')); return; }
-        if (m.t === 'meta') { asm = createAssembler({ size: m.size }); mime = m.mime; setTransfer(key, { status: 'receiving', size: m.size, received: 0 }); return; }
+        if (m.t === 'meta') { asm = createAssembler({ size: m.size }); mime = m.mime; sha = m.sha; setTransfer(key, { status: 'receiving', size: m.size, received: 0 }); return; }
         if (m.t === 'end') {
           if (!asm || !asm.complete()) { finish(new Error('The file arrived incomplete.')); return; }
           try {
             const blob = new deps.Blob([asm.bytes()], { type: mime });
-            // The key names the bytes: anything else is refused, not stored.
-            if ((await deps.store.contentKeyFor(blob)) !== key) { finish(new Error('The file arrived damaged.')); return; }
+            // Bytes that aren't what was asked for are refused, not stored.
+            if (!receivedBytesOk(key, await deps.store.contentKeyFor(blob), sha)) { finish(new Error('The file arrived damaged.')); return; }
             await deps.store.putDocBlob(key, blob);
             setTransfer(key, { status: 'done', received: asm.received() });
             finish();

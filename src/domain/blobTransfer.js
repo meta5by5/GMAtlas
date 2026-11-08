@@ -5,29 +5,67 @@
 // the ICE settings. No DOM, no network: core/p2p.js does the WebRTC and the
 // signalling, and calls these.
 //
-// Only content-keyed bytes travel (`sha256:…`), so the receiver can check
-// every file against its own key before storing it.
+// Two kinds of key travel:
+//   - content keys (`sha256:…`): uploads and gallery images; the receiver
+//     checks the bytes against the key itself;
+//   - sourcebook keys (a Reference Library book's `assets/docs/…` path, one
+//     some license lists): the books of licenses this account owns. The key
+//     says nothing about the bytes, so the sender announces their sha256 and
+//     the receiver checks against that.
+// Transfer is between one account's own devices (the campaign room admits
+// only the owner's), so a book goes only where its license is owned anyway;
+// it must never go to another account (roadmap 6.4).
 
 import { missingDocuments } from './documents.js';
+import { LICENSES } from '../data/licenses.js';
+import { isLicensed } from '../data/rulesConstitution.js';
 
 /** Bytes per data-channel message: 64 KiB is safe on every browser's
  *  SCTP implementation (the roadmap's 256 KB is not, on older Safari). */
 export const CHUNK_BYTES = 64 * 1024;
 
 const isContentKey = (k) => typeof k === 'string' && /^sha256:[0-9a-f]{64}$/.test(k);
+const BOOK_KEYS = new Set(LICENSES.flatMap((l) => l.docs || []));
+/** A Reference Library sourcebook's key: a path some license lists. */
+export const isBookKey = (k) => typeof k === 'string' && BOOK_KEYS.has(k);
+const isTransferKey = (k) => isContentKey(k) || isBookKey(k);
+const isSha = (s) => typeof s === 'string' && /^[0-9a-f]{64}$/.test(s);
 const galleryImages = (campaign) => (campaign && campaign.gallery && Array.isArray(campaign.gallery.images) ? campaign.gallery.images : []);
 const isInline = (v) => typeof v === 'string' && v.startsWith('data:');
 
-/** Every content key this campaign points at: its uploads and its gallery
- *  images (portraits, tokens, battlemaps). What a device may hand out for
- *  it, and nothing else. */
+/** The sourcebooks of every license owned here (`settings.licenses`, with
+ *  open licenses always owned), whether or not this campaign uses them:
+ *  books are app-wide, not per campaign. */
+export function ownedBookKeys(settings) {
+  return LICENSES.filter((l) => isLicensed(settings, l.id)).flatMap((l) => l.docs || []);
+}
+
+/** Owned sourcebooks not stored here, in registry order. */
+export function wantedBookKeys(settings, presentKeys) {
+  const present = presentKeys || new Set();
+  return [...new Set(ownedBookKeys(settings).filter((k) => !present.has(k)))];
+}
+
+/** Every key a device may hand out for this campaign, and nothing else:
+ *  the content keys it points at (its uploads and gallery images:
+ *  portraits, tokens, battlemaps) and the books of licenses owned here. */
 export function servableKeys(campaign) {
   const keys = new Set();
   for (const d of ((campaign && campaign.documents && campaign.documents.library) || [])) {
     if (d && d.kind === 'file' && isContentKey(d.blobKey)) keys.add(d.blobKey);
   }
   for (const img of galleryImages(campaign)) if (isContentKey(img.blobKey)) keys.add(img.blobKey);
+  for (const k of ownedBookKeys(campaign && campaign.settings)) keys.add(k);
   return keys;
+}
+
+/** Whether received bytes are what was asked for: a content key must name
+ *  their hash (`contentKey`, `sha256:…` of the bytes); a book key must
+ *  match the hash its sender announced. */
+export function receivedBytesOk(key, contentKey, announcedSha) {
+  if (isContentKey(key)) return contentKey === key;
+  if (isBookKey(key)) return isSha(announcedSha) && contentKey === `sha256:${announcedSha}`;
+  return false;
 }
 
 /** The content keys this campaign points at whose bytes aren't stored here
@@ -45,7 +83,7 @@ export function wantedKeys(campaign, presentKeys) {
  *  both may hand out (this campaign points at them) and has. */
 export function answerWant(wanted, servable, presentKeys) {
   const present = presentKeys || new Set();
-  return [...new Set((wanted || []).filter((k) => isContentKey(k) && servable.has(k) && present.has(k)))];
+  return [...new Set((wanted || []).filter((k) => isTransferKey(k) && servable.has(k) && present.has(k)))];
 }
 
 /** Which device to fetch from: the one holding the most of `wanted`
@@ -98,10 +136,12 @@ export function parseControl(text) {
   let m;
   try { m = JSON.parse(text); } catch { return null; }
   if (!m || typeof m !== 'object') return null;
-  if (m.t === 'get' && isContentKey(m.key)) return { t: 'get', key: m.key };
-  if (m.t === 'meta' && isContentKey(m.key) && Number.isSafeInteger(m.size) && m.size >= 0) return { t: 'meta', key: m.key, size: m.size, mime: typeof m.mime === 'string' ? m.mime : '' };
-  if (m.t === 'end' && isContentKey(m.key)) return { t: 'end', key: m.key };
-  if (m.t === 'nope' && isContentKey(m.key)) return { t: 'nope', key: m.key };
+  if (m.t === 'get' && isTransferKey(m.key)) return { t: 'get', key: m.key };
+  if (m.t === 'meta' && isTransferKey(m.key) && Number.isSafeInteger(m.size) && m.size >= 0) {
+    return { t: 'meta', key: m.key, size: m.size, mime: typeof m.mime === 'string' ? m.mime : '', sha: isSha(m.sha) ? m.sha : null };
+  }
+  if (m.t === 'end' && isTransferKey(m.key)) return { t: 'end', key: m.key };
+  if (m.t === 'nope' && isTransferKey(m.key)) return { t: 'nope', key: m.key };
   if (m.t === 'done') return { t: 'done' };
   return null;
 }
@@ -109,7 +149,7 @@ export function parseControl(text) {
 /** A sealed signalling message's body, or null. `k` is its kind. */
 export function parseSignal(body) {
   if (!body || typeof body !== 'object' || typeof body.k !== 'string') return null;
-  const keys = Array.isArray(body.keys) ? body.keys.filter(isContentKey).slice(0, 2000) : [];
+  const keys = Array.isArray(body.keys) ? body.keys.filter(isTransferKey).slice(0, 2000) : [];
   switch (body.k) {
     case 'want': case 'have': return { k: body.k, keys };
     case 'offer': case 'answer': return typeof body.sid === 'string' && typeof body.sdp === 'string' ? { k: body.k, sid: body.sid, sdp: body.sdp, direct: body.direct === true } : null;

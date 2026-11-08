@@ -828,7 +828,8 @@ S3 step), the badges and card, WebRTC transfer between the owner's open
 devices (signalling sealed through the campaign room rather than an
 account room; 64 KiB chunks; TURN only when configured; "Direct
 connections only"), hash-matched re-import, and hash-carrying bundles.
-Not yet: sourcebook PDFs device to device.
+Sourcebook PDFs travel too, between one account's devices (Settings ›
+Licenses, checked against the hash the sender announces).
 
 1. "Not on this device" badges and cards, and "Get all missing".
 2. WebRTC P2P via account-room signalling, chunked with hash verification.

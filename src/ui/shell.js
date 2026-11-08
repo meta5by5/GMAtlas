@@ -4661,6 +4661,15 @@ function onClick(ev) {
     ev.preventDefault();
     return p2pGet({ keys: [p2pGetOne.dataset.docP2pGet], from: p2pGetOne.dataset.p2pFrom || null });
   }
+  // A license's sourcebooks that another device holds (Settings › Licenses).
+  const p2pBooks = hit('[data-p2p-get-books]');
+  if (p2pBooks) {
+    ev.preventDefault();
+    const lic = LICENSES.find((l) => l.id === p2pBooks.dataset.p2pGetBooks);
+    const from = p2pBooks.dataset.p2pFrom;
+    const keys = lic ? lic.docs.filter((f) => !refDocBlobKeys.has(f) && p2p.sourcesFor(f).includes(from)) : [];
+    return p2pGet({ keys, from });
+  }
   if (hit('[data-p2p-get-all]')) {
     ev.preventDefault();
     settingsMenuOpen = false;
@@ -11693,7 +11702,7 @@ function buildDrawerUi() {
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, oracleRouteToNavigator: oracleRoutingActive(), navigatorStepMapLink, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, docSort, docSortMenuOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     fiveLeaguesInfoOpen, fiveLeaguesItemNotesOpen,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
-    enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, tocOfferOpen, tocLibrary: store.getAppConfig().tocLibrary || {}, canScanToc: canScanToc(), lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, refDocBlobKeysLoaded, p2pOffer: p2pOffer(), expandedWhatConflicts,
+    enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, tocOfferOpen, tocLibrary: store.getAppConfig().tocLibrary || {}, canScanToc: canScanToc(), lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, refDocBlobKeysLoaded, p2pOffer: p2pOffer(), p2pBook, expandedWhatConflicts,
     advisorOracleResults, advisorDrafts, advisorConsequenceDraw, sceneSummaryOverride,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName, partyTrackersEditOpen, collapsedPartySections,
@@ -12003,6 +12012,20 @@ function p2pOffer() {
     from, name: from ? sync.deviceName(from) : '', count, busy: ps.busy,
     progress: ps.busy ? `Getting files from ${sync.deviceName((active[0] || {}).from)}… ${doneNow} of ${doneNow + active.length}` : '',
   };
+}
+
+/** A sourcebook another online device of this account can send (Settings ›
+ *  Licenses): {from, name} for the first device holding it, `pct` while it's
+ *  coming in, `error` if the last try failed; or null. */
+function p2pBook(file) {
+  if (!p2p.available()) return null;
+  const t = p2p.getState().transfers[file];
+  if (t && (t.status === 'waiting' || t.status === 'receiving')) {
+    return { busy: true, name: sync.deviceName(t.from), pct: t.size ? Math.floor((100 * (t.received || 0)) / t.size) : 0 };
+  }
+  const from = p2p.sourcesFor(file)[0];
+  if (!from) return null;
+  return { from, name: sync.deviceName(from), error: t && t.status === 'failed' ? (t.error || 'That didn’t work.') : '' };
 }
 
 /** The "Get it from …" part of a missing document's card. */

@@ -180,6 +180,8 @@ To bring the file over:
 - **Import file…** on the card, or **Import files…** in the Docs library for all of them at once: pick the same files. Each is recognised by its contents, so it fills in even if it was renamed.
 - **⬇ Export Library** and **⬆ Import Library** (Settings → General) carry them in a zip.
 
+Sourcebooks you've loaded or imported on one device can come across the same way: **Settings → Licenses** shows **⇄ Get from…** beside each book another of your devices has, and **⇄ Get N from…** for all of a license's books. They only ever go between your own devices.
+
 When two devices can't reach each other directly, a transfer may go through a relay that only passes the encrypted stream along. To never use one from a device, tick **Direct connections only** under **Account → Sync** there.
 
 ## Stopping
