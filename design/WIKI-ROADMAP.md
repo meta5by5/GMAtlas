@@ -1,7 +1,7 @@
 # Campaign Wiki & Journal — Roadmap
 
-**Status:** In progress. W0 was signed off and W1 was built on 2026-11-08.
-W2 onward is still a proposal.
+**Status:** In progress. W0 was signed off, and W1 and W2 were built on
+2026-11-08. W3 onward is still a proposal.
 
 **Source:** `design/onetimecmd.md`. That file holds the requested scope and a
 Claude chat's recommendations and build prompt.
@@ -93,19 +93,27 @@ everywhere, in one `store.update()`. The old name is kept as an **alias**
 resolves. A failed write rolls back like any other.
 
 ### 3.6 Player View is a lens, not a second copy
-A toggle in the wiki hides:
-- `overview` and every GM field;
-- `:::gm … :::` blocks;
-- entities marked GM-only (`visibility: 'gm'`, new, default `'gm'`, which
-  matches today, where nothing is shown to players).
+In the Entity Editor, `overview` is "What the party knows" and `revealed` is
+"Revealed / hidden (GM)": secrets, twists, true motives. So a toggle in the
+wiki shows, for entities set to `'players'`:
+- `overview`, minus its `:::gm … :::` blocks;
+- links in it only to pages that are themselves shared;
+- a short whitelist of public infobox facts.
 
-It shows `revealed`, plus text outside GM blocks, for entities set to
-`'players'`.
+It hides:
+- `revealed`, every other GM field, aliases and relationship notes;
+- backlinks and sessions;
+- entities marked GM-only (`visibility: 'gm'`, the default, which matches
+  today, where nothing is shown to players).
 
 One pure function, `playerSafe(campaign, entityId)`, is the only way any
 player-facing output is made. That covers the Player View, markdown export,
-Drive sharing (D4) and later S5 tables. A test scans its output for every GM
-field.
+Drive sharing (D4) and later S5 tables. It is built from a whitelist, so a
+GM field added later stays hidden until it's named there. A test scans its
+output for GM text.
+
+(An earlier draft of this decision had `overview` and `revealed` the wrong
+way round. W2 follows the Entity Editor's labels.)
 
 ### 3.7 Search stays client-side and zero-dependency
 D1's FTS5 can't help: synced text reaches the server sealed with the campaign
@@ -148,8 +156,7 @@ The text sources scanned are:
 - text documents;
 - hex, tile and battlemap notes.
 
-Not done yet: `setDungeonRoomLocation` (W3) and any UI for aliases,
-visibility or place kind (W2).
+Not done yet: `setDungeonRoomLocation` (W3).
 
 - `entity.aliases[]`, `entity.visibility` (`'gm'` default),
   `entity.placeKind` (locations only). All are optional; old documents are
@@ -170,7 +177,27 @@ visibility or place kind (W2).
   resolution, rename propagation through every text source, mention index,
   and an export → import round trip with the new fields.
 
-### W2 — Wiki pages
+### W2 — Wiki pages — built 2026-11-08
+Built as written below, with these specifics:
+- **The Wiki panel** (📜, in the edge nav like Cast, not gateable) lists
+  every page by type. You can search names, aliases and tags and filter by
+  type. It shows a 👁 badge on pages shared with players, a count of what
+  links to each page, and a Red links list.
+- **Entity tabs** gain 📖 Read and ✎ Edit. Following a link from a page or
+  the Wiki panel opens the next page in Read mode.
+- **"Linked from"** is grouped by where the link lives: pages, journal,
+  scenes, Guide, maps and so on. Journal, Guide and map sources open where
+  they are.
+- **The red-link type picker** is an inline row of type buttons, not the
+  text prompt.
+- **Page settings** (aliases, visibility, place kind) sit at the foot of the
+  page in the GM view.
+- **Player View** is one switch, shared by the Wiki panel and every page.
+- **The views** live in `ui/drawers/wiki.js`. The pure parts (GM blocks, `[[ ]]` →
+  `@[ ]` display, `unlinkHidden`, `playerSafe`, `wikiIndex`) are in
+  `domain/wiki.js`.
+
+The original plan:
 - A **Wiki** drawer panel, dispatched through `drawers/index.js` like every
   other panel. Each page is an entity tab: the 2026-11-08 one-tab-per-entity
   work, with a Read/Edit switch.

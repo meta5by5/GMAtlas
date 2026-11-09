@@ -11,6 +11,7 @@ import { ORACLE_TABLE_SOURCES, ORACLE_GROUPS_FANTASY } from '../../data/oracleGr
 import { referenceDocSource } from '../../domain/permissions.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { campaignTimeline } from '../../domain/encounters.js';
+import { wikiPanel, wikiPage, wikiReadButton } from './wiki.js';
 import { lightState, lightRemaining, isLit, formatLight } from '../../domain/torchTimer.js';
 import {
   listEntities, filterEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, entityTypeLabel, listTagVocabulary, listEntityTagVocabulary,
@@ -148,6 +149,7 @@ export function renderDrawer(id, doc, ui = {}) {
     case 'oracle': return oracle(doc, ui);
     case 'cast': return entities(doc, ui);
     case 'entity-detail': return entityDetail(doc, ui);
+    case 'wiki': return wikiPanel(doc, ui);
     case 'party': return party(doc, ui);
     case 'colony': return colony(doc, ui);
     case 'trade': return trade(doc, ui);
@@ -302,6 +304,8 @@ function relPickerBlock(doc, e, ui) {
 function entityDetail(doc, ui) {
   const active = getEntity(doc, doc.entities && doc.entities.activeId);
   if (!active) return '<p class="dim small">Click an entity anywhere (Cast, a mention, a relationship, the graph, ...) to see it here.</p>';
+  // Read mode (design/WIKI-ROADMAP.md W2): the same entity as a wiki page.
+  if (ui.wikiReadIds && ui.wikiReadIds.has(active.id)) return wikiPage(doc, active, ui);
   // The whole editor is a relationship drop target, not just the
   // Relationships section specifically — dragging an entity from Cast (or
   // anywhere else draggable, e.g. a WHO/WHERE chip) and dropping it
@@ -451,6 +455,7 @@ function inspector(doc, e, ui) {
   return `
     <div class="inspector-head">
       <input class="inspector-name" data-entity-field="name" value="${esc(e.name)}" placeholder="Name">
+      ${wikiReadButton(e)}
       ${e.type === 'npc' && !isPartyCharacter ? `<button class="icon-btn" data-deepen-npc="${esc(e.id)}" title="Roll a Stereotype/Want/Complication and add it to this NPC's Overview">🎲 Deepen</button>` : ''}
       <button class="icon-btn" data-entity-del="${esc(e.id)}" title="Delete entity">🗑</button>
     </div>

@@ -12822,3 +12822,82 @@ test('wiki: the new fields survive an export round trip', () => {
   assert.equal(wkGet(back, keep).placeKind, 'dungeon');
 });
 
+﻿
+// --- Campaign wiki W2: reading, GM blocks, the player-safe lens --------------
+import {
+  splitGmBlocks as wkSplitGm, stripGmBlocks as wkStripGm, wikiLinksToMentions as wkToMentions, unlinkHidden as wkUnlinkHidden,
+  playerSafe as wkPlayerSafe, wikiIndex as wkWikiIndex,
+} from '../src/domain/wiki.js';
+
+test('wiki W2: :::gm blocks split out, and an unclosed one hides to the end', () => {
+  const text = 'Public line\n:::gm\nSecret line\n:::\nMore public\n::: GM \nTail secret';
+  assert.deepEqual(wkSplitGm(text), [
+    { gm: false, text: 'Public line' }, { gm: true, text: 'Secret line' }, { gm: false, text: 'More public' }, { gm: true, text: 'Tail secret' },
+  ]);
+  assert.equal(wkStripGm(text), 'Public line\nMore public');
+  assert.equal(wkStripGm('no blocks'), 'no blocks');
+  assert.equal(wkStripGm(''), '');
+});
+
+test('wiki W2: [[ ]] links are drawn as the equivalent @[ ] mentions', () => {
+  assert.equal(wkToMentions('[[Black Keep]] and [[Captain Reyes|the captain]] and [[Kade|kade]]'), '@[Black Keep] and @[the captain|Captain Reyes] and @[Kade]');
+  assert.equal(wkToMentions('plain'), 'plain');
+});
+
+test('wiki W2: links to anything players can’t open become plain text', () => {
+  let { c, kade, reyes } = wkCampaign();
+  c = wkSetVisibility(c, reyes, 'players');
+  const out = wkUnlinkHidden(c, '@[Captain Reyes] met @Kade and [[Kade|the thief]] near [[Captain Reyes|the captain]] and @[pal|Kade], see [[Nowhere]]');
+  assert.equal(out, '@[Captain Reyes] met Kade and the thief near [[Captain Reyes|the captain]] and pal, see Nowhere');
+  assert.ok(kade);
+});
+
+test('wiki W2: playerSafe shows only shared pages, and no GM text of any kind', () => {
+  let { c, kade, reyes, keep, hall, cellar } = wkCampaign();
+  assert.equal(wkPlayerSafe(c, reyes), null, 'GM-only by default');
+  c = updateEntity(c, reyes, {
+    overview: 'A tired captain who knows [[Kade]].\n:::gm\nSECRET-A: is the spy\n:::\nDrinks at the [[Great Hall]].',
+    revealed: 'SECRET-B: owes the cartel',
+    currentGoal: 'SECRET-C: escape',
+    aliases: ['SECRET-D'],
+  });
+  c = addRelationship(c, reyes, kade, 'SECRET-E rival', 'rival_of');
+  c = addRelationship(c, reyes, hall, 'regular', 'linked');
+  c = addNote(c, 'SECRET-F: @[Captain Reyes] was seen');
+  c = wkSetVisibility(c, reyes, 'players');
+  c = wkSetVisibility(c, hall, 'players');
+  c = wkSetPlaceKind(c, cellar, 'room');
+  const safe = wkPlayerSafe(c, reyes);
+  assert.equal(safe.name, 'Captain Reyes');
+  assert.equal(safe.overview, 'A tired captain who knows Kade.\nDrinks at the [[Great Hall]].', 'GM block gone; link to a hidden page unlinked; shared link kept');
+  assert.deepEqual(safe.relations.map((g) => g.items.map((i) => i.name)), [['Great Hall']], 'only relations to shared pages, without notes');
+  assert.ok(!JSON.stringify(safe).includes('SECRET'), `nothing GM-only leaks: ${JSON.stringify(safe)}`);
+  assert.ok(!('aliases' in safe) && !('linkedFrom' in safe) && !('sessions' in safe) && !('revealed' in safe));
+  assert.ok(keep);
+});
+
+test('wiki W2: playerSafe hides private infobox facts and unshared places', () => {
+  let { c, keep, hall, cellar } = wkCampaign();
+  c = addRelationship(c, hall, keep, 'floor of', 'located_at');
+  c = addRelationship(c, cellar, hall, 'below', 'located_at');
+  c = updateEntity(c, hall, { biome: 'Stone', developmentLevel: 'Ruined' });
+  for (const id of [hall, cellar]) c = wkSetVisibility(c, id, 'players');
+  c = wkSetPlaceKind(c, hall, 'floor');
+  const safe = wkPlayerSafe(c, cellar);
+  assert.deepEqual(safe.breadcrumb.map((b) => b.name), ['Great Hall'], 'the unshared keep is left out of the trail');
+  const hallSafe = wkPlayerSafe(c, hall);
+  assert.deepEqual(hallSafe.infobox.map((f) => f.key), ['placeKind', 'biome', 'developmentLevel']);
+  assert.deepEqual(hallSafe.children.map((ch) => ch.name), ['Wine Cellar']);
+});
+
+test('wiki W2: the Wiki panel index searches names, aliases and tags, and filters by type', () => {
+  let { c, reyes, kade } = wkCampaign();
+  c = wkSetAliases(c, reyes, 'Old Salt');
+  c = addEntityTag(c, kade, 'thief');
+  c = addNote(c, 'Saw @Kade');
+  assert.deepEqual(wkWikiIndex(c, { search: 'salt' }).map((r) => r.name), ['Captain Reyes']);
+  assert.deepEqual(wkWikiIndex(c, { search: 'thief' }).map((r) => r.name), ['Kade']);
+  assert.deepEqual(wkWikiIndex(c, { type: 'location' }).map((r) => r.name), ['Black Keep', 'Great Hall', 'Wine Cellar']);
+  assert.equal(wkWikiIndex(c).find((r) => r.id === kade).linkCount, 1);
+});
+

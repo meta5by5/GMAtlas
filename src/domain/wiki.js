@@ -353,3 +353,116 @@ export function pageFor(campaign, id, { index } = {}) {
     sessions,
   };
 }
+
+// --- reading: GM blocks, [[ ]] display, the player-safe lens (W2) ---------------
+
+const GM_OPEN = /^\s*:::\s*gm\s*$/i;
+const GM_CLOSE = /^\s*:::\s*$/;
+
+/** A text split into runs, each `{gm, text}`. `:::gm` on a line of its own
+ *  opens a GM-only block and `:::` closes it; an unclosed block runs to the
+ *  end (so a forgotten close hides more, never less). */
+export function splitGmBlocks(text) {
+  const out = [];
+  let gm = false;
+  let buf = [];
+  const flush = () => { if (buf.length) out.push({ gm, text: buf.join('\n') }); buf = []; };
+  for (const line of String(text || '').split('\n')) {
+    if (!gm && GM_OPEN.test(line)) { flush(); gm = true; continue; }
+    if (gm && GM_CLOSE.test(line)) { flush(); gm = false; continue; }
+    buf.push(line);
+  }
+  flush();
+  return out.filter((r) => r.text.trim() !== '' || r.gm);
+}
+
+/** `text` without its GM-only blocks. */
+export function stripGmBlocks(text) {
+  return splitGmBlocks(text).filter((r) => !r.gm).map((r) => r.text).join('\n').trim();
+}
+
+/** `[[Name]]` / `[[Name|shown]]` written as the equivalent `@[Name]` /
+ *  `@[shown|Name]`, so one renderer draws both kinds of link. */
+export function wikiLinksToMentions(text) {
+  return String(text || '').replace(/\[\[([^\[\]\n]+?)\]\]/g, (whole, inner) => {
+    const bar = inner.indexOf('|');
+    const name = (bar < 0 ? inner : inner.slice(0, bar)).trim();
+    const shown = bar < 0 ? '' : inner.slice(bar + 1).trim();
+    if (!name) return whole;
+    return shown && lower(shown) !== lower(name) ? `@[${shown}|${name}]` : `@[${name}]`;
+  });
+}
+
+function shownText(inner, wiki) {
+  const bar = inner.indexOf('|');
+  if (bar < 0) return inner.replace(/\s*(?:#|p\.?)\s*\d+$/i, '').trim();
+  return (wiki ? inner.slice(bar + 1) : inner.slice(0, bar)).trim();
+}
+
+/** `text` with every link to something a player can't open turned into its
+ *  plain shown text: GM-only entities, documents, maps and red links. Links
+ *  to pages shared with players stay links. */
+export function unlinkHidden(campaign, text) {
+  const shared = (name) => { const e = findByName(campaign, name); return !!e && entityVisibility(e) === 'players'; };
+  return String(text || '')
+    .replace(/\[\[([^\[\]\n]+?)\]\]/g, (whole, inner) => {
+      const bar = inner.indexOf('|');
+      return shared((bar < 0 ? inner : inner.slice(0, bar)).trim()) ? whole : shownText(inner, true);
+    })
+    .replace(/@\[([^\]]+)\]/g, (whole, inner) => (shared(parseMentions(whole)[0] || '') ? whole : shownText(inner, false)))
+    .replace(/(^|[^\w@[\]])@([A-Za-z0-9_''-]+)/g, (whole, pre, name) => (shared(name) ? whole : `${pre}${name}`));
+}
+
+// Facts a player may see in an infobox. A whitelist: anything not named
+// here (agendas, goals, causes, secrets) stays with the GM.
+const PLAYER_INFOBOX_KEYS = new Set(['placeKind', 'objectType', 'biome', 'developmentLevel', 'population', 'techLevel', 'starport', 'leadership', 'hq', 'status']);
+
+/** The one way any player-facing copy of a page is made (roadmap decision
+ *  3.6): the Player View, and later markdown export, Drive sharing and S5
+ *  tables. Null when the page isn't shared with players. Built from a
+ *  whitelist, so a GM field added later stays hidden until listed here:
+ *  name, type, place kind, the player-known `overview` without its GM
+ *  blocks or links to hidden pages, public infobox facts, and only those
+ *  places, occupants and relations that are themselves shared. Relationship
+ *  notes, `revealed`, GM notes, aliases and backlinks are never included. */
+export function playerSafe(campaign, id) {
+  const e = getEntity(campaign, id);
+  if (!e || entityVisibility(e) !== 'players') return null;
+  const page = pageFor(campaign, id, { index: new Map() });
+  const shared = (x) => { const o = getEntity(campaign, x.id); return !!o && entityVisibility(o) === 'players'; };
+  const relations = page.relations
+    .map((g) => ({ type: g.type, label: g.label, items: g.items.filter(shared).map((i) => ({ id: i.id, name: i.name, type: i.type })) }))
+    .filter((g) => g.items.length);
+  return {
+    id: page.id,
+    name: page.name,
+    type: page.type,
+    typeLabel: page.typeLabel,
+    placeKind: page.placeKind,
+    overview: unlinkHidden(campaign, stripGmBlocks(e.overview || '')),
+    infobox: page.infobox.filter((f) => PLAYER_INFOBOX_KEYS.has(f.key)),
+    breadcrumb: page.breadcrumb.filter(shared),
+    children: page.children.filter(shared),
+    here: page.here.filter(shared),
+    relations,
+  };
+}
+
+/** The Wiki panel's list: every page matching `search` (name, alias or tag)
+ *  and `type`, sorted by name, each with how many places link to it. */
+export function wikiIndex(campaign, { search = '', type = '' } = {}) {
+  const q = lower(search);
+  const index = mentionIndex(campaign);
+  return listEntities(campaign)
+    .filter((e) => !type || e.type === type)
+    .filter((e) => !q || [e.name, ...(e.aliases || []), ...(e.tags || [])].some((s) => lower(s).includes(q)))
+    .map((e) => ({
+      id: e.id,
+      name: e.name || 'Unnamed',
+      type: e.type,
+      placeKind: e.type === 'location' ? (e.placeKind || null) : null,
+      visibility: entityVisibility(e),
+      linkCount: (index.get(e.id) || []).length,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}

@@ -135,7 +135,7 @@ src/
                    torchTimer.js/shadowdarkImport.js (Shadowdark) are 2026-11-08
                    additions (design/adr/composer-encounters-and-panels.md,
                    shadowdark-ruleset.md); wiki.js is the campaign wiki's
-                   links/backlinks/rename (design/WIKI-ROADMAP.md); search.js/
+                   links/backlinks/rename/playerSafe (design/WIKI-ROADMAP.md); search.js/
                    activities.js/contentPack.js/titleCase.js are cross-cutting;
                    inlineBlobs.js/syncOps.js/licensing.js are sync groundwork
                    (design/adr/sync-groundwork.md); helpCentre.js backs Help.
@@ -145,7 +145,8 @@ src/
                         sections + sticky Narrative Composer + pressure dials)
     copilotPanel.js     the always-visible Co-Pilot ("decision sandbox")
     drawers/index.js    every drawer's render, dispatched through one switch
-                        (factionEvents.js is split out only to avoid a circular import)
+                        (factionEvents.js is split out only to avoid a circular import;
+                        wiki.js holds the Wiki panel and an entity's Read-mode page)
     portal/index.js     the portal surface (#/help Help centre; later account/store),
                         own layout in styles/portal.css
     imageSrc.js         a gallery record's displayable src (inline or blob cache)
@@ -160,7 +161,7 @@ styles/
   cockpit.css      layout + component styles (campaign surface)
   portal.css       portal surface layout (shares tokens.css only)
 tests/
-  domain.test.js   830 tests — domain modules, incl. sync-merge convergence
+  domain.test.js   836 tests — domain modules, incl. sync-merge convergence
   migrate.test.js  27 tests — legacy-key absorption + round-trip
 scripts/
   build.js         zero-dependency bundler (see below) — re-run after any src/ edit;

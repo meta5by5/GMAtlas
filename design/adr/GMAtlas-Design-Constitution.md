@@ -401,7 +401,13 @@ lookup, backlinks derived from every text that can hold a link (never
 stored), red links, a rename that rewrites every link and keeps the old name
 as an alias, optional `aliases` / `visibility` (`gm` default) / Location
 `placeKind`, and the `connects_to` (self-mirroring) and `appears_in`
-relationship types — no wiki page view yet (W2); lazy,
+relationship types; and (W2) the Wiki panel plus a 📖 Read / ✎ Edit switch
+on every entity tab — a page with infobox, breadcrumb, contents, relations,
+Linked from, Appears in sessions, inline red-link page creation, shaded
+`:::gm` blocks, and a Player View built only from `playerSafe` (a whitelist:
+the shared `overview` without GM blocks, public facts, shared neighbours);
+map binding, journal dates, the quick switcher and markdown export are not
+built (W3–W6); lazy,
 additive, never-overwriting type-specific field provisioning for Faction
 (HQ/Leadership/Agenda/Force-Cunning-Wealth/Fear-Need-Secret/the full SWN
 Faction Turn Engine field set), Location (full UWP profile + development

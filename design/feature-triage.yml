@@ -292,7 +292,7 @@ pending:
     title: Campaign wiki — [[wikilinks]], backlinks, page view per entity, nesting (hex → dungeon → room), GM-secret blocks, player view, map binding, markdown export
     sources: [design/onetimecmd.md, design/WIKI-ROADMAP.md]
     state: not-built
-    notes: Roadmap in design/WIKI-ROADMAP.md (W0–W6). W0 signed off; W1 (links, backlinks, rename, aliases, visibility, place kinds) built 2026-11-08; W2 (page view) next.
+    notes: Roadmap in design/WIKI-ROADMAP.md (W0–W6). W0 signed off; W1 (links, backlinks, rename, aliases, visibility, place kinds) and W2 (Wiki panel, Read mode, red links, Player View) built 2026-11-08; W3 (map binding) next.
   - id: dated-session-journal
     title: Session journal with real and in-world dates, session numbers, attendees, timeline by in-world date
     sources: [design/onetimecmd.md, design/WIKI-ROADMAP.md W4]
