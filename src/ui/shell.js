@@ -15,6 +15,8 @@ import { continueStory, restartStory, applyStoryShift, rollOracle, addNote, setJ
 import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, addSceneAsset, removeSceneAsset, addSceneLocation, removeSceneLocation, setSceneSystem, addSceneDismissedFaction, removeSceneDismissedFaction, moveSceneActor } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
 import { createEncounterFromComposer, listEncounters, composerPrompt } from '../domain/encounters.js';
+import { renameEntityEverywhere, setEntityAliases, setEntityVisibility, setPlaceKind } from '../domain/wiki.js';
+import { isRedLinkSpan } from './drawers/wiki.js';
 import { lightStart, lightPause, lightReset, lightBurnOut, lightRemaining, lightState, isLit, formatLight } from '../domain/torchTimer.js';
 import { parseShadowdark, importShadowdark } from '../domain/shadowdarkImport.js';
 import { COMPOSER_STEPS } from './workspace/index.js';
@@ -198,7 +200,7 @@ function isPhoneWidth() { return window.innerWidth <= PHONE_BREAKPOINT; }
 // avoid) meaning "toggle the .mc-copilot aside open/closed"; its button's
 // own glyph/label follow whatever content the Advisor position currently
 // holds (see computeVisibleEdgeOrder's render loop).
-const EDGE_ORDER = ['guide', 'oracle', 'cast', 'faction-events', 'trade', 'documents', 'gallery', 'battlemap', 'hexcrawl', 'dungeoncrawl', 'graph', 'advisor-toggle'];
+const EDGE_ORDER = ['guide', 'oracle', 'cast', 'wiki', 'faction-events', 'trade', 'documents', 'gallery', 'battlemap', 'hexcrawl', 'dungeoncrawl', 'graph', 'advisor-toggle'];
 // The header's own small drawer-tab group, right-aligned in .header-actions
 // — same data-drawer-open routing as the edge nav (onClick's [data-drawer-
 // open] branch has no idea which container a button lives in), rendered by
@@ -621,6 +623,16 @@ let shadowdarkImportResult = '';
 // The Guide tree's move mode (2026-11-08): off by default; the ↕ button turns
 // it on, and only then are documents draggable.
 let guideReorderMode = false;
+// Campaign wiki (design/WIKI-ROADMAP.md W2), all ephemeral: which entities
+// show as a wiki page instead of the editor, Player View, the red link
+// being turned into a page, which pages have Page settings open, and the
+// Wiki panel's search/type filter.
+const wikiReadIds = new Set();
+let wikiPlayerView = false;
+let wikiRedLinkPick = null;
+const wikiSettingsOpen = new Set();
+let wikiSearch = '';
+let wikiType = '';
 // The Guide drop target under a drag, and since when: hovering one entry for
 // GUIDE_NEST_MS turns a "move above it" drop into "put it inside".
 const GUIDE_NEST_MS = 2000;
@@ -1646,6 +1658,32 @@ let focusInspectorRelationshipNextRender = false; // ephemeral — set by Curren
 let entityDetailFocusEventId = ''; // ephemeral — set when a data-open-entity link also carries data-open-entity-event (a Faction Events turn's faction-name link); factionTurnSectionHtml highlights/expands that one Turn History entry
 let locationProximity = null; // ephemeral — { locationId, locationName } for the Advisor's "Located at" card (direct follow-up request) — set whenever a Location entity is opened via data-open-entity; copilotPanel.js recomputes entities.js's proximityToLocation(doc, locationId) fresh on every render rather than storing a frozen list
 
+/** Called by the portal's wiki pages (ui/portal/wiki.js) to show an entity
+ *  in the campaign: its entity tab, as the editor (`read: false`) or as the
+ *  page. The portal switches the hash back to the campaign first. */
+export function openEntityInCampaign(id, { read = false } = {}) {
+  if (read) wikiReadIds.add(id); else wikiReadIds.delete(id);
+  openDrawerTab('entity-detail');
+  store.update((d) => setActiveEntity(d, id));
+}
+
+/** The portal's way to open where a backlink lives: a panel ('journal'),
+ *  a Guide doc ({guideId}), or a map ({mapKey: 'map:<type>:<id>'}). */
+export function openPanelInCampaign(drawerId, { guideId, mapKey } = {}) {
+  if (mapKey) {
+    const [, mapType, mapId] = mapKey.split(':');
+    if (mapType === 'battlemap') store.update((d) => setActiveBattlemap(d, mapId));
+    else if (mapType === 'hexcrawl') store.update((d) => setActiveHexMap(d, mapId));
+    else if (mapType === 'dungeoncrawl') store.update((d) => setActiveDungeonMap(d, mapId));
+    else return;
+    openDrawerTab(mapType);
+    return render();
+  }
+  openDrawerTab(drawerId);
+  if (guideId) return store.update((d) => setActiveGuideId(d, guideId));
+  return render();
+}
+
 export function mountShell(el) {
   root = el;
   setBlobResolver(store.blobDataUrl);
@@ -1957,6 +1995,9 @@ function onClick(ev) {
   const edge = hit('[data-drawer-open]');
   if (edge) {
     const id = edge.dataset.drawerOpen;
+    // The Wiki opens as its own portal page (#/wiki, ui/portal/wiki.js)
+    // rather than a drawer tab (direct request, 2026-11-08).
+    if (id === 'wiki') { location.hash = '#/wiki'; return; }
     // An anchored panel already lives on the Storyboard — go to it rather
     // than opening a placeholder tab for it.
     if (FOCUS_ON_REOPEN_DRAWERS.has(id) || anchoredPanels.includes(id)) return focusDrawerPanel(id);
@@ -3361,8 +3402,59 @@ function onClick(ev) {
   // graph node, WHO/WHERE chip, ...) opens the same Entity Detail tab — it
   // has no edge nav button of its own; this is the only way it opens (see
   // DRAWER_META/openDrawerTab('entity-detail')).
+  // --- campaign wiki (design/WIKI-ROADMAP.md W2) ---
+  // A red link (a link inside a page that resolves to nothing) offers to
+  // create that page, inline. Checked before data-open-entity, which a red
+  // link never carries.
+  const wikiRedSpan = hit('.wiki-page .mention-link');
+  if (wikiRedSpan && isRedLinkSpan(wikiRedSpan)) {
+    ev.preventDefault();
+    wikiRedLinkPick = wikiRedSpan.dataset.mentionName || null;
+    return renderDrawerBody();
+  }
+  const wikiRed = hit('[data-wiki-redlink]');
+  if (wikiRed) { wikiRedLinkPick = wikiRed.dataset.wikiRedlink; return renderDrawerBody(); }
+  if (hit('[data-wiki-create-cancel]')) { wikiRedLinkPick = null; return renderDrawerBody(); }
+  const wikiCreate = hit('[data-wiki-create-type]');
+  if (wikiCreate) {
+    const name = wikiRedLinkPick;
+    wikiRedLinkPick = null;
+    if (!name) return renderDrawerBody();
+    openDrawerTab('entity-detail');
+    store.update((d) => createEntity(d, { type: wikiCreate.dataset.wikiCreateType, name }).campaign);
+    toast(`Created “${name}” — write its page here.`);
+    return;
+  }
+  const wikiRead = hit('[data-wiki-read]');
+  if (wikiRead) { wikiReadIds.add(wikiRead.dataset.wikiRead); return renderDrawerBody(); }
+  const wikiEdit = hit('[data-wiki-edit]');
+  if (wikiEdit) { wikiReadIds.delete(wikiEdit.dataset.wikiEdit); wikiRedLinkPick = null; return renderDrawerBody(); }
+  if (hit('[data-wiki-player-view]')) { wikiPlayerView = !wikiPlayerView; wikiRedLinkPick = null; return renderDrawerBody(); }
+  const wikiSettingsToggle = hit('[data-wiki-settings-toggle]');
+  if (wikiSettingsToggle) {
+    const id = wikiSettingsToggle.dataset.wikiSettingsToggle;
+    if (wikiSettingsOpen.has(id)) wikiSettingsOpen.delete(id); else wikiSettingsOpen.add(id);
+    return renderDrawerBody();
+  }
+  const wikiOpen = hit('[data-wiki-open]');
+  if (wikiOpen) {
+    const id = wikiOpen.dataset.wikiOpen;
+    wikiReadIds.add(id);
+    openDrawerTab('entity-detail');
+    store.update((d) => setActiveEntity(d, id));
+    return;
+  }
+  const wikiJournal = hit('[data-wiki-source-journal]');
+  if (wikiJournal) { openDrawerTab('journal'); return render(); }
+  const wikiGuide = hit('[data-wiki-source-guide]');
+  if (wikiGuide) { openDrawerTab('guide'); store.update((d) => setActiveGuideId(d, wikiGuide.dataset.wikiSourceGuide)); return; }
+
   const openEnt = hit('[data-open-entity]');
   if (openEnt) {
+    // A link followed from a wiki page or the Wiki panel opens its target
+    // as a page too, so reading carries on as reading.
+    const fromWiki = !!openEnt.closest('.wiki-page, .wiki-index');
+    if (fromWiki) wikiReadIds.add(openEnt.dataset.openEntity);
     // A click inside a contenteditable mention-link would otherwise still
     // run the browser's own default "place the caret here" action after
     // this handler returns, stealing focus right back from the inspector
@@ -3377,7 +3469,7 @@ function onClick(ev) {
     // BEFORE store.update() — that call synchronously triggers the render
     // that reads this flag, so setting it after would always be one render
     // too late.
-    focusInspectorNameNextRender = true;
+    focusInspectorNameNextRender = !fromWiki;
     // Living Faction Engine Phase D: a faction-name link from a specific
     // turn (data-open-entity-event, factionEvents.js) also carries which
     // event to highlight/expand once the Entity Editor opens — cleared to
@@ -6985,6 +7077,16 @@ function onChange(ev) {
     if (t.value) return store.update((d) => addFiveLeaguesItemFromCatalog(d, active, gi, t.value));
     return;
   }
+  // Campaign wiki page settings and the Wiki panel's type filter
+  // (design/WIKI-ROADMAP.md W2).
+  if (t.closest('[data-wiki-type]')) { wikiType = t.value; return renderDrawerBody(); }
+  const wikiAliases = t.closest('[data-wiki-aliases]');
+  if (wikiAliases) return store.update((d) => setEntityAliases(d, wikiAliases.dataset.wikiAliases, t.value));
+  const wikiVis = t.closest('[data-wiki-visibility]');
+  if (wikiVis) return store.update((d) => setEntityVisibility(d, wikiVis.dataset.wikiVisibility, t.value));
+  const wikiPlace = t.closest('[data-wiki-place-kind]');
+  if (wikiPlace) return store.update((d) => setPlaceKind(d, wikiPlace.dataset.wikiPlaceKind, t.value));
+
   const ef = t.closest('[data-entity-field]');
   if (ef) {
     const active = store.get().entities.activeId;
@@ -7008,6 +7110,9 @@ function onChange(ev) {
     // first plain-number-backed fields — coerced via Number() same as the
     // checkbox branch, so the engine's arithmetic never receives a string.
     const value = t.type === 'checkbox' ? t.checked : t.type === 'number' ? (Number(t.value) || 0) : t.value;
+    // A rename carries every link to the old name along with it, and keeps
+    // the old name as an alias (design/WIKI-ROADMAP.md W1).
+    if (field === 'name') return store.update((d) => renameEntityEverywhere(d, active, value));
     return store.update((d) => updateEntity(d, active, { [field]: value }));
   }
 
@@ -7954,6 +8059,9 @@ function onInput(ev) {
 
   const gf = t.closest('[data-graph-filter]');
   if (gf) { graphFilter = t.value; renderDrawerBody(); restoreFocus('[data-graph-filter]'); return; }
+
+  const wsrch = t.closest('[data-wiki-search]');
+  if (wsrch) { wikiSearch = t.value; renderDrawerBody(); restoreFocus('[data-wiki-search]'); return; }
 
   const esrch = t.closest('[data-entity-search]');
   if (esrch) { entitySearch = t.value; renderDrawerBody(); restoreFocus('[data-entity-search]'); return; }
@@ -11922,6 +12030,7 @@ function buildDrawerUi() {
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
     enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, tocOfferOpen, tocLibrary: store.getAppConfig().tocLibrary || {}, canScanToc: canScanToc(), lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, refDocBlobKeysLoaded, p2pOffer: p2pOffer(), p2pBook, expandedWhatConflicts,
     composerWizardStep, composerWizardOffer: composerWizardOffer(), guideReorderMode, shadowdarkImportResult,
+    wikiReadIds, wikiPlayerView, wikiRedLinkPick, wikiSettingsOpen, wikiSearch, wikiType,
     advisorOracleResults, advisorDrafts, advisorConsequenceDraw, sceneSummaryOverride,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName, partyTrackersEditOpen, collapsedPartySections,

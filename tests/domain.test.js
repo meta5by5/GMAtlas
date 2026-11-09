@@ -12795,3 +12795,254 @@ test('Shadowdark is a licensed fantasy game system with its own carousing oracle
   assert.ok(pack.tables['Core Oracles'], 'plus the full fantasy oracle set');
   assert.ok(!sdGenrePack('fantasy').tables.Carousing, 'carousing stays out of other fantasy campaigns');
 });
+// --- Campaign wiki W1 (design/WIKI-ROADMAP.md) --------------------------------
+import {
+  parseWikiLinkRefs as wkParseRefs, linkedNames as wkLinkedNames, resolveLink as wkResolve, mentionIndex as wkIndex,
+  linkedFrom as wkLinkedFrom, unresolvedLinks as wkUnresolved, rewriteLinks as wkRewrite, renameEntityEverywhere as wkRename,
+  setEntityAliases as wkSetAliases, setEntityVisibility as wkSetVisibility, setPlaceKind as wkSetPlaceKind, pageFor as wkPage,
+  entityVisibility as wkVisibility, PLACE_KINDS as WK_PLACE_KINDS,
+} from '../src/domain/wiki.js';
+import { createHexMap as wkCreateHexMap, setHexNotes as wkSetHexNotes } from '../src/domain/hexcrawls.js';
+import { RELATIONSHIP_TYPES as wkRelTypes, updateRelationshipType as wkRetype, getEntity as wkGet } from '../src/domain/entities.js';
+
+function wkCampaign() {
+  let c = defaultCampaign();
+  let kade; let reyes; let keep; let cellar; let hall;
+  ({ campaign: c, id: kade } = createEntity(c, { type: 'npc', name: 'Kade' }));
+  ({ campaign: c, id: reyes } = createEntity(c, { type: 'npc', name: 'Captain Reyes' }));
+  ({ campaign: c, id: keep } = createEntity(c, { type: 'location', name: 'Black Keep' }));
+  ({ campaign: c, id: hall } = createEntity(c, { type: 'location', name: 'Great Hall' }));
+  ({ campaign: c, id: cellar } = createEntity(c, { type: 'location', name: 'Wine Cellar' }));
+  return { c, kade, reyes, keep, hall, cellar };
+}
+
+test('wiki: [[ ]] links parse with the target first, alongside @ mentions', () => {
+  assert.deepEqual(wkParseRefs('See [[Black Keep]] and [[Captain Reyes|the captain]].'), [
+    { name: 'Black Keep', label: null }, { name: 'Captain Reyes', label: 'the captain' },
+  ]);
+  assert.deepEqual(wkLinkedNames('@Kade met @[old friend|Captain Reyes] at [[Black Keep]]'), ['Kade', 'Captain Reyes', 'Black Keep']);
+  assert.deepEqual(wkLinkedNames('no links [here]'), []);
+  assert.deepEqual(wkParseRefs('[[ ]] [[a\nb]]'), [], 'empty or multi-line brackets are not links');
+});
+
+test('wiki: links resolve by name, then alias; unknown names are red links', () => {
+  let { c, reyes } = wkCampaign();
+  c = wkSetAliases(c, reyes, 'The Captain, captain reyes, Old Salt');
+  assert.deepEqual(wkGet(c, reyes).aliases, ['The Captain', 'Old Salt'], 'its own name and duplicates are dropped');
+  assert.equal(wkResolve(c, 'the captain').id, reyes);
+  assert.equal(findByName(c, 'Old Salt').id, reyes, 'every @mention lookup knows aliases');
+  assert.equal(wkResolve(c, 'Nobody'), null);
+  c = addNote(c, 'Asked [[Nobody]] about @Kade');
+  const red = wkUnresolved(c);
+  assert.deepEqual(red.map((r) => r.name), ['Nobody']);
+  assert.equal(red[0].sources[0].kind, 'journal');
+});
+
+test('wiki: backlinks come from journal, entities and hex notes, never from itself', () => {
+  let { c, kade, reyes, keep } = wkCampaign();
+  c = addNote(c, 'We found @Kade drinking.');
+  c = updateEntity(c, reyes, { overview: 'Owes [[Kade]] money. Also @Kade again.' });
+  c = updateEntity(c, kade, { overview: 'I am @Kade' });
+  let mapId; ({ campaign: c, id: mapId } = wkCreateHexMap(c, 'Marches'));
+  c = wkSetHexNotes(c, mapId, 2, -1, 'Kade camps here: [[Kade]]');
+  const index = wkIndex(c);
+  const from = wkLinkedFrom(c, kade, index);
+  assert.deepEqual(from.map((s) => s.kind).sort(), ['entity', 'hex', 'journal']);
+  const ent = from.find((s) => s.kind === 'entity');
+  assert.equal(ent.id, reyes);
+  assert.deepEqual(ent.fields, ['overview'], 'one entry per source, however many mentions');
+  const hex = from.find((s) => s.kind === 'hex');
+  assert.equal(hex.mapId, mapId); assert.equal(hex.q, 2); assert.equal(hex.r, -1);
+  assert.equal(wkLinkedFrom(c, keep, index).length, 0);
+});
+
+test('wiki: rewriteLinks keeps shown text and page anchors, and leaves other names alone', () => {
+  const t = '@Kade, @[Kade], @[pal|kade], [[Kade]], [[Kade|him]], @Kaden, [[Kader]], mail a@Kade.org';
+  assert.equal(wkRewrite(t, 'Kade', 'Kade Varro'),
+    '@[Kade Varro], @[Kade Varro], @[pal|Kade Varro], [[Kade Varro]], [[Kade Varro|him]], @Kaden, [[Kader]], mail a@Kade.org');
+  assert.equal(wkRewrite('@Kade.', 'Kade', 'Varro'), '@Varro.', 'a one-word name stays a bare mention');
+  assert.equal(wkRewrite('@[Old Map#12] @[Old Map p.4]', 'Old Map', 'New Map'), '@[New Map#12] @[New Map p.4]');
+  assert.equal(wkRewrite('nothing here', 'Kade', 'X'), 'nothing here');
+});
+
+test('wiki: renaming carries every link along and keeps the old name as an alias', () => {
+  let { c, kade, reyes } = wkCampaign();
+  c = addNote(c, 'Met @Kade at the docks.');
+  c = updateEntity(c, reyes, { overview: 'Hunting [[Kade|the thief]].' });
+  c.scenes = [{ id: 's1', number: 1, summary: 'Chase @[Kade] through the market' }];
+  c.guide.docs = [{ id: 'g1', title: 'Notes', text: 'Remember @Kade', parentId: null, order: 0 }];
+  const before = JSON.stringify(c);
+  const next = wkRename(c, kade, 'Kade Varro');
+  assert.equal(JSON.stringify(c), before, 'input untouched');
+  assert.equal(wkGet(next, kade).name, 'Kade Varro');
+  assert.deepEqual(wkGet(next, kade).aliases, ['Kade']);
+  assert.match(next.journal[next.journal.length - 1].text, /@\[Kade Varro\] at the docks/);
+  assert.equal(wkGet(next, reyes).overview, 'Hunting [[Kade Varro|the thief]].');
+  assert.equal(next.scenes[0].summary, 'Chase @[Kade Varro] through the market');
+  assert.equal(next.guide.docs[0].text, 'Remember @[Kade Varro]');
+  assert.equal(wkLinkedFrom(next, kade).length, 4, 'journal, Reyes, the scene and the guide still link to it');
+  assert.equal(findByName(next, 'Kade').id, kade, 'the old name still finds it');
+  const back = wkRename(next, kade, 'Kade');
+  assert.deepEqual(wkGet(back, kade).aliases, ['Kade Varro'], 'renaming back swaps the alias');
+});
+
+test('wiki: renaming leaves links alone when the old name belongs to someone else', () => {
+  let { c, kade } = wkCampaign();
+  let twin; ({ campaign: c, id: twin } = createEntity(c, { type: 'npc', name: 'Kade' }));
+  c = addNote(c, 'Saw @Kade');
+  const next = wkRename(c, twin, 'Second Kade');
+  assert.match(next.journal[next.journal.length - 1].text, /Saw @Kade$/);
+  assert.equal(findByName(next, 'Kade').id, kade);
+});
+
+test('wiki: place kinds, visibility, and the page view', () => {
+  let { c, kade, keep, hall, cellar } = wkCampaign();
+  assert.ok(WK_PLACE_KINDS.includes('room') && WK_PLACE_KINDS.includes('building'));
+  c = wkSetPlaceKind(c, keep, 'building');
+  c = wkSetPlaceKind(c, hall, 'floor');
+  c = wkSetPlaceKind(c, cellar, 'room');
+  assert.equal(wkSetPlaceKind(c, kade, 'room'), c, 'only locations have a place kind');
+  assert.equal(wkSetPlaceKind(c, keep, 'spaceship'), c, 'unknown kinds are refused');
+  c = addRelationship(c, hall, keep, 'floor of', 'located_at');
+  c = addRelationship(c, cellar, hall, 'below', 'located_at');
+  c = addRelationship(c, kade, cellar, 'hiding', 'located_at');
+  c = addNote(c, 'Searched the [[Wine Cellar]].');
+  assert.equal(wkVisibility(wkGet(c, cellar)), 'gm', 'GM-only until shared');
+  c = wkSetVisibility(c, cellar, 'players');
+  assert.equal(wkVisibility(wkGet(c, cellar)), 'players');
+  assert.equal(wkSetVisibility(c, cellar, 'everyone'), c);
+
+  const page = wkPage(c, cellar);
+  assert.equal(page.name, 'Wine Cellar');
+  assert.equal(page.infobox[0].value, 'Room');
+  assert.deepEqual(page.breadcrumb.map((b) => b.name), ['Black Keep', 'Great Hall']);
+  assert.deepEqual(page.here.map((h) => h.name), ['Kade']);
+  assert.deepEqual(wkPage(c, keep).children.map((ch) => ch.name), ['Great Hall']);
+  assert.equal(page.sessions.length, 1, 'appears in one journal entry');
+  assert.ok(page.relations.some((g) => g.type === 'located_at' && g.items[0].name === 'Great Hall'));
+  assert.equal(wkPage(c, 'missing'), null);
+});
+
+test('wiki: connects_to mirrors itself; appears_in is a new type', () => {
+  let { c, hall, cellar } = wkCampaign();
+  assert.ok(wkRelTypes.includes('connects_to') && wkRelTypes.includes('appears_in'));
+  c = addRelationship(c, hall, cellar, 'trapdoor', 'connects_to');
+  assert.equal(wkGet(c, cellar).relationships.find((r) => r.to === hall).type, 'connects_to');
+  c = addRelationship(c, hall, cellar, 'x', 'linked');
+  c = wkRetype(c, hall, cellar, 'connects_to');
+  assert.equal(wkGet(c, cellar).relationships.find((r) => r.to === hall).type, 'connects_to');
+});
+
+test('wiki: the new fields survive an export round trip', () => {
+  let { c, reyes, keep } = wkCampaign();
+  c = wkSetAliases(c, reyes, 'The Captain');
+  c = wkSetVisibility(c, reyes, 'players');
+  c = wkSetPlaceKind(c, keep, 'dungeon');
+  const back = JSON.parse(JSON.stringify(c));
+  assert.deepEqual(wkGet(back, reyes).aliases, ['The Captain']);
+  assert.equal(wkGet(back, reyes).visibility, 'players');
+  assert.equal(wkGet(back, keep).placeKind, 'dungeon');
+});
+
+
+// --- Campaign wiki W2: reading, GM blocks, the player-safe lens --------------
+import {
+  splitGmBlocks as wkSplitGm, stripGmBlocks as wkStripGm, wikiLinksToMentions as wkToMentions, unlinkHidden as wkUnlinkHidden,
+  playerSafe as wkPlayerSafe, wikiIndex as wkWikiIndex,
+} from '../src/domain/wiki.js';
+
+test('wiki W2: :::gm blocks split out, and an unclosed one hides to the end', () => {
+  const text = 'Public line\n:::gm\nSecret line\n:::\nMore public\n::: GM \nTail secret';
+  assert.deepEqual(wkSplitGm(text), [
+    { gm: false, text: 'Public line' }, { gm: true, text: 'Secret line' }, { gm: false, text: 'More public' }, { gm: true, text: 'Tail secret' },
+  ]);
+  assert.equal(wkStripGm(text), 'Public line\nMore public');
+  assert.equal(wkStripGm('no blocks'), 'no blocks');
+  assert.equal(wkStripGm(''), '');
+});
+
+test('wiki W2: [[ ]] links are drawn as the equivalent @[ ] mentions', () => {
+  assert.equal(wkToMentions('[[Black Keep]] and [[Captain Reyes|the captain]] and [[Kade|kade]]'), '@[Black Keep] and @[the captain|Captain Reyes] and @[Kade]');
+  assert.equal(wkToMentions('plain'), 'plain');
+});
+
+test('wiki W2: links to anything players can’t open become plain text', () => {
+  let { c, kade, reyes } = wkCampaign();
+  c = wkSetVisibility(c, reyes, 'players');
+  const out = wkUnlinkHidden(c, '@[Captain Reyes] met @Kade and [[Kade|the thief]] near [[Captain Reyes|the captain]] and @[pal|Kade], see [[Nowhere]]');
+  assert.equal(out, '@[Captain Reyes] met Kade and the thief near [[Captain Reyes|the captain]] and pal, see Nowhere');
+  assert.ok(kade);
+});
+
+test('wiki W2: playerSafe shows only shared pages, and no GM text of any kind', () => {
+  let { c, kade, reyes, keep, hall, cellar } = wkCampaign();
+  assert.equal(wkPlayerSafe(c, reyes), null, 'GM-only by default');
+  c = updateEntity(c, reyes, {
+    overview: 'A tired captain who knows [[Kade]].\n:::gm\nSECRET-A: is the spy\n:::\nDrinks at the [[Great Hall]].',
+    revealed: 'SECRET-B: owes the cartel',
+    currentGoal: 'SECRET-C: escape',
+    aliases: ['SECRET-D'],
+  });
+  c = addRelationship(c, reyes, kade, 'SECRET-E rival', 'rival_of');
+  c = addRelationship(c, reyes, hall, 'regular', 'linked');
+  c = addNote(c, 'SECRET-F: @[Captain Reyes] was seen');
+  c = wkSetVisibility(c, reyes, 'players');
+  c = wkSetVisibility(c, hall, 'players');
+  c = wkSetPlaceKind(c, cellar, 'room');
+  const safe = wkPlayerSafe(c, reyes);
+  assert.equal(safe.name, 'Captain Reyes');
+  assert.equal(safe.overview, 'A tired captain who knows Kade.\nDrinks at the [[Great Hall]].', 'GM block gone; link to a hidden page unlinked; shared link kept');
+  assert.deepEqual(safe.relations.map((g) => g.items.map((i) => i.name)), [['Great Hall']], 'only relations to shared pages, without notes');
+  assert.ok(!JSON.stringify(safe).includes('SECRET'), `nothing GM-only leaks: ${JSON.stringify(safe)}`);
+  assert.ok(!('aliases' in safe) && !('linkedFrom' in safe) && !('sessions' in safe) && !('revealed' in safe));
+  assert.ok(keep);
+});
+
+test('wiki W2: playerSafe hides private infobox facts and unshared places', () => {
+  let { c, keep, hall, cellar } = wkCampaign();
+  c = addRelationship(c, hall, keep, 'floor of', 'located_at');
+  c = addRelationship(c, cellar, hall, 'below', 'located_at');
+  c = updateEntity(c, hall, { biome: 'Stone', developmentLevel: 'Ruined' });
+  for (const id of [hall, cellar]) c = wkSetVisibility(c, id, 'players');
+  c = wkSetPlaceKind(c, hall, 'floor');
+  const safe = wkPlayerSafe(c, cellar);
+  assert.deepEqual(safe.breadcrumb.map((b) => b.name), ['Great Hall'], 'the unshared keep is left out of the trail');
+  const hallSafe = wkPlayerSafe(c, hall);
+  assert.deepEqual(hallSafe.infobox.map((f) => f.key), ['placeKind', 'biome', 'developmentLevel']);
+  assert.deepEqual(hallSafe.children.map((ch) => ch.name), ['Wine Cellar']);
+});
+
+test('wiki W2: the Wiki panel index searches names, aliases and tags, and filters by type', () => {
+  let { c, reyes, kade } = wkCampaign();
+  c = wkSetAliases(c, reyes, 'Old Salt');
+  c = addEntityTag(c, kade, 'thief');
+  c = addNote(c, 'Saw @Kade');
+  assert.deepEqual(wkWikiIndex(c, { search: 'salt' }).map((r) => r.name), ['Captain Reyes']);
+  assert.deepEqual(wkWikiIndex(c, { search: 'thief' }).map((r) => r.name), ['Kade']);
+  assert.deepEqual(wkWikiIndex(c, { type: 'location' }).map((r) => r.name), ['Black Keep', 'Great Hall', 'Wine Cellar']);
+  assert.equal(wkWikiIndex(c).find((r) => r.id === kade).linkCount, 1);
+});
+
+
+// --- Wiki as a plugin and a portal page (2026-11-08) -------------------------
+import { parsePortalRoute as wkParseRoute } from '../src/domain/helpCentre.js';
+import { GATEABLE_MODULES as WK_GATEABLE } from '../src/core/schema.js';
+
+test('wiki portal: #/wiki and #/wiki/<id> are portal routes', () => {
+  assert.deepEqual(wkParseRoute('#/wiki'), { view: 'wiki' });
+  assert.deepEqual(wkParseRoute('#/wiki/'), { view: 'wiki' });
+  assert.deepEqual(wkParseRoute('#/wiki/ent_abc123'), { view: 'wiki-page', id: 'ent_abc123' });
+  assert.equal(wkParseRoute('#/wiki/bad id'), null);
+  assert.deepEqual(wkParseRoute('#/help'), { view: 'help' }, 'help still routes');
+});
+
+test('wiki plugin: gateable, on for a new profile and for one saved before it existed', () => {
+  assert.ok(WK_GATEABLE.includes('wiki'));
+  const fresh = defaultRulesProfile('Fresh');
+  assert.equal(fresh.moduleEnabled.wiki, true);
+  assert.equal(isModuleVisible(fresh, 'wiki'), true);
+  const old = defaultRulesProfile('Old');
+  delete old.moduleEnabled.wiki;
+  assert.equal(isModuleVisible(old, 'wiki'), true, 'no saved value means on');
+  assert.equal(isModuleVisible(setModuleEnabled(old, 'wiki', false), 'wiki'), false, 'and it can be turned off');
+});

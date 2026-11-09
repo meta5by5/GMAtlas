@@ -167,10 +167,20 @@ export async function handleApi(request, env) {
   }
 }
 
+const WIKI_PATH = /^\/wiki(?:\/([A-Za-z0-9_-]+))?\/?$/;
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname.startsWith('/api/')) return handleApi(request, env);
+    // The campaign wiki's portal page lives at #/wiki in the static app
+    // (src/ui/portal/wiki.js); /wiki and /wiki/<page> are friendly
+    // addresses for it. The page itself reads the campaign open in this
+    // browser, so nothing about it is served from here.
+    const wiki = WIKI_PATH.exec(url.pathname);
+    if (wiki && (request.method === 'GET' || request.method === 'HEAD')) {
+      return new Response(null, { status: 302, headers: { location: `${url.origin}/#/wiki${wiki[1] ? `/${wiki[1]}` : ''}`, 'cache-control': 'no-store' } });
+    }
     if (env.ASSETS) return env.ASSETS.fetch(request);
     return new Response('Not found', { status: 404 });
   },

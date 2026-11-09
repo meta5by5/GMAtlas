@@ -1,4 +1,4 @@
-// room.js â€” the CampaignRoom Durable Object: one per synced campaign, the
+// room.js — the CampaignRoom Durable Object: one per synced campaign, the
 // single-threaded authority that orders its ops (roadmap 2.1, 5.4). A thin
 // shell around roomCore.js. Uses WebSocket hibernation, so an open but idle
 // campaign costs next to nothing. Only the Worker calls it, after checking

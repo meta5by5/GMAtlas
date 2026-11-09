@@ -81,11 +81,14 @@ export function entityTypeLabel(type, genrePackId) {
 // Starforged Bond (Make a Connection -> Forge a Bond, rulebook pp.163-166/
 // 233) is just a `bond`-typed relationship whose `strength` a GM raises as
 // the connection deepens, not a separate progress-track data shape.
-export const RELATIONSHIP_TYPES = ['linked', 'member_of', 'owns', 'controls', 'located_at', 'contains', 'allied_with', 'rival_of', 'bond', 'involves'];
+// `connects_to` (doors, passages, stairs between places) and `appears_in`
+// (an entity's part in an Encounter) are the wiki's additions
+// (design/WIKI-ROADMAP.md W1).
+export const RELATIONSHIP_TYPES = ['linked', 'member_of', 'owns', 'controls', 'located_at', 'contains', 'allied_with', 'rival_of', 'bond', 'involves', 'connects_to', 'appears_in'];
 export const RELATIONSHIP_TYPE_LABEL = {
   linked: 'Linked', member_of: 'Member Of', owns: 'Owns', controls: 'Controls',
   located_at: 'Located At', contains: 'Contains', allied_with: 'Allied With', rival_of: 'Rival Of', bond: 'Bond',
-  involves: 'Involves',
+  involves: 'Involves', connects_to: 'Connects To', appears_in: 'Appears In',
 };
 // Which entity types a typed relationship's target is expected to be, for
 // "flag, don't delete" (pack 9, below) — null means no constraint (allied_with/
@@ -96,7 +99,7 @@ export const RELATIONSHIP_TYPE_LABEL = {
 // Conflict) joins them the same way — a Conflict's edge to a Faction.
 const RELATIONSHIP_TYPE_TARGETS = {
   member_of: ['faction'], owns: ['asset'], controls: ['faction', 'location', 'asset'], located_at: ['location'],
-  involves: ['faction'],
+  involves: ['faction'], appears_in: ['conflict'],
 };
 // Rival Of/Allied With/Bond aren't directional (no single fixed target type
 // the way Member Of always points at a faction), but they're still social
@@ -108,6 +111,7 @@ const RELATIONSHIP_TYPE_TARGETS = {
 // review.
 const RELATIONSHIP_TYPE_MUTUAL = {
   allied_with: ['npc', 'faction'], rival_of: ['npc', 'faction'], bond: ['npc', 'faction'],
+  connects_to: ['location'],
 };
 
 function clampStrength(n) {
@@ -158,9 +162,16 @@ export function getEntity(campaign, id) {
   return ((campaign.entities && campaign.entities.items) || []).find((e) => e.id === id) || null;
 }
 
+// A name matches an entity's own name first, then any of its aliases
+// (design/WIKI-ROADMAP.md W1: a rename keeps the old name as an alias, so
+// text written with it elsewhere still finds the entity).
 export function findByName(campaign, name) {
   const n = String(name || '').trim().toLowerCase();
-  return ((campaign.entities && campaign.entities.items) || []).find((e) => (e.name || '').trim().toLowerCase() === n) || null;
+  if (!n) return null;
+  const items = (campaign.entities && campaign.entities.items) || [];
+  return items.find((e) => (e.name || '').trim().toLowerCase() === n)
+    || items.find((e) => Array.isArray(e.aliases) && e.aliases.some((a) => String(a || '').trim().toLowerCase() === n))
+    || null;
 }
 
 // Faction card template (2026-07-03 ruleset review, Hostile's "Agencies &
@@ -704,7 +715,8 @@ function _create(campaign, { type = 'npc', name = '' } = {}) {
 // matter which side the GM set the relationship from. No other type gets
 // this treatment (Member Of -> Faction, Owns -> Asset, etc. aren't
 // self-inverse the same way).
-const INVERSE_REL_TYPE = { located_at: 'contains', contains: 'located_at' };
+// connects_to is symmetric: a passage from A to B is one from B to A.
+const INVERSE_REL_TYPE = { located_at: 'contains', contains: 'located_at', connects_to: 'connects_to' };
 
 function _link(campaign, aId, bId, label = 'linked', type = 'linked') {
   if (aId === bId) return;

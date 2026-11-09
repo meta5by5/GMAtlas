@@ -6,7 +6,8 @@
 //
 // Routing is the location hash, so Back/Forward, deep links and "open in
 // new tab" behave as in any web app: `#/help` and `#/help/<slug>` show the
-// portal; anything else shows the campaign. Rule 4 applies per surface
+// portal, as do `#/wiki` and `#/wiki/<entity id>` (the open campaign's wiki,
+// portal/wiki.js); anything else shows the campaign. Rule 4 applies per surface
 // root: one delegated listener per event type on the portal root, plus the
 // one window `hashchange` listener that switches surfaces.
 
@@ -17,6 +18,8 @@ import {
   bindAccountScreens, signInView, signInRedirect, accountView, enterAccountSection, enterSignIn, oauthView, enterOauth,
   onAccountSubmit, onAccountClick, onAccountChange,
 } from './account.js';
+import { store } from '../../core/store.js';
+import { wikiPortalView, bindWikiPortal, onWikiClick, onWikiInput, onWikiChange, wikiEnabled } from './wiki.js';
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -36,10 +39,16 @@ export function mountPortal(portalEl, appEl) {
   // Account events repaint only the account screens, so a background
   // session refresh never wipes a half-typed Help search.
   bindAccountScreens(() => { if (current && (current.view === 'account' || current.view === 'sign-in' || current.view === 'oauth')) paint(false); });
+  // The wiki pages follow the open campaign as it changes (a page shared,
+  // an alias added, an edit made on another device).
+  bindWikiPortal(paint);
+  store.subscribe(() => { if (current && isWikiView(current) && !portalRoot.hidden) paint(false); });
   route();
 }
 
 let current = null;
+const isWikiView = (r) => r.view === 'wiki' || r.view === 'wiki-page';
+const AREA_LABEL = { help: 'Help', account: 'Account', wiki: 'Wiki' };
 
 function route() {
   const r = parsePortalRoute(location.hash);
@@ -70,8 +79,9 @@ function route() {
 function paint(fresh) {
   const r = current;
   if (!r) return;
-  const area = r.view === 'sign-in' || r.view === 'account' || r.view === 'oauth' ? 'account' : 'help';
-  const content = r.view === 'article' ? articleView(r.slug)
+  const area = r.view === 'sign-in' || r.view === 'account' || r.view === 'oauth' ? 'account' : isWikiView(r) ? 'wiki' : 'help';
+  const content = isWikiView(r) ? wikiPortalView(r)
+    : r.view === 'article' ? articleView(r.slug)
     : r.view === 'help' ? helpHome()
       : r.view === 'sign-in' ? signInView()
         : r.view === 'oauth' ? oauthView()
@@ -83,7 +93,7 @@ function paint(fresh) {
   const focus = portalRoot.querySelector('[autofocus]');
   if (focus) focus.focus();
   const h1 = portalRoot.querySelector('h1');
-  document.title = `${h1 ? h1.textContent : 'Help'} · GMAtlas ${area === 'account' ? 'Account' : 'Help'}`;
+  document.title = `${h1 ? h1.textContent : AREA_LABEL[area]} · GMAtlas ${AREA_LABEL[area]}`;
 }
 
 function onSubmit(e) {
@@ -91,10 +101,12 @@ function onSubmit(e) {
 }
 
 function onChange(e) {
+  if (onWikiChange(e)) return;
   onAccountChange(e);
 }
 
 function onInput(e) {
+  if (onWikiInput(e, portalRoot)) return;
   const search = e.target.closest('[data-help-search]');
   if (!search) return;
   query = search.value;
@@ -104,6 +116,7 @@ function onInput(e) {
 
 function onClick(e) {
   if (onAccountClick(e)) return;
+  if (onWikiClick(e)) return;
   const jump = e.target.closest('[data-help-jump]');
   if (jump) {
     const target = portalRoot.querySelector(`#${CSS.escape(jump.dataset.helpJump)}`);
@@ -119,8 +132,9 @@ function frame(content, area) {
   const here = (a) => (a === area ? 'aria-current="page"' : '');
   return `
     <header class="portal-topbar">
-      <a class="portal-brand" href="#/help">GMAtlas <span>${area === 'account' ? 'Account' : 'Help'}</span></a>
+      <a class="portal-brand" href="${area === 'wiki' ? '#/wiki' : '#/help'}">GMAtlas <span>${AREA_LABEL[area]}</span></a>
       <nav class="portal-nav" aria-label="Portal">
+        ${wikiEnabled() ? `<a href="#/wiki" ${here('wiki')}>Wiki</a>` : ''}
         <a href="#/help" ${here('help')}>Help centre</a>
         <a href="#/account" ${here('account')}>Account</a>
       </nav>

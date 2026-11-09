@@ -1,4 +1,4 @@
-# server/ â€” GMAtlas accounts, sync and licensing service
+# server/ — GMAtlas accounts, sync and licensing service
 
 Lives on the **`server`** branch only, until a roadmap phase is complete and
 merged into `main`. The design is `design/ACCOUNTS-SYNC-ROADMAP.md`. Read
@@ -185,7 +185,8 @@ src/oauth.js                  Continue with Google / Apple / Discord
 src/admin.js                  /api/admin/*: users, entitlements, flags, audit (role-checked)
 src/features.js               feature flags: load, resolve per account, requireFeature
 scripts/admin-role.js         set an admin role from the command line (first owner)
-src/worker.js                 entry: routes /api/*, everything else to the static app;
+src/worker.js                 entry: routes /api/*, redirects /wiki and /wiki/<page> to the
+                              app's #/wiki portal page, everything else to the static app;
                               exports the CampaignRoom Durable Object
 src/sync.js                   vault, synced-campaign index, snapshots, socket tickets
 src/room.js, src/roomCore.js  CampaignRoom: the per-campaign encrypted op log

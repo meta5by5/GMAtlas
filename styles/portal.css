@@ -292,3 +292,21 @@
   .portal .portal-row { flex-direction: column; align-items: stretch; }
   .portal .portal-row-actions { flex-wrap: wrap; }
 }
+
+/* Campaign wiki (#/wiki, ui/portal/wiki.js). A page reuses the in-campaign
+   Read view's .wiki-* styles from cockpit.css, centred at reading width. */
+.portal .portal-wiki-bar { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-2); align-items: center; }
+.portal .portal-wiki-bar .portal-search { flex: 1 1 18rem; }
+.portal .portal-btn {
+  padding: 0.6rem 1rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.portal .portal-btn.is-on { border-color: var(--accent); color: var(--accent); }
+.portal .portal-wiki-page { max-width: 64rem; margin: 0 auto; padding: var(--sp-4); background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius); }
+.portal .portal-wiki-page .wiki-title h2 { font-size: 2rem; }
+.portal .wiki-redlink-pick { max-width: 64rem; margin: 0 auto var(--sp-4); }

@@ -429,3 +429,19 @@ test('migrateDocument drops an untouched archived Bestiary from #character NPCs,
   assert.deepEqual(kinds('c'), ['npc']);
   assert.deepEqual(migrateDocument(out).entities.items.map((e) => e.statblocks.length), [1, 2, 1], 'idempotent');
 });
+
+test('the wiki fields (aliases, visibility, placeKind) survive migrateDocument and importCampaign (design/WIKI-ROADMAP.md W1)', () => {
+  const doc = defaultCampaign();
+  doc.entities.items.push(
+    { id: 'ent_w1', type: 'npc', name: 'Reyes', tags: [], overview: '', revealed: '', relationships: [], aliases: ['The Captain'], visibility: 'players' },
+    { id: 'ent_w2', type: 'location', name: 'Wine Cellar', tags: [], overview: '', revealed: '', relationships: [{ to: 'ent_w1', label: 'door', type: 'connects_to', strength: 0 }], placeKind: 'room' },
+  );
+  for (const out of [migrateDocument(JSON.parse(JSON.stringify(doc))), importCampaign(JSON.parse(JSON.stringify(doc)))]) {
+    const reyes = out.entities.items.find((e) => e.id === 'ent_w1');
+    const cellar = out.entities.items.find((e) => e.id === 'ent_w2');
+    assert.deepEqual(reyes.aliases, ['The Captain']);
+    assert.equal(reyes.visibility, 'players');
+    assert.equal(cellar.placeKind, 'room');
+    assert.equal(cellar.relationships[0].type, 'connects_to');
+  }
+});

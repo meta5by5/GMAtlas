@@ -3681,3 +3681,44 @@ input[type="number"] { -moz-appearance: textfield; }
 .shadowdark-import { margin-top: var(--sp-3); display: grid; gap: var(--sp-2); }
 .shadowdark-import .shadowdark-paste { width: 100%; font-family: ui-monospace, monospace; font-size: 0.85em; }
 .shadowdark-import-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+/* --- Campaign wiki (design/WIKI-ROADMAP.md W2) ------------------------------ */
+.wiki-page { container-type: inline-size; line-height: 1.6; }
+.wiki-page-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2, 8px); flex-wrap: wrap; margin-bottom: var(--sp-2, 8px); }
+.wiki-page-actions { display: inline-flex; gap: var(--sp-1, 4px); margin-left: auto; }
+.wiki-breadcrumb { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: .85em; color: var(--text-dim); }
+.wiki-title h2 { margin: 0; font-size: 1.6em; line-height: 1.2; }
+.wiki-sub { color: var(--text-dim); font-size: .9em; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.wiki-aka { margin-top: 2px; font-style: italic; }
+.wiki-badge { font-size: .75em; padding: 1px 6px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-dim); white-space: nowrap; }
+.wiki-badge-shared { border-color: var(--accent); color: var(--accent); }
+.wiki-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-3, 12px); margin-top: var(--sp-3, 12px); }
+@container (min-width: 560px) {
+  .wiki-layout { grid-template-columns: minmax(0, 1fr) 14rem; }
+  .wiki-infobox { order: 2; }
+}
+.wiki-infobox { order: -1; align-self: start; border: 1px solid var(--border); border-radius: 6px; padding: var(--sp-2, 8px); background: var(--bg-inset); font-size: .9em; }
+.wiki-infobox dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+.wiki-infobox dt { color: var(--text-dim); }
+.wiki-infobox dd { margin: 0; overflow-wrap: anywhere; }
+.wiki-main { min-width: 0; max-width: 46rem; font-size: 1.02em; }
+.wiki-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 var(--sp-2, 8px); }
+.wiki-gm-block { position: relative; border-left: 3px solid var(--warn); background: color-mix(in srgb, var(--warn) 8%, transparent); padding: 18px var(--sp-2, 8px) 6px; border-radius: 4px; }
+.wiki-gm-tag { position: absolute; top: 2px; left: 8px; font-size: .7em; text-transform: uppercase; letter-spacing: .05em; color: var(--warn); }
+.wiki-section { margin-top: var(--sp-3, 12px); }
+.wiki-section h3 { font-size: 1em; margin: 0 0 4px; border-bottom: 1px solid var(--border); padding-bottom: 2px; }
+.wiki-rel-group h4, .wiki-index-group h4 { font-size: .8em; text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim); margin: 6px 0 2px; }
+.wiki-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.wiki-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.wiki-link { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-align: left; }
+.wiki-link:hover, .wiki-link:focus-visible { text-decoration: underline; }
+.wiki-redlink, .wiki-page .mention-link:not(.mention-link-active):not(.mention-link-missing) { color: var(--danger); cursor: pointer; text-decoration: underline dotted; }
+.wiki-sessions { margin: 0; padding-left: 1.2em; }
+.wiki-snippet { color: var(--text-dim); font-size: .88em; }
+.wiki-redlink-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: var(--sp-2, 8px) 0; padding: 6px var(--sp-2, 8px); border: 1px dashed var(--danger); border-radius: 6px; }
+.wiki-settings { margin-top: var(--sp-3, 12px); border-top: 1px solid var(--border); padding-top: var(--sp-2, 8px); }
+.wiki-settings-body { display: grid; gap: var(--sp-2, 8px); margin-top: var(--sp-2, 8px); }
+.wiki-hidden-note { padding: var(--sp-3, 12px); border: 1px dashed var(--border); border-radius: 6px; color: var(--text-dim); }
+.wiki-index-bar { display: flex; flex-wrap: wrap; gap: var(--sp-1, 4px); align-items: center; margin-bottom: var(--sp-2, 8px); }
+.wiki-index-bar .drawer-search { flex: 1 1 12rem; }
+.wiki-index-group { margin-bottom: var(--sp-2, 8px); }
+.wiki-page-actions .btn.active, .wiki-index-bar .btn.active { border-color: var(--accent); color: var(--accent); }
