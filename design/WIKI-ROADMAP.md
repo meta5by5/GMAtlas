@@ -206,6 +206,26 @@ Built as written below, with these specifics:
     back to the campaign.
   - The in-campaign Wiki panel still renders wherever a profile puts it in
     a Storyboard position.
+- **Left nav and full record** (direct request, 2026-11-09).
+  - The portal wiki has a left-hand menu of every top-level section: All
+    pages, one per entity type (with counts, `#/wiki/section/<type>`), and
+    Red links (GM only). On a page it adds "On this page", listing the
+    page's sections and each record card. On a phone the menu becomes a
+    scrolling strip of chips.
+  - A page shows the entity's whole record as cards: Basics, the type's own
+    sections, each statblock (with its weapons, items and attacks), and
+    "Other fields" for anything the catalog doesn't name. Unset fields read
+    `{none}`.
+  - Which fields each type shows is data: `data/wikiRecordFields.js`. A
+    genre-gated section (UWP outside fantasy, settlement fields in fantasy)
+    still shows if it holds data. `domain/wiki.js recordSections()` builds
+    it; Player View gets the same cards cut to the player whitelist.
+  - **VitePress was considered and not adopted.** It builds a static site
+    from Markdown files at build time with Vue and Vite. Wiki content lives
+    in each browser's campaign document (encrypted when synced), so there
+    is nothing for a build to read, and it would add a second toolset to a
+    zero-dependency app. Its useful ideas (left sidebar, per-page outline,
+    templated record layout) are built here instead.
 - **The views** live in `ui/drawers/wiki.js`. The pure parts (GM blocks, `[[ ]]` →
   `@[ ]` display, `unlinkHidden`, `playerSafe`, `wikiIndex`) are in
   `domain/wiki.js`.

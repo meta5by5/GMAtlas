@@ -113,7 +113,7 @@ src/
     store.js       the ONLY persistence access (IndexedDB); pubsub via subscribe()
     migrate.js     legacy key absorption, lossless
     buildInfo.js   hand-maintained phase/version/changelog (Settings → Build)
-  data/            54 files — every game-content catalog (oracle tables x3 genre
+  data/            55 files — every game-content catalog (oracle tables x3 genre
                    packs, genre pack registry, rulesets, statblock/gear templates,
                    gear catalog, Rules Constitution provider registry, two
                    interchangeable faction content catalogs, trade economy/
@@ -162,7 +162,7 @@ styles/
   cockpit.css      layout + component styles (campaign surface)
   portal.css       portal surface layout (shares tokens.css only)
 tests/
-  domain.test.js   848 tests — domain modules, incl. sync-merge convergence
+  domain.test.js   853 tests — domain modules, incl. sync-merge convergence
   migrate.test.js  27 tests — legacy-key absorption + round-trip
 scripts/
   build.js         zero-dependency bundler (see below) — re-run after any src/ edit;
