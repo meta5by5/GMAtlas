@@ -30,7 +30,10 @@ export const DRAWERS = [
   // rename of data-drawer-open="colony"/isModuleVisible/etc.) — only this
   // one label changes, propagating everywhere via drawerMeta().
   { id: 'colony', glyph: '🏛', label: 'Campaign' },
-  { id: 'world-tracker', glyph: '🪐', label: 'World' },
+  // Direct request (2026-11-08): renamed "World" -> "Planetfall". The id
+  // stays 'world-tracker' (profiles, module visibility and saved layouts
+  // all name it).
+  { id: 'world-tracker', glyph: '🪐', label: 'Planetfall' },
   { id: 'faction-events', glyph: '⚔', label: 'Faction Events' },
   { id: 'trade', glyph: '💰', label: 'Trade' },
   { id: 'documents', glyph: '📄', label: 'Docs' },

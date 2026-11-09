@@ -110,6 +110,19 @@ export const DEFAULT_GEAR_TEMPLATES = {
       { key: 'Traits' },
     ]),
   },
+  // Shadowdark RPG gear (2026-11-08): the columns its equipment lists use;
+  // filled by domain/shadowdarkImport.js from the GM's own copy.
+  shadowdark: {
+    label: 'Shadowdark RPG',
+    fields: withDefaults([
+      { key: 'Cost' },
+      { key: 'Gear Slots' },
+      { key: 'Damage' },
+      { key: 'Range' },
+      { key: 'Armor Class' },
+      { key: 'Properties' },
+    ]),
+  },
 };
 
 export const GEAR_TEMPLATE_SYSTEMS = Object.keys(DEFAULT_GEAR_TEMPLATES);

@@ -10,6 +10,8 @@ import {
 import { ORACLE_TABLE_SOURCES, ORACLE_GROUPS_FANTASY } from '../../data/oracleGroups.js';
 import { referenceDocSource } from '../../domain/permissions.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
+import { campaignTimeline } from '../../domain/encounters.js';
+import { lightState, lightRemaining, isLit, formatLight } from '../../domain/torchTimer.js';
 import {
   listEntities, filterEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, entityTypeLabel, listTagVocabulary, listEntityTagVocabulary,
   RELATIONSHIP_TYPES, RELATIONSHIP_TYPE_LABEL, isRelationshipFlagged, computeFactionMaxHp,
@@ -3722,7 +3724,8 @@ function licenseRow(doc, lic, ui) {
   const importNote = owned && source === 'import' && lic.docs.length
     ? '<p class="dim small">Sourcebooks aren’t downloadable from this site: they’re the publisher’s. Import your own copy of each PDF; it stays in this browser.</p>'
     : '';
-  const extra = lic.id === 'hostile' && owned ? hostileWorldInformationSection(doc, ui) : '';
+  const extra = lic.id === 'hostile' && owned ? hostileWorldInformationSection(doc, ui)
+    : lic.id === 'shadowdark' && owned ? shadowdarkImportSection(ui) : '';
   const packs = licensePacksHtml(doc, lic, owned, ui);
   return `
       <div class="license-row">
@@ -3732,6 +3735,46 @@ function licenseRow(doc, lic, ui) {
         ${packs}
         ${extra}
       </div>`;
+}
+
+// Shadowdark RPG (2026-11-08): bring monsters and gear in from the GM's own
+// copy into the current campaign (domain/shadowdarkImport.js). Paste the
+// text, or pick a .txt/.csv/.json file; both go through the shell's single
+// change/click handlers.
+function shadowdarkImportSection(ui) {
+  const last = ui.shadowdarkImportResult;
+  return `
+        <div class="shadowdark-import">
+          <p class="dim small license-packs-head">Import monsters &amp; gear into this campaign</p>
+          <p class="dim small">From your own copy. <b>Monsters:</b> paste stat blocks as printed (name, description, the “AC …, HP …, ATK …, MV …, S +1 … AL N, LV 2” line, then specials) or JSON. <b>Gear:</b> one item per line, “Name, Cost, Gear Slots, Damage, Range, AC, Properties”, or JSON. Names already in the campaign are skipped.</p>
+          <textarea class="shadowdark-paste" data-shadowdark-paste rows="5" placeholder="GOBLIN&#10;AC 11, HP 5, ATK 1 club +0 (1d4), MV near, S +0, D +1, C +0, I -1, W -1, Ch -2, AL C, LV 1&#10;Keen Senses. Can see in the dark."></textarea>
+          <div class="shadowdark-import-actions">
+            <button type="button" class="btn sm" data-shadowdark-import="monsters">Import pasted monsters</button>
+            <button type="button" class="btn sm" data-shadowdark-import="gear">Import pasted gear</button>
+            <label class="btn ghost sm">⬆ Monsters file…<input type="file" accept=".txt,.json,.csv,.tsv,text/plain,application/json" hidden data-shadowdark-import-file="monsters"></label>
+            <label class="btn ghost sm">⬆ Gear file…<input type="file" accept=".txt,.json,.csv,.tsv,text/plain,application/json" hidden data-shadowdark-import-file="gear"></label>
+          </div>
+          ${last ? `<p class="small">${esc(last)}</p>` : ''}
+        </div>`;
+}
+
+// Shadowdark's torch (2026-11-08, domain/torchTimer.js): a real-time
+// countdown on the Party tab while Shadowdark is in use. The shell ticks the
+// [data-torch-remaining] text every second without re-rendering the panel.
+function torchTimerHtml(doc) {
+  const now = Date.now();
+  const l = lightState(doc);
+  const left = lightRemaining(doc, now);
+  const lit = isLit(doc, now);
+  const out = left <= 0;
+  return `<div class="torch-timer ${lit ? 'lit' : ''} ${out ? 'out' : ''}" data-torch-timer>
+    <span class="torch-flame" aria-hidden="true">${out ? '🌑' : '🔥'}</span>
+    <span class="torch-label">${esc(l.label)}</span>
+    <span class="torch-remaining" data-torch-remaining aria-live="polite">${out ? 'Out' : formatLight(left)}</span>
+    ${lit ? '<button type="button" class="btn ghost sm" data-torch-pause title="Pause the torch (the hour stops counting)">⏸ Pause</button>'
+      : `<button type="button" class="btn sm" data-torch-start title="Light it: an hour of real time">${out ? '🔥 Light a new torch' : '🔥 Light'}</button>`}
+    ${!out ? '<button type="button" class="icon-btn" data-torch-reset title="Replace with a fresh torch (a full hour, unlit)" aria-label="New torch">↺</button>' : ''}
+  </div>`;
 }
 
 function gameSystemActivationSection(doc, ui) {
@@ -4558,8 +4601,17 @@ function party(doc, ui = {}) {
   const trackersCollapsed = isPartySectionCollapsed(ui, 'trackers', true);
   const sharedAssetsCollapsed = isPartySectionCollapsed(ui, 'sharedAssets', true);
   const sharedGearCollapsed = isPartySectionCollapsed(ui, 'sharedGear', true);
-  const membersHead = '<div class="statblock-head party-members-head"><h4>Party</h4>'
-    + '<button class="icon-btn" data-entity-picker-open="party-add-character" title="Add a Character — pick an existing NPC to tag #character, or create a new one already tagged Character. Tagging an NPC #character in Cast, or dragging one in here, does the same.">＋</button></div>';
+  // Direct request (2026-11-08): the Campaign panel's Colony / Starship /
+  // Warband tabs moved here. "Party" (everything below) is the first tab on
+  // the same row, and the ＋ that adds a party member shows only on it.
+  const tabs = partyPanelTabs(doc);
+  const activeTab = tabs.some((t) => t.id === ui.partyPanelTab) ? ui.partyPanelTab : 'party';
+  const tabRow = `<div class="party-tab-row" role="tablist">${tabs.map((t) => `
+    <button type="button" class="party-tab ${t.id === activeTab ? 'active' : ''}" role="tab" data-party-panel-tab="${t.id}" aria-selected="${t.id === activeTab}">${esc(t.label)}</button>`).join('')}
+    ${activeTab === 'party' ? '<button class="icon-btn party-add-member" data-entity-picker-open="party-add-character" title="Add a Character — pick an existing NPC to tag #character, or create a new one already tagged Character. Tagging an NPC #character in Cast, or dragging one in here, does the same.">＋</button>' : ''}
+  </div>`;
+  if (activeTab !== 'party') return `${tabRow}${(COLONY_PANEL_TAB_RENDERERS[activeTab] || colonyTabHtml)(doc, ui)}`;
+  const membersHead = tabRow + (isGameSystemActivated(doc, 'shadowdark') ? torchTimerHtml(doc) : '');
 
   return `
     ${membersHead}
@@ -4575,7 +4627,7 @@ function party(doc, ui = {}) {
     </div>`}
     ${partySectionHeaderHtml('sharedGear', 'Shared Gear', sharedGearCollapsed, richToolbarToggleHTML(sharedGearKey, toolbarCollapsed(doc, ui, sharedGearKey)))}
     ${sharedGearCollapsed ? '' : `<div class="rich-field">${richToolbarHTML(sharedGearKey, toolbarCollapsed(doc, ui, sharedGearKey), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-party-field="sharedGear" data-placeholder="A shared toolkit, the ship's medkit, anything not tied to one character…">${buildMentionEditorHTML(doc, party_.sharedGear)}</div></div>`}
-    ${partySectionHeaderHtml('sharedAssets', 'Shared Assets', sharedAssetsCollapsed, `<button class="chip" data-entity-picker-open="party-shared-asset">＋ Shared Asset</button>`)}
+    ${partySectionHeaderHtml('sharedAssets', 'Shared Assets', sharedAssetsCollapsed, `<button class="icon-btn" data-entity-picker-open="party-shared-asset" title="Add a shared asset" aria-label="Add a shared asset">＋</button>`)}
     ${sharedAssetsCollapsed ? '' : `
     ${sharedAssetVehicleThumbs ? `<div class="actor-thumb-row">${sharedAssetVehicleThumbs}</div>` : ''}
     <div class="entity-chips">${sharedAssetChips || (sharedAssetVehicleThumbs ? '' : '<span class="dim small">None yet.</span>')}</div>
@@ -4997,14 +5049,44 @@ const COLONY_PANEL_TABS = [
   { id: 'warband', label: 'Warband', system: 'fiveleagues' },
 ];
 const COLONY_PANEL_TAB_RENDERERS = { colony: colonyTabHtml, starship: starshipTabHtml, warband: warbandTabHtml };
+/** The Party panel's tabs (direct request, 2026-11-08): Party always, then
+ *  each Turn-Step tab whose system a Turn-Step gameplay area resolves to. */
+function partyPanelTabs(doc) {
+  return [{ id: 'party', label: 'Party' }, ...COLONY_PANEL_TABS.filter((t) => isTurnStepSystemActive(doc, t.system))];
+}
+
+// The Campaign panel, now the campaign timeline (direct request, 2026-11-08:
+// "if no features remain on campaign panel, repurpose it to be a timeline
+// graph of campaign steps and encounters with links to the encounter entity
+// record"). Its Colony/Starship/Warband tabs moved to the Party panel. Each
+// scene is a node on one vertical line; the Encounters made from it branch
+// off it, and an Encounter not made from a scene sits on the line at the
+// time it was made. Every Encounter opens its entity record.
 function colony(doc, ui = {}) {
-  // Turn-Step tabs follow what Campaign turn / Colony management actually resolve to.
-  const visibleTabs = COLONY_PANEL_TABS.filter((t) => isTurnStepSystemActive(doc, t.system));
-  if (!visibleTabs.length) return '<p class="ws-placeholder">Colony, Starship, and Warband are all currently deactivated — enable Planetfall, Five Parsecs from Home, and/or Five Leagues from Borderlands under Settings → Licenses → Game System Activation.</p>';
-  const activeTab = visibleTabs.some((t) => t.id === ui.colonyPanelTab) ? ui.colonyPanelTab : visibleTabs[0].id;
-  const tabBar = visibleTabs.length > 1 ? `<div class="settings-tab-bar align-right">${visibleTabs.map((t) => `
-    <button class="btn ghost sm ${t.id === activeTab ? 'active' : ''}" data-colony-panel-tab="${t.id}" aria-selected="${t.id === activeTab}">${esc(t.label)}</button>`).join('')}</div>` : '';
-  return `${tabBar}${(COLONY_PANEL_TAB_RENDERERS[activeTab] || colonyTabHtml)(doc, ui)}`;
+  const items = campaignTimeline(doc);
+  if (!items.length) {
+    return `<p class="ws-placeholder">No scenes or encounters yet. Start a scene from the Navigator, or use <strong>＋ Encounter</strong> or the 🪄✨ wizard in the Composer, and it appears here.</p>`;
+  }
+  const day = (iso) => (iso ? String(iso).slice(0, 10) : '');
+  const encounterNode = (e, branch) => `
+    <li class="timeline-node timeline-encounter ${branch ? 'timeline-branch' : ''}">
+      <span class="timeline-dot" aria-hidden="true">◆</span>
+      <a href="#" class="timeline-label" data-open-entity="${esc(e.id)}" title="Open this encounter">${esc(e.label)}</a>
+      ${e.status ? `<span class="chip sm">${esc(e.status)}</span>` : ''}
+      ${branch ? '' : `<span class="dim small">${esc(day(e.at))}</span>`}
+    </li>`;
+  const rows = items.map((it) => (it.kind === 'scene' ? `
+    <li class="timeline-node timeline-scene">
+      <span class="timeline-dot" aria-hidden="true">${esc(String(it.number || '•'))}</span>
+      <span class="timeline-label">Scene ${esc(String(it.number || ''))}: ${esc(it.label)}</span>
+      <span class="dim small">${esc(day(it.at))}</span>
+      ${it.encounters.length ? `<ul class="timeline-branches">${it.encounters.map((e) => encounterNode(e, true)).join('')}</ul>` : ''}
+    </li>` : encounterNode(it, false))).join('');
+  const scenes = items.filter((i) => i.kind === 'scene').length;
+  const encounters = items.reduce((n, i) => n + (i.kind === 'encounter' ? 1 : i.encounters.length), 0);
+  return `
+    <p class="dim small">${scenes} scene${scenes === 1 ? '' : 's'} · ${encounters} encounter${encounters === 1 ? '' : 's'}, oldest first.</p>
+    <ol class="campaign-timeline">${rows}</ol>`;
 }
 
 // --- Trade: Merchant Rules Lens (ADR 0003/0004) -----------------------------
@@ -5235,7 +5317,7 @@ function guide(doc, ui = {}) {
     ? `<input class="doc-rename-input" data-guide-rename-input="${esc(active.id)}" value="${esc(active.title)}" autofocus>`
     : `<input class="guide-title-input" data-guide-title-input value="${esc(active.title)}" placeholder="Untitled">`;
   return `
-    ${helpBody('guide-intro', 'A table of contents for the campaign — <code>@Name</code> links a Cast entity, <code>@[Doc Name]</code> references a document (<code>@[Doc Name#12]</code> or <code>@[Doc Name p.12]</code> jumps to a page). Click a mention to open it; arrow-key the cursor into it to edit its label. Saves automatically. Drag a document below to reorganize the tree.', ui)}
+    ${helpBody('guide-intro', 'A table of contents for the campaign — <code>@Name</code> links a Cast entity, <code>@[Doc Name]</code> references a document (<code>@[Doc Name#12]</code> or <code>@[Doc Name p.12]</code> jumps to a page). Click a mention to open it; arrow-key the cursor into it to edit its label. Saves automatically. To reorganize the tree, turn on ↕ beside Guide Documents, then drag a document onto another to put it above that one (hold for 2 seconds to put it inside).', ui)}
     <div class="guide-doc-head">${titleEl}${richToolbarToggleHTML(`guide:${active.id}`, toolbarCollapsed(doc, ui, `guide:${active.id}`))}</div>
     <div class="rich-field">${richToolbarHTML(`guide:${active.id}`, toolbarCollapsed(doc, ui, `guide:${active.id}`), { includeToggle: false })}<div class="mention-editor guide-editor" contenteditable="true" data-guide-input data-guide-active="${esc(active.id)}" data-placeholder="Colony Builder — see @[5PFH Planetfall p.12] for the turn sheet.&#10;Meet @Captain Reyes in Docking Bay 3.">${buildMentionEditorHTML(doc, active.text)}</div></div>
     ${mechanicsIndexList(doc)}
@@ -5243,9 +5325,12 @@ function guide(doc, ui = {}) {
       <div class="guide-tree-head">
         <h4>Guide Documents</h4>
         <button class="chip" data-guide-add-root title="Add a new top-level Guide document">＋ Root doc</button>
+        <button type="button" class="icon-btn guide-reorder-toggle ${ui.guideReorderMode ? 'active' : ''}" data-guide-reorder-toggle aria-pressed="${!!ui.guideReorderMode}" title="${ui.guideReorderMode ? 'Done moving documents' : 'Move documents: drop one onto another to put it above that one; hold over it for 2 seconds to put it inside'}" aria-label="Move documents">↕</button>
       </div>
-      <div class="guide-tree-drop-root" data-drop-guide-node="__root__" title="Drag a document here to make it top-level">📄 Top level</div>
-      <div class="guide-tree">${tree.map((node) => guideTreeRow(node, ui, active.id, 0)).join('')}</div>
+      ${ui.guideReorderMode ? `
+      <p class="dim small guide-reorder-hint">Drag a document onto another to put it just above it. Hold it there for 2 seconds to put it inside instead.</p>
+      <div class="guide-tree-drop-root" data-drop-guide-node="__root__" title="Drag a document here to make it top-level">📄 Top level</div>` : ''}
+      <div class="guide-tree ${ui.guideReorderMode ? 'reordering' : ''}">${tree.map((node) => guideTreeRow(node, ui, active.id, 0)).join('')}</div>
     </div>`;
 }
 
@@ -5259,8 +5344,8 @@ function guideTreeRow(node, ui, activeId, depth) {
     ? `<input class="doc-rename-input" data-guide-rename-input="${esc(node.id)}" value="${esc(node.title)}" autofocus>`
     : `<button type="button" class="guide-node-title ${node.id === activeId ? 'sel' : ''}" data-guide-node-select="${esc(node.id)}">${esc(node.title)}</button>`;
   const row = `
-    <div class="guide-tree-row" style="padding-left: ${depth * 1.1}rem" draggable="true" data-drag-guide-node="${esc(node.id)}" data-drop-guide-node="${esc(node.id)}">
-      <span class="entity-drag-handle" aria-hidden="true">⠿</span>
+    <div class="guide-tree-row" style="padding-left: ${depth * 1.1}rem" ${ui.guideReorderMode ? `draggable="true" data-drag-guide-node="${esc(node.id)}" data-drop-guide-node="${esc(node.id)}"` : ''}>
+      ${ui.guideReorderMode ? '<span class="entity-drag-handle" aria-hidden="true">⠿</span>' : ''}
       ${hasChildren ? `<button type="button" class="guide-node-caret" data-guide-node-toggle="${esc(node.id)}">${expanded ? '▾' : '▸'}</button>` : '<span class="guide-node-caret-spacer"></span>'}
       ${titleEl}
       <span class="guide-node-actions">
@@ -6939,7 +7024,7 @@ function worldTrackerActionsTab(doc) {
     <div class="settings-group">
       <h3>Reset</h3>
       <p class="dim small">Clears every sector, the home base, and the world-level notes — starts the grid over from scratch. This cannot be undone.</p>
-      <button class="btn ghost" data-world-tracker-reset>🗑 Reset World Tracker</button>
+      <button class="btn ghost" data-world-tracker-reset>🗑 Reset Planetfall</button>
     </div>`;
 }
 

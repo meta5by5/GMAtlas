@@ -339,6 +339,59 @@ export const RULESETS = [
       ],
     },
   },
+  {
+    // Direct request (2026-11-08): "a ruleset for shadowdark with statblock
+    // and entity import of equipment and monsters and a mechanic for torch
+    // duration and random tables for carousing." The sheet is this app's own
+    // layout of the game's mechanics (six 3-18 ability scores whose modifier
+    // is derived the 5e way, so the existing 'd20-score'/'d20' roll methods
+    // fit; AC, HP, level/XP, luck, gear slots), not text from the book. No
+    // sourcebook link: the Shadowdark RPG is a commercial book (licensed as
+    // an owned book, data/licenses.js), so its monsters and gear come in
+    // through the importer (domain/shadowdarkImport.js) from the GM's own
+    // copy, never shipped here.
+    id: 'shadowdark',
+    label: 'Shadowdark RPG',
+    doc: null,
+    characterTemplate: {
+      sections: [
+        { id: 'identity', label: 'Character', fields: [
+          { key: 'Ancestry', kind: 'text', value: '' },
+          { key: 'Class', kind: 'text', value: '' },
+          { key: 'Title', kind: 'text', value: '' },
+          { key: 'Alignment', kind: 'text', value: '' },
+          { key: 'Background', kind: 'text', value: '' },
+          { key: 'Deity', kind: 'text', value: '' },
+          { key: 'Level', kind: 'attribute', rollMethod: 'none', format: 'plain', value: 1 },
+          { key: 'XP', kind: 'track', value: 0, max: 10 },
+        ]},
+        { id: 'abilityScores', label: 'Ability Scores', fields: [
+          { key: 'Strength', kind: 'attribute', rollMethod: 'd20-score', format: 'plain', value: 10 },
+          { key: 'Dexterity', kind: 'attribute', rollMethod: 'd20-score', format: 'plain', value: 10 },
+          { key: 'Constitution', kind: 'attribute', rollMethod: 'd20-score', format: 'plain', value: 10 },
+          { key: 'Intelligence', kind: 'attribute', rollMethod: 'd20-score', format: 'plain', value: 10 },
+          { key: 'Wisdom', kind: 'attribute', rollMethod: 'd20-score', format: 'plain', value: 10 },
+          { key: 'Charisma', kind: 'attribute', rollMethod: 'd20-score', format: 'plain', value: 10 },
+        ]},
+        { id: 'combat', label: 'Combat', fields: [
+          { key: 'Armor Class', kind: 'text', value: '' },
+          { key: 'Hit Points', kind: 'track', value: 0, max: 0 },
+          { key: 'Attacks', kind: 'text', value: '' },
+          { key: 'Luck Token', kind: 'track', value: 0, max: 1 },
+        ]},
+        { id: 'abilities', label: 'Talents & Spells', fields: [
+          { key: 'Talents', kind: 'text', value: '' },
+          { key: 'Spells Known', kind: 'text', value: '' },
+          { key: 'Languages', kind: 'text', value: '' },
+        ]},
+        { id: 'gear', label: 'Gear', fields: [
+          { key: 'Gear Slots', kind: 'text', value: '' },
+          { key: 'Gear', kind: 'text', value: '' },
+          { key: 'Gold', kind: 'attribute', rollMethod: 'none', format: 'plain', value: 0 },
+        ]},
+      ],
+    },
+  },
 ];
 
 export function findRuleset(id) {

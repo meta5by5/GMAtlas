@@ -12,6 +12,7 @@ import { SCENE_TABLES } from './tables.js';
 import { CYBERPUNK_TABLES } from './tables-cyberpunk.js';
 import { DND5E_TABLES } from './tables-dnd5e.js';
 import { FANTASY_FULL_TABLES } from './tables-fantasy-full.js';
+import { SHADOWDARK_TABLES } from './tables-shadowdark.js';
 import { QUEST_ORACLES } from './questOracles.js';
 
 // Each pack's tables plus its own "Quests" category (data/questOracles.js).
@@ -77,6 +78,10 @@ export const GENRE_PACKS = [
   // oracles.overrides) never touches the 'fantasy' pack above or anything
   // else using it.
   { id: 'dnd5e', label: 'D&D 5e', tables: withQuests(DND5E_TABLES, 'dnd5e'), gameSystemIds: ['dnd5e'], factionPowersGroup: 'Noble Houses & Guilds', factionActionGroup: 'Faction Turns' },
+  // Shadowdark RPG (direct request, 2026-11-08): the full fantasy oracle set
+  // plus its own original Carousing tables (data/tables-shadowdark.js), as a
+  // pack of its own so the carousing tables show only in Shadowdark campaigns.
+  { id: 'shadowdark', label: 'Shadowdark', tables: withQuests({ ...FANTASY_FULL_TABLES, ...SHADOWDARK_TABLES }, 'fantasy'), gameSystemIds: ['shadowdark'], factionPowersGroup: 'Noble Houses & Guilds', factionActionGroup: 'Faction Turns' },
 ];
 
 // The old 'hostile' pack id, aliased forever (not just for one migration
@@ -110,7 +115,7 @@ export function factionActionGroup(id) {
 // oracle grouping and lens vocabulary rather than the sci-fi-worded defaults.
 export function isFantasyGenre(id) {
   const resolved = findGenrePack(id).id;
-  return resolved === 'fantasy' || resolved === 'dnd5e';
+  return resolved === 'fantasy' || resolved === 'dnd5e' || resolved === 'shadowdark';
 }
 
 // "Bestiary" is a fantasy-genre term (a monster manual); it reads oddly for
@@ -119,7 +124,7 @@ export function isFantasyGenre(id) {
 // mechanism (data/statblockTemplates.js's NPC field manifests) is unchanged
 // either way — this only ever swaps the label a GM reads in the UI, driven
 // by the same settings.genrePack Phase 9 already introduced.
-const BESTIARY_TERM = { 'sci-fi-generic': 'LifeForm', hostile: 'LifeForm', cyberpunk: 'LifeForm', fantasy: 'Bestiary', dnd5e: 'Bestiary' };
+const BESTIARY_TERM = { 'sci-fi-generic': 'LifeForm', hostile: 'LifeForm', cyberpunk: 'LifeForm', fantasy: 'Bestiary', dnd5e: 'Bestiary', shadowdark: 'Bestiary' };
 export function bestiaryTerm(genrePackId) {
   return BESTIARY_TERM[genrePackId] || 'Bestiary';
 }
@@ -138,6 +143,7 @@ export function bestiaryTerm(genrePackId) {
 const LOCATION_HIERARCHY_TERMS = {
   fantasy: { system: 'Realm', star: 'Ruler' },
   dnd5e: { system: 'Realm', star: 'Ruler' },
+  shadowdark: { system: 'Realm', star: 'Ruler' },
 };
 const DEFAULT_LOCATION_HIERARCHY_TERMS = { system: 'System', star: 'Star' };
 export function locationHierarchyTerms(genrePackId) {
@@ -148,7 +154,7 @@ export function locationHierarchyTerms(genrePackId) {
 // a campaign wears — shell.js sets it as <html data-genre="..."> every
 // render, so changing the profile's Genre Pack (or picking Ironsworn, whose
 // oracles already read as fantasy) restyles the app automatically.
-const FANTASY_GENRE_PACKS = new Set(['fantasy', 'dnd5e']);
+const FANTASY_GENRE_PACKS = new Set(['fantasy', 'dnd5e', 'shadowdark']);
 export function genreStyleFamily(genrePackId, statRuleset) {
   if (statRuleset === 'ironsworn' || FANTASY_GENRE_PACKS.has(genrePackId)) return 'fantasy';
   return 'sci-fi';

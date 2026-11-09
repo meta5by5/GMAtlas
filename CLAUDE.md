@@ -117,7 +117,7 @@ src/
                    commodities/biomes, UWP tables, suggestion lenses, enhancement
                    types, battlemap icons, Reference Library manifest). All content
                    is data — no ruleset vocabulary belongs in src/domain/.
-  domain/          54 files, pure/DOM-free, covered by tests/domain.test.js.
+  domain/          62 files, pure/DOM-free, covered by tests/domain.test.js.
                    session.js/context.js/scenes.js/copilot.js/recap.js orchestrate
                    the WHO/WHERE/WHAT/WHY/HOW model and Co-Pilot; oracles.js is the
                    roll engine; entities.js/statblocks.js/threads.js/graph.js/
@@ -127,7 +127,11 @@ src/
                    enhancements.js/expeditions.js are economy & jobs;
                    documents.js/guide.js/mechanicsIndex.js/toc.js/worldbuilding.js/
                    hostileLocations.js are content & reference; party.js/colony.js/
-                   gallery.js/battlemaps.js round out the rest; search.js/
+                   gallery.js/battlemaps.js round out the rest; encounters.js
+                   (Composer → Encounter, AI prompt, campaign timeline) and
+                   torchTimer.js/shadowdarkImport.js (Shadowdark) are 2026-11-08
+                   additions (design/adr/composer-encounters-and-panels.md,
+                   shadowdark-ruleset.md); search.js/
                    activities.js/contentPack.js/titleCase.js are cross-cutting;
                    inlineBlobs.js/syncOps.js/licensing.js are sync groundwork
                    (design/adr/sync-groundwork.md); helpCentre.js backs Help.
@@ -152,7 +156,7 @@ styles/
   cockpit.css      layout + component styles (campaign surface)
   portal.css       portal surface layout (shares tokens.css only)
 tests/
-  domain.test.js   783 tests — domain modules, incl. sync-merge convergence
+  domain.test.js   831 tests — domain modules, incl. sync-merge convergence
   migrate.test.js  26 tests — legacy-key absorption + round-trip
 scripts/
   build.js         zero-dependency bundler (see below) — re-run after any src/ edit;

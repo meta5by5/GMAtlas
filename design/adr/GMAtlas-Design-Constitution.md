@@ -300,10 +300,13 @@ actually present on disk). Two non-game data files sit beside them:
   Apply actions, and conditional overlooked/flagged-relationship cards, in
   that fixed order.
 - **`src/ui/drawers/index.js`** — every drawer's render function
-  (Guide/Journal/Oracle/Party/Cast/Entity Detail/Colony/Trade/
-  Documents/Gallery/Battlemap/Graph/Settings), dispatched through one
-  `renderDrawer(id, doc, ui)` switch. `factionEvents.js` is split out
-  separately only to avoid a circular import.
+  (Guide/Journal/Oracle/Party/Cast/Entity Detail/Campaign timeline (the
+  `colony` id)/Planetfall (`world-tracker`)/Trade/Documents/Gallery/
+  Battlemap/Graph/Settings), dispatched through one `renderDrawer(id, doc,
+  ui)` switch. Party carries the Colony/Starship/Warband Turn-Step tabs;
+  each open entity is its own `entity:<id>` tab rendering Entity Detail
+  (design/adr/composer-encounters-and-panels.md). `factionEvents.js` is
+  split out separately only to avoid a circular import.
 - **`src/ui/portal/index.js`** — the portal surface (rule 4): the Help
   centre at `#/help`, shown instead of the campaign, in its own layout
   and stylesheet (`styles/portal.css`, sharing only `tokens.css`).

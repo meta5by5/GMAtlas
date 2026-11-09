@@ -794,7 +794,40 @@ export function positionCardHtml(title, body, extraClass) {
   return card(title, '', body, extraClass);
 }
 
-export function composerBodyHtml(doc, ui) {
+// The Composer's five sections, in order: also the steps of the Encounter
+// wizard (direct request, 2026-11-08: "a button with a wand with stars icon
+// ... that prompts to run a wizard that steps through populating the
+// sections of the composer").
+export const COMPOSER_STEPS = [
+  { key: 'who', title: 'WHO is here', lead: 'People and factions in play.', body: (d, u) => whoSectionBody(d, u), extra: () => whoHeaderExtra() },
+  { key: 'where', title: 'WHERE it happens', lead: 'The place the scene is set.', body: (d, u) => whereSectionBody(d, u) },
+  { key: 'what', title: 'WHAT is happening', lead: 'The active situation.', body: (d, u) => whatSectionBody(d, u), extra: () => whatHeaderExtra() },
+  { key: 'why', title: 'WHY they are here', lead: 'The objective driving the party, tracked as progress clocks.', body: (d, u) => whySectionBody(d, u) },
+  { key: 'how', title: 'HOW it plays', lead: 'Mode and pacing for the current scene.', body: (d, u) => howSectionBody(d, u) },
+];
+
+// The Composer's own toolbar (direct requests, 2026-11-08): save what it
+// holds as an Encounter, run the Encounter wizard, and copy everything as a
+// prompt for an AI client (domain/encounters.js).
+function composerToolbarHtml(ui) {
+  const wizard = Number.isInteger(ui.composerWizardStep);
+  return `<div class="composer-toolbar">
+    <button type="button" class="btn sm" data-composer-add-encounter title="Save who, where, what, why and how as an Encounter, linked to everyone and everything in it">＋ Encounter</button>
+    <button type="button" class="icon-btn composer-wizard-btn ${wizard ? 'active' : ''}" data-composer-wizard="${wizard ? 'stop' : 'start'}" title="${wizard ? 'Leave the Encounter wizard' : 'Encounter wizard: fill the Composer one section at a time'}" aria-label="Encounter wizard">🪄✨</button>
+    <button type="button" class="icon-btn" data-composer-copy-prompt title="Copy everything in the Composer as a prompt for an AI client (to write the encounter’s description)" aria-label="Copy AI prompt">📋</button>
+  </div>`;
+}
+
+// Asked when the Composer opens and the campaign has no Encounter yet.
+function composerWizardOfferHtml() {
+  return `<div class="drawer-note composer-wizard-offer">
+    <span>🪄✨ No encounters yet. Build the first one step by step?</span>
+    <button type="button" class="btn sm" data-composer-wizard="start">Run the Encounter wizard</button>
+    <button type="button" class="btn ghost sm" data-composer-wizard="dismiss">Not now</button>
+  </div>`;
+}
+
+function activitySelectHtml(doc) {
   const activity = doc.context.how.activity || '';
   return `
     <label class="field-label sm">Activity
@@ -802,12 +835,40 @@ export function composerBodyHtml(doc, ui) {
         <option value="">— none set —</option>
         ${ACTIVITIES.map((a) => `<option value="${a.id}" ${a.id === activity ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}
       </select>
-    </label>
-    ${dashboardSection('who', 'WHO is here', 'People and factions in play.', whoSectionBody(doc, ui), doc, ui, whoHeaderExtra())}
-    ${dashboardSection('where', 'WHERE it happens', 'The place the scene is set.', whereSectionBody(doc, ui), doc, ui)}
-    ${dashboardSection('what', 'WHAT is happening', 'The active situation.', whatSectionBody(doc, ui), doc, ui, whatHeaderExtra())}
-    ${dashboardSection('why', 'WHY they are here', 'The objective driving the party, tracked as progress clocks.', whySectionBody(doc, ui), doc, ui)}
-    ${dashboardSection('how', 'HOW it plays', 'Mode and pacing for the current scene.', howSectionBody(doc, ui), doc, ui)}
+    </label>`;
+}
+
+// One wizard step: only that section, open, with Back / Next (or Save as
+// Encounter on the last step). The section editors are the Composer's own,
+// so filling a step is exactly filling the Composer.
+function composerWizardHtml(doc, ui) {
+  const i = Math.max(0, Math.min(COMPOSER_STEPS.length - 1, ui.composerWizardStep));
+  const step = COMPOSER_STEPS[i];
+  const open = { ...ui, expandedDashboardSections: new Set([...(ui.expandedDashboardSections || []), step.key]) };
+  const last = i === COMPOSER_STEPS.length - 1;
+  return `
+    <div class="composer-wizard-head">
+      <strong>🪄✨ Encounter wizard</strong>
+      <span class="dim small">Step ${i + 1} of ${COMPOSER_STEPS.length}</span>
+      <ol class="composer-wizard-steps">${COMPOSER_STEPS.map((s, n) => `<li class="${n === i ? 'active' : n < i ? 'done' : ''}"><button type="button" class="link-btn" data-composer-wizard-goto="${n}">${esc(s.key.toUpperCase())}</button></li>`).join('')}</ol>
+    </div>
+    ${step.key === 'how' ? activitySelectHtml(doc) : ''}
+    ${dashboardSection(step.key, step.title, step.lead, step.body(doc, open), doc, open, step.extra ? step.extra() : '')}
+    <div class="composer-wizard-nav">
+      <button type="button" class="btn ghost sm" data-composer-wizard-goto="${i - 1}" ${i === 0 ? 'disabled' : ''}>◀ Back</button>
+      ${last
+        ? '<button type="button" class="btn sm" data-composer-add-encounter data-composer-wizard-finish>✔ Save as Encounter</button>'
+        : `<button type="button" class="btn sm" data-composer-wizard-goto="${i + 1}">Next ▶</button>`}
+    </div>`;
+}
+
+export function composerBodyHtml(doc, ui) {
+  if (Number.isInteger(ui.composerWizardStep)) return `${composerToolbarHtml(ui)}${composerWizardHtml(doc, ui)}`;
+  return `
+    ${composerToolbarHtml(ui)}
+    ${ui.composerWizardOffer ? composerWizardOfferHtml() : ''}
+    ${activitySelectHtml(doc)}
+    ${COMPOSER_STEPS.map((s) => dashboardSection(s.key, s.title, s.lead, s.body(doc, ui), doc, ui, s.extra ? s.extra() : '')).join('')}
   `;
 }
 

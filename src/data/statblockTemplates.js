@@ -181,6 +181,30 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
       { key: 'Legendary Actions', kind: 'text' },
     ]),
   },
+  // Shadowdark RPG monster (direct request, 2026-11-08): the game's own
+  // stat-line order — AC, HP, ATK, MV, the six ability MODIFIERS (monsters
+  // list +N, not scores, so they roll as a plain d20 + modifier), AL, LV —
+  // plus free-text specials. domain/shadowdarkImport.js fills it from a stat
+  // line the GM pastes from their own book.
+  'shadowdark-lifeform': {
+    label: 'Shadowdark Monster',
+    ruleset: 'shadowdark',
+    fields: withDefaults([
+      { key: 'Armor Class', kind: 'text' },
+      { key: 'Hit Points', kind: 'track', rollMethod: 'none', max: 10 },
+      { key: 'Attacks', kind: 'text' },
+      { key: 'Movement', kind: 'text' },
+      { key: 'STR', kind: 'attribute', rollMethod: 'd20', format: 'sign' },
+      { key: 'DEX', kind: 'attribute', rollMethod: 'd20', format: 'sign' },
+      { key: 'CON', kind: 'attribute', rollMethod: 'd20', format: 'sign' },
+      { key: 'INT', kind: 'attribute', rollMethod: 'd20', format: 'sign' },
+      { key: 'WIS', kind: 'attribute', rollMethod: 'd20', format: 'sign' },
+      { key: 'CHA', kind: 'attribute', rollMethod: 'd20', format: 'sign' },
+      { key: 'Alignment', kind: 'text' },
+      { key: 'Level', kind: 'attribute', rollMethod: 'none', format: 'plain', value: 1 },
+      { key: 'Specials', kind: 'text' },
+    ]),
+  },
   // Five Leagues from the Borderlands (assets/docs/5LFB): mapped directly
   // off the core rulebook's own Enemy Profile column headings (p.152) —
   // Enemy / Num. / Speed / Combat / Damage / Tough. / Armor / Ranged, plus

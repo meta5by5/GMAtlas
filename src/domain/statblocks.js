@@ -248,6 +248,7 @@ const DEFAULT_NPC_TEMPLATE_BY_RULESET = {
   '5pfh': '5pfh',
   fiveleagues: 'fiveleagues-lifeform',
   dnd5e: 'dnd5e-lifeform',
+  shadowdark: 'shadowdark-lifeform',
 };
 
 /** True when a Bestiary (kind 'npc') group still holds exactly what its
