@@ -12901,3 +12901,26 @@ test('wiki W2: the Wiki panel index searches names, aliases and tags, and filter
   assert.equal(wkWikiIndex(c).find((r) => r.id === kade).linkCount, 1);
 });
 
+
+// --- Wiki as a plugin and a portal page (2026-11-08) -------------------------
+import { parsePortalRoute as wkParseRoute } from '../src/domain/helpCentre.js';
+import { GATEABLE_MODULES as WK_GATEABLE } from '../src/core/schema.js';
+
+test('wiki portal: #/wiki and #/wiki/<id> are portal routes', () => {
+  assert.deepEqual(wkParseRoute('#/wiki'), { view: 'wiki' });
+  assert.deepEqual(wkParseRoute('#/wiki/'), { view: 'wiki' });
+  assert.deepEqual(wkParseRoute('#/wiki/ent_abc123'), { view: 'wiki-page', id: 'ent_abc123' });
+  assert.equal(wkParseRoute('#/wiki/bad id'), null);
+  assert.deepEqual(wkParseRoute('#/help'), { view: 'help' }, 'help still routes');
+});
+
+test('wiki plugin: gateable, on for a new profile and for one saved before it existed', () => {
+  assert.ok(WK_GATEABLE.includes('wiki'));
+  const fresh = defaultRulesProfile('Fresh');
+  assert.equal(fresh.moduleEnabled.wiki, true);
+  assert.equal(isModuleVisible(fresh, 'wiki'), true);
+  const old = defaultRulesProfile('Old');
+  delete old.moduleEnabled.wiki;
+  assert.equal(isModuleVisible(old, 'wiki'), true, 'no saved value means on');
+  assert.equal(isModuleVisible(setModuleEnabled(old, 'wiki', false), 'wiki'), false, 'and it can be turned off');
+});

@@ -1656,6 +1656,32 @@ let focusInspectorRelationshipNextRender = false; // ephemeral — set by Curren
 let entityDetailFocusEventId = ''; // ephemeral — set when a data-open-entity link also carries data-open-entity-event (a Faction Events turn's faction-name link); factionTurnSectionHtml highlights/expands that one Turn History entry
 let locationProximity = null; // ephemeral — { locationId, locationName } for the Advisor's "Located at" card (direct follow-up request) — set whenever a Location entity is opened via data-open-entity; copilotPanel.js recomputes entities.js's proximityToLocation(doc, locationId) fresh on every render rather than storing a frozen list
 
+/** Called by the portal's wiki pages (ui/portal/wiki.js) to show an entity
+ *  in the campaign: its entity tab, as the editor (`read: false`) or as the
+ *  page. The portal switches the hash back to the campaign first. */
+export function openEntityInCampaign(id, { read = false } = {}) {
+  if (read) wikiReadIds.add(id); else wikiReadIds.delete(id);
+  openDrawerTab('entity-detail');
+  store.update((d) => setActiveEntity(d, id));
+}
+
+/** The portal's way to open where a backlink lives: a panel ('journal'),
+ *  a Guide doc ({guideId}), or a map ({mapKey: 'map:<type>:<id>'}). */
+export function openPanelInCampaign(drawerId, { guideId, mapKey } = {}) {
+  if (mapKey) {
+    const [, mapType, mapId] = mapKey.split(':');
+    if (mapType === 'battlemap') store.update((d) => setActiveBattlemap(d, mapId));
+    else if (mapType === 'hexcrawl') store.update((d) => setActiveHexMap(d, mapId));
+    else if (mapType === 'dungeoncrawl') store.update((d) => setActiveDungeonMap(d, mapId));
+    else return;
+    openDrawerTab(mapType);
+    return render();
+  }
+  openDrawerTab(drawerId);
+  if (guideId) return store.update((d) => setActiveGuideId(d, guideId));
+  return render();
+}
+
 export function mountShell(el) {
   root = el;
   setBlobResolver(store.blobDataUrl);
@@ -1964,6 +1990,9 @@ function onClick(ev) {
   const edge = hit('[data-drawer-open]');
   if (edge) {
     const id = edge.dataset.drawerOpen;
+    // The Wiki opens as its own portal page (#/wiki, ui/portal/wiki.js)
+    // rather than a drawer tab (direct request, 2026-11-08).
+    if (id === 'wiki') { location.hash = '#/wiki'; return; }
     // An anchored panel already lives on the Storyboard — go to it rather
     // than opening a placeholder tab for it.
     if (FOCUS_ON_REOPEN_DRAWERS.has(id) || anchoredPanels.includes(id)) return focusDrawerPanel(id);

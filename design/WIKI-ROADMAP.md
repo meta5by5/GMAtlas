@@ -193,6 +193,19 @@ Built as written below, with these specifics:
 - **Page settings** (aliases, visibility, place kind) sit at the foot of the
   page in the GM view.
 - **Player View** is one switch, shared by the Wiki panel and every page.
+- **Wiki is a plugin** (`GATEABLE_MODULES`), on by default for every
+  profile. A profile saved before it existed counts as on.
+- **The portal page** (direct request, 2026-11-08). The Wiki nav button opens
+  the wiki as a portal page, `#/wiki` and `#/wiki/<entity id>`
+  (`ui/portal/wiki.js`). On the hosted app, the Worker redirects `/wiki` to
+  `/#/wiki`. It shows the campaign open on this device, or a notice when
+  that campaign's profile has the Wiki off.
+  - A page there is the same Read view.
+  - Page links stay in the portal.
+  - ✎ Edit, red-link page creation, and journal, Guide and map sources go
+    back to the campaign.
+  - The in-campaign Wiki panel still renders wherever a profile puts it in
+    a Storyboard position.
 - **The views** live in `ui/drawers/wiki.js`. The pure parts (GM blocks, `[[ ]]` →
   `@[ ]` display, `unlinkHidden`, `playerSafe`, `wikiIndex`) are in
   `domain/wiki.js`.

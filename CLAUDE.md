@@ -147,7 +147,8 @@ src/
     drawers/index.js    every drawer's render, dispatched through one switch
                         (factionEvents.js is split out only to avoid a circular import;
                         wiki.js holds the Wiki panel and an entity's Read-mode page)
-    portal/index.js     the portal surface (#/help Help centre; later account/store),
+    portal/index.js     the portal surface (#/help Help centre, #/account, #/wiki the open
+                        campaign's wiki via portal/wiki.js; later store),
                         own layout in styles/portal.css
     imageSrc.js         a gallery record's displayable src (inline or blob cache)
     mentionEditor.js, searchPanel.js, imageResize.js, mechanicsScan.js, tocScan.js,
@@ -161,7 +162,7 @@ styles/
   cockpit.css      layout + component styles (campaign surface)
   portal.css       portal surface layout (shares tokens.css only)
 tests/
-  domain.test.js   836 tests — domain modules, incl. sync-merge convergence
+  domain.test.js   838 tests — domain modules, incl. sync-merge convergence
   migrate.test.js  27 tests — legacy-key absorption + round-trip
 scripts/
   build.js         zero-dependency bundler (see below) — re-run after any src/ edit;

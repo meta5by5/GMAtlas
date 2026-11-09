@@ -3156,7 +3156,7 @@ function campaignModuleChecksSection(ui) {
       ${helpBody('settings-campaign-modules', "Which plugins this campaign's own assigned profile shows — the same setting as the Modules tab's own \"Visible plugins\" checklist, just grouped by module here.", ui)}
       ${rulesetSpecific ? `<h4>Module-specific</h4><div class="module-enable-checks">${rulesetSpecific}</div>` : ''}
       <h4>General Plugins</h4>
-      <div class="module-enable-checks">${check('trade')}${check('battlemap')}${check('graph')}${check('faction-events')}</div>
+      <div class="module-enable-checks">${check('trade')}${check('battlemap')}${check('graph')}${check('faction-events')}${check('wiki')}</div>
       ${profileDraftSaveBar(activeProfile, dirty)}
     </div>`;
 }

@@ -15,7 +15,10 @@ export const SCHEMA_VERSION = 1;
 // Modules a Rules Profile can hide entirely (design/adr/rules-profiles-
 // multi-campaign.md). Party is deliberately NOT here — it stays always-
 // reachable regardless of profile, same as Guide/Oracle/Cast/Journal/etc.
-export const GATEABLE_MODULES = ['colony', 'world-tracker', 'trade', 'battlemap', 'hexcrawl', 'dungeoncrawl', 'graph', 'faction-events'];
+// 'wiki' (design/WIKI-ROADMAP.md) is on for every profile: a profile saved
+// before it existed has no moduleEnabled.wiki, and isModuleVisible treats
+// anything but an explicit false as visible.
+export const GATEABLE_MODULES = ['colony', 'world-tracker', 'trade', 'battlemap', 'hexcrawl', 'dungeoncrawl', 'graph', 'faction-events', 'wiki'];
 
 // The canonical WHO / WHERE / WHAT / WHY / HOW context — a first-class stored
 // model, not something re-derived on every render (that was a v0.53 weakness).

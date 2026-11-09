@@ -97,6 +97,10 @@ export function parsePortalRoute(hash) {
   if (security) return security[1] ? { view: 'account', section: 'security', outcome: security[1] } : { view: 'account', section: 'security' };
   const account = /^#\/account(?:\/(devices|licenses|sync))?\/?$/.exec(text);
   if (account) return { view: 'account', section: account[1] || 'profile' };
+  // The campaign wiki's portal pages (design/WIKI-ROADMAP.md): the index,
+  // and one page per entity id.
+  const wiki = /^#\/wiki(?:\/([A-Za-z0-9_-]+))?\/?$/.exec(text);
+  if (wiki) return wiki[1] ? { view: 'wiki-page', id: wiki[1] } : { view: 'wiki' };
   const m = /^#\/help(?:\/([a-z0-9-]+))?\/?$/.exec(text);
   if (!m) return null;
   return m[1] ? { view: 'article', slug: m[1] } : { view: 'help' };

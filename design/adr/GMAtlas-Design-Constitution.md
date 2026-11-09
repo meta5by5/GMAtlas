@@ -401,7 +401,9 @@ lookup, backlinks derived from every text that can hold a link (never
 stored), red links, a rename that rewrites every link and keeps the old name
 as an alias, optional `aliases` / `visibility` (`gm` default) / Location
 `placeKind`, and the `connects_to` (self-mirroring) and `appears_in`
-relationship types; and (W2) the Wiki panel plus a 📖 Read / ✎ Edit switch
+relationship types; and (W2) the Wiki — a plugin on by default for every
+profile, whose nav button opens the `#/wiki` portal page (the open
+campaign's pages; `/wiki` on the hosted app redirects there) — plus a 📖 Read / ✎ Edit switch
 on every entity tab — a page with infobox, breadcrumb, contents, relations,
 Linked from, Appears in sessions, inline red-link page creation, shaded
 `:::gm` blocks, and a Player View built only from `playerSafe` (a whitelist:

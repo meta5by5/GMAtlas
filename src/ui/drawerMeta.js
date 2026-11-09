@@ -24,8 +24,9 @@ export const DRAWERS = [
   { id: 'oracle', glyph: '🎲', label: 'Oracle' },
   { id: 'party', glyph: '👥', label: 'Party' },
   { id: 'cast', glyph: '☷', label: 'Cast' },
-  // The campaign wiki's page index (design/WIKI-ROADMAP.md W2). Not a
-  // GATEABLE_MODULES id: like Cast, every campaign has it.
+  // The campaign wiki (design/WIKI-ROADMAP.md). A GATEABLE_MODULES id, on
+  // by default for every profile. Its nav button opens the #/wiki portal
+  // page (ui/portal/wiki.js), not a drawer tab.
   { id: 'wiki', glyph: '📜', label: 'Wiki' },
   // Direct follow-up request: renamed "Colony" -> "Campaign" (now a
   // two-tab panel, Colony/Starship — see drawers/index.js's colony()
