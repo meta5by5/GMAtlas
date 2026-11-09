@@ -1060,7 +1060,7 @@ export function removeEntityStatblockGroup(campaign, id, groupIndex) {
 export function moveEntityStatblockGroup(campaign, id, groupIndex, direction) {
   const next = clone(campaign);
   const e = getEntity(next, id);
-  if (e) moveStatblockGroup(e, groupIndex, direction);
+  if (e) moveStatblockGroup(e, groupIndex, direction, next.settings);
   return next;
 }
 
@@ -1386,6 +1386,66 @@ export function addEntityStatblockWeapon(campaign, id, groupIndex) {
   const next = clone(campaign);
   const e = getEntity(next, id);
   if (e) addStatblockWeapon(e, groupIndex);
+  return next;
+}
+
+// --- weapon rows filled from Item entities ----------------------------------
+
+const WEAPON_TAGS = ['melee', 'ranged'];
+const weaponTagOf = (e) => {
+  const tags = (e.tags || []).map((t) => String(t).trim().replace(/^#/, '').toLowerCase());
+  return WEAPON_TAGS.find((w) => tags.includes(w)) || null;
+};
+
+// A statblock field's value by key, case-insensitive, first of `keys` found.
+function gearValue(groups, keys) {
+  for (const key of keys) {
+    for (const g of groups) {
+      const f = (g.fields || []).find((x) => String(x.key || '').trim().toLowerCase() === key);
+      if (f && f.value !== undefined && f.value !== null && String(f.value).trim() !== '') return String(f.value);
+    }
+  }
+  return '';
+}
+
+/** The Item entities a weapon row can be filled from: every Item tagged
+ *  #melee or #ranged, sorted by name, each with the weapon stats read from
+ *  its statblocks (a 5PFH gear statblock first: Range, Shots, Damage,
+ *  Traits; Shots falls back to Magazine/Rounds/Ammo for other rulesets'
+ *  gear). `tag` is 'melee' or 'ranged'. */
+export function weaponItems(campaign) {
+  return listEntities(campaign, ['item'])
+    .map((e) => ({ e, tag: weaponTagOf(e) }))
+    .filter((x) => x.tag)
+    .map(({ e, tag }) => {
+      const groups = (e.statblocks || []).slice().sort((a, b) => (b.ruleset === '5pfh') - (a.ruleset === '5pfh'));
+      return {
+        id: e.id,
+        name: e.name || 'Unnamed',
+        tag,
+        range: gearValue(groups, ['range']),
+        shots: gearValue(groups, ['shots', 'magazine', 'rounds', 'ammo']),
+        damage: gearValue(groups, ['damage']),
+        traits: gearValue(groups, ['traits']),
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Fills one weapon row of an entity's statblock from a #melee/#ranged
+ *  Item (weaponItems): its name and stats, and `itemId` pointing back at
+ *  it. No-op for an unknown entity, row or item, or an item without one of
+ *  those tags. */
+export function fillEntityWeaponFromItem(campaign, id, groupIndex, weaponIndex, itemId) {
+  const item = weaponItems(campaign).find((w) => w.id === itemId);
+  if (!item) return campaign;
+  const next = clone(campaign);
+  const e = getEntity(next, id);
+  const g = e && e.statblocks && e.statblocks[groupIndex];
+  if (!g || !Array.isArray(g.weapons) || !g.weapons[weaponIndex]) return campaign;
+  updateStatblockWeapon(e, groupIndex, weaponIndex, {
+    name: item.name, range: item.range, shots: item.shots, damage: item.damage, traits: item.traits, itemId: item.id,
+  });
   return next;
 }
 

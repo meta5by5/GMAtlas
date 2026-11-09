@@ -172,6 +172,6 @@ export const WIKI_RECORD_SECTIONS = {
 // in their own sections (relationships, statblocks, place kind), oracle
 // side-channels, and inert carried-over fields (CLAUDE.md, migration rule 5).
 export const WIKI_RECORD_SKIP = [
-  'id', 'type', 'name', 'createdAt', 'updatedAt', 'overview', 'revealed', 'relationships', 'statblocks',
+  'id', 'type', 'name', 'createdAt', 'updatedAt', 'overview', 'revealed', 'relationships', 'statblocks', 'statblocksManualOrder',
   'placeKind', 'sensorySource', 'fantasyFieldSource', 'starSystemId', 'starId', 'fromComposer', 'sceneId', '_legacy',
 ];

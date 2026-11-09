@@ -16,7 +16,7 @@ import { lightState, lightRemaining, isLit, formatLight } from '../../domain/tor
 import {
   listEntities, filterEntities, getEntity, ENTITY_TYPES, TYPE_LABEL, entityTypeLabel, listTagVocabulary, listEntityTagVocabulary,
   RELATIONSHIP_TYPES, RELATIONSHIP_TYPE_LABEL, isRelationshipFlagged, computeFactionMaxHp,
-  getSystemForLocation, getStarForLocation, getHexZoneForLocation, LOCATION_FANTASY_FIELD_ORACLE_PATH,
+  getSystemForLocation, getStarForLocation, getHexZoneForLocation, LOCATION_FANTASY_FIELD_ORACLE_PATH, weaponItems,
 } from '../../domain/entities.js';
 import { sortStatblockGroups, getStatblockTemplates } from '../../domain/statblocks.js';
 import { listTemplates } from '../../domain/statblockTemplates.js';
@@ -454,7 +454,7 @@ function inspector(doc, e, ui) {
     </div>`;
   return `
     <div class="inspector-head">
-      <input class="inspector-name" data-entity-field="name" value="${esc(e.name)}" placeholder="Name">
+      ${ui.nameInDrawerTitle ? '' : `<input class="inspector-name" data-entity-field="name" value="${esc(e.name)}" placeholder="Name">`}
       ${wikiReadButton(e)}
       ${e.type === 'npc' && !isPartyCharacter ? `<button class="icon-btn" data-deepen-npc="${esc(e.id)}" title="Roll a Stereotype/Want/Complication and add it to this NPC's Overview">🎲 Deepen</button>` : ''}
       <button class="icon-btn" data-entity-del="${esc(e.id)}" title="Delete entity">🗑</button>
@@ -474,7 +474,6 @@ function inspector(doc, e, ui) {
       </div>
     </div>
     ${characterSheetSectionHtml(e, doc, ui)}
-    ${nonCharacterStatblockCardsHtml(e, doc, ui)}
     ${inactiveStatblocksHtml(e, doc)}
     ${isPartyCharacter ? '' : `<div class="revealed-block">
       <span class="field-label-row">
@@ -1528,42 +1527,14 @@ function tagEditorList(doc, e, ui) {
 // ui.statblockAddOpen) alongside the existing "add a whole new statblock
 // group" chips, instead of competing for attention with the fields
 // themselves.
-// Direct follow-up request: "move character sheet section right below the
-// thumbnail and above 'Revealed / hidden (GM)'" — renders just the
-// Character Sheet group(s) (kind: 'character'; there's normally at most
-// one, but this handles more than one the same defensive way every other
-// sortStatblockGroups-based function here does), reusing statblockGroupBlock
-// (which already dispatches kind:'character' to characterSheetGroupBlock)
-// so there's exactly one place that knows how to render a Character Sheet
-// card, just two call sites now instead of one.
+// Every active statblock card (character sheets, Bestiary, vehicle, gear),
+// right under the thumbnail, as one list in display order: ranked by kind
+// until the GM reorders with ▲/▼, then as stored (sortStatblockGroups,
+// statblocksManualOrder). Archived groups (the Bestiary <-> Character
+// swap) are left out here and listed by inactiveStatblocksHtml.
 function characterSheetSectionHtml(e, doc, ui = {}, opts = {}) {
-  const sorted = sortStatblockGroups(e.statblocks || [], doc.settings);
-  // group.archived (direct follow-up request — removing the protected
-  // "character" tag archives rather than deletes its Character Sheet)
-  // hides it from view here; re-adding the tag (shell.js) clears the flag.
-  return sorted.filter(({ group }) => group.kind === 'character' && !group.archived)
-    .map(({ group, index }) => statblockGroupBlock(e, group, index, doc, ui, opts)).join('');
-}
-
-// Direct follow-up request: "any statblocks that are selected must be
-// added under the last statblock added under thumbnail" — every OTHER
-// statblock group (Bestiary/Vehicle/Gear; anything sortStatblockGroups
-// doesn't rank as 'character') now renders immediately after
-// characterSheetSectionHtml (inspector()'s own return), right under the
-// thumbnail alongside Character Sheet, instead of much further down past
-// Faction/Conflict/World Profile/etc. — a newly-added group lands right
-// there too, since this reads the live entity.statblocks on every render.
-function nonCharacterStatblockCardsHtml(e, doc, ui = {}, opts = {}) {
-  const sorted = sortStatblockGroups(e.statblocks || [], doc.settings);
-  // group.archived (direct follow-up request: "Don't allow both a
-  // bestiary and a character sheet at the same time... swap... if the
-  // Character tag is added/removed") — same hide-don't-delete filter
-  // characterSheetSectionHtml's own !group.archived already uses, now
-  // symmetric: a Bestiary ('npc') group gets archived while #character
-  // is active, so it stays out of view here until the tag is removed and
-  // ensureAutoStatblock swaps it back. Vehicle/Gear groups never carry
-  // this flag at all, so they're unaffected either way.
-  return sorted.filter(({ group }) => group.kind !== 'character' && !group.archived)
+  const sorted = sortStatblockGroups(e.statblocks || [], doc.settings, e.statblocksManualOrder);
+  return sorted.filter(({ group }) => !group.archived)
     .map(({ group, index }) => statblockGroupBlock(e, group, index, doc, ui, opts)).join('');
 }
 
@@ -1573,7 +1544,7 @@ function nonCharacterStatblockCardsHtml(e, doc, ui = {}, opts = {}) {
 // here rather than hidden, each with the usual remove control, so every
 // statblock an entity holds is visible and removable.
 function inactiveStatblocksHtml(e, doc) {
-  const sorted = sortStatblockGroups(e.statblocks || [], doc.settings).filter(({ group }) => group.archived);
+  const sorted = sortStatblockGroups(e.statblocks || [], doc.settings, e.statblocksManualOrder).filter(({ group }) => group.archived);
   if (!sorted.length) return '';
   const rows = sorted.map(({ group, index }) => {
     const why = group.kind === 'character'
@@ -1588,16 +1559,16 @@ function inactiveStatblocksHtml(e, doc) {
 // The "+Field"/"+Track" (one picker per existing group), "+ Add a whole
 // new statblock group" chips, and Enhancements — direct follow-up request
 // moved these out from directly under the statblock cards (which moved up
-// near the thumbnail — see nonCharacterStatblockCardsHtml above) and into
+// near the thumbnail — see characterSheetSectionHtml above) and into
 // the Configuration section (entityConfigurationSectionHtml, below)
 // alongside Type/Tags, consolidated under ONE collapsed-by-default header
 // instead of two.
 function statblockAddControlsHtml(e, doc, ui = {}) {
   const groups = e.statblocks || [];
-  const sorted = sortStatblockGroups(groups, doc.settings);
+  const sorted = sortStatblockGroups(groups, doc.settings, e.statblocksManualOrder);
   const addChoices = statblockAddChoices(e, groups, doc);
   // Direct follow-up request (Bestiary/Character swap): an archived group
-  // isn't shown as a card at all (nonCharacterStatblockCardsHtml/
+  // isn't shown as a card at all (characterSheetSectionHtml/
   // characterSheetSectionHtml's own !archived filters) — offering to add
   // a Field/Track to it here, where the GM can't even see its current
   // fields, would be confusing.
@@ -1692,7 +1663,7 @@ function statblockGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
     <div class="statblock-head">
       ${only ? '' : statblockCollapseToggleHtml(key, collapsed)}
       <h4>${statblockGroupLabel(group, doc)}</h4>
-      ${only ? '' : statblockMoveButtonsHtml(gi)}
+      ${canMoveStatblock(e) ? statblockMoveButtonsHtml(gi) : ''}
       ${only ? '' : statblockRemoveButtonHtml(gi)}
     </div>
     ${collapsed ? '' : `
@@ -1851,7 +1822,7 @@ function fiveLeaguesEnemyStatblockHtml(e, group, gi, doc, ui = {}, opts = {}) {
     <div class="statblock-head">
       ${only ? '' : statblockCollapseToggleHtml(key, collapsed)}
       <h4>${statblockGroupLabel(group, doc)}</h4>
-      ${only ? '' : statblockMoveButtonsHtml(gi)}
+      ${canMoveStatblock(e) ? statblockMoveButtonsHtml(gi) : ''}
       ${only ? '' : statblockRemoveButtonHtml(gi)}
     </div>
     ${collapsed ? '' : `
@@ -1986,7 +1957,7 @@ function characterSheetGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
         return `
           ${stats.length ? `<div class="character-sheet-stats">${stats.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true, ruleset: group.ruleset })).join('')}</div>` : ''}
           ${resources.length ? `<div class="character-sheet-resources">${resources.map(({ f, fi }) => statblockFieldRow(f, gi, fi, { ...opts, compact: true, ruleset: group.ruleset })).join('')}</div>` : ''}
-          ${['5pfh', 'fiveleagues'].includes(group.ruleset) ? characterSheetWeaponsAndGearHtml(group, gi) : ''}
+          ${['5pfh', 'fiveleagues'].includes(group.ruleset) ? characterSheetWeaponsAndGearHtml(group, gi, doc, ui) : ''}
           ${group.ruleset === 'fiveleagues' ? fiveLeaguesCharacterSheetExtrasHtml(e, group, gi, doc, ui) : ''}`;
       })();
   // D&D 5e PDF character-sheet import (direct request, phase 4) — only
@@ -1998,11 +1969,11 @@ function characterSheetGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
     ? `<label class="btn ghost sm file-btn" title="Import a D&D Beyond character sheet PDF export">Import from PDF<input type="file" accept=".pdf,application/pdf" data-dnd5e-import-pdf="${gi}" hidden></label>`
     : '';
   // A lone sheet with no PDF import has nothing left in its header at all.
-  const headHtml = only && !pdfImportBtn ? '' : `<div class="statblock-head">
+  const headHtml = only && !pdfImportBtn && !canMoveStatblock(e) ? '' : `<div class="statblock-head">
       ${only ? '' : statblockCollapseToggleHtml(key, collapsed)}
       ${characterSheetCount > 1 ? `<h4>Character Sheet · ${esc(ruleset.label)}</h4>` : ''}
       ${pdfImportBtn}
-      ${characterSheetCount > 1 ? statblockMoveButtonsHtml(gi) : ''}
+      ${canMoveStatblock(e) ? statblockMoveButtonsHtml(gi) : ''}
       ${only ? '' : statblockRemoveButtonHtml(gi)}
     </div>`;
   return `<div class="statblock-block character-sheet" data-statblock-group="${gi}">
@@ -2019,6 +1990,12 @@ function characterSheetGroupBlock(e, group, gi, doc, ui = {}, opts = {}) {
 // groups, which are listed separately with their own remove button.
 function isEntityStatblock(g) {
   return g.kind !== 'gear' && g.kind !== 'vehicle';
+}
+
+// ▲/▼ show on every statblock card while there is more than one card to
+// order (any kind: character sheet, Bestiary, vehicle, gear).
+function canMoveStatblock(e) {
+  return (e.statblocks || []).filter((g) => !g.archived).length > 1;
 }
 
 function isOnlyStatblock(e, group) {
@@ -2090,7 +2067,29 @@ function characterSheetAttacksHtml(group, gi) {
 // delete icon to a second row"). Both addressed by plain array index
 // (weaponIndex), not a generated id, same convention statblock fields
 // already use.
-function characterSheetWeaponsAndGearHtml(group, gi) {
+// A blank 5PFH weapon row's ＋ opens this list of Items tagged #melee or
+// #ranged; picking one fills the row (fillEntityWeaponFromItem), and with
+// the row no longer blank the ＋ goes away.
+function weaponRowBlank(w) {
+  return !['name', 'range', 'shots', 'damage', 'traits'].some((k) => String((w && w[k]) || '').trim());
+}
+
+function weaponItemPickerRow(doc, gi, wi) {
+  const items = weaponItems(doc);
+  const group = (tag, label) => {
+    const list = items.filter((i) => i.tag === tag);
+    return list.length ? `<div class="weapon-pick-group"><span class="weapon-pick-label">${label}</span>${list.map((i) => `<button type="button" class="chip sm" data-statblock-weapon-pick-item="${gi}::${wi}::${esc(i.id)}" title="${esc([i.range && `Range ${i.range}`, i.shots && `Shots ${i.shots}`, i.damage && `Damage ${i.damage}`, i.traits].filter(Boolean).join(' · ') || 'No stats on this Item yet')}">${esc(i.name)}</button>`).join('')}</div>` : '';
+  };
+  const body = group('melee', 'Melee') + group('ranged', 'Ranged');
+  return `<tr class="weapon-pick-row"><td colspan="7">
+    <div class="weapon-pick" role="group" aria-label="Pick a weapon">
+      ${body || '<span class="dim small">No Items tagged #melee or #ranged yet. Tag an Item with one to pick it here.</span>'}
+      <button type="button" class="icon-btn" data-statblock-weapon-pick="${gi}::${wi}" title="Close" aria-label="Close">✕</button>
+    </div>
+  </td></tr>`;
+}
+
+function characterSheetWeaponsAndGearHtml(group, gi, doc, ui = {}) {
   const weapons = group.weapons || [];
   const isFiveLeagues = group.ruleset === 'fiveleagues';
   const traitsListId = `five-leagues-weapon-traits-${gi}`;
@@ -2143,21 +2142,23 @@ function characterSheetWeaponsAndGearHtml(group, gi) {
       ${gearFieldHtml}`;
   }
 
+  const pickKey = ui.weaponPick || '';
   const weaponRows = weapons.map((w, wi) => `
     <tr>
+      <td class="statblock-weapon-pick-cell">${weaponRowBlank(w) ? `<button type="button" class="icon-btn" data-statblock-weapon-pick="${gi}::${wi}" title="Fill from an Item tagged #melee or #ranged" aria-label="Pick a weapon" aria-expanded="${pickKey === `${gi}::${wi}`}">＋</button>` : ''}</td>
       <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::name" value="${esc(w.name)}" placeholder="Weapon"></td>
       <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::range" value="${esc(w.range)}" placeholder="Range"></td>
       <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::shots" value="${esc(w.shots)}" placeholder="Shots"></td>
       <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::damage" value="${esc(w.damage)}" placeholder="Damage"></td>
       <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::traits" value="${esc(w.traits)}" placeholder="Traits"></td>
       <td class="statblock-weapon-remove-cell"><button type="button" class="icon-btn statblock-weapon-remove-btn" data-statblock-weapon-remove="${gi}::${wi}" title="Remove weapon">🗑</button></td>
-    </tr>`).join('');
+    </tr>${pickKey === `${gi}::${wi}` && weaponRowBlank(w) ? weaponItemPickerRow(doc, gi, wi) : ''}`).join('');
   return `
     <div class="statblock-weapons">
       <h4>Weapons</h4>
       <table class="statblock-weapon-table">
         <thead><tr>
-          <th class="statblock-weapon-col-name">Weapon</th><th>Range</th><th>Shots</th><th>Damage</th><th class="statblock-weapon-col-traits">Traits</th>
+          <th class="statblock-weapon-pick-cell"></th><th class="statblock-weapon-col-name">Weapon</th><th>Range</th><th>Shots</th><th>Damage</th><th class="statblock-weapon-col-traits">Traits</th>
           <th></th></tr></thead>
         <tbody>${weaponRows}</tbody>
       </table>
@@ -4140,7 +4141,7 @@ function templateFieldRow(systemId, f, i, count) {
 // single nullable key, not a Set), so picking a different track field
 // swaps the open one instead of stacking a second below it.
 function partyMemberStatblocks(e, doc, ui, opts = {}) {
-  const sorted = sortStatblockGroups(e.statblocks, doc.settings);
+  const sorted = sortStatblockGroups(e.statblocks, doc.settings, e.statblocksManualOrder);
   const openKey = (ui && ui.expandedPartyStatField) || null;
   // Direct follow-up request: "remove the description of the character
   // sheet... in the dropdown of the entity on the Party panel if there is

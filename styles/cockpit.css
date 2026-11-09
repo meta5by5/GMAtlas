@@ -535,6 +535,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
    there's one "Cast" label instead of the title plus a second collapsible
    header row underneath it. */
 .mc-drawer h2.drawer-title-toggle { cursor: pointer; user-select: none; }
+/* An entity's title row: its kind (NPC, PC, Location, ...) then its name,
+   which is the name field itself — an input that reads as the title until
+   focused (✎ at the row's right edge focuses it). */
+.mc-drawer h2.drawer-title-entity { display: flex; align-items: baseline; gap: var(--sp-2); flex: 1; min-width: 0; }
+.drawer-title-kind { flex: none; color: var(--text-dim); font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.drawer-title-name { flex: 1; min-width: 0; font: inherit; font-weight: 600; color: inherit; background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 2px 4px; }
+.drawer-title-name:hover { border-color: var(--border); }
+.drawer-title-name:focus { border-color: var(--accent); background: var(--bg-inset); outline: none; }
+.inspector-head { justify-content: flex-end; }
 .mc-drawer h2.drawer-title-toggle:hover { color: var(--accent); }
 
 /* Tabbed drawer switching (2026-07-04) — hidden entirely unless 2+ drawers
@@ -2502,8 +2511,15 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 /* Direct follow-up request: Weapon/Traits get the most room (25% each),
    Range/Shots/Damage are short values and stay narrow, the remove-icon
    column is just wide enough for the button itself. */
-.statblock-weapon-col-name, .statblock-weapon-col-traits { width: 30%; }
-.statblock-weapon-table th:nth-child(2), .statblock-weapon-table th:nth-child(3), .statblock-weapon-table th:nth-child(4) { width: 12%; }
+.statblock-weapon-col-name, .statblock-weapon-col-traits { width: 28%; }
+/* Columns 3-5 are Range/Shots/Damage (column 1 is a blank row's ＋). */
+.statblock-weapon-table th:nth-child(3), .statblock-weapon-table th:nth-child(4), .statblock-weapon-table th:nth-child(5) { width: 12%; }
+.statblock-weapon-pick-cell { width: 1.6rem; padding-left: 0.1rem !important; padding-right: 0 !important; text-align: center; }
+.statblock-weapon-pick-cell .icon-btn { padding: 0 0.15rem; color: var(--accent); }
+.weapon-pick { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding: var(--sp-2); border: 1px dashed var(--accent); border-radius: 6px; background: var(--bg-inset); }
+.weapon-pick-group { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.weapon-pick-label { font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); }
+.weapon-pick > .icon-btn { margin-left: auto; }
 .statblock-weapon-remove-cell { width: 1.8rem; padding-left: 0.1rem; padding-right: 0.1rem; text-align: center; }
 .statblock-weapon-remove-btn { padding-left: 0.15rem; padding-right: 0.15rem; }
 /* Five Leagues weapon cards (direct follow-up request: "use two rows where
