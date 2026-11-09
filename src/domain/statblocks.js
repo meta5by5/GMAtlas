@@ -359,23 +359,28 @@ export function removeStatblockGroup(entity, groupIndex) {
   return entity;
 }
 
-/** Direct follow-up request: "Add an up & down arrow... so it can be
- *  reordered" — swaps a group with its immediate neighbor in the RAW
- *  array, bounds-checked no-op past either end (same convention as
- *  moveCrewTaskInList/moveCombatTrackerEntry elsewhere in this app).
- *  sortStatblockGroups' own kind-rank grouping (character, then npc/
- *  Bestiary, then vehicle) still governs which TIER a group displays in —
- *  this only changes relative order WITHIN a tier, since Array.prototype
- *  .sort is a stable sort and preserves whatever order this leaves things
- *  in for two same-rank groups. */
-export function moveStatblockGroup(entity, groupIndex, direction) {
+/** The ▲/▼ on a statblock card: moves a group past its neighbor AS SHOWN
+ *  (the display order, skipping archived groups, which aren't shown among
+ *  the cards). A bounds-checked no-op past either end. The first move
+ *  writes the display order back into the array and marks the entity
+ *  `statblocksManualOrder`, after which sortStatblockGroups shows the
+ *  array as stored instead of re-ranking it by kind and ruleset — before
+ *  this, a move between two differently-ranked groups (a character sheet
+ *  and a Bestiary) was silently undone by that ranking. */
+export function moveStatblockGroup(entity, groupIndex, direction, settings) {
   if (!entity || !Array.isArray(entity.statblocks)) return entity;
-  const groups = entity.statblocks;
-  const target = groupIndex + (direction === 'up' ? -1 : 1);
-  if (groupIndex < 0 || groupIndex >= groups.length || target < 0 || target >= groups.length) return entity;
-  const tmp = groups[groupIndex];
-  groups[groupIndex] = groups[target];
-  groups[target] = tmp;
+  const group = entity.statblocks[groupIndex];
+  if (!group) return entity;
+  const shown = sortStatblockGroups(entity.statblocks, settings, entity.statblocksManualOrder).map((x) => x.group);
+  const from = shown.indexOf(group);
+  const step = direction === 'up' ? -1 : 1;
+  let to = from + step;
+  while (to >= 0 && to < shown.length && shown[to].archived) to += step;
+  if (to < 0 || to >= shown.length) return entity;
+  shown[from] = shown[to];
+  shown[to] = group;
+  entity.statblocks = shown;
+  entity.statblocksManualOrder = true;
   return entity;
 }
 
@@ -384,9 +389,12 @@ export function moveStatblockGroup(entity, groupIndex, direction) {
  *  (in Settings' template order), then vehicle. Returns `{group, index}`
  *  pairs — `index` is the position in the ORIGINAL (unsorted) array, which
  *  is what every mutator below addresses a group by, so sorting for display
- *  never disturbs the identifiers used to edit a group. */
-export function sortStatblockGroups(groups, settings) {
+ *  never disturbs the identifiers used to edit a group. With `manual` (the
+ *  entity's statblocksManualOrder, set once the GM reorders with ▲/▼) the
+ *  stored order is the display order. */
+export function sortStatblockGroups(groups, settings, manual = false) {
   const list = groups || [];
+  if (manual) return list.map((group, index) => ({ group, index }));
   const rulesetOrder = RULESETS.map((r) => r.id);
   const templateOrder = listStatblockTemplateIds(settings);
   const KIND_RANK = { character: 0, npc: 1, vehicle: 2 };

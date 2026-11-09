@@ -12999,3 +12999,49 @@ test('wiki record: the player copy keeps only whitelisted fields', () => {
   assert.ok(keys.includes('biome') && keys.includes('population'));
   assert.ok(!keys.includes('sights') && !keys.includes('locationStory') && !keys.includes('tags'));
 });
+
+// --- Statblock reorder across kinds; weapon rows from #melee/#ranged Items ---
+import { weaponItems as sbWeaponItems, fillEntityWeaponFromItem as sbFillWeapon } from '../src/domain/entities.js';
+import { sortStatblockGroups as sbSort } from '../src/domain/statblocks.js';
+
+test('statblock ▲/▼ reorders across kinds and the display follows it', () => {
+  let camp = defaultCampaign();
+  let id; ({ campaign: camp, id } = createEntity(camp, { type: 'npc', name: 'Rook' }));
+  camp = addEntityStatblockGroup(camp, id, 'character', '5pfh');
+  camp = addEntityStatblockGroup(camp, id, 'vehicle', 'vehicle');
+  const shown = () => { const e = getEntity(camp, id); return sbSort(e.statblocks, camp.settings, e.statblocksManualOrder).filter((x) => !x.group.archived).map((x) => x.group.kind); };
+  const before = shown();
+  assert.equal(before[0], 'character', 'a character sheet ranks first by default');
+  const e0 = getEntity(camp, id);
+  const charIndex = e0.statblocks.findIndex((g) => g.kind === 'character');
+  camp = moveEntityStatblockGroup(camp, id, charIndex, 'down');
+  const after = shown();
+  assert.notDeepEqual(after, before, 'moving the character sheet down changes what is shown');
+  assert.equal(after[1], 'character');
+  assert.equal(getEntity(camp, id).statblocksManualOrder, true);
+  const topIndex = getEntity(camp, id).statblocks.findIndex((g) => g === getEntity(camp, id).statblocks.filter((g2) => !g2.archived)[0]);
+  const same = moveEntityStatblockGroup(camp, id, topIndex, 'up');
+  assert.deepEqual(shown.call(null), after, 'past the top is a no-op');
+  assert.ok(same);
+});
+
+test('weaponItems lists #melee/#ranged Items with stats; filling a weapon row copies them', () => {
+  let camp = defaultCampaign();
+  let pc; ({ campaign: camp, id: pc } = createEntity(camp, { type: 'npc', name: 'Rook' }));
+  camp = addEntityStatblockGroup(camp, pc, 'character', '5pfh');
+  let gun; ({ campaign: camp, id: gun } = createEntity(camp, { type: 'item', name: 'Hand Laser' }));
+  camp = updateEntity(camp, gun, { tags: ['#Ranged'], statblocks: [{ kind: 'gear', ruleset: '5pfh', fields: [{ key: 'Range', value: '12"' }, { key: 'Shots', value: '2' }, { key: 'Damage', value: '0' }, { key: 'Traits', value: 'Snap Shot' }] }] });
+  let blade; ({ campaign: camp, id: blade } = createEntity(camp, { type: 'item', name: 'Blade' }));
+  camp = updateEntity(camp, blade, { tags: ['melee'] });
+  let rope; ({ campaign: camp, id: rope } = createEntity(camp, { type: 'item', name: 'Rope' }));
+  const list = sbWeaponItems(camp);
+  assert.deepEqual(list.map((w) => [w.name, w.tag]), [['Blade', 'melee'], ['Hand Laser', 'ranged']], 'untagged items are left out');
+  assert.equal(list[1].range, '12"');
+
+  const gi = getEntity(camp, pc).statblocks.findIndex((g) => g.kind === 'character');
+  camp = addEntityStatblockWeapon(camp, pc, gi);
+  camp = sbFillWeapon(camp, pc, gi, 0, gun);
+  assert.deepEqual(getEntity(camp, pc).statblocks[gi].weapons[0], { name: 'Hand Laser', range: '12"', shots: '2', damage: '0', traits: 'Snap Shot', itemId: gun });
+  assert.equal(sbFillWeapon(camp, pc, gi, 0, rope), camp, 'an untagged item is refused');
+  assert.equal(sbFillWeapon(camp, pc, gi, 5, gun), camp, 'a missing row is refused');
+});

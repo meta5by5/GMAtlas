@@ -34,17 +34,69 @@ defer:
     sources: [design/adr/deferred-turn-and-realtime-collaboration.md, ACCOUNTS-SYNC-ROADMAP S5/S6, functional-requirements-v3 Content Library recommendations]
     state: not-built
     notes: Deferred 2026-11-08. Groundwork (room, merge, per-campaign keys, table/player scopes, tables flag) stays.
-
-add:
   - id: s4-store-billing
     title: S4 store and billing, provider-neutral
     sources: [ACCOUNTS-SYNC-ROADMAP S4, section 8.3, section 9]
     state: not-built
     notes: Owner's decision 2026-11-08 — catalog, synced cart, checkout behind an adapter with a fake provider, orders, webhooks to entitlements, receipts, Billing page, redeem codes, Products/Orders/Codes in admin. Real provider chosen later.
+  - id: help-guides-checklists
+    title: Help-centre step-by-step guides with progress checklists
+    sources: [ACCOUNTS-SYNC-ROADMAP 8.3, S6]
+    state: not-built
+  - id: help-panel-deeplinks
+    title: A "?" on each campaign panel deep-linking to its help article
+    sources: [ACCOUNTS-SYNC-ROADMAP 8.3]
+    state: partial
+  - id: account-menu-avatar
+    title: Top-right account menu with avatar on both surfaces
+    sources: [ACCOUNTS-SYNC-ROADMAP 8.2]
+    state: partial
+    notes: The logo menu covers most of it; no avatar.
+  - id: moves-icon-placement
+    title: Moves-menu icon placement check in the Navigator
+    sources: [README Phase 14]
+    state: not-built
+    notes: Depends on moves-menu.
+  - id: location-breadcrumb
+    title: Clickable location breadcrumb (Site → Region → System → Sector)
+    sources: [Constitution Part IV]
+    state: not-built
+
+add:
+  - id: persistent-conflict-chips
+    title: Conflict chips that survive a reload, and cover account settings
+    sources: [design/adr/personal-sync.md]
+    state: partial
+  - id: live-account-settings
+    title: Account settings arriving live (account room) instead of a 30 s poll
+    sources: [design/adr/personal-sync.md, ACCOUNTS-SYNC-ROADMAP 5.4]
+    state: partial
+  - id: entitlements-push
+    title: Account-room push of entitlements.changed (instant license/flag updates)
+    sources: [ACCOUNTS-SYNC-ROADMAP 4.3]
+    state: partial
+    notes: Today the certificate is re-fetched every 10 min and on returning to the tab.
+  - id: cert-grace-banner
+    title: Offline-past-expiry 14-day grace banner, then pause paid features
+    sources: [ACCOUNTS-SYNC-ROADMAP 4.3]
+    state: not-built
+ - id: touch-gesture-polish
+    title: Phone/tablet touch and gesture polish pass
+    sources: [design/UX-ROADMAP.md, README Phase 14]
+    state: not-built
+  - id: multi-slot-drawers
+    title: Repositionable multi-slot drawers, 2×/3× widths, pop-out windows
+    sources: [Constitution Part IV, functional-requirements-v3 Storyboard ("explicitly out of scope")]
+    state: not-built
 
 ignore: []
 
 delete: []
+  - id: orphan-shift-reducers
+    title: The 8 Situation Model SHIFTS reducers with no UI control
+    sources: [deviations Part II, README Phase 12]
+    state: dead-code
+    notes: Candidate for delete or for wiring into a control.
 
 pending:
   # --- Accounts & sync (design/ACCOUNTS-SYNC-ROADMAP.md, ADRs) -------------
@@ -69,23 +121,6 @@ pending:
     sources: [design/adr/personal-sync.md]
     state: not-built
     notes: Today it shows an error and stays local.
-  - id: persistent-conflict-chips
-    title: Conflict chips that survive a reload, and cover account settings
-    sources: [design/adr/personal-sync.md]
-    state: partial
-  - id: live-account-settings
-    title: Account settings arriving live (account room) instead of a 30 s poll
-    sources: [design/adr/personal-sync.md, ACCOUNTS-SYNC-ROADMAP 5.4]
-    state: partial
-  - id: entitlements-push
-    title: Account-room push of entitlements.changed (instant license/flag updates)
-    sources: [ACCOUNTS-SYNC-ROADMAP 4.3]
-    state: partial
-    notes: Today the certificate is re-fetched every 10 min and on returning to the tab.
-  - id: cert-grace-banner
-    title: Offline-past-expiry 14-day grace banner, then pause paid features
-    sources: [ACCOUNTS-SYNC-ROADMAP 4.3]
-    state: not-built
   - id: file-mode-device-code
     title: file:// sign-in via a device-code flow
     sources: [ACCOUNTS-SYNC-ROADMAP 3.3]
@@ -103,38 +138,9 @@ pending:
     title: Admin metrics dashboard
     sources: [ACCOUNTS-SYNC-ROADMAP S6]
     state: not-built
-  - id: help-guides-checklists
-    title: Help-centre step-by-step guides with progress checklists
-    sources: [ACCOUNTS-SYNC-ROADMAP 8.3, S6]
-    state: not-built
-  - id: help-panel-deeplinks
-    title: A "?" on each campaign panel deep-linking to its help article
-    sources: [ACCOUNTS-SYNC-ROADMAP 8.3]
-    state: partial
-  - id: account-menu-avatar
-    title: Top-right account menu with avatar on both surfaces
-    sources: [ACCOUNTS-SYNC-ROADMAP 8.2]
-    state: partial
-    notes: The logo menu covers most of it; no avatar.
 
   # --- Storyboard / UX (functional-requirements-v3, design/UX-ROADMAP.md) --
-  - id: touch-gesture-polish
-    title: Phone/tablet touch and gesture polish pass
-    sources: [design/UX-ROADMAP.md, README Phase 14]
-    state: not-built
-  - id: moves-icon-placement
-    title: Moves-menu icon placement check in the Navigator
-    sources: [README Phase 14]
-    state: not-built
-    notes: Depends on moves-menu.
-  - id: multi-slot-drawers
-    title: Repositionable multi-slot drawers, 2×/3× widths, pop-out windows
-    sources: [Constitution Part IV, functional-requirements-v3 Storyboard ("explicitly out of scope")]
-    state: not-built
-  - id: location-breadcrumb
-    title: Clickable location breadcrumb (Site → Region → System → Sector)
-    sources: [Constitution Part IV]
-    state: not-built
+ 
   - id: five-w-jump-row
     title: A small WHO/WHERE/WHAT/WHY/HOW jump-button row
     sources: [deviations Part II (13c–13k)]
@@ -247,11 +253,6 @@ pending:
     title: Manual physical-dice result → consequence calculation
     sources: [README Phase 13, deviations Part II]
     state: not-built
-  - id: orphan-shift-reducers
-    title: The 8 Situation Model SHIFTS reducers with no UI control
-    sources: [deviations Part II, README Phase 12]
-    state: dead-code
-    notes: Candidate for delete or for wiring into a control.
 
   # --- Visual & tactical tools (Phase 11, legacy ADRs) ---------------------
   - id: planetfall-base-builder
@@ -290,16 +291,16 @@ pending:
   # --- Campaign wiki & Drive (design/onetimecmd.md) ----------------------
   - id: campaign-wiki
     title: Campaign wiki — [[wikilinks]], backlinks, page view per entity, nesting (hex → dungeon → room), GM-secret blocks, player view, map binding, markdown export
-    sources: [design/onetimecmd.md, design/WIKI-ROADMAP.md]
+    sources: [design/onetimecmd.md]
     state: not-built
-    notes: Roadmap in design/WIKI-ROADMAP.md (W0–W6). W0 signed off; W1 (links, backlinks, rename, aliases, visibility, place kinds) and W2 (Wiki panel, Read mode, red links, Player View) built 2026-11-08; W3 (map binding) next.
+    notes: No roadmap written yet. Much overlaps @mentions, the relationship graph and the battlemap.
   - id: dated-session-journal
     title: Session journal with real and in-world dates, session numbers, attendees, timeline by in-world date
-    sources: [design/onetimecmd.md, design/WIKI-ROADMAP.md W4]
+    sources: [design/onetimecmd.md]
     state: partial
   - id: drive-backup-sharing
     title: Google Drive backup, restore and player-safe sharing (drive.file scope)
-    sources: [design/onetimecmd.md, design/WIKI-ROADMAP.md D1–D4]
+    sources: [design/onetimecmd.md]
     state: not-built
 
   # --- Planetfall world tracker spec ---------------------------------------

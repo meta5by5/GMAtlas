@@ -42,7 +42,7 @@ import {
 import {
   createEntity, applyNewNpcRoleStatblock, updateEntity, addEntityTag, removeEntityTag, removeEntity, filterEntities, setActiveEntity, addRelationship, removeRelationship,
   getEntity, addEntityStatblockGroup, removeEntityStatblockGroup, moveEntityStatblockGroup, setEntityStatblockField, addEntityStatblockField, removeEntityStatblockField,
-  addEntityStatblockWeapon, updateEntityStatblockWeapon, removeEntityStatblockWeapon, setEntityStatblockGear,
+  addEntityStatblockWeapon, fillEntityWeaponFromItem, updateEntityStatblockWeapon, removeEntityStatblockWeapon, setEntityStatblockGear,
   addEntityStatblockItem, updateEntityStatblockItem, removeEntityStatblockItem,
   addEntityStatblockAttack, updateEntityStatblockAttack, removeEntityStatblockAttack, applyDnd5ePdfImport,
   setEntityStatblockTrackValue, setEntityStatblockAttributeValue, updateRelationshipLabel, updateRelationshipType, updateRelationshipStrength,
@@ -628,6 +628,8 @@ let guideReorderMode = false;
 const wikiReadIds = new Set();
 let wikiPlayerView = false;
 let wikiRedLinkPick = null;
+// The 5PFH weapon row whose ＋ item picker is open, as "gi::wi" (one at a time).
+let weaponPick = null;
 const wikiSettingsOpen = new Set();
 let wikiSearch = '';
 let wikiType = '';
@@ -2030,6 +2032,13 @@ function onClick(ev) {
   // this opens all of them; otherwise (anything at all open) it collapses
   // all of them. Only wired for these two — see the title's own
   // .drawer-title-toggle class, set only for 'colony'/'party' above.
+  // ✎ at the right edge of an entity's title row: edit its name in place.
+  const nameEdit = hit('[data-entity-name-edit]');
+  if (nameEdit) {
+    const input = nameEdit.closest('[data-drawer]') && nameEdit.closest('[data-drawer]').querySelector('.drawer-title-name');
+    if (input) { input.focus(); input.select(); }
+    return;
+  }
   const drawerTitleToggle = hit('[data-drawer-title].drawer-title-toggle');
   if (drawerTitleToggle) {
     const sections = activeDrawer === 'colony' ? CAMPAIGN_SECTION_KEYS : activeDrawer === 'party' ? PARTY_SECTION_KEYS : null;
@@ -3714,6 +3723,22 @@ function onClick(ev) {
     const gi = Number(sbWeaponAdd.dataset.statblockWeaponAdd);
     const active = store.get().entities.activeId;
     return store.update((d) => addEntityStatblockWeapon(d, active, gi));
+  }
+  // A blank 5PFH weapon row's ＋: open (or close) its list of Items tagged
+  // #melee/#ranged; picking one fills the row from that Item.
+  const sbWeaponPickItem = hit('[data-statblock-weapon-pick-item]');
+  if (sbWeaponPickItem) {
+    const [gi, wi, itemId] = sbWeaponPickItem.dataset.statblockWeaponPickItem.split('::');
+    const active = store.get().entities.activeId;
+    weaponPick = null;
+    store.update((d) => fillEntityWeaponFromItem(d, active, Number(gi), Number(wi), itemId));
+    return;
+  }
+  const sbWeaponPick = hit('[data-statblock-weapon-pick]');
+  if (sbWeaponPick) {
+    const key = sbWeaponPick.dataset.statblockWeaponPick;
+    weaponPick = weaponPick === key ? null : key;
+    return renderDrawerBody();
   }
   const sbWeaponRemove = hit('[data-statblock-weapon-remove]');
   if (sbWeaponRemove) {
@@ -7085,7 +7110,7 @@ function onChange(ev) {
     const value = t.type === 'checkbox' ? t.checked : t.type === 'number' ? (Number(t.value) || 0) : t.value;
     // A rename carries every link to the old name along with it, and keeps
     // the old name as an alias (design/WIKI-ROADMAP.md W1).
-    if (field === 'name') return store.update((d) => renameEntityEverywhere(d, active, value));
+    if (field === 'name') return store.update((d) => renameEntityEverywhere(d, ef.dataset.entityId || active, value));
     return store.update((d) => updateEntity(d, active, { [field]: value }));
   }
 
@@ -10511,7 +10536,10 @@ function render() {
   // reachable from the tab strip instead now (design/UX-ROADMAP.md Step 3).
   root.querySelector('.cockpit').classList.toggle('has-open-drawer', openDrawers.length > 0);
   const titleEl = drawer.querySelector('[data-drawer-title]');
-  titleEl.textContent = titleForDrawer(doc, activeDrawer, profile);
+  const titleEntity = entityForDrawer(doc, activeDrawer);
+  titleEl.classList.toggle('drawer-title-entity', !!titleEntity);
+  if (titleEntity) titleRowForEntity(titleEl, doc, titleEntity);
+  else titleEl.textContent = titleForDrawer(doc, activeDrawer, profile);
   // Direct follow-up request: "make the Campaign and Party headers of
   // those respective panels toggle the section headers to open or close
   // on their respective panels" — revives the title-as-toggle affordance
@@ -11946,12 +11974,37 @@ function diceRollCardHtml(label, method, r, meta) {
 // there's only ever the one active entity, so unlike every other drawer
 // there's no separate list to distinguish it from.
 function titleForDrawer(doc, id, profile) {
-  if (id === 'entity-detail' || isEntityTab(id)) {
-    const active = getEntity(doc, isEntityTab(id) ? id.slice(ENTITY_TAB_PREFIX.length) : (doc.entities && doc.entities.activeId));
-    return active ? `Entity — ${active.name || 'Unnamed'}` : 'Entity';
-  }
+  const e = entityForDrawer(doc, id);
+  if (e) return `${entityKindLabel(doc, e)} — ${e.name || 'Unnamed'}`;
+  if (id === 'entity-detail' || isEntityTab(id)) return 'Entity';
   const meta = drawerMeta(resolveSlotContentId(id, profile));
   return meta ? meta.label : 'Drawer';
+}
+
+function entityForDrawer(doc, id) {
+  if (id !== 'entity-detail' && !isEntityTab(id)) return null;
+  return getEntity(doc, isEntityTab(id) ? id.slice(ENTITY_TAB_PREFIX.length) : (doc.entities && doc.entities.activeId)) || null;
+}
+
+// What the title row calls an entity: PC for a party character (an NPC
+// tagged #character), otherwise its type's label (NPC, Location, ...).
+function entityKindLabel(doc, e) {
+  if (e.type === 'npc' && hasCharacterTag(e)) return 'PC';
+  return entityTypeLabel(e.type, doc.settings && doc.settings.genrePack);
+}
+
+// The entity drawer's title row: its kind, then its name as the one name
+// field (an input styled as the title; ✎ at the row's right edge focuses
+// it). A name being typed is left alone by a re-render.
+function titleRowForEntity(titleEl, doc, e) {
+  const kind = entityKindLabel(doc, e);
+  const input = titleEl.querySelector('.drawer-title-name');
+  if (input && input === document.activeElement && input.dataset.entityId === e.id) {
+    const k = titleEl.querySelector('.drawer-title-kind');
+    if (k) k.textContent = kind;
+    return;
+  }
+  titleEl.innerHTML = `<span class="drawer-title-kind">${escapeHtml(kind)}</span><input class="inspector-name drawer-title-name" data-entity-field="name" data-entity-id="${escapeHtml(e.id)}" value="${escapeHtml(e.name || '')}" placeholder="Name" aria-label="Name" autocomplete="off">`;
 }
 
 // Cast's "Generate…" dropdown is the one drawer-specific control that lives
@@ -11970,6 +12023,7 @@ function castGenerateSelectHtml() {
 }
 function headExtraForDrawer(id) {
   if (id === 'cast') return castGenerateSelectHtml();
+  if (entityForDrawer(store.get(), id)) return '<button type="button" class="icon-btn" data-entity-name-edit title="Edit the name" aria-label="Edit the name">✎</button>';
   if (id === 'battlemap') return battlemapSpanControlsHtml();
   // (Party's ＋ picker lives on the Party panel's own "Party" section header.)
   // Guide/Documents' top-of-drawer intro tips have no in-content header of
@@ -11997,7 +12051,7 @@ function buildDrawerUi() {
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
     enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, tocOfferOpen, tocLibrary: store.getAppConfig().tocLibrary || {}, canScanToc: canScanToc(), lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, refDocBlobKeysLoaded, expandedWhatConflicts,
     composerWizardStep, composerWizardOffer: composerWizardOffer(), guideReorderMode, shadowdarkImportResult,
-    wikiReadIds, wikiPlayerView, wikiRedLinkPick, wikiSettingsOpen, wikiSearch, wikiType,
+    wikiReadIds, wikiPlayerView, wikiRedLinkPick, wikiSettingsOpen, wikiSearch, wikiType, weaponPick,
     advisorOracleResults, advisorDrafts, advisorConsequenceDraw, sceneSummaryOverride,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName, partyTrackersEditOpen, collapsedPartySections,
@@ -12169,7 +12223,9 @@ function renderActiveDrawerHtmlUnguarded(doc) {
   }
   // An entity tab (entity:<id>) renders the Entity view; its entity is the
   // active one (normalizeEntityTabs keeps the two in step).
-  return renderDrawer(isEntityTab(activeDrawer) ? 'entity-detail' : activeDrawer, doc, buildDrawerUi());
+  // In the drawer, the entity's name is edited in the drawer's title row
+  // (titleRowForEntity), so the editor leaves out its own name field.
+  return renderDrawer(isEntityTab(activeDrawer) ? 'entity-detail' : activeDrawer, doc, { ...buildDrawerUi(), nameInDrawerTitle: true });
 }
 
 // A live Story Option the GM hasn't yet rolled/journaled/dismissed is
@@ -12246,7 +12302,7 @@ function renderDrawerBody() {
   // AND puts you right on the name," not just a switch to the Cast tab.
   if (focusInspectorNameNextRender) {
     focusInspectorNameNextRender = false;
-    const nameInput = root && root.querySelector('.inspector-name');
+    const nameInput = root && (root.querySelector('[data-drawer] .drawer-title-name') || root.querySelector('.inspector-name'));
     if (nameInput) { nameInput.focus(); nameInput.select(); }
   }
   // Current Location's "🔗" (data-location-edit-relationships) — focuses
