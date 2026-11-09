@@ -290,16 +290,16 @@ pending:
   # --- Campaign wiki & Drive (design/onetimecmd.md) ----------------------
   - id: campaign-wiki
     title: Campaign wiki — [[wikilinks]], backlinks, page view per entity, nesting (hex → dungeon → room), GM-secret blocks, player view, map binding, markdown export
-    sources: [design/onetimecmd.md]
+    sources: [design/onetimecmd.md, design/WIKI-ROADMAP.md]
     state: not-built
-    notes: No roadmap written yet. Much overlaps @mentions, the relationship graph and the battlemap.
+    notes: Roadmap in design/WIKI-ROADMAP.md (W0–W6). W0 signed off; W1 (links, backlinks, rename, aliases, visibility, place kinds) built 2026-11-08; W2 (page view) next.
   - id: dated-session-journal
     title: Session journal with real and in-world dates, session numbers, attendees, timeline by in-world date
-    sources: [design/onetimecmd.md]
+    sources: [design/onetimecmd.md, design/WIKI-ROADMAP.md W4]
     state: partial
   - id: drive-backup-sharing
     title: Google Drive backup, restore and player-safe sharing (drive.file scope)
-    sources: [design/onetimecmd.md]
+    sources: [design/onetimecmd.md, design/WIKI-ROADMAP.md D1–D4]
     state: not-built
 
   # --- Planetfall world tracker spec ---------------------------------------

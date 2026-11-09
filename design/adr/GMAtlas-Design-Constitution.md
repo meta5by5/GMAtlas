@@ -386,7 +386,7 @@ real oracle roll instead of a fixed sentence), Roll Oracle, journal note
 CRUD with `@mention` auto-linking, capped 6-entry timeline breadcrumbs,
 `generateNpc`/`deepenNpc`.
 
-**Cast, relationships & mentions.** Full entity CRUD across 7 types; mirrored
+**Cast, relationships & mentions.** Full entity CRUD across 8 types; mirrored
 but independently-typed relationships (a directional edge's reverse side
 always starts `linked`, never mirrors the same directional type); "flag,
 don't auto-correct" integrity checking for type-mismatched relationship
@@ -394,7 +394,14 @@ targets (dangling links to a deleted entity are the one case that IS
 stripped outright); automatic Bond-track creation between eligible
 npc/faction pairs; every entity resolves to a faction (real membership or a
 synthetic non-persisted "Unaligned"); `@mention` parsing (bare `@Name` and
-bracketed `@[Label|Name#Page]`) with pairwise auto-relate on auto-link; lazy,
+bracketed `@[Label|Name#Page]`) with pairwise auto-relate on auto-link; the
+wiki's groundwork (`domain/wiki.js`, design/WIKI-ROADMAP.md W1): `[[Name]]` /
+`[[Name|shown]]` links that mean the same as `@[...]`, name-then-alias
+lookup, backlinks derived from every text that can hold a link (never
+stored), red links, a rename that rewrites every link and keeps the old name
+as an alias, optional `aliases` / `visibility` (`gm` default) / Location
+`placeKind`, and the `connects_to` (self-mirroring) and `appears_in`
+relationship types — no wiki page view yet (W2); lazy,
 additive, never-overwriting type-specific field provisioning for Faction
 (HQ/Leadership/Agenda/Force-Cunning-Wealth/Fear-Need-Secret/the full SWN
 Faction Turn Engine field set), Location (full UWP profile + development

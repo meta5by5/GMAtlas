@@ -51,6 +51,9 @@ non-trivial change; this file only covers day-to-day mechanics.
 - **`design/ACCOUNTS-SYNC-ROADMAP.md`** — the proposed (unbuilt) plan for
   sign-in, multi-device sync, account-wide licensing, multiplayer tables,
   the admin panel and the portal surface, phased S0–S6.
+- **`design/WIKI-ROADMAP.md`** — the proposed (unbuilt) campaign wiki &
+  journal (W0–W6) and Google Drive backup/sharing (D1–D4), mapped onto the
+  existing entities, mentions and maps.
 - **`PROGRESS.md`** — the phase-by-phase status ledger. Check it when a
   phase number is ambiguous.
 - New architectural decisions (a new engine, a schema shape change, a
@@ -117,7 +120,7 @@ src/
                    commodities/biomes, UWP tables, suggestion lenses, enhancement
                    types, battlemap icons, Reference Library manifest). All content
                    is data — no ruleset vocabulary belongs in src/domain/.
-  domain/          61 files, pure/DOM-free, covered by tests/domain.test.js.
+  domain/          62 files, pure/DOM-free, covered by tests/domain.test.js.
                    session.js/context.js/scenes.js/copilot.js/recap.js orchestrate
                    the WHO/WHERE/WHAT/WHY/HOW model and Co-Pilot; oracles.js is the
                    roll engine; entities.js/statblocks.js/threads.js/graph.js/
@@ -131,7 +134,8 @@ src/
                    (Composer → Encounter, AI prompt, campaign timeline) and
                    torchTimer.js/shadowdarkImport.js (Shadowdark) are 2026-11-08
                    additions (design/adr/composer-encounters-and-panels.md,
-                   shadowdark-ruleset.md); search.js/
+                   shadowdark-ruleset.md); wiki.js is the campaign wiki's
+                   links/backlinks/rename (design/WIKI-ROADMAP.md); search.js/
                    activities.js/contentPack.js/titleCase.js are cross-cutting;
                    inlineBlobs.js/syncOps.js/licensing.js are sync groundwork
                    (design/adr/sync-groundwork.md); helpCentre.js backs Help.
@@ -156,8 +160,8 @@ styles/
   cockpit.css      layout + component styles (campaign surface)
   portal.css       portal surface layout (shares tokens.css only)
 tests/
-  domain.test.js   821 tests — domain modules, incl. sync-merge convergence
-  migrate.test.js  26 tests — legacy-key absorption + round-trip
+  domain.test.js   830 tests — domain modules, incl. sync-merge convergence
+  migrate.test.js  27 tests — legacy-key absorption + round-trip
 scripts/
   build.js         zero-dependency bundler (see below) — re-run after any src/ edit;
                    two entries: src/main.js -> app.bundle.js, src/admin/main.js -> admin.bundle.js

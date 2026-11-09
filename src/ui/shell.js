@@ -13,6 +13,7 @@ import { continueStory, restartStory, applyStoryShift, rollOracle, addNote, setJ
 import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, addSceneAsset, removeSceneAsset, addSceneLocation, removeSceneLocation, setSceneSystem, addSceneDismissedFaction, removeSceneDismissedFaction, moveSceneActor } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
 import { createEncounterFromComposer, listEncounters, composerPrompt } from '../domain/encounters.js';
+import { renameEntityEverywhere } from '../domain/wiki.js';
 import { lightStart, lightPause, lightReset, lightBurnOut, lightRemaining, lightState, isLit, formatLight } from '../domain/torchTimer.js';
 import { parseShadowdark, importShadowdark } from '../domain/shadowdarkImport.js';
 import { COMPOSER_STEPS } from './workspace/index.js';
@@ -6981,6 +6982,9 @@ function onChange(ev) {
     // first plain-number-backed fields — coerced via Number() same as the
     // checkbox branch, so the engine's arithmetic never receives a string.
     const value = t.type === 'checkbox' ? t.checked : t.type === 'number' ? (Number(t.value) || 0) : t.value;
+    // A rename carries every link to the old name along with it, and keeps
+    // the old name as an alias (design/WIKI-ROADMAP.md W1).
+    if (field === 'name') return store.update((d) => renameEntityEverywhere(d, active, value));
     return store.update((d) => updateEntity(d, active, { [field]: value }));
   }
 
