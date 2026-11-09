@@ -307,6 +307,50 @@
   cursor: pointer;
 }
 .portal .portal-btn.is-on { border-color: var(--accent); color: var(--accent); }
-.portal .portal-wiki-page { max-width: 64rem; margin: 0 auto; padding: var(--sp-4); background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius); }
+.portal .portal-wiki-page { padding: var(--sp-4) var(--sp-6) var(--sp-6); background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius); }
 .portal .portal-wiki-page .wiki-title h2 { font-size: 2rem; }
-.portal .wiki-redlink-pick { max-width: 64rem; margin: 0 auto var(--sp-4); }
+.portal .wiki-redlink-pick { margin: 0 0 var(--sp-4); }
+
+/* Wiki frame: the sections menu on the left, the page or list beside it. */
+.portal .portal-main.is-wide { max-width: 82rem; }
+.portal .portal-wiki { display: grid; grid-template-columns: 14rem minmax(0, 1fr); gap: var(--sp-6); align-items: start; }
+.portal .portal-wiki-content { min-width: 0; }
+.portal .portal-wiki-hero { padding-top: 0; text-align: left; }
+.portal .portal-wiki-hero .portal-wiki-bar { justify-content: flex-start; }
+.portal .portal-wiki-nav {
+  position: sticky;
+  top: 5rem;
+  max-height: calc(100vh - 6rem);
+  overflow-y: auto;
+  font-size: 0.9rem;
+  padding-right: var(--sp-2);
+}
+.portal .portal-wiki-nav h2 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); margin: var(--sp-6) 0 var(--sp-2); }
+.portal .portal-wiki-sections { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.portal .portal-wiki-sections a {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: 0.4rem 0.65rem;
+  border-radius: var(--radius);
+  color: var(--text);
+  text-decoration: none;
+}
+.portal .portal-wiki-sections a:hover { background: var(--bg-raised); }
+.portal .portal-wiki-sections a[aria-current="page"] { background: var(--bg-raised); color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.portal .portal-wiki-count { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.portal .portal-wiki-nav .portal-toc ul { list-style: none; margin: 0; padding: 0 0 0 var(--sp-3); }
+.portal .portal-wiki-nav .portal-toc ul button { font-size: 0.85rem; }
+
+@media (max-width: 760px) {
+  /* On a phone the sections become a scrolling strip above the content;
+     "On this page" stays hidden as it is for Help. */
+  .portal .portal-wiki { grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
+  .portal .portal-wiki-nav { position: static; max-height: none; display: flex; gap: var(--sp-1); overflow-x: auto; padding: 0 0 var(--sp-1); }
+  .portal .portal-wiki-nav h2 { display: none; }
+  .portal .portal-wiki-nav .portal-toc { display: none; }
+  .portal .portal-wiki-sections { flex: none; flex-direction: row; gap: var(--sp-1); }
+  .portal .portal-wiki-sections a { white-space: nowrap; border: 1px solid var(--border); border-radius: 999px; }
+  .portal .portal-wiki-sections a[aria-current="page"] { box-shadow: none; border-color: var(--accent); }
+  .portal .portal-wiki-page { padding: var(--sp-3); }
+}

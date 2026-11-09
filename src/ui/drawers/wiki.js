@@ -5,7 +5,7 @@
 
 import { ENTITY_TYPES, entityTypeLabel } from '../../domain/entities.js';
 import {
-  pageFor, playerSafe, wikiIndex, unresolvedLinks, splitGmBlocks, wikiLinksToMentions,
+  pageFor, playerSafe, recordSections, wikiIndex, unresolvedLinks, splitGmBlocks, wikiLinksToMentions,
   PLACE_KINDS, PLACE_KIND_LABEL, entityVisibility,
 } from '../../domain/wiki.js';
 import { buildMentionEditorHTML } from '../mentionEditor.js';
@@ -76,10 +76,6 @@ const SOURCE_GROUP_LABEL = {
   guide: 'Guide', document: 'Documents', hex: 'Hexcrawl', tile: 'Dungeon Crawl', battlemap: 'Battlemap',
 };
 
-function section(title, body) {
-  return body ? `<section class="wiki-section"><h3>${esc(title)}</h3>${body}</section>` : '';
-}
-
 function linkList(items, extra = () => '') {
   if (!items.length) return '';
   return `<ul class="wiki-list">${items.map((i) => `<li>${entityLink(i.id, i.name)}${extra(i)}</li>`).join('')}</ul>`;
@@ -132,10 +128,44 @@ function pageBar(e, ui, crumbs) {
   </div>`;
 }
 
-/** An entity's page in Read mode — the GM's view, or the player-safe one
- *  while Player View is on. */
-export function wikiPage(doc, e, ui = {}) {
-  if (ui.wikiPlayerView) return playerPage(doc, e, ui);
+const NONE = '<span class="wiki-none">{none}</span>';
+const secId = (id) => `wiki-sec-${id}`;
+
+function refHtml(r) {
+  return r.id ? entityLink(r.id, r.name) : esc(r.name);
+}
+
+function fieldValueHtml(doc, f) {
+  if (f.empty) return NONE;
+  switch (f.kind) {
+    case 'long': return textHtml(doc, f.value) || NONE;
+    case 'ref': return refHtml(f.value);
+    case 'refs': return f.value.map(refHtml).join(', ');
+    case 'list': return `<span class="wiki-chips">${f.value.map((v) => `<span class="wiki-chip">${esc(v)}</span>`).join('')}</span>`;
+    case 'items':
+    case 'object': return `<ul class="wiki-items">${f.value.map((v) => `<li>${esc(v)}</li>`).join('')}</ul>`;
+    default: return esc(f.value);
+  }
+}
+
+const WIDE_KINDS = new Set(['long', 'items', 'object']);
+
+/** The full record as cards, one per section, every field shown and unset
+ *  ones as {none}. */
+function recordHtml(doc, sections) {
+  return `<div class="wiki-record">${sections.map((s) => `<section class="wiki-record-card" id="${secId(s.id)}">
+      <h4>${esc(s.title)}</h4>
+      ${s.fields.length ? `<dl class="wiki-fields">${s.fields.map((f) => `<div class="wiki-field${WIDE_KINDS.has(f.kind) ? ' wide' : ''}${f.empty ? ' is-empty' : ''}"><dt>${esc(f.label)}</dt><dd>${fieldValueHtml(doc, f)}</dd></div>`).join('')}</dl>` : `<p>${NONE}</p>`}
+    </section>`).join('')}</div>`;
+}
+
+// A page is a list of parts; the page draws them and the portal's left nav
+// lists them, so the two can't disagree.
+function part(id, title, body, sub) {
+  return body ? { id, title, html: `<section class="wiki-section" id="${secId(id)}"><h3>${esc(title)}</h3>${body}</section>`, sub: sub || [] } : null;
+}
+
+function gmParts(doc, e, ui) {
   const page = pageFor(doc, e.id);
   const journalById = new Map((doc.journal || []).map((j) => [j.id, j]));
   const groups = new Map();
@@ -150,11 +180,20 @@ export function wikiPage(doc, e, ui = {}) {
       return `<li><button type="button" class="wiki-link" data-wiki-source-journal="${esc(s.id)}">${esc(String(s.createdAt || '').slice(0, 10))}</button> <span class="dim small">${esc(j ? j.source || '' : '')}</span><div class="wiki-snippet">${esc(plainSnippet(j && j.text))}</div></li>`;
     }).join('')}</ol>`
     : '';
-  const overview = textHtml(doc, e.overview || '');
-  const secrets = (e.revealed || '').trim()
-    ? `<div class="wiki-text wiki-gm-block"><span class="wiki-gm-tag">GM notes</span>${buildMentionEditorHTML(doc, wikiLinksToMentions(e.revealed))}</div>`
-    : '';
-  return `<article class="wiki-page" data-wiki-page="${esc(e.id)}">
+  const record = recordSections(doc, e.id) || [];
+  const parts = [
+    part('overview', 'Overview', textHtml(doc, e.overview || '') || `<p>${NONE}</p>`),
+    part('gm-notes', 'GM notes', (e.revealed || '').trim()
+      ? `<div class="wiki-text wiki-gm-block"><span class="wiki-gm-tag">GM only</span>${buildMentionEditorHTML(doc, wikiLinksToMentions(e.revealed))}</div>`
+      : `<p>${NONE}</p>`),
+    part('details', 'Details', recordHtml(doc, record), record.map((s) => ({ id: s.id, title: s.title }))),
+    part('contains', 'Contains', linkList(page.children, (c) => (c.placeKind ? ` <span class="dim small">${esc(PLACE_KIND_LABEL[c.placeKind])}</span>` : ''))),
+    part('here', 'Here', linkList(page.here)),
+    part('relationships', 'Relationships', relationsHtml(page, true)),
+    part('linked-from', 'Linked from', linkedFromHtml),
+    part('sessions', 'Appears in sessions', sessionsHtml),
+  ].filter(Boolean);
+  const html = `<article class="wiki-page" data-wiki-page="${esc(e.id)}">
     ${pageBar(e, ui, breadcrumbHtml(page))}
     <header class="wiki-title">
       <h2>${esc(page.name)}</h2>
@@ -163,47 +202,59 @@ export function wikiPage(doc, e, ui = {}) {
     </header>
     ${redLinkChooser(doc, ui.wikiRedLinkPick)}
     <div class="wiki-layout">
-      <div class="wiki-main">
-        ${overview || '<p class="dim small">Nothing written yet. ✎ Edit to add an overview.</p>'}
-        ${secrets}
-        ${section('Contains', linkList(page.children, (c) => (c.placeKind ? ` <span class="dim small">${esc(PLACE_KIND_LABEL[c.placeKind])}</span>` : '')))}
-        ${section('Here', linkList(page.here))}
-        ${section('Relationships', relationsHtml(page, true))}
-        ${section('Linked from', linkedFromHtml)}
-        ${section('Appears in sessions', sessionsHtml)}
-      </div>
+      <div class="wiki-main">${parts.map((p) => p.html).join('')}</div>
       ${infoboxHtml(page)}
     </div>
     ${pageSettingsHtml(doc, e, ui)}
   </article>`;
+  return { html, parts };
 }
 
-function playerPage(doc, e, ui) {
+function playerParts(doc, e, ui) {
   const safe = playerSafe(doc, e.id);
   if (!safe) {
-    return `<article class="wiki-page wiki-player" data-wiki-page="${esc(e.id)}">
+    return {
+      parts: [],
+      html: `<article class="wiki-page wiki-player" data-wiki-page="${esc(e.id)}">
       ${pageBar(e, ui, '')}
       <p class="wiki-hidden-note">🔒 Players can’t see this page. Share it in ✎ Edit's page settings, or turn Player View off.</p>
-    </article>`;
+    </article>`,
+    };
   }
   const crumbs = safe.breadcrumb.length ? breadcrumbHtml({ ...safe }) : '';
-  const overview = safe.overview ? `<div class="wiki-text">${buildMentionEditorHTML(doc, wikiLinksToMentions(safe.overview))}</div>` : '';
-  return `<article class="wiki-page wiki-player" data-wiki-page="${esc(e.id)}">
+  const parts = [
+    part('overview', 'Overview', safe.overview ? `<div class="wiki-text">${buildMentionEditorHTML(doc, wikiLinksToMentions(safe.overview))}</div>` : `<p>${NONE}</p>`),
+    part('details', 'Details', safe.record.length ? recordHtml(doc, safe.record) : '', safe.record.map((s) => ({ id: s.id, title: s.title }))),
+    part('contains', 'Contains', linkList(safe.children)),
+    part('here', 'Here', linkList(safe.here)),
+    part('relationships', 'Relationships', relationsHtml(safe, false)),
+  ].filter(Boolean);
+  const html = `<article class="wiki-page wiki-player" data-wiki-page="${esc(e.id)}">
     ${pageBar(e, ui, crumbs)}
     <header class="wiki-title">
       <h2>${esc(safe.name)}</h2>
       <div class="wiki-sub">${esc(safe.typeLabel)}${safe.placeKind ? ` · ${esc(PLACE_KIND_LABEL[safe.placeKind])}` : ''} <span class="wiki-badge wiki-badge-shared">👁 Player View</span></div>
     </header>
     <div class="wiki-layout">
-      <div class="wiki-main">
-        ${overview || '<p class="dim small">Nothing shared yet.</p>'}
-        ${section('Contains', linkList(safe.children))}
-        ${section('Here', linkList(safe.here))}
-        ${section('Relationships', relationsHtml(safe, false))}
-      </div>
+      <div class="wiki-main">${parts.map((p) => p.html).join('')}</div>
       ${infoboxHtml(safe)}
     </div>
   </article>`;
+  return { html, parts };
+}
+
+/** An entity's page in Read mode with its outline: `{html, outline}`, the
+ *  outline being `[{id, title, sub: [{id, title}]}]` with ids as the
+ *  section element ids (the portal's left nav lists it). */
+export function wikiPageWithOutline(doc, e, ui = {}) {
+  const { html, parts } = ui.wikiPlayerView ? playerParts(doc, e, ui) : gmParts(doc, e, ui);
+  return { html, outline: parts.map((p) => ({ id: secId(p.id), title: p.title, sub: p.sub.map((s) => ({ id: secId(s.id), title: s.title })) })) };
+}
+
+/** An entity's page in Read mode — the GM's view, or the player-safe one
+ *  while Player View is on. */
+export function wikiPage(doc, e, ui = {}) {
+  return wikiPageWithOutline(doc, e, ui).html;
 }
 
 /** The 📖 button on the Entity Editor's head row that switches to Read. */

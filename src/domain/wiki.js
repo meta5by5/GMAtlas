@@ -14,6 +14,7 @@ import {
 } from './entities.js';
 import { findDocumentTabByTitle } from './documents.js';
 import { findMapByName } from './mapMentions.js';
+import { WIKI_COMMON_SECTION, WIKI_RECORD_SECTIONS, WIKI_RECORD_SKIP } from '../data/wikiRecordFields.js';
 
 function clone(c) { try { return structuredClone(c); } catch { return JSON.parse(JSON.stringify(c)); } }
 const lower = (s) => String(s || '').trim().toLowerCase();
@@ -422,7 +423,8 @@ const PLAYER_INFOBOX_KEYS = new Set(['placeKind', 'objectType', 'biome', 'develo
  *  tables. Null when the page isn't shared with players. Built from a
  *  whitelist, so a GM field added later stays hidden until listed here:
  *  name, type, place kind, the player-known `overview` without its GM
- *  blocks or links to hidden pages, public infobox facts, and only those
+ *  blocks or links to hidden pages, public infobox facts (also as `record`
+ *  sections, unset ones included), and only those
  *  places, occupants and relations that are themselves shared. Relationship
  *  notes, `revealed`, GM notes, aliases and backlinks are never included. */
 export function playerSafe(campaign, id) {
@@ -441,11 +443,139 @@ export function playerSafe(campaign, id) {
     placeKind: page.placeKind,
     overview: unlinkHidden(campaign, stripGmBlocks(e.overview || '')),
     infobox: page.infobox.filter((f) => PLAYER_INFOBOX_KEYS.has(f.key)),
+    // The record, cut to the same whitelist; sections left with nothing go.
+    record: recordSections(campaign, id)
+      .map((s) => ({ id: s.id, title: s.title, fields: s.fields.filter((f) => PLAYER_INFOBOX_KEYS.has(f.key)) }))
+      .filter((s) => s.fields.length),
     breadcrumb: page.breadcrumb.filter(shared),
     children: page.children.filter(shared),
     here: page.here.filter(shared),
     relations,
   };
+}
+
+// --- the full record (every field, set or not) ---------------------------------
+
+const isBlank = (v) => v === undefined || v === null
+  || (typeof v === 'string' && v.trim() === '')
+  || (Array.isArray(v) && v.length === 0)
+  || (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0);
+
+/** `homeworldId` -> "Homeworld", `thirdPartyCasualty` -> "Third party casualty". */
+export function humanizeKey(key) {
+  const s = String(key || '').replace(/Ids?$/, '').replace(/[_-]+/g, ' ').replace(/([a-z0-9])([A-Z])/g, '$1 $2').trim().toLowerCase();
+  return s ? s[0].toUpperCase() + s.slice(1) : String(key || '');
+}
+
+function refOf(campaign, id) {
+  const o = getEntity(campaign, id);
+  return o ? { id: o.id, name: o.name || 'Unnamed' } : { id: null, name: String(id) };
+}
+
+function scalarText(campaign, key, v) {
+  if (typeof v === 'boolean') return v ? 'yes' : 'no';
+  if (/Id$/.test(key) && typeof v === 'string' && v) return refOf(campaign, v).name;
+  if (/Ids$/.test(key) && Array.isArray(v)) return v.map((id) => refOf(campaign, id).name).join(', ');
+  if (Array.isArray(v)) return v.map((x) => (typeof x === 'object' && x ? JSON.stringify(x) : String(x))).join(', ');
+  if (typeof v === 'object' && v) return JSON.stringify(v);
+  return String(v);
+}
+
+// One line per field of a record, entity ids shown as names.
+function objectLines(campaign, obj) {
+  return Object.entries(obj || {})
+    .filter(([k, v]) => k !== 'id' && !isBlank(v))
+    .map(([k, v]) => `${humanizeKey(k)}: ${scalarText(campaign, k, v)}`);
+}
+
+// One line for an item in a list of records: its text/summary/name first,
+// then its other fields.
+function itemLine(campaign, item) {
+  if (item === null || typeof item !== 'object') return String(item);
+  const lead = ['text', 'summary', 'name', 'catalogId'].find((k) => typeof item[k] === 'string' && item[k].trim());
+  const rest = objectLines(campaign, Object.fromEntries(Object.entries(item).filter(([k]) => k !== lead)));
+  return [lead ? item[lead] : '', ...rest].filter(Boolean).join(' · ');
+}
+
+function guessKind(key, v) {
+  if (typeof v === 'boolean') return 'bool';
+  if (typeof v === 'number') return 'number';
+  if (Array.isArray(v)) {
+    if (/Ids$/.test(key)) return 'refs';
+    return v.every((x) => typeof x !== 'object' || x === null) ? 'list' : 'items';
+  }
+  if (v && typeof v === 'object') return 'object';
+  if (/Id$/.test(key)) return 'ref';
+  return String(v || '').length > 120 || String(v || '').includes('\n') ? 'long' : 'text';
+}
+
+function fieldOf(campaign, e, key, label, kind) {
+  const raw = e[key];
+  const f = { key, label, kind, empty: isBlank(raw), value: null };
+  if (f.empty) return f;
+  switch (kind) {
+    case 'bool': f.value = raw ? 'Yes' : 'No'; break;
+    case 'number': f.value = String(raw); break;
+    case 'list': f.value = (Array.isArray(raw) ? raw : [raw]).map((x) => String(x)); break;
+    case 'ref': f.value = refOf(campaign, raw); break;
+    case 'refs': f.value = (Array.isArray(raw) ? raw : [raw]).map((id) => refOf(campaign, id)); break;
+    case 'items': f.value = (Array.isArray(raw) ? raw : [raw]).map((x) => itemLine(campaign, x)); break;
+    case 'object': f.value = objectLines(campaign, raw); f.empty = !f.value.length; break;
+    default: f.value = String(raw);
+  }
+  return f;
+}
+
+const STATBLOCK_META = new Set(['fields', 'kind', 'ruleset', 'name', 'templateId', 'id']);
+
+function statblockTitle(g) {
+  const bits = [g.name, g.ruleset, g.kind].filter((x) => typeof x === 'string' && x.trim()).map(humanizeKey);
+  return `Statblock${bits.length ? ` · ${bits.join(' ')}` : ''}`;
+}
+
+/** Every field of an entity's record, in the page's sections: Basics, the
+ *  type's own sections (data/wikiRecordFields.js), each statblock, and an
+ *  "Other fields" section for anything the record carries that the catalog
+ *  doesn't name. Unset fields are included with `empty: true` so a page can
+ *  show them as unset. Each section is `{id, title, fields: [{key, label,
+ *  kind, empty, value}]}`; values are display-ready (entity ids resolved to
+ *  `{id, name}`). Null for an unknown id. */
+export function recordSections(campaign, id) {
+  const e = getEntity(campaign, id);
+  if (!e) return null;
+  const genre = (campaign.settings && campaign.settings.genrePack) || '';
+  const out = [];
+
+  const basics = { id: WIKI_COMMON_SECTION.id, title: WIKI_COMMON_SECTION.title, fields: WIKI_COMMON_SECTION.fields.map(([k, l, kind]) => fieldOf(campaign, e, k, l, kind)) };
+  const vis = basics.fields.find((f) => f.key === 'visibility');
+  if (vis) Object.assign(vis, { empty: false, value: entityVisibility(e) === 'players' ? 'Shared with players' : 'GM only' });
+  out.push(basics);
+
+  const named = new Set([...WIKI_RECORD_SKIP, ...WIKI_COMMON_SECTION.fields.map((f) => f[0])]);
+  for (const s of WIKI_RECORD_SECTIONS[e.type] || []) {
+    for (const [k] of s.fields) named.add(k);
+    const fields = s.fields.map(([k, l, kind]) => fieldOf(campaign, e, k, l, kind));
+    const inGenre = (!s.genres || s.genres.includes(genre)) && (!s.notGenres || !s.notGenres.includes(genre));
+    if (inGenre || fields.some((f) => !f.empty)) out.push({ id: s.id, title: s.title, fields });
+  }
+
+  (Array.isArray(e.statblocks) ? e.statblocks : []).forEach((g, i) => {
+    const fields = (g && Array.isArray(g.fields) ? g.fields : []).map((sf) => {
+      const blank = isBlank(sf.value);
+      const value = blank ? null : sf.track && sf.max !== undefined && sf.max !== null ? `${sf.value} / ${sf.max}` : String(sf.value);
+      return { key: String(sf.key || ''), label: String(sf.key || 'Field'), kind: 'text', empty: blank, value };
+    });
+    // Whatever else the sheet carries (weapons, items, attacks, gear, skills).
+    for (const k of Object.keys(g || {}).filter((x) => !STATBLOCK_META.has(x)).sort()) {
+      fields.push(fieldOf(campaign, g, k, humanizeKey(k), guessKind(k, g[k])));
+    }
+    out.push({ id: `statblock-${i}`, title: statblockTitle(g || {}), fields });
+  });
+
+  const other = Object.keys(e).filter((k) => !named.has(k)).sort()
+    .map((k) => fieldOf(campaign, e, k, humanizeKey(k), guessKind(k, e[k])));
+  if (other.length) out.push({ id: 'other', title: 'Other fields', fields: other });
+  return out;
 }
 
 /** The Wiki panel's list: every page matching `search` (name, alias or tag)

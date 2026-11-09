@@ -141,7 +141,7 @@ function frame(content, area) {
       ${who}
       <a class="portal-back" href="#/">← Back to campaign</a>
     </header>
-    <main class="portal-main">${content}</main>`;
+    <main class="portal-main${area === 'wiki' ? ' is-wide' : ''}">${content}</main>`;
 }
 
 const articlesIn = (categoryId) => HELP_ARTICLES.filter((a) => a.category === categoryId);

@@ -403,7 +403,7 @@ as an alias, optional `aliases` / `visibility` (`gm` default) / Location
 `placeKind`, and the `connects_to` (self-mirroring) and `appears_in`
 relationship types; and (W2) the Wiki — a plugin on by default for every
 profile, whose nav button opens the `#/wiki` portal page (the open
-campaign's pages; `/wiki` on the hosted app redirects there) — plus a 📖 Read / ✎ Edit switch
+campaign's pages, a left nav of every section, and each page laid out as the entity's full record with unset fields shown as {none}, from data/wikiRecordFields.js; `/wiki` on the hosted app redirects there) — plus a 📖 Read / ✎ Edit switch
 on every entity tab — a page with infobox, breadcrumb, contents, relations,
 Linked from, Appears in sessions, inline red-link page creation, shaded
 `:::gm` blocks, and a Player View built only from `playerSafe` (a whitelist:

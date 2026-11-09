@@ -12912,6 +12912,8 @@ test('wiki portal: #/wiki and #/wiki/<id> are portal routes', () => {
   assert.deepEqual(wkParseRoute('#/wiki/ent_abc123'), { view: 'wiki-page', id: 'ent_abc123' });
   assert.equal(wkParseRoute('#/wiki/bad id'), null);
   assert.deepEqual(wkParseRoute('#/help'), { view: 'help' }, 'help still routes');
+  assert.deepEqual(wkParseRoute('#/wiki/section/npc'), { view: 'wiki', section: 'npc' });
+  assert.deepEqual(wkParseRoute('#/wiki/section/red-links/'), { view: 'wiki', section: 'red-links' });
 });
 
 test('wiki plugin: gateable, on for a new profile and for one saved before it existed', () => {
@@ -12923,4 +12925,77 @@ test('wiki plugin: gateable, on for a new profile and for one saved before it ex
   delete old.moduleEnabled.wiki;
   assert.equal(isModuleVisible(old, 'wiki'), true, 'no saved value means on');
   assert.equal(isModuleVisible(setModuleEnabled(old, 'wiki', false), 'wiki'), false, 'and it can be turned off');
+});
+
+// --- Wiki: the full record on a page ------------------------------------------
+import { recordSections as wkRecord, humanizeKey as wkHumanize } from '../src/domain/wiki.js';
+import { WIKI_RECORD_SECTIONS as WK_RECORD_CATALOG } from '../src/data/wikiRecordFields.js';
+
+const wkField = (sections, key) => sections.flatMap((s) => s.fields).find((f) => f.key === key);
+
+test('wiki record: every catalogued field shows, unset ones flagged empty', () => {
+  let { c, keep } = wkCampaign();
+  c = updateEntity(c, keep, { biome: 'Tundra', tags: ['ruin'] });
+  const rec = wkRecord(c, keep);
+  assert.equal(rec[0].id, 'basics');
+  assert.deepEqual(wkField(rec, 'tags'), { key: 'tags', label: 'Tags', kind: 'list', empty: false, value: ['ruin'] });
+  assert.equal(wkField(rec, 'aliases').empty, true);
+  assert.equal(wkField(rec, 'visibility').value, 'GM only');
+  assert.equal(wkField(rec, 'biome').value, 'Tundra');
+  assert.equal(wkField(rec, 'sights').empty, true, 'an unset field is still listed');
+  for (const s of WK_RECORD_CATALOG.location.filter((x) => !x.genres)) {
+    for (const [k] of s.fields) assert.ok(wkField(rec, k), `${k} is on the page`);
+  }
+  assert.ok(!rec.some((s) => s.id === 'location-settlement'), 'fantasy-only section stays out of a sci-fi campaign');
+  assert.equal(wkField(rec, 'gasGiant').value, 'No', 'false is a value, not unset');
+  assert.equal(wkWikiRecordKeys(rec).includes('sensorySource'), false, 'oracle side-channels never show');
+});
+
+function wkWikiRecordKeys(rec) { return rec.flatMap((s) => s.fields.map((f) => f.key)); }
+
+test('wiki record: genre-gated sections still show when they hold data', () => {
+  let { c, keep } = wkCampaign();
+  c = updateEntity(c, keep, { danger: 'Wolves' });
+  const rec = wkRecord(c, keep);
+  assert.equal(wkField(rec, 'danger').value, 'Wolves');
+  assert.equal(wkField(rec, 'authority').empty, true);
+});
+
+test('wiki record: refs resolve to names, records to lines, unknown keys to Other fields', () => {
+  let { c, kade, keep } = wkCampaign();
+  let f;
+  ({ campaign: c, id: f } = createEntity(c, { type: 'conflict', name: 'Border dispute' }));
+  c = updateEntity(c, f, {
+    locationId: keep,
+    sessionHooks: [{ id: 'h1', text: 'A courier vanishes', used: false }],
+    informationAsymmetry: { holderFactionId: kade, whatTheyKnow: 'The map is fake', revealed: false },
+    customNote: 'kept',
+  });
+  const rec = wkRecord(c, f);
+  assert.deepEqual(wkField(rec, 'locationId').value, { id: keep, name: 'Black Keep' });
+  assert.deepEqual(wkField(rec, 'sessionHooks').value, ['A courier vanishes · Used: no']);
+  assert.deepEqual(wkField(rec, 'informationAsymmetry').value, ['Holder faction: Kade', 'What they know: The map is fake', 'Revealed: no']);
+  const other = rec.find((s) => s.id === 'other');
+  assert.deepEqual(other.fields.map((x) => x.key), ['customNote']);
+  assert.equal(wkHumanize('thirdPartyCasualty'), 'Third party casualty');
+  assert.equal(wkHumanize('homeworldId'), 'Homeworld');
+});
+
+test('wiki record: statblocks are their own sections; unknown id is null', () => {
+  let { c, kade } = wkCampaign();
+  const e = wkGet(c, kade);
+  const rec = wkRecord(c, kade);
+  const blocks = rec.filter((s) => s.id.startsWith('statblock-'));
+  assert.equal(blocks.length, (e.statblocks || []).length);
+  assert.equal(wkRecord(c, 'ent_nope'), null);
+});
+
+test('wiki record: the player copy keeps only whitelisted fields', () => {
+  let { c, keep } = wkCampaign();
+  c = updateEntity(c, keep, { biome: 'Tundra', sights: 'Smoke', locationStory: 'GM plans' });
+  c = wkSetVisibility(c, keep, 'players');
+  const safe = wkPlayerSafe(c, keep);
+  const keys = safe.record.flatMap((s) => s.fields.map((x) => x.key));
+  assert.ok(keys.includes('biome') && keys.includes('population'));
+  assert.ok(!keys.includes('sights') && !keys.includes('locationStory') && !keys.includes('tags'));
 });

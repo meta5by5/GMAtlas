@@ -3697,7 +3697,7 @@ input[type="number"] { -moz-appearance: textfield; }
 .wiki-infobox dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
 .wiki-infobox dt { color: var(--text-dim); }
 .wiki-infobox dd { margin: 0; overflow-wrap: anywhere; }
-.wiki-main { min-width: 0; max-width: 46rem; font-size: 1.02em; }
+.wiki-main { min-width: 0; max-width: 60rem; font-size: 1.02em; }
 .wiki-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 var(--sp-2, 8px); }
 .wiki-gm-block { position: relative; border-left: 3px solid var(--warn); background: color-mix(in srgb, var(--warn) 8%, transparent); padding: 18px var(--sp-2, 8px) 6px; border-radius: 4px; }
 .wiki-gm-tag { position: absolute; top: 2px; left: 8px; font-size: .7em; text-transform: uppercase; letter-spacing: .05em; color: var(--warn); }
@@ -3719,3 +3719,22 @@ input[type="number"] { -moz-appearance: textfield; }
 .wiki-index-bar .drawer-search { flex: 1 1 12rem; }
 .wiki-index-group { margin-bottom: var(--sp-2, 8px); }
 .wiki-page-actions .btn.active, .wiki-index-bar .btn.active { border-color: var(--accent); color: var(--accent); }
+/* The full record: a card per section, every field shown, unset ones {none}. */
+.wiki-section { scroll-margin-top: 5rem; }
+.wiki-record { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-2, 8px); margin-top: var(--sp-1, 4px); }
+@container (min-width: 720px) {
+  .wiki-record { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.wiki-record-card { border: 1px solid var(--border); border-radius: 6px; background: var(--bg-inset); padding: var(--sp-2, 8px) var(--sp-3, 12px); scroll-margin-top: 5rem; min-width: 0; }
+.wiki-record-card h4 { margin: 0 0 6px; font-size: .78em; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); }
+.wiki-fields { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
+.wiki-field { display: grid; grid-template-columns: minmax(7rem, 38%) minmax(0, 1fr); gap: 2px 10px; padding: 4px 0; border-top: 1px solid var(--border); }
+.wiki-field:first-child { border-top: 0; }
+.wiki-field.wide { grid-template-columns: minmax(0, 1fr); }
+.wiki-field dt { color: var(--text-dim); font-size: .88em; }
+.wiki-field dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.wiki-field dd .wiki-text { margin: 0; }
+.wiki-none { color: var(--text-dim); font-style: italic; opacity: .75; }
+.wiki-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.wiki-chip { font-size: .85em; padding: 0 8px; border: 1px solid var(--border); border-radius: 999px; }
+.wiki-items { margin: 0; padding-left: 1.1em; }
