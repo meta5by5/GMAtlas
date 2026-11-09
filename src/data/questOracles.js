@@ -276,3 +276,7 @@ export const QUEST_BRIEFS = {
     'Dragon Sighting': 'confirm the rumors of a dragon and learn what it wants',
   },
 };
+// The Shadowdark pack (genrePacks.js) rolls the fantasy quests, so it reads
+// the fantasy briefs too.
+QUEST_BRIEFS.shadowdark = QUEST_BRIEFS.fantasy;
+QUEST_ORACLES.shadowdark = QUEST_ORACLES.fantasy;

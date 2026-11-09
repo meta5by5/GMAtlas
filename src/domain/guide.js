@@ -171,6 +171,30 @@ export function removeGuideDoc(campaign, id) {
  *  id's own descendants (would create a cycle). Does not support
  *  reordering among siblings, only reparenting — a deliberately smaller
  *  first version (see the ADR). */
+/** Moves id to just above targetId, at targetId's own level (same parent),
+ *  renumbering that level's order — the Guide's default drop (direct
+ *  request, 2026-11-08: "make the default reposition action to move the
+ *  entry above the entry hovered over"; hovering two seconds nests instead,
+ *  which is moveGuideDoc below). No-ops if either doesn't exist, they're the
+ *  same doc, or targetId is inside id's own subtree (a cycle). */
+export function moveGuideDocBefore(campaign, id, targetId) {
+  const next = clone(campaign);
+  const guide = ensureGuide(next);
+  const d = guide.docs.find((x) => x.id === id);
+  const target = guide.docs.find((x) => x.id === targetId);
+  if (!d || !target || id === targetId) return next;
+  if (subtreeIds(guide.docs, id).has(targetId)) return next;
+  const parentId = target.parentId || null;
+  const siblings = guide.docs
+    .filter((x) => x.id !== id && (x.parentId || null) === parentId)
+    .sort((a, b) => a.order - b.order);
+  const at = siblings.findIndex((x) => x.id === targetId);
+  siblings.splice(at, 0, d);
+  d.parentId = parentId;
+  siblings.forEach((x, i) => { x.order = i; });
+  return next;
+}
+
 export function moveGuideDoc(campaign, id, newParentId) {
   const next = clone(campaign);
   const guide = ensureGuide(next);

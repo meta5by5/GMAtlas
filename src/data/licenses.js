@@ -145,4 +145,14 @@ export const LICENSES = [
       'assets/docs/dnd5e/Monster Manual.pdf',
     ],
   },
+  {
+    // The Arcane Library's commercial book (2026-11-08): owned like any
+    // other publisher's. GMAtlas ships only its own sheet layout, torch
+    // timer and original carousing tables; monsters and gear are imported
+    // from the GM's own copy (domain/shadowdarkImport.js).
+    id: 'shadowdark', label: 'Shadowdark RPG', family: 'Shadowdark',
+    systems: ['shadowdark'],
+    text: 'I own the Shadowdark RPG and will import its monsters and gear from my own copy, for my own personal GM reference.',
+    docs: [],
+  },
 ];

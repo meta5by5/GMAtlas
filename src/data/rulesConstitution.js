@@ -119,6 +119,18 @@ export const RULES_PROVIDERS = {
     requiresActivation: true,
     rulesetId: 'fiveleagues', genrePackId: 'fantasy', get dedicatedRulesetId() { return this.rulesetId; },
   },
+  // Shadowdark RPG (direct request, 2026-11-08) — a purchased commercial
+  // book like fiveleagues above, so owned before use. Unlike fiveleagues
+  // nothing here transcribes it: the sheet and monster layout are the
+  // game's mechanics in this app's own format, the torch timer is a
+  // mechanic, the carousing tables are original writing, and the book's
+  // own monsters/gear come in from the GM's copy through the importer.
+  shadowdark: {
+    label: 'Shadowdark RPG', status: 'ruleset + importer + torch timer + original carousing tables',
+    note: 'Character sheet and monster statblock (data/rulesets.js, data/statblockTemplates.js) are this app\'s own layout of the game\'s mechanics. Monsters and gear are imported from the GM\'s own copy (Settings → Licenses → Shadowdark RPG → Import monsters & gear). The Party panel gets a real-time torch timer (1 hour per torch). The Shadowdark genre pack adds original Carousing tables to the fantasy oracles.',
+    requiresActivation: true,
+    rulesetId: 'shadowdark', genrePackId: 'shadowdark', get dedicatedRulesetId() { return this.rulesetId; },
+  },
 };
 
 // Canonical name for the registry above, per the Phase A audit's target

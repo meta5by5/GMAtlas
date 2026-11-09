@@ -12,6 +12,10 @@ import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { continueStory, restartStory, applyStoryShift, rollOracle, addNote, setJournalDraft, submitJournalDraft, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField, rollLocationFantasyField, editLocationFantasyField, rollWhereDetailField, addContextEntity, removeContextEntity } from '../domain/session.js';
 import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, addSceneAsset, removeSceneAsset, addSceneLocation, removeSceneLocation, setSceneSystem, addSceneDismissedFaction, removeSceneDismissedFaction, moveSceneActor } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
+import { createEncounterFromComposer, listEncounters, composerPrompt } from '../domain/encounters.js';
+import { lightStart, lightPause, lightReset, lightBurnOut, lightRemaining, lightState, isLit, formatLight } from '../domain/torchTimer.js';
+import { parseShadowdark, importShadowdark } from '../domain/shadowdarkImport.js';
+import { COMPOSER_STEPS } from './workspace/index.js';
 import { addOracleEntry, updateOracleEntry, removeOracleEntry, resetOracleTable, addOracleTag, removeOracleTag, currentTableEntries } from '../domain/oracles.js';
 import { formatFieldRoll, WHERE_DETAIL_ORACLE_PATH } from '../domain/session.js';
 import { getNpcSceneState, NPC_SCENE_FIELD_ORACLE_PATH } from '../domain/scenes.js';
@@ -115,7 +119,7 @@ import { CONTENT_PACKS_MANIFEST } from '../data/contentPacksManifest.js';
 import { generateMission, formatMission, addMission, updateMissionStatus, removeMission } from '../domain/missions.js';
 import {
   getActiveGuideDoc, setGuideDocText, setActiveGuideId, createGuideDoc, renameGuideDoc,
-  countGuideDescendants, removeGuideDoc, moveGuideDoc,
+  countGuideDescendants, removeGuideDoc, moveGuideDoc, moveGuideDocBefore,
 } from '../domain/guide.js';
 import { titleFromFilename } from '../domain/titleCase.js';
 import { buildSessionRecap, formatSessionRecap } from '../domain/recap.js';
@@ -604,6 +608,22 @@ let docTagListOpen = false; // ephemeral — collapses the Documents drawer's ta
 // per-session display preference, not campaign data.
 let docSort = 'title-asc'; // 'title-asc' | 'title-desc' | 'date-newest' | 'date-oldest'
 let docSortMenuOpen = false; // the Docs library's sort icon menu
+// The Composer's Encounter wizard (2026-11-08): the step shown (index into
+// COMPOSER_STEPS) while it runs, else null; and the campaigns whose
+// "no encounters yet — run the wizard?" offer was dismissed this session.
+let composerWizardStep = null;
+// The New campaign wizard overlay (renderNewCampaignWizard).
+let newCampaignWizardOpen = false;
+// The last Shadowdark import's result line (Settings › Licenses).
+let shadowdarkImportResult = '';
+// The Guide tree's move mode (2026-11-08): off by default; the ↕ button turns
+// it on, and only then are documents draggable.
+let guideReorderMode = false;
+// The Guide drop target under a drag, and since when: hovering one entry for
+// GUIDE_NEST_MS turns a "move above it" drop into "put it inside".
+const GUIDE_NEST_MS = 2000;
+let guideHover = { id: null, since: 0, timer: null, el: null };
+const composerOfferDismissed = new Set();
 let journalEditOpen = new Set(); // ephemeral — which journal entries are showing an editable mention-editor instead of their static rendered text
 let galleryFilter = ''; // ephemeral — Gallery drawer search box
 // Gallery's own "+ Upload" flow (as opposed to an entity's "+ Photo"): the
@@ -790,6 +810,9 @@ let worldTrackerMigrateOpen = new Set();
 // buttons that enable separate tabs") — same plain-string ephemeral state
 // as worldTrackerTab above.
 let colonyPanelTab = 'colony';
+// The Party panel's tab (2026-11-08): 'party', or a Turn-Step tab moved from
+// the Campaign panel ('colony' | 'starship' | 'warband').
+let partyPanelTab = 'party';
 // Feature-kind labels for World Tracker Journal entries (direct follow-up
 // request) — drawers/index.js's own WT_FEATURE_KINDS/wtFeatureLabel are
 // private to that file; this is the same handful of labels, just where
@@ -1637,10 +1660,12 @@ export function mountShell(el) {
           <img src="assets/globe.png" alt="" class="startup-logo">
           <h1>GMAtlas</h1>
           <div class="startup-campaigns" data-startup-campaigns></div>
+          <button type="button" class="btn" data-new-campaign-open>＋ New campaign</button>
           <button type="button" class="btn ghost" data-startup-open-settings>⚙ Settings</button>
           <p class="dim small startup-version" data-startup-version></p>
         </div>
       </div>
+      <div class="new-campaign-wizard" data-new-campaign-wizard hidden role="dialog" aria-modal="true" aria-label="New campaign"></div>
       <header class="mc-header">
         <div class="brand">
           <h1><button type="button" class="brand-menu-toggle" data-settings-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-label="GMAtlas menu: account, settings and help" title="Account, settings and help"><svg class="brand-planet" viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><circle cx="10" cy="10" r="9"/><ellipse cx="10" cy="10" rx="4" ry="9"/><path d="M10 1v18M1 10h18M2.2 5.5h15.6M2.2 14.5h15.6"/></svg><span class="brand-sync-dot" data-brand-sync-dot hidden></span><span class="brand-name">GMAtlas</span><span class="brand-caret" aria-hidden="true">▾</span></button></h1>
@@ -1819,6 +1844,9 @@ export function mountShell(el) {
   });
 
   store.subscribe(render);
+  // Shadowdark's real-time torch (tickTorch): a timer, not an event listener.
+  const torchTimer = setInterval(tickTorch, 1000);
+  if (torchTimer && torchTimer.unref) torchTimer.unref();
   // Party Trackers follow the profile's game systems on ANY change — a saved
   // profile edit, a campaign switch, a profile reassignment, a license — not
   // only when the Party panel opens. Writes only when something differs, so
@@ -1850,6 +1878,50 @@ function onClick(ev) {
   if (hit('[data-doc-sort-menu-toggle]')) { docSortMenuOpen = !docSortMenuOpen; return renderDrawerBody(); }
   const docSortPick = hit('[data-doc-sort-pick]');
   if (docSortPick) { docSort = docSortPick.dataset.docSortPick; docSortMenuOpen = false; return renderDrawerBody(); }
+
+  // The Composer's toolbar and Encounter wizard (2026-11-08,
+  // domain/encounters.js). Saving makes an Encounter (a `conflict` entity)
+  // from whatever the Composer holds and opens it.
+  if (hit('[data-guide-reorder-toggle]')) { guideReorderMode = !guideReorderMode; return renderDrawerBody(); }
+  // Shadowdark's torch (domain/torchTimer.js).
+  if (hit('[data-torch-start]')) return store.update((d) => lightStart(d, Date.now()));
+  if (hit('[data-torch-pause]')) return store.update((d) => lightPause(d, Date.now()));
+  if (hit('[data-torch-reset]')) return store.update((d) => lightReset(d, { label: 'Torch' }));
+  // Shadowdark import from pasted text (the file pickers are in onChange).
+  const sdImport = hit('[data-shadowdark-import]');
+  if (sdImport) {
+    const box = sdImport.closest('.shadowdark-import');
+    const area = box && box.querySelector('[data-shadowdark-paste]');
+    return runShadowdarkImport(area ? area.value : '', sdImport.dataset.shadowdarkImport, () => { if (area) area.value = ''; });
+  }
+  if (hit('[data-composer-add-encounter]')) {
+    let made = null;
+    store.update((d) => { const r = createEncounterFromComposer(d); made = r.id; return r.campaign; });
+    if (!made) return toast('Nothing in the Composer yet: add who, where or what first.');
+    if (hit('[data-composer-wizard-finish]')) composerWizardStep = null;
+    openDrawerTab('entity-detail');
+    toast(`Encounter saved: ${(getEntity(store.get(), made) || {}).name || 'Unnamed'}`);
+    return render();
+  }
+  const wizardAction = hit('[data-composer-wizard]');
+  if (wizardAction) {
+    const what = wizardAction.dataset.composerWizard;
+    if (what === 'dismiss') { const d = store.get(); if (d && d.meta) composerOfferDismissed.add(d.meta.id); }
+    composerWizardStep = what === 'start' ? 0 : null;
+    return render();
+  }
+  const wizardGoto = hit('[data-composer-wizard-goto]');
+  if (wizardGoto) {
+    const n = Number(wizardGoto.dataset.composerWizardGoto);
+    if (Number.isInteger(n) && n >= 0 && n < COMPOSER_STEPS.length) composerWizardStep = n;
+    return render();
+  }
+  if (hit('[data-composer-copy-prompt]')) {
+    const d = store.get();
+    const prompt = composerPrompt(d, { genre: (d.settings && d.settings.genrePack) || '', ruleset: (d.settings && d.settings.statRuleset) || '' });
+    copyText(prompt).then((ok) => toast(ok ? 'AI prompt copied: paste it into your AI client.' : 'Couldn’t copy to the clipboard here.'));
+    return;
+  }
 
   const suggestItem = hit('[data-mention-suggest-item]');
   if (suggestItem) { chooseMentionSuggestItem(Number(suggestItem.dataset.mentionSuggestItem)); return; }
@@ -1901,7 +1973,16 @@ function onClick(ev) {
   const storyboardUnanchor = hit('[data-storyboard-unanchor]');
   if (storyboardUnanchor) return toggleAnchorPanel(storyboardUnanchor.dataset.storyboardUnanchor);
   const drawerTab = hit('[data-drawer-tab]');
-  if (drawerTab) { endOracleRoutingUnlessKept(drawerTab.dataset.drawerTab); activeDrawer = drawerTab.dataset.drawerTab; return render(); }
+  if (drawerTab) {
+    endOracleRoutingUnlessKept(drawerTab.dataset.drawerTab);
+    activeDrawer = drawerTab.dataset.drawerTab;
+    // An entity tab shows its own entity: make it the active one.
+    if (isEntityTab(activeDrawer)) {
+      const entId = activeDrawer.slice(ENTITY_TAB_PREFIX.length);
+      if ((store.get().entities || {}).activeId !== entId) return store.update((d) => setActiveEntity(d, entId), { system: true });
+    }
+    return render();
+  }
   // Direct follow-up request: "make the Campaign and Party headers...
   // toggle the section headers to open or close" — a "smart" toggle (not
   // a blind alternating flip): if every section is currently collapsed,
@@ -2038,21 +2119,26 @@ function onClick(ev) {
     if (!window.confirm(`Switch to campaign "${target.title}"? Each campaign is fully independent — nothing in the current one is lost, you're just changing which one is active.`)) return render();
     return store.switchCampaign(id).then(() => toast('Switched campaign'));
   }
-  // Creates the campaign straight away — the one New Campaign path since
-  // Settings → Campaigns dropped its own title/profile form. It starts on
-  // the current campaign's Rules Profile; Settings → Campaigns opens so the
-  // GM can rename it (✎) and pick a different Profile there.
-  if (hit('[data-campaign-switcher-new]')) {
+  // New campaign (2026-11-08): the switcher's "New" and the startup screen's
+  // "＋ New campaign" both open the wizard (renderNewCampaignWizard), which
+  // asks only for a name and a Rules Profile.
+  if (hit('[data-campaign-switcher-new]') || hit('[data-new-campaign-open]')) {
     campaignSwitcherOpen = false;
-    const active = store.getActiveProfile();
-    const profileId = (active && active.id) || ((store.listProfiles()[0] || {}).id);
-    if (!profileId) { toast('Create a Rules Profile first'); return render(); }
-    return store.newCampaign({ profileId }).then(() => {
-      settingsCampaignId = null; // configure the new (now active) campaign
-      settingsTab = 'campaigns';
-      openDrawerTab('settings');
+    newCampaignWizardOpen = true;
+    return render();
+  }
+  if (hit('[data-new-campaign-cancel]')) { newCampaignWizardOpen = false; return render(); }
+  if (hit('[data-new-campaign-create]')) {
+    const box = root.querySelector('[data-new-campaign-wizard]');
+    const title = ((box.querySelector('[data-new-campaign-title]') || {}).value || '').trim();
+    const profileId = (box.querySelector('[data-new-campaign-profile]') || {}).value || ((store.listProfiles()[0] || {}).id);
+    if (!title) { toast('Give the campaign a name'); const i = box.querySelector('[data-new-campaign-title]'); if (i) i.focus(); return; }
+    if (!profileId) { toast('Create a Rules Profile first'); return; }
+    return store.newCampaign({ title, profileId }).then(() => {
+      newCampaignWizardOpen = false;
+      startupScreenOpen = false;
       render();
-      toast('Campaign created — rename it with ✎ and pick its Profile below');
+      toast(`Campaign “${title}” created`);
     });
   }
 
@@ -4163,6 +4249,17 @@ function onClick(ev) {
   // Level), which aren't really "the world changing" as a narrative beat.
   if (hit('[data-world-tracker-tab]')) { worldTrackerTab = hit('[data-world-tracker-tab]').dataset.worldTrackerTab; return renderDrawerBody(); }
   if (hit('[data-colony-panel-tab]')) { colonyPanelTab = hit('[data-colony-panel-tab]').dataset.colonyPanelTab; return renderDrawerBody(); }
+  // The Party panel's tabs. Opening a Turn-Step tab starts with its sections
+  // collapsed (its Guide open), as the Campaign panel used to.
+  const partyTab = hit('[data-party-panel-tab]');
+  if (partyTab) {
+    partyPanelTab = partyTab.dataset.partyPanelTab;
+    if (partyPanelTab !== 'party') {
+      setSectionsCollapsed(CAMPAIGN_SECTION_KEYS.filter((sec) => !CAMPAIGN_GUIDE_KEYS.has(sec.key)), true);
+      setSectionsCollapsed(CAMPAIGN_SECTION_KEYS.filter((sec) => CAMPAIGN_GUIDE_KEYS.has(sec.key)), false);
+    }
+    return renderDrawerBody();
+  }
   const sectorSelect = hit('[data-sector-select]');
   if (sectorSelect) {
     const [sx, sy] = sectorSelect.dataset.sectorSelect.split(',').map(Number);
@@ -4176,24 +4273,24 @@ function onClick(ev) {
     return updateAndOpenJournal((d) => {
       const next = revealSector(d, sx, sy);
       const s = getSector(next, sx, sy);
-      return addNote(next, `Sector ${sx},${sy} revealed — resource ${s.resourceLevel}, hazard ${s.hazardLevel}.`, 'World Tracker');
+      return addNote(next, `Sector ${sx},${sy} revealed — resource ${s.resourceLevel}, hazard ${s.hazardLevel}.`, 'Planetfall');
     });
   }
   const sectorSurvey = hit('[data-sector-survey]');
   if (sectorSurvey) {
     const [sx, sy] = sectorSurvey.dataset.sectorSurvey.split(',').map(Number);
-    return updateAndOpenJournal((d) => addNote(surveySector(d, sx, sy), `Sector ${sx},${sy} surveyed.`, 'World Tracker'));
+    return updateAndOpenJournal((d) => addNote(surveySector(d, sx, sy), `Sector ${sx},${sy} surveyed.`, 'Planetfall'));
   }
   const sectorHarvest = hit('[data-sector-harvest]');
   if (sectorHarvest) {
     const [sx, sy] = sectorHarvest.dataset.sectorHarvest.split(',').map(Number);
-    return updateAndOpenJournal((d) => addNote(harvestSectorResource(d, sx, sy), `Sector ${sx},${sy}'s resource marked harvested.`, 'World Tracker'));
+    return updateAndOpenJournal((d) => addNote(harvestSectorResource(d, sx, sy), `Sector ${sx},${sy}'s resource marked harvested.`, 'Planetfall'));
   }
   const sectorAddFeature = hit('[data-sector-add-feature]');
   if (sectorAddFeature) {
     const [sx, sy] = sectorAddFeature.dataset.sectorAddFeature.split(',').map(Number);
     const kind = sectorAddFeature.dataset.featureKind;
-    return updateAndOpenJournal((d) => addNote(addSectorFeature(d, sx, sy, kind), `${wtFeatureKindLabel(kind)} added to sector ${sx},${sy}.`, 'World Tracker'));
+    return updateAndOpenJournal((d) => addNote(addSectorFeature(d, sx, sy, kind), `${wtFeatureKindLabel(kind)} added to sector ${sx},${sy}.`, 'Planetfall'));
   }
   const featureDiscoverToggle = hit('[data-feature-discover-toggle]');
   if (featureDiscoverToggle) {
@@ -4203,7 +4300,7 @@ function onClick(ev) {
       const next = toggleSectorFeatureDiscovered(d, sx, sy, featureId);
       const f = getSector(next, sx, sy).features.find((ft) => ft.id === featureId);
       if (!f) return next;
-      return addNote(next, `${wtFeatureKindLabel(f.kind)} at sector ${sx},${sy} marked ${f.discovered ? 'discovered' : 'undiscovered'}.`, 'World Tracker');
+      return addNote(next, `${wtFeatureKindLabel(f.kind)} at sector ${sx},${sy} marked ${f.discovered ? 'discovered' : 'undiscovered'}.`, 'Planetfall');
     });
   }
   const featureRemove = hit('[data-feature-remove]');
@@ -4213,7 +4310,7 @@ function onClick(ev) {
     return updateAndOpenJournal((d) => {
       const f = getSector(d, sx, sy).features.find((ft) => ft.id === featureId);
       const next = removeSectorFeature(d, sx, sy, featureId);
-      return f ? addNote(next, `${wtFeatureKindLabel(f.kind)} removed from sector ${sx},${sy}.`, 'World Tracker') : next;
+      return f ? addNote(next, `${wtFeatureKindLabel(f.kind)} removed from sector ${sx},${sy}.`, 'Planetfall') : next;
     });
   }
   const featureMigrateToggle = hit('[data-feature-migrate-toggle]');
@@ -4229,7 +4326,7 @@ function onClick(ev) {
     return updateAndOpenJournal((d) => {
       const f = getSector(d, Number(fromX), Number(fromY)).features.find((ft) => ft.id === featureId);
       const next = migrateFeature(d, Number(fromX), Number(fromY), featureId, Number(toX), Number(toY));
-      return f ? addNote(next, `${wtFeatureKindLabel(f.kind)} migrated from ${fromX},${fromY} to ${toX},${toY}.`, 'World Tracker') : next;
+      return f ? addNote(next, `${wtFeatureKindLabel(f.kind)} migrated from ${fromX},${fromY} to ${toX},${toY}.`, 'Planetfall') : next;
     });
   }
   const cornerLabelEdit = hit('[data-corner-label-edit]');
@@ -4257,14 +4354,14 @@ function onClick(ev) {
     updateAndOpenJournal((d) => {
       const next = rollHomeBase(d);
       const hb = next.worldTracker.homeBaseSector;
-      return addNote(next, `Home base rolled: sector ${hb.x},${hb.y}.`, 'World Tracker');
+      return addNote(next, `Home base rolled: sector ${hb.x},${hb.y}.`, 'Planetfall');
     });
     return toast('Home base rolled');
   }
   const homeBaseSet = hit('[data-home-base-set]');
   if (homeBaseSet) {
     const [sx, sy] = homeBaseSet.dataset.homeBaseSet.split(',').map(Number);
-    return updateAndOpenJournal((d) => addNote(setHomeBase(d, sx, sy), `Home base set to sector ${sx},${sy}.`, 'World Tracker'));
+    return updateAndOpenJournal((d) => addNote(setHomeBase(d, sx, sy), `Home base set to sector ${sx},${sy}.`, 'Planetfall'));
   }
   const investigationToggle = hit('[data-sector-investigation-toggle]');
   if (investigationToggle) {
@@ -4272,7 +4369,7 @@ function onClick(ev) {
     return updateAndOpenJournal((d) => {
       const next = toggleInvestigationSite(d, sx, sy);
       const marked = getSector(next, sx, sy).investigationSite;
-      return addNote(next, `Sector ${sx},${sy} ${marked ? 'marked' : 'un-marked'} as an investigation site.`, 'World Tracker');
+      return addNote(next, `Sector ${sx},${sy} ${marked ? 'marked' : 'un-marked'} as an investigation site.`, 'Planetfall');
     });
   }
   const investigationRandom = hit('[data-sector-investigation-random]');
@@ -4288,7 +4385,7 @@ function onClick(ev) {
       const rolled = rollRandomInvestigationSite(d);
       if (rolled.x == null) return d;
       rolledXY = { x: rolled.x, y: rolled.y };
-      return addNote(rolled.campaign, `Investigation site randomly rolled: sector ${rolled.x},${rolled.y}.`, 'World Tracker');
+      return addNote(rolled.campaign, `Investigation site randomly rolled: sector ${rolled.x},${rolled.y}.`, 'Planetfall');
     });
     if (rolledXY) { worldTrackerSelectedSector = rolledXY; openDrawerTab('journal'); render(); }
     else toast(`Investigation site limit reached (${MAX_INVESTIGATION_SITES} marked)`);
@@ -4298,17 +4395,17 @@ function onClick(ev) {
     updateAndOpenJournal((d) => {
       const { campaign, turn, changes } = advanceCampaignTurnWithAccrual(d);
       const next = advanceWorldTurn(campaign);
-      return addNote(next, formatTurnAdvanceNote(turn, changes), 'World Tracker');
+      return addNote(next, formatTurnAdvanceNote(turn, changes), 'Planetfall');
     });
     return toast('Turn advanced');
   }
   if (hit('[data-world-milestone-inc]')) return store.update((d) => incrementCampaignMilestones(d));
   if (hit('[data-world-milestone-dec]')) return store.update((d) => decrementCampaignMilestones(d));
   if (hit('[data-world-tracker-reset]')) {
-    if (!window.confirm('Reset the World Tracker? Every sector, the home base, and the world-level notes will be cleared. This cannot be undone.')) return;
-    updateAndOpenJournal((d) => addNote(resetWorldTracker(d), 'World Tracker reset — every sector cleared, starting over.', 'World Tracker'));
+    if (!window.confirm('Reset Planetfall? Every sector, the home base, and the world-level notes will be cleared. This cannot be undone.')) return;
+    updateAndOpenJournal((d) => addNote(resetWorldTracker(d), 'Planetfall reset — every sector cleared, starting over.', 'Planetfall'));
     worldTrackerSelectedSector = null;
-    return toast('World Tracker reset');
+    return toast('Planetfall reset');
   }
   const missionRun = hit('[data-mission-hook-run]');
   if (missionRun) {
@@ -5981,7 +6078,7 @@ function onClick(ev) {
         const withLists = { ...d, turnStepLists: store.get().turnStepLists || [] };
         const { campaign: resultCampaign, turn, changes } = startNextColonyCampaignTurn(withLists);
         const { turnStepLists, ...clean } = resultCampaign;
-        return addNote(clean, formatTurnAdvanceNote(turn, changes), 'World Tracker');
+        return addNote(clean, formatTurnAdvanceNote(turn, changes), 'Planetfall');
       });
     }
     return applyTurnStepMutation('colony', advanceTurnStep);
@@ -6414,6 +6511,14 @@ function commitEntityTagValue(value) {
 
 function onChange(ev) {
   const t = ev.target;
+  const sdFile = t.closest && t.closest('[data-shadowdark-import-file]');
+  if (sdFile) {
+    const file = (t.files || [])[0];
+    const kind = sdFile.dataset.shadowdarkImportFile;
+    t.value = '';
+    if (file) file.text().then((txt) => runShadowdarkImport(txt, kind)).catch((err) => toast(`Couldn’t read ${file.name} — ${err.message}`));
+    return;
+  }
   if (t === pickerInput) pickerInput = null;
   // Docs library sort/filter (direct follow-up request) — a <select> only
   // ever fires 'change', never the Documents search box's own live
@@ -7245,7 +7350,7 @@ function onChange(ev) {
       const before = Number(getColonyFields(store.get()).campaignTurn) || 0;
       const after = Number(t.value) || 0;
       if (after === before) return store.update((d) => setColonyField(d, key, t.value));
-      return updateAndOpenJournal((d) => addNote(setColonyField(d, key, t.value), `Campaign Turn changed to ${after}.`, 'World Tracker'));
+      return updateAndOpenJournal((d) => addNote(setColonyField(d, key, t.value), `Campaign Turn changed to ${after}.`, 'Planetfall'));
     }
     return store.update((d) => setColonyField(d, key, t.value));
   }
@@ -7989,7 +8094,7 @@ function openDrawerTab(id) {
     // when switching focus to other open tabs)" — resetting here (inside
     // the "newly added to openDrawers" guard) is exactly that: a genuine
     // fresh open, not a mere re-focus of an already-pinned tab.
-    if (id === 'party') collapsedPartySections = new Set();
+    if (id === 'party') { collapsedPartySections = new Set(); partyPanelTab = 'party'; }
   }
   // Auto-populate Momentum/Supply on every Party open, not just the first
   // (direct request) — deliberately OUTSIDE the "already open" guard above,
@@ -8076,6 +8181,11 @@ function closeDrawerTab(id) {
   // drawer just closed while it was active, there's nothing left for it to
   // ride along with.
   if (!openDrawers.length && activeDrawer === 'advisor') activeDrawer = null;
+  // The entity tab that takes over shows its own entity.
+  if (isEntityTab(activeDrawer)) {
+    const entId = activeDrawer.slice(ENTITY_TAB_PREFIX.length);
+    if ((store.get().entities || {}).activeId !== entId) { store.update((d) => setActiveEntity(d, entId), { system: true }); return; }
+  }
   render();
 }
 
@@ -8476,7 +8586,7 @@ function onDragOver(ev) {
   const types = ev.dataTransfer.types || [];
   if (types.includes(GUIDE_NODE_DRAG_TYPE)) {
     const target = ev.target.closest('[data-drop-guide-node]');
-    if (target) { ev.preventDefault(); target.classList.add('drop-hover'); }
+    if (target) { ev.preventDefault(); target.classList.add('drop-hover'); noteGuideHover(target); }
     return;
   }
   // Combat Initiative Tracker (direct request, no separate toggle icon —
@@ -9115,8 +9225,34 @@ function ensureHexcrawlRangeCoversViewport() {
  *  that guard, just resolve the "__root__" drop-zone sentinel to null. */
 function completeGuideNodeDrop(target, guideNodeId) {
   const dropId = target.dataset.dropGuideNode;
-  const newParentId = dropId === '__root__' ? null : dropId;
-  store.update((d) => moveGuideDoc(d, guideNodeId, newParentId));
+  // Held over this entry for GUIDE_NEST_MS: put it inside (the old reparent).
+  // Otherwise (2026-11-08 default): just above it, at its level.
+  const nest = guideHover.id === dropId && Date.now() - guideHover.since >= GUIDE_NEST_MS;
+  clearGuideHover();
+  if (dropId === '__root__') store.update((d) => moveGuideDoc(d, guideNodeId, null));
+  else if (nest) store.update((d) => moveGuideDoc(d, guideNodeId, dropId));
+  else store.update((d) => moveGuideDocBefore(d, guideNodeId, dropId));
+}
+
+/** Tracks the Guide entry under a drag (mouse or touch). A new entry starts
+ *  the clock; at GUIDE_NEST_MS its highlight turns from "above" to "inside"
+ *  (a timer, so a finger held perfectly still still sees the change). */
+function noteGuideHover(target) {
+  const id = target && target.dataset.dropGuideNode;
+  if (!id || id === guideHover.id) return;
+  clearGuideHover();
+  guideHover = { id, since: Date.now(), el: target, timer: null };
+  target.classList.add('drop-before');
+  if (id !== '__root__') {
+    guideHover.timer = setTimeout(() => {
+      if (guideHover.el) { guideHover.el.classList.remove('drop-before'); guideHover.el.classList.add('drop-nest'); }
+    }, GUIDE_NEST_MS);
+  }
+}
+function clearGuideHover() {
+  clearTimeout(guideHover.timer);
+  if (guideHover.el) guideHover.el.classList.remove('drop-before', 'drop-nest');
+  guideHover = { id: null, since: 0, timer: null, el: null };
 }
 
 // Shared by the mouse path (onDrop, native HTML5 DnD) and the touch path
@@ -9283,7 +9419,11 @@ function updateTouchDragHover(under) {
   } else if (hoverTab) {
     const targetId = hoverTab.dataset.drawerTab;
     if (targetId !== activeDrawer || drawerCollapsed) {
-      touchDrag.hoverTimer = setTimeout(() => { activeDrawer = targetId; drawerCollapsed = false; render(); }, TOUCH_HOVER_DWELL_MS);
+      touchDrag.hoverTimer = setTimeout(() => {
+        activeDrawer = targetId; drawerCollapsed = false;
+        if (isEntityTab(targetId)) store.update((d) => setActiveEntity(d, targetId.slice(ENTITY_TAB_PREFIX.length)), { system: true });
+        else render();
+      }, TOUCH_HOVER_DWELL_MS);
     }
   }
 }
@@ -9327,6 +9467,7 @@ function onTouchMove(ev) {
     if (touchDrag.lastTarget) touchDrag.lastTarget.classList.remove('drop-hover');
     if (dropTarget) dropTarget.classList.add('drop-hover');
     touchDrag.lastTarget = dropTarget || null;
+    if (touchDrag.guideNodeId) { if (dropTarget) noteGuideHover(dropTarget); else clearGuideHover(); }
   }
   touchDrag.lastX = touch.clientX;
   touchDrag.lastY = touch.clientY;
@@ -9972,9 +10113,84 @@ function renderStartupScreen() {
   const listEl = el.querySelector('[data-startup-campaigns]');
   listEl.innerHTML = campaigns.length
     ? campaigns.map((c) => `<button type="button" class="btn ${c.active ? '' : 'ghost'} startup-campaign-btn" data-startup-campaign-select="${escapeHtml(c.id)}">${escapeHtml(c.title || 'Untitled campaign')}${c.active ? ' <span class="dim small">(current)</span>' : ''}</button>`).join('')
-    : '<p class="dim small">No campaigns yet — open Settings to create one.</p>';
+    : '<p class="dim small">No campaigns yet — create one below.</p>';
   const versionEl = el.querySelector('[data-startup-version]');
   versionEl.textContent = `v${BUILD.version}`;
+}
+
+// --- Entity tabs (direct request, 2026-11-08) ----------------------------
+// "When loading an entity record into the menu bar, put the name of the
+// entity as the tab name. Also allow multiple entity tabs open (only one per
+// entity record though)." Every entity click still opens the generic
+// 'entity-detail' tab and sets the active entity (a dozen call sites, left
+// as they are); each render turns that into the entity's own tab,
+// `entity:<id>`, reusing it if it's already open. The active entity tab and
+// the active entity are kept the same, so the Entity view needs no change.
+const ENTITY_TAB_PREFIX = 'entity:';
+let lastRenderedEntityId = null;
+function isEntityTab(id) { return typeof id === 'string' && id.startsWith(ENTITY_TAB_PREFIX); }
+function entityTabMeta(doc, id) {
+  if (!isEntityTab(id)) return null;
+  const e = getEntity(doc, id.slice(ENTITY_TAB_PREFIX.length));
+  return { id, glyph: '👤', label: e ? (e.name || 'Unnamed') : 'Entity' };
+}
+function normalizeEntityTabs(doc) {
+  const activeId = doc.entities && doc.entities.activeId;
+  const activeExists = !!(activeId && getEntity(doc, activeId));
+  const tabFor = (entId) => ENTITY_TAB_PREFIX + entId;
+  // The generic tab becomes the active entity's own tab, where it stood.
+  if (openDrawers.includes('entity-detail')) {
+    const wasActive = activeDrawer === 'entity-detail';
+    const tab = activeExists ? tabFor(activeId) : null;
+    openDrawers = openDrawers.flatMap((x) => (x !== 'entity-detail' ? [x] : (tab && !openDrawers.includes(tab) ? [tab] : [])));
+    if (wasActive) activeDrawer = tab || openDrawers[openDrawers.length - 1] || null;
+  }
+  // Something else chose another entity (the active entity changed since the
+  // last render) while an entity tab was showing: that entity gets its tab.
+  if (activeId !== lastRenderedEntityId && isEntityTab(activeDrawer) && activeExists && activeDrawer !== tabFor(activeId)) {
+    if (!openDrawers.includes(tabFor(activeId))) openDrawers = [...openDrawers, tabFor(activeId)];
+    activeDrawer = tabFor(activeId);
+  }
+  lastRenderedEntityId = activeId;
+  // Tabs for deleted entities close.
+  const before = openDrawers.length;
+  openDrawers = openDrawers.filter((x) => !isEntityTab(x) || getEntity(doc, x.slice(ENTITY_TAB_PREFIX.length)));
+  if (openDrawers.length !== before && isEntityTab(activeDrawer) && !openDrawers.includes(activeDrawer)) activeDrawer = openDrawers[openDrawers.length - 1] || null;
+}
+
+// The New campaign wizard (direct request, 2026-11-08): from the startup
+// screen or the campaign switcher, it asks only for what a campaign needs —
+// a name and its Rules Profile (which sets the game system, genre and
+// modules) — and creates it, without opening Settings. Source data and
+// module configuration stay in Settings for later. Its values are read on
+// Create, so the shell's one click listener handles it (rule 4).
+function renderNewCampaignWizard() {
+  const el = root && root.querySelector('[data-new-campaign-wizard]');
+  if (!el) return;
+  el.hidden = !newCampaignWizardOpen;
+  if (!newCampaignWizardOpen) { el.innerHTML = ''; return; }
+  if (el.querySelector('[data-new-campaign-title]')) return; // keep what's typed across re-renders
+  const profiles = store.listProfiles();
+  const current = (store.getActiveProfile() || {}).id;
+  el.innerHTML = `
+    <div class="new-campaign-card">
+      <h2>New campaign</h2>
+      <label class="field-label">Name
+        <input type="text" data-new-campaign-title maxlength="80" placeholder="The Ashen Hand" autofocus>
+      </label>
+      <label class="field-label">Rules Profile
+        <select data-new-campaign-profile>
+          ${profiles.map((p) => `<option value="${escapeHtml(p.id)}" ${p.id === current ? 'selected' : ''}>${escapeHtml(p.name || 'Untitled profile')}</option>`).join('')}
+        </select>
+      </label>
+      <p class="dim small">The profile sets the game system, genre and which panels show. You can change it, and everything else, in Settings later.</p>
+      <div class="new-campaign-actions">
+        <button type="button" class="btn ghost" data-new-campaign-cancel>Cancel</button>
+        <button type="button" class="btn" data-new-campaign-create ${profiles.length ? '' : 'disabled'}>Create campaign</button>
+      </div>
+    </div>`;
+  const input = el.querySelector('[data-new-campaign-title]');
+  if (input) input.focus();
 }
 
 // ---- rendering ----------------------------------------------------------
@@ -9994,6 +10210,8 @@ function render() {
   const scrollY = window.scrollY;
 
   renderStartupScreen();
+  renderNewCampaignWizard();
+  normalizeEntityTabs(doc);
 
   // Genre stylesheet (styles/genre-scifi.css / genre-fantasy.css) follows the profile's Genre Pack.
   document.documentElement.dataset.genre = genreStyleFamily(doc.settings.genrePack, doc.settings.statRuleset);
@@ -10237,7 +10455,7 @@ function render() {
       // content actually fills them (design/adr/rules-profiles-multi-campaign.md) — the tab reads
       // "Colony" under a profile that put Colony in the Composer slot,
       // not the fixed "Composer" slot name.
-      const m = drawerMeta(resolveSlotContentId(id, profile));
+      const m = entityTabMeta(doc, id) || drawerMeta(resolveSlotContentId(id, profile));
       const pending = id === 'advisor' && resolveSlotContentId('advisor', profile) === 'copilot' && hasPendingAdvisorDecision(doc);
       const pinned = PINNED_TAB_IDS.includes(id);
       const close = pinned ? '' : `<span class="drawer-tab-close" data-drawer-tab-close="${id}" aria-label="Close ${m ? m.label : id}">✕</span>`;
@@ -11620,8 +11838,8 @@ function diceRollCardHtml(label, method, r, meta) {
 // there's only ever the one active entity, so unlike every other drawer
 // there's no separate list to distinguish it from.
 function titleForDrawer(doc, id, profile) {
-  if (id === 'entity-detail') {
-    const active = getEntity(doc, doc.entities && doc.entities.activeId);
+  if (id === 'entity-detail' || isEntityTab(id)) {
+    const active = getEntity(doc, isEntityTab(id) ? id.slice(ENTITY_TAB_PREFIX.length) : (doc.entities && doc.entities.activeId));
     return active ? `Entity — ${active.name || 'Unnamed'}` : 'Entity';
   }
   const meta = drawerMeta(resolveSlotContentId(id, profile));
@@ -11670,6 +11888,7 @@ function buildDrawerUi() {
     fiveLeaguesInfoOpen, fiveLeaguesItemNotesOpen,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
     enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, tocOfferOpen, tocLibrary: store.getAppConfig().tocLibrary || {}, canScanToc: canScanToc(), lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, refDocBlobKeysLoaded, expandedWhatConflicts,
+    composerWizardStep, composerWizardOffer: composerWizardOffer(), guideReorderMode, shadowdarkImportResult,
     advisorOracleResults, advisorDrafts, advisorConsequenceDraw, sceneSummaryOverride,
     expandedGuideNodes, guideRenameOpen,
     partyTrackerAddOpen, partyTrackerDraftKind, partyTrackerDraftName, partyTrackersEditOpen, collapsedPartySections,
@@ -11682,7 +11901,7 @@ function buildDrawerUi() {
     contentPackFlags, contentPackImporting, dataPackImporting, licenseDocLoading, canLoadReference: canLoadRulesetReference(),
     refDocLocation: { protocol: location.protocol, hostname: location.hostname }, exportIncludeAttachments, exportAttachmentsPreview,
     worldTrackerTab, worldTrackerSelectedSector, worldTrackerMigrateOpen,
-    expandedTurnStepGroups, editingTurnStepListId, turnStepListsCollapsed, turnStepMoveEditOpen, turnStepBranchEditOpen, colonyPanelTab,
+    expandedTurnStepGroups, editingTurnStepListId, turnStepListsCollapsed, turnStepMoveEditOpen, turnStepBranchEditOpen, colonyPanelTab, partyPanelTab,
     // Faction Events' own docked-in-WHERE state (see factionEventsDockedInWhere's
     // comment above) — workspace/index.js's WHERE view reads these to render
     // the same renderFactionEvents() body a second way when docked.
@@ -11839,7 +12058,9 @@ function renderActiveDrawerHtmlUnguarded(doc) {
   if (BUILTIN_CONTENT_IDS.includes(activeDrawer)) {
     return renderPositionContent(activeDrawer, doc, buildDrawerUi());
   }
-  return renderDrawer(activeDrawer, doc, buildDrawerUi());
+  // An entity tab (entity:<id>) renders the Entity view; its entity is the
+  // active one (normalizeEntityTabs keeps the two in step).
+  return renderDrawer(isEntityTab(activeDrawer) ? 'entity-detail' : activeDrawer, doc, buildDrawerUi());
 }
 
 // A live Story Option the GM hasn't yet rolled/journaled/dismissed is
@@ -12051,6 +12272,66 @@ function brandMenuHtml() {
   items.push('<button type="button" role="menuitem" data-menu-open-about>About</button>');
   if (signedIn) items.push('<hr>', '<button type="button" role="menuitem" data-menu-sign-out>Sign out</button>');
   return `<div class="brand-menu-account">${head}</div>${items.join('')}`;
+}
+
+/** Imports Shadowdark monsters or gear (domain/shadowdarkImport.js) into the
+ *  current campaign and reports the result under the importer. */
+function runShadowdarkImport(text, kind, onDone) {
+  const { items, error } = parseShadowdark(text, kind);
+  if (error) { shadowdarkImportResult = error; toast(error); return renderDrawerBody(); }
+  let added = 0;
+  let skipped = [];
+  const settings = store.get().settings;
+  store.update((d) => { const r = importShadowdark(d, items, kind, settings); added = r.added; skipped = r.skipped; return r.campaign; });
+  const what = kind === 'gear' ? 'gear item' : 'monster';
+  shadowdarkImportResult = `Imported ${added} ${what}${added === 1 ? '' : 's'}${skipped.length ? `; skipped ${skipped.length} already here (${skipped.slice(0, 5).join(', ')}${skipped.length > 5 ? '…' : ''})` : ''}.`;
+  toast(shadowdarkImportResult);
+  if (onDone) onDone();
+  return renderDrawerBody();
+}
+
+// Shadowdark's torch ticks in real time: once a second, the visible
+// countdown text is updated in place (no re-render), and a torch that has
+// just burned down is put out, logged to the Journal and announced.
+function tickTorch() {
+  const el = root && root.querySelector('[data-torch-remaining]');
+  const doc = store.get();
+  if (!doc || !doc.party || !doc.party.light || lightState(doc).startedAt === null) return;
+  const left = lightRemaining(doc, Date.now());
+  if (el) el.textContent = left > 0 ? formatLight(left) : 'Out';
+  if (left <= 0) {
+    const label = lightState(doc).label;
+    store.update((d) => addNote(lightBurnOut(d), `The ${label.toLowerCase()} gutters out. Darkness.`, 'Shadowdark'));
+    toast(`🌑 The ${label.toLowerCase()} has gone out`);
+  }
+}
+
+/** Whether the Composer should ask to run the Encounter wizard: the campaign
+ *  has no Encounter yet, the wizard isn't running, and the GM hasn't said
+ *  "Not now" for this campaign this session. */
+function composerWizardOffer() {
+  const doc = store.get();
+  if (!doc || Number.isInteger(composerWizardStep) || composerOfferDismissed.has(doc.meta && doc.meta.id)) return false;
+  return !listEncounters(doc).length;
+}
+
+/** Copies text to the clipboard: the async Clipboard API where allowed
+ *  (https or localhost), else a hidden textarea and execCommand (file://). */
+async function copyText(textToCopy) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(textToCopy); return true; }
+  } catch { /* fall back below */ }
+  const ta = document.createElement('textarea');
+  ta.value = textToCopy;
+  ta.setAttribute('readonly', '');
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { ok = false; }
+  ta.remove();
+  return ok;
 }
 
 function toast(msg) {

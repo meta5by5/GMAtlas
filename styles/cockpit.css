@@ -553,7 +553,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
   position: sticky; top: 0; z-index: 2;
 }
 .drawer-tabs[hidden] { display: none; }
-.drawer-tabs-scroll { display: flex; gap: 2px; overflow-x: auto; flex: 1 1 auto; min-width: 0; padding: 0 var(--sp-2); }
+/* Two rows of tabs (direct request, 2026-11-08): the strip wraps instead of
+   scrolling sideways, up to two rows tall; past that it scrolls vertically.
+   A tab row is the tab's own padding plus one line of its 0.78rem text. */
+.drawer-tabs-scroll {
+  --drawer-tab-row: calc(0.78rem * 1.4 + 2 * var(--sp-2));
+  display: flex; flex-wrap: wrap; gap: 2px; flex: 1 1 auto; min-width: 0; padding: 0 var(--sp-2);
+  max-height: calc(2 * var(--drawer-tab-row) + 2px); overflow-x: hidden; overflow-y: auto;
+}
 .drawer-tab {
   display: flex; align-items: center; gap: var(--sp-1); flex: 0 0 auto; max-width: 12rem;
   padding: var(--sp-2) var(--sp-2); background: none; border: none; border-right: 1px solid var(--tier1-border);
@@ -3620,3 +3627,54 @@ input[type="number"] { -moz-appearance: textfield; }
 .statblock-inactive h4 { margin: 0 0 var(--sp-1); }
 .statblock-inactive-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2); }
 .statblock-inactive-row + .statblock-inactive-row { margin-top: var(--sp-2); }
+
+/* --- Composer toolbar, Encounter wizard (2026-11-08) ----------------------- */
+.composer-toolbar { display: flex; align-items: center; gap: var(--sp-2); justify-content: flex-end; margin-bottom: var(--sp-2); }
+.composer-toolbar .composer-wizard-btn.active { outline: 1px solid var(--accent); border-radius: var(--radius-sm); }
+.composer-wizard-offer { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.composer-wizard-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-2); }
+.composer-wizard-steps { display: flex; gap: var(--sp-1); list-style: none; margin: 0; padding: 0; }
+.composer-wizard-steps li .link-btn { background: none; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-dim); padding: 0 var(--sp-2); cursor: pointer; font: inherit; font-size: 0.8em; }
+.composer-wizard-steps li.done .link-btn { color: inherit; }
+.composer-wizard-steps li.active .link-btn { border-color: var(--accent); color: var(--accent); }
+.composer-wizard-nav { display: flex; justify-content: space-between; gap: var(--sp-2); margin-top: var(--sp-3); }
+/* --- Party panel tabs (Party / Colony / Starship / Warband), 2026-11-08 ---- */
+.party-tab-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); margin-bottom: var(--sp-3); border-bottom: 1px solid var(--border); }
+.party-tab { background: none; border: 1px solid transparent; border-bottom: none; border-radius: var(--radius-sm) var(--radius-sm) 0 0; color: var(--text-dim); font: inherit; font-weight: 600; padding: var(--sp-1) var(--sp-3); cursor: pointer; margin-bottom: -1px; }
+.party-tab:hover { color: inherit; }
+.party-tab.active { color: inherit; border-color: var(--border); background: var(--bg-raised); }
+.party-tab-row .party-add-member { margin-left: auto; }
+
+/* --- Campaign timeline (2026-11-08) ---------------------------------------- */
+.campaign-timeline { list-style: none; margin: 0; padding: 0 0 0 var(--sp-2); position: relative; }
+.campaign-timeline::before { content: ''; position: absolute; left: calc(var(--sp-2) + 0.75rem); top: 0.5rem; bottom: 0.5rem; width: 2px; background: var(--border); }
+.campaign-timeline .timeline-node { position: relative; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); padding: var(--sp-2) 0 var(--sp-2) 2.25rem; }
+.campaign-timeline .timeline-dot { position: absolute; left: 0; top: var(--sp-2); width: 1.5rem; height: 1.5rem; display: grid; place-items: center; border-radius: 50%; background: var(--bg-raised); border: 2px solid var(--accent); font-size: 0.75em; font-weight: 700; }
+.campaign-timeline .timeline-encounter .timeline-dot { border-radius: var(--radius-sm); border-color: var(--border); color: var(--accent); }
+.campaign-timeline .timeline-label { font-weight: 600; }
+.campaign-timeline .timeline-branches { list-style: none; margin: 0; padding: 0; flex-basis: 100%; }
+.campaign-timeline .timeline-branch { padding-left: 2rem; }
+.campaign-timeline .timeline-branch::before { content: ''; position: absolute; left: -1.5rem; top: calc(var(--sp-2) + 0.75rem); width: 1.25rem; height: 2px; background: var(--border); }
+.campaign-timeline .timeline-branch .timeline-dot { left: 0.25rem; width: 1.2rem; height: 1.2rem; }
+/* --- Guide move mode (2026-11-08) ------------------------------------------- */
+.guide-reorder-toggle.active { outline: 1px solid var(--accent); border-radius: var(--radius-sm); color: var(--accent); }
+.guide-tree.reordering .guide-tree-row { cursor: grab; }
+.guide-tree-row.drop-before { box-shadow: inset 0 3px 0 var(--accent); }
+.guide-tree-row.drop-nest { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--bg-inset); }
+/* --- New campaign wizard (2026-11-08) --------------------------------------- */
+.new-campaign-wizard { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: var(--sp-4); background: rgba(2, 6, 23, 0.6); }
+.new-campaign-wizard[hidden] { display: none; }
+.new-campaign-card { width: min(26rem, 100%); background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--sp-6); display: grid; gap: var(--sp-3); }
+.new-campaign-card h2 { margin: 0; }
+.new-campaign-card input, .new-campaign-card select { width: 100%; }
+.new-campaign-actions { display: flex; justify-content: flex-end; gap: var(--sp-2); }
+/* --- Shadowdark: torch timer, importer (2026-11-08) ------------------------- */
+.torch-timer { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-inset); }
+.torch-timer .torch-label { font-weight: 600; }
+.torch-timer .torch-remaining { font-variant-numeric: tabular-nums; font-size: 1.15em; font-weight: 700; margin-right: auto; }
+.torch-timer.lit .torch-flame { filter: drop-shadow(0 0 4px #f59e0b); }
+.torch-timer.out { opacity: 0.85; }
+.torch-timer.out .torch-remaining { color: var(--text-dim); }
+.shadowdark-import { margin-top: var(--sp-3); display: grid; gap: var(--sp-2); }
+.shadowdark-import .shadowdark-paste { width: 100%; font-family: ui-monospace, monospace; font-size: 0.85em; }
+.shadowdark-import-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }

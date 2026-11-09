@@ -1,0 +1,391 @@
+# feature-triage.yml — the triage list for every feature ever documented
+# for GMAtlas that isn't built (as of 2026-11-08).
+#
+# How to use it: move each item out of `pending` into one of the four
+# sections by cutting and pasting the whole entry. Once `pending` is empty,
+# Claude acts on it:
+#   defer   — keep, but out of the current plan. Recorded in an ADR as
+#             deferred (like design/adr/deferred-turn-and-realtime-
+#             collaboration.md), removed from every "what's missing" list.
+#   add     — build it. Goes into the roadmap (functional-requirements-v3
+#             or the accounts roadmap) in the order listed here.
+#   ignore  — not wanted. Removed from every doc that describes it as
+#             planned or missing; left alone where it's only history
+#             (PROGRESS.md log entries, sessions/, git history).
+#   delete  — remove from code AND documentation: dead code, stubs and the
+#             docs that describe them. Schema stubs are removed only through
+#             a migration that keeps old exports importable (rule 5).
+#
+# The goal: design/adr/ (and the Constitution's Part IV) describes only what
+# exists, plus explicit deferral ADRs; nothing else claims a feature is
+# planned unless it's under `add`.
+#
+# Entry fields: id (stable, for reference), title, sources (where it's
+# documented), state (not-built | partial | stub | dead-code), notes.
+
+defer:
+  - id: turn-relay
+    title: TURN relay for device-to-device transfer
+    sources: [design/adr/deferred-turn-and-realtime-collaboration.md, ACCOUNTS-SYNC-ROADMAP D7]
+    state: partial
+    notes: Wired end to end except the Cloudflare key. Deferred 2026-11-08.
+  - id: realtime-collaboration
+    title: Real-time collaboration (S5 multiplayer tables, players, reveal-to-table, full presence, rolls/chat, cross-account documents, Yjs co-typing, table load tests)
+    sources: [design/adr/deferred-turn-and-realtime-collaboration.md, ACCOUNTS-SYNC-ROADMAP S5/S6, functional-requirements-v3 Content Library recommendations]
+    state: not-built
+    notes: Deferred 2026-11-08. Groundwork (room, merge, per-campaign keys, table/player scopes, tables flag) stays.
+
+add:
+  - id: s4-store-billing
+    title: S4 store and billing, provider-neutral
+    sources: [ACCOUNTS-SYNC-ROADMAP S4, section 8.3, section 9]
+    state: not-built
+    notes: Owner's decision 2026-11-08 — catalog, synced cart, checkout behind an adapter with a fake provider, orders, webhooks to entitlements, receipts, Billing page, redeem codes, Products/Orders/Codes in admin. Real provider chosen later.
+
+ignore: []
+
+delete: []
+
+pending:
+  # --- Accounts & sync (design/ACCOUNTS-SYNC-ROADMAP.md, ADRs) -------------
+  - id: privacy-export-everything
+    title: Account › Privacy & data — "Export everything"
+    sources: [ACCOUNTS-SYNC-ROADMAP 8.3]
+    state: not-built
+  - id: account-deletion
+    title: Delete account with a 30-day grace period
+    sources: [ACCOUNTS-SYNC-ROADMAP 8.3]
+    state: not-built
+  - id: revoke-closes-socket
+    title: Close a revoked device's open sync socket at once
+    sources: [design/adr/personal-sync.md "Not yet built"]
+    state: not-built
+  - id: vault-rotation-after-revoke
+    title: Rotate the vault key after a device is revoked
+    sources: [design/adr/personal-sync.md, ACCOUNTS-SYNC-ROADMAP S6]
+    state: not-built
+  - id: split-large-changes
+    title: Split a single sync change larger than ~600 KB of text
+    sources: [design/adr/personal-sync.md]
+    state: not-built
+    notes: Today it shows an error and stays local.
+  - id: persistent-conflict-chips
+    title: Conflict chips that survive a reload, and cover account settings
+    sources: [design/adr/personal-sync.md]
+    state: partial
+  - id: live-account-settings
+    title: Account settings arriving live (account room) instead of a 30 s poll
+    sources: [design/adr/personal-sync.md, ACCOUNTS-SYNC-ROADMAP 5.4]
+    state: partial
+  - id: entitlements-push
+    title: Account-room push of entitlements.changed (instant license/flag updates)
+    sources: [ACCOUNTS-SYNC-ROADMAP 4.3]
+    state: partial
+    notes: Today the certificate is re-fetched every 10 min and on returning to the tab.
+  - id: cert-grace-banner
+    title: Offline-past-expiry 14-day grace banner, then pause paid features
+    sources: [ACCOUNTS-SYNC-ROADMAP 4.3]
+    state: not-built
+  - id: file-mode-device-code
+    title: file:// sign-in via a device-code flow
+    sources: [ACCOUNTS-SYNC-ROADMAP 3.3]
+    state: not-built
+    notes: Roadmap says only "if it proves essential".
+  - id: verified-licenses
+    title: A `verified` license source (proof of purchase, e.g. a DriveThruRPG lookup)
+    sources: [ACCOUNTS-SYNC-ROADMAP 4.5]
+    state: not-built
+  - id: admin-roles-ui
+    title: Admin roles beyond owner/admin in the admin UI (Support, Content) and an admin Tables area
+    sources: [ACCOUNTS-SYNC-ROADMAP 9]
+    state: partial
+  - id: admin-metrics
+    title: Admin metrics dashboard
+    sources: [ACCOUNTS-SYNC-ROADMAP S6]
+    state: not-built
+  - id: help-guides-checklists
+    title: Help-centre step-by-step guides with progress checklists
+    sources: [ACCOUNTS-SYNC-ROADMAP 8.3, S6]
+    state: not-built
+  - id: help-panel-deeplinks
+    title: A "?" on each campaign panel deep-linking to its help article
+    sources: [ACCOUNTS-SYNC-ROADMAP 8.3]
+    state: partial
+  - id: account-menu-avatar
+    title: Top-right account menu with avatar on both surfaces
+    sources: [ACCOUNTS-SYNC-ROADMAP 8.2]
+    state: partial
+    notes: The logo menu covers most of it; no avatar.
+
+  # --- Storyboard / UX (functional-requirements-v3, design/UX-ROADMAP.md) --
+  - id: touch-gesture-polish
+    title: Phone/tablet touch and gesture polish pass
+    sources: [design/UX-ROADMAP.md, README Phase 14]
+    state: not-built
+  - id: moves-icon-placement
+    title: Moves-menu icon placement check in the Navigator
+    sources: [README Phase 14]
+    state: not-built
+    notes: Depends on moves-menu.
+  - id: multi-slot-drawers
+    title: Repositionable multi-slot drawers, 2×/3× widths, pop-out windows
+    sources: [Constitution Part IV, functional-requirements-v3 Storyboard ("explicitly out of scope")]
+    state: not-built
+  - id: location-breadcrumb
+    title: Clickable location breadcrumb (Site → Region → System → Sector)
+    sources: [Constitution Part IV]
+    state: not-built
+  - id: five-w-jump-row
+    title: A small WHO/WHERE/WHAT/WHY/HOW jump-button row
+    sources: [deviations Part II (13c–13k)]
+    state: not-built
+
+  # --- Moves (functional-requirements-v3 "The Moves Menu") -----------------
+  - id: moves-menu
+    title: Moves catalog (Starforged/5PFH) and the Moves menu with per-move roll button, stat picker, roll → Composer → Journal flow, ruleset remapping, Advisor move suggestions
+    sources: [functional-requirements-v3, Constitution Part IV]
+    state: not-built
+
+  # --- Cast (functional-requirements-v3 "Entity Dashboard") ----------------
+  - id: cast-summary-strip
+    title: Cast summary strip (count per entity type) and more prominent Cast navigation
+    sources: [functional-requirements-v3]
+    state: not-built
+  - id: cast-connection-counts
+    title: Relationship / "mentioned in N places" counts in the Cast list
+    sources: [functional-requirements-v3 recommendations]
+    state: not-built
+
+  # --- Game mechanics (functional-requirements-v3) --------------------------
+  - id: cast-tag-taxonomy
+    title: Auto #npc tag on NPC creation; #antagonist/#bystander tags
+    sources: [functional-requirements-v3 Foundational Additions]
+    state: not-built
+  - id: faction-size
+    title: Faction size at creation driving FacCreds/stat scaling
+    sources: [functional-requirements-v3, Constitution Part IV]
+    state: not-built
+  - id: regional-faction-turns
+    title: Every faction in a location's containment chain joins its faction turn
+    sources: [functional-requirements-v3, Constitution Part IV]
+    state: partial
+  - id: faction-event-opportunities
+    title: Committed faction events add Advisor opportunities/consequences
+    sources: [functional-requirements-v3]
+    state: partial
+  - id: trade-transaction-events
+    title: Random success/consequence events on trade transactions
+    sources: [functional-requirements-v3]
+    state: not-built
+  - id: mission-timers
+    title: Mission variable start time/duration with progress or timer clocks
+    sources: [functional-requirements-v3]
+    state: partial
+  - id: oracle-tag-pool-roll
+    title: Rolling "by tag" as one pooled table across every same-tagged table
+    sources: [functional-requirements-v3, Constitution Part IV]
+    state: not-built
+  - id: oracle-tags-to-settings
+    title: Move the Oracle Tags editor into Settings; hide tags in the Oracle drawer
+    sources: [functional-requirements-v3]
+    state: not-built
+  - id: thread-urgency-momentum
+    title: Thread urgency and momentum dials (and origin / related entities / possible consequences)
+    sources: [functional-requirements-v3, Constitution Part IV, deviations Part II]
+    state: not-built
+
+  # --- Composer NPC generation (functional-requirements-v3) ----------------
+  - id: npc-roll-until-fits
+    title: Roll-until-fits NPC generator at scene start for Antagonist/Bystander slots
+    sources: [functional-requirements-v3, Constitution Part IV]
+    state: not-built
+  - id: npc-field-locks
+    title: Per-field lock/unlock on generated NPCs, respected by rerolls
+    sources: [functional-requirements-v3, Constitution Part IV]
+    state: not-built
+  - id: npc-thumbnail-chips
+    title: 48px NPC thumbnail cards in the Composer with promote/discard
+    sources: [functional-requirements-v3, Constitution Part IV]
+    state: not-built
+  - id: bystander-conversion
+    title: Bystander → NPC/Antagonist conversion with tag-driven stats
+    sources: [functional-requirements-v3]
+    state: not-built
+  - id: lightbulb-moves
+    title: Lightbulb on entities/fields loading relevant Moves into the Advisor
+    sources: [functional-requirements-v3]
+    state: not-built
+    notes: Depends on moves-menu.
+  - id: field-click-oracle-suggestions
+    title: Clicking a Composer field surfaces fitting oracle suggestions in the Advisor
+    sources: [functional-requirements-v3]
+    state: not-built
+  - id: scene-goal-proposal
+    title: Auto-assessed scene goal with a relevance filter over hazards/opportunities
+    sources: [functional-requirements-v3]
+    state: not-built
+
+  # --- Scene Operating Model, Phase 13c–13k (README, deviations) -----------
+  - id: what-news-dangers
+    title: WHAT News Events / Dangers / Shared Circumstances tracking (13c)
+    sources: [README Phase 13, deviations Part II]
+    state: not-built
+  - id: why-oracle-filtering
+    title: WHY oracle filtering by carried-over threads/foreshadowing/world flags
+    sources: [README Phase 13, deviations Part II]
+    state: not-built
+  - id: how-roleplay-suggestions
+    title: HOW role-play suggestions plus asset/gear associations
+    sources: [deviations Part II]
+    state: not-built
+  - id: guided-scene-walkthrough
+    title: Guided step-by-step scene walkthrough mode
+    sources: [README Phase 13, deviations Part II]
+    state: not-built
+    notes: The Composer's Encounter wizard (built 2026-11-08) already steps through WHO→HOW; this would be the scene-play version.
+  - id: manual-dice-consequences
+    title: Manual physical-dice result → consequence calculation
+    sources: [README Phase 13, deviations Part II]
+    state: not-built
+  - id: orphan-shift-reducers
+    title: The 8 Situation Model SHIFTS reducers with no UI control
+    sources: [deviations Part II, README Phase 12]
+    state: dead-code
+    notes: Candidate for delete or for wiring into a control.
+
+  # --- Visual & tactical tools (Phase 11, legacy ADRs) ---------------------
+  - id: planetfall-base-builder
+    title: Planetfall Base Builder (and Planetfall Buildings icon set)
+    sources: [README Phase 11, deviations Part II]
+    state: not-built
+  - id: encounter-manager
+    title: Encounter Manager with per-ruleset initiative/attack resolvers
+    sources: [README Phase 11, Constitution Part IV, deviations Part II]
+    state: not-built
+    notes: The Encounter entity/timeline requested 2026-11-08 touches this.
+  - id: interactive-maps
+    title: Interactive Maps
+    sources: [README Phase 11]
+    state: not-built
+  - id: battlemap-encounter-extensions
+    title: Battlemap 11b–11f — encounter overlays, room templates, fog of war, floors, annotation links
+    sources: [Constitution Part IV, deviations Part II, functional-requirements-v3]
+    state: not-built
+  - id: deckplan-builder
+    title: Shipyard-style gridless vessel-deckplan builder
+    sources: [Constitution Part IV, deviations Part II]
+    state: not-built
+  - id: shipyard-link
+    title: Shipyard companion link (Phase 10)
+    sources: [README Phase 10]
+    state: not-built
+    notes: Blocked on external input.
+
+  # --- Search ----------------------------------------------------------------
+  - id: search-ranking-saved
+    title: Relevance-ranked search ("Knowledge Cards") and saved searches
+    sources: [functional-requirements-v3, Constitution Part IV, deviations Part II]
+    state: not-built
+
+  # --- Campaign wiki & Drive (design/onetimecmd.md) ----------------------
+  - id: campaign-wiki
+    title: Campaign wiki — [[wikilinks]], backlinks, page view per entity, nesting (hex → dungeon → room), GM-secret blocks, player view, map binding, markdown export
+    sources: [design/onetimecmd.md]
+    state: not-built
+    notes: No roadmap written yet. Much overlaps @mentions, the relationship graph and the battlemap.
+  - id: dated-session-journal
+    title: Session journal with real and in-world dates, session numbers, attendees, timeline by in-world date
+    sources: [design/onetimecmd.md]
+    state: partial
+  - id: drive-backup-sharing
+    title: Google Drive backup, restore and player-safe sharing (drive.file scope)
+    sources: [design/onetimecmd.md]
+    state: not-built
+
+  # --- Planetfall world tracker spec ---------------------------------------
+  - id: planetfall-tracker-gaps
+    title: Gaps between requirements/PLANETFALL_world_tracker.md and the built World Tracker
+    sources: [requirements/PLANETFALL_world_tracker.md]
+    state: partial
+    notes: Not audited item by item yet; the module exists (commit 0dcf18f).
+
+  # --- Legacy architecture (design/adr/deviations.md Part II) --------------
+  - id: legacy-event-bus
+    title: Formal typed event bus with undo/redo checkpoints
+    sources: [deviations Part II, Constitution Part IV]
+    state: not-built
+  - id: legacy-decision-engine
+    title: Decision Engine (assistance reasoning with confidence/explanation)
+    sources: [deviations Part II]
+    state: not-built
+  - id: legacy-cie
+    title: Campaign Intelligence Engine
+    sources: [deviations Part II]
+    state: stub
+    notes: An empty `settings.cie: {}` exists in the schema; nothing reads it.
+  - id: legacy-scenario-engine
+    title: Scenario Engine (adventure templates with named beat types)
+    sources: [deviations Part II]
+    state: not-built
+  - id: legacy-living-world
+    title: Living World Engine (background world-simulation turns)
+    sources: [deviations Part II]
+    state: not-built
+  - id: legacy-campaign-director
+    title: Campaign Director (unified tracker rollup, threshold events)
+    sources: [deviations Part II]
+    state: stub
+    notes: Inert `director: {}` and `settings.form: {}` in the schema.
+  - id: legacy-knowledge-graph
+    title: Knowledge Graph distinct from the Context Graph
+    sources: [deviations Part II]
+    state: not-built
+  - id: legacy-plugin-sdk
+    title: Plugin architecture / SDK
+    sources: [deviations Part II, Constitution Part IV]
+    state: not-built
+  - id: legacy-workspace-federation
+    title: Workspace Federation (four-level external tool integration)
+    sources: [deviations Part II]
+    state: not-built
+  - id: legacy-maturity-model
+    title: Campaign OS Maturity Model (Level 0–5)
+    sources: [deviations Part II]
+    state: not-built
+  - id: legacy-ai-assistance
+    title: Explainable AI assistance / predictive story guidance
+    sources: [deviations Part II]
+    state: not-built
+    notes: The Composer "copy as AI prompt" requested 2026-11-08 is a first step.
+  - id: legacy-revision-history
+    title: Append-only revision history for entity edits
+    sources: [deviations Part II]
+    state: not-built
+  - id: legacy-consequence-engine
+    title: Consequence Engine / consequence state machine
+    sources: [deviations Part II]
+    state: not-built
+  - id: legacy-story-hierarchy
+    title: Six-level story hierarchy (Act/Mission/Objective/Scene/Beat/Moment)
+    sources: [deviations Part II]
+    state: not-built
+  - id: legacy-scene-graph
+    title: Branching pre-authored scene graph with stable scene identity
+    sources: [Constitution Part IV]
+    state: not-built
+  - id: legacy-gameplay-engines
+    title: The brainstormed engines in gameplay-mechanics.md (Salvage, Exploration, Science, Diplomacy, Discovery Quality, Noncombat Resolution, Campaign Momentum rule, GM Prompt Hierarchy)
+    sources: [deviations Part II]
+    state: not-built
+
+  # --- Dead code and inert schema (candidates for `delete`) ----------------
+  - id: dead-exports
+    title: Dead exports getFactionDossier, relationshipCount, toggleEntityStatblockFieldAttribute, setEntityTags
+    sources: [deviations Part II, README Phase 12]
+    state: dead-code
+    notes: toggleStatblockFieldTrack/Attribute are deliberately kept per CLAUDE.md; check each before deleting.
+  - id: vestigial-context-active
+    title: Vestigial `context.active` in the schema
+    sources: [CLAUDE.md Known non-issues]
+    state: stub
+    notes: CLAUDE.md says keep (rule 5). Deleting needs a migration.

@@ -12472,3 +12472,204 @@ test('resolveBlobAlias and rekeyTocLibrary', () => {
   assert.equal(out['sha256:xxx'].docTitle, 'X new', 'an existing scan under the new key wins');
   assert.ok(lib.doc_a, 'input untouched');
 });
+
+
+// --- Composer → Encounter, AI prompt, campaign timeline (2026-11-08) ---------
+import {
+  composerSnapshot, composerHasContent, createEncounterFromComposer, listEncounters,
+  composerPrompt, parseEncounterReply, campaignTimeline,
+} from '../src/domain/encounters.js';
+import { createEntity as createEnt, getEntity as getEnt } from '../src/domain/entities.js';
+
+function composerCampaign() {
+  let c = defaultCampaign();
+  const hero = createEnt(c, { type: 'npc', name: 'Rae' }); c = hero.campaign;
+  const foe = createEnt(c, { type: 'npc', name: 'The Warden' }); c = foe.campaign;
+  const place = createEnt(c, { type: 'location', name: 'Dust Station' }); c = place.campaign;
+  c.scenes = [{ id: 'scn_1', number: 1, createdAt: '2026-11-01T10:00:00Z', summary: 'Discovery at the docks', opening: 'Fog rolls in.', complication: 'The lights fail.', protagonistIds: [hero.id], antagonistIds: [foe.id], bystanderIds: [], assetIds: [], locationIds: [place.id] }];
+  c.context.what.situation = 'A standoff over the water rights\nmore detail';
+  c.context.why.summary = 'Recover the ledger';
+  return { c, hero: hero.id, foe: foe.id, place: place.id };
+}
+
+test('composerSnapshot resolves the scene and context to names', () => {
+  const { c } = composerCampaign();
+  const s = composerSnapshot(c);
+  assert.deepEqual(s.protagonists.map((e) => e.name), ['Rae']);
+  assert.deepEqual(s.antagonists.map((e) => e.name), ['The Warden']);
+  assert.deepEqual(s.locations.map((e) => e.name), ['Dust Station']);
+  assert.equal(s.objective, 'Recover the ledger');
+  assert.equal(s.sceneNumber, 1);
+  assert.equal(composerHasContent(composerSnapshot(defaultCampaign())), false, 'an empty Composer has nothing to save');
+});
+
+test('createEncounterFromComposer makes a linked Encounter stamped with its scene', () => {
+  const { c, hero, foe, place } = composerCampaign();
+  const before = JSON.stringify(c);
+  const { campaign, id } = createEncounterFromComposer(c);
+  assert.equal(JSON.stringify(c), before, 'input untouched');
+  const e = getEnt(campaign, id);
+  assert.equal(e.type, 'conflict');
+  assert.equal(e.name, 'A standoff over the water rights', 'named from the situation’s first line');
+  assert.equal(e.sceneId, 'scn_1');
+  assert.equal(e.locationId, place);
+  assert.match(e.overview, /Objective: Recover the ledger/);
+  const targets = e.relationships.map((r) => r.targetId || r.id || r.to);
+  for (const want of [hero, foe, place]) assert.ok(JSON.stringify(e.relationships).includes(want), `linked to ${want}`);
+  assert.ok(targets.length >= 3);
+  assert.equal(listEncounters(campaign).length, 1);
+  assert.equal(createEncounterFromComposer(defaultCampaign()).id, null, 'nothing in the Composer, nothing made');
+});
+
+test('composerPrompt asks for a fixed JSON reply built only from the Composer’s facts', () => {
+  const { c } = composerCampaign();
+  const p = composerPrompt(c, { genre: 'Sci-fi', ruleset: 'Starforged' });
+  assert.match(p, /Antagonists: The Warden/);
+  assert.match(p, /Location: Dust Station/);
+  assert.match(p, /Setting: Sci-fi · Starforged/);
+  assert.match(p, /\{"title": "\.\.\.", "description": "\.\.\.", "hooks"/);
+  assert.deepEqual(parseEncounterReply('Sure! {"title":"T","description":"D","hooks":["a",2,"b"]}'), { title: 'T', description: 'D', hooks: ['a', 'b'] });
+  assert.equal(parseEncounterReply('no json here'), null);
+});
+
+test('campaignTimeline orders scenes and encounters, nesting encounters under their scene', () => {
+  const { c } = composerCampaign();
+  let { campaign } = createEncounterFromComposer(c);
+  const loose = createEnt(campaign, { type: 'conflict', name: 'Old feud' });
+  campaign = loose.campaign;
+  campaign.entities.items.find((e) => e.id === loose.id).createdAt = '2026-10-01T00:00:00Z';
+  const tl = campaignTimeline(campaign);
+  assert.equal(tl[0].kind, 'encounter', 'an older loose encounter comes first');
+  assert.equal(tl[0].label, 'Old feud');
+  const scene = tl.find((x) => x.kind === 'scene');
+  assert.equal(scene.encounters.length, 1);
+  assert.equal(tl.filter((x) => x.kind === 'encounter').length, 1, 'the scene’s encounter isn’t listed twice');
+});
+
+// --- Guide: move above the hovered entry (2026-11-08) -----------------------
+import { moveGuideDocBefore, createGuideDoc as mkGuideDoc, buildGuideTree as guideTree, moveGuideDoc as nestGuideDoc } from '../src/domain/guide.js';
+
+test('moveGuideDocBefore puts a doc just above the target, at the target’s level', () => {
+  let c = defaultCampaign();
+  const a = mkGuideDoc(c, { title: 'A' }); c = a.campaign;
+  const b = mkGuideDoc(c, { title: 'B' }); c = b.campaign;
+  const kid = mkGuideDoc(c, { title: 'Kid', parentId: a.id }); c = kid.campaign;
+  const titles = (cc) => guideTree(cc).map((n) => n.title);
+  // B above A (top level).
+  let moved = moveGuideDocBefore(c, b.id, a.id);
+  assert.deepEqual(titles(moved).slice(-2), ['B', 'A']);
+  // A nested child moved above a top-level doc becomes top-level.
+  moved = moveGuideDocBefore(c, kid.id, b.id);
+  assert.ok(titles(moved).indexOf('Kid') === titles(moved).indexOf('B') - 1, 'Kid lands right above B');
+  assert.equal(guideTree(moved).find((n) => n.title === 'A').children.length, 0);
+  // A top-level doc moved above a nested one joins that level.
+  moved = moveGuideDocBefore(c, b.id, kid.id);
+  assert.deepEqual(guideTree(moved).find((n) => n.title === 'A').children.map((n) => n.title), ['B', 'Kid']);
+  // Guards: into its own subtree, onto itself, unknown ids.
+  assert.deepEqual(guideTree(moveGuideDocBefore(c, a.id, kid.id)), guideTree(c), 'no cycle');
+  assert.deepEqual(guideTree(moveGuideDocBefore(c, a.id, a.id)), guideTree(c));
+  assert.deepEqual(guideTree(moveGuideDocBefore(c, 'nope', a.id)), guideTree(c));
+  // Nesting is still the existing reparent.
+  assert.deepEqual(guideTree(nestGuideDoc(c, b.id, a.id)).find((n) => n.title === 'A').children.map((n) => n.title), ['Kid', 'B']);
+});
+
+// --- Shadowdark: importer, torch timer, carousing (2026-11-08) ---------------
+import { parseStatLine, parseShadowdark, importShadowdark } from '../src/domain/shadowdarkImport.js';
+import { TORCH_MS, lightRemaining, lightStart, lightPause, lightReset, lightBurnOut, isLit, isOut, formatLight } from '../src/domain/torchTimer.js';
+import { findGenrePack as sdGenrePack, isFantasyGenre as sdIsFantasy } from '../src/data/genrePacks.js';
+import { findRuleset as sdRuleset } from '../src/data/rulesets.js';
+import { licenseFor as sdLicenseFor } from '../src/data/rulesConstitution.js';
+
+const SD_TEXT = `GOBLIN
+A small, cruel humanoid that lurks in caves.
+AC 11, HP 5, ATK 1 club +0 (1d4), MV near, S +0,
+D +1, C +0, I -1, W -1, Ch -2, AL C, LV 1
+Keen Senses. Can see in the dark.
+
+CAVE BEAR
+Huge and hungry.
+AC 13, HP 30, ATK 2 claw +4 (1d8), MV near (climb), S +4, D +0, C +3, I -4, W +1, Ch -3, AL N, LV 6
+Rend. If both claws hit, one extra 1d8.
+Hibernates. Sleeps through winter.`;
+
+test('Shadowdark stat lines parse, wrapped or not', () => {
+  const s = parseStatLine('AC 13, HP 9, ATK 1 bite +2 (1d6), MV near, S +1, D +2, C +0, I -2, W +0, Ch -3, AL N, LV 2');
+  assert.deepEqual(s, { ac: '13', hp: 9, atk: '1 bite +2 (1d6)', mv: 'near', s: 1, d: 2, c: 0, i: -2, w: 0, ch: -3, al: 'N', lv: 2 });
+  assert.equal(parseStatLine('Just a description.'), null);
+  const { items } = parseShadowdark(SD_TEXT, 'monsters');
+  assert.deepEqual(items.map((m) => m.name), ['Goblin', 'Cave Bear']);
+  assert.equal(items[0].d, 1, 'a stat line wrapped over two lines still reads');
+  assert.equal(items[0].description, 'A small, cruel humanoid that lurks in caves.');
+  assert.match(items[0].specials, /Keen Senses/);
+  assert.match(items[1].specials, /Rend[\s\S]*Hibernates/, 'every special up to the next monster');
+  assert.equal(items[1].mv, 'near (climb)');
+  assert.ok(parseShadowdark('nothing here', 'monsters').error);
+});
+
+test('Shadowdark gear parses from CSV (with a header) or JSON', () => {
+  const csv = parseShadowdark('Name, Cost, Slots, Damage\nLongsword, 9 gp, 1, 1d8\n"Rope, 60\'", 1 gp, 1\n', 'gear');
+  assert.deepEqual(csv.items.map((g) => g.name), ['Longsword', "Rope, 60'"]);
+  assert.equal(csv.items[0].damage, '1d8');
+  const json = parseShadowdark('[{"name":"Torch","cost":"5 cp","slots":1}]', 'gear');
+  assert.equal(json.items[0].slots, '1');
+  assert.ok(parseShadowdark('{bad json', 'gear').error);
+});
+
+test('importShadowdark makes Lifeforms and Items with Shadowdark statblocks, skipping names it has', () => {
+  const c = defaultCampaign();
+  const monsters = parseShadowdark(SD_TEXT, 'monsters').items;
+  const r = importShadowdark(c, monsters, 'monsters', c.settings);
+  assert.equal(r.added, 2);
+  const bear = r.campaign.entities.items.find((e) => e.name === 'Cave Bear');
+  assert.equal(bear.type, 'lifeform');
+  const g = bear.statblocks[0];
+  assert.equal(g.templateId, 'shadowdark-lifeform');
+  const f = (k) => g.fields.find((x) => x.key === k);
+  assert.equal(f('Hit Points').value, 30);
+  assert.equal(f('Hit Points').max, 30);
+  assert.equal(f('STR').value, 4);
+  assert.equal(f('Alignment').value, 'N');
+  const again = importShadowdark(r.campaign, monsters, 'monsters', c.settings);
+  assert.equal(again.added, 0);
+  assert.deepEqual(again.skipped, ['Goblin', 'Cave Bear']);
+  const gear = importShadowdark(c, parseShadowdark('Longsword, 9 gp, 1, 1d8', 'gear').items, 'gear', c.settings);
+  const sword = gear.campaign.entities.items.find((e) => e.name === 'Longsword');
+  assert.equal(sword.type, 'item');
+  assert.equal(sword.statblocks[0].ruleset, 'shadowdark');
+  assert.equal(sword.statblocks[0].fields.find((x) => x.key === 'Damage').value, '1d8');
+});
+
+test('the torch burns for an hour of real time, pausable, and goes out', () => {
+  let c = defaultCampaign();
+  const t0 = 1_000_000;
+  assert.equal(lightRemaining(c, t0), TORCH_MS, 'an unlit torch has its full hour');
+  assert.equal(isLit(c, t0), false);
+  c = lightStart(c, t0);
+  assert.equal(isLit(c, t0 + 1), true);
+  assert.equal(lightRemaining(c, t0 + 10 * 60 * 1000), 50 * 60 * 1000);
+  c = lightPause(c, t0 + 10 * 60 * 1000);
+  assert.equal(lightRemaining(c, t0 + 99 * 60 * 1000), 50 * 60 * 1000, 'paused, it doesn’t burn');
+  c = lightStart(c, t0 + 20 * 60 * 1000);
+  assert.equal(isOut(c, t0 + 70 * 60 * 1000), true, 'gone after the remaining 50 minutes');
+  c = lightBurnOut(c);
+  c = lightStart(c, t0 + 80 * 60 * 1000);
+  assert.equal(lightRemaining(c, t0 + 80 * 60 * 1000), TORCH_MS, 'lighting a spent torch starts a fresh one');
+  c = lightReset(c, { label: 'Lantern' });
+  assert.equal(c.party.light.label, 'Lantern');
+  assert.equal(isLit(c, t0 + 81 * 60 * 1000), false);
+  assert.equal(formatLight(61 * 1000), '01:01');
+  assert.equal(formatLight(TORCH_MS), '1:00:00');
+});
+
+test('Shadowdark is a licensed fantasy game system with its own carousing oracles', () => {
+  assert.equal(sdRuleset('shadowdark').id, 'shadowdark');
+  assert.ok(Array.isArray(sdRuleset('shadowdark').characterTemplate.sections));
+  const lic = sdLicenseFor('shadowdark');
+  assert.ok(lic && !lic.open, 'an owned book, not open content');
+  const pack = sdGenrePack('shadowdark');
+  assert.equal(pack.id, 'shadowdark');
+  assert.ok(sdIsFantasy('shadowdark'));
+  assert.ok(Object.keys(pack.tables.Carousing).length >= 4);
+  assert.ok(pack.tables['Core Oracles'], 'plus the full fantasy oracle set');
+  assert.ok(!sdGenrePack('fantasy').tables.Carousing, 'carousing stays out of other fantasy campaigns');
+});
