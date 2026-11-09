@@ -12672,7 +12672,7 @@ test('Shadowdark is a licensed fantasy game system with its own carousing oracle
   assert.ok(Object.keys(pack.tables.Carousing).length >= 4);
   assert.ok(pack.tables['Core Oracles'], 'plus the full fantasy oracle set');
   assert.ok(!sdGenrePack('fantasy').tables.Carousing, 'carousing stays out of other fantasy campaigns');
-});﻿
+});
 // --- Campaign wiki W1 (design/WIKI-ROADMAP.md) --------------------------------
 import {
   parseWikiLinkRefs as wkParseRefs, linkedNames as wkLinkedNames, resolveLink as wkResolve, mentionIndex as wkIndex,
@@ -12822,7 +12822,7 @@ test('wiki: the new fields survive an export round trip', () => {
   assert.equal(wkGet(back, keep).placeKind, 'dungeon');
 });
 
-﻿
+
 // --- Campaign wiki W2: reading, GM blocks, the player-safe lens --------------
 import {
   splitGmBlocks as wkSplitGm, stripGmBlocks as wkStripGm, wikiLinksToMentions as wkToMentions, unlinkHidden as wkUnlinkHidden,
