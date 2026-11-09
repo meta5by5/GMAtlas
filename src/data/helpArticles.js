@@ -182,7 +182,7 @@ To bring the file over:
 
 Sourcebooks you've loaded or imported on one device can come across the same way: **Settings → Licenses** shows **⇄ Get from…** beside each book another of your devices has, and **⇄ Get N from…** for all of a license's books. They only ever go between your own devices.
 
-When two devices can't reach each other directly, a transfer may go through a relay that only passes the encrypted stream along. To never use one from a device, tick **Direct connections only** under **Account → Sync** there.
+The two devices need to reach each other directly: on the same Wi-Fi this usually works, while some office, school and mobile networks block it. If a transfer won't connect, use **Import file…** or a library zip instead.
 
 ## Stopping
 

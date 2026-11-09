@@ -160,7 +160,8 @@ runs of two browsers with an in-memory WebRTC stand-in.
   STUN always; a TURN relay only when `TURN_KEY_ID` and
   `TURN_KEY_API_TOKEN` are set (Cloudflare Realtime › TURN; short-lived
   credentials minted per request, 4 h). Without them, transfers work
-  wherever a direct path exists.
+  wherever a direct path exists. Setting them is deferred; the steps are
+  in `design/adr/deferred-turn-and-realtime-collaboration.md`.
 - **The bytes never come here:** they go device to device over a WebRTC
   data channel, and each file is checked against its content hash.
 

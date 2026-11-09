@@ -467,9 +467,9 @@ function syncSection() {
     <div class="portal-panel">
       <h2>Files between your devices</h2>
       <p class="portal-dim">A PDF or image added on one device can be sent to another while both have the campaign open: look for <strong>Get it from…</strong> on a document that isn’t on this device. It goes straight from device to device, encrypted, and never passes through or rests on the GMAtlas service.</p>
-      <p class="portal-dim">When two devices can’t reach each other directly (some office, school and mobile networks block it), the transfer can go through a relay instead. The relay only passes the encrypted stream along and can’t read it.</p>
+      <p class="portal-dim">The two devices need to reach each other directly. Some office, school and mobile networks block that; on the same Wi-Fi it usually works.</p>
       <label class="portal-toggle"><input type="checkbox" data-p2p-direct-only ${p2p.directOnly() ? 'checked' : ''}> Direct connections only</label>
-      <p class="portal-dim">Never use a relay from this device. Some transfers then won’t connect.</p>
+      <p class="portal-dim">If GMAtlas ever offers a relay for devices that can’t connect directly, never use it from this device.</p>
     </div>` : ''}
     <div class="portal-panel">
       <h2>Recovery key</h2>

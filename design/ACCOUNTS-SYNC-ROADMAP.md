@@ -828,8 +828,8 @@ S2 is built; it moves to `main` by pull request.
 (off by default): uploads keyed by content with old keys aliased (the 6.1
 S3 step), the badges and card, WebRTC transfer between the owner's open
 devices (signalling sealed through the campaign room rather than an
-account room; 64 KiB chunks; TURN only when configured; "Direct
-connections only"), hash-matched re-import, and hash-carrying bundles.
+account room; 64 KiB chunks; TURN wired but deferred, so only direct
+connections for now; "Direct connections only"), hash-matched re-import, and hash-carrying bundles.
 Sourcebook PDFs travel too, between one account's devices (Settings ›
 Licenses, checked against the hash the sender announces).
 
@@ -847,6 +847,11 @@ Licenses, checked against the hash the sender announces).
 
 ### S5 — Multiplayer tables
 
+**Deferred** (2026-11-08) with the rest of real-time collaboration. The
+build order, preconditions and acceptance criteria are now in
+`design/adr/deferred-turn-and-realtime-collaboration.md`, which wins where
+it and this outline differ.
+
 1. Partitions `table` / `player:<uid>`, server write ACL, the
    `visibility.js` projection, and "Reveal to table" / "Hide" controls.
 2. Invites, roles, seat limits, player mode of the campaign surface, full
@@ -857,7 +862,9 @@ Licenses, checked against the hash the sender announces).
 
 Load tests (50 concurrent tables, 6 players each), key rotation, abuse
 limits, the Yjs escape hatch for co-typed long text *if* real use shows
-it's needed, help-centre guides with checklists, and admin metrics.
+it's needed, help-centre guides with checklists, and admin metrics. The
+table-related parts (load tests, co-typing, table abuse limits) are
+deferred with S5 (`design/adr/deferred-turn-and-realtime-collaboration.md`).
 
 ---
 
@@ -914,7 +921,7 @@ it's needed, help-centre guides with checklists, and admin metrics.
 | D4 | Third-party book licenses | **Attestation follows the account**; the store sells GMAtlas products only; no public serving of third-party PDFs |
 | D5 | Does the GM's plan cover the table? | **Yes** for revealed content and table features; never for PDFs |
 | D6 | Payments | **A merchant of record (Paddle)** if selling worldwide as a small operation (it handles VAT and sales tax); **Stripe Checkout + Stripe Tax** if more control is wanted |
-| D7 | TURN relay for P2P | **On, disclosed**, with a "Direct connections only" toggle |
+| D7 | TURN relay for P2P | **On, disclosed**, with a "Direct connections only" toggle. The toggle is built; the relay itself is deferred (`design/adr/deferred-turn-and-realtime-collaboration.md`) |
 | D8 | Device limit per account | **None by default**; an admin-configurable per-product cap if abuse appears |
 
 ---

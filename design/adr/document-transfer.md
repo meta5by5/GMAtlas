@@ -68,7 +68,9 @@ file brought in on two devices had two unrelated keys.
      its content key and stores nothing that doesn't match.
    - **Relay (TURN)** is offered by the server only when configured
      (`GET /api/p2p/ice`); it carries the DTLS-encrypted stream, never
-     readable. **"Direct connections only"** (Account › Sync, decision D7)
+     readable. Configuring it is deferred
+     (`deferred-turn-and-realtime-collaboration.md`), so today only direct
+     connections work. **"Direct connections only"** (Account › Sync, decision D7)
      is per device (`appConfig.p2p.directOnly`, local) and makes the whole
      session direct: it drops relay servers here, asks the other device to
      do the same in the offer, and both ends drop relay candidates.

@@ -553,8 +553,11 @@ codebase, as of this audit. This list states absence only — see
 - An Encounter Manager with per-ruleset initiative/attack resolvers.
 
 **Platform**
-- Multi-user access, authentication, or any cloud-hosted shared campaign
-  database — the app is single-user and local-first with no accounts.
+- More than one person in a campaign. Accounts and end-to-end encrypted
+  sync across one user's own devices exist (design/adr/personal-sync.md),
+  but multiplayer tables, players, reveal-to-table, full presence and
+  co-typing don't. Neither does a TURN relay for device-to-device transfer.
+  Both are deferred (design/adr/deferred-turn-and-realtime-collaboration.md).
 - A plugin/extension SDK — rules packs, oracle packs, entity templates, and
   UI themes are added by editing `src/data/`, not by installing a
   third-party package.

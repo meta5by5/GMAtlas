@@ -14,6 +14,62 @@ reorganized — treat them as history, not current pointers.
 
 ## Status Summary
 
+**2026-11-08 Accounts & sync: S1–S3 leftovers** (`server` branch, deployed
+to dev only) — direct request ("finish S1–S3 leftovers" first, then S4
+store/billing built provider-neutral behind an adapter, real provider
+chosen later).
+- *Sourcebooks device to device* (`design/adr/document-transfer.md` item
+  7). Settings › Licenses offers "⇄ Get from <device>" per book and "⇄ Get
+  N from <device>" per license. Only owned licenses' books, only between
+  one account's devices, checked against the sha256 the sender announces.
+- *Continue with Apple* (`design/adr/passkeys-oauth.md` item 4). Apple's
+  cross-site form post is let through the origin check for that one path
+  and only 303-bounces to the GET callback. ES256 client secret; the ID
+  token's issuer, audience, expiry and nonce are checked. Inert until the
+  four `APPLE_*` secrets are set (needs a paid Apple Developer account;
+  steps in `server/README.md`).
+- *Device-bound sessions* (`design/adr/device-bound-sessions.md`, migration
+  0007, applied on dev). Each browser makes one non-extractable P-256 key;
+  sessions bind to it at sign-in, and every refresh is signed over an
+  ever-later timestamp, so a stolen refresh cookie renews nothing. Existing
+  sessions bind at their next refresh. The admin page signs with the app's
+  key via `store.js` `readDeviceKeys()` (admin bundle ~0.9 MB now).
+- *Deferred by the owner:* the TURN relay and real-time collaboration (S5
+  multiplayer tables, full presence, co-typing). The plan to pick up from
+  is `design/adr/deferred-turn-and-realtime-collaboration.md`. Account ›
+  Sync and the help article now say transfers need a direct connection
+  instead of describing a relay. Production still needs migration 0007
+  before its next release.
+- 847 core tests, 41 server tests, all headless smoke runs (two-browser
+  P2P, sign-in, admin, sync conflict, settings, blobs, import) passing with
+  no console errors. Dev at v0.103.0.
+
+**2026-11-07 Accounts & sync: S1 + S2 merged to `main`, S3 built; two Docs
+import fixes** — direct requests.
+- `server` merged into `main` (S1 accounts, admin v1, feature flags,
+  sign-in limits, passkeys, Google/Discord, Import my copy; S2 personal
+  sync, settings sync, conflict chips, presence, the sync dot).
+- *S3a, on `main`* (`design/adr/document-transfer.md`). Uploads are keyed
+  by content (`sha256:`), with older ones re-keyed behind a per-device
+  alias. ☁̸ "not on this device" badges and cards. Hash-matched re-import.
+  Hash-carrying library zips.
+- *S3b, on `server`.* WebRTC device-to-device transfer behind the
+  `p2p.transfer` flag: signalling sealed with the campaign key through the
+  campaign room, 64 KiB chunks, hash-checked, TURN only when configured,
+  and a per-device "Direct connections only". `p2p.transfer` was turned
+  on for the owner's account on dev only (a per-account override, with an
+  audit row).
+- *Fix: picked files lost to a re-render.* Docs "Import files…" took a
+  file and imported nothing: a re-render while the picker was open (a
+  phone hides the page) detached the input. The input the picker was
+  opened from is now put back in place of its re-rendered twin.
+- *Fix: a sourcebook-named file went missing.* "Import File(s)" filed a
+  file named like a catalog sourcebook under that book's key even when the
+  campaign doesn't list the book, so it never showed. It now becomes a
+  personal document unless the campaign lists the book.
+- Both fixes are on `main` and pushed (GitHub Pages) and merged into
+  `server`; dev deployed. 837 tests on `main`, 845 on `server`.
+
 **2026-11-05 Accounts & sync, Phase S0: groundwork**
 (`design/ACCOUNTS-SYNC-ROADMAP.md`, `design/adr/sync-groundwork.md`) — direct
 request. Gallery images and videos moved out of the campaign document into
