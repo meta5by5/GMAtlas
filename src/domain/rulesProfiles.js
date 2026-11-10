@@ -178,6 +178,34 @@ export function applyProfileDraft(profile, draft) {
   };
 }
 
+// --- The seeded Five Parsecs profile ----------------------------------------
+export const FIVE_PARSECS_PROFILE_NAME = 'Five Parsecs';
+export const FIVE_PARSECS_HEADLINE_FIELDS = ['Speed', 'Combat', 'Tough'];
+
+/** One-time upgrade of the seeded profile once called "5PFH": it is renamed
+ *  Five Parsecs, and gets Five Parsecs from Home as its Module for Profile and
+ *  Speed/Combat/Tough as its Party Roster headline. Each part only replaces
+ *  the value the old seed was created with (Starforged; Health, Momentum), so
+ *  a GM's own choice is kept. Skipped when a profile called Five Parsecs
+ *  already exists. Idempotent: nothing is called 5PFH afterwards. */
+export function upgradeFivePfhProfile(appConfig) {
+  const profiles = appConfig.profiles || [];
+  if (!profiles.some((p) => p.name === '5PFH') || profiles.some((p) => p.name === FIVE_PARSECS_PROFILE_NAME)) return appConfig;
+  const isOldHeadline = (list) => Array.isArray(list) && list.length === 2 && list[0] === 'Health' && list[1] === 'Momentum';
+  let done = false;
+  return {
+    ...appConfig,
+    profiles: profiles.map((p) => {
+      if (done || p.name !== '5PFH') return p;
+      done = true;
+      const ruleset = { ...(p.ruleset || {}) };
+      if (!ruleset.statRuleset || ruleset.statRuleset === 'starforged') ruleset.statRuleset = '5pfh';
+      if (!ruleset.partyHeadlineFields || isOldHeadline(ruleset.partyHeadlineFields)) ruleset.partyHeadlineFields = [...FIVE_PARSECS_HEADLINE_FIELDS];
+      return { ...p, name: FIVE_PARSECS_PROFILE_NAME, ruleset };
+    }),
+  };
+}
+
 // --- Crew Tasks default backfill (design/adr/rules-profiles-multi-
 // campaign.md, direct follow-up request) -----------------------------------
 // NOTE: the equivalent Turn Step backfill used to live here
@@ -198,12 +226,13 @@ export function applyProfileDraft(profile, draft) {
  *  in this app (see schema.js's toolbarCollapsedByDefault comment). Called
  *  once from store.js's load(). */
 export function backfillDefaultCrewTasks(appConfig, seedTasks) {
-  const needsBackfill = appConfig.profiles.some((p) => p.name === '5PFH' && (!p.crewTasks || !p.crewTasks.tasks || p.crewTasks.tasks.length === 0));
+  const isFivePfh = (p) => p.name === '5PFH' || p.name === FIVE_PARSECS_PROFILE_NAME;
+  const needsBackfill = appConfig.profiles.some((p) => isFivePfh(p) && (!p.crewTasks || !p.crewTasks.tasks || p.crewTasks.tasks.length === 0));
   if (!needsBackfill) return appConfig;
   return {
     ...appConfig,
     profiles: appConfig.profiles.map((p) => {
-      if (p.name !== '5PFH' || (p.crewTasks && p.crewTasks.tasks && p.crewTasks.tasks.length)) return p;
+      if (!isFivePfh(p) || (p.crewTasks && p.crewTasks.tasks && p.crewTasks.tasks.length)) return p;
       return { ...p, crewTasks: { tasks: JSON.parse(JSON.stringify(seedTasks)) } };
     }),
   };
@@ -336,17 +365,36 @@ export function dnd5eStoryboardProfile(now = new Date().toISOString()) {
   return profile;
 }
 
-/** Seeds the "Five Leagues (Storyboard)" campaign template for an install
+export const FIVE_LEAGUES_PROFILE_NAME = 'Five Leagues from the Borderlands';
+
+/** The seeded "Five Leagues (Storyboard)" profile is now called Five Leagues
+ *  from the Borderlands. Renames it once (nothing else changes); skipped
+ *  when a profile of the new name already exists. Idempotent. */
+export function renameFiveLeaguesProfile(appConfig) {
+  const profiles = appConfig.profiles || [];
+  if (!profiles.some((p) => p.name === 'Five Leagues (Storyboard)') || profiles.some((p) => p.name === FIVE_LEAGUES_PROFILE_NAME)) return appConfig;
+  let done = false;
+  return {
+    ...appConfig,
+    profiles: profiles.map((p) => {
+      if (done || p.name !== 'Five Leagues (Storyboard)') return p;
+      done = true;
+      return { ...p, name: FIVE_LEAGUES_PROFILE_NAME };
+    }),
+  };
+}
+
+/** Seeds the "Five Leagues from the Borderlands" (formerly "Five Leagues (Storyboard)") campaign template for an install
  *  that already has an appConfig — same split/idempotency posture as
  *  backfillDnd5eStoryboardProfile above (a brand-new install gets it
  *  directly from migrate.js's wrapLegacyCampaignIntoAppConfig instead).
  *  Called once from store.js's load(). */
 export function backfillFiveLeaguesStoryboardProfile(appConfig, now = new Date().toISOString()) {
-  if (appConfig.profiles.some((p) => p.name === 'Five Leagues (Storyboard)')) return appConfig;
+  if (appConfig.profiles.some((p) => p.name === FIVE_LEAGUES_PROFILE_NAME || p.name === 'Five Leagues (Storyboard)')) return appConfig;
   return { ...appConfig, profiles: [...appConfig.profiles, fiveLeaguesStoryboardProfile(now)] };
 }
 
-/** The actual "Five Leagues (Storyboard)" profile shape — same all-off
+/** The actual "Five Leagues from the Borderlands" profile shape — same all-off
  *  GATEABLE_MODULES sweep as dnd5eStoryboardProfile above, EXCEPT `colony`
  *  is re-enabled: unlike D&D 5e (fully Storyboard-only), Five Leagues has
  *  real campaign-turn tracking (Preparation/Adventuring/Encounters/
@@ -360,7 +408,7 @@ export function backfillFiveLeaguesStoryboardProfile(appConfig, now = new Date()
  *  migrate.js's own first-install seeding so the two paths can't drift
  *  apart into two different-shaped profiles with the same name. */
 export function fiveLeaguesStoryboardProfile(now = new Date().toISOString()) {
-  const profile = defaultRulesProfile('Five Leagues (Storyboard)', now);
+  const profile = defaultRulesProfile(FIVE_LEAGUES_PROFILE_NAME, now);
   profile.moduleEnabled = GATEABLE_MODULES.reduce((acc, id) => { acc[id] = false; return acc; }, {});
   profile.moduleEnabled.colony = true;
   profile.ruleset = {

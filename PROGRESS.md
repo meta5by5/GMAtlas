@@ -55,7 +55,7 @@ Faction Events) are visible, and what fills the Storyboard's three
 positions (Composer/Navigator/Advisor — any module assignable). Each
 campaign picks one profile; editing a profile changes it everywhere it's
 used. Migration seeds a "Default" profile from a pre-existing campaign's
-current settings, plus a "5PFH" profile (Battlemap/Graph/Trade/Faction
+current settings, plus a "Five Parsecs" profile (originally "5PFH"; Battlemap/Graph/Trade/Faction
 Events off, Composer/Navigator/Advisor repointed to Colony/World
 Tracker/Party). New Settings > Profiles & Campaigns tab. Amends the Design
 Constitution's rules #1/#2 (single campaign document / two fixed

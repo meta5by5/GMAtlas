@@ -106,7 +106,15 @@ covers its rules, its Turn Steps and its sourcebooks.
    pack's Import button only then, and the import handler refuses
    otherwise. Each book's weapon and equipment lists ship as their own
    pack (Five Parsecs core, its Compendium, Planetfall, Five Leagues core,
-   its Compendium), built by `scripts/build-equipment-packs.js`.
+   its Compendium), built by `scripts/build-equipment-packs.js`. Every
+   entity a shipped pack adds carries `sourcePack` (the manifest id); a
+   re-import claims an earlier same-named, same-type copy from before that
+   (a Hostile zone claims only its own zone, stars and worlds, not the
+   shared bases). Once a pack has records in the campaign its Import becomes
+   **Remove**, which asks, then deletes them and every link to them
+   (`domain/contentPack.js` `removeSourcePack`). Such a pack stays listed,
+   marked "not in use", after its book stops being in use, so a campaign that
+   drops a book or supplement can shed its records.
 10. **Activity → Rules Lens** suggestions carry their own provider lists in
    `domain/activities.js`.
 

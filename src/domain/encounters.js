@@ -12,6 +12,9 @@
 // Encounters out in order.
 
 import { createEntity, getEntity, updateEntity, addRelationship, listEntities } from './entities.js';
+import { tablesWithOverrides, oraclePathsWithAnyTag, excludeFactionOracleTables } from './oracles.js';
+import { INTENT_ORACLE_TAGS } from '../data/entityFieldOracleLinks.js';
+import { ENCOUNTER_WIZARD_GUIDE } from '../data/encounterWizardGuide.js';
 
 const text = (v) => String(v == null ? '' : v).trim();
 const names = (campaign, ids) => (ids || []).map((id) => getEntity(campaign, id)).filter(Boolean);
@@ -195,4 +198,84 @@ export function campaignTimeline(campaign) {
     ...loose.map(enc),
   ];
   return items.sort((a, b) => String(a.at).localeCompare(String(b.at)));
+}
+
+// --- The Encounter wizard's guidance (data/encounterWizardGuide.js) ---------
+
+/** The oracle tags the wizard suggests tables from at one step, in priority
+ *  order, deduped. WHAT leads with the current Intent's own tags. */
+export function wizardStepTags(campaign, stepKey) {
+  const guide = ENCOUNTER_WIZARD_GUIDE[stepKey];
+  if (!guide) return [];
+  const intent = campaign && campaign.context && campaign.context.what && campaign.context.what.intent;
+  const lead = guide.useIntent ? (INTENT_ORACLE_TAGS[intent] || []) : [];
+  return [...new Set([...lead, ...guide.tags])];
+}
+
+/** Where a kept result for `tag` at `stepKey` goes: "key.field" or 'npc'. */
+export function wizardResultTarget(stepKey, tag) {
+  const guide = ENCOUNTER_WIZARD_GUIDE[stepKey];
+  if (!guide) return null;
+  return (guide.tagTargets && guide.tagTargets[tag]) || guide.target;
+}
+
+/** Oracle tables to suggest at one wizard step: tables carrying the step's
+ *  tags, taken one tag at a time in turn so every tag is represented, each
+ *  table once. `offset` pages through the full list (wrapping), so "Other
+ *  suggestions" shows the next few. Uses the same tables the Oracle drawer
+ *  shows (genre pack, GM overrides, the faction-tables switch). Returns
+ *  [{ path, tag, target }]. Deterministic. */
+export function wizardOracleSuggestions(campaign, stepKey, { limit = 5, offset = 0 } = {}) {
+  const tags = wizardStepTags(campaign, stepKey);
+  if (!tags.length) return [];
+  const settings = (campaign && campaign.settings) || {};
+  const genrePack = settings.statRuleset === 'ironsworn' ? 'fantasy' : settings.genrePack;
+  const raw = tablesWithOverrides(campaign.oracles && campaign.oracles.overrides, genrePack);
+  const tables = settings.factionOraclesEnabled === false ? excludeFactionOracleTables(raw) : raw;
+  const perTag = tags.map((tag) => ({ tag, paths: oraclePathsWithAnyTag(campaign, tables, [tag]) }));
+  const seen = new Set();
+  const all = [];
+  for (let i = 0; perTag.some((t) => i < t.paths.length); i++) {
+    for (const t of perTag) {
+      const path = t.paths[i];
+      if (!path) continue;
+      const key = path.join('>');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      all.push({ path, tag: t.tag, target: wizardResultTarget(stepKey, t.tag) });
+    }
+  }
+  if (all.length <= limit) return all;
+  const start = ((offset % all.length) + all.length) % all.length;
+  return Array.from({ length: limit }, (_, k) => all[(start + k) % all.length]);
+}
+
+/** Appends a kept oracle result to a Composer field ("key.field", e.g.
+ *  'what.situation'), on a new line after anything already there. Returns a
+ *  new campaign; an unknown target or empty text returns it unchanged. */
+export function applyWizardResult(campaign, target, value) {
+  const t = text(value);
+  const [key, field] = String(target || '').split('.');
+  if (!t || !key || !field || !campaign.context || !campaign.context[key]) return campaign;
+  const current = text(campaign.context[key][field]);
+  return {
+    ...campaign,
+    context: { ...campaign.context, [key]: { ...campaign.context[key], [field]: current ? `${current}\n${t}` : t } },
+  };
+}
+
+/** A short NPC name from an oracle result: its last line, after any
+ *  "Table:" or "→" label, cut to a few words. */
+export function npcNameFromOracleText(value) {
+  const last = text(value).split('\n').filter(Boolean).pop() || '';
+  const body = last.split(/→|:\s/).pop().trim().replace(/[.;,]+$/, '');
+  const words = body.split(/\s+/).filter(Boolean);
+  return words.length > 6 ? `${words.slice(0, 6).join(' ')}…` : body;
+}
+
+/** An oracle roll's text without its "Table > Subtable" breadcrumb line —
+ *  what goes into a Composer field or an NPC's overview. */
+export function oracleResultBody(value) {
+  const lines = text(value).split('\n');
+  return (lines.length > 1 && / > /.test(lines[0]) ? lines.slice(1) : lines).join('\n').trim();
 }

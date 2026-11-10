@@ -3662,6 +3662,20 @@ input[type="number"] { -moz-appearance: textfield; }
 .composer-wizard-steps li.done .link-btn { color: inherit; }
 .composer-wizard-steps li.active .link-btn { border-color: var(--accent); color: var(--accent); }
 .composer-wizard-nav { display: flex; justify-content: space-between; gap: var(--sp-2); margin-top: var(--sp-3); }
+/* The Composer's default tab strip (same look as the wizard's steps). */
+.composer-tabs { margin-bottom: var(--sp-2); flex-wrap: wrap; }
+.composer-tabs li .link-btn { padding: 0.15rem var(--sp-2); font-size: 0.85em; }
+.composer-tabs li.done:not(.active) .link-btn::after { content: ' ✓'; color: var(--accent); }
+.dashboard-section-title { font-weight: 600; }
+.composer-wizard-guide { border: 1px solid var(--accent); border-radius: var(--radius-sm); padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-2); }
+.composer-wizard-guide .composer-wizard-head { margin-bottom: var(--sp-1); }
+.composer-wizard-hint { margin: 0 0 var(--sp-1); }
+.composer-wizard-prompts { margin: 0 0 var(--sp-2); padding-left: 1.2em; }
+.composer-wizard-prompts li { margin: 0.1rem 0; }
+.composer-wizard-guide .oracle-links-head { display: flex; justify-content: space-between; align-items: baseline; }
+.composer-wizard-oracle { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); margin-top: var(--sp-1); }
+.composer-wizard-result { flex: 1 1 12rem; font-size: 0.9em; white-space: pre-line; }
+.composer-wizard-result-actions { display: inline-flex; gap: var(--sp-1); align-items: center; }
 /* --- Party panel tabs (Party / Colony / Starship / Warband), 2026-11-08 ---- */
 .party-tab-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); margin-bottom: var(--sp-3); border-bottom: 1px solid var(--border); }
 .party-tab { background: none; border: 1px solid transparent; border-bottom: none; border-radius: var(--radius-sm) var(--radius-sm) 0 0; color: var(--text-dim); font: inherit; font-weight: 600; padding: var(--sp-1) var(--sp-3); cursor: pointer; margin-bottom: -1px; }

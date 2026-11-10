@@ -28,6 +28,8 @@ import { listPartyTrackersForRuleset } from '../../domain/party.js';
 import { TURN_STEP_ORACLE_LINKS, TURN_STEP_LOCATION_STEPS } from '../../data/turnStepWorkflowMeta.js';
 import { tablesWithOverrides, oraclePathsWithAnyTag, excludeFactionOracleTables } from '../../domain/oracles.js';
 import { locationHierarchyTerms } from '../../data/genrePacks.js';
+import { ENCOUNTER_WIZARD_GUIDE } from '../../data/encounterWizardGuide.js';
+import { wizardOracleSuggestions } from '../../domain/encounters.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -69,8 +71,8 @@ function card(title, lead, body, extraClass) {
 // (domain/context.js) — the exact function that used to label the old tab
 // strip buttons — stripped of HTML/mention-bracket markup and truncated,
 // since it's plain header text here, not a rich field.
-function dashboardSection(key, title, lead, bodyHtml, doc, ui, headerExtra = '') {
-  const expanded = ((ui && ui.expandedDashboardSections) || new Set()).has(key);
+function dashboardSection(key, title, lead, bodyHtml, doc, ui, headerExtra = '', { tabbed = false } = {}) {
+  const expanded = tabbed || ((ui && ui.expandedDashboardSections) || new Set()).has(key);
   const rawSummary = contextSummary(doc.context, key)
     .replace(/<[^>]+>/g, ' ')
     .replace(/@\[([^\]|]+)(?:\|[^\]]*)?\]/g, '$1')
@@ -95,7 +97,9 @@ function dashboardSection(key, title, lead, bodyHtml, doc, ui, headerExtra = '')
   const dropAttr = key === 'who' ? ' data-drop-who' : '';
   return `<section class="dashboard-section" data-dashboard-section="${esc(key)}"${dropAttr}>
     <div class="section-head-row">
-      <button type="button" class="dashboard-section-toggle" data-dashboard-section-toggle="${esc(key)}">${expanded ? '▾' : '▸'} ${esc(title)}</button>
+      ${tabbed
+        ? `<span class="dashboard-section-title">${esc(title)}</span>`
+        : `<button type="button" class="dashboard-section-toggle" data-dashboard-section-toggle="${esc(key)}">${expanded ? '▾' : '▸'} ${esc(title)}</button>`}
       <span class="entity-chip-row">
         ${headerExtra}
         ${expanded && lead ? helpToggle(helpKey) : ''}
@@ -135,8 +139,8 @@ function dashboardSection(key, title, lead, bodyHtml, doc, ui, headerExtra = '')
 // one remaining button trigger; this restores that trigger here.
 function whoHeaderExtra() {
   return `
-    <button type="button" class="icon-btn" data-entity-picker-open="who-add-npc" title="Add NPC — pick from Cast or create new, then choose a scene role">🧑＋</button>
-    <button type="button" class="icon-btn" data-entity-add="faction" title="New Faction — opens a blank Entity Editor">🏛＋</button>`;
+    <button type="button" class="icon-btn" data-entity-picker-open="who-add-npc" title="Add NPC — pick from Cast or create new, then choose a scene role" aria-label="Add NPC">🧑</button>
+    <button type="button" class="icon-btn" data-entity-add="faction" title="New Faction — opens a blank Entity Editor" aria-label="New Faction">🏛</button>`;
 }
 
 function whoSectionBody(doc, ui) {
@@ -813,7 +817,7 @@ function composerToolbarHtml(ui) {
   const wizard = Number.isInteger(ui.composerWizardStep);
   return `<div class="composer-toolbar">
     <button type="button" class="btn sm" data-composer-add-encounter title="Save who, where, what, why and how as an Encounter, linked to everyone and everything in it">＋ Encounter</button>
-    <button type="button" class="icon-btn composer-wizard-btn ${wizard ? 'active' : ''}" data-composer-wizard="${wizard ? 'stop' : 'start'}" title="${wizard ? 'Leave the Encounter wizard' : 'Encounter wizard: fill the Composer one section at a time'}" aria-label="Encounter wizard">🪄✨</button>
+    <button type="button" class="icon-btn composer-wizard-btn ${wizard ? 'active' : ''}" data-composer-wizard="${wizard ? 'stop' : 'start'}" title="${wizard ? 'Leave the Encounter wizard' : 'Encounter wizard: questions and oracle suggestions for each step'}" aria-label="Encounter wizard">🪄✨</button>
     <button type="button" class="icon-btn" data-composer-copy-prompt title="Copy everything in the Composer as a prompt for an AI client (to write the encounter’s description)" aria-label="Copy AI prompt">📋</button>
   </div>`;
 }
@@ -838,37 +842,87 @@ function activitySelectHtml(doc) {
     </label>`;
 }
 
-// One wizard step: only that section, open, with Back / Next (or Save as
-// Encounter on the last step). The section editors are the Composer's own,
-// so filling a step is exactly filling the Composer.
-function composerWizardHtml(doc, ui) {
-  const i = Math.max(0, Math.min(COMPOSER_STEPS.length - 1, ui.composerWizardStep));
-  const step = COMPOSER_STEPS[i];
-  const open = { ...ui, expandedDashboardSections: new Set([...(ui.expandedDashboardSections || []), step.key]) };
-  const last = i === COMPOSER_STEPS.length - 1;
-  return `
+// The Composer is tabbed (direct request, 2026-11-09: "apply the tab format
+// of the Encounter wizard as the default layout"): a WHO/WHERE/WHAT/WHY/HOW
+// strip, one section shown at a time (ui.composerTab, shell.js). A filled
+// section's tab is marked done. The Encounter wizard is the same tabs plus a
+// guide over the section: the step's questions, oracle tables suggested for
+// it (domain/encounters.js wizardOracleSuggestions) that roll in place and
+// can be kept into the step's field (or, at WHO, made into an NPC), and
+// Back / Next, with Save as Encounter on the last step.
+function composerTabIndex(ui) {
+  const raw = Number.isInteger(ui.composerWizardStep) ? ui.composerWizardStep : ui.composerTab;
+  return Math.max(0, Math.min(COMPOSER_STEPS.length - 1, Number.isInteger(raw) ? raw : 0));
+}
+
+function composerTabsHtml(doc, i) {
+  return `<ol class="composer-wizard-steps composer-tabs" role="tablist">${COMPOSER_STEPS.map((s, n) => {
+    const filled = !!contextSummary(doc.context, s.key).replace(/<[^>]+>/g, '').trim();
+    const cls = [n === i ? 'active' : '', filled ? 'done' : ''].filter(Boolean).join(' ');
+    return `<li class="${cls}"><button type="button" class="link-btn" role="tab" aria-selected="${n === i}" data-composer-tab="${n}" title="${esc(s.title)}">${esc(s.key.toUpperCase())}</button></li>`;
+  }).join('')}</ol>`;
+}
+
+function composerWizardOracleRow(stepKey, m, ui) {
+  const key = `${stepKey}::${m.path.join('>')}`;
+  const label = m.path[m.path.length - 1];
+  const result = ui.composerWizardResults && ui.composerWizardResults[key];
+  const useLabel = m.target === 'npc' ? '＋ NPC' : '✔ Use';
+  const useTitle = m.target === 'npc' ? 'Make this an NPC, then choose their role in the scene' : 'Add this to the step’s field';
+  return `<div class="composer-wizard-oracle">
+    <button type="button" class="chip sm" data-composer-wizard-roll="${esc(key)}" data-wizard-tag="${esc(m.tag)}" title="Roll ${esc(m.path.join(' → '))}">🎲 ${esc(label)}</button>
+    ${result ? `<span class="composer-wizard-result">${esc(result.text)}</span>
+      <span class="composer-wizard-result-actions">
+        <button type="button" class="btn sm" data-composer-wizard-use="${esc(key)}" title="${useTitle}">${useLabel}</button>
+        <button type="button" class="icon-btn" data-composer-wizard-journal="${esc(key)}" title="Add to the Journal" aria-label="Add to the Journal">📖</button>
+        <button type="button" class="icon-btn" data-composer-wizard-discard="${esc(key)}" title="Discard" aria-label="Discard">✕</button>
+      </span>` : ''}
+  </div>`;
+}
+
+function composerWizardGuideHtml(doc, ui, step, i) {
+  const guide = ENCOUNTER_WIZARD_GUIDE[step.key] || { prompts: [] };
+  const offset = (ui.composerWizardOffset && ui.composerWizardOffset[step.key]) || 0;
+  const suggestions = wizardOracleSuggestions(doc, step.key, { offset });
+  return `<div class="composer-wizard-guide">
     <div class="composer-wizard-head">
       <strong>🪄✨ Encounter wizard</strong>
-      <span class="dim small">Step ${i + 1} of ${COMPOSER_STEPS.length}</span>
-      <ol class="composer-wizard-steps">${COMPOSER_STEPS.map((s, n) => `<li class="${n === i ? 'active' : n < i ? 'done' : ''}"><button type="button" class="link-btn" data-composer-wizard-goto="${n}">${esc(s.key.toUpperCase())}</button></li>`).join('')}</ol>
+      <span class="dim small">Step ${i + 1} of ${COMPOSER_STEPS.length}: ${esc(step.title)}</span>
     </div>
-    ${step.key === 'how' ? activitySelectHtml(doc) : ''}
-    ${dashboardSection(step.key, step.title, step.lead, step.body(doc, open), doc, open, step.extra ? step.extra() : '')}
-    <div class="composer-wizard-nav">
-      <button type="button" class="btn ghost sm" data-composer-wizard-goto="${i - 1}" ${i === 0 ? 'disabled' : ''}>◀ Back</button>
+    ${guide.hint ? `<p class="dim small composer-wizard-hint">${esc(guide.hint)}</p>` : ''}
+    <ul class="composer-wizard-prompts">${guide.prompts.map((q) => `<li>${esc(q)}</li>`).join('')}</ul>
+    ${suggestions.length ? `<div class="oracle-links-block">
+      <div class="oracle-links-head">Suggested oracles
+        <button type="button" class="link-btn small" data-composer-wizard-more="${esc(step.key)}" title="Show other oracle tables for this step">🔀 Others</button>
+      </div>
+      ${suggestions.map((m) => composerWizardOracleRow(step.key, m, ui)).join('')}
+    </div>` : ''}
+  </div>`;
+}
+
+function composerWizardNavHtml(i) {
+  const last = i === COMPOSER_STEPS.length - 1;
+  return `<div class="composer-wizard-nav">
+      <button type="button" class="btn ghost sm" data-composer-tab="${i - 1}" ${i === 0 ? 'disabled' : ''}>◀ Back</button>
       ${last
         ? '<button type="button" class="btn sm" data-composer-add-encounter data-composer-wizard-finish>✔ Save as Encounter</button>'
-        : `<button type="button" class="btn sm" data-composer-wizard-goto="${i + 1}">Next ▶</button>`}
+        : `<button type="button" class="btn sm" data-composer-tab="${i + 1}">Next ▶</button>`}
     </div>`;
 }
 
 export function composerBodyHtml(doc, ui) {
-  if (Number.isInteger(ui.composerWizardStep)) return `${composerToolbarHtml(ui)}${composerWizardHtml(doc, ui)}`;
+  const wizard = Number.isInteger(ui.composerWizardStep);
+  const i = composerTabIndex(ui);
+  const step = COMPOSER_STEPS[i];
+  const open = { ...ui, expandedDashboardSections: new Set([...(ui.expandedDashboardSections || []), step.key]) };
   return `
     ${composerToolbarHtml(ui)}
-    ${ui.composerWizardOffer ? composerWizardOfferHtml() : ''}
-    ${activitySelectHtml(doc)}
-    ${COMPOSER_STEPS.map((s) => dashboardSection(s.key, s.title, s.lead, s.body(doc, ui), doc, ui, s.extra ? s.extra() : '')).join('')}
+    ${!wizard && ui.composerWizardOffer ? composerWizardOfferHtml() : ''}
+    ${composerTabsHtml(doc, i)}
+    ${wizard ? composerWizardGuideHtml(doc, ui, step, i) : ''}
+    ${step.key === 'how' ? activitySelectHtml(doc) : ''}
+    ${dashboardSection(step.key, step.title, step.lead, step.body(doc, open), doc, open, step.extra ? step.extra() : '', { tabbed: true })}
+    ${wizard ? composerWizardNavHtml(i) : ''}
   `;
 }
 
@@ -877,7 +931,7 @@ export function navigatorBodyHtml(doc, ui) {
     ${narrativeComposerBlock(doc, ui)}
     ${navigatorWorkflowBlock(doc, ui)}
     ${dashboardTrackersBlock(doc)}
-    ${generatorsSection(ui)}
+    ${generatorsSection(ui, doc)}
     ${contractsSection(doc, ui, { collapsible: true })}
   `;
 }

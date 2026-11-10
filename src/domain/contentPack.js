@@ -61,7 +61,7 @@ export function exportContentPack(campaign, { entities = false, guide = false, j
  *  that section) rather than throwing — a bad file picked at the
  *  file-input level is the UI's job to reject with a toast before this
  *  ever runs. */
-export function importContentPack(campaign, pack) {
+export function importContentPack(campaign, pack, { packId } = {}) {
   const next = clone(campaign);
   if (!pack || typeof pack !== 'object') return next;
 
@@ -74,13 +74,23 @@ export function importContentPack(campaign, pack) {
     const toCreate = [];
     for (const e of pack.entities) {
       const existingId = existingByName.get(nameKey(e.name));
-      if (existingId) { idMap.set(e.id, existingId); continue; }
+      if (existingId) {
+        idMap.set(e.id, existingId);
+        // A shipped pack's own earlier import (from before entities carried
+        // sourcePack) is claimed by the pack, so it can be removed with it.
+        if (packId) {
+          const had = next.entities.items.find((x) => x.id === existingId);
+          if (had && !had.sourcePack && had.type === e.type) had.sourcePack = packId;
+        }
+        continue;
+      }
       idMap.set(e.id, freshId('ent_'));
       toCreate.push(e);
     }
     for (const e of toCreate) {
       const copy = clone(e);
       copy.id = idMap.get(e.id);
+      if (packId) copy.sourcePack = packId;
       copy.relationships = (Array.isArray(copy.relationships) ? copy.relationships : [])
         .filter((r) => idMap.has(r.to))
         .map((r) => ({ ...r, to: idMap.get(r.to) }));
@@ -110,4 +120,61 @@ export function importContentPack(campaign, pack) {
   }
 
   return next;
+}
+
+// --- Shipped Source Data packs (Settings › Campaigns › Source Data) --------
+// Every entity a shipped content or data pack adds carries sourcePack: the
+// pack's manifest id, so the pack can be taken out again when a campaign
+// stops using that book.
+
+/** How many entities in the campaign came from pack `packId`. */
+export function countSourcePackEntities(campaign, packId) {
+  if (!packId) return 0;
+  return ((campaign && campaign.entities && campaign.entities.items) || []).filter((e) => e && e.sourcePack === packId).length;
+}
+
+/** Marks entities `ids` as having come from pack `packId` (one already
+ *  marked keeps its own). Returns a new campaign. */
+export function stampSourcePack(campaign, ids, packId) {
+  const want = new Set(ids || []);
+  if (!packId || !want.size) return campaign;
+  const next = clone(campaign);
+  for (const e of (next.entities && next.entities.items) || []) if (want.has(e.id) && !e.sourcePack) e.sourcePack = packId;
+  return next;
+}
+
+/** Removes every entity that came from pack `packId`, along with links to
+ *  them: other entities' relationships, scene cast/location/asset lists and
+ *  the WHO/WHERE/WHY context lists. Returns { campaign, removed }. */
+export function removeSourcePack(campaign, packId) {
+  const items = (campaign && campaign.entities && campaign.entities.items) || [];
+  const gone = new Set(items.filter((e) => e && packId && e.sourcePack === packId).map((e) => e.id));
+  if (!gone.size) return { campaign, removed: 0 };
+  const next = clone(campaign);
+  const ents = next.entities;
+  ents.items = ents.items.filter((e) => !gone.has(e.id));
+  ents.items.forEach((e) => { if (Array.isArray(e.relationships)) e.relationships = e.relationships.filter((r) => !gone.has(r.to)); });
+  if (gone.has(ents.activeId)) ents.activeId = ents.items[0] ? ents.items[0].id : null;
+  if (Array.isArray(ents.history)) ents.history = ents.history.filter((id) => !gone.has(id));
+  const keep = (list) => (Array.isArray(list) ? list.filter((id) => !gone.has(id)) : list);
+  for (const sc of next.scenes || []) {
+    for (const k of ['protagonistIds', 'antagonistIds', 'bystanderIds', 'assetIds', 'locationIds']) if (sc[k]) sc[k] = keep(sc[k]);
+    if (sc.systemId && gone.has(sc.systemId)) sc.systemId = null;
+  }
+  for (const k of ['who', 'where', 'why']) if (next.context && next.context[k] && next.context[k].entityIds) next.context[k].entityIds = keep(next.context[k].entityIds);
+  if (next.context && next.context.what && next.context.what.entityIds) next.context.what.entityIds = keep(next.context.what.entityIds);
+  return { campaign: next, removed: gone.size };
+}
+
+/** Marks the not-yet-marked entities of `type` whose name (case-insensitive,
+ *  trimmed) is in `names` as having come from pack `packId` — for data packs
+ *  whose importer dedups by name (Hostile zones), including a copy imported
+ *  before entities carried sourcePack. Returns a new campaign. */
+export function stampSourcePackByName(campaign, names, type, packId) {
+  const want = new Set((names || []).map((n) => String(n || '').trim().toLowerCase()).filter(Boolean));
+  if (!packId || !want.size) return campaign;
+  const ids = ((campaign.entities && campaign.entities.items) || [])
+    .filter((e) => e && e.type === type && !e.sourcePack && want.has(String(e.name || '').trim().toLowerCase()))
+    .map((e) => e.id);
+  return stampSourcePack(campaign, ids, packId);
 }

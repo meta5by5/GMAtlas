@@ -12,7 +12,7 @@ import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { continueStory, restartStory, applyStoryShift, rollOracle, addNote, setJournalDraft, submitJournalDraft, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField, rollLocationFantasyField, editLocationFantasyField, rollWhereDetailField, addContextEntity, removeContextEntity } from '../domain/session.js';
 import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, addSceneAsset, removeSceneAsset, addSceneLocation, removeSceneLocation, setSceneSystem, addSceneDismissedFaction, removeSceneDismissedFaction, moveSceneActor } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
-import { createEncounterFromComposer, listEncounters, composerPrompt } from '../domain/encounters.js';
+import { createEncounterFromComposer, listEncounters, composerPrompt, wizardResultTarget, applyWizardResult, npcNameFromOracleText, oracleResultBody } from '../domain/encounters.js';
 import { renameEntityEverywhere, setEntityAliases, setEntityVisibility, setPlaceKind } from '../domain/wiki.js';
 import { isRedLinkSpan } from './drawers/wiki.js';
 import { lightStart, lightPause, lightReset, lightBurnOut, lightRemaining, lightState, isLit, formatLight } from '../domain/torchTimer.js';
@@ -115,7 +115,7 @@ import {
 import { generateConflictSeed } from '../domain/factionConflicts.js';
 import { importHostileLocations } from '../domain/hostileLocations.js';
 import { fetchHostileLocationsPack } from './hostileLocationsFetch.js';
-import { exportContentPack, importContentPack } from '../domain/contentPack.js';
+import { exportContentPack, importContentPack, removeSourcePack, stampSourcePackByName, countSourcePackEntities } from '../domain/contentPack.js';
 import { fetchJsonPack } from './contentPacksFetch.js';
 import { CONTENT_PACKS_MANIFEST } from '../data/contentPacksManifest.js';
 import { generateMission, formatMission, addMission, updateMissionStatus, removeMission } from '../domain/missions.js';
@@ -150,7 +150,7 @@ import { TURN_STEP_ORACLE_LINKS, TURN_STEP_LOCATION_STEPS } from '../data/turnSt
 import { genrePackIdForRuleset, isPackInUse } from '../data/rulesConstitution.js';
 import { LICENSES } from '../data/licenses.js';
 import { RULESET_GENRE_PACK_HINTS, findRuleset } from '../data/rulesets.js';
-import { locationHierarchyTerms, genreStyleFamily } from '../data/genrePacks.js';
+import { locationHierarchyTerms, genreStyleFamily, isFantasyGenre } from '../data/genrePacks.js';
 import { canLoadRulesetReference, referenceDocSource, checkImportedPdf, matchPickedPdfs } from '../domain/permissions.js';
 import { fetchRulesetReferenceBlob } from './rulesetReferenceFetch.js';
 import { DRAWER_META, drawerMeta } from './drawerMeta.js';
@@ -614,6 +614,19 @@ let docSortMenuOpen = false; // the Docs library's sort icon menu
 // COMPOSER_STEPS) while it runs, else null; and the campaigns whose
 // "no encounters yet — run the wizard?" offer was dismissed this session.
 let composerWizardStep = null;
+// The Composer's open tab (index into COMPOSER_STEPS) outside the wizard, and
+// the wizard's rolled-but-not-yet-kept oracle results ({ "step::path": {
+// text, tag } }) and per-step "Others" page.
+let composerTab = 0;
+let composerWizardResults = {};
+/** Switches the Composer (and the wizard, if running) to one section's tab. */
+function showComposerTab(key) {
+  const n = COMPOSER_STEPS.findIndex((st) => st.key === key);
+  if (n < 0) return;
+  composerTab = n;
+  if (Number.isInteger(composerWizardStep)) composerWizardStep = n;
+}
+let composerWizardOffset = {};
 // The New campaign wizard overlay (renderNewCampaignWizard).
 let newCampaignWizardOpen = false;
 // The last Shadowdark import's result line (Settings › Licenses).
@@ -1949,13 +1962,76 @@ function onClick(ev) {
   if (wizardAction) {
     const what = wizardAction.dataset.composerWizard;
     if (what === 'dismiss') { const d = store.get(); if (d && d.meta) composerOfferDismissed.add(d.meta.id); }
-    composerWizardStep = what === 'start' ? 0 : null;
+    if (what === 'start') composerWizardStep = 0;
+    else { if (Number.isInteger(composerWizardStep)) composerTab = composerWizardStep; composerWizardStep = null; }
     return render();
   }
-  const wizardGoto = hit('[data-composer-wizard-goto]');
-  if (wizardGoto) {
-    const n = Number(wizardGoto.dataset.composerWizardGoto);
-    if (Number.isInteger(n) && n >= 0 && n < COMPOSER_STEPS.length) composerWizardStep = n;
+  // A Composer tab, or the wizard's Back / Next (same attribute).
+  const composerTabBtn = hit('[data-composer-tab]');
+  if (composerTabBtn) {
+    const n = Number(composerTabBtn.dataset.composerTab);
+    if (!Number.isInteger(n) || n < 0 || n >= COMPOSER_STEPS.length) return;
+    composerTab = n;
+    if (Number.isInteger(composerWizardStep)) composerWizardStep = n;
+    return render();
+  }
+  // The wizard's suggested oracles (domain/encounters.js): 🎲 rolls in place
+  // (not to the Journal); ✔ Use appends the result to the step's field, or at
+  // WHO makes it an NPC and asks for their scene role; 📖 files it in the
+  // Journal; ✕ drops it.
+  const wizardRoll = hit('[data-composer-wizard-roll]');
+  if (wizardRoll) {
+    const key = wizardRoll.dataset.composerWizardRoll;
+    const path = key.split('::').slice(1).join('::').split('>');
+    let text = '';
+    store.update((d) => { const r = rollOracle(d, path, { toJournal: false, genrePack: store.get().settings.genrePack }); text = r.text; return r.campaign; });
+    composerWizardResults = { ...composerWizardResults, [key]: { text, tag: wizardRoll.dataset.wizardTag } };
+    return render();
+  }
+  const wizardUse = hit('[data-composer-wizard-use]');
+  if (wizardUse) {
+    const key = wizardUse.dataset.composerWizardUse;
+    const res = composerWizardResults[key];
+    if (!res) return;
+    const stepKey = key.split('::')[0];
+    const target = wizardResultTarget(stepKey, res.tag);
+    const { [key]: _drop, ...rest } = composerWizardResults;
+    composerWizardResults = rest;
+    if (target === 'npc') {
+      let id = null;
+      store.update((d) => {
+        const r = createEntity(d, { type: 'npc', name: npcNameFromOracleText(res.text) || 'New NPC' });
+        id = r.id;
+        return updateEntity(r.campaign, r.id, { overview: oracleResultBody(res.text) });
+      });
+      render();
+      // justCreated: the role pick also gives it that role's statblock.
+      entityPicker = { entityType: 'npc', mode: 'who-add-npc', scope: null, query: '', pendingEntityId: id, justCreated: true };
+      return renderEntityPickerOverlay();
+    }
+    store.update((d) => applyWizardResult(d, target, oracleResultBody(res.text)));
+    return toast('Added to the Composer');
+  }
+  const wizardJournal = hit('[data-composer-wizard-journal]');
+  if (wizardJournal) {
+    const key = wizardJournal.dataset.composerWizardJournal;
+    const res = composerWizardResults[key];
+    if (!res) return;
+    const { [key]: _drop, ...rest } = composerWizardResults;
+    composerWizardResults = rest;
+    store.update((d) => addNote(d, res.text, 'Encounter wizard'));
+    return toast('Added to Journal');
+  }
+  const wizardDiscard = hit('[data-composer-wizard-discard]');
+  if (wizardDiscard) {
+    const { [wizardDiscard.dataset.composerWizardDiscard]: _drop, ...rest } = composerWizardResults;
+    composerWizardResults = rest;
+    return render();
+  }
+  const wizardMore = hit('[data-composer-wizard-more]');
+  if (wizardMore) {
+    const k = wizardMore.dataset.composerWizardMore;
+    composerWizardOffset = { ...composerWizardOffset, [k]: (composerWizardOffset[k] || 0) + 5 };
     return render();
   }
   if (hit('[data-composer-copy-prompt]')) {
@@ -2075,7 +2151,7 @@ function onClick(ev) {
     // WHERE section, docs/adr/0040 Phase 12f), so just make sure that
     // section is expanded instead of reopening a second copy as a drawer
     // tab.
-    if (factionEventsDockedInWhere) { expandedDashboardSections.add('where'); return render(); }
+    if (factionEventsDockedInWhere) { expandedDashboardSections.add('where'); showComposerTab('where'); return render(); }
     if (anchoredPanels.includes('faction-events')) return focusDrawerPanel('faction-events');
     entityTypeFilter = 'faction';
     entityTagFilters = new Set();
@@ -4761,6 +4837,7 @@ function onClick(ev) {
   if (hit('[data-faction-events-dock]')) {
     factionEventsDockedInWhere = true;
     expandedDashboardSections.add('where');
+    showComposerTab('where');
     closeDrawerTab('faction-events');
     return render();
   }
@@ -5120,8 +5197,10 @@ function onClick(ev) {
   if (hit('[data-generate-mission]')) {
     const text = formatMission(generateMission(store.get()));
     appendToSceneSummary(text);
-    store.update((d) => addNote(d, text, 'Mission'));
-    return toast('Mission generated — added to the Journal and Scene Summary');
+    const s = store.get().settings || {};
+    const word = isFantasyGenre(s.statRuleset === 'ironsworn' ? 'fantasy' : s.genrePack) ? 'Quest' : 'Mission';
+    store.update((d) => addNote(d, text, word));
+    return toast(`${word} generated — added to the Journal and Scene Summary`);
   }
   // Living Faction Engine Phase C: a hot faction's activity becomes a
   // real, trackable mission (campaign.missions[]) instead of only a
@@ -5245,14 +5324,15 @@ function onClick(ev) {
     fetchJsonPack(entry.file)
       .then((pack) => store.updateCampaign(campaignId, (d) => {
         const before = (d.entities?.items || []).length;
-        const next = importContentPack(d, pack);
+        const next = importContentPack(d, pack, { packId });
         importedCount = (next.entities?.items || []).length - before;
         return next;
       }))
       .then(() => {
         contentPackImporting = new Set(contentPackImporting); contentPackImporting.delete(packId);
         renderDrawerBody();
-        toast(importedCount ? `${importedCount} entit${importedCount === 1 ? 'y' : 'ies'} imported` : 'Nothing to import');
+        const owned = countSourcePackEntities(store.peekCampaign(campaignId) || store.get(), packId);
+        toast(importedCount ? `${importedCount} entit${importedCount === 1 ? 'y' : 'ies'} imported` : owned ? `${entry.title} was already imported: it can be removed now` : 'Nothing to import');
       })
       .catch((err) => {
         contentPackImporting = new Set(contentPackImporting); contentPackImporting.delete(packId);
@@ -5278,13 +5358,36 @@ function onClick(ev) {
       .then((pack) => store.updateCampaign(campaignId, (d) => {
         const r = importHostileLocations(d, pack);
         createdCount = r.createdIds.length;
-        return r.campaign;
+        // The zone's own zone/stars/worlds belong to it (not the bases,
+        // which every zone shares), so Remove takes out just this zone.
+        const names = [...(pack.zones || []), ...(pack.stars || []), ...(pack.locations || [])].map((x) => x && x.name);
+        return stampSourcePackByName(r.campaign, names, 'location', packId);
       }))
       .then(() => {
         done();
         toast(createdCount ? `${createdCount} location(s) imported from ${entry.title}` : `${entry.title} is already up to date — nothing new to import`);
       })
       .catch((err) => { done(); toast(`Import failed — ${err.message}`); });
+    return;
+  }
+  // Source Data's Remove (direct request, 2026-11-09): once a pack is in the
+  // campaign its Import becomes Remove, which deletes every entity that came
+  // from it (sourcePack), so a campaign that drops a book or supplement can
+  // shed its records. Asks first; offered even after the book stops being in
+  // use, since that's exactly when it's wanted.
+  const packRemoveBtn = hit('[data-source-pack-remove]');
+  if (packRemoveBtn) {
+    const packId = packRemoveBtn.dataset.sourcePackRemove;
+    const entry = CONTENT_PACKS_MANIFEST.find((pk) => pk.id === packId);
+    const campaignId = configCampaignId();
+    const target = store.peekCampaign(campaignId) || store.get();
+    const n = countSourcePackEntities(target, packId);
+    if (!entry || !n) return;
+    if (!window.confirm(`Remove the ${n} record${n === 1 ? '' : 's'} imported from ${entry.title}? Any edits made to them are lost too.`)) return;
+    let removed = 0;
+    Promise.resolve(store.updateCampaign(campaignId, (d) => { const res = removeSourcePack(d, packId); removed = res.removed; return res.campaign; }))
+      .then(() => { renderDrawerBody(); toast(`${removed} record${removed === 1 ? '' : 's'} removed`); })
+      .catch((err) => toast(`Remove failed — ${err.message}`));
     return;
   }
   // Settings -> Licenses (an admin action): Load pulls a sourcebook from the
@@ -6467,6 +6570,7 @@ function onKeydown(ev) {
     const dir = ev.key === 'ArrowRight' ? 1 : -1;
     dashboardSectionCursor = CONTEXT_QUESTIONS[(idx + dir + CONTEXT_QUESTIONS.length) % CONTEXT_QUESTIONS.length];
     expandedDashboardSections.add(dashboardSectionCursor);
+    showComposerTab(dashboardSectionCursor);
     render();
     const section = root.querySelector(`[data-dashboard-section="${dashboardSectionCursor}"]`);
     if (section) section.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -12103,7 +12207,8 @@ function buildDrawerUi() {
     fiveLeaguesInfoOpen, fiveLeaguesItemNotesOpen,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
     enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, tocOfferOpen, tocLibrary: store.getAppConfig().tocLibrary || {}, canScanToc: canScanToc(), lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, refDocBlobKeysLoaded, expandedWhatConflicts,
-    composerWizardStep, composerWizardOffer: composerWizardOffer(), guideReorderMode, shadowdarkImportResult,
+    factionsActive: isModuleVisible(store.getActiveProfile(), 'faction-events'),
+    composerWizardStep, composerTab, composerWizardResults, composerWizardOffset, composerWizardOffer: composerWizardOffer(), guideReorderMode, shadowdarkImportResult,
     wikiReadIds, wikiPlayerView, wikiRedLinkPick, wikiSettingsOpen, wikiSearch, wikiType, weaponPick,
     advisorOracleResults, advisorDrafts, advisorConsequenceDraw, sceneSummaryOverride,
     expandedGuideNodes, guideRenameOpen,

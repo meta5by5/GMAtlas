@@ -19,9 +19,9 @@ import { PLANETFALL_TURN_STEPS } from '../data/turnStepListPlanetfall.js';
 import { TURN_STEPS_FIVE_LEAGUES } from '../data/turnStepListFiveLeagues.js';
 import { CREW_TASKS_5PFH } from '../data/crewTasksDefault5pfh.js';
 import { MAX_ENCOUNTERS } from '../domain/colony.js';
-import { hasCharacterTag, isPristineStatblockGroup } from '../domain/statblocks.js';
+import { hasCharacterTag, isPristineStatblockGroup, renameLegacyToughFields } from '../domain/statblocks.js';
 import { tagLegacyModuleTrackers } from '../domain/party.js';
-import { dnd5eStoryboardProfile, fiveLeaguesStoryboardProfile } from '../domain/rulesProfiles.js';
+import { dnd5eStoryboardProfile, fiveLeaguesStoryboardProfile, FIVE_PARSECS_PROFILE_NAME, FIVE_PARSECS_HEADLINE_FIELDS } from '../domain/rulesProfiles.js';
 
 // Every legacy key the old app is known to write, plus the very old aliases.
 export const LEGACY_KEYS = [
@@ -282,6 +282,12 @@ export function migrateDocument(doc, now = new Date().toISOString()) {
     }
   }
 
+  // The Five Parsecs and Planetfall Bestiary statblocks call the field Tough,
+  // like the 5PFH character sheet does; an existing one's Toughness is
+  // renamed in place (values kept). Before the pristine check below, which
+  // compares against today's templates. Idempotent.
+  d = renameLegacyToughFields(d);
+
   // A Character has no Bestiary statblock: drop the untouched auto-created
   // one an NPC used to keep (hidden) after being tagged #character. An
   // edited one stays, inactive, for the GM to remove from the Entity Editor.
@@ -331,12 +337,17 @@ export function wrapLegacyCampaignIntoAppConfig(legacyDoc, now = new Date().toIS
     partyHeadlineFields: [...(settings.partyHeadlineFields || ['Health', 'Momentum'])],
   };
 
-  const fivePfhProfile = defaultRulesProfile('5PFH', now);
+  // The Five Parsecs profile plays Five Parsecs from Home as its Module for
+  // Profile, with the 5PFH sheet's own Speed/Combat/Tough as its Party
+  // Roster headline (an install from before this gets the same through
+  // rulesProfiles.js's upgradeFivePfhProfile).
+  const fivePfhProfile = defaultRulesProfile(FIVE_PARSECS_PROFILE_NAME, now);
   fivePfhProfile.ruleset = {
     ...defaultProfile.ruleset,
+    statRuleset: '5pfh',
     rulesProviderChoices: { ...defaultProfile.ruleset.rulesProviderChoices },
     gameSystemActivations: { ...defaultProfile.ruleset.gameSystemActivations },
-    partyHeadlineFields: [...defaultProfile.ruleset.partyHeadlineFields],
+    partyHeadlineFields: [...FIVE_PARSECS_HEADLINE_FIELDS],
   };
   fivePfhProfile.moduleEnabled = {
     ...defaultProfile.moduleEnabled,
@@ -379,7 +390,7 @@ export function wrapLegacyCampaignIntoAppConfig(legacyDoc, now = new Date().toIS
   // call, so they can't drift apart into two different-shaped profiles
   // with the same name).
   const dnd5eProfile = dnd5eStoryboardProfile(now);
-  // Five Leagues (Storyboard) campaign template — same split as dnd5e above.
+  // Five Leagues from the Borderlands campaign template — same split as dnd5e above.
   const fiveLeaguesProfile = fiveLeaguesStoryboardProfile(now);
 
   const appConfig = {

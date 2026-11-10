@@ -283,6 +283,56 @@ export function isPristineStatblockGroup(group, settings) {
   });
 }
 
+/** Bestiary templates whose Toughness field is now called Tough (the 5PFH
+ *  character sheet's own name for it). */
+export const TOUGH_TEMPLATE_IDS = ['5pfh', 'planetfall-lifeform', '5pfh-lifeform'];
+
+/** Renames a `Toughness` field to `Tough` in every statblock group on one of
+ *  TOUGH_TEMPLATE_IDS, and in the campaign's own edited copies of those
+ *  templates (settings.statblockTemplates). Values, max and every other
+ *  property are kept; a group that already has a Tough field is left alone.
+ *  Returns a new campaign; idempotent. */
+export function renameLegacyToughFields(campaign) {
+  const ids = new Set(TOUGH_TEMPLATE_IDS);
+  const renameIn = (fields) => {
+    if (!Array.isArray(fields) || fields.some((f) => f && f.key === 'Tough')) return fields;
+    if (!fields.some((f) => f && f.key === 'Toughness')) return fields;
+    return fields.map((f) => (f && f.key === 'Toughness' ? { ...f, key: 'Tough' } : f));
+  };
+  const items = (campaign.entities && Array.isArray(campaign.entities.items)) ? campaign.entities.items : [];
+  let changed = false;
+  const nextItems = items.map((e) => {
+    if (!e || !Array.isArray(e.statblocks)) return e;
+    let touched = false;
+    const statblocks = e.statblocks.map((g) => {
+      if (!g || !ids.has(g.templateId)) return g;
+      const fields = renameIn(g.fields);
+      if (fields === g.fields) return g;
+      touched = true;
+      return { ...g, fields };
+    });
+    if (!touched) return e;
+    changed = true;
+    return { ...e, statblocks };
+  });
+  const tpls = (campaign.settings && campaign.settings.statblockTemplates) || {};
+  let nextTpls = tpls;
+  for (const id of TOUGH_TEMPLATE_IDS) {
+    const t = tpls[id];
+    if (!t || !Array.isArray(t.fields)) continue;
+    const fields = renameIn(t.fields);
+    if (fields === t.fields) continue;
+    if (nextTpls === tpls) nextTpls = { ...tpls };
+    nextTpls[id] = { ...t, fields };
+  }
+  if (!changed && nextTpls === tpls) return campaign;
+  return {
+    ...campaign,
+    ...(changed ? { entities: { ...campaign.entities, items: nextItems } } : {}),
+    ...(nextTpls !== tpls ? { settings: { ...campaign.settings, statblockTemplates: nextTpls } } : {}),
+  };
+}
+
 /** The active module's own Bestiary template id, or null for makeStatblock's generic fallback. */
 export function defaultNpcTemplateId(settings) {
   return DEFAULT_NPC_TEMPLATE_BY_RULESET[settings && settings.statRuleset] || null;

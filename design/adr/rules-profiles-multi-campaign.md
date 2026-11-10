@@ -128,11 +128,15 @@ aliasing) does not.
 **Migration seeds exactly two profiles.** A pre-existing single campaign
 (or a brand-new install) is wrapped, once, into a "Default" profile
 carrying whatever its current six ruleset fields already were (everything
-enabled, matching today's always-visible behavior) and a "5PFH" profile
-cloned from Default with `trade`/`battlemap`/`graph`/`faction-events`
-disabled and Composer/Navigator/Advisor repointed to `colony`/
-`world-tracker`/`party` — `migrate.js`'s pure
-`wrapLegacyCampaignIntoAppConfig()`, called from `store.js`'s `load()`.
+enabled, matching today's always-visible behavior) and a "Five Parsecs"
+profile cloned from Default with `trade`/`battlemap`/`graph`/`faction-events`
+disabled, Composer/Navigator/Advisor repointed to `colony`/
+`world-tracker`/`party`, Five Parsecs from Home (`5pfh`) as its Module for
+Profile and Speed/Combat/Tough as its Party Roster headline fields —
+`migrate.js`'s pure `wrapLegacyCampaignIntoAppConfig()`, called from
+`store.js`'s `load()`. An install seeded before 2026-11-09 has it as
+"5PFH"; `rulesProfiles.js`'s `upgradeFivePfhProfile` renames it once and
+sets the module and headline only where they're still the old seed values.
 
 ## Consequences
 

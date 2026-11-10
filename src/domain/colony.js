@@ -293,7 +293,7 @@ export function createGeneratedLifeform(campaign, rowId, name, rng = Math.random
   setField('Speed', profile.speed);
   setField('Combat', profile.combat);
   setField('Melee Damage', profile.meleeDamage);
-  setField('Toughness', profile.toughness);
+  setField('Tough', profile.toughness);
   setField('Armor / Notes', profile.toughnessNote);
   setField('Special', [...profile.specialAttacks, ...(profile.uniqueAbility ? [profile.uniqueAbility] : [])].join(', '));
   setField('KP', profile.kp);
