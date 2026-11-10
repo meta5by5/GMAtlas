@@ -473,6 +473,10 @@ function ensureConflictFields(e) {
   if (!Array.isArray(e.irreversibleFacts)) e.irreversibleFacts = []; // [{id, summary, consequence}] — append-only
   if (!Array.isArray(e.factionPostures)) e.factionPostures = []; // [{factionId, cohesion, notes}]
   if (e.informationAsymmetry === undefined) e.informationAsymmetry = null; // {holderFactionId, whatTheyKnow, impactIfRevealed, revealed}
+  // What the Composer (the Encounter builder, domain/encounters.js) saves:
+  // the cast, assets, places and factions in play, and WHERE/WHAT/WHY/HOW.
+  for (const k of ['protagonistIds', 'antagonistIds', 'bystanderIds', 'assetIds', 'locationIds', 'factionIds']) if (!Array.isArray(e[k])) e[k] = [];
+  for (const k of ['siteDescription', 'surroundings', 'situation', 'intent', 'objective', 'encounterMode', 'encounterActivity']) if (e[k] === undefined) e[k] = '';
 }
 
 /** Append one free-text Session Hook — {id, text, used:false} — to a

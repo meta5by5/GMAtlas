@@ -3776,3 +3776,11 @@ input[type="number"] { -moz-appearance: textfield; }
 .wiki-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .wiki-chip { font-size: .85em; padding: 0 8px; border: 1px solid var(--border); border-radius: 999px; }
 .wiki-items { margin: 0; padding-left: 1.1em; }
+/* The Composer as the Encounter builder: which Encounter, and its own fields. */
+.composer-encounter-head { display: flex; align-items: flex-end; gap: var(--sp-2); margin-bottom: var(--sp-1); }
+.composer-encounter-name { flex: 1; margin: 0; }
+.composer-encounter-name input { width: 100%; }
+.composer-encounter-fields { margin-top: var(--sp-2); }
+.composer-encounter-field { margin-bottom: var(--sp-1); }
+.composer-wizard-target { max-width: 11rem; font-size: 0.85em; }
+.encounter-composer-fields .encounter-composer-head { margin: var(--sp-3) 0 var(--sp-1); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); }

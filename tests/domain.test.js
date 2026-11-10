@@ -13231,3 +13231,98 @@ test('Source Data packs: an import marks its entities, a re-import claims an ear
   loc = stampSourcePackByName(loc, ['fomalhaut iv'], 'location', 'zone');
   assert.equal(countSourcePackEntities(loc, 'zone'), 1);
 });
+
+// --- 2026-11-09: the Composer as the Encounter builder ---------------------
+test('Encounter builder: saving keeps every Composer field on the record, then updates the same record; factions are its Involved list', async () => {
+  const E = await import('../src/domain/encounters.js');
+  let { c, hero, foe, place } = composerCampaign();
+  const guild = createEnt(c, { type: 'faction', name: 'Water Guild' }); c = guild.campaign;
+  c = E.addComposerFaction(c, guild.id);
+  c.context.where.siteDescription = 'A pump house';
+  c.context.what.intent = 'Moral choice';
+  c.context.how.summary = 'Tense talks';
+  c = E.setComposerEncounterField(c, 'statedCause', 'A broken contract');
+  c = E.setComposerEncounterField(c, 'rootCause', 'The guild is broke');
+  c = E.setComposerEncounterField(c, 'status', 'simmering');
+  c = E.setComposerEncounterField(c, 'nope', 'x');
+  c = E.addComposerSessionHook(c, 'The ledger is forged');
+  const first = E.saveComposerEncounter(c);
+  assert.equal(first.created, true);
+  let e = getEnt(first.campaign, first.id);
+  assert.deepEqual([e.protagonistIds, e.antagonistIds, e.locationIds, e.factionIds], [[hero], [foe], [place], [guild.id]]);
+  assert.equal(e.siteDescription, 'A pump house');
+  assert.equal(e.intent, 'Moral choice');
+  assert.equal(e.objective, 'Recover the ledger');
+  assert.equal(e.encounterMode, 'Tense talks');
+  assert.equal(e.statedCause, 'A broken contract');
+  assert.equal(e.rootCause, 'The guild is broke');
+  assert.equal(e.status, 'simmering');
+  assert.deepEqual(e.sessionHooks.map((h) => h.text), ['The ledger is forged']);
+  assert.ok(e.relationships.some((r) => r.type === 'involves' && r.to === guild.id), 'the faction is involved');
+  assert.equal(first.campaign.context.encounter.id, first.id, 'the Composer goes on editing it');
+  // A second save updates the same record; a dismissed faction stops being involved.
+  let c2 = first.campaign;
+  c2.scenes[0].dismissedFactionIds = [guild.id];
+  c2.context.what.situation = 'Talks collapse';
+  const second = E.saveComposerEncounter(c2);
+  assert.equal(second.created, false);
+  assert.equal(second.id, first.id);
+  assert.equal(E.listEncounters(second.campaign).length, 1);
+  e = getEnt(second.campaign, first.id);
+  assert.equal(e.situation, 'Talks collapse');
+  assert.deepEqual(e.factionIds, []);
+  assert.ok(!e.relationships.some((r) => r.type === 'involves'), 'involves rebuilt from the list');
+  assert.equal(e.relationships.filter((r) => r.label === 'protagonist').length, 1, 'cast links not duplicated');
+  // New starts a fresh record.
+  const third = E.saveComposerEncounter(E.newComposerEncounter(second.campaign));
+  assert.equal(third.created, true);
+  assert.equal(E.listEncounters(third.campaign).length, 2);
+  assert.equal(getEnt(third.campaign, third.id).statedCause, '', 'New clears the Encounter-only fields');
+});
+
+test('Encounter builder: loading a record fills the Composer, and an older record falls back to its links', async () => {
+  const E = await import('../src/domain/encounters.js');
+  let { c, hero, foe, place } = composerCampaign();
+  c = E.setComposerEncounterField(c, 'partyLeverage', 'The forged ledger');
+  const saved = E.saveComposerEncounter(c);
+  let blank = E.newComposerEncounter(saved.campaign);
+  blank.scenes = [];
+  blank.context.what.situation = '';
+  const loaded = E.loadEncounterIntoComposer(blank, saved.id);
+  assert.equal(loaded.scenes.length, 1, 'a scene is started when there is none');
+  assert.deepEqual(loaded.scenes[0].protagonistIds, [hero]);
+  assert.deepEqual(loaded.scenes[0].locationIds, [place]);
+  assert.equal(loaded.context.what.situation, 'A standoff over the water rights\nmore detail');
+  assert.equal(loaded.context.why.summary, 'Recover the ledger');
+  assert.equal(loaded.context.encounter.id, saved.id);
+  assert.equal(loaded.context.encounter.partyLeverage, 'The forged ledger');
+  // A record from before Encounters kept their own lists.
+  let old = loaded;
+  old = { ...old, entities: { ...old.entities, items: old.entities.items.map((x) => (x.id === saved.id ? { ...x, protagonistIds: [], antagonistIds: [] } : x)) } };
+  const fromLinks = E.loadEncounterIntoComposer(old, saved.id);
+  assert.deepEqual(fromLinks.scenes[0].antagonistIds, [foe], 'antagonists from the relationship labels');
+  assert.equal(E.loadEncounterIntoComposer(old, 'nope'), old);
+});
+
+test('Encounter builder: a field 🎲 has tables, a session-hook target adds a hook, and the wizard offers each step\'s fields', async () => {
+  const E = await import('../src/domain/encounters.js');
+  const { ENCOUNTER_WIZARD_GUIDE, ENCOUNTER_FIELD_ORACLE_TAGS } = await import('../src/data/encounterWizardGuide.js');
+  const camp = defaultCampaign();
+  for (const target of Object.keys(ENCOUNTER_FIELD_ORACLE_TAGS)) assert.ok(E.encounterFieldOraclePaths(camp, target).length > 0, `${target} has tables`);
+  const withHook = E.applyWizardResult(camp, 'encounter.sessionHooks', 'A courier vanishes');
+  assert.deepEqual(withHook.context.encounter.sessionHooks.map((h) => h.text), ['A courier vanishes']);
+  assert.equal(E.applyWizardResult(camp, 'encounter.rootCause', 'Debt').context.encounter.rootCause, 'Debt');
+  for (const [key, g] of Object.entries(ENCOUNTER_WIZARD_GUIDE)) assert.ok(g.fields.some(([t]) => t === g.target), `${key}: default target is in its menu`);
+});
+
+test('Encounter builder: composerHoldsAnything says when loading would replace something', async () => {
+  const E = await import('../src/domain/encounters.js');
+  const empty = defaultCampaign();
+  assert.equal(E.composerHoldsAnything(empty), false, 'a fresh Composer holds nothing');
+  assert.equal(E.composerHoldsAnything(E.setComposerEncounterField(empty, 'gmNotes', 'x')), true, 'an Encounter field');
+  assert.equal(E.composerHoldsAnything(E.setComposerEncounterField(empty, 'status', 'escalated')), true, 'a changed status');
+  assert.equal(E.composerHoldsAnything(E.addComposerSessionHook(empty, 'Hook')), true, 'a hook');
+  assert.equal(E.composerHoldsAnything(composerCampaign().c), true, 'a cast and situation');
+  const saved = E.saveComposerEncounter(composerCampaign().c);
+  assert.equal(E.composerHoldsAnything(saved.campaign), true, 'editing the same Encounter still counts (unsaved edits)');
+});

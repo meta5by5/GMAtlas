@@ -23,13 +23,40 @@ recording it, and tidied several panels:
 ## Decision
 
 1. **An Encounter is the existing `conflict` entity type**, which the app
-   already labels "Encounter" (`entities.js` TYPE_LABEL). No schema change.
-   `domain/encounters.js` (pure):
+   already labels "Encounter" (`entities.js` TYPE_LABEL), and **the Composer
+   is its editor — the Encounter builder** (2026-11-09). `domain/encounters.js`
+   (pure):
    - `composerSnapshot` reads WHO (the latest scene's Protagonists/
-     Antagonists/Bystanders and assets), WHERE (its locations, site text),
-     WHAT/WHY/HOW;
-   - `createEncounterFromComposer` saves it as an Encounter linked to every
-     person, asset and location in it, stamped with `sceneId`/`sceneNumber`;
+     Antagonists/Bystanders and assets, and its factions —
+     `composerFactionIds`: present in the region, an actor's faction, or added
+     by hand as `scene.factionIds`, minus the dismissed), WHERE (its
+     locations, site text), WHAT/WHY/HOW, and `context.encounter`;
+   - `context.encounter` (schema) holds the id of the Encounter being edited
+     (null = new), its name, and the Encounter's own fields with no WHO…HOW
+     home (`ENCOUNTER_DETAIL_FIELDS`: status, stated/root cause, why the gap
+     matters, the innocent casualty, what lit the fuse, deep root, party
+     leverage, last de-escalation attempt, GM notes; plus session hooks). The
+     Composer shows them in the tab they belong to, each with a 🎲 that rolls
+     a table suited to it (`ENCOUNTER_FIELD_ORACLE_TAGS`);
+   - `saveComposerEncounter` updates the Encounter being edited, or creates
+     one and goes on editing it. The record gets every Composer field — cast,
+     asset, place and faction id lists, site/surroundings, situation, intent,
+     threat/mystery, objective, mode, activity — plus the Encounter-only
+     fields, stamped with `sceneId`/`sceneNumber`; its cast/place links are
+     rebuilt by label and its `involves` links set to the faction list (the
+     Composer's factions are the Encounter's Involved factions). ＋ New
+     (`newComposerEncounter`) starts another; `createEncounterFromComposer`
+     always makes a new one;
+   - `loadEncounterIntoComposer` (the record's 📝 Open in Composer) copies a
+     record back: the current scene's cast, places and hand-added factions (a
+     scene is started if there is none), WHERE…HOW and `context.encounter`.
+     A record from before falls back to its relationship labels. It always
+     asks first when the Composer holds anything (`composerHoldsAnything`),
+     including unsaved edits to the same Encounter, naming what it replaces;
+   - the record shows the same information plainly (text fields edit in
+     place, lists change through the Composer), without oracles or tips;
+     "Involved" is the Composer's faction thumbnail list with ＋/✕, replacing
+     the location-scoped dropdown (and WHO's contested-zone picker);
    - `composerPrompt` builds the AI prompt from those facts only, asking for
      a fixed JSON reply; `parseEncounterReply` reads that reply back;
    - `campaignTimeline` orders scenes and Encounters, nesting each Encounter
@@ -45,10 +72,12 @@ recording it, and tidied several panels:
    tables suggested for it (`data/encounterWizardGuide.js`; tags from the
    locked field-link vocabulary, WHAT led by the current Intent;
    `domain/encounters.js` `wizardOracleSuggestions`). A suggestion rolls in
-   place; ✔ Use appends the result to the step's field (WHERE's surroundings
-   tag to Immediate Surroundings), at WHO ＋ NPC makes it an NPC and asks for
-   their scene role, 📖 files it in the Journal; 🔀 Others pages on. Back/Next
-   and a final "Save as Encounter". The tab, step and rolled results are
+   place; ✔ Use appends the result to the field picked in its menu — any of
+   the step's fields, including its Encounter-only ones (the default follows
+   the table's tag, e.g. WHERE's surroundings to Immediate Surroundings, a
+   secret at WHY to What's actually driving it) — at WHO ＋ NPC makes it an
+   NPC and asks for their scene role, 📖 files it in the Journal; 🔀 Others
+   pages on. Back/Next and a final "Save Encounter". The tab, step and rolled results are
    shell state, not document state. The "run the wizard?" offer shows while
    the campaign has no Encounter and until "Not now" for that campaign this
    session.

@@ -12,7 +12,7 @@ import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { continueStory, restartStory, applyStoryShift, rollOracle, addNote, setJournalDraft, submitJournalDraft, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField, rollLocationFantasyField, editLocationFantasyField, rollWhereDetailField, addContextEntity, removeContextEntity } from '../domain/session.js';
 import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, addSceneAsset, removeSceneAsset, addSceneLocation, removeSceneLocation, setSceneSystem, addSceneDismissedFaction, removeSceneDismissedFaction, moveSceneActor } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
-import { createEncounterFromComposer, listEncounters, composerPrompt, wizardResultTarget, applyWizardResult, npcNameFromOracleText, oracleResultBody } from '../domain/encounters.js';
+import { listEncounters, composerPrompt, wizardResultTarget, applyWizardResult, npcNameFromOracleText, oracleResultBody, saveComposerEncounter, newComposerEncounter, setComposerEncounterField, addComposerSessionHook, removeComposerSessionHook, addComposerFaction, loadEncounterIntoComposer, encounterFieldOraclePaths, composerEncounterFields, composerSnapshot, composerHoldsAnything } from '../domain/encounters.js';
 import { renameEntityEverywhere, setEntityAliases, setEntityVisibility, setPlaceKind } from '../domain/wiki.js';
 import { isRedLinkSpan } from './drawers/wiki.js';
 import { lightStart, lightPause, lightReset, lightBurnOut, lightRemaining, lightState, isLit, formatLight } from '../domain/torchTimer.js';
@@ -177,6 +177,9 @@ import { CREW_TASKS_5PFH } from '../data/crewTasksDefault5pfh.js';
 // third, separate layout.
 const COMPACT_TAB_BREAKPOINT = 1023;
 function isCompactTab() { return window.innerWidth <= COMPACT_TAB_BREAKPOINT; }
+// Commits the focused field's pending edit (its 'change' fires on blur) before
+// an action reads the document.
+function blurActiveField() { const el = document.activeElement; if (el && el !== document.body && typeof el.blur === 'function') el.blur(); }
 // Narrower than COMPACT_TAB_BREAKPOINT on purpose — matches styles/
 // cockpit.css's own "genuinely phone-specific" <=480px tier (as opposed to
 // the wider compact-tab tier that also covers tablet), for the one phone-
@@ -627,6 +630,8 @@ function showComposerTab(key) {
   if (Number.isInteger(composerWizardStep)) composerWizardStep = n;
 }
 let composerWizardOffset = {};
+// The wizard's per-result "put it in" choice ({ "step::path": target }).
+let composerWizardTargets = {};
 // The New campaign wizard overlay (renderNewCampaignWizard).
 let newCampaignWizardOpen = false;
 // The last Shadowdark import's result line (Settings › Licenses).
@@ -1949,14 +1954,66 @@ function onClick(ev) {
     const area = box && box.querySelector('[data-shadowdark-paste]');
     return runShadowdarkImport(area ? area.value : '', sdImport.dataset.shadowdarkImport, () => { if (area) area.value = ''; });
   }
+  // The Composer is the Encounter builder (domain/encounters.js): Save
+  // updates the Encounter it is editing, or makes a new one and goes on
+  // editing that; ＋ New starts another; 📝 on an Encounter record loads it.
   if (hit('[data-composer-add-encounter]')) {
+    blurActiveField();
     let made = null;
-    store.update((d) => { const r = createEncounterFromComposer(d); made = r.id; return r.campaign; });
+    let created = false;
+    store.update((d) => { const res = saveComposerEncounter(d); made = res.id; created = res.created; return res.campaign; });
     if (!made) return toast('Nothing in the Composer yet: add who, where or what first.');
     if (hit('[data-composer-wizard-finish]')) composerWizardStep = null;
-    openDrawerTab('entity-detail');
-    toast(`Encounter saved: ${(getEntity(store.get(), made) || {}).name || 'Unnamed'}`);
+    toast(`Encounter ${created ? 'saved' : 'updated'}: ${(getEntity(store.get(), made) || {}).name || 'Unnamed'}`);
     return render();
+  }
+  if (hit('[data-composer-new-encounter]')) {
+    store.update((d) => newComposerEncounter(d));
+    return toast('New Encounter: the Composer will save to a new record');
+  }
+  const toComposer = hit('[data-encounter-to-composer]');
+  if (toComposer) {
+    const id = toComposer.dataset.encounterToComposer;
+    // Always asks before replacing anything the Composer holds — including
+    // unsaved edits to this same Encounter (direct request, 2026-11-09).
+    const d0 = store.get();
+    const rec = getEntity(d0, id);
+    const enc = composerEncounterFields(d0);
+    const what = enc.id === id ? 'your unsaved changes to it in the Composer' : enc.id ? `the Encounter being edited (${(getEntity(d0, enc.id) || {}).name || 'Unnamed'})` : 'what the Composer holds';
+    if (composerHoldsAnything(d0)
+      && !window.confirm(`Load “${(rec && rec.name) || 'this Encounter'}” into the Composer? This replaces ${what}: the current scene’s cast, assets, places and factions, WHO…HOW, and the Encounter fields. Save first if you want to keep them.`)) return;
+    store.update((d) => loadEncounterIntoComposer(d, id));
+    showComposerTab('who');
+    toast('Encounter loaded into the Composer');
+    return render();
+  }
+  const composerHookAdd = hit('[data-composer-hook-add]');
+  if (composerHookAdd) {
+    const inp = root.querySelector('[data-composer-hook-input]');
+    const v = inp ? inp.value : '';
+    if (!String(v).trim()) return;
+    return store.update((d) => addComposerSessionHook(d, v));
+  }
+  // An Encounter record's ✕ on one of its Factions involved (an `involves` link).
+  const conflictFactionRemove = hit('[data-conflict-faction-remove]');
+  if (conflictFactionRemove) {
+    const [cid, fid] = conflictFactionRemove.dataset.conflictFactionRemove.split('::');
+    return store.update((d) => removeRelationship(d, cid, fid));
+  }
+  const composerHookRemove = hit('[data-composer-hook-remove]');
+  if (composerHookRemove) return store.update((d) => removeComposerSessionHook(d, composerHookRemove.dataset.composerHookRemove));
+  // A Composer field's 🎲: one table among those suited to the field.
+  const fieldRoll = hit('[data-composer-field-roll]');
+  if (fieldRoll) {
+    const target = fieldRoll.dataset.composerFieldRoll;
+    const paths = encounterFieldOraclePaths(store.get(), target);
+    if (!paths.length) return toast('No oracle tables for this field in this genre');
+    const path = paths[Math.floor(Math.random() * paths.length)];
+    blurActiveField();
+    let text = '';
+    store.update((d) => { const res = rollOracle(d, path, { toJournal: false, genrePack: store.get().settings.genrePack }); text = res.text; return res.campaign; });
+    store.update((d) => applyWizardResult(d, target, oracleResultBody(text)));
+    return toast(`🎲 ${path[path.length - 1]}`);
   }
   const wizardAction = hit('[data-composer-wizard]');
   if (wizardAction) {
@@ -1994,7 +2051,7 @@ function onClick(ev) {
     const res = composerWizardResults[key];
     if (!res) return;
     const stepKey = key.split('::')[0];
-    const target = wizardResultTarget(stepKey, res.tag);
+    const target = composerWizardTargets[key] || wizardResultTarget(stepKey, res.tag);
     const { [key]: _drop, ...rest } = composerWizardResults;
     composerWizardResults = rest;
     if (target === 'npc') {
@@ -5833,6 +5890,10 @@ function onClick(ev) {
               ? { entityType: 'location-current', mode: 'current', scope: null, query: '' }
               : raw === 'system'
                 ? { entityType: 'system', mode: 'system', scope: null, query: '' }
+                : raw === 'composer-faction'
+                  ? { entityType: 'composer-faction', mode: 'composer-faction', scope: null, query: '' }
+                : raw.startsWith('conflict-faction:')
+                  ? { entityType: 'conflict-faction', mode: 'conflict-faction', scope: raw.slice('conflict-faction:'.length), query: '' }
                 : raw.startsWith('where-faction-link:')
                   ? { entityType: 'where-faction-link', mode: 'link', scope: raw.slice('where-faction-link:'.length), query: '' }
                   : raw.startsWith('colony-encounter::')
@@ -6890,6 +6951,18 @@ function onChange(ev) {
     }
     return;
   }
+  // The Composer's Encounter-only fields and name (domain/encounters.js),
+  // and the wizard's "put it in" menu on a rolled result.
+  const encField = t.closest('[data-composer-encounter-field]');
+  if (encField) {
+    const field = encField.dataset.composerEncounterField;
+    return store.update((d) => setComposerEncounterField(d, field, t.value));
+  }
+  const wizTarget = t.closest('[data-composer-wizard-target]');
+  if (wizTarget) {
+    composerWizardTargets = { ...composerWizardTargets, [wizTarget.dataset.composerWizardTarget]: t.value };
+    return render();
+  }
   const ctx = t.closest('[data-ctx]');
   if (ctx) {
     // The free-text fields (situation/summary) are contenteditable now, not
@@ -7509,19 +7582,6 @@ function onChange(ev) {
   if (asymmetryField) {
     const [id, field] = asymmetryField.dataset.conflictAsymmetryField.split('::');
     return store.update((d) => updateConflictInformationAsymmetry(d, id, { [field]: t.value }));
-  }
-  // The Location-scoped "+ add a local faction" dropdown (conflictSection,
-  // drawers/index.js) — same select-picks-then-immediately-links pattern
-  // as data-entity-base-add/-tradecode-add; links via the ordinary
-  // relationship system (Involves), so it shows up in the generic
-  // Relationships block too, not a separate storage mechanism.
-  const conflictFactionLink = t.closest('[data-conflict-faction-link]');
-  if (conflictFactionLink) {
-    const conflictId = conflictFactionLink.dataset.conflictFactionLink;
-    const factionId = t.value;
-    t.value = '';
-    if (!factionId) return;
-    return store.update((d) => addRelationship(d, conflictId, factionId, 'Involves', 'involves'));
   }
 
   const oev = t.closest('[data-oracle-entry-value]');
@@ -10927,6 +10987,9 @@ function addNpcToSceneRole(d, sceneId, npcId, role, justCreated) {
 
 function commitEntityPickerPick(picker, id) {
   if (!picker) return renderEntityPickerOverlay();
+  // The Composer's Factions involved ＋, and an Encounter record's own.
+  if (picker.entityType === 'composer-faction') return store.update((d) => addComposerFaction(d, id));
+  if (picker.entityType === 'conflict-faction') return store.update((d) => addRelationship(d, picker.scope, id, 'involves', 'involves'));
   if (picker.entityType === 'where-faction-link') {
     // WHO's "+" on Factions active nearby (direct follow-up request,
     // replacing the old inline <select>) — links the picked faction to
@@ -11110,6 +11173,8 @@ function commitEntityPickerPick(picker, id) {
 // enough for colony-encounter, which needs to roll stats too).
 const ENTITY_PICKER_CREATE_TYPE = {
   'where-faction-link': 'faction',
+  'composer-faction': 'faction',
+  'conflict-faction': 'faction',
   'contract-patron': 'npc',
   'party-vehicle': 'asset',
   'party-item': 'item',
@@ -11316,6 +11381,15 @@ function renderEntityPickerOverlay() {
     const currentLinkedId = scope.mapId ? getHex(doc, scope.mapId, scope.q, scope.r).vertexConflicts[scope.vertexIndex] : null;
     candidates = listEntities(doc, ['conflict']).filter((c) => c.id !== currentLinkedId);
     emptyMessage = 'No Encounter entities yet — create one below.';
+  } else if (entityPicker.entityType === 'composer-faction') {
+    const inPlay = new Set(composerSnapshot(doc).factions.map((f) => f.id));
+    candidates = listEntities(doc, ['faction']).filter((f) => !inPlay.has(f.id));
+    emptyMessage = 'No other Faction entities yet — create one below.';
+  } else if (entityPicker.entityType === 'conflict-faction') {
+    const enc = getEntity(doc, entityPicker.scope);
+    const involved = new Set(((enc && enc.relationships) || []).filter((rl) => rl.type === 'involves').map((rl) => rl.to));
+    candidates = listEntities(doc, ['faction']).filter((f) => !involved.has(f.id));
+    emptyMessage = 'No other Faction entities yet — create one below.';
   } else if (entityPicker.entityType === 'where-faction-link') {
     // WHO's Factions active nearby "+" (direct follow-up request) —
     // excludes whatever's already showing there (region presence, an
@@ -12208,7 +12282,7 @@ function buildDrawerUi() {
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
     enhancementDraft, expandedEnhancements, basesOfInfluenceToggled, expandedConflictDepth, expandedSceneFields, collapsedToolbars, expandedPartyMembers, expandedPartyStatField, collapsedOverview, collapsedEntityTags, expandedContracts, tradeLocationTagFilter, mechanicsScanning, tocScanning, tocOfferOpen, tocLibrary: store.getAppConfig().tocLibrary || {}, canScanToc: canScanToc(), lensPickerOpen, lensDraw, whyLensPickerOpen, whyLensDraw, suggestedOracleEntries, dismissedStoryOptionIds, selectedStoryOptionIds, expandedDashboardSections, expandedSceneNpcs, expandedLocationDetails, expandedFactionsNearby, collapsedActorGroups, inspirationDrafts, refDocBlobKeys, refDocBlobKeysLoaded, expandedWhatConflicts,
     factionsActive: isModuleVisible(store.getActiveProfile(), 'faction-events'),
-    composerWizardStep, composerTab, composerWizardResults, composerWizardOffset, composerWizardOffer: composerWizardOffer(), guideReorderMode, shadowdarkImportResult,
+    composerWizardStep, composerTab, composerWizardResults, composerWizardOffset, composerWizardTargets, composerWizardOffer: composerWizardOffer(), guideReorderMode, shadowdarkImportResult,
     wikiReadIds, wikiPlayerView, wikiRedLinkPick, wikiSettingsOpen, wikiSearch, wikiType, weaponPick,
     advisorOracleResults, advisorDrafts, advisorConsequenceDraw, sceneSummaryOverride,
     expandedGuideNodes, guideRenameOpen,
