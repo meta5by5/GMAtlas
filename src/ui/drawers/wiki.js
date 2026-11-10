@@ -259,7 +259,7 @@ export function wikiPage(doc, e, ui = {}) {
 
 /** The 📖 button on the Entity Editor's head row that switches to Read. */
 export function wikiReadButton(e) {
-  return `<button type="button" class="icon-btn" data-wiki-read="${esc(e.id)}" title="Read this as a wiki page">📖 Read</button>`;
+  return `<button type="button" class="icon-btn" data-wiki-read="${esc(e.id)}" title="Read this as a wiki page" aria-label="Read as a wiki page">📖</button>`;
 }
 
 /** The Wiki panel: every page (or, in Player View, every shared page),

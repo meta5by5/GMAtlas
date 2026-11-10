@@ -128,8 +128,8 @@ export const RULESETS = [
         { key: 'Tough', value: 3 },
       ],
       tracks: [
-        { key: 'Luck', value: 1, max: 3 },
-        { key: 'XP', value: 0, max: 10 },
+        { key: 'Luck', value: 1, max: 3, display: 'number' },
+        { key: 'XP', value: 0, max: 10, display: 'number' },
       ],
     },
   },
@@ -333,9 +333,9 @@ export const RULESETS = [
         { key: 'Casting', value: 0 },
       ],
       tracks: [
-        { key: 'Luck', value: 1, max: 3 },
-        { key: 'Will', value: 1, max: 3 },
-        { key: 'XP', value: 0, max: 10 },
+        { key: 'Luck', value: 1, max: 3, display: 'number' },
+        { key: 'Will', value: 1, max: 3, display: 'number' },
+        { key: 'XP', value: 0, max: 10, display: 'number' },
       ],
     },
   },

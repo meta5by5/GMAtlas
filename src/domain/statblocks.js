@@ -51,6 +51,20 @@ export function hasVehicleTag(entity) {
   return Array.isArray(entity && entity.tags) && entity.tags.some((t) => /^vehicles?$/i.test(String(t).trim()));
 }
 
+/** A "number textfield": a track field drawn as a directly-editable number
+ *  box with ＋/− (instead of click-to-set boxes), max still enforced. Set by
+ *  `display: 'number'` on the field, or on the same-keyed track in its
+ *  ruleset's characterTemplate (data/rulesets.js) — so sheets made before a
+ *  ruleset adopted it switch over too. The one test every renderer uses. */
+export function isNumberTextfield(field, rulesetId) {
+  if (!field || !field.track) return false;
+  if (field.display) return field.display === 'number';
+  const ruleset = rulesetId ? findRuleset(rulesetId) : null;
+  const tracks = (ruleset && ruleset.characterTemplate && ruleset.characterTemplate.tracks) || [];
+  const t = tracks.find((x) => String(x.key).toLowerCase() === String(field.key || '').toLowerCase());
+  return !!t && t.display === 'number';
+}
+
 /** True if the entity's tags include "character" (case-insensitive) — the
  *  flag that marks an NPC as a Party member (see domain/party.js) and makes
  *  it default to a full character sheet instead of a Bestiary statblock. */
@@ -172,7 +186,7 @@ export function makeStatblock(kind, rulesetId, templateId, settings) {
           if (rollMethod === 'traveller') field.target = s.target || tpl.attributeTarget || 8;
           return field;
         }),
-        ...tpl.tracks.map((t) => ({ key: t.key, value: t.value, max: t.max, track: true, group: 'resource' })),
+        ...tpl.tracks.map((t) => ({ key: t.key, value: t.value, max: t.max, track: true, group: 'resource', ...(t.display ? { display: t.display } : {}) })),
       ];
       group = { kind: 'character', ruleset: ruleset.id, fields };
     }

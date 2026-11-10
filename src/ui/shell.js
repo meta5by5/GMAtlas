@@ -147,7 +147,7 @@ import { renderSearchPanel } from './searchPanel.js';
 import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
 import { isModuleVisible, setModuleEnabled, setStoryboardPosition, updateProfileRuleset, applyProfileDraft, resolvePositionContentId, BUILTIN_SLOT_CONTENT, profileFileSlug } from '../domain/rulesProfiles.js';
 import { TURN_STEP_ORACLE_LINKS, TURN_STEP_LOCATION_STEPS } from '../data/turnStepWorkflowMeta.js';
-import { genrePackIdForRuleset } from '../data/rulesConstitution.js';
+import { genrePackIdForRuleset, isPackInUse } from '../data/rulesConstitution.js';
 import { LICENSES } from '../data/licenses.js';
 import { RULESET_GENRE_PACK_HINTS, findRuleset } from '../data/rulesets.js';
 import { locationHierarchyTerms, genreStyleFamily } from '../data/genrePacks.js';
@@ -630,6 +630,8 @@ let wikiPlayerView = false;
 let wikiRedLinkPick = null;
 // The 5PFH weapon row whose ＋ item picker is open, as "gi::wi" (one at a time).
 let weaponPick = null;
+// The entity whose name is in edit mode in the panel title row (✎ / 💾).
+let entityNameEditing = null;
 const wikiSettingsOpen = new Set();
 let wikiSearch = '';
 let wikiType = '';
@@ -2032,13 +2034,16 @@ function onClick(ev) {
   // this opens all of them; otherwise (anything at all open) it collapses
   // all of them. Only wired for these two — see the title's own
   // .drawer-title-toggle class, set only for 'colony'/'party' above.
-  // ✎ at the right edge of an entity's title row: edit its name in place.
+  // ✎ / 💾 at the right of an entity's title row: edit its name, then save.
   const nameEdit = hit('[data-entity-name-edit]');
   if (nameEdit) {
-    const input = nameEdit.closest('[data-drawer]') && nameEdit.closest('[data-drawer]').querySelector('.drawer-title-name');
+    entityNameEditing = nameEdit.dataset.entityNameEdit;
+    render();
+    const input = root.querySelector('[data-drawer] input.drawer-title-name');
     if (input) { input.focus(); input.select(); }
     return;
   }
+  if (hit('[data-entity-name-save]')) return finishEntityNameEdit(false);
   const drawerTitleToggle = hit('[data-drawer-title].drawer-title-toggle');
   if (drawerTitleToggle) {
     const sections = activeDrawer === 'colony' ? CAMPAIGN_SECTION_KEYS : activeDrawer === 'party' ? PARTY_SECTION_KEYS : null;
@@ -3430,9 +3435,13 @@ function onClick(ev) {
     return;
   }
   const wikiRead = hit('[data-wiki-read]');
-  if (wikiRead) { wikiReadIds.add(wikiRead.dataset.wikiRead); return renderDrawerBody(); }
+  if (wikiRead) {
+    const id = wikiRead.dataset.wikiRead;
+    if (wikiReadIds.has(id)) wikiReadIds.delete(id); else wikiReadIds.add(id);
+    return render();
+  }
   const wikiEdit = hit('[data-wiki-edit]');
-  if (wikiEdit) { wikiReadIds.delete(wikiEdit.dataset.wikiEdit); wikiRedLinkPick = null; return renderDrawerBody(); }
+  if (wikiEdit) { wikiReadIds.delete(wikiEdit.dataset.wikiEdit); wikiRedLinkPick = null; return render(); }
   if (hit('[data-wiki-player-view]')) { wikiPlayerView = !wikiPlayerView; wikiRedLinkPick = null; return renderDrawerBody(); }
   const wikiSettingsToggle = hit('[data-wiki-settings-toggle]');
   if (wikiSettingsToggle) {
@@ -5225,10 +5234,13 @@ function onClick(ev) {
     const packId = contentPackImportBtn.dataset.contentPackImport;
     const entry = CONTENT_PACKS_MANIFEST.find((p) => p.id === packId);
     if (!entry || contentPackImporting.has(packId)) return;
+    // Into the campaign Settings → Campaigns is configuring (configCampaignId),
+    // and only while that campaign uses the pack's book (isPackInUse).
+    const campaignId = configCampaignId();
+    const target = store.peekCampaign(campaignId) || store.get();
+    if (!isPackInUse(target.settings, entry)) return toast(`${entry.title} needs its book in use in this campaign (Settings › Modules)`);
     contentPackImporting = new Set(contentPackImporting).add(packId);
     renderDrawerBody();
-    // Into the campaign Settings → Campaigns is configuring (configCampaignId).
-    const campaignId = configCampaignId();
     let importedCount = 0;
     fetchJsonPack(entry.file)
       .then((pack) => store.updateCampaign(campaignId, (d) => {
@@ -6435,6 +6447,11 @@ async function performFieldRoll(f, label) {
 // open Universal Search from anywhere, matching the convention comparable
 // tools already use for a search/command action.
 function onKeydown(ev) {
+  // The title row's name input: Enter saves, Escape cancels.
+  if (entityNameEditing && ev.target.matches && ev.target.matches('input.drawer-title-name') && (ev.key === 'Enter' || ev.key === 'Escape')) {
+    ev.preventDefault();
+    return finishEntityNameEdit(ev.key === 'Escape');
+  }
   // Ctrl+Left/Right cycles which Story Dashboard section is expanded
   // (direct request: "navigate between cards open on the menu" — originally
   // cycled the now-retired WHO/WHERE/WHAT/WHY/HOW tab strip; docs/adr/0040
@@ -10559,7 +10576,13 @@ function render() {
   // ids — 'entities' isn't 'cast' or 'entity-detail') are no longer read
   // at all; left inert in the schema per migration rule 5.
   const drawerHeadExtra = drawer.querySelector('[data-drawer-head-extra]');
-  if (drawerHeadExtra) drawerHeadExtra.innerHTML = headExtraForDrawer(activeDrawer);
+  // Redrawn only when it changes: a blur-triggered save of the title-row
+  // name re-renders between mousedown and click on 💾, and replacing the
+  // button there would swallow the click.
+  if (drawerHeadExtra) {
+    const headHtml = headExtraForDrawer(activeDrawer);
+    if (drawerHeadExtra.__src !== headHtml) { drawerHeadExtra.innerHTML = headHtml; drawerHeadExtra.__src = headHtml; }
+  }
   // Tab strip — same pattern as the doc viewer's own tabs below: one pinned
   // drawer per tab, click to switch, ✕ to close without needing to make it
   // active first. No anchor icon (docs/adr/0032 removed the second,
@@ -11993,19 +12016,48 @@ function entityKindLabel(doc, e) {
   return entityTypeLabel(e.type, doc.settings && doc.settings.genrePack);
 }
 
-// The entity drawer's title row: its kind, then its name as the one name
-// field (an input styled as the title; ✎ at the row's right edge focuses
-// it). A name being typed is left alone by a re-render.
+// The entity drawer's title row: its kind, then its name — read-only until
+// ✎ (at the row's right edge) switches it to an input, with 💾 in the ✎'s
+// place to save and leave edit mode (Enter saves, Escape cancels). A name
+// being typed is left alone by a re-render.
 function titleRowForEntity(titleEl, doc, e) {
   const kind = entityKindLabel(doc, e);
-  const input = titleEl.querySelector('.drawer-title-name');
-  if (input && input === document.activeElement && input.dataset.entityId === e.id) {
+  const editing = entityNameEditing === e.id;
+  const input = titleEl.querySelector('input.drawer-title-name');
+  if (editing && input && input === document.activeElement && input.dataset.entityId === e.id) {
     const k = titleEl.querySelector('.drawer-title-kind');
     if (k) k.textContent = kind;
     return;
   }
-  titleEl.innerHTML = `<span class="drawer-title-kind">${escapeHtml(kind)}</span><input class="inspector-name drawer-title-name" data-entity-field="name" data-entity-id="${escapeHtml(e.id)}" value="${escapeHtml(e.name || '')}" placeholder="Name" aria-label="Name" autocomplete="off">`;
+  const name = editing
+    ? `<input class="inspector-name drawer-title-name" data-entity-field="name" data-entity-id="${escapeHtml(e.id)}" value="${escapeHtml(e.name || '')}" placeholder="Name" aria-label="Name" autocomplete="off">`
+    : `<span class="drawer-title-name is-readonly" data-entity-id="${escapeHtml(e.id)}">${escapeHtml(e.name || 'Unnamed')}</span>`;
+  titleEl.innerHTML = `<span class="drawer-title-kind">${escapeHtml(kind)}</span>${name}`;
 }
+
+// The entity title row's controls, left of the panel's ✕: ✎ (or 💾 while
+// editing the name), 📖 Read (toggles the wiki page view) and 🗑 Delete.
+function entityHeadControlsHtml(e) {
+  const id = escapeHtml(e.id);
+  const reading = wikiReadIds.has(e.id);
+  const nameBtn = entityNameEditing === e.id
+    ? `<button type="button" class="icon-btn" data-entity-name-save="${id}" title="Save the name" aria-label="Save the name">💾</button>`
+    : `<button type="button" class="icon-btn" data-entity-name-edit="${id}" title="Edit the name" aria-label="Edit the name">✎</button>`;
+  return `${nameBtn}<button type="button" class="icon-btn${reading ? ' active' : ''}" data-wiki-read="${id}" aria-pressed="${reading}" title="${reading ? 'Back to editing' : 'Read this as a wiki page'}" aria-label="Read as a wiki page">📖</button><button type="button" class="icon-btn" data-entity-del="${id}" title="Delete entity" aria-label="Delete entity">🗑</button>`;
+}
+
+/** Leaves name editing, saving what was typed unless cancel is set. */
+function finishEntityNameEdit(cancel) {
+  const id = entityNameEditing;
+  if (!id) return;
+  const input = root && root.querySelector('[data-drawer] input.drawer-title-name');
+  const value = input ? input.value : null;
+  entityNameEditing = null;
+  const e = getEntity(store.get(), id);
+  if (!cancel && e && value !== null && value !== (e.name || '')) store.update((d) => renameEntityEverywhere(d, id, value));
+  else render();
+}
+
 
 // Cast's "Generate…" dropdown is the one drawer-specific control that lives
 // in the HEAD (next to the close ✕) rather than the body — every other
@@ -12023,7 +12075,8 @@ function castGenerateSelectHtml() {
 }
 function headExtraForDrawer(id) {
   if (id === 'cast') return castGenerateSelectHtml();
-  if (entityForDrawer(store.get(), id)) return '<button type="button" class="icon-btn" data-entity-name-edit title="Edit the name" aria-label="Edit the name">✎</button>';
+  const headEntity = entityForDrawer(store.get(), id);
+  if (headEntity) return entityHeadControlsHtml(headEntity);
   if (id === 'battlemap') return battlemapSpanControlsHtml();
   // (Party's ＋ picker lives on the Party panel's own "Party" section header.)
   // Guide/Documents' top-of-drawer intro tips have no in-content header of
@@ -12302,7 +12355,16 @@ function renderDrawerBody() {
   // AND puts you right on the name," not just a switch to the Cast tab.
   if (focusInspectorNameNextRender) {
     focusInspectorNameNextRender = false;
-    const nameInput = root && (root.querySelector('[data-drawer] .drawer-title-name') || root.querySelector('.inspector-name'));
+    // In the panel the name is read-only until ✎; a just-created entity
+    // with no name yet opens straight into editing it.
+    const titled = entityForDrawer(doc, activeDrawer);
+    if (titled && drawerEl && !String(titled.name || '').trim() && entityNameEditing !== titled.id) {
+      entityNameEditing = titled.id;
+      titleRowForEntity(drawerEl.querySelector('[data-drawer-title]'), doc, titled);
+      const extra = drawerEl.querySelector('[data-drawer-head-extra]');
+      if (extra) { const h = headExtraForDrawer(activeDrawer); extra.innerHTML = h; extra.__src = h; }
+    }
+    const nameInput = root && (root.querySelector('[data-drawer] input.drawer-title-name') || root.querySelector('.inspector-name'));
     if (nameInput) { nameInput.focus(); nameInput.select(); }
   }
   // Current Location's "🔗" (data-location-edit-relationships) — focuses

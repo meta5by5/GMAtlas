@@ -162,12 +162,14 @@ styles/
   cockpit.css      layout + component styles (campaign surface)
   portal.css       portal surface layout (shares tokens.css only)
 tests/
-  domain.test.js   845 tests — domain modules, incl. sync-merge convergence
+  domain.test.js   849 tests — domain modules, incl. sync-merge convergence
   migrate.test.js  27 tests — legacy-key absorption + round-trip
 scripts/
   build.js         zero-dependency bundler (see below) — re-run after any src/ edit;
                    two entries: src/main.js -> app.bundle.js, src/admin/main.js -> admin.bundle.js
   save-import.js   standalone CLI: stage an exported campaign JSON for manual use
+  build-equipment-packs.js  writes the five Five Parsecs/Five Leagues weapon &
+                   equipment content packs (assets/content-packs/*-equipment-*)
 dist/
   app.bundle.js    build output, gitignored, regenerate with `npm run build`
 design/adr/        architecture reference (Constitution, deviations, new ADRs)
@@ -321,6 +323,14 @@ built; 13c–13k are roadmap only. `PROGRESS.md` has the full ledger;
   display, never parsed back out. Four dice models exist
   (`none`/`action`/`flat`/`traveller`) and the list is meant to grow, not a
   closed set.
+- A **"number textfield"** is the owner's name for one field design: a track
+  drawn as a directly-editable number box with ＋/− tight underneath (no
+  click-to-set boxes), max still enforced (`numberFieldRow` + `numStepper`
+  in `drawers/index.js`). When asked to make a field "a number textfield",
+  set `display: 'number'` on it, or on its ruleset's characterTemplate
+  track (`data/rulesets.js`); `isNumberTextfield()` in `statblocks.js` is
+  the one test every renderer uses. 5PFH Luck/XP and Five Leagues
+  Luck/Will/XP use it.
 - `context.active: 'what'` in the schema is vestigial — the UI no longer
   branches on it. Don't remove it (migration rule 5) and don't wire new
   behavior to it.

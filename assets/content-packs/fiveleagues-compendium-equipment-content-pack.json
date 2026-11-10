@@ -1,0 +1,3020 @@
+{
+  "app": "GMAtlas",
+  "kind": "content-pack",
+  "schemaVersion": 1,
+  "entities": [
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_desert-survival-kit",
+      "type": "item",
+      "name": "Desert survival kit",
+      "tags": [
+        "gear",
+        "the-dust"
+      ],
+      "overview": "Item (Backpack). +1 to Wilderness and Scouting tests while in The Dust. (Five Leagues from the Borderlands Compendium, p.34)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Item"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Backpack"
+            },
+            {
+              "key": "Effect",
+              "value": "+1 to Wilderness and Scouting tests while in The Dust."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_crystalized-morning-wind",
+      "type": "item",
+      "name": "Crystalized morning wind",
+      "tags": [
+        "gear",
+        "the-dust"
+      ],
+      "overview": "Item (Backpack). Serpentine Mage only: gain 1D6+1 Drift at once. (Five Leagues from the Borderlands Compendium, p.34)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Item"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Backpack"
+            },
+            {
+              "key": "Effect",
+              "value": "Serpentine Mage only: gain 1D6+1 Drift at once."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_invigorating-tea",
+      "type": "item",
+      "name": "Invigorating tea",
+      "tags": [
+        "gear",
+        "the-dust"
+      ],
+      "overview": "Item (Single-use, Campaign). Remove Exhaustion from two characters, sell for 2 Gold Marks, or offer it at a General Meeting for +5 on the Interaction roll. (Five Leagues from the Borderlands Compendium, p.34)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Item"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Single-use, Campaign"
+            },
+            {
+              "key": "Effect",
+              "value": "Remove Exhaustion from two characters, sell for 2 Gold Marks, or offer it at a General Meeting for +5 on the Interaction roll."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_bottle-of-oasis-flower",
+      "type": "item",
+      "name": "Bottle of Oasis Flower",
+      "tags": [
+        "gear",
+        "the-dust"
+      ],
+      "overview": "Item (Single-use, Backpack). 1 temporary point of Will for a battle (no effect on Ferals; a Chitter also heals). (Five Leagues from the Borderlands Compendium, p.34)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Item"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Single-use, Backpack"
+            },
+            {
+              "key": "Effect",
+              "value": "1 temporary point of Will for a battle (no effect on Ferals; a Chitter also heals)."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_akayan-pony",
+      "type": "item",
+      "name": "Akayan pony",
+      "tags": [
+        "gear",
+        "the-dust"
+      ],
+      "overview": "Item (Campaign). The warband carries 1 more Backpack item (stacks with a Brave mule, not another pony). (Five Leagues from the Borderlands Compendium, p.34)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Item"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Campaign"
+            },
+            {
+              "key": "Effect",
+              "value": "The warband carries 1 more Backpack item (stacks with a Brave mule, not another pony)."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_exotic-wine",
+      "type": "item",
+      "name": "Exotic wine",
+      "tags": [
+        "gear",
+        "the-dust"
+      ],
+      "overview": "Item (Single-use, Campaign). Removes Disgruntled, or sells for 1D3+1 Gold Marks in a settlement. (Five Leagues from the Borderlands Compendium, p.34)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Item"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Single-use, Campaign"
+            },
+            {
+              "key": "Effect",
+              "value": "Removes Disgruntled, or sells for 1D3+1 Gold Marks in a settlement."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_gentle-shade-flower",
+      "type": "item",
+      "name": "Gentle shade flower",
+      "tags": [
+        "gear",
+        "the-dust"
+      ],
+      "overview": "Item (Single-use, Campaign). Taken before poisoning: immune to all poison for the battle. (Five Leagues from the Borderlands Compendium, p.34)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Item"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Single-use, Campaign"
+            },
+            {
+              "key": "Effect",
+              "value": "Taken before poisoning: immune to all poison for the battle."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_thorny-rock-fruit",
+      "type": "item",
+      "name": "Thorny rock fruit",
+      "tags": [
+        "gear",
+        "the-dust"
+      ],
+      "overview": "Item (Single-use, Campaign). +1 Toughness (max 5) for a battle, or eaten instead of Rations (-3 Gold Marks Upkeep). (Five Leagues from the Borderlands Compendium, p.34)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Item"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Single-use, Campaign"
+            },
+            {
+              "key": "Effect",
+              "value": "+1 Toughness (max 5) for a battle, or eaten instead of Rations (-3 Gold Marks Upkeep)."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_sage-flower",
+      "type": "item",
+      "name": "Sage flower",
+      "tags": [
+        "gear",
+        "the-dust"
+      ],
+      "overview": "Item (Single-use, Campaign). A character rolling on the post-game Injury table rolls twice and picks. (Five Leagues from the Borderlands Compendium, p.34)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Item"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Single-use, Campaign"
+            },
+            {
+              "key": "Effect",
+              "value": "A character rolling on the post-game Injury table rolls twice and picks."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_blade-of-torment",
+      "type": "item",
+      "name": "Blade of Torment",
+      "tags": [
+        "weapon",
+        "melee",
+        "enchanted",
+        "the-dust"
+      ],
+      "overview": "Melee weapon, Damage +1 / +1 (Overcome Armor / Toughness). Traits: Bulky. Combat Skill -1; ignores Tough, and its Wounds cannot be healed in battle. (Five Leagues from the Borderlands Compendium, p.59)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +1"
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": "Bulky"
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Combat Skill -1; ignores Tough, and its Wounds cannot be healed in battle."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_fiend-hunting-spear",
+      "type": "item",
+      "name": "Fiend-hunting Spear",
+      "tags": [
+        "weapon",
+        "melee",
+        "enchanted",
+        "the-dust"
+      ],
+      "overview": "Melee weapon, Damage +0 / +0 (+0 / +2 vs Aberrations) (Overcome Armor / Toughness). Traits: Counter Attack. Aberrations in range always attack the wielder first. (Five Leagues from the Borderlands Compendium, p.59)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0 (+0 / +2 vs Aberrations)"
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": "Counter Attack"
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Aberrations in range always attack the wielder first."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_hammer-of-the-old-war",
+      "type": "item",
+      "name": "Hammer of the Old War",
+      "tags": [
+        "weapon",
+        "melee",
+        "enchanted",
+        "the-dust"
+      ],
+      "overview": "Melee weapon, Damage +1 / +0 (+1 / +1 vs Undead) (Overcome Armor / Toughness). Traits: Bulky. Cannot use Counter Attack. (Five Leagues from the Borderlands Compendium, p.59)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0 (+1 / +1 vs Undead)"
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": "Bulky"
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Cannot use Counter Attack."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_clay-tablet",
+      "type": "item",
+      "name": "Clay Tablet",
+      "tags": [
+        "gear",
+        "the-dust"
+      ],
+      "overview": "Item of The Dust (Single-use, Campaign). Mystic or Serpentine Mage gains +2 XP. (Five Leagues from the Borderlands Compendium, p.59)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Item of The Dust"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Single-use, Campaign"
+            },
+            {
+              "key": "Effect",
+              "value": "Mystic or Serpentine Mage gains +2 XP."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_dancing-wind",
+      "type": "item",
+      "name": "Dancing Wind",
+      "tags": [
+        "gear",
+        "the-dust",
+        "enchanted"
+      ],
+      "overview": "Item of The Dust (Worn). Each activation: +1 to own missile Hits, or -1 to all missile Hits on both sides. (Five Leagues from the Borderlands Compendium, p.59)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Item of The Dust"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Worn"
+            },
+            {
+              "key": "Effect",
+              "value": "Each activation: +1 to own missile Hits, or -1 to all missile Hits on both sides."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_helmet-of-quiet-dominion",
+      "type": "item",
+      "name": "Helmet of Quiet Dominion",
+      "tags": [
+        "gear",
+        "the-dust",
+        "enchanted"
+      ],
+      "overview": "Item of The Dust, Armor 2 (Worn). Undead slain in melee by the wearer rise and fight for them for the battle (one at a time). Not combined with other armor. (Five Leagues from the Borderlands Compendium, p.59)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Item of The Dust"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Worn"
+            },
+            {
+              "key": "Effect",
+              "value": "Undead slain in melee by the wearer rise and fight for them for the battle (one at a time). Not combined with other armor."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_lure-stone",
+      "type": "item",
+      "name": "Lure Stone",
+      "tags": [
+        "gear",
+        "the-dust"
+      ],
+      "overview": "Item of The Dust (Single-use, battle only). Every enemy makes a full move toward a marker placed within 2\". (Five Leagues from the Borderlands Compendium, p.59)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Item of The Dust"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Single-use, battle only"
+            },
+            {
+              "key": "Effect",
+              "value": "Every enemy makes a full move toward a marker placed within 2\"."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_rod-of-desert-wisdom",
+      "type": "item",
+      "name": "Rod of Desert Wisdom",
+      "tags": [
+        "gear",
+        "the-dust"
+      ],
+      "overview": "Item of The Dust (Single-use, Backpack). Serpentine Mages start every battle with 2 Drift. (Five Leagues from the Borderlands Compendium, p.59)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Item of The Dust"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Single-use, Backpack"
+            },
+            {
+              "key": "Effect",
+              "value": "Serpentine Mages start every battle with 2 Drift."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_safe-roaming",
+      "type": "item",
+      "name": "Safe Roaming",
+      "tags": [
+        "gear",
+        "the-dust",
+        "enchanted"
+      ],
+      "overview": "Item of The Dust (Worn). Unaffected by The Dust's environmental conditions in battle. (Five Leagues from the Borderlands Compendium, p.59)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Item of The Dust"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Worn"
+            },
+            {
+              "key": "Effect",
+              "value": "Unaffected by The Dust's environmental conditions in battle."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_time-gem",
+      "type": "item",
+      "name": "Time Gem",
+      "tags": [
+        "gear",
+        "the-dust"
+      ],
+      "overview": "Item of The Dust (Single-use, battle only). The user and chosen characters within 6\" take an extra full activation. (Five Leagues from the Borderlands Compendium, p.59)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Item of The Dust"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Single-use, battle only"
+            },
+            {
+              "key": "Effect",
+              "value": "The user and chosen characters within 6\" take an extra full activation."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_tiny-chime",
+      "type": "item",
+      "name": "Tiny Chime",
+      "tags": [
+        "gear",
+        "the-dust"
+      ],
+      "overview": "Item of The Dust (Single-use, any time). Reroll a Camp, Town, News Travels or Enemy Moves event and pick; used up only if the new roll is taken. (Five Leagues from the Borderlands Compendium, p.59)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Item of The Dust"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Single-use, any time"
+            },
+            {
+              "key": "Effect",
+              "value": "Reroll a Camp, Town, News Travels or Enemy Moves event and pick; used up only if the new roll is taken."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_scrap-weapon",
+      "type": "item",
+      "name": "Scrap weapon",
+      "tags": [
+        "weapon",
+        "melee",
+        "deep-below"
+      ],
+      "overview": "Melee weapon, Damage +0 / +0 (Overcome Armor / Toughness). Breaks permanently if Damaged. (Five Leagues from the Borderlands Compendium, p.196)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Breaks permanently if Damaged."
+            },
+            {
+              "key": "Cost",
+              "value": "1 Gold Mark"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_robust-weapon",
+      "type": "item",
+      "name": "Robust weapon",
+      "tags": [
+        "weapon",
+        "melee",
+        "deep-below"
+      ],
+      "overview": "Melee weapon, Damage +0 / +0 (Overcome Armor / Toughness). If Damaged, becomes a scrap weapon instead. (Five Leagues from the Borderlands Compendium, p.196)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "If Damaged, becomes a scrap weapon instead."
+            },
+            {
+              "key": "Cost",
+              "value": "3 Gold Marks"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_staff-deep-below",
+      "type": "item",
+      "name": "Staff (Deep Below)",
+      "tags": [
+        "weapon",
+        "melee",
+        "deep-below"
+      ],
+      "overview": "Melee weapon, Damage -1 / +0 (Overcome Armor / Toughness). Traits: Parry. (Five Leagues from the Borderlands Compendium, p.196)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "-1 / +0"
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": "Parry"
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": "3 Gold Marks"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_bastard-sword-deep-below",
+      "type": "item",
+      "name": "Bastard sword (Deep Below)",
+      "tags": [
+        "weapon",
+        "melee",
+        "deep-below"
+      ],
+      "overview": "Melee weapon, Damage +0 / +1 (Overcome Armor / Toughness). (Five Leagues from the Borderlands Compendium, p.196)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +1"
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": "15 Gold Marks"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_fencing-sword-deep-below",
+      "type": "item",
+      "name": "Fencing sword (Deep Below)",
+      "tags": [
+        "weapon",
+        "melee",
+        "deep-below"
+      ],
+      "overview": "Melee weapon, Damage +0 / +0 (Overcome Armor / Toughness). Traits: Parry. (Five Leagues from the Borderlands Compendium, p.196)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": "Parry"
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": "9 Gold Marks"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_warhammer-deep-below",
+      "type": "item",
+      "name": "Warhammer (Deep Below)",
+      "tags": [
+        "weapon",
+        "melee",
+        "deep-below"
+      ],
+      "overview": "Melee weapon, Damage +1 / +0 (Overcome Armor / Toughness). (Five Leagues from the Borderlands Compendium, p.196)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": "10 Gold Marks"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_war-spear-deep-below",
+      "type": "item",
+      "name": "War spear (Deep Below)",
+      "tags": [
+        "weapon",
+        "melee",
+        "deep-below"
+      ],
+      "overview": "Melee weapon, Damage +0 / +0 (Overcome Armor / Toughness). Traits: Counter Attack. (Five Leagues from the Borderlands Compendium, p.196)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": "Counter Attack"
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": "12 Gold Marks"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_self-bow-deep-below",
+      "type": "item",
+      "name": "Self bow (Deep Below)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "deep-below"
+      ],
+      "overview": "Ranged weapon, Range 12\" (18\" outdoors), Damage +0 / +0 (Overcome Armor / Toughness). (Five Leagues from the Borderlands Compendium, p.196)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Range",
+              "value": "12\" (18\" outdoors)"
+            },
+            {
+              "key": "Damage",
+              "value": "+0 / +0"
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": "7 Gold Marks"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_sling-deep-below",
+      "type": "item",
+      "name": "Sling (Deep Below)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "deep-below"
+      ],
+      "overview": "Ranged weapon, Range 10\", Damage -1 / +0 (Overcome Armor / Toughness). (Five Leagues from the Borderlands Compendium, p.196)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Range",
+              "value": "10\""
+            },
+            {
+              "key": "Damage",
+              "value": "-1 / +0"
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": "3 Gold Marks"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_crossbow-deep-below",
+      "type": "item",
+      "name": "Crossbow (Deep Below)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "deep-below"
+      ],
+      "overview": "Ranged weapon, Range 12\" (24\" outdoors), Damage +1 / +0 (Overcome Armor / Toughness). Cannot move at all in an activation it is shot. (Five Leagues from the Borderlands Compendium, p.196)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Range",
+              "value": "12\" (24\" outdoors)"
+            },
+            {
+              "key": "Damage",
+              "value": "+1 / +0"
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Cannot move at all in an activation it is shot."
+            },
+            {
+              "key": "Cost",
+              "value": "8 Gold Marks"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_light-armor-deep-below",
+      "type": "item",
+      "name": "Light armor (Deep Below)",
+      "tags": [
+        "gear",
+        "armor",
+        "deep-below"
+      ],
+      "overview": "Body armor, Armor 1 (Worn). Armor rating 1. (Five Leagues from the Borderlands Compendium, p.197)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Body armor"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Worn"
+            },
+            {
+              "key": "Effect",
+              "value": "Armor rating 1."
+            },
+            {
+              "key": "Cost",
+              "value": "3 Gold Marks"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_partial-armor-deep-below",
+      "type": "item",
+      "name": "Partial armor (Deep Below)",
+      "tags": [
+        "gear",
+        "armor",
+        "deep-below"
+      ],
+      "overview": "Body armor, Armor 2 (Worn). Armor rating 2; Dash -2\". (Five Leagues from the Borderlands Compendium, p.197)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Body armor"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Worn"
+            },
+            {
+              "key": "Effect",
+              "value": "Armor rating 2; Dash -2\"."
+            },
+            {
+              "key": "Cost",
+              "value": "8 Gold Marks"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_full-armor-deep-below",
+      "type": "item",
+      "name": "Full armor (Deep Below)",
+      "tags": [
+        "gear",
+        "armor",
+        "deep-below"
+      ],
+      "overview": "Body armor, Armor 3 (Worn). Armor rating 3; Dash -2\". (Five Leagues from the Borderlands Compendium, p.197)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Body armor"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": "3"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Worn"
+            },
+            {
+              "key": "Effect",
+              "value": "Armor rating 3; Dash -2\"."
+            },
+            {
+              "key": "Cost",
+              "value": "15 Gold Marks"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_helmet-deep-below",
+      "type": "item",
+      "name": "Helmet (Deep Below)",
+      "tags": [
+        "gear",
+        "armor",
+        "deep-below"
+      ],
+      "overview": "Additional armor (Worn). On a post-battle Injury double the wearer is only knocked out; the helmet is destroyed. (Five Leagues from the Borderlands Compendium, p.197)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Additional armor"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": "Worn"
+            },
+            {
+              "key": "Effect",
+              "value": "On a post-battle Injury double the wearer is only knocked out; the helmet is destroyed."
+            },
+            {
+              "key": "Cost",
+              "value": "3 Gold Marks"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_shield-deep-below",
+      "type": "item",
+      "name": "Shield (Deep Below)",
+      "tags": [
+        "gear",
+        "armor",
+        "deep-below"
+      ],
+      "overview": "Additional armor (Worn). May Parry; +1 Armor against ranged attacks (not spells). (Five Leagues from the Borderlands Compendium, p.197)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Additional armor"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": "Parry"
+            },
+            {
+              "key": "Storage",
+              "value": "Worn"
+            },
+            {
+              "key": "Effect",
+              "value": "May Parry; +1 Armor against ranged attacks (not spells)."
+            },
+            {
+              "key": "Cost",
+              "value": "5 Gold Marks"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_binding-rune",
+      "type": "item",
+      "name": "Binding rune",
+      "tags": [
+        "gear",
+        "rune",
+        "deep-below"
+      ],
+      "overview": "Function rune. The target cannot Move or act on its next activation (not constructs). (Five Leagues from the Borderlands Compendium, p.193)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Function rune"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "The target cannot Move or act on its next activation (not constructs)."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_destruction-rune",
+      "type": "item",
+      "name": "Destruction rune",
+      "tags": [
+        "gear",
+        "rune",
+        "deep-below"
+      ],
+      "overview": "Function rune. A +1 / +1 Hit (+1 / +2 and pushed 2\" vs Undead). (Five Leagues from the Borderlands Compendium, p.193)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Function rune"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "A +1 / +1 Hit (+1 / +2 and pushed 2\" vs Undead)."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_healing-rune",
+      "type": "item",
+      "name": "Healing rune",
+      "tags": [
+        "gear",
+        "rune",
+        "deep-below"
+      ],
+      "overview": "Function rune. The target heals a Wound and cannot be Wounded or Stunned this round. (Five Leagues from the Borderlands Compendium, p.193)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Function rune"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "The target heals a Wound and cannot be Wounded or Stunned this round."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_repulsion-rune",
+      "type": "item",
+      "name": "Repulsion rune",
+      "tags": [
+        "gear",
+        "rune",
+        "deep-below"
+      ],
+      "overview": "Function rune. The target is pushed 1D6+6\" away from the user. (Five Leagues from the Borderlands Compendium, p.193)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Function rune"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "The target is pushed 1D6+6\" away from the user."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_shifting-rune",
+      "type": "item",
+      "name": "Shifting rune",
+      "tags": [
+        "gear",
+        "rune",
+        "deep-below"
+      ],
+      "overview": "Function rune. On its next activation the target moves through terrain and obstacles freely. (Five Leagues from the Borderlands Compendium, p.193)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Function rune"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "On its next activation the target moves through terrain and obstacles freely."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_tunneling-rune",
+      "type": "item",
+      "name": "Tunneling rune",
+      "tags": [
+        "gear",
+        "rune",
+        "deep-below"
+      ],
+      "overview": "Function rune. Opens a 1\"-wide, 6\" straight passage through terrain. (Five Leagues from the Borderlands Compendium, p.193)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Function rune"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Opens a 1\"-wide, 6\" straight passage through terrain."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_duplication-rune",
+      "type": "item",
+      "name": "Duplication rune",
+      "tags": [
+        "gear",
+        "rune",
+        "deep-below"
+      ],
+      "overview": "Power rune. The spell affects its target twice (or doubles its duration). (Five Leagues from the Borderlands Compendium, p.193)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Power rune"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "The spell affects its target twice (or doubles its duration)."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_reaching-rune",
+      "type": "item",
+      "name": "Reaching rune",
+      "tags": [
+        "gear",
+        "rune",
+        "deep-below"
+      ],
+      "overview": "Power rune. The spell's range increases by 6\". (Five Leagues from the Borderlands Compendium, p.193)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Power rune"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "The spell's range increases by 6\"."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_repetition-rune",
+      "type": "item",
+      "name": "Repetition rune",
+      "tags": [
+        "gear",
+        "rune",
+        "deep-below"
+      ],
+      "overview": "Power rune. The spell takes effect again on the caster's next activation. (Five Leagues from the Borderlands Compendium, p.193)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Power rune"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "The spell takes effect again on the caster's next activation."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_selection-rune",
+      "type": "item",
+      "name": "Selection rune",
+      "tags": [
+        "gear",
+        "rune",
+        "deep-below"
+      ],
+      "overview": "Power rune. The spell affects two different targets. (Five Leagues from the Borderlands Compendium, p.193)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Power rune"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "The spell affects two different targets."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_traversal-rune",
+      "type": "item",
+      "name": "Traversal rune",
+      "tags": [
+        "gear",
+        "rune",
+        "deep-below"
+      ],
+      "overview": "Power rune. The spell needs no Line of Sight. (Five Leagues from the Borderlands Compendium, p.193)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Power rune"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "The spell needs no Line of Sight."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_potion-of-recovery",
+      "type": "item",
+      "name": "Potion of Recovery",
+      "tags": [
+        "gear",
+        "potion",
+        "deep-below"
+      ],
+      "overview": "Potion. Avoid one post-battle Injury roll. (Five Leagues from the Borderlands Compendium, p.255)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Potion"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Avoid one post-battle Injury roll."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_potion-of-flame",
+      "type": "item",
+      "name": "Potion of Flame",
+      "tags": [
+        "gear",
+        "potion",
+        "deep-below"
+      ],
+      "overview": "Potion. Throwable (6\"): everyone within 2\" of the point takes a +1 / +1 Hit; Undead take 2 Hits. (Five Leagues from the Borderlands Compendium, p.255)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Potion"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": "Throwable"
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Throwable (6\"): everyone within 2\" of the point takes a +1 / +1 Hit; Undead take 2 Hits."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_potion-of-paralysis",
+      "type": "item",
+      "name": "Potion of Paralysis",
+      "tags": [
+        "gear",
+        "potion",
+        "deep-below"
+      ],
+      "overview": "Potion. Throwable (6\"): everyone within 2\" cannot act on their next activation. (Five Leagues from the Borderlands Compendium, p.255)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Potion"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": "Throwable"
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Throwable (6\"): everyone within 2\" cannot act on their next activation."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_potion-of-speed",
+      "type": "item",
+      "name": "Potion of Speed",
+      "tags": [
+        "gear",
+        "potion",
+        "deep-below"
+      ],
+      "overview": "Potion. +2\" / +2\" movement for the rest of the battle. (Five Leagues from the Borderlands Compendium, p.255)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Potion"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+2\" / +2\" movement for the rest of the battle."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_potion-of-might",
+      "type": "item",
+      "name": "Potion of Might",
+      "tags": [
+        "gear",
+        "potion",
+        "deep-below"
+      ],
+      "overview": "Potion. +1 / +1 to all hand-to-hand damage rolls. (Five Leagues from the Borderlands Compendium, p.255)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Potion"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1 / +1 to all hand-to-hand damage rolls."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_potion-of-invisibility",
+      "type": "item",
+      "name": "Potion of Invisibility",
+      "tags": [
+        "gear",
+        "potion",
+        "deep-below"
+      ],
+      "overview": "Potion. Ignored by enemies until the drinker fights in melee; wears off on a 1 after each activation. (Five Leagues from the Borderlands Compendium, p.255)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Potion"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Ignored by enemies until the drinker fights in melee; wears off on a 1 after each activation."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_potion-of-vision",
+      "type": "item",
+      "name": "Potion of Vision",
+      "tags": [
+        "gear",
+        "potion",
+        "deep-below"
+      ],
+      "overview": "Potion. No visibility limits in the dark. (Five Leagues from the Borderlands Compendium, p.255)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Potion"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "No visibility limits in the dark."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_potion-of-protection",
+      "type": "item",
+      "name": "Potion of Protection",
+      "tags": [
+        "gear",
+        "potion",
+        "deep-below"
+      ],
+      "overview": "Potion. +1 Toughness and +1 Armor for the rest of the battle. (Five Leagues from the Borderlands Compendium, p.255)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Potion"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1 Toughness and +1 Armor for the rest of the battle."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_potion-of-poison",
+      "type": "item",
+      "name": "Potion of Poison",
+      "tags": [
+        "gear",
+        "potion",
+        "deep-below"
+      ],
+      "overview": "Potion. Throwable (6\"): everyone within 2\" is poisoned and becomes a casualty on a 1 each activation. (Five Leagues from the Borderlands Compendium, p.255)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Potion"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": "Throwable"
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Throwable (6\"): everyone within 2\" is poisoned and becomes a casualty on a 1 each activation."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_fiveleagues-compendium-equipment_potion-of-explosion",
+      "type": "item",
+      "name": "Potion of Explosion",
+      "tags": [
+        "gear",
+        "potion",
+        "deep-below"
+      ],
+      "overview": "Potion. Throwable (6\"): everyone within 1\" is Hit twice at +1 / +1. (Five Leagues from the Borderlands Compendium, p.255)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "fiveleagues",
+          "fields": [
+            {
+              "key": "Type",
+              "value": "Potion"
+            },
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Armor",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": "Throwable"
+            },
+            {
+              "key": "Storage",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Throwable (6\"): everyone within 1\" is Hit twice at +1 / +1."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,3297 @@
+{
+  "app": "GMAtlas",
+  "kind": "content-pack",
+  "schemaVersion": 1,
+  "entities": [
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_auto-rifle-dramatic",
+      "type": "item",
+      "name": "Auto rifle (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 24\", Shots 2, Damage 0. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "24\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_beam-pistol-dramatic",
+      "type": "item",
+      "name": "Beam pistol (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 8\", Shots 1, Damage 1. Traits: Pistol, Critical. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "8\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Pistol, Critical"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_blade-dramatic",
+      "type": "item",
+      "name": "Blade (Dramatic)",
+      "tags": [
+        "weapon",
+        "melee",
+        "dramatic-weapons"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 1. Traits: Melee. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_blast-pistol-dramatic",
+      "type": "item",
+      "name": "Blast pistol (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 6\", Shots 1, Damage 1. Traits: Pistol. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "6\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Pistol"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_blast-rifle-dramatic",
+      "type": "item",
+      "name": "Blast rifle (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 18\", Shots 1, Damage 1. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "18\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_boarding-saber-dramatic",
+      "type": "item",
+      "name": "Boarding saber (Dramatic)",
+      "tags": [
+        "weapon",
+        "melee",
+        "dramatic-weapons"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 2. Traits: Melee, Elegant. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee, Elegant"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_brutal-melee-weapon-dramatic",
+      "type": "item",
+      "name": "Brutal melee weapon (Dramatic)",
+      "tags": [
+        "weapon",
+        "melee",
+        "dramatic-weapons"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 2. Traits: Melee, Clumsy. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee, Clumsy"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_cling-fire-pistol-dramatic",
+      "type": "item",
+      "name": "Cling fire pistol (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 9\", Shots 2, Damage 1. Traits: Focused, Burn. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "9\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Focused, Burn"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_colony-rifle-dramatic",
+      "type": "item",
+      "name": "Colony rifle (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 18\", Shots 1, Damage 0. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "18\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_dazzle-grenade-dramatic",
+      "type": "item",
+      "name": "Dazzle grenade (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "grenade",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 6\", Damage NA. Traits: Area, Stun, Single use. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "6\""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "NA"
+            },
+            {
+              "key": "Traits",
+              "value": "Area, Stun, Single use"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_duelling-pistol-dramatic",
+      "type": "item",
+      "name": "Duelling pistol (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 6\", Shots 1, Damage 0. Traits: Pistol, Critical. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "6\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Pistol, Critical"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_flak-gun-dramatic",
+      "type": "item",
+      "name": "Flak gun (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 9\", Shots 2, Damage 1. Traits: Focused, Shrapnel. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "9\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Focused, Shrapnel"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_frakk-grenade-dramatic",
+      "type": "item",
+      "name": "Frakk grenade (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "grenade",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 6\", Damage 0. Traits: Area, Single use. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "6\""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Area, Single use"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_fury-rifle-dramatic",
+      "type": "item",
+      "name": "Fury rifle (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 24\", Shots 1, Damage 2. Traits: Heavy, Piercing, Shockwave. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "24\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Heavy, Piercing, Shockwave"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_glare-sword-dramatic",
+      "type": "item",
+      "name": "Glare sword (Dramatic)",
+      "tags": [
+        "weapon",
+        "melee",
+        "dramatic-weapons"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 1. Traits: Melee, Elegant, Piercing. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee, Elegant, Piercing"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_hand-cannon-dramatic",
+      "type": "item",
+      "name": "Hand cannon (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 6\", Shots 1, Damage 2. Traits: Pistol. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "6\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Pistol"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_hand-flamer-dramatic",
+      "type": "item",
+      "name": "Hand flamer (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 8\", Damage 1. Traits: Area, Burn. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "8\""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Area, Burn"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_hand-gun-dramatic",
+      "type": "item",
+      "name": "Hand gun (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 9\", Shots 1, Damage 0. Traits: Pistol. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "9\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Pistol"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_hand-laser-dramatic",
+      "type": "item",
+      "name": "Hand laser (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 9\", Shots 1, Damage 0. Traits: Pistol, Snap Shot. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "9\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Pistol, Snap Shot"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_hold-out-pistol-dramatic",
+      "type": "item",
+      "name": "Hold out pistol (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 4\", Shots 1, Damage 0. Traits: Melee. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "4\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_hunting-rifle-dramatic",
+      "type": "item",
+      "name": "Hunting rifle (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 30\", Shots 1, Damage 1. Traits: Heavy, Critical. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "30\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Heavy, Critical"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_hyper-blaster-dramatic",
+      "type": "item",
+      "name": "Hyper blaster (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 24\", Shots 3, Damage 1. Traits: Overheat. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "24\""
+            },
+            {
+              "key": "Shots",
+              "value": "3"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Overheat"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_infantry-laser-dramatic",
+      "type": "item",
+      "name": "Infantry laser (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 30\", Shots 1, Damage 0. Traits: Snap Shot. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "30\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Snap Shot"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_machine-pistol-dramatic",
+      "type": "item",
+      "name": "Machine pistol (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 6\", Shots 2, Damage 0. Traits: Pistol, Focused. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "6\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Pistol, Focused"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_marksman-s-rifle-dramatic",
+      "type": "item",
+      "name": "Marksman's rifle (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 36\", Shots 1, Damage 0. Traits: Critical. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "36\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Critical"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_military-rifle-dramatic",
+      "type": "item",
+      "name": "Military rifle (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 24\", Shots 1, Damage 0. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "24\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_needle-rifle-dramatic",
+      "type": "item",
+      "name": "Needle rifle (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 18\", Shots 1, Damage 0. Traits: Critical, Piercing. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "18\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Critical, Piercing"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_plasma-rifle-dramatic",
+      "type": "item",
+      "name": "Plasma rifle (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 20\", Shots 2, Damage 1. Traits: Focused, Piercing, Overheat. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "20\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Focused, Piercing, Overheat"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_power-claw-dramatic",
+      "type": "item",
+      "name": "Power claw (Dramatic)",
+      "tags": [
+        "weapon",
+        "melee",
+        "dramatic-weapons"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 3. Traits: Melee, Clumsy, Piercing. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "3"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee, Clumsy, Piercing"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_rattle-gun-dramatic",
+      "type": "item",
+      "name": "Rattle gun (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 24\", Shots 3, Damage 0. Traits: Heavy. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "24\""
+            },
+            {
+              "key": "Shots",
+              "value": "3"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Heavy"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_ripper-sword-dramatic",
+      "type": "item",
+      "name": "Ripper sword (Dramatic)",
+      "tags": [
+        "weapon",
+        "melee",
+        "dramatic-weapons"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 2. Traits: Melee. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_scrap-pistol-dramatic",
+      "type": "item",
+      "name": "Scrap pistol (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 7\", Shots 1, Damage 0. Traits: Pistol. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "7\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Pistol"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_shatter-axe-dramatic",
+      "type": "item",
+      "name": "Shatter axe (Dramatic)",
+      "tags": [
+        "weapon",
+        "melee",
+        "dramatic-weapons"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 3. Traits: Melee, Clumsy, Shockwave. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "3"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee, Clumsy, Shockwave"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_shell-gun-dramatic",
+      "type": "item",
+      "name": "Shell gun (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 18\", Damage 0. Traits: Area. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "18\""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Area"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_shotgun-dramatic",
+      "type": "item",
+      "name": "Shotgun (Dramatic)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "dramatic-weapons"
+      ],
+      "overview": "Ranged weapon: Range 8\", Shots 1, Damage 1. Traits: Critical. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "8\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Critical"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_suppression-maul-dramatic",
+      "type": "item",
+      "name": "Suppression maul (Dramatic)",
+      "tags": [
+        "weapon",
+        "melee",
+        "dramatic-weapons"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 2. Traits: Melee, Stun. (Five Parsecs from Home Compendium, p.88)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee, Stun"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_warding-shrel",
+      "type": "item",
+      "name": "Warding Shrel",
+      "tags": [
+        "gear",
+        "psionic-equipment"
+      ],
+      "overview": "Utility. If the wearer would suffer psionic Strain, it is avoided and the device shuts down for the battle. Two Shrels cancel each other out. (Five Parsecs from Home Compendium, p.27)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "If the wearer would suffer psionic Strain, it is avoided and the device shuts down for the battle. Two Shrels cancel each other out."
+            },
+            {
+              "key": "Cost",
+              "value": "10 Credits"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_psionic-focus",
+      "type": "item",
+      "name": "Psionic Focus",
+      "tags": [
+        "gear",
+        "psionic-equipment"
+      ],
+      "overview": "Utility. +1\" range to all psionic powers. (Five Parsecs from Home Compendium, p.27)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1\" range to all psionic powers."
+            },
+            {
+              "key": "Cost",
+              "value": "10 Credits"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_nullification-surgery",
+      "type": "item",
+      "name": "Nullification surgery",
+      "tags": [
+        "gear",
+        "psionic-equipment"
+      ],
+      "overview": "Implant. The character permanently loses all psionic abilities. (Five Parsecs from Home Compendium, p.27)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Implant"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "The character permanently loses all psionic abilities."
+            },
+            {
+              "key": "Cost",
+              "value": "3 Credits"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_built-in-weapon",
+      "type": "item",
+      "name": "Built-in weapon",
+      "tags": [
+        "gear",
+        "bot-upgrade"
+      ],
+      "overview": "Bot upgrade. Build any weapon into the chassis, ignoring its Heavy and Clumsy traits; 1 Credit to revert. (Five Parsecs from Home Compendium, p.26)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Bot upgrade"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Build any weapon into the chassis, ignoring its Heavy and Clumsy traits; 1 Credit to revert."
+            },
+            {
+              "key": "Cost",
+              "value": "3 Credits per Shot + 1 per point of Damage"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_improved-armor-casing",
+      "type": "item",
+      "name": "Improved armor casing",
+      "tags": [
+        "gear",
+        "bot-upgrade"
+      ],
+      "overview": "Bot upgrade. The Bot's built-in Armor save becomes 5+. (Five Parsecs from Home Compendium, p.26)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Bot upgrade"
+            },
+            {
+              "key": "Saving Throw",
+              "value": "5+"
+            },
+            {
+              "key": "Effect",
+              "value": "The Bot's built-in Armor save becomes 5+."
+            },
+            {
+              "key": "Cost",
+              "value": "5 Credits"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_deflection-module",
+      "type": "item",
+      "name": "Deflection module",
+      "tags": [
+        "gear",
+        "bot-upgrade"
+      ],
+      "overview": "Bot upgrade. The Bot's built-in save counts as both Screen and Armor. (Five Parsecs from Home Compendium, p.26)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Bot upgrade"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "The Bot's built-in save counts as both Screen and Armor."
+            },
+            {
+              "key": "Cost",
+              "value": "8 Credits"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_jump-module",
+      "type": "item",
+      "name": "Jump module",
+      "tags": [
+        "gear",
+        "bot-upgrade"
+      ],
+      "overview": "Bot upgrade. Any part of a move (including Dash) may be a jump of the same distance. (Five Parsecs from Home Compendium, p.26)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Bot upgrade"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Any part of a move (including Dash) may be a jump of the same distance."
+            },
+            {
+              "key": "Cost",
+              "value": "6 Credits"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_multi-wave-scanner",
+      "type": "item",
+      "name": "Multi-wave scanner",
+      "tags": [
+        "gear",
+        "bot-upgrade"
+      ],
+      "overview": "Bot upgrade. +1 to Seize the Initiative, cumulative with a Motion Tracker. (Five Parsecs from Home Compendium, p.26)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Bot upgrade"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1 to Seize the Initiative, cumulative with a Motion Tracker."
+            },
+            {
+              "key": "Cost",
+              "value": "10 Credits"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_broad-spectrum-vision",
+      "type": "item",
+      "name": "Broad spectrum vision",
+      "tags": [
+        "gear",
+        "bot-upgrade"
+      ],
+      "overview": "Bot upgrade. Sees through darkness, smoke, fog and gas without penalty. (Five Parsecs from Home Compendium, p.26)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Bot upgrade"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Sees through darkness, smoke, fog and gas without penalty."
+            },
+            {
+              "key": "Cost",
+              "value": "6 Credits"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_service-pistol",
+      "type": "item",
+      "name": "Service pistol",
+      "tags": [
+        "weapon",
+        "ranged",
+        "bug-hunt"
+      ],
+      "overview": "Ranged weapon: Range 14\", Shots 1, Damage 0. Traits: Pistol. (Five Parsecs from Home Compendium, p.179)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "14\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Pistol"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_hand-cannon-bug-hunt",
+      "type": "item",
+      "name": "Hand cannon (Bug Hunt)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "bug-hunt"
+      ],
+      "overview": "Ranged weapon: Range 8\", Shots 1, Damage 1. Traits: Pistol. (Five Parsecs from Home Compendium, p.179)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "8\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Pistol"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_carbine",
+      "type": "item",
+      "name": "Carbine",
+      "tags": [
+        "weapon",
+        "ranged",
+        "bug-hunt"
+      ],
+      "overview": "Ranged weapon: Range 18\", Shots 1, Damage 0. (Five Parsecs from Home Compendium, p.179)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "18\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_combat-rifle",
+      "type": "item",
+      "name": "Combat rifle",
+      "tags": [
+        "weapon",
+        "ranged",
+        "bug-hunt"
+      ],
+      "overview": "Ranged weapon: Range 26\", Shots 1, Damage 0. (Five Parsecs from Home Compendium, p.179)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "26\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_shot-gun-bug-hunt",
+      "type": "item",
+      "name": "Shot gun (Bug Hunt)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "bug-hunt"
+      ],
+      "overview": "Ranged weapon: Range 12\", Shots 2, Damage 1. Traits: Focused. (Five Parsecs from Home Compendium, p.179)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "12\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Focused"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_sniper-rifle",
+      "type": "item",
+      "name": "Sniper rifle",
+      "tags": [
+        "weapon",
+        "ranged",
+        "bug-hunt"
+      ],
+      "overview": "Ranged weapon: Range 40\", Shots 1, Damage 1. Traits: Aimed. (Five Parsecs from Home Compendium, p.179)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "40\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Aimed"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_light-machine-gun",
+      "type": "item",
+      "name": "Light machine gun",
+      "tags": [
+        "weapon",
+        "ranged",
+        "bug-hunt"
+      ],
+      "overview": "Ranged weapon: Range 36\", Shots 3, Damage 1. Traits: Heavy. (Five Parsecs from Home Compendium, p.179)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "36\""
+            },
+            {
+              "key": "Shots",
+              "value": "3"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Heavy"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_incinerator",
+      "type": "item",
+      "name": "Incinerator",
+      "tags": [
+        "weapon",
+        "ranged",
+        "bug-hunt"
+      ],
+      "overview": "Ranged weapon: Range 8\", Shots 3, Damage 1. Traits: Focused, Area. (Five Parsecs from Home Compendium, p.179)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "8\""
+            },
+            {
+              "key": "Shots",
+              "value": "3"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Focused, Area"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_hyper-blaster-bug-hunt",
+      "type": "item",
+      "name": "Hyper blaster (Bug Hunt)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "bug-hunt"
+      ],
+      "overview": "Ranged weapon: Range 24\", Shots 3, Damage 1. Traits: Overheat. (Five Parsecs from Home Compendium, p.179)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "24\""
+            },
+            {
+              "key": "Shots",
+              "value": "3"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Overheat"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_plasma-rifle-bug-hunt",
+      "type": "item",
+      "name": "Plasma rifle (Bug Hunt)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "bug-hunt"
+      ],
+      "overview": "Ranged weapon: Range 20\", Shots 2, Damage 1. Traits: Focused, Piercing. (Five Parsecs from Home Compendium, p.179)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "20\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Focused, Piercing"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_boarding-sword",
+      "type": "item",
+      "name": "Boarding sword",
+      "tags": [
+        "weapon",
+        "melee",
+        "bug-hunt"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 0. Traits: Melee. (Five Parsecs from Home Compendium, p.179)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_power-claw-bug-hunt",
+      "type": "item",
+      "name": "Power claw (Bug Hunt)",
+      "tags": [
+        "weapon",
+        "melee",
+        "bug-hunt"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 1. Traits: Melee. (Five Parsecs from Home Compendium, p.179)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_flash-grenade",
+      "type": "item",
+      "name": "Flash grenade",
+      "tags": [
+        "weapon",
+        "ranged",
+        "grenade",
+        "bug-hunt"
+      ],
+      "overview": "Ranged weapon: Range 6\", Damage -. Traits: Stun. (Five Parsecs from Home Compendium, p.179)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "6\""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "-"
+            },
+            {
+              "key": "Traits",
+              "value": "Stun"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_frag-grenade",
+      "type": "item",
+      "name": "Frag grenade",
+      "tags": [
+        "weapon",
+        "ranged",
+        "grenade",
+        "bug-hunt"
+      ],
+      "overview": "Ranged weapon: Range 6\", Shots 2, Damage 0. Traits: Area. (Five Parsecs from Home Compendium, p.179)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "6\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Area"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_mounted-launcher",
+      "type": "item",
+      "name": "Mounted launcher",
+      "tags": [
+        "weapon",
+        "ranged",
+        "bug-hunt"
+      ],
+      "overview": "Ranged weapon: Range 18\", Damage -. Traits: Launcher. Fires any grenade type carried. (Five Parsecs from Home Compendium, p.179)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "18\""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "-"
+            },
+            {
+              "key": "Traits",
+              "value": "Launcher"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Fires any grenade type carried."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-compendium-equipment_trooper-armor",
+      "type": "item",
+      "name": "Trooper armor",
+      "tags": [
+        "gear",
+        "protective-device",
+        "armor",
+        "bug-hunt"
+      ],
+      "overview": "Armor. Bug Hunt troopers' standard armor. (Five Parsecs from Home Compendium, p.176)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Armor"
+            },
+            {
+              "key": "Saving Throw",
+              "value": "5+"
+            },
+            {
+              "key": "Effect",
+              "value": "Bug Hunt troopers' standard armor."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

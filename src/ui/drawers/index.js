@@ -18,7 +18,7 @@ import {
   RELATIONSHIP_TYPES, RELATIONSHIP_TYPE_LABEL, isRelationshipFlagged, computeFactionMaxHp,
   getSystemForLocation, getStarForLocation, getHexZoneForLocation, LOCATION_FANTASY_FIELD_ORACLE_PATH, weaponItems,
 } from '../../domain/entities.js';
-import { sortStatblockGroups, getStatblockTemplates } from '../../domain/statblocks.js';
+import { sortStatblockGroups, getStatblockTemplates, isNumberTextfield } from '../../domain/statblocks.js';
 import { listTemplates } from '../../domain/statblockTemplates.js';
 import { buildGraph, computeLayout, nodeColor } from '../../domain/graph.js';
 import { imageSrc } from '../imageSrc.js';
@@ -453,12 +453,19 @@ function inspector(doc, e, ui) {
       ${relCollapsed ? '' : relBodyHtml}
     </div>`;
   return `
-    <div class="inspector-head">
-      ${ui.nameInDrawerTitle ? '' : `<input class="inspector-name" data-entity-field="name" value="${esc(e.name)}" placeholder="Name">`}
-      ${wikiReadButton(e)}
-      ${e.type === 'npc' && !isPartyCharacter ? `<button class="icon-btn" data-deepen-npc="${esc(e.id)}" title="Roll a Stereotype/Want/Complication and add it to this NPC's Overview">🎲 Deepen</button>` : ''}
-      <button class="icon-btn" data-entity-del="${esc(e.id)}" title="Delete entity">🗑</button>
-    </div>
+    ${(() => {
+      // In the panel, the name, 📖 Read and 🗑 live in its title row (shell.js
+      // entityHeadControlsHtml); only 🎲 Deepen stays here.
+      const inTitle = !!ui.nameInDrawerTitle;
+      const deepen = e.type === 'npc' && !isPartyCharacter ? `<button class="icon-btn" data-deepen-npc="${esc(e.id)}" title="Roll a Stereotype/Want/Complication and add it to this NPC's Overview">🎲 Deepen</button>` : '';
+      if (inTitle && !deepen) return '';
+      return `<div class="inspector-head">
+      ${inTitle ? '' : `<input class="inspector-name" data-entity-field="name" value="${esc(e.name)}" placeholder="Name">`}
+      ${inTitle ? '' : wikiReadButton(e)}
+      ${deepen}
+      ${inTitle ? '' : `<button class="icon-btn" data-entity-del="${esc(e.id)}" title="Delete entity">🗑</button>`}
+    </div>`;
+    })()}
     ${isFiveLeaguesAberrationEntity(e) ? '<p class="fiveleagues-enemy-subtitle">Aberration</p>' : ''}
     <div class="inspector-photo-row">
       ${entityPhotoHtml(doc, e)}
@@ -2074,14 +2081,14 @@ function weaponRowBlank(w) {
   return !['name', 'range', 'shots', 'damage', 'traits'].some((k) => String((w && w[k]) || '').trim());
 }
 
-function weaponItemPickerRow(doc, gi, wi) {
+function weaponItemPickerRow(doc, gi, wi, cols) {
   const items = weaponItems(doc);
   const group = (tag, label) => {
     const list = items.filter((i) => i.tag === tag);
     return list.length ? `<div class="weapon-pick-group"><span class="weapon-pick-label">${label}</span>${list.map((i) => `<button type="button" class="chip sm" data-statblock-weapon-pick-item="${gi}::${wi}::${esc(i.id)}" title="${esc([i.range && `Range ${i.range}`, i.shots && `Shots ${i.shots}`, i.damage && `Damage ${i.damage}`, i.traits].filter(Boolean).join(' · ') || 'No stats on this Item yet')}">${esc(i.name)}</button>`).join('')}</div>` : '';
   };
   const body = group('melee', 'Melee') + group('ranged', 'Ranged');
-  return `<tr class="weapon-pick-row"><td colspan="7">
+  return `<tr class="weapon-pick-row"><td colspan="${cols}">
     <div class="weapon-pick" role="group" aria-label="Pick a weapon">
       ${body || '<span class="dim small">No Items tagged #melee or #ranged yet. Tag an Item with one to pick it here.</span>'}
       <button type="button" class="icon-btn" data-statblock-weapon-pick="${gi}::${wi}" title="Close" aria-label="Close">✕</button>
@@ -2143,22 +2150,25 @@ function characterSheetWeaponsAndGearHtml(group, gi, doc, ui = {}) {
   }
 
   const pickKey = ui.weaponPick || '';
+  // The ＋ column exists only while some row is still blank, so a full
+  // table gives its width back to the other columns.
+  const anyBlank = weapons.some(weaponRowBlank);
   const weaponRows = weapons.map((w, wi) => `
     <tr>
-      <td class="statblock-weapon-pick-cell">${weaponRowBlank(w) ? `<button type="button" class="icon-btn" data-statblock-weapon-pick="${gi}::${wi}" title="Fill from an Item tagged #melee or #ranged" aria-label="Pick a weapon" aria-expanded="${pickKey === `${gi}::${wi}`}">＋</button>` : ''}</td>
+      ${anyBlank ? `<td class="statblock-weapon-pick-cell">${weaponRowBlank(w) ? `<button type="button" class="icon-btn" data-statblock-weapon-pick="${gi}::${wi}" title="Fill from an Item tagged #melee or #ranged" aria-label="Pick a weapon" aria-expanded="${pickKey === `${gi}::${wi}`}">＋</button>` : ''}</td>` : ''}
       <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::name" value="${esc(w.name)}" placeholder="Weapon"></td>
       <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::range" value="${esc(w.range)}" placeholder="Range"></td>
       <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::shots" value="${esc(w.shots)}" placeholder="Shots"></td>
       <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::damage" value="${esc(w.damage)}" placeholder="Damage"></td>
       <td><input type="text" data-statblock-weapon-field="${gi}::${wi}::traits" value="${esc(w.traits)}" placeholder="Traits"></td>
       <td class="statblock-weapon-remove-cell"><button type="button" class="icon-btn statblock-weapon-remove-btn" data-statblock-weapon-remove="${gi}::${wi}" title="Remove weapon">🗑</button></td>
-    </tr>${pickKey === `${gi}::${wi}` && weaponRowBlank(w) ? weaponItemPickerRow(doc, gi, wi) : ''}`).join('');
+    </tr>${pickKey === `${gi}::${wi}` && weaponRowBlank(w) ? weaponItemPickerRow(doc, gi, wi, anyBlank ? 7 : 6) : ''}`).join('');
   return `
     <div class="statblock-weapons">
       <h4>Weapons</h4>
       <table class="statblock-weapon-table">
         <thead><tr>
-          <th class="statblock-weapon-pick-cell"></th><th class="statblock-weapon-col-name">Weapon</th><th>Range</th><th>Shots</th><th>Damage</th><th class="statblock-weapon-col-traits">Traits</th>
+          ${anyBlank ? '<th class="statblock-weapon-pick-cell"></th>' : ''}<th class="statblock-weapon-col-name">Weapon</th><th class="statblock-weapon-col-short">Range</th><th class="statblock-weapon-col-short">Shots</th><th class="statblock-weapon-col-short">Damage</th><th class="statblock-weapon-col-traits">Traits</th>
           <th></th></tr></thead>
         <tbody>${weaponRows}</tbody>
       </table>
@@ -2436,12 +2446,11 @@ function fiveLeaguesSpellsSectionHtml(e) {
 // scale (trackRow); anything else → plain text (textRow).
 function statblockFieldRow(f, gi, fi, opts) {
   if (f.attribute) return attrRow(f, gi, fi, opts);
-  // Direct follow-up request: "Change Will, XP and Luck to number fields
-  // instead of trackers" — scoped to the Five Leagues ruleset specifically
-  // (its characterTemplate's only tracks ARE Will/Luck/XP, p.53), not a
-  // general change to every other ruleset's own tracks (Starforged
-  // Momentum, 5PFH HP, ...), which keep the usual click-to-set box row.
-  if (f.track) return (opts.ruleset === 'fiveleagues') ? numberFieldRow(f, gi, fi, opts) : trackRow(f, gi, fi, opts);
+  // A track marked as a "number textfield" (isNumberTextfield: Five
+  // Leagues' Luck/Will/XP, 5PFH's Luck/XP, or any field given
+  // display: 'number') is a number box with ＋/−; every other track keeps
+  // the click-to-set box row.
+  if (f.track) return isNumberTextfield(f, opts.ruleset) ? numberFieldRow(f, gi, fi, opts) : trackRow(f, gi, fi, opts);
   return textRow(f, gi, fi, opts);
 }
 
@@ -3678,10 +3687,12 @@ function licensePacksHtml(doc, lic, owned, ui) {
     const isData = pk.kind === 'data-pack';
     const busy = (isData ? dataImporting : contentImporting).has(pk.id);
     const attr = isData ? 'data-data-pack-import' : 'data-content-pack-import';
-    const btn = owned && ui.canLoadReference
+    // Import only while this campaign uses the book (isPackInUse), as in
+    // Settings › Campaigns › Source Data.
+    const btn = owned && ui.canLoadReference && isPackInUse(doc.settings, pk)
       ? '<button type="button" class="btn ghost sm" ' + attr + '="' + esc(pk.id) + '" ' + (busy ? 'disabled' : '') + ' title="Import into the current campaign (skips anything already there by name)">' + (busy ? 'Importing…' : '⬇ Import') + '</button>'
       : '';
-    return '<li class="license-doc-row"><span class="license-doc-title" title="' + esc(pk.description || '') + '">' + (isData ? '🗺️ ' : '🐾 ') + esc(pk.title) + '</span> ' + btn + '</li>';
+    return '<li class="license-doc-row"><span class="license-doc-title" title="' + esc(pk.description || '') + '">' + (isData ? '🗺️ ' : pk.contents === 'equipment' ? '🗡️ ' : '🐾 ') + esc(pk.title) + '</span> ' + btn + '</li>';
   }).join('');
   return '<p class="dim small license-packs-head">Content packs</p><ul class="license-doc-list">' + rows + '</ul>';
 }
@@ -3829,7 +3840,7 @@ function sourceDataSection(doc, ui) {
     const isData = pk.kind === 'data-pack';
     const busy = (isData ? dataImporting : contentImporting).has(pk.id);
     const attr = isData ? 'data-data-pack-import' : 'data-content-pack-import';
-    const kindLabel = isData ? 'Locations' : 'Lifeforms & enemies';
+    const kindLabel = isData ? 'Locations' : pk.contents === 'equipment' ? 'Weapons & equipment' : 'Lifeforms & enemies';
     return `<li class="source-data-row">
         <span><b>${esc(pk.title)}</b> <span class="chip sm">${kindLabel}</span><br><span class="dim small">${esc(pk.description || '')}</span></span>
         <button type="button" class="btn ghost sm" ${attr}="${esc(pk.id)}" ${busy ? 'disabled' : ''}>${busy ? 'Importing…' : 'Import'}</button>
@@ -3841,7 +3852,7 @@ function sourceDataSection(doc, ui) {
   return `
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Source Data', 'settings-source-data')}
-      ${helpBody('settings-source-data', "Preload game data into this campaign from the sourcebooks it uses — lifeforms and enemies as Cast entities, Hostile's canon worlds and stations as Locations. Only packs whose license you own (Settings → Licenses) and whose game system this campaign's profile designates are listed. Imports add to the campaign and skip anything that already exists by name, so it's safe to run one again. Needs the app served over http(s) (npm run serve).", ui)}
+      ${helpBody('settings-source-data', "Preload game data into this campaign from the sourcebooks it uses — lifeforms and enemies as Cast entities, weapons and equipment as Items, Hostile's canon worlds and stations as Locations. Only packs whose license you own (Settings → Licenses) and whose game system this campaign's profile designates are listed. Imports add to the campaign and skip anything that already exists by name, so it's safe to run one again. Needs the app served over http(s) (npm run serve).", ui)}
       ${body || '<p class="dim small">No source data for this campaign\'s game systems — own a license in Settings → Licenses and designate its game system in Settings → Modules.</p>'}
     </div>`;
 }

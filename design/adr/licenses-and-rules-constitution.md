@@ -101,7 +101,12 @@ covers its rules, its Turn Steps and its sourcebooks.
    packs and data packs whose sourcebook's license is in use in the campaign
    (`isPackInUse`, the same test as the Docs library). Each has its own
    Import, and each Hostile zone imports separately. This replaces the
-   Modules tab's old "Available Packs" list.
+   Modules tab's old "Available Packs" list. A pack can be imported only
+   while its book is in use in the campaign: the Licenses tab shows a
+   pack's Import button only then, and the import handler refuses
+   otherwise. Each book's weapon and equipment lists ship as their own
+   pack (Five Parsecs core, its Compendium, Planetfall, Five Leagues core,
+   its Compendium), built by `scripts/build-equipment-packs.js`.
 10. **Activity → Rules Lens** suggestions carry their own provider lists in
    `domain/activities.js`.
 
