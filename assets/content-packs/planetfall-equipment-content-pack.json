@@ -1,0 +1,2912 @@
+{
+  "app": "GMAtlas",
+  "kind": "content-pack",
+  "schemaVersion": 1,
+  "entities": [
+    {
+      "id": "ent_eq_planetfall-equipment_handgun-planetfall",
+      "type": "item",
+      "name": "Handgun (Planetfall)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "standard-issue"
+      ],
+      "overview": "Ranged weapon: Range 6\", Shots 1, Damage +0. Traits: Civilian, Pistol. (Five Parsecs: Planetfall, p.76)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "6\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "+0"
+            },
+            {
+              "key": "Traits",
+              "value": "Civilian, Pistol"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_colonial-shotgun",
+      "type": "item",
+      "name": "Colonial shotgun",
+      "tags": [
+        "weapon",
+        "ranged",
+        "standard-issue"
+      ],
+      "overview": "Ranged weapon: Range 12\", Shots 1, Damage +0. Traits: Civilian, Critical. (Five Parsecs: Planetfall, p.76)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "12\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "+0"
+            },
+            {
+              "key": "Traits",
+              "value": "Civilian, Critical"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_colony-rifle-planetfall",
+      "type": "item",
+      "name": "Colony rifle (Planetfall)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "standard-issue"
+      ],
+      "overview": "Ranged weapon: Range 18\", Shots 1, Damage +0. Traits: Civilian. (Five Parsecs: Planetfall, p.76)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "18\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "+0"
+            },
+            {
+              "key": "Traits",
+              "value": "Civilian"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_scout-pistol",
+      "type": "item",
+      "name": "Scout pistol",
+      "tags": [
+        "weapon",
+        "ranged",
+        "standard-issue"
+      ],
+      "overview": "Ranged weapon: Range 9\", Shots 1, Damage +0. Traits: Scout, Pistol, Stabilized. (Five Parsecs: Planetfall, p.76)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "9\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "+0"
+            },
+            {
+              "key": "Traits",
+              "value": "Scout, Pistol, Stabilized"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_infantry-rifle",
+      "type": "item",
+      "name": "Infantry rifle",
+      "tags": [
+        "weapon",
+        "ranged",
+        "standard-issue"
+      ],
+      "overview": "Ranged weapon: Range 24\", Shots 1, Damage +0. Traits: Grunt. (Five Parsecs: Planetfall, p.76)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "24\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "+0"
+            },
+            {
+              "key": "Traits",
+              "value": "Grunt"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_light-machine-gun-planetfall",
+      "type": "item",
+      "name": "Light machine gun (Planetfall)",
+      "tags": [
+        "weapon",
+        "ranged",
+        "standard-issue"
+      ],
+      "overview": "Ranged weapon: Range 36\" / 12\", Shots 3 / 4, Damage +0. Traits: Grunt, Cumbersome, Hail of Fire. (Five Parsecs: Planetfall, p.76)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "36\" / 12\""
+            },
+            {
+              "key": "Shots",
+              "value": "3 / 4"
+            },
+            {
+              "key": "Damage",
+              "value": "+0"
+            },
+            {
+              "key": "Traits",
+              "value": "Grunt, Cumbersome, Hail of Fire"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_trooper-rifle",
+      "type": "item",
+      "name": "Trooper rifle",
+      "tags": [
+        "weapon",
+        "ranged",
+        "standard-issue"
+      ],
+      "overview": "Ranged weapon: Range 30\", Shots 1, Damage +0. Traits: Trooper, AP Ammo. (Five Parsecs: Planetfall, p.76)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "30\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "+0"
+            },
+            {
+              "key": "Traits",
+              "value": "Trooper, AP Ammo"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_assault-gun",
+      "type": "item",
+      "name": "Assault gun",
+      "tags": [
+        "weapon",
+        "ranged",
+        "standard-issue"
+      ],
+      "overview": "Ranged weapon: Range 18\", Shots 2, Damage +0. Traits: Trooper. (Five Parsecs: Planetfall, p.76)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "18\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "+0"
+            },
+            {
+              "key": "Traits",
+              "value": "Trooper"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_flame-projector",
+      "type": "item",
+      "name": "Flame projector",
+      "tags": [
+        "weapon",
+        "ranged",
+        "standard-issue"
+      ],
+      "overview": "Ranged weapon: Range 6\", Damage +1. Traits: Trooper, Stream, Burning. (Five Parsecs: Planetfall, p.76)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "6\""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "+1"
+            },
+            {
+              "key": "Traits",
+              "value": "Trooper, Stream, Burning"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_shard-pistol",
+      "type": "item",
+      "name": "Shard pistol",
+      "tags": [
+        "weapon",
+        "ranged",
+        "tier-1"
+      ],
+      "overview": "Ranged weapon: Range 9\", Shots 2, Damage +1. Traits: Trooper, Tier 1, Focused, Pistol. (Five Parsecs: Planetfall, p.77)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "9\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "+1"
+            },
+            {
+              "key": "Traits",
+              "value": "Trooper, Tier 1, Focused, Pistol"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_ripper-pistol",
+      "type": "item",
+      "name": "Ripper pistol",
+      "tags": [
+        "weapon",
+        "ranged",
+        "tier-1"
+      ],
+      "overview": "Ranged weapon: Range 9\", Shots 2, Damage +0. Traits: Scout, Tier 1, Pistol. (Five Parsecs: Planetfall, p.77)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "9\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "+0"
+            },
+            {
+              "key": "Traits",
+              "value": "Scout, Tier 1, Pistol"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_kill-break-shotgun",
+      "type": "item",
+      "name": "Kill-Break shotgun",
+      "tags": [
+        "weapon",
+        "ranged",
+        "tier-1"
+      ],
+      "overview": "Ranged weapon: Range 12\", Shots 1, Damage +2. Traits: Trooper, Tier 1, Knockback. (Five Parsecs: Planetfall, p.77)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "12\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "+2"
+            },
+            {
+              "key": "Traits",
+              "value": "Trooper, Tier 1, Knockback"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_steady-rifle",
+      "type": "item",
+      "name": "Steady rifle",
+      "tags": [
+        "weapon",
+        "ranged",
+        "tier-1"
+      ],
+      "overview": "Ranged weapon: Range 24\", Shots 1, Damage +0. Traits: Civilian, Tier 1, Stabilized. (Five Parsecs: Planetfall, p.77)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "24\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "+0"
+            },
+            {
+              "key": "Traits",
+              "value": "Civilian, Tier 1, Stabilized"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_carver-blade",
+      "type": "item",
+      "name": "Carver blade",
+      "tags": [
+        "weapon",
+        "melee",
+        "tier-1"
+      ],
+      "overview": "Melee weapon: Brawl, Damage +2. Traits: Civilian, Tier 1, Flexible, Melee. (Five Parsecs: Planetfall, p.77)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "+2"
+            },
+            {
+              "key": "Traits",
+              "value": "Civilian, Tier 1, Flexible, Melee"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_bio-gun",
+      "type": "item",
+      "name": "Bio-gun",
+      "tags": [
+        "weapon",
+        "ranged",
+        "tier-2"
+      ],
+      "overview": "Ranged weapon: Range 12\", Shots Special, Damage +1. Traits: Trooper, Tier 2, Area. (Five Parsecs: Planetfall, p.78)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "12\""
+            },
+            {
+              "key": "Shots",
+              "value": "Special"
+            },
+            {
+              "key": "Damage",
+              "value": "+1"
+            },
+            {
+              "key": "Traits",
+              "value": "Trooper, Tier 2, Area"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_mind-link-pistol",
+      "type": "item",
+      "name": "Mind-link pistol",
+      "tags": [
+        "weapon",
+        "ranged",
+        "tier-2"
+      ],
+      "overview": "Ranged weapon: Range 9\", Shots 1, Damage +0. Traits: Scientist, Tier 2, Mind-link. (Five Parsecs: Planetfall, p.78)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "9\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "+0"
+            },
+            {
+              "key": "Traits",
+              "value": "Scientist, Tier 2, Mind-link"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_phase-rifle",
+      "type": "item",
+      "name": "Phase rifle",
+      "tags": [
+        "weapon",
+        "ranged",
+        "tier-2"
+      ],
+      "overview": "Ranged weapon: Range 16\", Shots 1, Damage +1. Traits: Scout, Tier 2, Phased Fire. (Five Parsecs: Planetfall, p.78)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "16\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "+1"
+            },
+            {
+              "key": "Traits",
+              "value": "Scout, Tier 2, Phased Fire"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_dart-pistol",
+      "type": "item",
+      "name": "Dart pistol",
+      "tags": [
+        "weapon",
+        "ranged",
+        "tier-2"
+      ],
+      "overview": "Ranged weapon: Range 9\", Shots 1, Damage +1. Traits: Civilian, Tier 2, Armor-piercing. (Five Parsecs: Planetfall, p.78)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "9\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "+1"
+            },
+            {
+              "key": "Traits",
+              "value": "Civilian, Tier 2, Armor-piercing"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_hyper-rifle",
+      "type": "item",
+      "name": "Hyper-rifle",
+      "tags": [
+        "weapon",
+        "ranged",
+        "tier-2"
+      ],
+      "overview": "Ranged weapon: Range 16\", Shots 1, Damage +1. Traits: Trooper, Tier 2, Hyperfire. (Five Parsecs: Planetfall, p.78)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "16\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "+1"
+            },
+            {
+              "key": "Traits",
+              "value": "Trooper, Tier 2, Hyperfire"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_sharpshooter-sight",
+      "type": "item",
+      "name": "Sharpshooter sight",
+      "tags": [
+        "gear",
+        "grunt-upgrade"
+      ],
+      "overview": "Grunt upgrade. One grunt per fireteam: +1 to Hit when stationary (military rifle only). Needs Early warning system. (Five Parsecs: Planetfall, p.79)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Grunt upgrade"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "One grunt per fireteam: +1 to Hit when stationary (military rifle only). Needs Early warning system."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_adapted-armor",
+      "type": "item",
+      "name": "Adapted armor",
+      "tags": [
+        "gear",
+        "grunt-upgrade"
+      ],
+      "overview": "Grunt upgrade. All grunts get a 6+ saving throw. Needs Locally adapted food production site. (Five Parsecs: Planetfall, p.79)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Grunt upgrade"
+            },
+            {
+              "key": "Saving Throw",
+              "value": "6+"
+            },
+            {
+              "key": "Effect",
+              "value": "All grunts get a 6+ saving throw. Needs Locally adapted food production site."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_bolstered-survival-kit",
+      "type": "item",
+      "name": "Bolstered survival kit",
+      "tags": [
+        "gear",
+        "grunt-upgrade"
+      ],
+      "overview": "Grunt upgrade. Post-mission grunt survival: only a 1 is a permanent casualty. Needs Immune System Bio-delineation. (Five Parsecs: Planetfall, p.79)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Grunt upgrade"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Post-mission grunt survival: only a 1 is a permanent casualty. Needs Immune System Bio-delineation."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_ammo-packs",
+      "type": "item",
+      "name": "Ammo packs",
+      "tags": [
+        "gear",
+        "grunt-upgrade"
+      ],
+      "overview": "Grunt upgrade. Once per battle, every grunt in a fireteam rolls one extra die to Hit, all in the same round. Needs Military barracks. (Five Parsecs: Planetfall, p.79)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Grunt upgrade"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Once per battle, every grunt in a fireteam rolls one extra die to Hit, all in the same round. Needs Military barracks."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_side-arms",
+      "type": "item",
+      "name": "Side arms",
+      "tags": [
+        "gear",
+        "grunt-upgrade"
+      ],
+      "overview": "Grunt upgrade. All grunts also carry a handgun. Needs Shard pistol. (Five Parsecs: Planetfall, p.79)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Grunt upgrade"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "All grunts also carry a handgun. Needs Shard pistol."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_sergeant-weaponry",
+      "type": "item",
+      "name": "Sergeant weaponry",
+      "tags": [
+        "gear",
+        "grunt-upgrade"
+      ],
+      "overview": "Grunt upgrade. One grunt per fireteam also gets a Damage +1 Melee weapon. Needs Carver blade. (Five Parsecs: Planetfall, p.79)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Grunt upgrade"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "One grunt per fireteam also gets a Damage +1 Melee weapon. Needs Carver blade."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_flex-rigid-armor-vest",
+      "type": "item",
+      "name": "Flex-rigid armor vest",
+      "tags": [
+        "gear",
+        "artifact",
+        "armor"
+      ],
+      "overview": "Artifact equipment. Armor saving throw. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact equipment"
+            },
+            {
+              "key": "Saving Throw",
+              "value": "4+"
+            },
+            {
+              "key": "Effect",
+              "value": "Armor saving throw."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_short-range-phase-displacer",
+      "type": "item",
+      "name": "Short-range phase displacer",
+      "tags": [
+        "gear",
+        "artifact"
+      ],
+      "overview": "Artifact equipment. When moving, may teleport anywhere within movement range instead. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact equipment"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "When moving, may teleport anywhere within movement range instead."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_nervous-system-override-cathode",
+      "type": "item",
+      "name": "Nervous system override cathode",
+      "tags": [
+        "gear",
+        "artifact"
+      ],
+      "overview": "Artifact equipment. +1\" to base Move and Dash. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact equipment"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1\" to base Move and Dash."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_visual-distortion-module",
+      "type": "item",
+      "name": "Visual Distortion Module",
+      "tags": [
+        "gear",
+        "artifact"
+      ],
+      "overview": "Artifact equipment. Ranged attacks against the bearer are -1 to Hit. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact equipment"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Ranged attacks against the bearer are -1 to Hit."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_predictive-sighting-module",
+      "type": "item",
+      "name": "Predictive sighting module",
+      "tags": [
+        "gear",
+        "artifact"
+      ],
+      "overview": "Artifact equipment. Reroll all 1s to Hit when firing. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact equipment"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Reroll all 1s to Hit when firing."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_crystalline-assault-harness",
+      "type": "item",
+      "name": "Crystalline assault harness",
+      "tags": [
+        "gear",
+        "artifact",
+        "armor"
+      ],
+      "overview": "Artifact equipment. Armor saving throw; roll twice when brawling and keep the best. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact equipment"
+            },
+            {
+              "key": "Saving Throw",
+              "value": "5+"
+            },
+            {
+              "key": "Effect",
+              "value": "Armor saving throw; roll twice when brawling and keep the best."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_sub-psionic-visor",
+      "type": "item",
+      "name": "Sub-psionic visor",
+      "tags": [
+        "gear",
+        "artifact"
+      ],
+      "overview": "Artifact equipment. Extends all visibility penalties by 4\" for the bearer. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact equipment"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Extends all visibility penalties by 4\" for the bearer."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_inherent-core-principal-carbine",
+      "type": "item",
+      "name": "Inherent core principal carbine",
+      "tags": [
+        "weapon",
+        "ranged",
+        "artifact"
+      ],
+      "overview": "Ranged weapon: Range 15\", Shots 1, Damage 2. +1 to hit. Artifact: usable by any class. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "15\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1 to hit. Artifact: usable by any class."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_phase-anticipation-sword",
+      "type": "item",
+      "name": "Phase anticipation sword",
+      "tags": [
+        "weapon",
+        "melee",
+        "artifact"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 2. Traits: Melee. No penalty for rolling a 1 in a brawl. Artifact. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "No penalty for rolling a 1 in a brawl. Artifact."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_psi-boosted-nano-blade",
+      "type": "item",
+      "name": "Psi-boosted nano-blade",
+      "tags": [
+        "weapon",
+        "melee",
+        "artifact"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 2. Traits: Melee. Ignores Saving Throws. Artifact. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Ignores Saving Throws. Artifact."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_flexible-bolt-launcher",
+      "type": "item",
+      "name": "Flexible bolt launcher",
+      "tags": [
+        "weapon",
+        "ranged",
+        "artifact"
+      ],
+      "overview": "Ranged weapon: Range 8\" or 24\", Shots 2 or 1, Damage 1 or 2. Each shot, choose Range 8\" Shots 2 Damage 1, or Range 24\" Shots 1 Damage 2. Artifact. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "8\" or 24\""
+            },
+            {
+              "key": "Shots",
+              "value": "2 or 1"
+            },
+            {
+              "key": "Damage",
+              "value": "1 or 2"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Each shot, choose Range 8\" Shots 2 Damage 1, or Range 24\" Shots 1 Damage 2. Artifact."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_shard-projection-rifle",
+      "type": "item",
+      "name": "Shard projection rifle",
+      "tags": [
+        "weapon",
+        "ranged",
+        "artifact"
+      ],
+      "overview": "Ranged weapon: Range 24\", Shots 2, Damage 2. Traits: Focused. Artifact. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "24\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Focused"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Artifact."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_focused-beam-emitter",
+      "type": "item",
+      "name": "Focused beam emitter",
+      "tags": [
+        "weapon",
+        "ranged",
+        "artifact"
+      ],
+      "overview": "Ranged weapon: Range 18\", Shots 1, Damage 4. Artifact. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "18\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "4"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Artifact."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_altered-psi-wave-emitter",
+      "type": "item",
+      "name": "Altered psi-wave emitter",
+      "tags": [
+        "gear",
+        "artifact",
+        "single-use"
+      ],
+      "overview": "Artifact (single-use). Everyone in Sick Bay recovers completely. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact (single-use)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Everyone in Sick Bay recovers completely."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_alien-translation-guide",
+      "type": "item",
+      "name": "Alien translation guide",
+      "tags": [
+        "gear",
+        "artifact",
+        "single-use"
+      ],
+      "overview": "Artifact (single-use). The next two research topics cost half their Research Points (rounded up). (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact (single-use)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "The next two research topics cost half their Research Points (rounded up)."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_bio-present-induction-schematic",
+      "type": "item",
+      "name": "Bio-present induction schematic",
+      "tags": [
+        "gear",
+        "artifact",
+        "single-use"
+      ],
+      "overview": "Artifact (single-use). Gain 3 Augmentation Points. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact (single-use)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Gain 3 Augmentation Points."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_programmed-restoration-settlement-module",
+      "type": "item",
+      "name": "Programmed restoration settlement module",
+      "tags": [
+        "gear",
+        "artifact",
+        "single-use"
+      ],
+      "overview": "Artifact (single-use). Restore up to 10 Colony Integrity. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact (single-use)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Restore up to 10 Colony Integrity."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_ancient-language-translation-aid",
+      "type": "item",
+      "name": "Ancient language translation aid",
+      "tags": [
+        "gear",
+        "artifact",
+        "single-use"
+      ],
+      "overview": "Artifact (single-use). Gain 3 Story Points and 1 Mission Data. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact (single-use)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Gain 3 Story Points and 1 Mission Data."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_neo-ancient-data-cache",
+      "type": "item",
+      "name": "Neo-ancient data cache",
+      "tags": [
+        "gear",
+        "artifact",
+        "single-use"
+      ],
+      "overview": "Artifact (single-use). Counts as completing a campaign Milestone. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact (single-use)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Counts as completing a campaign Milestone."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_bio-frame-optimization-serum",
+      "type": "item",
+      "name": "Bio-frame optimization serum",
+      "tags": [
+        "gear",
+        "artifact",
+        "single-use"
+      ],
+      "overview": "Artifact (single-use). Permanently +1 to one character's Toughness. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact (single-use)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Permanently +1 to one character's Toughness."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_transcendence-blueprints",
+      "type": "item",
+      "name": "Transcendence blueprints",
+      "tags": [
+        "gear",
+        "artifact",
+        "single-use"
+      ],
+      "overview": "Artifact (single-use). +4 Colony Morale and +1 Augmentation Point. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact (single-use)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+4 Colony Morale and +1 Augmentation Point."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_time-dilution-serum",
+      "type": "item",
+      "name": "Time dilution serum",
+      "tags": [
+        "gear",
+        "artifact",
+        "single-use"
+      ],
+      "overview": "Artifact (single-use). Permanently +1\" to one character's Speed. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact (single-use)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Permanently +1\" to one character's Speed."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_organic-pattern-booster",
+      "type": "item",
+      "name": "Organic pattern booster",
+      "tags": [
+        "gear",
+        "artifact",
+        "single-use"
+      ],
+      "overview": "Artifact (single-use). A character who just died is restored to life. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact (single-use)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "A character who just died is restored to life."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_mind-induction-device",
+      "type": "item",
+      "name": "Mind induction device",
+      "tags": [
+        "gear",
+        "artifact",
+        "single-use"
+      ],
+      "overview": "Artifact (single-use). A character gains 5 XP; gain 1 Mission Data. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact (single-use)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "A character gains 5 XP; gain 1 Mission Data."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_preventative-nano-deployment",
+      "type": "item",
+      "name": "Preventative nano deployment",
+      "tags": [
+        "gear",
+        "artifact",
+        "colony-item"
+      ],
+      "overview": "Artifact (colony item). Colony Repair Rate +1. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact (colony item)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Colony Repair Rate +1."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_ancient-ai-chip",
+      "type": "item",
+      "name": "Ancient AI chip",
+      "tags": [
+        "gear",
+        "artifact",
+        "colony-item"
+      ],
+      "overview": "Artifact (colony item). +1 Research Point per campaign turn. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact (colony item)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1 Research Point per campaign turn."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_mutative-nano-materials",
+      "type": "item",
+      "name": "Mutative nano materials",
+      "tags": [
+        "gear",
+        "artifact",
+        "colony-item"
+      ],
+      "overview": "Artifact (colony item). +1 Build Point per campaign turn. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact (colony item)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1 Build Point per campaign turn."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_adjusted-bio-targeting-array",
+      "type": "item",
+      "name": "Adjusted bio-targeting array",
+      "tags": [
+        "gear",
+        "artifact",
+        "colony-item"
+      ],
+      "overview": "Artifact (colony item). Colony Defenses +1. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact (colony item)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Colony Defenses +1."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_planetfall-equipment_regenerative-building-material-schematic",
+      "type": "item",
+      "name": "Regenerative building material schematic",
+      "tags": [
+        "gear",
+        "artifact",
+        "colony-item"
+      ],
+      "overview": "Artifact (colony item). Mitigate 1 point of building damage per campaign turn. (Five Parsecs: Planetfall, p.135)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Artifact (colony item)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Mitigate 1 point of building damage per campaign turn."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

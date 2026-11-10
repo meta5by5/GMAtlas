@@ -1,0 +1,6060 @@
+{
+  "app": "GMAtlas",
+  "kind": "content-pack",
+  "schemaVersion": 1,
+  "entities": [
+    {
+      "id": "ent_eq_5pfh-equipment_auto-rifle",
+      "type": "item",
+      "name": "Auto rifle",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 24\", Shots 2, Damage 0. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "24\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_beam-pistol",
+      "type": "item",
+      "name": "Beam pistol",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 10\", Shots 1, Damage 1. Traits: Pistol, Critical. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "10\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Pistol, Critical"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_blade",
+      "type": "item",
+      "name": "Blade",
+      "tags": [
+        "weapon",
+        "melee"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 0. Traits: Melee. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_blast-pistol",
+      "type": "item",
+      "name": "Blast pistol",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 8\", Shots 1, Damage 1. Traits: Pistol. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "8\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Pistol"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_blast-rifle",
+      "type": "item",
+      "name": "Blast rifle",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 16\", Shots 1, Damage 1. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "16\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_boarding-saber",
+      "type": "item",
+      "name": "Boarding saber",
+      "tags": [
+        "weapon",
+        "melee"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 1. Traits: Melee, Elegant. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee, Elegant"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_brutal-melee-weapon",
+      "type": "item",
+      "name": "Brutal melee weapon",
+      "tags": [
+        "weapon",
+        "melee"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 1. Traits: Melee, Clumsy. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee, Clumsy"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_cling-fire-pistol",
+      "type": "item",
+      "name": "Cling fire pistol",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 12\", Shots 2, Damage 1. Traits: Focused, Terrifying. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "12\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Focused, Terrifying"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_colony-rifle",
+      "type": "item",
+      "name": "Colony rifle",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 18\", Shots 1, Damage 0. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "18\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_dazzle-grenade",
+      "type": "item",
+      "name": "Dazzle grenade",
+      "tags": [
+        "weapon",
+        "ranged",
+        "grenade"
+      ],
+      "overview": "Ranged weapon: Range 6\", Shots 1, Damage NA. Traits: Area, Stun, Single use. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "6\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "NA"
+            },
+            {
+              "key": "Traits",
+              "value": "Area, Stun, Single use"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_duelling-pistol",
+      "type": "item",
+      "name": "Duelling pistol",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 8\", Shots 1, Damage 0. Traits: Pistol, Critical. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "8\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Pistol, Critical"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_flak-gun",
+      "type": "item",
+      "name": "Flak gun",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 8\", Shots 2, Damage 1. Traits: Focused, Critical. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "8\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Focused, Critical"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_frakk-grenade",
+      "type": "item",
+      "name": "Frakk grenade",
+      "tags": [
+        "weapon",
+        "ranged",
+        "grenade"
+      ],
+      "overview": "Ranged weapon: Range 6\", Shots 2, Damage 0. Traits: Heavy, Area, Single use. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "6\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Heavy, Area, Single use"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_fury-rifle",
+      "type": "item",
+      "name": "Fury rifle",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 24\", Shots 1, Damage 2. Traits: Heavy, Piercing. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "24\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Heavy, Piercing"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_glare-sword",
+      "type": "item",
+      "name": "Glare sword",
+      "tags": [
+        "weapon",
+        "melee"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 0. Traits: Melee, Elegant, Piercing. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee, Elegant, Piercing"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_hand-cannon",
+      "type": "item",
+      "name": "Hand cannon",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 8\", Shots 1, Damage 2. Traits: Pistol. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "8\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Pistol"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_hand-flamer",
+      "type": "item",
+      "name": "Hand flamer",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 12\", Shots 2, Damage 1. Traits: Focused, Area. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "12\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Focused, Area"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_hand-laser",
+      "type": "item",
+      "name": "Hand laser",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 12\", Shots 1, Damage 0. Traits: Snap Shot, Pistol. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "12\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Snap Shot, Pistol"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_hand-gun",
+      "type": "item",
+      "name": "Hand gun",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 12\", Shots 1, Damage 0. Traits: Pistol. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "12\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Pistol"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_hold-out-pistol",
+      "type": "item",
+      "name": "Hold out pistol",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 4\", Shots 1, Damage 0. Traits: Pistol, Melee. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "4\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Pistol, Melee"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_hunting-rifle",
+      "type": "item",
+      "name": "Hunting rifle",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 30\", Shots 1, Damage 1. Traits: Heavy. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "30\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Heavy"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_hyper-blaster",
+      "type": "item",
+      "name": "Hyper blaster",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 24\", Shots 3, Damage 1. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "24\""
+            },
+            {
+              "key": "Shots",
+              "value": "3"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_infantry-laser",
+      "type": "item",
+      "name": "Infantry laser",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 30\", Shots 1, Damage 0. Traits: Snap Shot. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "30\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Snap Shot"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_machine-pistol",
+      "type": "item",
+      "name": "Machine pistol",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 8\", Shots 2, Damage 0. Traits: Pistol, Focused. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "8\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Pistol, Focused"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_marksman-s-rifle",
+      "type": "item",
+      "name": "Marksman's rifle",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 36\", Shots 1, Damage 0. Traits: Heavy. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "36\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Heavy"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_military-rifle",
+      "type": "item",
+      "name": "Military rifle",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 24\", Shots 1, Damage 0. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "24\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_needle-rifle",
+      "type": "item",
+      "name": "Needle rifle",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 18\", Shots 2, Damage 0. Traits: Critical. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "18\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Critical"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_plasma-rifle",
+      "type": "item",
+      "name": "Plasma rifle",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 20\", Shots 2, Damage 1. Traits: Focused, Piercing. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "20\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Focused, Piercing"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_power-claw",
+      "type": "item",
+      "name": "Power claw",
+      "tags": [
+        "weapon",
+        "melee"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 3. Traits: Melee, Clumsy. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "3"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee, Clumsy"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_rattle-gun",
+      "type": "item",
+      "name": "Rattle gun",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 24\", Shots 3, Damage 0. Traits: Heavy. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "24\""
+            },
+            {
+              "key": "Shots",
+              "value": "3"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Heavy"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_ripper-sword",
+      "type": "item",
+      "name": "Ripper sword",
+      "tags": [
+        "weapon",
+        "melee"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 1. Traits: Melee. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_scrap-pistol",
+      "type": "item",
+      "name": "Scrap pistol",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 9\", Shots 1, Damage 0. Traits: Pistol. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "9\""
+            },
+            {
+              "key": "Shots",
+              "value": "1"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Pistol"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_shatter-axe",
+      "type": "item",
+      "name": "Shatter axe",
+      "tags": [
+        "weapon",
+        "melee"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 2. Traits: Melee. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "2"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_shell-gun",
+      "type": "item",
+      "name": "Shell gun",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 30\", Shots 2, Damage 0. Traits: Heavy, Area. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "30\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "0"
+            },
+            {
+              "key": "Traits",
+              "value": "Heavy, Area"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_shotgun",
+      "type": "item",
+      "name": "Shotgun",
+      "tags": [
+        "weapon",
+        "ranged"
+      ],
+      "overview": "Ranged weapon: Range 12\", Shots 2, Damage 1. Traits: Focused. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "12\""
+            },
+            {
+              "key": "Shots",
+              "value": "2"
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Focused"
+            },
+            {
+              "key": "Type",
+              "value": "Ranged weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_suppression-maul",
+      "type": "item",
+      "name": "Suppression maul",
+      "tags": [
+        "weapon",
+        "melee"
+      ],
+      "overview": "Melee weapon: Brawl, Damage 1. Traits: Melee, Impact. (Five Parsecs from Home, p.50)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": "Brawl"
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": "1"
+            },
+            {
+              "key": "Traits",
+              "value": "Melee, Impact"
+            },
+            {
+              "key": "Type",
+              "value": "Melee weapon"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": ""
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_assault-blade",
+      "type": "item",
+      "name": "Assault blade",
+      "tags": [
+        "gear",
+        "gun-mod"
+      ],
+      "overview": "Gun mod. Weapon gains the Melee trait and +1 Damage, and wins a Brawl on a draw. Not for Pistols. (Five Parsecs from Home, p.53)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Gun mod"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Weapon gains the Melee trait and +1 Damage, and wins a Brawl on a draw. Not for Pistols."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_beam-light",
+      "type": "item",
+      "name": "Beam light",
+      "tags": [
+        "gear",
+        "gun-mod"
+      ],
+      "overview": "Gun mod. In reduced visibility, the user sees +3\" further. (Five Parsecs from Home, p.53)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Gun mod"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "In reduced visibility, the user sees +3\" further."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_bipod",
+      "type": "item",
+      "name": "Bipod",
+      "tags": [
+        "gear",
+        "gun-mod"
+      ],
+      "overview": "Gun mod. +1 to Hit beyond 8\" when Aiming or firing from Cover. Not for Pistols. (Five Parsecs from Home, p.53)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Gun mod"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1 to Hit beyond 8\" when Aiming or firing from Cover. Not for Pistols."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_hot-shot-pack",
+      "type": "item",
+      "name": "Hot shot pack",
+      "tags": [
+        "gear",
+        "gun-mod"
+      ],
+      "overview": "Gun mod. Blast pistol, Blast rifle, Hand laser or Infantry laser only: +1 Damage, but any natural 6 to Hit overheats the weapon for the rest of the fight. (Five Parsecs from Home, p.53)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Gun mod"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Blast pistol, Blast rifle, Hand laser or Infantry laser only: +1 Damage, but any natural 6 to Hit overheats the weapon for the rest of the fight."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_cyber-configurable-nano-sludge",
+      "type": "item",
+      "name": "Cyber-configurable nano-sludge",
+      "tags": [
+        "gear",
+        "gun-mod"
+      ],
+      "overview": "Gun mod. Permanent +1 to Hit. (Five Parsecs from Home, p.53)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Gun mod"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Permanent +1 to Hit."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_stabilizer",
+      "type": "item",
+      "name": "Stabilizer",
+      "tags": [
+        "gear",
+        "gun-mod"
+      ],
+      "overview": "Gun mod. The weapon ignores the Heavy trait. (Five Parsecs from Home, p.53)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Gun mod"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "The weapon ignores the Heavy trait."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_shock-attachment",
+      "type": "item",
+      "name": "Shock attachment",
+      "tags": [
+        "gear",
+        "gun-mod"
+      ],
+      "overview": "Gun mod. The weapon has the Impact trait against targets within 8\". (Five Parsecs from Home, p.53)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Gun mod"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "The weapon has the Impact trait against targets within 8\"."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_upgrade-kit",
+      "type": "item",
+      "name": "Upgrade kit",
+      "tags": [
+        "gear",
+        "gun-mod"
+      ],
+      "overview": "Gun mod. +2\" Range. (Five Parsecs from Home, p.53)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Gun mod"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+2\" Range."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_laser-sight",
+      "type": "item",
+      "name": "Laser sight",
+      "tags": [
+        "gear",
+        "gun-sight"
+      ],
+      "overview": "Gun sight. The weapon gains Snap Shot. Pistols only. (Five Parsecs from Home, p.53)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Gun sight"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "The weapon gains Snap Shot. Pistols only."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_quality-sight",
+      "type": "item",
+      "name": "Quality sight",
+      "tags": [
+        "gear",
+        "gun-sight"
+      ],
+      "overview": "Gun sight. +2\" Range, and reroll 1s when firing a single shot. (Five Parsecs from Home, p.53)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Gun sight"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+2\" Range, and reroll 1s when firing a single shot."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_seeker-sight",
+      "type": "item",
+      "name": "Seeker sight",
+      "tags": [
+        "gear",
+        "gun-sight"
+      ],
+      "overview": "Gun sight. +1 to Hit if the shooter did not Move this round. (Five Parsecs from Home, p.53)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Gun sight"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1 to Hit if the shooter did not Move this round."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_tracker-sight",
+      "type": "item",
+      "name": "Tracker sight",
+      "tags": [
+        "gear",
+        "gun-sight"
+      ],
+      "overview": "Gun sight. +1 to Hit against the target fired at in the previous round. (Five Parsecs from Home, p.53)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Gun sight"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1 to Hit against the target fired at in the previous round."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_unity-battle-sight",
+      "type": "item",
+      "name": "Unity battle sight",
+      "tags": [
+        "gear",
+        "gun-sight"
+      ],
+      "overview": "Gun sight. +1 to all Hit rolls. (Five Parsecs from Home, p.53)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Gun sight"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1 to all Hit rolls."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_booster-pills",
+      "type": "item",
+      "name": "Booster pills",
+      "tags": [
+        "gear",
+        "consumable"
+      ],
+      "overview": "Consumable (single-use). Removes all Stun markers, and the user may move at double Speed this round. (Five Parsecs from Home, p.54)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Consumable (single-use)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Removes all Stun markers, and the user may move at double Speed this round."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_combat-serum",
+      "type": "item",
+      "name": "Combat serum",
+      "tags": [
+        "gear",
+        "consumable"
+      ],
+      "overview": "Consumable (single-use). +2\" Speed and +2 Reactions for the rest of the battle. (Five Parsecs from Home, p.54)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Consumable (single-use)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+2\" Speed and +2 Reactions for the rest of the battle."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_kiranin-crystals",
+      "type": "item",
+      "name": "Kiranin crystals",
+      "tags": [
+        "gear",
+        "consumable"
+      ],
+      "overview": "Consumable (single-use). Dazzles every character within 4\" (not the user) who has not yet acted, so they cannot act this round; they still defend in a Brawl. (Five Parsecs from Home, p.54)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Consumable (single-use)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Dazzles every character within 4\" (not the user) who has not yet acted, so they cannot act this round; they still defend in a Brawl."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_rage-out",
+      "type": "item",
+      "name": "Rage out",
+      "tags": [
+        "gear",
+        "consumable"
+      ],
+      "overview": "Consumable (single-use). +2\" Speed and +1 to Brawling rolls this round and next (all battle for a K'Erin). (Five Parsecs from Home, p.54)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Consumable (single-use)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+2\" Speed and +1 to Brawling rolls this round and next (all battle for a K'Erin)."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_still",
+      "type": "item",
+      "name": "Still",
+      "tags": [
+        "gear",
+        "consumable"
+      ],
+      "overview": "Consumable (single-use). +1 to Hit, but the user cannot Move this round or next. (Five Parsecs from Home, p.54)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Consumable (single-use)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1 to Hit, but the user cannot Move this round or next."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_stim-pack",
+      "type": "item",
+      "name": "Stim-pack",
+      "tags": [
+        "gear",
+        "consumable"
+      ],
+      "overview": "Consumable (single-use). Used reflexively when the character would become a casualty: they stay on the table with one Stun marker instead. (Five Parsecs from Home, p.54)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Consumable (single-use)"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Used reflexively when the character would become a casualty: they stay on the table with one Stun marker instead."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_battle-dress",
+      "type": "item",
+      "name": "Battle dress",
+      "tags": [
+        "gear",
+        "protective-device",
+        "armor"
+      ],
+      "overview": "Armor. Counts as +1 Reactions (to a maximum of 4). (Five Parsecs from Home, p.54)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Armor"
+            },
+            {
+              "key": "Saving Throw",
+              "value": "5+"
+            },
+            {
+              "key": "Effect",
+              "value": "Counts as +1 Reactions (to a maximum of 4)."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_camo-cloak",
+      "type": "item",
+      "name": "Camo cloak",
+      "tags": [
+        "gear",
+        "protective-device",
+        "screen"
+      ],
+      "overview": "Screen. Within 2\" of Cover counts as in Cover, unless the shooter is within 4\". (Five Parsecs from Home, p.54)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Screen"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Within 2\" of Cover counts as in Cover, unless the shooter is within 4\"."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_combat-armor",
+      "type": "item",
+      "name": "Combat armor",
+      "tags": [
+        "gear",
+        "protective-device",
+        "armor"
+      ],
+      "overview": "Armor. Armor saving throw. (Five Parsecs from Home, p.54)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Armor"
+            },
+            {
+              "key": "Saving Throw",
+              "value": "5+"
+            },
+            {
+              "key": "Effect",
+              "value": "Armor saving throw."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_deflector-field",
+      "type": "item",
+      "name": "Deflector field",
+      "tags": [
+        "gear",
+        "protective-device",
+        "screen"
+      ],
+      "overview": "Screen. Automatically deflects one ranged Hit per battle; choose to use it before Toughness or armor rolls. (Five Parsecs from Home, p.54)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Screen"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Automatically deflects one ranged Hit per battle; choose to use it before Toughness or armor rolls."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_flak-screen",
+      "type": "item",
+      "name": "Flak screen",
+      "tags": [
+        "gear",
+        "protective-device",
+        "screen"
+      ],
+      "overview": "Screen. Area weapon hits on the wearer have Damage -1 (to a minimum of +0). (Five Parsecs from Home, p.54)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Screen"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Area weapon hits on the wearer have Damage -1 (to a minimum of +0)."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_flex-armor",
+      "type": "item",
+      "name": "Flex-armor",
+      "tags": [
+        "gear",
+        "protective-device",
+        "armor"
+      ],
+      "overview": "Armor. If the wearer did not move on their last activation, +1 Toughness (to a maximum of 6). (Five Parsecs from Home, p.54)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Armor"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "If the wearer did not move on their last activation, +1 Toughness (to a maximum of 6)."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_frag-vest",
+      "type": "item",
+      "name": "Frag vest",
+      "tags": [
+        "gear",
+        "protective-device",
+        "armor"
+      ],
+      "overview": "Armor. Saving throw 6+, improved to 5+ against Area attacks. (Five Parsecs from Home, p.54)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Armor"
+            },
+            {
+              "key": "Saving Throw",
+              "value": "6+ (5+ vs Area)"
+            },
+            {
+              "key": "Effect",
+              "value": "Saving throw 6+, improved to 5+ against Area attacks."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_screen-generator",
+      "type": "item",
+      "name": "Screen generator",
+      "tags": [
+        "gear",
+        "protective-device",
+        "screen"
+      ],
+      "overview": "Screen. Saving throw against gunfire only; no effect against Area or Melee attacks. (Five Parsecs from Home, p.54)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Screen"
+            },
+            {
+              "key": "Saving Throw",
+              "value": "5+ (gunfire)"
+            },
+            {
+              "key": "Effect",
+              "value": "Saving throw against gunfire only; no effect against Area or Melee attacks."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_stealth-gear",
+      "type": "item",
+      "name": "Stealth gear",
+      "tags": [
+        "gear",
+        "protective-device",
+        "armor"
+      ],
+      "overview": "Armor. Enemies shooting from over 9\" are -1 to Hit. (Five Parsecs from Home, p.54)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Armor"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Enemies shooting from over 9\" are -1 to Hit."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_ai-companion",
+      "type": "item",
+      "name": "AI companion",
+      "tags": [
+        "gear",
+        "implant"
+      ],
+      "overview": "Implant. Roll Savvy tests twice and keep the better. (Five Parsecs from Home, p.55)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Implant"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Roll Savvy tests twice and keep the better."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_body-wire",
+      "type": "item",
+      "name": "Body wire",
+      "tags": [
+        "gear",
+        "implant"
+      ],
+      "overview": "Implant. +1 Reactions. (Five Parsecs from Home, p.55)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Implant"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1 Reactions."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_boosted-arm",
+      "type": "item",
+      "name": "Boosted arm",
+      "tags": [
+        "gear",
+        "implant"
+      ],
+      "overview": "Implant. +2\" Grenade range, and may climb onto an obstacle no taller than the figure as a Free Action at the end of a move. (Five Parsecs from Home, p.55)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Implant"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+2\" Grenade range, and may climb onto an obstacle no taller than the figure as a Free Action at the end of a move."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_boosted-leg",
+      "type": "item",
+      "name": "Boosted leg",
+      "tags": [
+        "gear",
+        "implant"
+      ],
+      "overview": "Implant. +1\" to base move and Dash speed. (Five Parsecs from Home, p.55)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Implant"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1\" to base move and Dash speed."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_cyber-hand",
+      "type": "item",
+      "name": "Cyber hand",
+      "tags": [
+        "gear",
+        "implant"
+      ],
+      "overview": "Implant. Build one owned Pistol into the hand: half Range, but always +1 to Hit and +1 more when Brawling. (Five Parsecs from Home, p.55)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Implant"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Build one owned Pistol into the hand: half Range, but always +1 to Hit and +1 more when Brawling."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_genetic-defenses",
+      "type": "item",
+      "name": "Genetic defenses",
+      "tags": [
+        "gear",
+        "implant"
+      ],
+      "overview": "Implant. Saving throw 5+ against poison, viruses, gas and disease. (Five Parsecs from Home, p.55)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Implant"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Saving throw 5+ against poison, viruses, gas and disease."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_health-boost",
+      "type": "item",
+      "name": "Health boost",
+      "tags": [
+        "gear",
+        "implant"
+      ],
+      "overview": "Implant. Post-battle Injury recovery of 2+ turns is 1 turn shorter; Toughness 3 becomes 4. (Five Parsecs from Home, p.55)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Implant"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Post-battle Injury recovery of 2+ turns is 1 turn shorter; Toughness 3 becomes 4."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_nerve-adjuster",
+      "type": "item",
+      "name": "Nerve adjuster",
+      "tags": [
+        "gear",
+        "implant"
+      ],
+      "overview": "Implant. Saving throw 5+ to avoid any Stun. (Five Parsecs from Home, p.55)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Implant"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Saving throw 5+ to avoid any Stun."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_neural-optimization",
+      "type": "item",
+      "name": "Neural optimization",
+      "tags": [
+        "gear",
+        "implant"
+      ],
+      "overview": "Implant. The character cannot be Stunned. (Five Parsecs from Home, p.55)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Implant"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "The character cannot be Stunned."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_night-sight",
+      "type": "item",
+      "name": "Night sight",
+      "tags": [
+        "gear",
+        "implant"
+      ],
+      "overview": "Implant. No visibility reduction from darkness (smoke, gas etc. still apply). (Five Parsecs from Home, p.55)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Implant"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "No visibility reduction from darkness (smoke, gas etc. still apply)."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_pain-suppressor",
+      "type": "item",
+      "name": "Pain suppressor",
+      "tags": [
+        "gear",
+        "implant"
+      ],
+      "overview": "Implant. Can do crew tasks while in Sick Bay (but not fight). (Five Parsecs from Home, p.55)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Implant"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Can do crew tasks while in Sick Bay (but not fight)."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_auto-sensor",
+      "type": "item",
+      "name": "Auto sensor",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. When an enemy starts or ends a move within 4\" and in sight, fire one Pistol shot at it, hitting only on a natural 6. (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "When an enemy starts or ends a move within 4\" and in sight, fire one Pistol shot at it, hitting only on a natural 6."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_battle-visor",
+      "type": "item",
+      "name": "Battle visor",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. Reroll 1s on the firing dice. (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Reroll 1s on the firing dice."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_communicator",
+      "type": "item",
+      "name": "Communicator",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. Roll one extra die for Reactions each round, then discard one. (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Roll one extra die for Reactions each round, then discard one."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_concealed-blade",
+      "type": "item",
+      "name": "Concealed blade",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. Once per battle, if starting the round within 2\" of an enemy, throw it as a Free Action (Damage +0); replaced for free afterwards. (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Once per battle, if starting the round within 2\" of an enemy, throw it as a Free Action (Damage +0); replaced for free afterwards."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_displacer",
+      "type": "item",
+      "name": "Displacer",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. Once per mission instead of Moving: teleport 1D6\" in a random direction from a point in sight; landing inside an obstacle breaks it until Repaired. (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Once per mission instead of Moving: teleport 1D6\" in a random direction from a point in sight; landing inside an obstacle breaks it until Repaired."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_distraction-bot",
+      "type": "item",
+      "name": "Distraction bot",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. Once per battle (Combat Action): an enemy within 12\" cannot act on its next activation. (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Once per battle (Combat Action): an enemy within 12\" cannot act on its next activation."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_grapple-launcher",
+      "type": "item",
+      "name": "Grapple launcher",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. Combat Action: climb a terrain feature within 1\", up to 12\", to a standable surface. (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Combat Action: climb a terrain feature within 1\", up to 12\", to a standable surface."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_grav-dampener",
+      "type": "item",
+      "name": "Grav dampener",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. No falling damage; a drop over 6\" uses the character's Move. (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "No falling damage; a drop over 6\" uses the character's Move."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_hazard-suit",
+      "type": "item",
+      "name": "Hazard suit",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. Saving throw 5+ against environmental hazard Hits. (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": "5+ (hazards)"
+            },
+            {
+              "key": "Effect",
+              "value": "Saving throw 5+ against environmental hazard Hits."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_hover-board",
+      "type": "item",
+      "name": "Hover board",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. Move up to 9\" over man-height terrain instead of walking; no combat while riding. (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Move up to 9\" over man-height terrain instead of walking; no combat while riding."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_insta-wall",
+      "type": "item",
+      "name": "Insta-wall",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. Once per mission (Combat Action): place a 2\" man-height force wall within 3\" that blocks attacks; it fades on a 6 each round. (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Once per mission (Combat Action): place a 2\" man-height force wall within 3\" that blocks attacks; it fades on a 6 each round."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_jump-belt",
+      "type": "item",
+      "name": "Jump belt",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. Instead of Moving, jump up to 9\" forward and 3\" up, then act normally. (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Instead of Moving, jump up to 9\" forward and 3\" up, then act normally."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_motion-tracker",
+      "type": "item",
+      "name": "Motion tracker",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. +1 to Seize the Initiative rolls. (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1 to Seize the Initiative rolls."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_multi-cutter",
+      "type": "item",
+      "name": "Multi-cutter",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. Combat Action: cut a man-sized hole through terrain up to 1\" thick (not force fields). (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Combat Action: cut a man-sized hole through terrain up to 1\" thick (not force fields)."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_robo-rabbit-s-foot",
+      "type": "item",
+      "name": "Robo-rabbit's foot",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. Luck 0 counts as Luck 1; if the bearer would die, the foot is destroyed instead of an Injury roll. (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Luck 0 counts as Luck 1; if the bearer would die, the foot is destroyed instead of an Injury roll."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_scanner-bot",
+      "type": "item",
+      "name": "Scanner bot",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. +1 to Seize the Initiative rolls for the crew. (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1 to Seize the Initiative rolls for the crew."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_snooper-bot",
+      "type": "item",
+      "name": "Snooper bot",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. Before battle, ignore a penalty to Seize the Initiative; the bot is Damaged on a 1. (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Before battle, ignore a penalty to Seize the Initiative; the bot is Damaged on a 1."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_sonic-emitter",
+      "type": "item",
+      "name": "Sonic emitter",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. Enemies within 5\" are -1 to Hit when shooting. (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Enemies within 5\" are -1 to Hit when shooting."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_steel-boots",
+      "type": "item",
+      "name": "Steel boots",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. On winning a Brawl with a natural 5-6, kick instead: Damage +0 and knock the target 1D3\" back. (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "On winning a Brawl with a natural 5-6, kick instead: Damage +0 and knock the target 1D3\" back."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_time-distorter",
+      "type": "item",
+      "name": "Time distorter",
+      "tags": [
+        "gear",
+        "utility-device"
+      ],
+      "overview": "Utility device. Single-use Free Action: freeze up to 3 enemies until the end of next round. (Five Parsecs from Home, p.56)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "Utility device"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Single-use Free Action: freeze up to 3 enemies until the end of next round."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_analyzer",
+      "type": "item",
+      "name": "Analyzer",
+      "tags": [
+        "gear",
+        "on-board-item"
+      ],
+      "overview": "On-board item. +1 when rolling for Rumors becoming a Quest and for Quest resolution. (Five Parsecs from Home, p.57)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "On-board item"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1 when rolling for Rumors becoming a Quest and for Quest resolution."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_colonist-ration-packs",
+      "type": "item",
+      "name": "Colonist ration packs",
+      "tags": [
+        "gear",
+        "on-board-item"
+      ],
+      "overview": "On-board item. Single-use: skip Upkeep for one turn and gain +1 story point. (Five Parsecs from Home, p.57)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "On-board item"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Single-use: skip Upkeep for one turn and gain +1 story point."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_duplicator",
+      "type": "item",
+      "name": "Duplicator",
+      "tags": [
+        "gear",
+        "on-board-item"
+      ],
+      "overview": "On-board item. Single-use: copy any one item in inventory (not another Duplicator). (Five Parsecs from Home, p.57)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "On-board item"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Single-use: copy any one item in inventory (not another Duplicator)."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_fake-id",
+      "type": "item",
+      "name": "Fake ID",
+      "tags": [
+        "gear",
+        "on-board-item"
+      ],
+      "overview": "On-board item. +1 to obtain a license or other legal document. (Five Parsecs from Home, p.57)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "On-board item"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1 to obtain a license or other legal document."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_fixer",
+      "type": "item",
+      "name": "Fixer",
+      "tags": [
+        "gear",
+        "on-board-item"
+      ],
+      "overview": "On-board item. Single-use: repair one damaged or destroyed personal item for free. (Five Parsecs from Home, p.57)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "On-board item"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Single-use: repair one damaged or destroyed personal item for free."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_genetic-reconfiguration-kit",
+      "type": "item",
+      "name": "Genetic reconfiguration kit",
+      "tags": [
+        "gear",
+        "on-board-item"
+      ],
+      "overview": "On-board item. Single-use: an ability score upgrade costs 2 XP less (not Bots or Soulless; K'Erin Toughness only). (Five Parsecs from Home, p.57)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "On-board item"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Single-use: an ability score upgrade costs 2 XP less (not Bots or Soulless; K'Erin Toughness only)."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_loaded-dice",
+      "type": "item",
+      "name": "Loaded dice",
+      "tags": [
+        "gear",
+        "on-board-item"
+      ],
+      "overview": "On-board item. Each turn one crew member gambles 1D6: 1-4 earns that many credits, 5 nothing, 6 loses the dice and an Injury roll. (Five Parsecs from Home, p.57)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "On-board item"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Each turn one crew member gambles 1D6: 1-4 earns that many credits, 5 nothing, 6 loses the dice and an Injury roll."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_lucky-dice",
+      "type": "item",
+      "name": "Lucky dice",
+      "tags": [
+        "gear",
+        "on-board-item"
+      ],
+      "overview": "On-board item. Each turn one crew member gambles for +1 credit. (Five Parsecs from Home, p.57)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "On-board item"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Each turn one crew member gambles for +1 credit."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_mk-ii-translator",
+      "type": "item",
+      "name": "Mk II translator",
+      "tags": [
+        "gear",
+        "on-board-item"
+      ],
+      "overview": "On-board item. Roll an extra D6 when Recruiting. (Five Parsecs from Home, p.57)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "On-board item"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Roll an extra D6 when Recruiting."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_med-patch",
+      "type": "item",
+      "name": "Med-patch",
+      "tags": [
+        "gear",
+        "on-board-item"
+      ],
+      "overview": "On-board item. Single-use: one turn off an Injury recovery. (Five Parsecs from Home, p.57)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "On-board item"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Single-use: one turn off an Injury recovery."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_meditation-orb",
+      "type": "item",
+      "name": "Meditation orb",
+      "tags": [
+        "gear",
+        "on-board-item"
+      ],
+      "overview": "On-board item. Single-use: +2 story points; Swift and Precursor crew gain +1 XP. (Five Parsecs from Home, p.57)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "On-board item"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Single-use: +2 story points; Swift and Precursor crew gain +1 XP."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_nano-doc",
+      "type": "item",
+      "name": "Nano-doc",
+      "tags": [
+        "gear",
+        "on-board-item"
+      ],
+      "overview": "On-board item. Single-use: prevent one post-battle Injury roll (decide before rolling). (Five Parsecs from Home, p.57)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "On-board item"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Single-use: prevent one post-battle Injury roll (decide before rolling)."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_novelty-stuffed-animal",
+      "type": "item",
+      "name": "Novelty stuffed animal",
+      "tags": [
+        "gear",
+        "on-board-item"
+      ],
+      "overview": "On-board item. Single-use: a crew member (not Soulless, K'Erin or Bot) gains +1 XP, and +1 story point on a 6. (Five Parsecs from Home, p.57)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "On-board item"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Single-use: a crew member (not Soulless, K'Erin or Bot) gains +1 XP, and +1 story point on a 6."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_purifier",
+      "type": "item",
+      "name": "Purifier",
+      "tags": [
+        "gear",
+        "on-board-item"
+      ],
+      "overview": "On-board item. Each turn, makes clean water worth 1 credit (one Purifier at a time). (Five Parsecs from Home, p.57)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "On-board item"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Each turn, makes clean water worth 1 credit (one Purifier at a time)."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_repair-bot",
+      "type": "item",
+      "name": "Repair Bot",
+      "tags": [
+        "gear",
+        "on-board-item"
+      ],
+      "overview": "On-board item. +1 to Repair attempts. (Five Parsecs from Home, p.57)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "On-board item"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1 to Repair attempts."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_sector-permit",
+      "type": "item",
+      "name": "Sector permit",
+      "tags": [
+        "gear",
+        "on-board-item"
+      ],
+      "overview": "On-board item. Where a license is required, roll 1D6 per license: 4+ the permit is accepted. (Five Parsecs from Home, p.57)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "On-board item"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Where a license is required, roll 1D6 per license: 4+ the permit is accepted."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_spare-parts",
+      "type": "item",
+      "name": "Spare parts",
+      "tags": [
+        "gear",
+        "on-board-item"
+      ],
+      "overview": "On-board item. +1 to Repair attempts; used up on a natural 1. (Five Parsecs from Home, p.57)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "On-board item"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "+1 to Repair attempts; used up on a natural 1."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_teach-bot",
+      "type": "item",
+      "name": "Teach-bot",
+      "tags": [
+        "gear",
+        "on-board-item"
+      ],
+      "overview": "On-board item. Single-use: a character on the Train crew task earns 1D6 extra XP. (Five Parsecs from Home, p.57)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "On-board item"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Single-use: a character on the Train crew task earns 1D6 extra XP."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ent_eq_5pfh-equipment_transcender",
+      "type": "item",
+      "name": "Transcender",
+      "tags": [
+        "gear",
+        "on-board-item"
+      ],
+      "overview": "On-board item. Single-use: the user gains +1 XP and the crew +2 story points. (Five Parsecs from Home, p.57)",
+      "revealed": "",
+      "relationships": [],
+      "createdAt": "2026-11-09T00:00:00.000Z",
+      "statblocks": [
+        {
+          "kind": "gear",
+          "ruleset": "5pfh",
+          "fields": [
+            {
+              "key": "Range",
+              "value": ""
+            },
+            {
+              "key": "Shots",
+              "value": ""
+            },
+            {
+              "key": "Damage",
+              "value": ""
+            },
+            {
+              "key": "Traits",
+              "value": ""
+            },
+            {
+              "key": "Type",
+              "value": "On-board item"
+            },
+            {
+              "key": "Saving Throw",
+              "value": ""
+            },
+            {
+              "key": "Effect",
+              "value": "Single-use: the user gains +1 XP and the crew +2 story points."
+            },
+            {
+              "key": "Cost",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

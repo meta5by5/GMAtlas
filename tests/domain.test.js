@@ -13167,3 +13167,74 @@ test('weaponItems lists #melee/#ranged Items with stats; filling a weapon row co
   assert.equal(sbFillWeapon(camp, pc, gi, 0, rope), camp, 'an untagged item is refused');
   assert.equal(sbFillWeapon(camp, pc, gi, 5, gun), camp, 'a missing row is refused');
 });
+
+// --- "number textfield": a track drawn as a number box with +/- ------------
+import { isNumberTextfield as ntIsNumber, makeStatblock as ntMake } from '../src/domain/statblocks.js';
+
+test('number textfield: 5PFH and Five Leagues Luck/XP (and Will) are number textfields, other tracks are not', () => {
+  const pfh = ntMake('character', '5pfh');
+  const field = (g, k) => g.fields.find((f) => f.key === k);
+  assert.equal(field(pfh, 'Luck').display, 'number', 'a new sheet carries the flag');
+  assert.ok(ntIsNumber(field(pfh, 'Luck'), '5pfh') && ntIsNumber(field(pfh, 'XP'), '5pfh'));
+  const legacy = { key: 'Luck', value: 2, max: 3, track: true };
+  assert.ok(ntIsNumber(legacy, '5pfh'), 'a sheet made before the flag follows its ruleset');
+  assert.ok(ntIsNumber({ key: 'Will', value: 1, max: 3, track: true }, 'fiveleagues'));
+  assert.ok(!ntIsNumber({ key: 'Momentum', value: 2, max: 10, track: true }, 'starforged'), 'other tracks keep boxes');
+  assert.ok(!ntIsNumber({ key: 'Luck', value: 1, track: false }, '5pfh'), 'only tracks');
+  assert.ok(ntIsNumber({ key: 'Ammo', value: 3, max: 6, track: true, display: 'number' }, 'starforged'), 'any field can opt in');
+  assert.ok(!ntIsNumber({ key: 'Luck', value: 1, max: 3, track: true, display: 'track' }, '5pfh'), 'and a field can opt out');
+});
+
+// --- Equipment packs (scripts/build-equipment-packs.js) --------------------
+import { readFileSync as eqRead } from 'node:fs';
+import { DEFAULT_GEAR_TEMPLATES as EQ_GEAR } from '../src/data/gearTemplates.js';
+import { importContentPack as eqImport } from '../src/domain/contentPack.js';
+import { weaponItems as eqWeaponItems } from '../src/domain/entities.js';
+
+const EQ_PACKS = ['5pfh-equipment', '5pfh-compendium-equipment', 'planetfall-equipment', 'fiveleagues-equipment', 'fiveleagues-compendium-equipment'];
+const eqPack = (id) => JSON.parse(eqRead(new URL(`../${CONTENT_PACKS_MANIFEST.find((p) => p.id === id).file}`, import.meta.url), 'utf8'));
+
+test('equipment packs: each item is a tagged Item with a gear statblock matching its template', () => {
+  for (const id of EQ_PACKS) {
+    const pack = eqPack(id);
+    assert.equal(pack.kind, 'content-pack');
+    assert.ok(pack.entities.length > 40, `${id} has its lists`);
+    for (const e of pack.entities) {
+      assert.equal(e.type, 'item', e.name);
+      const weapon = e.tags.includes('weapon');
+      assert.ok(weapon !== e.tags.includes('gear'), `${e.name} is #weapon or #gear`);
+      if (weapon) assert.ok(e.tags.includes('melee') !== e.tags.includes('ranged'), `${e.name} is #melee or #ranged`);
+      assert.ok(!e.tags.some((t) => t.startsWith('#')), 'tags are stored without #');
+      const [g] = e.statblocks;
+      assert.equal(g.kind, 'gear');
+      assert.deepEqual(g.fields.map((f) => f.key), EQ_GEAR[g.ruleset].fields.map((f) => f.key), `${e.name} fields follow the ${g.ruleset} gear template`);
+      assert.match(e.overview, /p\.\d+\)$/, `${e.name} cites its page`);
+    }
+  }
+});
+
+test('equipment packs: names are unique across all five, so importing every pack keeps every item', () => {
+  let c = defaultCampaign();
+  const before = c.entities.items.length;
+  let total = 0;
+  for (const id of EQ_PACKS) { const p = eqPack(id); total += p.entities.length; c = eqImport(c, p); }
+  assert.equal(c.entities.items.length - before, total, 'no item skipped as a duplicate name');
+  const names = c.entities.items.map((e) => e.name);
+  assert.ok(names.includes('Hand cannon') && names.includes('Hand cannon (Dramatic)') && names.includes('Hand cannon (Bug Hunt)'));
+  assert.ok(names.includes('Colony rifle (Planetfall)') && names.includes('Staff (Deep Below)'));
+  const again = eqImport(c, eqPack('5pfh-equipment'));
+  assert.equal(again.entities.items.length, c.entities.items.length, 're-importing adds nothing');
+  const laser = eqWeaponItems(c).find((w) => w.name === 'Hand laser');
+  assert.deepEqual([laser.tag, laser.range, laser.shots, laser.damage, laser.traits], ['ranged', '12"', '1', '0', 'Snap Shot, Pistol'], 'imported weapons fill a 5PFH weapon row');
+  assert.equal(eqWeaponItems(c).find((w) => w.name === 'Blade').tag, 'melee');
+});
+
+test('equipment packs: each is offered only while its own book is owned and in use', () => {
+  const p = (id) => CONTENT_PACKS_MANIFEST.find((x) => x.id === id);
+  const inUse = (s) => EQ_PACKS.filter((id) => isPackInUse(s, p(id)));
+  assert.deepEqual(inUse({ statRuleset: '5pfh', licenses: {} }), [], 'nothing without the license');
+  assert.deepEqual(inUse({ statRuleset: '5pfh', licenses: { fivepfh: true, 'fivepfh-compendium': true, planetfall: true } }), ['5pfh-equipment'], 'owning a book is not using it');
+  assert.deepEqual(inUse({ statRuleset: '5pfh', licenses: { fivepfh: true, 'fivepfh-compendium': true }, rulesProviderChoices: { bestiary: 'fivepfh-compendium' } }), ['5pfh-equipment', '5pfh-compendium-equipment']);
+  assert.deepEqual(inUse({ statRuleset: '5pfh', licenses: { fivepfh: true, planetfall: true }, rulesProviderChoices: { 'colony-management': 'planetfall' } }), ['5pfh-equipment', 'planetfall-equipment']);
+  assert.deepEqual(inUse({ statRuleset: 'fiveleagues', licenses: { fiveleagues: true, 'fiveleagues-compendium': true }, rulesProviderChoices: { bestiary: 'fiveleagues-compendium' } }), ['fiveleagues-equipment', 'fiveleagues-compendium-equipment']);
+});

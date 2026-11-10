@@ -121,6 +121,63 @@ export const CONTENT_PACKS_MANIFEST = [
     kind: 'content-pack',
     licenseStatus: 'included',
   },
+  // Equipment packs (direct request, 2026-11-09): every weapon and equipment
+  // list in each book, as Item entities tagged #weapon (+ #melee/#ranged) or
+  // #gear (+ the list's own tag), each with a gear statblock. Built by
+  // scripts/build-equipment-packs.js; each is listed only while its book is
+  // in use in the campaign (isPackInUse).
+  {
+    id: '5pfh-equipment',
+    file: 'assets/content-packs/5pfh-equipment-content-pack.json',
+    contents: 'equipment',
+    title: 'Five Parsecs from Home Weapons & Equipment',
+    description: 'All 36 weapons (p.50) and every equipment list (pp.53-58): gun mods, gun sights, consumables, protective devices, implants, utility devices and on-board items — 114 Items, weapons tagged #weapon with #melee or #ranged, the rest #gear with their list (e.g. #implant).',
+    ruleset: 'fivepfh',
+    kind: 'content-pack',
+    licenseStatus: 'included',
+  },
+  {
+    id: '5pfh-compendium-equipment',
+    supplement: 'fivepfh-compendium',
+    file: 'assets/content-packs/5pfh-compendium-equipment-content-pack.json',
+    contents: 'equipment',
+    title: 'Five Parsecs Compendium Weapons & Equipment (incl. Bug Hunt)',
+    description: 'The Dramatic Weapons table (pp.88-89, named "… (Dramatic)"), Bug Hunt\'s weapons (p.179) and trooper armor, psionic equipment (p.27) and bot upgrades (p.26) — 61 Items.',
+    ruleset: 'fivepfh',
+    kind: 'content-pack',
+    licenseStatus: 'included',
+  },
+  {
+    id: 'planetfall-equipment',
+    file: 'assets/content-packs/planetfall-equipment-content-pack.json',
+    contents: 'equipment',
+    title: 'Planetfall Weapons & Equipment',
+    description: 'The campaign armory (pp.76-79: standard, Tier 1 and Tier 2 weapons and grunt upgrades) and the Artifacts table (p.135: artifact weapons, equipment, single-use finds and colony items) — 54 Items.',
+    ruleset: 'planetfall',
+    kind: 'content-pack',
+    licenseStatus: 'included',
+  },
+  {
+    id: 'fiveleagues-equipment',
+    file: 'assets/content-packs/fiveleagues-equipment-content-pack.json',
+    contents: 'equipment',
+    title: 'Five Leagues from the Borderlands Weapons & Equipment',
+    description: 'Weapons (pp.60-61), armor, helmet and shield (p.62), assorted items (pp.63-65) and every enchanted item (pp.199-206: weapons, armor, potions, jewelry, clothing, magical apparatus, unique items) — 123 Items.',
+    ruleset: 'fiveleagues',
+    kind: 'content-pack',
+    licenseStatus: 'included',
+  },
+  {
+    id: 'fiveleagues-compendium-equipment',
+    supplement: 'fiveleagues-compendium',
+    file: 'assets/content-packs/fiveleagues-compendium-equipment-content-pack.json',
+    contents: 'equipment',
+    title: 'Five Leagues Compendium Weapons & Equipment',
+    description: "The Ancient Land of Dust's equipment and Items of The Dust (pp.34-35, 59-60), and Deep Below's weapons and armor (pp.196-197, named \"… (Deep Below)\"), runes (p.193) and potions (p.255) — 56 Items.",
+    ruleset: 'fiveleagues',
+    kind: 'content-pack',
+    licenseStatus: 'included',
+  },
   {
     id: 'hostile-near-earth-zone',
     file: 'assets/data-packs/hostile-near-earth-zone.json',

@@ -110,6 +110,24 @@ export const DEFAULT_GEAR_TEMPLATES = {
       { key: 'Traits' },
     ]),
   },
+  // Five Leagues from the Borderlands (and its Compendium): weapons rate
+  // Damage as Overcome Armor / Overcome Toughness ("+0 / +1"); armor is an
+  // Armor rating; items carry the book's storage marks (Backpack, Campaign,
+  // Worn, Single-use). Filled by the equipment content packs
+  // (scripts/build-equipment-packs.js).
+  fiveleagues: {
+    label: 'Five Leagues from the Borderlands',
+    fields: withDefaults([
+      { key: 'Type' },
+      { key: 'Range' },
+      { key: 'Damage' },
+      { key: 'Armor' },
+      { key: 'Traits' },
+      { key: 'Storage' },
+      { key: 'Effect' },
+      { key: 'Cost' },
+    ]),
+  },
   // Shadowdark RPG gear (2026-11-08): the columns its equipment lists use;
   // filled by domain/shadowdarkImport.js from the GM's own copy.
   shadowdark: {

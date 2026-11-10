@@ -541,8 +541,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .mc-drawer h2.drawer-title-entity { display: flex; align-items: baseline; gap: var(--sp-2); flex: 1; min-width: 0; }
 .drawer-title-kind { flex: none; color: var(--text-dim); font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
 .drawer-title-name { flex: 1; min-width: 0; font: inherit; font-weight: 600; color: inherit; background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 2px 4px; }
-.drawer-title-name:hover { border-color: var(--border); }
-.drawer-title-name:focus { border-color: var(--accent); background: var(--bg-inset); outline: none; }
+.drawer-title-name.is-readonly { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+input.drawer-title-name { border-color: var(--border); background: var(--bg-inset); }
+input.drawer-title-name:focus { border-color: var(--accent); outline: none; }
+.drawer-head-extra { display: flex; align-items: center; gap: 2px; }
+.drawer-head-extra .icon-btn.active { color: var(--accent); }
 .inspector-head { justify-content: flex-end; }
 .mc-drawer h2.drawer-title-toggle:hover { color: var(--accent); }
 
@@ -2480,7 +2483,10 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 }
 .number-row-compact .statblock-key { font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.68rem; white-space: nowrap; line-height: 1.2; }
 .number-row-input-wrap { display: flex; align-items: center; gap: 0.2em; }
-.number-row-compact .num-stepper { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; justify-items: center; }
+.number-row-compact .num-stepper { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1px; justify-items: stretch; }
+/* The "number textfield" (isNumberTextfield): ＋/− sit tight under the box,
+   no vertical padding, each half the box's width. */
+.number-row .num-stepper-btn { padding: 0 0.1rem; line-height: 1; min-height: 0; font-size: 0.8rem; text-align: center; }
 .number-row-compact .attr-val-input { grid-column: 1 / -1; width: 2.6em; text-align: center; padding: 0.1rem 0.2rem; font-size: 0.85rem; }
 /* Plain text/value field's own compact pill (direct follow-up request —
    textRow had no compact variant before; every statblock field now gets
@@ -2512,8 +2518,10 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    Range/Shots/Damage are short values and stay narrow, the remove-icon
    column is just wide enough for the button itself. */
 .statblock-weapon-col-name, .statblock-weapon-col-traits { width: 28%; }
-/* Columns 3-5 are Range/Shots/Damage (column 1 is a blank row's ＋). */
-.statblock-weapon-table th:nth-child(3), .statblock-weapon-table th:nth-child(4), .statblock-weapon-table th:nth-child(5) { width: 12%; }
+/* Range/Shots/Damage stay narrow. The ＋ column (a blank row's item
+   picker) exists only while a row is blank, so a full table gives its
+   width back to the others. */
+.statblock-weapon-col-short { width: 12%; }
 .statblock-weapon-pick-cell { width: 1.6rem; padding-left: 0.1rem !important; padding-right: 0 !important; text-align: center; }
 .statblock-weapon-pick-cell .icon-btn { padding: 0 0.15rem; color: var(--accent); }
 .weapon-pick { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding: var(--sp-2); border: 1px dashed var(--accent); border-radius: 6px; background: var(--bg-inset); }
