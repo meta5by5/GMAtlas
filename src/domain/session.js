@@ -74,6 +74,7 @@ export function restartStory(campaign) {
     what:  { situation: '', intent: 'Discovery', threat: 2, mystery: 2, resources: 5, reputation: 5, stress: 5 },
     why:   { summary: '', entityIds: [] },
     how:   { summary: 'Exploration', activity: '' },
+    encounter: { id: null, name: '', status: 'active', statedCause: '', rootCause: '', causeGapHook: '', thirdPartyCasualty: '', precipitatingIncident: '', deepRootSummary: '', partyLeverage: '', lastDeescalationAttempt: '', gmNotes: '', sessionHooks: [] },
   };
   next.scenes = [];
   next.journal = [];

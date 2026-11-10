@@ -72,6 +72,10 @@ export function defaultCampaign(now = new Date().toISOString()) {
       // reads the same as a fresh one that hasn't picked an Activity yet,
       // no migration needed (same posture as resources/reputation above).
       how:   { summary: 'Exploration', activity: '' },
+      // The Composer as the Encounter builder (domain/encounters.js): which
+      // Encounter it is editing (null = a new one) and that Encounter's own
+      // fields that have no WHO..HOW home.
+      encounter: { id: null, name: '', status: 'active', statedCause: '', rootCause: '', causeGapHook: '', thirdPartyCasualty: '', precipitatingIncident: '', deepRootSummary: '', partyLeverage: '', lastDeescalationAttempt: '', gmNotes: '', sessionHooks: [] },
     },
 
     entities: { items: [], activeId: null, history: [] },

@@ -135,14 +135,33 @@ export const WIKI_RECORD_SECTIONS = {
   ],
   conflict: [
     {
+      id: 'conflict-cast',
+      title: 'Who and where',
+      fields: [
+        ['protagonistIds', 'Protagonists', 'refs'],
+        ['antagonistIds', 'Antagonists', 'refs'],
+        ['bystanderIds', 'Bystanders', 'refs'],
+        ['factionIds', 'Factions involved', 'refs'],
+        ['assetIds', 'Assets present', 'refs'],
+        ['locationIds', 'Places', 'refs'],
+        ['siteDescription', 'Site description', 'long'],
+        ['surroundings', 'Immediate surroundings', 'long'],
+      ],
+    },
+    {
       id: 'conflict-core',
       title: 'Encounter',
       fields: [
         ['status', 'Status', 'text'],
         ['locationId', 'Takes place at', 'ref'],
         ['sceneNumber', 'From scene', 'number'],
+        ['situation', 'Situation', 'long'],
+        ['intent', 'Intent', 'text'],
+        ['objective', 'Objective', 'long'],
         ['encounterMode', 'Mode', 'text'],
         ['encounterActivity', 'Activity', 'text'],
+        ['threat', 'Threat', 'number'],
+        ['mystery', 'Mystery', 'number'],
         ['statedCause', 'Stated cause', 'text'],
         ['rootCause', 'Root cause', 'text'],
         ['causeGapHook', 'Cause gap hook', 'text'],

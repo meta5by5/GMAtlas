@@ -29,7 +29,7 @@ import { TURN_STEP_ORACLE_LINKS, TURN_STEP_LOCATION_STEPS } from '../../data/tur
 import { tablesWithOverrides, oraclePathsWithAnyTag, excludeFactionOracleTables } from '../../domain/oracles.js';
 import { locationHierarchyTerms } from '../../data/genrePacks.js';
 import { ENCOUNTER_WIZARD_GUIDE } from '../../data/encounterWizardGuide.js';
-import { wizardOracleSuggestions } from '../../domain/encounters.js';
+import { wizardOracleSuggestions, composerEncounterFields, composerFactionIds, ENCOUNTER_DETAIL_FIELDS } from '../../domain/encounters.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -148,7 +148,50 @@ function whoSectionBody(doc, ui) {
     ${npcSceneGroupsBlock(doc, ui)}
     ${factionsActiveNearbyBlock(doc, ui)}
     ${assetsPresentBlock(doc, ui)}
-    ${activeConflictLocationPicker(doc)}`;
+    ${encounterFieldsBlock(doc, ['thirdPartyCasualty'])}`;
+}
+
+// The Encounter-only fields (domain/encounters.js ENCOUNTER_DETAIL_FIELDS) the
+// Composer edits for the Encounter it's building, each in the tab it belongs
+// to. A field commits on change (data-composer-encounter-field, shell.js); 🎲
+// rolls an oracle table suited to it and adds the result
+// (data-composer-field-roll). Status is a select; session hooks a list.
+const ENCOUNTER_FIELD_PLACEHOLDERS = {
+  statedCause: 'The public story', rootCause: 'The real reason', causeGapHook: 'What happens if the party notices',
+  thirdPartyCasualty: 'Who, and how', precipitatingIncident: 'The recent, smaller thing that lit the fuse',
+  deepRootSummary: 'What started this, long before the party got involved', partyLeverage: 'Information, an asset, or an NPC nobody else controls',
+  lastDeescalationAttempt: 'Who tried to fix this, why it failed, who got blamed', gmNotes: 'Anything else worth remembering',
+};
+const ENCOUNTER_FIELD_LABEL = Object.fromEntries(ENCOUNTER_DETAIL_FIELDS);
+function encounterFieldsBlock(doc, keys) {
+  const enc = composerEncounterFields(doc);
+  const rows = keys.map((k) => {
+    if (k === 'status') {
+      return `<label class="field-label sm">Encounter status
+        <select data-composer-encounter-field="status">${CONFLICT_STATUS_OPTIONS.map(([v, l]) => `<option value="${esc(v)}" ${enc.status === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
+      </label>`;
+    }
+    if (k === 'sessionHooks') {
+      const hooks = enc.sessionHooks.map((h) => `<div class="thread-row">
+          <span class="thread-name">${esc(h.text)}</span>
+          <span class="thread-actions"><button type="button" class="icon-btn" data-composer-hook-remove="${esc(h.id)}" title="Remove">✕</button></span>
+        </div>`).join('');
+      return `<div class="composer-encounter-field">
+        <span class="field-label-static">Session hooks <button type="button" class="icon-btn" data-composer-field-roll="encounter.sessionHooks" title="Roll a hook">🎲</button></span>
+        ${hooks || '<p class="dim small">None yet.</p>'}
+        <div class="rel-add">
+          <input data-composer-hook-input placeholder="New session hook…">
+          <button type="button" class="btn ghost sm" data-composer-hook-add>+ Add</button>
+        </div>
+      </div>`;
+    }
+    return `<div class="oracle-field-row composer-encounter-field">
+      <span class="field-label-static">${esc(ENCOUNTER_FIELD_LABEL[k] || k)}</span>
+      <button type="button" class="icon-btn" data-composer-field-roll="encounter.${esc(k)}" title="Roll an oracle for ${esc(ENCOUNTER_FIELD_LABEL[k] || k)}">🎲</button>
+      <textarea class="thread-name-input oracle-field-textarea" rows="1" data-composer-encounter-field="${esc(k)}" placeholder="${esc(ENCOUNTER_FIELD_PLACEHOLDERS[k] || '')}">${esc(enc[k])}</textarea>
+    </div>`;
+  }).join('');
+  return `<div class="workspace-mini-section composer-encounter-fields">${rows}</div>`;
 }
 
 // Shared label + 🎲-roll + editable-text row (docs/adr/0041 Phase 13a/13b)
@@ -729,6 +772,7 @@ function whatSectionBody(doc, ui) {
       <div class="rich-field">${richToolbarHTML('what:situation', toolbarCollapsed(doc, ui, 'what:situation'), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-ctx="what.situation" data-placeholder="What is unresolved right now?">${buildMentionEditorHTML(doc, c.situation)}</div></div>
     </div>
     ${whatConflictsBlock(doc, ui)}
+    ${encounterFieldsBlock(doc, ['status', 'statedCause', 'precipitatingIncident'])}
     <label class="field-label">Intent
       <select data-ctx="what.intent">
         ${INTENTS.map((i) => `<option ${i === c.intent ? 'selected' : ''}>${i}</option>`).join('')}
@@ -747,6 +791,7 @@ function whySectionBody(doc, ui) {
     <div class="shift-actions">
       <button class="chip" data-shift-prompt="Set Objective">◎ Set Objective</button>
     </div>
+    ${encounterFieldsBlock(doc, ['rootCause', 'causeGapHook', 'deepRootSummary', 'partyLeverage'])}
     ${threadsBlock(doc)}
     ${foreshadowingBlock(doc)}`;
 }
@@ -759,7 +804,8 @@ function howSectionBody(doc, ui) {
     ${summaryField('how', doc.context.how.summary, 'Exploration, combat, social, downtime…', doc, ui)}
     <div class="shift-actions">
       <button class="chip" data-shift="Advance Time">⏱ Advance Time</button>
-    </div>`;
+    </div>
+    ${encounterFieldsBlock(doc, ['sessionHooks', 'lastDeescalationAttempt', 'gmNotes'])}`;
 }
 
 // The Storyboard's two persistent panels (design/UX-ROADMAP.md Step 2;
@@ -813,10 +859,19 @@ export const COMPOSER_STEPS = [
 // The Composer's own toolbar (direct requests, 2026-11-08): save what it
 // holds as an Encounter, run the Encounter wizard, and copy everything as a
 // prompt for an AI client (domain/encounters.js).
-function composerToolbarHtml(ui) {
+function composerToolbarHtml(ui, doc) {
   const wizard = Number.isInteger(ui.composerWizardStep);
-  return `<div class="composer-toolbar">
-    <button type="button" class="btn sm" data-composer-add-encounter title="Save who, where, what, why and how as an Encounter, linked to everyone and everything in it">＋ Encounter</button>
+  const enc = doc ? composerEncounterFields(doc) : { id: null, name: '' };
+  const editing = enc.id && doc && getEntity(doc, enc.id);
+  return `<div class="composer-encounter-head">
+    <label class="field-label sm composer-encounter-name">${editing ? 'Editing Encounter' : 'New Encounter'}
+      <input data-composer-encounter-field="name" value="${esc(enc.name)}" placeholder="${editing ? 'Unnamed' : 'Named from the situation if left blank'}">
+    </label>
+    ${editing ? `<button type="button" class="icon-btn" data-open-entity="${esc(enc.id)}" title="Open the Encounter record" aria-label="Open the Encounter record">📂</button>` : ''}
+  </div>
+  <div class="composer-toolbar">
+    <button type="button" class="btn sm" data-composer-add-encounter title="${editing ? 'Save the Composer to this Encounter' : 'Save who, where, what, why and how as a new Encounter, linked to everyone and everything in it'}">${editing ? '💾 Save Encounter' : '＋ Save as Encounter'}</button>
+    ${editing ? '<button type="button" class="btn ghost sm" data-composer-new-encounter title="Start a new Encounter (the scene stays as it is)">＋ New</button>' : ''}
     <button type="button" class="icon-btn composer-wizard-btn ${wizard ? 'active' : ''}" data-composer-wizard="${wizard ? 'stop' : 'start'}" title="${wizard ? 'Leave the Encounter wizard' : 'Encounter wizard: questions and oracle suggestions for each step'}" aria-label="Encounter wizard">🪄✨</button>
     <button type="button" class="icon-btn" data-composer-copy-prompt title="Copy everything in the Composer as a prompt for an AI client (to write the encounter’s description)" aria-label="Copy AI prompt">📋</button>
   </div>`;
@@ -867,12 +922,16 @@ function composerWizardOracleRow(stepKey, m, ui) {
   const key = `${stepKey}::${m.path.join('>')}`;
   const label = m.path[m.path.length - 1];
   const result = ui.composerWizardResults && ui.composerWizardResults[key];
-  const useLabel = m.target === 'npc' ? '＋ NPC' : '✔ Use';
-  const useTitle = m.target === 'npc' ? 'Make this an NPC, then choose their role in the scene' : 'Add this to the step’s field';
+  const fields = (ENCOUNTER_WIZARD_GUIDE[stepKey] && ENCOUNTER_WIZARD_GUIDE[stepKey].fields) || [];
+  const chosen = (ui.composerWizardTargets && ui.composerWizardTargets[key]) || m.target;
+  const useLabel = chosen === 'npc' ? '＋ NPC' : '✔ Use';
+  const useTitle = chosen === 'npc' ? 'Make this an NPC, then choose their role in the scene' : 'Add this to the chosen field';
+  const menu = fields.length > 1 ? `<select class="composer-wizard-target" data-composer-wizard-target="${esc(key)}" aria-label="Where to put it">${fields.map(([t, l]) => `<option value="${esc(t)}" ${t === chosen ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>` : '';
   return `<div class="composer-wizard-oracle">
     <button type="button" class="chip sm" data-composer-wizard-roll="${esc(key)}" data-wizard-tag="${esc(m.tag)}" title="Roll ${esc(m.path.join(' → '))}">🎲 ${esc(label)}</button>
     ${result ? `<span class="composer-wizard-result">${esc(result.text)}</span>
       <span class="composer-wizard-result-actions">
+        ${menu}
         <button type="button" class="btn sm" data-composer-wizard-use="${esc(key)}" title="${useTitle}">${useLabel}</button>
         <button type="button" class="icon-btn" data-composer-wizard-journal="${esc(key)}" title="Add to the Journal" aria-label="Add to the Journal">📖</button>
         <button type="button" class="icon-btn" data-composer-wizard-discard="${esc(key)}" title="Discard" aria-label="Discard">✕</button>
@@ -916,7 +975,7 @@ export function composerBodyHtml(doc, ui) {
   const step = COMPOSER_STEPS[i];
   const open = { ...ui, expandedDashboardSections: new Set([...(ui.expandedDashboardSections || []), step.key]) };
   return `
-    ${composerToolbarHtml(ui)}
+    ${composerToolbarHtml(ui, doc)}
     ${!wizard && ui.composerWizardOffer ? composerWizardOfferHtml() : ''}
     ${composerTabsHtml(doc, i)}
     ${wizard ? composerWizardGuideHtml(doc, ui, step, i) : ''}
@@ -1285,23 +1344,7 @@ function factionsActiveNearbyBlock(doc, ui) {
   const scenes = doc.scenes || [];
   const scene = scenes[scenes.length - 1];
   if (!scene) return '';
-  const whereLocations = getCurrentWhereLocations(doc);
-  const primary = whereLocations[0] || null;
-  const seen = new Map();
-  if (primary) {
-    for (const loc of whereLocations) {
-      for (const { faction } of factionsInRegion(doc, loc.id, { maxDepth: 6 })) {
-        if (!seen.has(faction.id)) seen.set(faction.id, faction);
-      }
-    }
-  }
-  const actorIds = [...(scene.protagonistIds || []), ...(scene.antagonistIds || []), ...(scene.bystanderIds || [])];
-  for (const id of actorIds) {
-    const faction = getEntityFaction(doc, id);
-    if (faction && faction.id && !seen.has(faction.id)) seen.set(faction.id, faction);
-  }
-  const dismissed = new Set(scene.dismissedFactionIds || []);
-  const active = Array.from(seen.values()).filter((f) => !dismissed.has(f.id));
+  const active = composerFactionIds(doc).map((id) => getEntity(doc, id)).filter(Boolean);
   const expandedSet = (ui && ui.expandedFactionsNearby) || new Set();
   const thumbs = active.map((f) => entityThumb(doc, f, {
     removeAttrHtml: `data-scene-faction-dismiss="${esc(f.id)}"`,
@@ -1309,10 +1352,10 @@ function factionsActiveNearbyBlock(doc, ui) {
     expanded: expandedSet.has(f.id),
   })).join('');
   return collapsibleThumbGroup(ui, {
-    key: 'who:factions-nearby', label: 'Factions active nearby', count: active.length,
+    key: 'who:factions-nearby', label: 'Factions involved', count: active.length,
     helpKey: 'who:factions-nearby',
-    hint: "Present in the region, manually linked here, or a faction one of this scene's Protagonists/Antagonists/Bystanders belongs to.",
-    headerExtra: primary ? `<button type="button" class="icon-btn" data-entity-picker-open="where-faction-link:${esc(primary.id)}" title="Link a faction operating here">＋</button>` : '',
+    hint: "The Encounter's factions: present in the region, a faction one of this scene's Protagonists/Antagonists/Bystanders belongs to, or added with ＋. ✕ leaves one out.",
+    headerExtra: `<button type="button" class="icon-btn" data-entity-picker-open="composer-faction" title="Add a faction to this encounter">＋</button>`,
     body: `${active.length ? `<div class="actor-thumb-row">${thumbs}</div>` : '<p class="dim small">None yet.</p>'}
       ${active.filter((f) => expandedSet.has(f.id)).map((f) => factionDetailBody(f)).join('')}`,
   });
@@ -1338,30 +1381,6 @@ function assetsPresentBlock(doc, ui) {
   });
 }
 
-/** Faction Conflict's Location (contested zone) picker — lives on WHO,
- *  not tucked inside the Conflict's own Entity Editor card, per direct
- *  request: scoping "which factions are eligible to link" is a WHO-tab
- *  concern, not an entity-detail-form concern. Renders only when a
- *  Conflict is the currently active/open entity (Cast/Entity Editor) —
- *  still just `data-entity-field="locationId"`, the same generic handler
- *  every other entity field already uses (it always targets whichever
- *  entity is active, regardless of which tab the control is rendered
- *  on), so no new shell.js wiring is needed for the field itself. */
-function activeConflictLocationPicker(doc) {
-  const active = getEntity(doc, doc.entities && doc.entities.activeId);
-  if (!active || active.type !== 'conflict') return '';
-  const locations = (doc.entities.items || []).filter((e) => e.type === 'location');
-  return `
-    <div class="workspace-mini-section">
-      <label class="field-label">${esc(active.name || 'This encounter')} — Location (contested zone)
-        <select data-entity-field="locationId">
-          <option value="">— unset —</option>
-          ${locations.map((l) => `<option value="${esc(l.id)}" ${active.locationId === l.id ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
-        </select>
-      </label>
-      <p class="dim small">Scopes which factions are offered as "local" when linking this conflict's Involved factions.</p>
-    </div>`;
-}
 
 // Same tie-in, from WHERE's side: the most recent committed Faction
 // Events at the current location(s)/district, each jumping to the panel
@@ -1423,8 +1442,8 @@ function locationFactionsBlock(doc, ui) {
 }
 
 // Read-only digest: Conflicts (docs/adr/0036) whose `locationId` (the
-// contested zone, set from this same WHO/WHERE pairing —
-// activeConflictLocationPicker above) matches the current location(s).
+// contested zone: the first WHERE place when it was saved from the
+// Composer) matches the current location(s).
 function locationConflictsBlock(doc) {
   const whereLocations = getCurrentWhereLocations(doc);
   if (!whereLocations.length) return '';

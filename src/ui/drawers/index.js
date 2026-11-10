@@ -32,6 +32,7 @@ import { COMMODITIES, findCommodity } from '../../data/commodities.js';
 import { THREAD_STATUSES, THREAD_STATUS_LABELS, THREAD_PRIORITIES } from '../../domain/threads.js';
 import { getPressureTrack } from '../../domain/factions.js';
 import { getFactionGoalTrack, factionEventsByRound, getConflictEscalationTrack, factionsPresentAt } from '../../domain/factionTurnEngine.js';
+import { ACTIVITIES } from '../../domain/activities.js';
 import { generateConflictSeed } from '../../domain/factionConflicts.js';
 import { factionProviderFor } from '../../data/factionRulesProviders.js';
 import { getEnhancements, strainUsed, strainCapacity, isOverStrained } from '../../domain/enhancements.js';
@@ -637,17 +638,10 @@ function conflictSection(doc, e, ui) {
       <span class="thread-actions"><button class="icon-btn" data-conflict-hook-remove="${esc(e.id)}::${esc(h.id)}" title="Remove">✕</button></span>
     </div>`).join('');
   const depthOpen = (ui.expandedConflictDepth || new Set()).has(e.id);
-  // Location (contested zone) is set from WHO's own tab, not here (direct
-  // request — scoping "which factions are eligible" is a WHO-tab
-  // concern), via workspace/index.js's activeConflictLocationPicker; this
-  // card just READS e.locationId to scope the "Involved" faction picker
-  // below to whoever's actually PRESENT there (factionsPresentAt, Living
-  // Faction Engine Phase A). The generic Relationships block further down
-  // can still link ANY faction regardless (Article II — this dropdown is
-  // a curated convenience, not a restriction).
-  const localFactions = e.locationId ? factionsPresentAt(doc, e.locationId) : listEntities(doc, 'faction');
-  const involvedIds = new Set(involvedFactions.map((f) => f.id));
-  const linkableFactions = localFactions.filter((f) => !involvedIds.has(f.id));
+  // Factions involved (direct request, 2026-11-09): the same thumbnail list
+  // the Composer's WHO shows, with ＋ (the entity picker) and ✕, in place of
+  // the old location-scoped dropdown. They are the record's `involves`
+  // links; saving from the Composer sets them to its factions list.
   // Direct follow-up request: "make the section headers such as 'Conflict'
   // and 'Relationships'... use the same collapseable format used on the
   // Campaign panel" — default COLLAPSED, same reasoning factionSection's
@@ -658,17 +652,11 @@ function conflictSection(doc, e, ui) {
       <label class="field-label">Status
         <select data-entity-field="status">${CONFLICT_STATUS_OPTIONS.map(([v, l]) => `<option value="${v}" ${e.status === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
       </label>
-      ${e.locationId ? '' : '<p class="dim small">Set this conflict\'s Location on the WHO tab to narrow the faction picker below to local factions.</p>'}
       ${clockHtml}
       <div class="faction-assets">
-        <span class="field-label-static">Involved</span>
-        <span class="faction-asset-list">${involvedFactions.map((f) => `<button type="button" class="entity-chip" data-open-entity="${esc(f.id)}">${esc(f.name) || 'Unnamed'}</button>`).join('') || '<span class="dim small">None yet.</span>'}</span>
-        <select data-conflict-faction-link="${esc(e.id)}">
-          <option value="">${e.locationId ? '— add a local faction —' : '— add a faction —'}</option>
-          ${linkableFactions.map((f) => `<option value="${esc(f.id)}">${esc(f.name) || 'Unnamed'}</option>`).join('')}
-        </select>
+        <span class="field-label-static">Factions involved <button type="button" class="icon-btn" data-entity-picker-open="conflict-faction:${esc(e.id)}" title="Add a faction to this encounter">＋</button></span>
       </div>
-      ${!e.locationId ? '<p class="dim small">Set a Location above to narrow this list to factions actually present there.</p>' : (!linkableFactions.length ? '<p class="dim small">No other factions present at this location yet — link one from Relationships below if it belongs anyway.</p>' : '')}
+      ${involvedFactions.length ? `<div class="actor-thumb-row">${involvedFactions.map((f) => encounterEntityThumb(doc, f, `data-conflict-faction-remove="${esc(e.id)}::${esc(f.id)}"`)).join('')}</div>` : '<p class="dim small">None yet.</p>'}
       <label class="field-label">What people say it's about
         <input data-entity-field="statedCause" value="${esc(e.statedCause)}" placeholder="The public story">
       </label>
@@ -692,11 +680,78 @@ function conflictSection(doc, e, ui) {
       </div>
       <button class="section-toggle" data-conflict-depth-toggle="${esc(e.id)}">${depthOpen ? '▾' : '▸'} Add depth</button>
       ${depthOpen ? conflictDepthHtml(doc, e, ui, involvedFactions) : ''}`;
+  const toComposer = `<button type="button" class="btn ghost sm" data-encounter-to-composer="${esc(e.id)}" title="Edit this Encounter in the Composer (the Encounter builder)">📝 Open in Composer</button>`;
   return `
     <div class="faction-card">
-      ${partySectionHeaderHtml(conflictKey, 'Encounter', conflictCollapsed)}
+      ${partySectionHeaderHtml(conflictKey, 'Encounter', conflictCollapsed, toComposer)}
       ${conflictCollapsed ? '' : conflictBodyHtml}
-    </div>`;
+    </div>
+    ${encounterComposerFieldsHtml(doc, e, ui)}`;
+}
+
+// An entity thumbnail with an optional ✕ (same markup as the Composer's).
+function encounterEntityThumb(doc, a, removeAttr) {
+  const img = a.thumbnailId ? getGalleryImage(doc, a.thumbnailId) : null;
+  const photo = img
+    ? `<img class="actor-thumb-photo" src="${esc(imageSrc(img))}" alt="">`
+    : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((a.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
+  return `<div class="actor-thumb-wrap">
+    <div class="actor-thumb-circle">
+      <button type="button" class="actor-thumb" data-open-entity="${esc(a.id)}" title="${esc(a.name || 'Unnamed')}">${photo}</button>
+      ${removeAttr ? `<button type="button" class="actor-thumb-badge actor-thumb-badge-remove" ${removeAttr} title="Remove">✕</button>` : ''}
+    </div>
+    <span class="actor-thumb-name">${esc(a.name || 'Unnamed')}</span>
+  </div>`;
+}
+
+// What the Composer (the Encounter builder) saved onto the record: the cast,
+// assets and places, and WHERE/WHAT/WHY/HOW — the same information without
+// the Composer's oracles and tips. The text fields edit in place; the lists
+// change through the Composer (📝 Open in Composer).
+const ENCOUNTER_INTENTS = ['Discovery', 'Travel', 'Social encounter', 'Investigation', 'Resource pressure', 'Combat pressure', 'Moral choice', 'Faction complication', 'Exploration hazard', 'Trade opportunity'];
+function encounterComposerFieldsHtml(doc, e, ui) {
+  const key = `entityEncounterComposer:${e.id}`;
+  const collapsed = isPartySectionCollapsed(ui, key, true);
+  const head = partySectionHeaderHtml(key, 'Who, where, what, why, how', collapsed);
+  if (collapsed) return `<div class="faction-card">${head}</div>`;
+  const people = (ids) => (ids || []).map((id) => getEntity(doc, id)).filter(Boolean);
+  const group = (label, ids) => {
+    const list = people(ids);
+    return `<div class="faction-assets"><span class="field-label-static">${esc(label)}</span></div>
+      ${list.length ? `<div class="actor-thumb-row">${list.map((x) => encounterEntityThumb(doc, x, '')).join('')}</div>` : '<p class="dim small">None.</p>'}`;
+  };
+  const area = (field, label) => `<label class="field-label sm">${esc(label)}
+      <textarea class="oracle-field-textarea" rows="1" data-entity-field="${esc(field)}">${esc(e[field] || '')}</textarea>
+    </label>`;
+  const intents = ENCOUNTER_INTENTS.includes(e.intent) || !e.intent ? ENCOUNTER_INTENTS : [e.intent, ...ENCOUNTER_INTENTS];
+  return `<div class="faction-card encounter-composer-fields">
+    ${head}
+    <h4 class="encounter-composer-head">Who</h4>
+    ${group('Protagonists', e.protagonistIds)}
+    ${group('Antagonists', e.antagonistIds)}
+    ${group('Bystanders', e.bystanderIds)}
+    ${group('Assets present', e.assetIds)}
+    <h4 class="encounter-composer-head">Where</h4>
+    ${group('Places', e.locationIds)}
+    ${area('siteDescription', 'Site description')}
+    ${area('surroundings', 'Immediate surroundings')}
+    <h4 class="encounter-composer-head">What</h4>
+    ${area('situation', 'Situation')}
+    <label class="field-label sm">Intent
+      <select data-entity-field="intent"><option value="">—</option>${intents.map((i) => `<option ${i === e.intent ? 'selected' : ''}>${esc(i)}</option>`).join('')}</select>
+    </label>
+    <div class="colony-turn-row">
+      <label class="field-label sm">Threat ${numStepper(`<input type="number" min="0" max="10" data-entity-field="threat" value="${esc(Number(e.threat) || 0)}">`)}</label>
+      <label class="field-label sm">Mystery ${numStepper(`<input type="number" min="0" max="10" data-entity-field="mystery" value="${esc(Number(e.mystery) || 0)}">`)}</label>
+    </div>
+    <h4 class="encounter-composer-head">Why</h4>
+    ${area('objective', 'Objective')}
+    <h4 class="encounter-composer-head">How</h4>
+    ${area('encounterMode', 'Mode and pacing')}
+    <label class="field-label sm">Activity
+      <select data-entity-field="encounterActivity"><option value="">— none set —</option>${ACTIVITIES.map((a) => `<option value="${esc(a.id)}" ${a.id === e.encounterActivity ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}</select>
+    </label>
+  </div>`;
 }
 
 function conflictDepthHtml(doc, e, ui, involvedFactions) {
