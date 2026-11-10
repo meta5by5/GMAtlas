@@ -46,6 +46,7 @@ import { GEAR_TEMPLATE_SYSTEMS, findGearTemplate } from '../../data/gearTemplate
 import { GEAR_CATALOG, findCatalogItem } from '../../data/gearCatalog.js';
 import { RULES_PROVIDERS, GAMEPLAY_AREAS, providerLabel, resolveProviderChoice, resolveActiveProviderChoice, isGameSystemActivated, isTurnStepSystemActive, matchesEnabledModule, isLicensed, isLicenseInUse, isPackInUse, licenseFor, licenseFamilies, licenseForDoc, isSupplementInUse, rulesConstitutionOptionIds, moduleProviderId } from '../../data/rulesConstitution.js';
 import { CONTENT_PACKS_MANIFEST } from '../../data/contentPacksManifest.js';
+import { countSourcePackEntities } from '../../domain/contentPack.js';
 import { CSS_TEMPLATES } from '../../data/cssTemplates.js';
 import { SOURCEBOOK_INVENTORY } from '../../data/sourcebookInventory.js';
 import { listGalleryImages, listGalleryTagVocabulary, getGalleryImage, isGalleryVideo } from '../../domain/gallery.js';
@@ -2703,16 +2704,20 @@ function journal(doc, ui = {}) {
 // navigatorBodyHtml) — the one-click roll-a-thing buttons that used to sit
 // under the Journal compose box. Each still writes its result into the
 // Journal (same shell.js handlers, same data-* attributes). Collapsed by
-// default, same section header as Contracts just below it.
-export function generatorsSection(ui) {
+// default, same section header as Contracts just below it. Advance Faction
+// Turns shows only while the profile has Faction Events on (ui.factionsActive).
+export function generatorsSection(ui, doc) {
+  // A fantasy campaign's job is a quest (direct request, 2026-11-09).
+  const settings = (doc && doc.settings) || {};
+  const quest = isFantasyGenre(settings.statRuleset === 'ironsworn' ? 'fantasy' : settings.genrePack);
   const collapsed = isPartySectionCollapsed(ui, 'navigator-generators', true);
   const header = partySectionHeaderHtml('navigator-generators', 'Generators', collapsed);
   if (collapsed) return header;
   return `${header}
     <p class="dim small">Each result is added to the Journal.</p>
     <div class="drawer-note-actions">
-      <button class="btn ghost" data-generate-mission title="Roll a job: payout/deadline scaled by the current Threat, plus a complication">🎲 Generate Mission</button>
-      <button class="btn ghost" data-advance-faction-turns title="Advance every tracked faction's pressure by one tick and roll a rumor for each">🎲 Advance Faction Turns</button>
+      <button class="btn ghost" data-generate-mission title="Roll a ${quest ? 'quest' : 'job'}: payout/deadline scaled by the current Threat, plus a complication">🎲 Generate ${quest ? 'Quest' : 'Mission'}</button>
+      ${ui.factionsActive === false ? '' : `<button class="btn ghost" data-advance-faction-turns title="Advance every tracked faction's pressure by one tick and roll a rumor for each">🎲 Advance Faction Turns</button>`}
       <button class="btn ghost" data-generate-creature title="Roll a creature concept: origin, movement, trait, and threat">🎲 Creature Concept</button>
       <button class="btn ghost" data-generate-site title="Roll a site concept: a feature, a danger, and a wonder">🎲 Site Concept</button>
       <button class="btn ghost" data-generate-seed title="Roll an adventure seed: a hook, a twist, and a complication">🎲 Adventure Seed</button>
@@ -3697,7 +3702,9 @@ function licensePacksHtml(doc, lic, owned, ui) {
     const attr = isData ? 'data-data-pack-import' : 'data-content-pack-import';
     // Import only while this campaign uses the book (isPackInUse), as in
     // Settings › Campaigns › Source Data.
-    const btn = owned && ui.canLoadReference && isPackInUse(doc.settings, pk)
+    const btn = countSourcePackEntities(doc, pk.id)
+      ? '<button type="button" class="btn ghost sm danger" data-source-pack-remove="' + esc(pk.id) + '" title="Delete the records this pack added to the current campaign">Remove</button>'
+      : owned && ui.canLoadReference && isPackInUse(doc.settings, pk)
       ? '<button type="button" class="btn ghost sm" ' + attr + '="' + esc(pk.id) + '" ' + (busy ? 'disabled' : '') + ' title="Import into the current campaign (skips anything already there by name)">' + (busy ? 'Importing…' : '⬇ Import') + '</button>'
       : '';
     return '<li class="license-doc-row"><span class="license-doc-title" title="' + esc(pk.description || '') + '">' + (isData ? '🗺️ ' : pk.contents === 'equipment' ? '🗡️ ' : '🐾 ') + esc(pk.title) + '</span> ' + btn + '</li>';
@@ -3843,7 +3850,9 @@ function contentPackSection(ui) {
 function sourceDataSection(doc, ui) {
   const contentImporting = ui.contentPackImporting || new Set();
   const dataImporting = ui.dataPackImporting || new Set();
-  const packs = CONTENT_PACKS_MANIFEST.filter((pk) => isPackInUse(doc.settings, pk));
+  // A pack already in the campaign stays listed (with Remove) after its book
+  // stops being in use, which is when a GM wants it out again.
+  const packs = CONTENT_PACKS_MANIFEST.filter((pk) => isPackInUse(doc.settings, pk) || countSourcePackEntities(doc, pk.id));
   const groups = new Map();
   for (const pk of packs) {
     const lic = licenseFor(pk.supplement || pk.ruleset);
@@ -3856,9 +3865,14 @@ function sourceDataSection(doc, ui) {
     const busy = (isData ? dataImporting : contentImporting).has(pk.id);
     const attr = isData ? 'data-data-pack-import' : 'data-content-pack-import';
     const kindLabel = isData ? 'Locations' : pk.contents === 'equipment' ? 'Weapons & equipment' : 'Lifeforms & enemies';
+    const imported = countSourcePackEntities(doc, pk.id);
+    const notInUse = !isPackInUse(doc.settings, pk);
+    const btn = imported
+      ? `<button type="button" class="btn ghost sm danger" data-source-pack-remove="${esc(pk.id)}" title="Delete the ${imported} record${imported === 1 ? '' : 's'} this pack added to the campaign">Remove</button>`
+      : `<button type="button" class="btn ghost sm" ${attr}="${esc(pk.id)}" ${busy ? 'disabled' : ''}>${busy ? 'Importing…' : 'Import'}</button>`;
     return `<li class="source-data-row">
-        <span><b>${esc(pk.title)}</b> <span class="chip sm">${kindLabel}</span><br><span class="dim small">${esc(pk.description || '')}</span></span>
-        <button type="button" class="btn ghost sm" ${attr}="${esc(pk.id)}" ${busy ? 'disabled' : ''}>${busy ? 'Importing…' : 'Import'}</button>
+        <span><b>${esc(pk.title)}</b> <span class="chip sm">${kindLabel}</span>${imported ? ` <span class="dim small">${imported} in campaign</span>` : ''}${notInUse ? ' <span class="chip sm" title="Its book is no longer in use in this campaign">not in use</span>' : ''}<br><span class="dim small">${esc(pk.description || '')}</span></span>
+        ${btn}
       </li>`;
   };
   const body = [...groups.entries()].map(([label, list]) => `
@@ -3867,7 +3881,7 @@ function sourceDataSection(doc, ui) {
   return `
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Source Data', 'settings-source-data')}
-      ${helpBody('settings-source-data', "Preload game data into this campaign from the sourcebooks it uses — lifeforms and enemies as Cast entities, weapons and equipment as Items, Hostile's canon worlds and stations as Locations. Only packs whose license you own (Settings → Licenses) and whose game system this campaign's profile designates are listed. Imports add to the campaign and skip anything that already exists by name, so it's safe to run one again. Needs the app served over http(s) (npm run serve).", ui)}
+      ${helpBody('settings-source-data', "Preload game data into this campaign from the sourcebooks it uses — lifeforms and enemies as Cast entities, weapons and equipment as Items, Hostile's canon worlds and stations as Locations. Only packs whose license you own (Settings → Licenses) and whose game system this campaign's profile designates are listed. Imports add to the campaign and skip anything that already exists by name. Once a pack is in the campaign its button becomes Remove, which deletes every record it added (with any edits made to them) — for when the campaign stops using that book or supplement; a pack stays listed while it has records here, even after its book is no longer in use. Needs the app served over http(s) (npm run serve).", ui)}
       ${body || '<p class="dim small">No source data for this campaign\'s game systems — own a license in Settings → Licenses and designate its game system in Settings → Modules.</p>'}
     </div>`;
 }
@@ -4456,17 +4470,21 @@ function sharedAssetVehicleThumb(doc, entityId) {
 // 5PFH specifically — same Genre-Pack-scoping posture Phase B's Rules
 // Constitution/Game System Activation sections already established,
 // applied here rather than only there.
+//
+// Direct request (2026-11-09): moved from the Party tab to the Party panel's
+// Starship tab (starshipTabHtml), under the ship's photo and name, open by
+// default. That tab only shows while Five Parsecs is in use, which replaces
+// the old sci-fi genre-pack check.
 function partyStarshipSectionHtml(doc, ui) {
-  if ((doc.settings.genrePack || 'sci-fi-generic') !== 'sci-fi-generic') return '';
   const entityId = doc.party && doc.party.starshipEntityId;
   const entity = entityId ? getEntity(doc, entityId) : null;
-  const collapsed = isPartySectionCollapsed(ui, 'starship', true);
+  const collapsed = isPartySectionCollapsed(ui, 'starship', false);
   const headerExtra = entity
     ? '<button type="button" class="icon-btn" data-party-starship-remove title="Remove starship">🗑</button>'
     : '<button class="chip" data-entity-picker-open="party-starship">＋ Select Starship</button>';
   return `
     ${partySectionHeaderHtml('starship', 'Starship', collapsed, headerExtra)}
-    ${collapsed ? '' : (entity ? partyMemberCard(entity, doc, ui) : '<p class="ws-placeholder">No starship yet — pick a #vehicle Asset entity above.</p>')}`;
+    ${collapsed ? '' : (entity ? partyMemberCard(entity, doc, ui) : '<p class="ws-placeholder">No starship yet — select a #vehicle Asset entity.</p>')}`;
 }
 
 // Party's Relationships section (direct follow-up request: "add a
@@ -4635,7 +4653,6 @@ function party(doc, ui = {}) {
     <div class="party-member-list" data-drop-party>
       ${memberCards || '<p class="ws-placeholder">No party members yet. Add one with ＋, tag an existing NPC #character in Cast, or drag one in here.</p>'}
     </div>
-    ${partyStarshipSectionHtml(doc, ui)}
     ${partySectionHeaderHtml('trackers', 'Party Trackers', trackersCollapsed, `${ui.partyTrackerAddOpen ? '' : '<button class="icon-btn" data-party-tracker-add-toggle title="Add tracker">＋</button>'}<button class="icon-btn" data-party-trackers-edit-toggle title="${trackersEditOpen ? 'Done editing' : 'Edit trackers (rename, remove)'}">${trackersEditOpen ? '💾' : '✎'}</button>`)}
     ${trackersCollapsed ? '' : `
     ${ui.partyTrackerAddOpen ? partyTrackerAddForm(ui, isStarforged) : ''}
@@ -4955,9 +4972,9 @@ function colonyTabHtml(doc, ui = {}) {
 
 // The Starship tab (direct follow-up request — plays the base 5PFH game,
 // distinct from Colony's own Planetfall content): a thumbnail+name row for
-// the single #starship-tagged entity (Party's own Starship section, below,
-// is the canonical place that ASSIGNS it — see partyStarshipSectionHtml —
-// this tab just displays/edits whatever's currently assigned, same
+// the single #starship-tagged entity, then its Starship section
+// (partyStarshipSectionHtml: the ship's card with statblocks, and select/
+// remove — this used to sit on the Party tab), same
 // "reference by id" shape Colony's own Crew Roster already uses for
 // entities), plus its own independent Campaign Turn (party.
 // starshipCampaignTurn — direct follow-up request: a separate counter, no
@@ -5010,6 +5027,7 @@ function starshipTabHtml(doc, ui = {}) {
   const campaignGuideCollapsed = isPartySectionCollapsed(ui, 'starshipCampaignGuide', false);
   return `
     ${starshipThumbnailRowHtml(doc)}
+    ${partyStarshipSectionHtml(doc, ui)}
     ${partySectionHeaderHtml('starshipCampaignGuide', 'Campaign Guide', campaignGuideCollapsed)}
     ${campaignGuideCollapsed ? '' : `
     <div class="colony-turn-row">

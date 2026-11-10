@@ -185,8 +185,9 @@ test('wrapLegacyCampaignIntoAppConfig: a pre-Rules-Profile single campaign becom
   assert.deepEqual(defaultProfile.ruleset.partyHeadlineFields, ['Luck', 'XP']);
   for (const id of GATEABLE_MODULES) assert.equal(defaultProfile.moduleEnabled[id], true, `Default profile: ${id} stays enabled (nothing was hidden before)`);
 
-  assert.equal(fivePfhProfile.name, '5PFH');
-  assert.equal(fivePfhProfile.ruleset.statRuleset, 'traveller', 'same ruleset as Default');
+  assert.equal(fivePfhProfile.name, 'Five Parsecs');
+  assert.equal(fivePfhProfile.ruleset.statRuleset, '5pfh', 'Module for Profile: Five Parsecs from Home');
+  assert.deepEqual(fivePfhProfile.ruleset.partyHeadlineFields, ['Speed', 'Combat', 'Tough']);
   assert.equal(fivePfhProfile.moduleEnabled.trade, false);
   assert.equal(fivePfhProfile.moduleEnabled.battlemap, false);
   assert.equal(fivePfhProfile.moduleEnabled.graph, false);
@@ -209,7 +210,7 @@ test('wrapLegacyCampaignIntoAppConfig: a pre-Rules-Profile single campaign becom
   // independence from the legacy doc's ruleset as D&D 5e above, but with
   // `colony` left ON (unlike D&D 5e's fully Storyboard-only profile),
   // since Warband campaign-turn tracking lives in the Campaign panel.
-  assert.equal(fiveLeaguesProfile.name, 'Five Leagues (Storyboard)');
+  assert.equal(fiveLeaguesProfile.name, 'Five Leagues from the Borderlands');
   assert.equal(fiveLeaguesProfile.ruleset.statRuleset, 'fiveleagues');
   assert.equal(fiveLeaguesProfile.ruleset.genrePack, 'fantasy');
   assert.equal(fiveLeaguesProfile.moduleEnabled.colony, true);

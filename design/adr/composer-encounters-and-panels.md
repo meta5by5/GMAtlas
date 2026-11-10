@@ -38,11 +38,20 @@ recording it, and tidied several panels:
    `describeEncounter()` rejects) is the one place a future automated client
    goes. Today the 📋 button copies the prompt to the clipboard. Only the
    prompt text would ever be sent (rule 6).
-3. **The wizard reuses the Composer's own sections.** In wizard mode the
-   Composer shows one section (WHO → HOW) at a time with Back/Next and a
-   final "Save as Encounter"; the step is shell state, not document state.
-   The "run the wizard?" offer shows while the campaign has no Encounter and
-   until "Not now" for that campaign this session.
+3. **The Composer is tabbed, and the wizard guides.** The Composer shows a
+   WHO/WHERE/WHAT/WHY/HOW tab strip and one section at a time (a filled
+   section's tab is ticked); Activity sits on the HOW tab. The wizard is the
+   same tabs plus a guide over the section: the step's questions and oracle
+   tables suggested for it (`data/encounterWizardGuide.js`; tags from the
+   locked field-link vocabulary, WHAT led by the current Intent;
+   `domain/encounters.js` `wizardOracleSuggestions`). A suggestion rolls in
+   place; ✔ Use appends the result to the step's field (WHERE's surroundings
+   tag to Immediate Surroundings), at WHO ＋ NPC makes it an NPC and asks for
+   their scene role, 📖 files it in the Journal; 🔀 Others pages on. Back/Next
+   and a final "Save as Encounter". The tab, step and rolled results are
+   shell state, not document state. The "run the wizard?" offer shows while
+   the campaign has no Encounter and until "Not now" for that campaign this
+   session.
 4. **Panels.**
    - Party gains a tab row: Party, then each Turn-Step tab (Colony,
      Starship, Warband) whose system is in use; the ＋ add-member button

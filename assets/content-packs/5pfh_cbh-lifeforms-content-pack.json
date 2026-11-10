@@ -33,7 +33,7 @@
               "target": 6
             },
             {
-              "key": "Toughness",
+              "key": "Tough",
               "value": 4,
               "max": 5,
               "track": true,
@@ -85,7 +85,7 @@
               "target": 6
             },
             {
-              "key": "Toughness",
+              "key": "Tough",
               "value": 5,
               "max": 5,
               "track": true,
@@ -137,7 +137,7 @@
               "target": 6
             },
             {
-              "key": "Toughness",
+              "key": "Tough",
               "value": 5,
               "max": 5,
               "track": true,
@@ -189,7 +189,7 @@
               "target": 6
             },
             {
-              "key": "Toughness",
+              "key": "Tough",
               "value": 4,
               "max": 5,
               "track": true,
@@ -241,7 +241,7 @@
               "target": 6
             },
             {
-              "key": "Toughness",
+              "key": "Tough",
               "value": 4,
               "max": 5,
               "track": true,
@@ -293,7 +293,7 @@
               "target": 6
             },
             {
-              "key": "Toughness",
+              "key": "Tough",
               "value": 4,
               "max": 5,
               "track": true,
@@ -345,7 +345,7 @@
               "target": 6
             },
             {
-              "key": "Toughness",
+              "key": "Tough",
               "value": 3,
               "max": 5,
               "track": true,
@@ -397,7 +397,7 @@
               "target": 6
             },
             {
-              "key": "Toughness",
+              "key": "Tough",
               "value": 5,
               "max": 5,
               "track": true,
@@ -449,7 +449,7 @@
               "target": 6
             },
             {
-              "key": "Toughness",
+              "key": "Tough",
               "value": 4,
               "max": 5,
               "track": true,
@@ -501,7 +501,7 @@
               "target": 6
             },
             {
-              "key": "Toughness",
+              "key": "Tough",
               "value": 5,
               "max": 5,
               "track": true,
@@ -553,7 +553,7 @@
               "target": 6
             },
             {
-              "key": "Toughness",
+              "key": "Tough",
               "value": 4,
               "max": 5,
               "track": true,
@@ -605,7 +605,7 @@
               "target": 6
             },
             {
-              "key": "Toughness",
+              "key": "Tough",
               "value": 3,
               "max": 5,
               "track": true,
@@ -657,7 +657,7 @@
               "target": 6
             },
             {
-              "key": "Toughness",
+              "key": "Tough",
               "value": 4,
               "max": 5,
               "track": true,
@@ -709,7 +709,7 @@
               "target": 6
             },
             {
-              "key": "Toughness",
+              "key": "Tough",
               "value": 4,
               "max": 5,
               "track": true,
@@ -761,7 +761,7 @@
               "target": 6
             },
             {
-              "key": "Toughness",
+              "key": "Tough",
               "value": 3,
               "max": 5,
               "track": true,
@@ -813,7 +813,7 @@
               "target": 6
             },
             {
-              "key": "Toughness",
+              "key": "Tough",
               "value": 4,
               "max": 5,
               "track": true,

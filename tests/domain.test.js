@@ -3434,7 +3434,7 @@ test('createGeneratedLifeform creates a lifeform entity with one populated plane
   const fields = entity.statblocks[0].fields;
   assert.ok([5, 6, 7].includes(fields.find((f) => f.key === 'Speed').value));
   assert.ok([0, 1, 2].includes(fields.find((f) => f.key === 'Combat').value));
-  assert.ok([3, 4, 5].includes(fields.find((f) => f.key === 'Toughness').value));
+  assert.ok([3, 4, 5].includes(fields.find((f) => f.key === 'Tough').value));
   assert.ok([0, 1, 2].includes(fields.find((f) => f.key === 'Melee Damage').value));
 });
 
@@ -4790,7 +4790,7 @@ test('a NPC entity can add a Bestiary template by id, alongside its existing gro
   const e = getEntity(camp, id);
   const fivePfh = e.statblocks.find((g) => g.templateId === '5pfh');
   assert.ok(fivePfh);
-  assert.ok(fivePfh.fields.some((f) => f.key === 'Toughness'));
+  assert.ok(fivePfh.fields.some((f) => f.key === 'Tough'));
   // the auto-attached Bestiary group from creation is untouched, not replaced
   // (defaultCampaign()'s own statRuleset is 'starforged' — see DEFAULT_NPC_TEMPLATE_BY_RULESET)
   assert.ok(e.statblocks.some((g) => g.templateId === 'starforged'));
@@ -10797,7 +10797,7 @@ test('backfillFiveLeaguesStoryboardProfile seeds the "Five Leagues (Storyboard)"
   const backfilled = backfillFiveLeaguesStoryboardProfile(cfg);
   assert.notEqual(backfilled, cfg, 'a change was made');
   assert.equal(backfilled.profiles.length, 2);
-  const fl = backfilled.profiles.find((p) => p.name === 'Five Leagues (Storyboard)');
+  const fl = backfilled.profiles.find((p) => p.name === 'Five Leagues from the Borderlands');
   assert.ok(fl);
   assert.equal(fl.ruleset.statRuleset, 'fiveleagues');
   assert.equal(fl.ruleset.genrePack, 'fantasy', 'the relabeled "Fantasy (generic)" pack, not a new pack of its own');
@@ -13237,4 +13237,119 @@ test('equipment packs: each is offered only while its own book is owned and in u
   assert.deepEqual(inUse({ statRuleset: '5pfh', licenses: { fivepfh: true, 'fivepfh-compendium': true }, rulesProviderChoices: { bestiary: 'fivepfh-compendium' } }), ['5pfh-equipment', '5pfh-compendium-equipment']);
   assert.deepEqual(inUse({ statRuleset: '5pfh', licenses: { fivepfh: true, planetfall: true }, rulesProviderChoices: { 'colony-management': 'planetfall' } }), ['5pfh-equipment', 'planetfall-equipment']);
   assert.deepEqual(inUse({ statRuleset: 'fiveleagues', licenses: { fiveleagues: true, 'fiveleagues-compendium': true }, rulesProviderChoices: { bestiary: 'fiveleagues-compendium' } }), ['fiveleagues-equipment', 'fiveleagues-compendium-equipment']);
+});
+
+// --- 2026-11-09: guided Encounter wizard, Tough rename, Five Parsecs profile ---
+test('Encounter wizard: each step suggests real oracle tables with a target, WHAT follows the Intent, and Others pages on', async () => {
+  const { wizardOracleSuggestions, wizardStepTags, wizardResultTarget } = await import('../src/domain/encounters.js');
+  const { ENCOUNTER_WIZARD_GUIDE } = await import('../src/data/encounterWizardGuide.js');
+  const camp = defaultCampaign();
+  for (const key of ['who', 'where', 'what', 'why', 'how']) {
+    assert.ok(ENCOUNTER_WIZARD_GUIDE[key].prompts.length >= 3, `${key} has questions`);
+    const list = wizardOracleSuggestions(camp, key);
+    assert.ok(list.length > 0 && list.length <= 5, `${key} suggests 1-5 tables`);
+    for (const m of list) assert.ok(Array.isArray(m.path) && m.path.length && m.target, `${key}: path and target`);
+    assert.equal(new Set(list.map((m) => m.path.join('>'))).size, list.length, 'no table twice');
+  }
+  const social = { ...camp, context: { ...camp.context, what: { ...camp.context.what, intent: 'Social encounter' } } };
+  assert.deepEqual(wizardStepTags(social, 'what').slice(0, 2), ['character', 'leadership']);
+  assert.equal(wizardResultTarget('who', 'character'), 'npc');
+  assert.equal(wizardResultTarget('where', 'surroundings'), 'where.surroundings');
+  assert.equal(wizardResultTarget('where', 'site'), 'where.siteDescription');
+  const first = wizardOracleSuggestions(camp, 'who').map((m) => m.path.join('>'));
+  const next = wizardOracleSuggestions(camp, 'who', { offset: 5 }).map((m) => m.path.join('>'));
+  assert.notDeepEqual(first, next, 'Others shows a different set');
+});
+
+test('Encounter wizard: a kept result appends to its Composer field; an NPC name comes from the result', async () => {
+  const { applyWizardResult, npcNameFromOracleText } = await import('../src/domain/encounters.js');
+  let camp = defaultCampaign();
+  camp = applyWizardResult(camp, 'what.situation', 'A sealed vault hums.');
+  camp = applyWizardResult(camp, 'what.situation', 'Someone is inside.');
+  assert.equal(camp.context.what.situation, 'A sealed vault hums.\nSomeone is inside.');
+  assert.equal(applyWizardResult(camp, 'nope.field', 'x'), camp);
+  assert.equal(applyWizardResult(camp, 'why.summary', '  '), camp);
+  assert.equal(npcNameFromOracleText('Character → Grizzled smuggler'), 'Grizzled smuggler');
+  assert.equal(npcNameFromOracleText('Character: A very tall and extremely nervous dock worker.'), 'A very tall and extremely nervous…');
+});
+
+test('Five Parsecs and Planetfall Bestiary templates call the field Tough; an old Toughness field is renamed in place', async () => {
+  const { renameLegacyToughFields, TOUGH_TEMPLATE_IDS } = await import('../src/domain/statblocks.js');
+  const { DEFAULT_STATBLOCK_TEMPLATES: STATBLOCK_TEMPLATES } = await import('../src/data/statblockTemplates.js');
+  for (const id of TOUGH_TEMPLATE_IDS) {
+    const keys = STATBLOCK_TEMPLATES[id].fields.map((f) => f.key);
+    assert.ok(keys.includes('Tough') && !keys.includes('Toughness'), `${id} uses Tough`);
+  }
+  assert.ok(STATBLOCK_TEMPLATES['fiveleagues-lifeform'].fields.some((f) => f.key === 'Toughness'), 'Five Leagues keeps its own name');
+  const camp = defaultCampaign();
+  camp.entities.items.push(
+    { id: 'e1', type: 'npc', name: 'Old', statblocks: [{ kind: 'npc', templateId: '5pfh-lifeform', fields: [{ key: 'Toughness', value: 4, max: 5, track: true }] }] },
+    { id: 'e2', type: 'npc', name: 'FL', statblocks: [{ kind: 'npc', templateId: 'fiveleagues-lifeform', fields: [{ key: 'Toughness', value: 3 }] }] },
+  );
+  camp.settings.statblockTemplates = { '5pfh': { label: 'x', ruleset: 'fivepfh', fields: [{ key: 'Toughness', kind: 'track' }] } };
+  const next = renameLegacyToughFields(camp);
+  assert.deepEqual(next.entities.items.find((e) => e.id === 'e1').statblocks[0].fields[0], { key: 'Tough', value: 4, max: 5, track: true });
+  assert.equal(next.entities.items.find((e) => e.id === 'e2').statblocks[0].fields[0].key, 'Toughness');
+  assert.equal(next.settings.statblockTemplates['5pfh'].fields[0].key, 'Tough');
+  assert.equal(camp.entities.items.find((e) => e.id === 'e1').statblocks[0].fields[0].key, 'Toughness', 'input not mutated');
+  assert.equal(renameLegacyToughFields(next), next, 'idempotent');
+});
+
+test('the seeded 5PFH profile becomes Five Parsecs, playing Five Parsecs from Home with Speed/Combat/Tough headlines, keeping a GM\'s own choices', async () => {
+  const { upgradeFivePfhProfile } = await import('../src/domain/rulesProfiles.js');
+  let cfg = createRulesProfile(defaultAppConfig(), { name: '5PFH' });
+  const up = upgradeFivePfhProfile(cfg);
+  const p = up.profiles.find((x) => x.name === 'Five Parsecs');
+  assert.ok(p && !up.profiles.some((x) => x.name === '5PFH'));
+  assert.equal(p.ruleset.statRuleset, '5pfh');
+  assert.deepEqual(p.ruleset.partyHeadlineFields, ['Speed', 'Combat', 'Tough']);
+  assert.equal(upgradeFivePfhProfile(up), up, 'idempotent');
+  const custom = { ...cfg, profiles: cfg.profiles.map((x) => (x.name === '5PFH' ? { ...x, ruleset: { ...x.ruleset, statRuleset: 'traveller', partyHeadlineFields: ['Luck'] } } : x)) };
+  const kept = upgradeFivePfhProfile(custom).profiles.find((x) => x.name === 'Five Parsecs');
+  assert.equal(kept.ruleset.statRuleset, 'traveller');
+  assert.deepEqual(kept.ruleset.partyHeadlineFields, ['Luck']);
+});
+
+test('oracleResultBody drops the roll text\'s table breadcrumb line', async () => {
+  const { oracleResultBody } = await import('../src/domain/encounters.js');
+  assert.equal(oracleResultBody('Characters > First Look\ntired eyes'), 'tired eyes');
+  assert.equal(oracleResultBody('Just one line'), 'Just one line');
+});
+
+test('the seeded Five Leagues (Storyboard) profile is renamed Five Leagues from the Borderlands, once, and is not re-seeded', async () => {
+  const { renameFiveLeaguesProfile, backfillFiveLeaguesStoryboardProfile } = await import('../src/domain/rulesProfiles.js');
+  const cfg = createRulesProfile(defaultAppConfig(), { name: 'Five Leagues (Storyboard)' });
+  const id = cfg.profiles.find((p) => p.name === 'Five Leagues (Storyboard)').id;
+  const up = backfillFiveLeaguesStoryboardProfile(renameFiveLeaguesProfile(cfg));
+  const named = up.profiles.filter((p) => p.name === 'Five Leagues from the Borderlands');
+  assert.equal(named.length, 1);
+  assert.equal(named[0].id, id, 'same profile, renamed');
+  assert.ok(!up.profiles.some((p) => p.name === 'Five Leagues (Storyboard)'));
+  assert.equal(renameFiveLeaguesProfile(up), up);
+});
+
+test('Source Data packs: an import marks its entities, a re-import claims an earlier unmarked copy, and Remove deletes them and links to them', async () => {
+  const { importContentPack, removeSourcePack, countSourcePackEntities, stampSourcePackByName } = await import('../src/domain/contentPack.js');
+  let camp = defaultCampaign();
+  camp.entities.items.push({ id: 'mine', type: 'item', name: 'Blade', tags: [], relationships: [] });
+  camp.entities.items.push({ id: 'keep', type: 'npc', name: 'Rae', tags: [], relationships: [{ to: 'mine', label: 'owns' }] });
+  const pack = { entities: [
+    { id: 'p1', type: 'item', name: 'Blade', tags: [], relationships: [] },
+    { id: 'p2', type: 'item', name: 'Rifle', tags: [], relationships: [] },
+  ] };
+  camp = importContentPack(camp, pack, { packId: 'pk' });
+  assert.equal(countSourcePackEntities(camp, 'pk'), 2, 'new Rifle plus the same-named, same-type Blade');
+  const rifle = camp.entities.items.find((e) => e.name === 'Rifle');
+  camp.scenes = [{ id: 's', protagonistIds: [], antagonistIds: [], bystanderIds: [], assetIds: [rifle.id], locationIds: [] }];
+  const { campaign: out, removed } = removeSourcePack(camp, 'pk');
+  assert.equal(removed, 2);
+  assert.deepEqual(out.entities.items.map((e) => e.id), ['keep']);
+  assert.deepEqual(out.entities.items[0].relationships, [], 'links to removed records go');
+  assert.deepEqual(out.scenes[0].assetIds, []);
+  assert.equal(removeSourcePack(out, 'pk').removed, 0);
+  assert.equal(countSourcePackEntities(importContentPack(defaultCampaign(), pack), 'pk'), 0, 'a GM file import marks nothing');
+  let loc = defaultCampaign();
+  loc.entities.items.push({ id: 'w', type: 'location', name: 'Fomalhaut IV', tags: [], relationships: [] }, { id: 'b', type: 'location', name: 'Naval base', tags: [], relationships: [] });
+  loc = stampSourcePackByName(loc, ['fomalhaut iv'], 'location', 'zone');
+  assert.equal(countSourcePackEntities(loc, 'zone'), 1);
 });

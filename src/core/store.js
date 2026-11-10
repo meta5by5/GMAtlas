@@ -37,7 +37,7 @@ import { defaultCampaign, defaultAppConfig } from './schema.js';
 import {
   importCampaign, migrateDocument, migrateFromLegacyKeys, readLegacyKeys, wrapLegacyCampaignIntoAppConfig, LEGACY_KEYS,
 } from './migrate.js';
-import { createCampaign, renameCampaignEntry, setActiveCampaign, createRulesProfile, reassignCampaignProfile, backfillDefaultCrewTasks, grandfatherCampaignPanelActivation, migrateLicensesFromActivations, migrateLicensesV2, backfillDnd5eStoryboardProfile, backfillFiveLeaguesStoryboardProfile, backfillGenrePackRename } from '../domain/rulesProfiles.js';
+import { createCampaign, renameCampaignEntry, setActiveCampaign, createRulesProfile, reassignCampaignProfile, backfillDefaultCrewTasks, grandfatherCampaignPanelActivation, migrateLicensesFromActivations, migrateLicensesV2, backfillDnd5eStoryboardProfile, backfillFiveLeaguesStoryboardProfile, backfillGenrePackRename, upgradeFivePfhProfile, renameFiveLeaguesProfile } from '../domain/rulesProfiles.js';
 import { createTurnStepList, hoistLegacyProfileTurnSteps, backfillTurnStepListInventory, fixPlanetfallBranching } from '../domain/turnStepLists.js';
 import { ensureRulesetGuideDefault } from '../domain/rulesetGuide.js';
 import { TURN_STEPS_5PFH } from '../data/turnStepsDefault5pfh.js';
@@ -453,8 +453,9 @@ function createStore() {
     backfilled = grandfatherCampaignPanelActivation(backfilled);
     backfilled = migrateLicensesV2(migrateLicensesFromActivations(backfilled));
     backfilled = backfillDnd5eStoryboardProfile(backfilled);
-    backfilled = backfillFiveLeaguesStoryboardProfile(backfilled);
+    backfilled = backfillFiveLeaguesStoryboardProfile(renameFiveLeaguesProfile(backfilled));
     backfilled = backfillGenrePackRename(backfilled);
+    backfilled = upgradeFivePfhProfile(backfilled);
     return backfilled;
   }
 

@@ -162,7 +162,7 @@ styles/
   cockpit.css      layout + component styles (campaign surface)
   portal.css       portal surface layout (shares tokens.css only)
 tests/
-  domain.test.js   859 tests — domain modules, incl. sync-merge convergence
+  domain.test.js   866 tests — domain modules, incl. sync-merge convergence
   migrate.test.js  27 tests — legacy-key absorption + round-trip
 scripts/
   build.js         zero-dependency bundler (see below) — re-run after any src/ edit;

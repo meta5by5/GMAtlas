@@ -79,7 +79,7 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
     ruleset: 'fivepfh',
     fields: withDefaults([
       { key: 'Threat Type', kind: 'text' },
-      { key: 'Toughness', kind: 'track', rollMethod: 'none', max: 5 },
+      { key: 'Tough', kind: 'track', rollMethod: 'none', max: 5 },
       // Direct follow-up request: "change the target number from 6 to 4
       // for 5PFH 'combat' dice rolls" — an explicit override; every other
       // field here keeps withDefaults' own target: 6 default (unused by any
@@ -113,7 +113,7 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
       // (it's a damage bonus applied on a successful Combat roll, not a
       // roll of its own).
       { key: 'Melee Damage', kind: 'attribute', rollMethod: 'none', format: 'sign' },
-      { key: 'Toughness', kind: 'track', rollMethod: 'none', max: 5 },
+      { key: 'Tough', kind: 'track', rollMethod: 'none', max: 5 },
       { key: 'Armor / Notes', kind: 'text' },
       { key: 'Special', kind: 'text' },
       { key: 'KP', kind: 'attribute', rollMethod: 'none', format: 'plain' },
@@ -136,7 +136,7 @@ export const DEFAULT_STATBLOCK_TEMPLATES = {
       // field here keeps withDefaults' own target: 6 default (unused by any
       // of them, since none are rollMethod: 'flat' except Combat).
       { key: 'Combat', kind: 'attribute', rollMethod: 'flat', target: 4 },
-      { key: 'Toughness', kind: 'track', rollMethod: 'none', max: 5 },
+      { key: 'Tough', kind: 'track', rollMethod: 'none', max: 5 },
       { key: 'AI', kind: 'text' },
       { key: 'Weapon', kind: 'text' },
       { key: 'Special', kind: 'text' },
