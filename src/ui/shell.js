@@ -305,8 +305,13 @@ function renderStoryboardGrid(doc, ui, profile) {
   // ('dashboard') whenever it would otherwise duplicate whatever Navigator
   // is already showing.
   if (composerContentId === navigatorContentId) composerContentId = BUILTIN_SLOT_CONTENT.composer;
+  const maxMap = mapMaximized();
+  if (maxMap) {
+    const label = `${escapeHtml((drawerMeta(maxMap) || {}).label || maxMap)} ${mapMaximizeButtonHtml(maxMap, true)}`;
+    return `<div class="storyboard-grid">${positionCardHtml(label, renderPositionContent(maxMap, doc, ui), 'map-maximized-card storyboard-span-2' + (maxMap === 'battlemap' ? ' battlemap-card' : ''))}</div>`;
+  }
   const titleWithUnanchor = (label, anchoredId) => anchoredId
-    ? `${escapeHtml(label)}${anchoredId === 'battlemap' ? battlemapSpanControlsHtml() : ''} <button type="button" class="icon-btn storyboard-unanchor" data-storyboard-unanchor="${escapeHtml(anchoredId)}" title="Return to the tab strip" aria-label="Return to the tab strip">⇤</button>`
+    ? `${escapeHtml(label)}${MAXIMIZABLE_MAPS.includes(anchoredId) ? ' ' + mapMaximizeButtonHtml(anchoredId, false) : ''}${anchoredId === 'battlemap' ? battlemapSpanControlsHtml() : ''} <button type="button" class="icon-btn storyboard-unanchor" data-storyboard-unanchor="${escapeHtml(anchoredId)}" title="Return to the tab strip" aria-label="Return to the tab strip">⇤</button>`
     : escapeHtml(label);
   const composerLabel = titleWithUnanchor((drawerMeta(composerContentId) || DRAWER_META.composer).label, anchoredComposerId);
   const navigatorLabel = titleWithUnanchor((drawerMeta(navigatorContentId) || DRAWER_META.navigator).label, anchoredNavigatorId);
@@ -531,6 +536,21 @@ let campaignSwitcherOpen = false;
 let hexcrawlPaletteMenu = null;
 // How many Storyboard sections the Battlemap panel covers (1 | 2 | 3), desktop only.
 let battlemapSpan = 1;
+// The map panel maximized over the Storyboard's left and center sections
+// (direct request, 2026-11-11): Battlemap, Hexcrawl and Dungeon Crawl each
+// carry a maximize button. Maximizing anchors the map (anchoredPanels, alone)
+// as one card across both columns and puts Party on the right. Ephemeral,
+// desktop only; mapMaximized() is the one test.
+const MAXIMIZABLE_MAPS = ['battlemap', 'hexcrawl', 'dungeoncrawl'];
+let maximizedMap = null;
+function mapMaximized() {
+  return maximizedMap && anchoredPanels.includes(maximizedMap) && !isCompactTab() ? maximizedMap : null;
+}
+function mapMaximizeButtonHtml(id, on) {
+  return on
+    ? `<button type="button" class="icon-btn map-maximize-btn" data-map-maximize="${escapeHtml(id)}" title="Restore: return the map to the panel" aria-label="Restore map">⤡</button>`
+    : `<button type="button" class="icon-btn map-maximize-btn" data-map-maximize="${escapeHtml(id)}" title="Maximize over the Storyboard's left and center sections, with Party on the right" aria-label="Maximize map">⤢</button>`;
+}
 // A tab the GM brought forward with its nav button (focusDrawerPanel) — the
 // tab strip lists it first. A Storyboard slot id when the panel fills a position.
 let navbarFrontId = null;
@@ -3151,6 +3171,8 @@ function onClick(ev) {
   // (next open corner, 6-max toast, auto-opens the Conflict picker). A
   // second click while already armed with this exact key un-arms it —
   // same toggle semantics as re-picking "Select" in the dropdown.
+  const mapMaximizeBtn = hit('[data-map-maximize]');
+  if (mapMaximizeBtn) return toggleMapMaximize(mapMaximizeBtn.dataset.mapMaximize);
   const battlemapSpanBtn = hit('[data-battlemap-span-step]');
   if (battlemapSpanBtn) { battlemapSpan = Math.min(3, Math.max(1, battlemapSpan + Number(battlemapSpanBtn.dataset.battlemapSpanStep))); return render(); }
   const hexMenuToggle = hit('[data-hexcrawl-menu-toggle]');
@@ -8467,6 +8489,7 @@ function updateAndOpenJournal(mutator) {
 // toggle, same cleanup).
 function toggleAnchorPanel(id) {
   if (!id || BUILTIN_POSITION_IDS.includes(id)) return;
+  if (id === maximizedMap) maximizedMap = null;
   endOracleRoutingUnlessKept(id);
   if (anchoredPanels.includes(id)) {
     // Un-anchor (the Storyboard card's own "⇤ Return to the tab strip"
@@ -8506,7 +8529,42 @@ function toggleAnchorPanel(id) {
   render();
 }
 
+// Maximize a map panel over Composer + Navigator, or restore it to the tab
+// strip. Maximizing returns any other anchored panel to the tab strip (the
+// map covers both columns), then shows Party on the right: when the
+// profile's right (Advisor) position is Party, every tab closes so that
+// position shows; otherwise Party opens as the active tab.
+function toggleMapMaximize(id) {
+  if (!MAXIMIZABLE_MAPS.includes(id) || isCompactTab()) return;
+  const profile = store.getActiveProfile();
+  if (mapMaximized() === id) {
+    maximizedMap = null;
+    anchoredPanels = anchoredPanels.filter((x) => x !== id);
+    drawerCollapsed = false;
+    navbarFrontId = id;
+    openDrawerTab(id);
+    return render();
+  }
+  for (const other of anchoredPanels) if (other !== id && !openDrawers.includes(other)) openDrawers = [...openDrawers, other];
+  anchoredPanels = [id];
+  maximizedMap = id;
+  openDrawers = openDrawers.filter((d) => d !== id);
+  if (activeDrawer === id) activeDrawer = openDrawers[openDrawers.length - 1] || null;
+  if (resolvePositionContentId(profile, 'advisor') === 'party') {
+    oracleRouteToNavigator = false;
+    openDrawers = [];
+    activeDrawer = null;
+    navbarFrontId = null;
+  } else if (isModuleVisible(profile, 'party')) {
+    drawerCollapsed = false;
+    navbarFrontId = 'party';
+    openDrawerTab('party');
+  }
+  render();
+}
+
 function closeDrawerTab(id) {
+  if (id === maximizedMap) maximizedMap = null;
   // Direct follow-up request: "...if the oracle panel is closed and
   // reopened" also resets oracle-output routing back to the Journal —
   // openDrawerTab's own reset only fires when switching TO a different
@@ -12288,7 +12346,8 @@ function headExtraForDrawer(id) {
   if (id === 'cast') return castGenerateSelectHtml();
   const headEntity = entityForDrawer(store.get(), id);
   if (headEntity) return entityHeadControlsHtml(headEntity);
-  if (id === 'battlemap') return battlemapSpanControlsHtml();
+  if (id === 'battlemap') return mapMaximizeButtonHtml(id, false) + battlemapSpanControlsHtml();
+  if (MAXIMIZABLE_MAPS.includes(id)) return mapMaximizeButtonHtml(id, false);
   // (Party's ＋ picker lives on the Party panel's own "Party" section header.)
   // Guide/Documents' top-of-drawer intro tips have no in-content header of
   // their own to sit next to (unlike a Settings group's <h3> or Documents'

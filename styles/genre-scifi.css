@@ -15,3 +15,35 @@
     radial-gradient(ellipse at 50% -10%, rgba(56, 189, 248, 0.08), transparent 60%);
   background-attachment: fixed;
 }
+
+/* The Encounter wizard's guidance voice as a ship's terminal readout
+   (direct request, 2026-11-11: "courier or a better sci-fi computer monitor
+   style font"): a monospace stack, upright, with a faint amber phosphor
+   glow. Local system fonts only (the app runs offline) — Cascadia Mono on
+   Windows 11, SF Mono/Menlo on Apple, then Consolas and Courier New. The
+   fantasy look keeps tokens.css's italic serif. */
+:root[data-genre="sci-fi"] {
+  --font-guide: "Cascadia Mono", "SF Mono", ui-monospace, Menlo, Consolas, "Lucida Console", "Courier New", monospace;
+}
+:root[data-genre="sci-fi"] .composer-wizard-guide .composer-wizard-prompts,
+:root[data-genre="sci-fi"] .composer-wizard-guide .composer-wizard-hint,
+:root[data-genre="sci-fi"] .composer-wizard-head .dim,
+:root[data-genre="sci-fi"] .composer-wizard-offer > :not(.btn) {
+  font-style: normal;
+  font-size: 0.88em;
+  letter-spacing: 0.01em;
+  text-shadow: 0 0 6px rgba(245, 201, 122, 0.25);
+}
+:root[data-genre="sci-fi"] .composer-wizard-prompts li::before { content: '>'; }
+:root[data-genre="sci-fi"] .composer-wizard-prompts li:last-child::after {
+  /* A blinking cursor after the last question. */
+  content: '\2588';
+  margin-left: 0.3em;
+  color: var(--guide);
+  font-size: 0.8em;
+  animation: guide-cursor 1.1s steps(1) infinite;
+}
+@keyframes guide-cursor { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  :root[data-genre="sci-fi"] .composer-wizard-prompts li:last-child::after { animation: none; }
+}
