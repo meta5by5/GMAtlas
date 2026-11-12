@@ -88,6 +88,16 @@ recording it, and tidied several panels:
      tab, so nothing was left on the Campaign panel.
    - The Campaign panel (`colony` id, label unchanged) is the timeline.
    - World Tracker's label is Planetfall (id `world-tracker` unchanged).
+   - Battlemap, Hexcrawl and Dungeon Crawl always carry a maximize button
+     (⤢, desktop only) at the top of the panel, in the drawer head and on
+     an anchored card. Maximizing anchors the map alone, as one card across
+     Composer and Navigator (any other anchored panel goes back to the tab
+     strip), and puts Party on the right. If the profile's right (Advisor)
+     position is Party, every tab closes so that position shows. Otherwise
+     Party opens as the active tab. ⤡ on the card returns the map to the
+     tab strip as the active tab. This is ephemeral state (`maximizedMap` in
+     `shell.js`); the Battlemap's own 1/2/3-section width controls are
+     unchanged.
 5. **Guide moves.** `guide.js` gains `moveGuideDocBefore` (sibling reorder
    with the same cycle guards as `moveGuideDoc`). Documents are draggable
    only in move mode. Mouse and touch share one rule (`completeGuideNodeDrop`

@@ -1498,10 +1498,11 @@ function narrativeComposerBlock(doc, ui) {
     ${wsHelpBody(helpKey, "Reflects WHO/WHERE's Focus text live, plus whichever Story Options you check in the Advisor — until you edit it directly or click Reload, after which it's yours to keep editing.", ui)}
     <div class="mention-editor narrative-composer-preview" contenteditable="true" data-scene-summary-field data-placeholder="Nothing to compose yet — write something in WHO/WHERE's Focus field, check a Story Option in the Advisor, or type your own.">${buildMentionEditorHTML(doc, draft)}</div>
     <div class="shift-actions">
-      <button class="chip" data-composer-copy title="Copy the current text to your clipboard">📋 Copy</button>
-      <button class="chip" data-composer-journal title="Add the current text to the Journal">＋ Send to Journal</button>
-      <button class="chip" data-composer-clear title="Blank this field">🗑 Clear</button>
-      <button class="chip" data-composer-reload title="Pull WHO/WHERE's current Focus text and checked Story Options back in, replacing what's here now">🔄 Reload</button>
+      <!-- Icon-only (direct request, 2026-11-11); ➜📖 matches the Journal tab's own add button. -->
+      <button class="chip" data-composer-copy title="Copy the current text to your clipboard" aria-label="Copy">📋</button>
+      <button class="chip" data-composer-journal title="Add the current text to the Journal" aria-label="Add to Journal"><span aria-hidden="true">➜📖</span></button>
+      <button class="chip" data-composer-clear title="Blank this field" aria-label="Clear">🗑</button>
+      <button class="chip" data-composer-reload title="Pull WHO/WHERE's current Focus text and checked Story Options back in, replacing what's here now" aria-label="Reload">🔄</button>
     </div>
   </div>`;
 }
