@@ -3814,3 +3814,14 @@ input[type="number"] { -moz-appearance: textfield; }
    narrow as its icon until opened. */
 .icon-select { width: auto; min-width: 2.4rem; max-width: 3rem; text-align: center; padding-inline: var(--sp-1); }
 .anvil-icon { display: inline-block; vertical-align: -0.2em; }
+/* The Five Leagues Weapons title row carries its ⚔ / anvil add buttons
+   (direct request, 2026-11-12). */
+.statblock-weapons-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.statblock-weapons-head h4 { margin: 0; }
+.statblock-weapons-head-actions { display: inline-flex; align-items: center; gap: var(--sp-1); }
+/* Party tab number trackers: one row of number textfields, like Luck /
+   Will / XP on a character sheet (direct request, 2026-11-12). */
+.party-tracker-numbers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-1); margin-bottom: var(--sp-2); }
+.party-tracker-number { width: auto; justify-content: space-between; gap: var(--sp-1); padding-inline: 0.35rem; }
+.party-tracker-number .statblock-key { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.party-tracker-number .number-row-input-wrap { flex: 0 0 auto; }

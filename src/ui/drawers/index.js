@@ -2077,20 +2077,22 @@ function characterSheetWeaponsAndGearHtml(group, gi, doc, ui = {}) {
     const catalogOptions = FIVE_LEAGUES_WEAPON_CATALOG.map((w) => `<option value="${esc(w.key)}">${esc(w.label)}</option>`).join('');
     return `
       <div class="statblock-weapons">
-        <h4>Weapons</h4>
+        <!-- Icon-only, on the title row (direct requests, 2026-11-12): ⚔ picks from the catalog, the anvil forges a custom weapon. -->
+        <div class="statblock-weapons-head">
+          <h4>Weapons</h4>
+          <span class="statblock-weapons-head-actions">
+            <select class="icon-select" data-fiveleagues-weapon-catalog-add="${gi}" title="Add a weapon from the Weapons catalog" aria-label="Add a weapon from the Weapons catalog">
+              <option value="">⚔</option>
+              ${catalogOptions}
+            </select>
+            <button type="button" class="icon-btn" data-statblock-weapon-add="${gi}" title="Add a custom weapon" aria-label="Add a custom weapon">${ANVIL_ICON}</button>
+          </span>
+        </div>
         <div class="statblock-weapon-headrow">
           <span class="statblock-weapon-name-head">Weapon</span><span>Rng</span><span>Shots</span><span>Dmg</span>
         </div>
         <div class="statblock-weapon-list">${weaponCards}</div>
         <datalist id="${traitsListId}">${FIVE_LEAGUES_WEAPON_TRAITS.map((t) => `<option value="${esc(t.label)}">`).join('')}</datalist>
-        <div class="five-leagues-item-add-row">
-          <!-- Icon-only (direct request, 2026-11-12): ⚔ picks from the catalog, the anvil forges a custom weapon. -->
-          <select class="icon-select" data-fiveleagues-weapon-catalog-add="${gi}" title="Add a weapon from the Weapons catalog" aria-label="Add a weapon from the Weapons catalog">
-            <option value="">⚔</option>
-            ${catalogOptions}
-          </select>
-          <button type="button" class="icon-btn" data-statblock-weapon-add="${gi}" title="Add a custom weapon" aria-label="Add a custom weapon">${ANVIL_ICON}</button>
-        </div>
       </div>
       ${gearFieldHtml}`;
   }
@@ -4306,6 +4308,21 @@ function partyTrackerRow(t, editOpen) {
     </div>`;
 }
 
+// A Party tracker as a number textfield: the numberFieldRow markup (label,
+// box, ＋/− under it), wired to the tracker's own value input. The stepper
+// nudges that input and fires its change, so it saves the way typing does.
+function partyTrackerNumberField(t) {
+  const rank = t.difficulty && findProgressDifficulty(t.difficulty);
+  const label = `${t.name || 'Untitled'}${rank ? ` (${rank.label})` : ''}`;
+  return `
+    <div class="statblock-row number-row number-row-compact party-tracker-number" title="${esc(label)}">
+      <span class="statblock-key">${esc(label)}</span>
+      <span class="number-row-input-wrap">
+        ${numStepper(`<input type="number" inputmode="numeric" class="attr-val-input" data-party-tracker-value="${esc(t.id)}" value="${Number(t.value) || 0}" aria-label="${esc(label)} value">`)}
+      </span>
+    </div>`;
+}
+
 // The "+ Tracker" creation form — a small inline group (name + type, no
 // popup) that replaces the old window.prompt() flow. The type select's
 // 'change' event re-renders this to swap in whichever type-specific field
@@ -4534,7 +4551,15 @@ function party(doc, ui = {}) {
 
   const isStarforged = ((doc.settings && doc.settings.statRuleset) || 'starforged') === 'starforged';
   const trackersEditOpen = !!ui.partyTrackersEditOpen;
-  const trackerRows = trackers.map((t) => partyTrackerRow(t, trackersEditOpen)).join('');
+  // Number trackers (a counter or currency: Gold Marks, Supply, ...) read
+  // as number textfields, side by side in one row, the same layout as Luck,
+  // Will and XP on a Five Leagues character sheet (direct request,
+  // 2026-11-12). Box meters and gauges keep their own rows; editing
+  // (rename/remove) keeps the plain row for every tracker.
+  const numberTracker = (t) => t.kind !== 'meter' && t.kind !== 'gauge';
+  const numberTrackers = trackersEditOpen ? [] : trackers.filter(numberTracker);
+  const trackerRows = (numberTrackers.length ? `<div class="character-sheet-resources party-tracker-numbers">${numberTrackers.map(partyTrackerNumberField).join('')}</div>` : '')
+    + trackers.filter((t) => trackersEditOpen || !numberTracker(t)).map((t) => partyTrackerRow(t, trackersEditOpen)).join('');
   const party_ = doc.party || {};
   const sharedGearKey = 'party:sharedGear';
   const sharedAssetChips = (party_.sharedAssets || []).map((a, i) => `
