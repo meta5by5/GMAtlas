@@ -24,8 +24,12 @@ recording it, and tidied several panels:
 
 1. **An Encounter is the existing `conflict` entity type**, which the app
    already labels "Encounter" (`entities.js` TYPE_LABEL), and **the Composer
-   is its editor — the Encounter builder** (2026-11-09). `domain/encounters.js`
-   (pure):
+   is its entity form** (2026-11-12, replacing the 2026-11-09 "builder that
+   saves to a record" model). The Composer panel is now labelled Encounter.
+   It is that form for the *current* Encounter (the live scene). Cast shows
+   the same form, with every tab, oracle and the wizard, for any Encounter
+   record. A brand-new, unsaved one is the **Encounter Composer**.
+   `domain/encounters.js` (pure):
    - `composerSnapshot` reads WHO (the latest scene's Protagonists/
      Antagonists/Bystanders and assets, and its factions —
      `composerFactionIds`: present in the region, an actor's faction, or added
@@ -47,23 +51,45 @@ recording it, and tidied several panels:
      Composer's factions are the Encounter's Involved factions). ＋ New
      (`newComposerEncounter`) starts another; `createEncounterFromComposer`
      always makes a new one;
-   - `loadEncounterIntoComposer` (the record's 📝 Open in Composer) copies a
-     record back: the current scene's cast, places and hand-added factions (a
-     scene is started if there is none), WHERE…HOW and `context.encounter`.
-     A record from before falls back to its relationship labels. It always
-     asks first when the Composer holds anything (`composerHoldsAnything`),
-     including unsaved edits to the same Encounter, naming what it replaces;
-   - the record shows the same information plainly (text fields edit in
-     place, lists change through the Composer), without oracles or tips;
-     "Involved" is the Composer's faction thumbnail list with ＋/✕, replacing
-     the location-scoped dropdown (and WHO's contested-zone picker);
+   - `loadEncounterIntoComposer` (a record's 📌 Make current) copies a
+     record into the scene: its cast, places and hand-added factions (a scene
+     is started if there is none), WHERE…HOW and `context.encounter`. A
+     record from before falls back to its relationship labels. It asks first
+     only when the panel holds an unsaved Encounter Composer
+     (`composerHoldsUnsaved`); a saved one is already in its record;
+   - **the current Encounter and its record stay equal**
+     (`syncCurrentEncounter`, run after every `store.update` by
+     `shell.js`'s hook). An edit to the scene saves to the record, and an
+     edit to the record (its title-row name, Quick-start, ...) loads into the
+     scene. Starting a new scene detaches it, giving a fresh Encounter
+     Composer, so moving on never empties the last record. 💾 still saves,
+     and it is what turns an Encounter Composer into a record;
+   - **a record that isn't current is edited in place.** Its Cast form is
+     wrapped in `[data-encounter-form="<id>"]`. `shell.js` sets
+     `encounterScope` for any interaction inside it, including the entity
+     picker or inline prompt it opened. While that scope is set,
+     `store.update` runs through `applyToEncounter`: the record is loaded
+     as the scene on a copy, the ordinary Composer mutator runs there, and
+     the result is saved back to the record. The live scene and context are
+     left as they were, and the record keeps its own `sceneId`. Every
+     Composer handler therefore works on any record unchanged.
+     `encounterFormView` is what such a form renders from;
+   - the record's own card under the form, "Escalation and depth", keeps
+     only what the form has no place for: the escalation clock, Quick-start,
+     irreversible facts, faction postures and information asymmetry. The
+     read-only summary and the record's separate cause, casualty, hook and
+     Involved fields are gone, because the form holds them;
+   - internal ids are unchanged (`data-composer-*`, the `composer`
+     Storyboard slot, `context.encounter`), so saved profiles and layouts
+     keep working; only what the GM reads says Encounter;
    - `composerPrompt` builds the AI prompt from those facts only, asking for
      a fixed JSON reply; `parseEncounterReply` reads that reply back;
    - `campaignTimeline` orders scenes and Encounters, nesting each Encounter
      under the scene it was made from.
 2. **The AI step is a stub.** `core/aiClient.js` (`configured()` false,
    `describeEncounter()` rejects) is the one place a future automated client
-   goes. Today the 📋 button copies the prompt to the clipboard. Only the
+   goes. Today the copy button (two overlapping boxes) copies the prompt to
+   the clipboard. Only the
    prompt text would ever be sent (rule 6).
 3. **The Composer is tabbed, and the wizard guides.** The Composer shows a
    WHO/WHERE/WHAT/WHY/HOW tab strip and one section at a time (a filled

@@ -61,3 +61,15 @@
 :root[data-genre="fantasy"] .dice-outcome-neutral { background: rgba(138, 47, 28, 0.10); border-color: rgba(138, 47, 28, 0.35); }
 :root[data-genre="fantasy"] .combat-tracker-row.combat-defender { background: rgba(61, 106, 42, 0.14); outline-color: var(--ok); }
 :root[data-genre="fantasy"] .startup-screen { background: #c9b07f; }
+
+/* The Encounter wizard's guidance voice (tokens.css --guide*), re-inked for
+   parchment: the amber read almost as the page itself. Oxblood and dark
+   umber keep it distinct from the app's own brown ink (direct request,
+   2026-11-12: "Step x of y" was nearly the background colour). */
+:root[data-genre="fantasy"] {
+  --guide:        #7a2414;
+  --guide-dim:    #4a2f14;
+  --guide-bg:     linear-gradient(180deg, rgba(122, 36, 20, 0.08), rgba(122, 36, 20, 0.03));
+  --guide-border: rgba(122, 36, 20, 0.45);
+}
+:root[data-genre="fantasy"] .composer-wizard-head .dim { color: var(--guide); font-weight: 600; }

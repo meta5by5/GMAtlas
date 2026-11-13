@@ -70,7 +70,7 @@ export const DRAWER_META = {
   // that tier (styles/cockpit.css) in favor of this. On desktop only the
   // Advisor slot rides along, and only once a real drawer is open (Step
   // 3) — Composer/Navigator stay their own permanent columns there.
-  dashboard: { id: 'dashboard', glyph: '📝', label: 'Composer' },
+  dashboard: { id: 'dashboard', glyph: '📝', label: 'Encounter' },
   narrative: { id: 'narrative', glyph: '🧭', label: 'Navigator' },
   copilot: { id: 'copilot', glyph: '💡', label: 'Advisor' },
   // The three SLOT ids themselves — 'composer'/'navigator'/'advisor' as an
@@ -80,7 +80,7 @@ export const DRAWER_META = {
   // These entries are a last-resort label fallback only (resolution
   // should always find a match under dashboard/narrative/copilot or a
   // real DRAWERS id first) — never used as a storyboardPositions VALUE.
-  composer: { id: 'composer', glyph: '📍', label: 'Composer' },
+  composer: { id: 'composer', glyph: '📍', label: 'Encounter' },
   navigator: { id: 'navigator', glyph: '📍', label: 'Navigator' },
   advisor: { id: 'advisor', glyph: '📍', label: 'Advisor' },
 };

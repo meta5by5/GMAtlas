@@ -482,6 +482,7 @@ function inspector(doc, e, ui) {
         </div>
       </div>
     </div>
+    ${e.type === 'conflict' && ui.encounterFormHtml ? ui.encounterFormHtml(doc, e.id, ui) : ''}
     ${characterSheetSectionHtml(e, doc, ui)}
     ${inactiveStatblocksHtml(e, doc)}
     ${isPartyCharacter ? '' : `<div class="revealed-block">
@@ -633,125 +634,23 @@ function conflictSection(doc, e, ui) {
         </span>
       </div>`
     : `<button class="btn ghost sm" data-conflict-start-clock="${esc(e.id)}">▶ Start Escalation Clock</button>`;
-  const hookRows = (e.sessionHooks || []).map((h) => `<div class="thread-row">
-      <span class="thread-name"><label><input type="checkbox" data-conflict-hook-toggle="${esc(e.id)}::${esc(h.id)}" ${h.used ? 'checked' : ''}> <span class="${h.used ? 'dim small' : ''}">${esc(h.text)}</span></label></span>
-      <span class="thread-actions"><button class="icon-btn" data-conflict-hook-remove="${esc(e.id)}::${esc(h.id)}" title="Remove">✕</button></span>
-    </div>`).join('');
   const depthOpen = (ui.expandedConflictDepth || new Set()).has(e.id);
-  // Factions involved (direct request, 2026-11-09): the same thumbnail list
-  // the Composer's WHO shows, with ＋ (the entity picker) and ✕, in place of
-  // the old location-scoped dropdown. They are the record's `involves`
-  // links; saving from the Composer sets them to its factions list.
-  // Direct follow-up request: "make the section headers such as 'Conflict'
-  // and 'Relationships'... use the same collapseable format used on the
-  // Campaign panel" — default COLLAPSED, same reasoning factionSection's
-  // own "Faction card" header above now uses.
   const conflictKey = `entityConflict:${e.id}`;
   const conflictCollapsed = isPartySectionCollapsed(ui, conflictKey, true);
+  // The Encounter form above holds everything the Composer did (direct
+  // request, 2026-11-12: the Composer IS the Encounter entity form); this
+  // card keeps only what the record has beyond it: the escalation clock,
+  // Quick-start, and the depth the form has no place for.
   const conflictBodyHtml = `
-      <label class="field-label">Status
-        <select data-entity-field="status">${CONFLICT_STATUS_OPTIONS.map(([v, l]) => `<option value="${v}" ${e.status === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
-      </label>
       ${clockHtml}
-      <div class="faction-assets">
-        <span class="field-label-static">Factions involved <button type="button" class="icon-btn" data-entity-picker-open="conflict-faction:${esc(e.id)}" title="Add a faction to this encounter">＋</button></span>
-      </div>
-      ${involvedFactions.length ? `<div class="actor-thumb-row">${involvedFactions.map((f) => encounterEntityThumb(doc, f, `data-conflict-faction-remove="${esc(e.id)}::${esc(f.id)}"`)).join('')}</div>` : '<p class="dim small">None yet.</p>'}
-      <label class="field-label">What people say it's about
-        <input data-entity-field="statedCause" value="${esc(e.statedCause)}" placeholder="The public story">
-      </label>
-      <label class="field-label">What's actually driving it
-        <input data-entity-field="rootCause" value="${esc(e.rootCause)}" placeholder="The real reason">
-      </label>
-      <label class="field-label">Why the gap matters
-        <input data-entity-field="causeGapHook" value="${esc(e.causeGapHook)}" placeholder="What happens if the party notices">
-      </label>
-      <label class="field-label">Someone innocent gets hurt regardless
-        <input data-entity-field="thirdPartyCasualty" value="${esc(e.thirdPartyCasualty)}" placeholder="Who, and how">
-      </label>
       <button class="btn ghost sm" data-conflict-quickstart="${esc(e.id)}">🎲 Quick-start</button>
-      <div class="faction-assets">
-        <span class="field-label-static">Session hooks</span>
-      </div>
-      ${hookRows || '<p class="dim small">None yet.</p>'}
-      <div class="rel-add">
-        <input data-conflict-hook-input="${esc(e.id)}" placeholder="New session hook…">
-        <button class="btn ghost sm" data-conflict-hook-add="${esc(e.id)}">+ Add</button>
-      </div>
       <button class="section-toggle" data-conflict-depth-toggle="${esc(e.id)}">${depthOpen ? '▾' : '▸'} Add depth</button>
       ${depthOpen ? conflictDepthHtml(doc, e, ui, involvedFactions) : ''}`;
-  const toComposer = `<button type="button" class="btn ghost sm" data-encounter-to-composer="${esc(e.id)}" title="Edit this Encounter in the Composer (the Encounter builder)">📝 Open in Composer</button>`;
   return `
     <div class="faction-card">
-      ${partySectionHeaderHtml(conflictKey, 'Encounter', conflictCollapsed, toComposer)}
+      ${partySectionHeaderHtml(conflictKey, 'Escalation and depth', conflictCollapsed)}
       ${conflictCollapsed ? '' : conflictBodyHtml}
-    </div>
-    ${encounterComposerFieldsHtml(doc, e, ui)}`;
-}
-
-// An entity thumbnail with an optional ✕ (same markup as the Composer's).
-function encounterEntityThumb(doc, a, removeAttr) {
-  const img = a.thumbnailId ? getGalleryImage(doc, a.thumbnailId) : null;
-  const photo = img
-    ? `<img class="actor-thumb-photo" src="${esc(imageSrc(img))}" alt="">`
-    : `<span class="actor-thumb-photo actor-thumb-photo-empty" aria-hidden="true">${esc((a.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
-  return `<div class="actor-thumb-wrap">
-    <div class="actor-thumb-circle">
-      <button type="button" class="actor-thumb" data-open-entity="${esc(a.id)}" title="${esc(a.name || 'Unnamed')}">${photo}</button>
-      ${removeAttr ? `<button type="button" class="actor-thumb-badge actor-thumb-badge-remove" ${removeAttr} title="Remove">✕</button>` : ''}
-    </div>
-    <span class="actor-thumb-name">${esc(a.name || 'Unnamed')}</span>
-  </div>`;
-}
-
-// What the Composer (the Encounter builder) saved onto the record: the cast,
-// assets and places, and WHERE/WHAT/WHY/HOW — the same information without
-// the Composer's oracles and tips. The text fields edit in place; the lists
-// change through the Composer (📝 Open in Composer).
-const ENCOUNTER_INTENTS = ['Discovery', 'Travel', 'Social encounter', 'Investigation', 'Resource pressure', 'Combat pressure', 'Moral choice', 'Faction complication', 'Exploration hazard', 'Trade opportunity'];
-function encounterComposerFieldsHtml(doc, e, ui) {
-  const key = `entityEncounterComposer:${e.id}`;
-  const collapsed = isPartySectionCollapsed(ui, key, true);
-  const head = partySectionHeaderHtml(key, 'Who, where, what, why, how', collapsed);
-  if (collapsed) return `<div class="faction-card">${head}</div>`;
-  const people = (ids) => (ids || []).map((id) => getEntity(doc, id)).filter(Boolean);
-  const group = (label, ids) => {
-    const list = people(ids);
-    return `<div class="faction-assets"><span class="field-label-static">${esc(label)}</span></div>
-      ${list.length ? `<div class="actor-thumb-row">${list.map((x) => encounterEntityThumb(doc, x, '')).join('')}</div>` : '<p class="dim small">None.</p>'}`;
-  };
-  const area = (field, label) => `<label class="field-label sm">${esc(label)}
-      <textarea class="oracle-field-textarea" rows="1" data-entity-field="${esc(field)}">${esc(e[field] || '')}</textarea>
-    </label>`;
-  const intents = ENCOUNTER_INTENTS.includes(e.intent) || !e.intent ? ENCOUNTER_INTENTS : [e.intent, ...ENCOUNTER_INTENTS];
-  return `<div class="faction-card encounter-composer-fields">
-    ${head}
-    <h4 class="encounter-composer-head">Who</h4>
-    ${group('Protagonists', e.protagonistIds)}
-    ${group('Antagonists', e.antagonistIds)}
-    ${group('Bystanders', e.bystanderIds)}
-    ${group('Assets present', e.assetIds)}
-    <h4 class="encounter-composer-head">Where</h4>
-    ${group('Places', e.locationIds)}
-    ${area('siteDescription', 'Site description')}
-    ${area('surroundings', 'Immediate surroundings')}
-    <h4 class="encounter-composer-head">What</h4>
-    ${area('situation', 'Situation')}
-    <label class="field-label sm">Intent
-      <select data-entity-field="intent"><option value="">—</option>${intents.map((i) => `<option ${i === e.intent ? 'selected' : ''}>${esc(i)}</option>`).join('')}</select>
-    </label>
-    <div class="colony-turn-row">
-      <label class="field-label sm">Threat ${numStepper(`<input type="number" min="0" max="10" data-entity-field="threat" value="${esc(Number(e.threat) || 0)}">`)}</label>
-      <label class="field-label sm">Mystery ${numStepper(`<input type="number" min="0" max="10" data-entity-field="mystery" value="${esc(Number(e.mystery) || 0)}">`)}</label>
-    </div>
-    <h4 class="encounter-composer-head">Why</h4>
-    ${area('objective', 'Objective')}
-    <h4 class="encounter-composer-head">How</h4>
-    ${area('encounterMode', 'Mode and pacing')}
-    <label class="field-label sm">Activity
-      <select data-entity-field="encounterActivity"><option value="">— none set —</option>${ACTIVITIES.map((a) => `<option value="${esc(a.id)}" ${a.id === e.encounterActivity ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}</select>
-    </label>
-  </div>`;
+    </div>`;
 }
 
 function conflictDepthHtml(doc, e, ui, involvedFactions) {
@@ -780,15 +679,6 @@ function conflictDepthHtml(doc, e, ui, involvedFactions) {
       <button class="btn ghost sm" data-conflict-asymmetry-clear="${esc(e.id)}">Clear</button>`
     : `<button class="btn ghost sm" data-conflict-asymmetry-add="${esc(e.id)}">+ Add Information Asymmetry</button>`;
   return `
-    <div class="field-label">${fieldLabelRow('Deep root', 'conflict', 'deepRootSummary', null, richToolbarToggleHTML(`entity:${e.id}:deepRootSummary`, toolbarCollapsed(doc, ui, `entity:${e.id}:deepRootSummary`)))}
-      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:deepRootSummary`, toolbarCollapsed(doc, ui, `entity:${e.id}:deepRootSummary`), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-entity-field="deepRootSummary" data-placeholder="What started this, long before the party got involved.">${buildMentionEditorHTML(doc, e.deepRootSummary)}</div></div>
-    </div>
-    <div class="field-label">${fieldLabelRow('Precipitating incident', 'conflict', 'precipitatingIncident', null, richToolbarToggleHTML(`entity:${e.id}:precipitatingIncident`, toolbarCollapsed(doc, ui, `entity:${e.id}:precipitatingIncident`)))}
-      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:precipitatingIncident`, toolbarCollapsed(doc, ui, `entity:${e.id}:precipitatingIncident`), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-entity-field="precipitatingIncident" data-placeholder="The recent, smaller thing that actually lit the fuse.">${buildMentionEditorHTML(doc, e.precipitatingIncident)}</div></div>
-    </div>
-    <div class="field-label">${fieldLabelRow('Last de-escalation attempt', 'conflict', 'lastDeescalationAttempt', null, richToolbarToggleHTML(`entity:${e.id}:lastDeescalationAttempt`, toolbarCollapsed(doc, ui, `entity:${e.id}:lastDeescalationAttempt`)))}
-      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:lastDeescalationAttempt`, toolbarCollapsed(doc, ui, `entity:${e.id}:lastDeescalationAttempt`), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-entity-field="lastDeescalationAttempt" data-placeholder="Who tried to fix this, why it failed, who got blamed.">${buildMentionEditorHTML(doc, e.lastDeescalationAttempt)}</div></div>
-    </div>
     <div class="faction-assets"><span class="field-label-static">Irreversible facts</span></div>
     ${factRows || '<p class="dim small">None yet.</p>'}
     <div class="rel-add">
@@ -799,12 +689,7 @@ function conflictDepthHtml(doc, e, ui, involvedFactions) {
     ${involvedFactions.length ? `<div class="faction-assets"><span class="field-label-static">Faction postures</span></div>${postureRows}` : ''}
     <div class="faction-assets"><span class="field-label-static">Information asymmetry</span></div>
     ${asymHtml}
-    <label class="field-label">Party leverage
-      <input data-entity-field="partyLeverage" value="${esc(e.partyLeverage)}" placeholder="Information, an asset, or an NPC neither faction controls">
-    </label>
-    <div class="field-label">${fieldLabelRow('GM notes', 'conflict', 'gmNotes', null, richToolbarToggleHTML(`entity:${e.id}:gmNotes`, toolbarCollapsed(doc, ui, `entity:${e.id}:gmNotes`)))}
-      <div class="rich-field">${richToolbarHTML(`entity:${e.id}:gmNotes`, toolbarCollapsed(doc, ui, `entity:${e.id}:gmNotes`), { includeToggle: false })}<div class="mention-editor" contenteditable="true" data-entity-field="gmNotes" data-placeholder="Anything else worth remembering.">${buildMentionEditorHTML(doc, e.gmNotes)}</div></div>
-    </div>`;
+`;
 }
 
 // SWN/GMAtlas Core Faction Turn Engine (docs/adr/0031, docs/adr/0032) — a
@@ -3349,7 +3234,7 @@ function rulesetProfileEditorSection(doc, ui) {
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Storyboard positions', 'settings-positions')}
       ${helpBody('settings-positions', "What fills each of the Storyboard's three always-visible positions. Anything not currently assigned to a position is reachable from the top navigation instead.", ui)}
-      ${positionSelect('composer', 'Left side (default Composer)')}
+      ${positionSelect('composer', 'Left side (default Encounter)')}
       ${positionSelect('navigator', 'Middle section (default Navigator)')}
       ${positionSelect('advisor', 'Right side (default Advisor)')}
     </div>`;
@@ -5140,7 +5025,7 @@ function partyPanelTabs(doc) {
 function colony(doc, ui = {}) {
   const items = campaignTimeline(doc);
   if (!items.length) {
-    return `<p class="ws-placeholder">No scenes or encounters yet. Start a scene from the Navigator, or use <strong>＋ Encounter</strong> or the 🪄✨ wizard in the Composer, and it appears here.</p>`;
+    return `<p class="ws-placeholder">No scenes or encounters yet. Start a scene from the Navigator, or save one from the Encounter panel (💾, or the ✨ wizard), and it appears here.</p>`;
   }
   const day = (iso) => (iso ? String(iso).slice(0, 10) : '');
   const encounterNode = (e, branch) => `

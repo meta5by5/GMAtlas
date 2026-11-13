@@ -12479,7 +12479,7 @@ import {
   composerSnapshot, composerHasContent, createEncounterFromComposer, listEncounters,
   composerPrompt, parseEncounterReply, campaignTimeline,
 } from '../src/domain/encounters.js';
-import { createEntity as createEnt, getEntity as getEnt } from '../src/domain/entities.js';
+import { createEntity as createEnt, getEntity as getEnt, updateEntity as updateEnt } from '../src/domain/entities.js';
 
 function composerCampaign() {
   let c = defaultCampaign();
@@ -13325,4 +13325,64 @@ test('Encounter builder: composerHoldsAnything says when loading would replace s
   assert.equal(E.composerHoldsAnything(composerCampaign().c), true, 'a cast and situation');
   const saved = E.saveComposerEncounter(composerCampaign().c);
   assert.equal(E.composerHoldsAnything(saved.campaign), true, 'editing the same Encounter still counts (unsaved edits)');
+});
+
+// --- 2026-11-12: the Composer is the Encounter entity form ------------------
+test('Encounter form: editing a record that is not current saves to it and leaves the live scene alone', async () => {
+  const E = await import('../src/domain/encounters.js');
+  const { c: base, hero } = composerCampaign();
+  const saved = E.saveComposerEncounter(base);
+  const recBefore = getEnt(saved.campaign, saved.id);
+  // Move on: the live scene now holds a different, unsaved encounter.
+  let live = E.newComposerEncounter(saved.campaign);
+  live.context.what.situation = 'A quiet market';
+  live.scenes[0].protagonistIds = [];
+  const out = E.applyToEncounter(live, saved.id, (d) => E.setComposerEncounterField({ ...d, context: { ...d.context, what: { ...d.context.what, situation: 'The standoff turns violent' } } }, 'gmNotes', 'Shots fired'));
+  const rec = getEnt(out, saved.id);
+  assert.equal(rec.situation, 'The standoff turns violent');
+  assert.equal(rec.gmNotes, 'Shots fired');
+  assert.deepEqual(rec.protagonistIds, [hero], 'its own cast is kept');
+  assert.equal(rec.sceneId, recBefore.sceneId, 'it keeps the scene it came from');
+  assert.equal(out.context.what.situation, 'A quiet market', 'the live scene is untouched');
+  assert.equal(out.context.encounter.id, null);
+  assert.deepEqual(out.scenes[0].protagonistIds, []);
+  const view = E.encounterFormView(out, saved.id);
+  assert.equal(view.context.what.situation, 'The standoff turns violent', 'the form shows the record');
+  assert.equal(E.encounterFormView(saved.campaign, saved.id), saved.campaign, 'the current Encounter is the live scene itself');
+});
+
+test('Encounter form: the current Encounter and its record stay equal, and a new scene starts an Encounter Composer', async () => {
+  const E = await import('../src/domain/encounters.js');
+  const { c: base } = composerCampaign();
+  const saved = E.saveComposerEncounter(base);
+  // A scene edit saves to the record.
+  let c = saved.campaign;
+  let keys = E.encounterSyncKeys(c);
+  c = { ...c, context: { ...c.context, why: { ...c.context.why, summary: 'Escape the city' } } };
+  c = E.syncCurrentEncounter(keys, c);
+  assert.equal(getEnt(c, saved.id).objective, 'Escape the city');
+  // A record edit (the title row's name, a field) loads into the scene.
+  keys = E.encounterSyncKeys(c);
+  c = updateEnt(c, saved.id, { name: 'The Pump House', rootCause: 'Old debts' });
+  c = E.syncCurrentEncounter(keys, c);
+  assert.equal(c.context.encounter.name, 'The Pump House');
+  assert.equal(c.context.encounter.rootCause, 'Old debts');
+  // A later scene edit doesn't put the old name back.
+  keys = E.encounterSyncKeys(c);
+  c = { ...c, context: { ...c.context, how: { ...c.context.how, summary: 'Chase' } } };
+  c = E.syncCurrentEncounter(keys, c);
+  assert.equal(getEnt(c, saved.id).name, 'The Pump House');
+  assert.equal(getEnt(c, saved.id).encounterMode, 'Chase');
+  // Nothing current: nothing synced.
+  const fresh = E.newComposerEncounter(c);
+  assert.equal(E.syncCurrentEncounter(E.encounterSyncKeys(fresh), fresh), fresh);
+  // A new scene detaches, so its empty cast never reaches the record.
+  keys = E.encounterSyncKeys(c);
+  const withScene = { ...c, scenes: [...c.scenes, { id: 'scn_2', number: 2, protagonistIds: [], antagonistIds: [], bystanderIds: [], assetIds: [], locationIds: [], npcStates: {} }] };
+  const moved = E.syncCurrentEncounter(keys, withScene);
+  assert.equal(moved.context.encounter.id, null, 'an unsaved Encounter Composer');
+  assert.equal(getEnt(moved, saved.id).protagonistIds.length, 1, 'the record keeps its cast');
+  // Only an unsaved Composer can lose anything when another becomes current.
+  assert.equal(E.composerHoldsUnsaved(c), false);
+  assert.equal(E.composerHoldsUnsaved(E.newComposerEncounter(c)), true);
 });

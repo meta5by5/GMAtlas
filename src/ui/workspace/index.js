@@ -844,7 +844,7 @@ export function positionCardHtml(title, body, extraClass) {
   return card(title, '', body, extraClass);
 }
 
-// The Composer's five sections, in order: also the steps of the Encounter
+// The Encounter form's five sections, in order: also the steps of the Encounter
 // wizard (direct request, 2026-11-08: "a button with a wand with stars icon
 // ... that prompts to run a wizard that steps through populating the
 // sections of the composer").
@@ -856,32 +856,49 @@ export const COMPOSER_STEPS = [
   { key: 'how', title: 'HOW it plays', lead: 'Mode and pacing for the current scene.', body: (d, u) => howSectionBody(d, u) },
 ];
 
-// The Composer's own toolbar (direct requests, 2026-11-08): save what it
-// holds as an Encounter, run the Encounter wizard, and copy everything as a
-// prompt for an AI client (domain/encounters.js).
+// The common "copy" icon: two overlapping boxes, the front one white
+// (direct request, 2026-11-12). currentColor outlines, so it suits both looks.
+export const COPY_ICON = '<svg class="copy-icon" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1.75" y="1.75" width="8.5" height="9.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="5.75" y="4.75" width="8.5" height="9.5" rx="1.5" fill="#fff" stroke="currentColor" stroke-width="1.3"/></svg>';
+
+// The Encounter form's toolbar (direct requests, 2026-11-08 / 2026-11-12):
+// 💾 saves (a brand-new Encounter Composer becomes a record; a saved one also
+// saves as it's edited), ✨ runs the wizard, and the copy icon copies
+// everything as a prompt for an AI client (domain/encounters.js). In the
+// Encounter panel it also carries the name, 📂 and ＋ New; in Cast (where the
+// title row holds the name) a record that isn't the current Encounter gets
+// 📌 Make current instead.
 function composerToolbarHtml(ui, doc) {
   const wizard = Number.isInteger(ui.composerWizardStep);
+  const form = ui.encounterForm || null;
+  const inCast = !!(form && form.inCast);
   const enc = doc ? composerEncounterFields(doc) : { id: null, name: '' };
   const editing = enc.id && doc && getEntity(doc, enc.id);
-  return `<div class="composer-encounter-head">
-    <label class="field-label sm composer-encounter-name">${editing ? 'Editing Encounter' : 'New Encounter'}
+  const saveTitle = editing ? 'Save Encounter' : 'Save as Encounter';
+  const head = inCast ? '' : `<div class="composer-encounter-head">
+    <label class="field-label sm composer-encounter-name">${editing ? 'Encounter' : 'Encounter Composer'}
       <input data-composer-encounter-field="name" value="${esc(enc.name)}" placeholder="${editing ? 'Unnamed' : 'Named from the situation if left blank'}">
     </label>
-    ${editing ? `<button type="button" class="icon-btn" data-open-entity="${esc(enc.id)}" title="Open the Encounter record" aria-label="Open the Encounter record">📂</button>` : ''}
-  </div>
+    ${editing ? `<button type="button" class="icon-btn" data-open-entity="${esc(enc.id)}" title="Open the Encounter record in Cast" aria-label="Open the Encounter record">📂</button>` : ''}
+  </div>`;
+  const castNote = !inCast ? ''
+    : form.current
+      ? '<span class="chip sm encounter-current-chip" title="This is the current Encounter: the Encounter panel shows it too">📌 Current</span>'
+      : `<button type="button" class="btn ghost sm" data-encounter-to-composer="${esc(form.id)}" data-encounter-unscoped title="Make this the current Encounter: the scene, and the Encounter panel">📌 Make current</button>`;
+  return `${head}
   <div class="composer-toolbar">
-    <button type="button" class="btn sm" data-composer-add-encounter title="${editing ? 'Save the Composer to this Encounter' : 'Save who, where, what, why and how as a new Encounter, linked to everyone and everything in it'}">${editing ? '💾 Save Encounter' : '＋ Save as Encounter'}</button>
-    ${editing ? '<button type="button" class="btn ghost sm" data-composer-new-encounter title="Start a new Encounter (the scene stays as it is)">＋ New</button>' : ''}
-    <button type="button" class="icon-btn composer-wizard-btn ${wizard ? 'active' : ''}" data-composer-wizard="${wizard ? 'stop' : 'start'}" title="${wizard ? 'Leave the Encounter wizard' : 'Encounter wizard: questions and oracle suggestions for each step'}" aria-label="Encounter wizard">🪄✨</button>
-    <button type="button" class="icon-btn" data-composer-copy-prompt title="Copy everything in the Composer as a prompt for an AI client (to write the encounter’s description)" aria-label="Copy AI prompt">📋</button>
+    <button type="button" class="icon-btn" data-composer-add-encounter title="${saveTitle}" aria-label="${saveTitle}">💾</button>
+    ${editing && !inCast ? '<button type="button" class="btn ghost sm" data-composer-new-encounter title="Start a new Encounter Composer (the scene stays as it is)">＋ New</button>' : ''}
+    ${castNote}
+    <button type="button" class="icon-btn composer-wizard-btn ${wizard ? 'active' : ''}" data-composer-wizard="${wizard ? 'stop' : 'start'}" title="${wizard ? 'Leave the Encounter wizard' : 'Encounter wizard: questions and oracle suggestions for each step'}" aria-label="Encounter wizard">✨</button>
+    <button type="button" class="icon-btn" data-composer-copy-prompt title="Copy everything in this Encounter as a prompt for an AI client (to write the encounter’s description)" aria-label="Copy AI prompt">${COPY_ICON}</button>
   </div>`;
 }
 
 // Asked when the Composer opens and the campaign has no Encounter yet.
 function composerWizardOfferHtml() {
   return `<div class="drawer-note composer-wizard-offer">
-    <span>🪄✨ No encounters yet. Build the first one step by step?</span>
-    <button type="button" class="btn sm" data-composer-wizard="start">Run the Encounter wizard</button>
+    <span>✨ No encounters yet. Build the first one step by step?</span>
+    <button type="button" class="btn sm" data-composer-wizard="start">Open the Encounter Composer</button>
     <button type="button" class="btn ghost sm" data-composer-wizard="dismiss">Not now</button>
   </div>`;
 }
@@ -945,7 +962,7 @@ function composerWizardGuideHtml(doc, ui, step, i) {
   const suggestions = wizardOracleSuggestions(doc, step.key, { offset });
   return `<div class="composer-wizard-guide">
     <div class="composer-wizard-head">
-      <strong>🪄✨ Encounter wizard</strong>
+      <strong>✨ ${composerEncounterFields(doc).id ? 'Encounter wizard' : 'Encounter Composer'}</strong>
       <span class="dim small">Step ${i + 1} of ${COMPOSER_STEPS.length}: ${esc(step.title)}</span>
     </div>
     ${guide.hint ? `<p class="dim small composer-wizard-hint">${esc(guide.hint)}</p>` : ''}
@@ -959,30 +976,35 @@ function composerWizardGuideHtml(doc, ui, step, i) {
   </div>`;
 }
 
-function composerWizardNavHtml(i) {
+function composerWizardNavHtml(i, editing) {
   const last = i === COMPOSER_STEPS.length - 1;
   return `<div class="composer-wizard-nav">
       <button type="button" class="btn ghost sm" data-composer-tab="${i - 1}" ${i === 0 ? 'disabled' : ''}>◀ Back</button>
       ${last
-        ? '<button type="button" class="btn sm" data-composer-add-encounter data-composer-wizard-finish>✔ Save as Encounter</button>'
+        ? `<button type="button" class="btn sm" data-composer-add-encounter data-composer-wizard-finish>✔ ${editing ? 'Save Encounter' : 'Save as Encounter'}</button>`
         : `<button type="button" class="btn sm" data-composer-tab="${i + 1}">Next ▶</button>`}
     </div>`;
 }
 
+// The Encounter entity form (direct request, 2026-11-12): the Encounter
+// panel renders it for the current Encounter, and Cast renders it for any
+// Encounter record (shell.js encounterFormHtml, ui.encounterForm set) with
+// `doc` already showing that record as the scene.
 export function composerBodyHtml(doc, ui) {
   const wizard = Number.isInteger(ui.composerWizardStep);
+  const inCast = !!(ui.encounterForm && ui.encounterForm.inCast);
   const i = composerTabIndex(ui);
   const step = COMPOSER_STEPS[i];
   const open = { ...ui, expandedDashboardSections: new Set([...(ui.expandedDashboardSections || []), step.key]) };
-  return `
+  return `<div class="composer-body">
     ${composerToolbarHtml(ui, doc)}
-    ${!wizard && ui.composerWizardOffer ? composerWizardOfferHtml() : ''}
+    ${!wizard && !inCast && ui.composerWizardOffer ? composerWizardOfferHtml() : ''}
     ${composerTabsHtml(doc, i)}
     ${wizard ? composerWizardGuideHtml(doc, ui, step, i) : ''}
     ${step.key === 'how' ? activitySelectHtml(doc) : ''}
     ${dashboardSection(step.key, step.title, step.lead, step.body(doc, open), doc, open, step.extra ? step.extra() : '', { tabbed: true })}
-    ${wizard ? composerWizardNavHtml(i) : ''}
-  `;
+    ${wizard ? composerWizardNavHtml(i, !!composerEncounterFields(doc).id) : ''}
+  </div>`;
 }
 
 export function navigatorBodyHtml(doc, ui) {
@@ -1499,7 +1521,7 @@ function narrativeComposerBlock(doc, ui) {
     <div class="mention-editor narrative-composer-preview" contenteditable="true" data-scene-summary-field data-placeholder="Nothing to compose yet — write something in WHO/WHERE's Focus field, check a Story Option in the Advisor, or type your own.">${buildMentionEditorHTML(doc, draft)}</div>
     <div class="shift-actions">
       <!-- Icon-only (direct request, 2026-11-11); ➜📖 matches the Journal tab's own add button. -->
-      <button class="chip" data-composer-copy title="Copy the current text to your clipboard" aria-label="Copy">📋</button>
+      <button class="chip" data-composer-copy title="Copy the current text to your clipboard" aria-label="Copy">${COPY_ICON}</button>
       <button class="chip" data-composer-journal title="Add the current text to the Journal" aria-label="Add to Journal"><span aria-hidden="true">➜📖</span></button>
       <button class="chip" data-composer-clear title="Blank this field" aria-label="Clear">🗑</button>
       <button class="chip" data-composer-reload title="Pull WHO/WHERE's current Focus text and checked Story Options back in, replacing what's here now" aria-label="Reload">🔄</button>

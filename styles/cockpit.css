@@ -1451,9 +1451,12 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
 .mc-drawer.drawer-span-3 { width: calc(100vw - var(--edge-w)); }
 @media (max-width: 1023px) { .battlemap-span-controls { display: none; } }
 /* A map maximized over Composer + Navigator (shell.js toggleMapMaximize):
-   one card across both columns, filling the Storyboard's height. */
-.workspace-card.map-maximized-card { min-height: calc(100vh - var(--header-h) - var(--sp-6) * 2); display: flex; flex-direction: column; }
-.workspace-card.map-maximized-card .workspace-card-body { flex: 1 1 auto; }
+   one card across both columns, filling the Storyboard's height. The card
+   fills its grid row exactly. No min-height of its own: a card taller than
+   its row made Chromium lay the column out twice, and the Battlemap's map
+   box (sized in container units off its viewport) kept the first pass's
+   zero height, so the background never showed. */
+.workspace-card.map-maximized-card { height: 100%; min-height: 0; }
 @media (max-width: 1023px) { .map-maximize-btn { display: none; } }
 /* The viewport: a fixed-aspect box (padding-top trick — no fixed height,
    since a GM's background image could be any shape), overflow:hidden so
@@ -3799,3 +3802,11 @@ input[type="number"] { -moz-appearance: textfield; }
 .composer-encounter-field { margin-bottom: var(--sp-1); }
 .composer-wizard-target { max-width: 11rem; font-size: 0.85em; }
 .encounter-composer-fields .encounter-composer-head { margin: var(--sp-3) 0 var(--sp-1); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); }
+
+/* The copy icon (workspace/index.js COPY_ICON) sits on the text baseline like
+   the emoji icons beside it. */
+.copy-icon { display: inline-block; vertical-align: -0.15em; }
+/* The Encounter form inside a Cast record (direct request, 2026-11-12): set
+   off from the record's own fields like the panel it also is. */
+.encounter-form { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--sp-2) var(--sp-3); margin: var(--sp-2) 0 var(--sp-3); }
+.encounter-current-chip { white-space: nowrap; }

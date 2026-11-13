@@ -12,6 +12,7 @@ import { CONTEXT_QUESTIONS } from '../core/schema.js';
 import { continueStory, restartStory, applyStoryShift, rollOracle, addNote, setJournalDraft, submitJournalDraft, editNote, patchContext, editContextText, logRoll, generateNpc, deepenNpc, drawSuggestionLenses, suggestNextWithLens, drawSuggestedOracles, drawFactionActivityOracles, drawConsequenceOracles, updateSceneField, rollNpcSceneField, editNpcSceneField, rollLocationSensoryField, editLocationSensoryField, rollLocationFantasyField, editLocationFantasyField, rollWhereDetailField, addContextEntity, removeContextEntity } from '../domain/session.js';
 import { addSceneProtagonist, removeSceneProtagonist, addSceneAntagonist, removeSceneAntagonist, addSceneBystander, removeSceneBystander, addSceneAsset, removeSceneAsset, addSceneLocation, removeSceneLocation, setSceneSystem, addSceneDismissedFaction, removeSceneDismissedFaction, moveSceneActor } from '../domain/scenes.js';
 import { buildStoryOptions, gatherSceneContext, composeNarrativeDraft } from '../domain/copilot.js';
+import { applyToEncounter, encounterSyncKeys, syncCurrentEncounter, encounterFormView, composerHoldsUnsaved } from '../domain/encounters.js';
 import { listEncounters, composerPrompt, wizardResultTarget, applyWizardResult, npcNameFromOracleText, oracleResultBody, saveComposerEncounter, newComposerEncounter, setComposerEncounterField, addComposerSessionHook, removeComposerSessionHook, addComposerFaction, loadEncounterIntoComposer, encounterFieldOraclePaths, composerEncounterFields, composerSnapshot, composerHoldsAnything } from '../domain/encounters.js';
 import { renameEntityEverywhere, setEntityAliases, setEntityVisibility, setPlaceKind } from '../domain/wiki.js';
 import { isRedLinkSpan } from './drawers/wiki.js';
@@ -1724,7 +1725,69 @@ export function openPanelInCampaign(drawerId, { guideId, mapKey } = {}) {
   return render();
 }
 
+// The Composer is the Encounter entity form (direct request, 2026-11-12;
+// domain/encounters.js applyToEncounter/syncCurrentEncounter). The Encounter
+// panel is the form for the current Encounter; Cast shows the same form for
+// any Encounter record, wrapped in [data-encounter-form="<id>"] when that
+// record isn't the current one. An interaction inside such a form (or in the
+// entity picker / inline prompt it opened) runs with encounterScope set, and
+// every store.update() made meanwhile is applied to that record instead of
+// the live scene. Every update also keeps the current Encounter and its
+// record equal. A control marked [data-encounter-unscoped] (📌 Make current)
+// always acts on the live scene.
+let encounterScope = null;
+function encounterScopeFor(target) {
+  if (!target || !target.closest) return null;
+  if (target.closest('[data-encounter-unscoped]')) return null;
+  const form = target.closest('[data-encounter-form]');
+  if (form) return form.dataset.encounterForm || null;
+  if (target.closest('[data-entity-picker-overlay]') && entityPicker && entityPicker.encounterScope) return entityPicker.encounterScope;
+  if (target.closest('[data-inline-prompt]') && inlinePrompt && inlinePrompt.encounterScope) return inlinePrompt.encounterScope;
+  return null;
+}
+function runInEncounterScope(scope, fn) {
+  const prev = encounterScope;
+  const pickerBefore = entityPicker;
+  const promptBefore = inlinePrompt;
+  encounterScope = scope;
+  try { return fn(); } finally {
+    // A picker or prompt opened from inside the form finishes there too.
+    if (scope) {
+      if (entityPicker && entityPicker !== pickerBefore) entityPicker.encounterScope = scope;
+      if (inlinePrompt && inlinePrompt !== promptBefore) inlinePrompt.encounterScope = scope;
+    }
+    encounterScope = prev;
+  }
+}
+function encounterScoped(fn, targetOf = (ev) => ev && ev.target) {
+  return function encounterScopedHandler(ev) { return runInEncounterScope(encounterScopeFor(targetOf(ev)), () => fn(ev)); };
+}
+let encounterStoreHooked = false;
+function hookEncounterStore() {
+  if (encounterStoreHooked) return;
+  encounterStoreHooked = true;
+  const rawUpdate = store.update;
+  store.update = (mutator, opts) => rawUpdate((d) => {
+    const before = encounterSyncKeys(d);
+    const out = encounterScope ? applyToEncounter(d, encounterScope, mutator) : (mutator(d) || d);
+    return syncCurrentEncounter(before, out);
+  }, opts);
+}
+// The campaign as the form in scope sees it (the live one outside a form).
+function encounterScopedDoc() {
+  const d = store.get();
+  return encounterScope ? encounterFormView(d, encounterScope) : d;
+}
+// An Encounter record's form in Cast: the Encounter panel's own form,
+// showing that record (live when it's the current Encounter).
+function encounterFormHtml(doc, id, ui) {
+  const current = composerEncounterFields(doc).id === id;
+  const view = encounterFormView(doc, id);
+  return `<div class="encounter-form"${current ? '' : ` data-encounter-form="${escapeHtml(id)}"`}>${composerBodyHtml(view, { ...ui, encounterForm: { id, current, inCast: true } })}</div>`;
+}
+
 export function mountShell(el) {
+  hookEncounterStore();
   root = el;
   setBlobResolver(store.blobDataUrl);
   // The logo menu shows sign-in and sync state: keep it current while open
@@ -1857,14 +1920,14 @@ export function mountShell(el) {
     else pickerInput = null;
   }).observe(el, { childList: true, subtree: true });
 
-  el.addEventListener('click', guarded(onClick));
-  el.addEventListener('dblclick', guarded(onDblClick));
-  el.addEventListener('change', guarded(onChange));
-  el.addEventListener('input', guarded(onInput));
+  el.addEventListener('click', guarded(encounterScoped(onClick)));
+  el.addEventListener('dblclick', guarded(encounterScoped(onDblClick)));
+  el.addEventListener('change', guarded(encounterScoped(onChange)));
+  el.addEventListener('input', guarded(encounterScoped(onInput)));
   el.addEventListener('dragstart', onDragStart);
   el.addEventListener('dragover', onDragOver);
   el.addEventListener('dragleave', onDragLeave);
-  el.addEventListener('drop', onDrop);
+  el.addEventListener('drop', encounterScoped(onDrop));
   // Touch equivalent of the drag-and-drop above (see onTouchStart's comment)
   // — touchmove is NOT passive because it conditionally calls
   // preventDefault() once a drag actually engages, to stop the page from
@@ -1872,8 +1935,8 @@ export function mountShell(el) {
   // is prevented and an ordinary scroll/tap behaves exactly as it always did.
   el.addEventListener('touchstart', onTouchStart, { passive: true });
   el.addEventListener('touchmove', onTouchMove, { passive: false });
-  el.addEventListener('touchend', onTouchEnd);
-  el.addEventListener('touchcancel', onTouchEnd);
+  el.addEventListener('touchend', encounterScoped(onTouchEnd, () => touchDrag && touchDrag.lastTarget));
+  el.addEventListener('touchcancel', encounterScoped(onTouchEnd, () => touchDrag && touchDrag.lastTarget));
   // Relationship graph pan/zoom (2026-07-04, "must allow for zoom-in
   // capability" once a campaign has a lot of links) — wheel is not passive
   // since onWheel conditionally calls preventDefault() (only when the
@@ -1887,7 +1950,7 @@ export function mountShell(el) {
   // focus (clicking elsewhere, tabbing away) — focusout bubbles (blur
   // doesn't), and picking a suggestion never reaches here in the first
   // place since onMouseDown already preventDefault()s that click.
-  el.addEventListener('focusout', onFocusOut);
+  el.addEventListener('focusout', encounterScoped(onFocusOut));
   // A small, deliberately short set (2026-07-04 review: "add shortcuts when
   // non-disruptive") — two near-universal conventions rather than a bound
   // shortcut for every action. On document, not root: Escape/Ctrl+K should
@@ -1982,34 +2045,35 @@ function onClick(ev) {
     let made = null;
     let created = false;
     store.update((d) => { const res = saveComposerEncounter(d); made = res.id; created = res.created; return res.campaign; });
-    if (!made) return toast('Nothing in the Composer yet: add who, where or what first.');
+    if (!made) return toast('Nothing in the Encounter yet: add who, where or what first.');
     if (hit('[data-composer-wizard-finish]')) composerWizardStep = null;
     toast(`Encounter ${created ? 'saved' : 'updated'}: ${(getEntity(store.get(), made) || {}).name || 'Unnamed'}`);
     return render();
   }
   if (hit('[data-composer-new-encounter]')) {
     store.update((d) => newComposerEncounter(d));
-    return toast('New Encounter: the Composer will save to a new record');
+    return toast('New Encounter Composer: 💾 saves it as a new record');
   }
   const toComposer = hit('[data-encounter-to-composer]');
   if (toComposer) {
     const id = toComposer.dataset.encounterToComposer;
-    // Always asks before replacing anything the Composer holds — including
-    // unsaved edits to this same Encounter (direct request, 2026-11-09).
+    // Makes this the current Encounter (the scene). A saved Encounter is
+    // kept in its record as it's edited, so only an unsaved Encounter
+    // Composer can be lost, and that is asked first (direct requests,
+    // 2026-11-09 / 2026-11-12).
     const d0 = store.get();
     const rec = getEntity(d0, id);
-    const enc = composerEncounterFields(d0);
-    const what = enc.id === id ? 'your unsaved changes to it in the Composer' : enc.id ? `the Encounter being edited (${(getEntity(d0, enc.id) || {}).name || 'Unnamed'})` : 'what the Composer holds';
-    if (composerHoldsAnything(d0)
-      && !window.confirm(`Load “${(rec && rec.name) || 'this Encounter'}” into the Composer? This replaces ${what}: the current scene’s cast, assets, places and factions, WHO…HOW, and the Encounter fields. Save first if you want to keep them.`)) return;
+    if (composerHoldsUnsaved(d0)
+      && !window.confirm(`Make “${(rec && rec.name) || 'this Encounter'}” the current Encounter? This replaces the unsaved Encounter Composer: the current scene’s cast, assets, places and factions, WHO…HOW, and the Encounter fields. Save it first (💾) if you want to keep it.`)) return;
     store.update((d) => loadEncounterIntoComposer(d, id));
     showComposerTab('who');
-    toast('Encounter loaded into the Composer');
+    toast(`Current Encounter: ${(rec && rec.name) || 'Unnamed'}`);
     return render();
   }
   const composerHookAdd = hit('[data-composer-hook-add]');
   if (composerHookAdd) {
-    const inp = root.querySelector('[data-composer-hook-input]');
+    const scopeEl = composerHookAdd.closest('.composer-body') || root;
+    const inp = scopeEl.querySelector('[data-composer-hook-input]');
     const v = inp ? inp.value : '';
     if (!String(v).trim()) return;
     return store.update((d) => addComposerSessionHook(d, v));
@@ -2087,7 +2151,7 @@ function onClick(ev) {
       return renderEntityPickerOverlay();
     }
     store.update((d) => applyWizardResult(d, target, oracleResultBody(res.text)));
-    return toast('Added to the Composer');
+    return toast('Added to the Encounter');
   }
   const wizardJournal = hit('[data-composer-wizard-journal]');
   if (wizardJournal) {
@@ -2112,7 +2176,7 @@ function onClick(ev) {
     return render();
   }
   if (hit('[data-composer-copy-prompt]')) {
-    const d = store.get();
+    const d = encounterScopedDoc();
     const prompt = composerPrompt(d, { genre: (d.settings && d.settings.genrePack) || '', ruleset: (d.settings && d.settings.statRuleset) || '' });
     copyText(prompt).then((ok) => toast(ok ? 'AI prompt copied: paste it into your AI client.' : 'Couldn’t copy to the clipboard here.'));
     return;
@@ -10150,6 +10214,7 @@ function closeInlinePrompt() {
 // multi-field kind, `values.<key>`) /meta instead.
 function commitInlinePrompt() {
   if (!inlinePrompt) return;
+  if (inlinePrompt.encounterScope && encounterScope !== inlinePrompt.encounterScope) return runInEncounterScope(inlinePrompt.encounterScope, commitInlinePrompt);
   const values = {};
   (root ? root.querySelectorAll('[data-inline-prompt-field]') : []).forEach((el) => { values[el.dataset.inlinePromptField] = (el.value || '').trim(); });
   const value = values.value || ''; // the synthesized single-field key
@@ -10850,7 +10915,7 @@ function render() {
       // lines up), so this button never needs its own un-anchor state;
       // that control lives on the Storyboard card itself instead
       // (renderStoryboardGrid's own data-storyboard-unanchor).
-      const anchorBtn = (pinned || compact) ? '' : `<span class="drawer-tab-anchor" data-drawer-tab-anchor="${id}" title="Anchor over the Storyboard (Composer/Navigator)" aria-label="Anchor panel to the Storyboard">⛶</span>`;
+      const anchorBtn = (pinned || compact) ? '' : `<span class="drawer-tab-anchor" data-drawer-tab-anchor="${id}" title="Anchor over the Storyboard (Encounter/Navigator)" aria-label="Anchor panel to the Storyboard">⛶</span>`;
       return `<button class="drawer-tab ${id === activeDrawer ? 'active' : ''} ${pending ? 'pending' : ''}" data-drawer-tab="${id}" title="${m ? m.label : id}${pending ? ' — a decision is waiting' : ''}">
         <span class="glyph">${m ? m.glyph : ''}</span><span class="drawer-tab-label">${m ? m.label : id}${pending ? ' ★' : ''}</span>
         ${anchorBtn}
@@ -12336,6 +12401,7 @@ function headExtraForDrawer(id) {
 // Every ephemeral UI flag a drawer template might read, in one place.
 function buildDrawerUi() {
   return {
+    encounterFormHtml,
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, oracleRouteToNavigator: oracleRoutingActive(), navigatorStepMapLink, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, docSort, docSortMenuOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     fiveLeaguesInfoOpen, fiveLeaguesItemNotesOpen,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),

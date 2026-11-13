@@ -507,3 +507,81 @@ export function composerHoldsAnything(campaign) {
   if (enc.id || enc.name || enc.sessionHooks.length) return true;
   return DETAIL_KEYS.some((k) => (k === 'status' ? enc.status !== 'active' : !!enc[k]));
 }
+
+// --- The Encounter form (direct request, 2026-11-12) -------------------------
+// The Composer is the Encounter entity form: the Encounter panel is that form
+// for the current Encounter (the one the live scene holds, context.encounter.
+// id), and Cast shows the same form for any Encounter record. Two pure
+// pieces make that safe:
+//  - applyToEncounter edits a record that is NOT the current one through the
+//    same Composer mutators, on a copy of the campaign with the record loaded
+//    as the scene, saving the result back to the record and leaving the live
+//    scene untouched;
+//  - syncCurrentEncounter keeps the current Encounter and its record equal
+//    after any edit: a change to the scene saves to the record, a change to
+//    the record loads into the scene, and a new scene starts a fresh, unsaved
+//    Encounter Composer (so moving on never overwrites the last record).
+
+const RECORD_KEYS = ['name', 'protagonistIds', 'antagonistIds', 'bystanderIds', 'assetIds', 'locationIds', 'factionIds', 'siteDescription', 'surroundings', 'situation', 'intent', 'threat', 'mystery', 'objective', 'encounterMode', 'encounterActivity', 'sessionHooks', ...DETAIL_KEYS];
+const recordKey = (rec) => JSON.stringify(rec ? RECORD_KEYS.map((k) => (rec[k] === undefined ? null : rec[k])) : null);
+function liveKey(campaign) {
+  const ctx = (campaign && campaign.context) || {};
+  const sc = currentScene(campaign) || {};
+  const where = ctx.where || {}; const what = ctx.what || {}; const why = ctx.why || {}; const how = ctx.how || {};
+  const { name: _n, ...enc } = composerEncounterFields(campaign);
+  return JSON.stringify([where.siteDescription, where.surroundings, what.situation, what.intent, what.threat, what.mystery, why.summary, how.summary, how.activity, enc,
+    sc.protagonistIds, sc.antagonistIds, sc.bystanderIds, sc.assetIds, sc.locationIds, sc.factionIds, sc.dismissedFactionIds]);
+}
+
+/** What syncCurrentEncounter compares against: taken before an edit. */
+export function encounterSyncKeys(campaign) {
+  const enc = composerEncounterFields(campaign);
+  return { id: enc.id, name: enc.name, sceneCount: ((campaign && campaign.scenes) || []).length, live: liveKey(campaign), rec: recordKey(enc.id ? getEntity(campaign, enc.id) : null) };
+}
+
+/** Keeps the current Encounter and its record equal after an edit (see above). */
+export function syncCurrentEncounter(before, campaign) {
+  if (!before || !campaign) return campaign;
+  const enc = composerEncounterFields(campaign);
+  if (!enc.id || enc.id !== before.id) return campaign;
+  if (((campaign.scenes || []).length) > before.sceneCount) return newComposerEncounter(campaign);
+  const rec = getEntity(campaign, enc.id);
+  if (!rec || rec.type !== 'conflict') return campaign;
+  if (liveKey(campaign) !== before.live || enc.name !== before.name) {
+    // The record's own name wins unless this edit renamed the Encounter here.
+    const next = enc.name === before.name ? patchEncounter(campaign, { name: rec.name || '' }) : campaign;
+    return saveComposerEncounter(next).campaign;
+  }
+  if (recordKey(rec) !== before.rec) return loadEncounterIntoComposer(campaign, enc.id);
+  return campaign;
+}
+
+const deepCopy = (v) => { try { return structuredClone(v); } catch { return JSON.parse(JSON.stringify(v)); } };
+
+/** Runs a Composer mutator against Encounter `id` instead of the live scene:
+ *  the record is loaded as the scene on a copy, `mutator` runs there, and the
+ *  result is saved back to the record. The live scene and context are left
+ *  as they were, and the record keeps the scene it came from. */
+export function applyToEncounter(campaign, id, mutator) {
+  const rec = getEntity(campaign, id);
+  if (!rec || rec.type !== 'conflict') return mutator(campaign) || campaign;
+  const liveContext = deepCopy(campaign.context);
+  const liveScenes = deepCopy(campaign.scenes || []);
+  const virtual = loadEncounterIntoComposer(deepCopy(campaign), id);
+  const out = mutator(virtual) || virtual;
+  const saved = saveComposerEncounter(out).campaign;
+  const next = { ...saved, context: liveContext, scenes: liveScenes };
+  return updateEntity(next, id, { sceneId: rec.sceneId === undefined ? null : rec.sceneId, sceneNumber: rec.sceneNumber === undefined ? null : rec.sceneNumber });
+}
+
+/** The campaign as the Encounter form for `id` shows it: the record loaded as
+ *  the scene (the live campaign itself when `id` is the current Encounter). */
+export function encounterFormView(campaign, id) {
+  return composerEncounterFields(campaign).id === id ? campaign : loadEncounterIntoComposer(campaign, id);
+}
+
+/** Whether making another Encounter current would lose anything: only an
+ *  unsaved Encounter Composer can (a saved one is kept in its record). */
+export function composerHoldsUnsaved(campaign) {
+  return !composerEncounterFields(campaign).id && composerHoldsAnything(campaign);
+}

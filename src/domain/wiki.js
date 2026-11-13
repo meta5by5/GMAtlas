@@ -112,7 +112,7 @@ function eachTextSource(campaign, visit) {
     walkStrings(s, (h, k) => visit(src, h, k), null);
   }
   if (campaign.context) {
-    const src = { kind: 'composer', id: 'context', label: 'Composer' };
+    const src = { kind: 'composer', id: 'context', label: 'Encounter' };
     walkStrings(campaign.context, (h, k) => visit(src, h, k), null);
   }
   for (const t of campaign.threads || []) {

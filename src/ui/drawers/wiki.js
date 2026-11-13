@@ -72,7 +72,7 @@ function sourceHtml(src) {
 }
 
 const SOURCE_GROUP_LABEL = {
-  entity: 'Pages', journal: 'Journal', scene: 'Scenes', composer: 'Composer', thread: 'Threads',
+  entity: 'Pages', journal: 'Journal', scene: 'Scenes', composer: 'Encounter', thread: 'Threads',
   guide: 'Guide', document: 'Documents', hex: 'Hexcrawl', tile: 'Dungeon Crawl', battlemap: 'Battlemap',
 };
 

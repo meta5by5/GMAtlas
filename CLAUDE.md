@@ -131,7 +131,8 @@ src/
                    documents.js/guide.js/mechanicsIndex.js/toc.js/worldbuilding.js/
                    hostileLocations.js are content & reference; party.js/colony.js/
                    gallery.js/battlemaps.js round out the rest; encounters.js
-                   (Composer → Encounter, AI prompt, campaign timeline) and
+                   (the Composer IS the Encounter entity form: scoped edits
+                   and current-Encounter sync, AI prompt, timeline) and
                    torchTimer.js/shadowdarkImport.js (Shadowdark) are 2026-11-08
                    additions (design/adr/composer-encounters-and-panels.md,
                    shadowdark-ruleset.md); wiki.js is the campaign wiki's
@@ -162,7 +163,7 @@ styles/
   cockpit.css      layout + component styles (campaign surface)
   portal.css       portal surface layout (shares tokens.css only)
 tests/
-  domain.test.js   860 tests — domain modules, incl. sync-merge convergence
+  domain.test.js   862 tests — domain modules, incl. sync-merge convergence
   migrate.test.js  27 tests — legacy-key absorption + round-trip
 scripts/
   build.js         zero-dependency bundler (see below) — re-run after any src/ edit;
