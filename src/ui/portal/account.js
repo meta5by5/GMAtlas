@@ -780,7 +780,10 @@ export function onAccountClick(e) {
       });
       break;
     case 'sync-copy': {
-      const text = ui.recoveryKey;
+      // The key on screen: from Turn on sync, or from the setup made
+      // automatically at sign-in (sync.lastSetup(), as syncSection shows it).
+      const auto = sync.lastSetup();
+      const text = ui.recoveryKey || (auto && auto.recoveryKey);
       if (text && navigator.clipboard) {
         navigator.clipboard.writeText(text).then(() => { ui.notice = 'Recovery key copied.'; rerender(); }, () => { ui.error = 'Couldn’t copy. Select the key and copy it by hand.'; rerender(); });
       }
