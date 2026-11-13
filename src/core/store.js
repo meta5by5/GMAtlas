@@ -558,7 +558,26 @@ function createStore() {
   function update(mutator, { silent = false, system = false } = {}) {
     const activeId = appConfig.activeCampaignId;
     const prev = docs.get(activeId);
-    const next = mutator(structuredCloneSafe(prev));
+    // The mutator sees the active Rules Profile's ruleset settings, the same
+    // values get() shows (direct request, 2026-11-12: an NPC made in Cast or
+    // the Party panel got the Starforged Bestiary under every profile,
+    // because domain code such as ensureAutoStatblock read the raw doc's own
+    // statRuleset). Those keys belong to the profile, so whatever the
+    // mutator left untouched goes back to the stored value before saving.
+    const ruleset = (activeProfile() || {}).ruleset || null;
+    const draft = structuredCloneSafe(prev);
+    if (ruleset && draft && draft.settings) draft.settings = { ...draft.settings, ...ruleset };
+    let next = mutator(draft);
+    if (ruleset && next && next.settings) {
+      const stored = (prev && prev.settings) || {};
+      const settings = { ...next.settings };
+      for (const k of Object.keys(ruleset)) {
+        if (settings[k] !== ruleset[k]) continue;
+        if (Object.prototype.hasOwnProperty.call(stored, k)) settings[k] = stored[k];
+        else delete settings[k];
+      }
+      next = { ...next, settings };
+    }
     const nextDoc = next || prev;
     nextDoc.meta.updatedAt = new Date().toISOString();
     docs.set(activeId, nextDoc);

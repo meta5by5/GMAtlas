@@ -3810,3 +3810,7 @@ input[type="number"] { -moz-appearance: textfield; }
    off from the record's own fields like the panel it also is. */
 .encounter-form { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--sp-2) var(--sp-3); margin: var(--sp-2) 0 var(--sp-3); }
 .encounter-current-chip { white-space: nowrap; }
+/* An icon-only <select> (the Five Leagues ⚔ weapon catalog picker): as
+   narrow as its icon until opened. */
+.icon-select { width: auto; min-width: 2.4rem; max-width: 3rem; text-align: center; padding-inline: var(--sp-1); }
+.anvil-icon { display: inline-block; vertical-align: -0.2em; }

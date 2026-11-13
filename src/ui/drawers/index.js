@@ -601,6 +601,10 @@ function factionSection(doc, e, ui) {
     ${factionTurnSectionHtml(doc, e, ui)}`;
 }
 
+// An anvil (no emoji exists for one): the Five Leagues "add a custom weapon"
+// button (direct request, 2026-11-12). currentColor, so it suits both looks.
+const ANVIL_ICON = '<svg class="anvil-icon" viewBox="0 0 20 16" width="18" height="15" aria-hidden="true"><path d="M1 3h12.5c2.8 0 5 1.2 5.5 3.2H14c-.6 0-1 .5-1 1v.6c0 .9-.7 1.6-1.6 1.6H11l1 2.6h2v2H5v-2h2l1-2.6H6.5C3.5 9.4 1 7 1 4z" fill="currentColor"/></svg>';
+
 export const CONFLICT_STATUS_OPTIONS = [
   ['cold', 'Cold'], ['simmering', 'Simmering'], ['active', 'Active'], ['escalated', 'Escalated'], ['open_war', 'Open War'], ['resolved', 'Resolved'],
 ];
@@ -2080,11 +2084,12 @@ function characterSheetWeaponsAndGearHtml(group, gi, doc, ui = {}) {
         <div class="statblock-weapon-list">${weaponCards}</div>
         <datalist id="${traitsListId}">${FIVE_LEAGUES_WEAPON_TRAITS.map((t) => `<option value="${esc(t.label)}">`).join('')}</datalist>
         <div class="five-leagues-item-add-row">
-          <select data-fiveleagues-weapon-catalog-add="${gi}" title="Add from Weapons catalog…">
-            <option value="">+ Add from Weapons catalog…</option>
+          <!-- Icon-only (direct request, 2026-11-12): ⚔ picks from the catalog, the anvil forges a custom weapon. -->
+          <select class="icon-select" data-fiveleagues-weapon-catalog-add="${gi}" title="Add a weapon from the Weapons catalog" aria-label="Add a weapon from the Weapons catalog">
+            <option value="">⚔</option>
             ${catalogOptions}
           </select>
-          <button type="button" class="btn ghost sm" data-statblock-weapon-add="${gi}">＋ Custom Weapon</button>
+          <button type="button" class="icon-btn" data-statblock-weapon-add="${gi}" title="Add a custom weapon" aria-label="Add a custom weapon">${ANVIL_ICON}</button>
         </div>
       </div>
       ${gearFieldHtml}`;
