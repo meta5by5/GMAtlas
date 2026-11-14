@@ -18,6 +18,8 @@ const SHELL = [
   './styles/genre-scifi.css',
   './styles/genre-fantasy.css',
   './styles/portal.css',
+  './assets/fonts/lancelot-latin.woff2',
+  './assets/fonts/metamorphous-latin.woff2',
   './dist/app.bundle.js',
   './assets/icon-192.png',
   './assets/icon-512.png',

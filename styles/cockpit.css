@@ -3086,7 +3086,10 @@ button.doc-badge:hover { background: rgba(56, 189, 248, 0.18); }
    Damage pill's own two-number-plus-slash layout and the Num+Ranged
    row's "Ranged fills the rest of the panel" behavior need new rules. */
 .fiveleagues-enemy-damage .fiveleagues-enemy-damage-inputs { display: flex; align-items: center; gap: 0.2rem; }
-.fiveleagues-enemy-damage-inputs input { width: 2.6rem; text-align: center; padding: 0.1rem; }
+/* Two-class selector so it outranks .attr-row-compact .attr-val-input's
+   width:0/min-width:100%, which squeezed both numbers into ~17px and
+   clipped the second one against the pill's edge. */
+.fiveleagues-enemy-damage-inputs .attr-val-input { width: 1.8rem; min-width: 0; text-align: center; padding: 0.1rem; }
 .fiveleagues-enemy-damage-sep { color: var(--text-dim); font-weight: 700; }
 .fiveleagues-enemy-num-ranged-row { display: flex; align-items: flex-end; gap: var(--sp-2); margin-top: var(--sp-2); }
 .fiveleagues-enemy-num-ranged-row .fiveleagues-enemy-wide-field { flex: 1 1 auto; min-width: 0; }
@@ -3819,6 +3822,8 @@ input[type="number"] { -moz-appearance: textfield; }
 .statblock-weapons-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
 .statblock-weapons-head h4 { margin: 0; }
 .statblock-weapons-head-actions { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.statblock-weapons-head-actions .icon-select,
+.statblock-weapons-head-actions .icon-btn { padding-block: 0; }
 /* Party tab number trackers: one row of number textfields, like Luck /
    Will / XP on a character sheet (direct request, 2026-11-12). */
 .party-tracker-numbers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-1); margin-bottom: var(--sp-2); }

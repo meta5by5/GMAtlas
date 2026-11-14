@@ -29,7 +29,6 @@
   --tier3-border: var(--border);
   --tool-panel-bg: #d9c49c;
 
-  --font: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
   --shadow: 0 8px 28px rgba(70, 45, 20, 0.35);
 }
 
@@ -47,9 +46,89 @@
   background-attachment: fixed;
 }
 
-:root[data-genre="fantasy"] h1,
-:root[data-genre="fantasy"] h2,
-:root[data-genre="fantasy"] h3 { letter-spacing: 0.01em; }
+/* Fantasy type, three voices (direct request, 2026-11-13):
+   - Metamorphous: headers and titles.
+   - Lancelot: content, meaning general text and the journal.
+   - A plain book serif (--font-ref): reference text read at a glance,
+     meaning turn steps and oracle titles. The Encounter wizard's guidance
+     uses the same family, in italic and oxblood (--font-guide).
+   Tooltips are native title="" bubbles, drawn by the OS in its own font.
+   Both fonts are vendored in assets/fonts (SIL OFL, licences beside them),
+   so the look works offline and from file://. Lancelot runs small for
+   its size, so it is scaled up a little to match the old body text. */
+@font-face { font-family: "Metamorphous"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../assets/fonts/metamorphous-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Metamorphous"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../assets/fonts/metamorphous-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Lancelot"; font-style: normal; font-weight: 400; font-display: swap; size-adjust: 115%;
+  src: url("../assets/fonts/lancelot-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Lancelot"; font-style: normal; font-weight: 400; font-display: swap; size-adjust: 115%;
+  src: url("../assets/fonts/lancelot-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+
+:root[data-genre="fantasy"] {
+  --font:       "Lancelot", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  --font-title: "Metamorphous", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  --font-ref:   "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+}
+
+/* Headers and titles. Metamorphous has one weight; faux-bolding it smears
+   the serifs, so titles drop to 400 and lean on size and ink instead. */
+:root[data-genre="fantasy"] :is(h1, h2, h3, h4, h5, h6,
+  .dashboard-section-title, .drawer-title-name, .mc-header .campaign-title,
+  .campaign-row-title, .campaign-switcher-row-title, .doc-viewer-tab-title,
+  .wiki-title h2, .startup-screen h1, .startup-screen h2,
+  .composer-tabs [data-composer-tab], .section-toggle, .drawer-title-kind,
+  .dashboard-trackers-section-head, .search-group-head, .dice-roll-label,
+  .fiveleagues-enemy-subtitle, .encounter-composer-head) {
+  font-family: var(--font-title); font-weight: 400; letter-spacing: 0.02em;
+}
+
+/* Small all-caps labels: Lancelot's capitals are ornate swash forms that
+   blur into each other at caption size, so field, stat and table labels
+   use the plain reference serif instead. Labels that work as headings
+   (section toggles, card heads, the WHO/WHERE tabs) take Metamorphous above. */
+:root[data-genre="fantasy"] :is(.field-label, .field-label-static, .statblock-key,
+  .statblock-key-roll, .attr-key, .actor-thumb-toplabel, .entity-type-tag,
+  .weapon-pick-label, .statblock-weapon-headrow, .inline-prompt-label,
+  .party-headline-counter-label, .party-stat-group-label, .party-stat-pill-label,
+  .party-stat-track-expansion-label, .wiki-gm-tag, th) {
+  font-family: var(--font-ref);
+}
+
+/* Placeholder hints (the greyed text in an empty field, like the Scene
+   Summary's "write something in WHO/WHERE's Focus field...") are guidance,
+   not content, so they use the turn-step serif rather than Lancelot,
+   whose all-caps WHO/WHERE garble (direct request, 2026-11-13). */
+:root[data-genre="fantasy"] .mention-editor:empty::before,
+:root[data-genre="fantasy"] ::placeholder { font-family: var(--font-ref); }
+
+/* Numbers and stat values in fields use the same serif. Lancelot's
+   old-style digits and swash capitals make "+1", "6\"" or "12/15" hard to
+   read at a glance. This covers any number box and every field in a
+   statblock, character sheet, weapon table or Party tracker (direct
+   request, 2026-11-13). */
+:root[data-genre="fantasy"] :is(input[type="number"], .attr-val-input, .statblock-val,
+  .party-tracker-name-input, .party-tracker-value-input, .party-tracker-draft-max-input),
+:root[data-genre="fantasy"] :is(.statblock-block, .statblock-row, .statblock-weapons,
+  .character-sheet-resources, .character-sheet-stats) :is(input, select, textarea) {
+  font-family: var(--font-ref);
+}
+
+/* An <input> with no type attribute misses cockpit.css's font: inherit rule
+   and would fall back to the browser's sans-serif. */
+:root[data-genre="fantasy"] input { font-family: inherit; }
+
+/* Reference text: turn steps and oracle titles stay in a plain book serif,
+   since they are scanned mid-turn rather than read as story. */
+:root[data-genre="fantasy"] :is(.turn-step-current, .turn-step-text-body,
+  .turn-step-row textarea, .turn-step-list,
+  .oracle-label, .oracle-group-label, .oracle-links-head) {
+  font-family: var(--font-ref);
+}
 
 /* Sci-fi blues hard-coded in cockpit.css, re-inked for parchment. */
 :root[data-genre="fantasy"] .btn.primary { background: linear-gradient(180deg, #9a3a24, #7a2a17); border-color: #6b2213; color: #fbf3e2; }
