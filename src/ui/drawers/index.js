@@ -3479,7 +3479,7 @@ function turnStepsSettingsSection(doc, ui, systems = []) {
         </span>
       </h3>
       ${listsCollapsed ? '' : `
-      ${helpBody('settings-turn-steps', "A shared, named inventory of reorderable campaign-turn workflows (direct follow-up request) — not tied to one Rules Profile. The Campaign panel's Colony/Starship tabs each walk through whichever list is assigned to them (see Turn Step Assignments below), following a step's own \"Branches to\" pick into another category in the SAME list automatically once reached. Create as many lists/categories/steps as you like; edits here apply instantly.", ui)}
+      ${helpBody('settings-turn-steps', "A shared, named inventory of reorderable campaign-turn workflows (direct follow-up request) — not tied to one Rules Profile. The Timeline panel's Colony/Starship tabs each walk through whichever list is assigned to them (see Turn Step Assignments below), following a step's own \"Branches to\" pick into another category in the SAME list automatically once reached. Create as many lists/categories/steps as you like; edits here apply instantly.", ui)}
       ${lists.length ? `<label class="field-label sm">Editing<select data-turnsteplist-select>${listOptions}</select></label>` : '<p class="dim small">No Turn Step Lists yet.</p>'}
       ${editingList && editingList.name === '5PFH' ? `<button class="btn ghost" data-turnsteplist-load-default="${esc(editingId)}::5pfh">Reload Five Parsecs from Home Default Steps</button>` : ''}
       ${editingList && editingList.name === 'Planetfall' ? `<button class="btn ghost" data-turnsteplist-load-default="${esc(editingId)}::planetfall">Reload Planetfall Default Steps</button>` : ''}

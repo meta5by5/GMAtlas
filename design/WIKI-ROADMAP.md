@@ -280,7 +280,7 @@ The original plan:
 - Quick event capture: a one-line event becomes a journal entry with
   source `Event`.
 - Each entity's "Appears in sessions" comes from `mentionIndex`.
-- The campaign timeline (the Campaign panel) gains an in-world-date
+- The campaign timeline (the Timeline panel) gains an in-world-date
   ordering beside scene order.
 
 ### W5 — Navigation

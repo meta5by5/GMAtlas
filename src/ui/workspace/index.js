@@ -1208,7 +1208,7 @@ function navigatorWorkflowBlock(doc, ui) {
   const helpKey = 'nav:workflow';
   return `<div class="navigator-workflow">
     <div class="threads-head"><h3>Campaign Workflow</h3>${helpToggle(helpKey)}</div>
-    ${wsHelpBody(helpKey, "Steps through the same Campaign Turn + 5PFH/Planetfall/Five Leagues Turn Step sequence as the Campaign panel's own Colony/Starship/Warband tabs — a second, parallel way to walk the same steps, not a replacement; editing either copy of Campaign Turn updates the same value. 🔮 jumps to a suggested Oracle table when one applies; a location-flavored step offers to pick or create a map, whose link travels with the step once you add it to the Journal.", ui)}
+    ${wsHelpBody(helpKey, "Steps through the same Campaign Turn + 5PFH/Planetfall/Five Leagues Turn Step sequence as the Timeline panel's own Colony/Starship/Warband tabs — a second, parallel way to walk the same steps, not a replacement; editing either copy of Campaign Turn updates the same value. 🔮 jumps to a suggested Oracle table when one applies; a location-flavored step offers to pick or create a map, whose link travels with the step once you add it to the Journal.", ui)}
     ${cards}
   </div>`;
 }

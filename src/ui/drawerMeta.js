@@ -28,12 +28,12 @@ export const DRAWERS = [
   // by default for every profile. Its nav button opens the #/wiki portal
   // page (ui/portal/wiki.js), not a drawer tab.
   { id: 'wiki', glyph: '📜', label: 'Wiki' },
-  // Direct follow-up request: renamed "Colony" -> "Campaign" (now a
-  // two-tab panel, Colony/Starship — see drawers/index.js's colony()
-  // function). The internal id stays 'colony' on purpose (no cascading
-  // rename of data-drawer-open="colony"/isModuleVisible/etc.) — only this
-  // one label changes, propagating everywhere via drawerMeta().
-  { id: 'colony', glyph: '🏛', label: 'Campaign' },
+  // The campaign-turn panel (Colony/Starship/Warband tabs — see
+  // drawers/index.js's colony()). Labeled "Timeline" (formerly "Colony",
+  // then "Campaign"). The internal id stays 'colony' on purpose (no
+  // cascading rename of data-drawer-open="colony"/isModuleVisible/saved
+  // layouts) — only this label changes, propagating via drawerMeta().
+  { id: 'colony', glyph: '⏳', label: 'Timeline' },
   // Direct request (2026-11-08): renamed "World" -> "Planetfall". The id
   // stays 'world-tracker' (profiles, module visibility and saved layouts
   // all name it).

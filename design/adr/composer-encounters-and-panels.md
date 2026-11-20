@@ -112,7 +112,7 @@ recording it, and tidied several panels:
      Starship, Warband) whose system is in use; the ＋ add-member button
      shows on the Party tab only. Warband moved too, as the same kind of
      tab, so nothing was left on the Campaign panel.
-   - The Campaign panel (`colony` id, label unchanged) is the timeline.
+   - The Campaign panel (`colony` id) is the timeline, labeled Timeline (2026-11-19), at the end of the top nav. The Advisor is admin-only, at the bottom of the right nav.
    - World Tracker's label is Planetfall (id `world-tracker` unchanged).
    - Battlemap, Hexcrawl and Dungeon Crawl always carry a maximize button
      (⤢, desktop only) at the top of the panel, in the drawer head and on

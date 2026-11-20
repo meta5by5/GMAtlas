@@ -47,7 +47,7 @@ import { LICENSES } from './licenses.js';
 export const RULES_PROVIDERS = {
   starforged: { label: 'Starforged', status: 'integrated', note: 'Character sheets (Phase 4); its oracle philosophy and Progress Track model shaped domain/oracles.js and domain/threads.js.', rulesetId: 'starforged', genrePackId: 'sci-fi-generic', get dedicatedRulesetId() { return this.rulesetId; } },
   fivepfh: {
-    label: 'Five Parsecs From Home', status: 'integrated', note: 'Character sheets (Phase 4). Also gates the Campaign panel\'s Starship tab (direct follow-up request) — a different kind of gate than SWN\'s own below (a plain feature toggle, not a licensing confirmation), reusing the same mechanism rather than inventing a second one.', rulesetId: '5pfh', genrePackId: 'sci-fi-generic', get dedicatedRulesetId() { return this.rulesetId; },
+    label: 'Five Parsecs From Home', status: 'integrated', note: 'Character sheets (Phase 4). Also gates the Timeline panel\'s Starship tab (direct follow-up request) — a different kind of gate than SWN\'s own below (a plain feature toggle, not a licensing confirmation), reusing the same mechanism rather than inventing a second one.', rulesetId: '5pfh', genrePackId: 'sci-fi-generic', get dedicatedRulesetId() { return this.rulesetId; },
     requiresActivation: true,
   },
   traveller: { label: 'Traveller', status: 'character ruleset authored (original content)', note: 'Stale as of the 2026-07-03 ruleset library review this note used to cite: real Traveller 2e PDFs now live under assets/docs/Traveller/ (found while mapping assets/docs/\'s real per-game subfolders for the Ruleset Guide ToC + "Load" sourcebook button feature). The character ruleset (data/rulesets.js) remains original content inspired by classic Traveller\'s six characteristics and its 2d6-vs-8 task resolution (domain/dice.js\'s rollTraveller), not a transcription; still no Trade/Vehicle/NPC-generation content of its own beyond what Hostile/SWN already provide for those areas.', rulesetId: 'traveller', genrePackId: 'sci-fi-generic', get dedicatedRulesetId() { return this.rulesetId; } },
@@ -68,7 +68,7 @@ export const RULES_PROVIDERS = {
     genrePackId: 'sci-fi-generic', dedicatedRulesetId: null,
   },
   planetfall: {
-    label: 'Planetfall (Five Parsecs from Home)', status: 'integrated', note: 'Colony drawer (domain/colony.js). Also gates the Campaign panel\'s Colony tab (direct follow-up request) — see fivepfh\'s own note above for why this reuses the Game System Activation mechanism as a plain feature toggle here.',
+    label: 'Planetfall (Five Parsecs from Home)', status: 'integrated', note: 'Colony drawer (domain/colony.js). Also gates the Timeline panel\'s Colony tab (direct follow-up request) — see fivepfh\'s own note above for why this reuses the Game System Activation mechanism as a plain feature toggle here.',
     requiresActivation: true,
     genrePackId: 'sci-fi-generic', dedicatedRulesetId: null,
   },
@@ -115,7 +115,7 @@ export const RULES_PROVIDERS = {
   // ownership-confirmation Game System Activation, not free to redistribute.
   fiveleagues: {
     label: 'Five Leagues from the Borderlands', status: 'ruleset + content pack authored (owned-sourcebook transcription)',
-    note: 'Character sheets (data/rulesets.js\'s fiveleagues characterTemplate) are original content in this app\'s own format, mirroring 5PFH\'s own field shape (its sister game, same publisher/designer). The Five Leagues Enemies content packs (core rulebook + Compendium) DO transcribe real Enemy Profile stat-block numbers and traits from the purchased PDF, which is why this system sits behind the Game System Activation gate below — same posture as swn. Also gates the Campaign panel\'s Warband tab.',
+    note: 'Character sheets (data/rulesets.js\'s fiveleagues characterTemplate) are original content in this app\'s own format, mirroring 5PFH\'s own field shape (its sister game, same publisher/designer). The Five Leagues Enemies content packs (core rulebook + Compendium) DO transcribe real Enemy Profile stat-block numbers and traits from the purchased PDF, which is why this system sits behind the Game System Activation gate below — same posture as swn. Also gates the Timeline panel\'s Warband tab.',
     requiresActivation: true,
     rulesetId: 'fiveleagues', genrePackId: 'fantasy', get dedicatedRulesetId() { return this.rulesetId; },
   },

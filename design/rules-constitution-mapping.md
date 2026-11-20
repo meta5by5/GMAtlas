@@ -66,15 +66,15 @@ for a profile with neither area assigned.
 | Option | Shown when | Switches on |
 |---|---|---|
 | Module for Profile | Always | The module's own campaign turn, if it has one: 5PFH → Starship, Five Leagues → Warband. Any other module → none. |
-| Five Parsecs From Home | 5PFH owned and not the module | Campaign panel **Starship** tab, its Turn Steps and Crew Tasks; Navigator Starship workflow card; 5PFH sourcebook in the Docs library; 5PFH-tagged packs and templates. Replaces the module's own Turn Steps (one pick per area). |
-| Five Leagues from the Borderlands | Five Leagues owned and not the module | Campaign panel **Warband** tab and its Turn Steps; Navigator Warband workflow card; Five Leagues sourcebooks in the Docs library; Five Leagues **Party trackers** (Gold Marks, Enemy Threat, Enemy Plans), which are auto-created and removed again when Five Leagues is no longer in use; Navigator read-only Five Leagues tracker section; Five Leagues-tagged packs and templates. |
+| Five Parsecs From Home | 5PFH owned and not the module | Timeline panel **Starship** tab, its Turn Steps and Crew Tasks; Navigator Starship workflow card; 5PFH sourcebook in the Docs library; 5PFH-tagged packs and templates. Replaces the module's own Turn Steps (one pick per area). |
+| Five Leagues from the Borderlands | Five Leagues owned and not the module | Timeline panel **Warband** tab and its Turn Steps; Navigator Warband workflow card; Five Leagues sourcebooks in the Docs library; Five Leagues **Party trackers** (Gold Marks, Enemy Threat, Enemy Plans), which are auto-created and removed again when Five Leagues is no longer in use; Navigator read-only Five Leagues tracker section; Five Leagues-tagged packs and templates. |
 
 ### ⏱ Colony management
 
 | Option | Shown when | Switches on |
 |---|---|---|
 | Module for Profile | Always | Nothing. No module carries colony rules. |
-| Planetfall (Five Parsecs from Home) | Planetfall owned | Campaign panel **Colony** tab (colony sheet, encounters, Turn Step walkthrough); Navigator Colony workflow card; Planetfall-tagged packs and templates (e.g. Planetfall Lifeforms). |
+| Planetfall (Five Parsecs from Home) | Planetfall owned | Timeline panel **Colony** tab (colony sheet, encounters, Turn Step walkthrough); Navigator Colony workflow card; Planetfall-tagged packs and templates (e.g. Planetfall Lifeforms). |
 
 ### Character creation
 

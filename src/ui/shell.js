@@ -242,21 +242,40 @@ function positionContentIds(profile) {
   if (!profile) return new Set();
   return new Set(BUILTIN_POSITION_IDS.map((slot) => resolvePositionContentId(profile, slot)));
 }
+// The Advisor (built-in 'copilot' content) is shown only to an admin: a
+// signed-in account with any admin role (the server's publicUser carries
+// `roles`). Everyone else never sees its nav button, aside or tab.
+function isAdminUser() {
+  const u = account.getState().user;
+  return !!(u && Array.isArray(u.roles) && u.roles.length);
+}
+// True when the Advisor position holds the Advisor itself and this viewer
+// isn't an admin — its toggle, aside and pinned tab all drop out.
+function advisorSlotHidden(profile) {
+  return resolvePositionContentId(profile, 'advisor') === 'copilot' && !isAdminUser();
+}
 function computeVisibleEdgeOrder(profile) {
   const positioned = positionContentIds(profile);
-  return EDGE_ORDER.filter((id) => {
-    if (id === 'advisor-toggle') return true; // aside toggle always present; its content follows the Advisor position
+  const ids = EDGE_ORDER.filter((id) => {
+    if (id === 'advisor-toggle') return !advisorSlotHidden(profile); // its content follows the Advisor position
     if (!isModuleVisible(profile, id)) return false;
     return !positioned.has(id);
   });
+  // A freed Advisor (another panel fills its position) sits at the very
+  // bottom of the right nav, admin only.
+  if (!positioned.has('copilot') && isAdminUser()) ids.push('copilot');
+  return ids;
 }
 function computeVisibleHeaderOrder(profile) {
   const positioned = positionContentIds(profile);
   // FOCUS_ON_REOPEN_DRAWERS ids (Party) keep their button even while filling a
   // position — clicking it goes to that position (focusDrawerPanel).
-  const base = HEADER_ORDER.filter((id) => isModuleVisible(profile, id) && (!positioned.has(id) || FOCUS_ON_REOPEN_DRAWERS.has(id)));
-  const freedBuiltins = BUILTIN_CONTENT_IDS.filter((id) => !positioned.has(id));
-  return [...base, ...freedBuiltins];
+  const shown = (id) => isModuleVisible(profile, id) && (!positioned.has(id) || FOCUS_ON_REOPEN_DRAWERS.has(id));
+  const base = HEADER_ORDER.filter((id) => id !== 'colony' && shown(id));
+  // Freed Composer/Navigator follow; the Advisor lives in the right nav
+  // instead, and Timeline takes its old place at the end of the row.
+  const freedBuiltins = BUILTIN_CONTENT_IDS.filter((id) => id !== 'copilot' && !positioned.has(id));
+  return [...base, ...freedBuiltins, ...(shown('colony') ? ['colony'] : [])];
 }
 // Resolve a content id (built-in dashboard/narrative/copilot, or any real
 // DRAWERS id) into real HTML. Lives here (not workspace/index.js or
@@ -1792,7 +1811,13 @@ export function mountShell(el) {
   setBlobResolver(store.blobDataUrl);
   // The logo menu shows sign-in and sync state: keep it current while open
   // (only then, so a sync status change never re-renders the campaign).
-  account.subscribe(() => { if (settingsMenuOpen) render(); else paintSyncIndicators(); });
+  // Admin status gates the Advisor's nav button, so a change to it (sign
+  // in/out, a renewed role) redraws the navs too.
+  let lastAdmin = isAdminUser();
+  account.subscribe(() => {
+    const admin = isAdminUser();
+    if (settingsMenuOpen || admin !== lastAdmin) { lastAdmin = admin; render(); } else paintSyncIndicators();
+  });
   // The sync dot and conflict chip repaint on their own; the campaign
   // surface never re-renders for a sync status change.
   sync.subscribe(() => { if (settingsMenuOpen) render(); else paintSyncIndicators(); });
@@ -10701,6 +10726,8 @@ function render() {
   root.querySelector('[data-copilot-body]').innerHTML = renderPositionContent(advisorContentId, doc, workspaceUi);
   const copilotTitleEl = root.querySelector('[data-copilot-title]');
   if (copilotTitleEl) copilotTitleEl.textContent = advisorMeta.label;
+  if (copilotOpen && advisorSlotHidden(profile)) copilotOpen = false;
+  if (activeDrawer === 'advisor' && advisorSlotHidden(profile)) activeDrawer = isCompactTab() ? 'composer' : (openDrawers[openDrawers.length - 1] || null);
   root.querySelector('[data-copilot]').dataset.open = String(copilotOpen);
   // Combat Initiative Tracker (direct request) — a completely separate,
   // independently-positioned DOM subtree from the drawer body/Composer/
@@ -10887,9 +10914,10 @@ function render() {
   // (never individually closed/reordered) — computed fresh for this
   // render, never persisted.
   const PINNED_TAB_IDS = ['composer', 'navigator', 'advisor'];
-  const tabIds = compact
+  const hideAdvisorTab = advisorSlotHidden(profile);
+  const tabIds = (compact
     ? [...PINNED_TAB_IDS, ...openDrawers]
-    : (openDrawers.length ? [...openDrawers, 'advisor'] : []);
+    : (openDrawers.length ? [...openDrawers, 'advisor'] : [])).filter((id) => !(hideAdvisorTab && id === 'advisor'));
   // The tab a nav button brought forward (e.g. Party, even while it fills a
   // Storyboard position) leads the strip.
   if (navbarFrontId && tabIds.includes(navbarFrontId)) tabIds.splice(0, tabIds.length, navbarFrontId, ...tabIds.filter((x) => x !== navbarFrontId));
