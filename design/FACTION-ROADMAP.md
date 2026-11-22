@@ -315,6 +315,24 @@ tests. The edge detail has no editor yet: F1's Factions panel adds it.
   written into the baseline (SRS phase 0).
 
 ### F1: Faction records and the Factions panel
+*Built 2026-11-21.* `domain/factionProfile.js`, `data/factionOracles.js`,
+`data/factionVerbs.js`, `ui/drawers/factions.js`; 10 tests and a smoke
+run. What F1 delivers:
+- the profile fields, standing, the oracle tables in four flavors, and
+  the generator (collision rule, starting trio offered when the panel is
+  empty);
+- the Factions panel with Overview (escalating Conflicts, plans in
+  motion, standing with the party, recent events), the directory, the
+  Web matrix with breakdowns, nudges and pins, Plans, Conflicts, History
+  (the old Faction Events body), and the faction page;
+- the peek popover, used in the Factions panel and on WHO/WHERE faction
+  thumbnails, which also show stance as glyph, number and label;
+- Advance, the one verb in use so far.
+
+Still to do: the peek on Cast, Graph, Timeline, wiki and Encounter chips,
+and the local graph beside Relationships. Overview's "Needs you", "Likely
+next" and opportunities sections arrive with F3 and F4.
+
 - **Profile fields** (B4.2), added lazily and additively.
 - **Stance and trust:** derivation, ripple, pins and the grouped
   breakdown (B4.4).

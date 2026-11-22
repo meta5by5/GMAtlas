@@ -144,6 +144,12 @@ import {
   formatFiveLeaguesOvercome, getFiveLeaguesAttackProfile, findFiveLeaguesGroupIndex,
 } from '../domain/fiveLeagues.js';
 import { renderFactionEvents } from './drawers/factionEvents.js';
+import { renderFactionsPanel, entityPeekHtml } from './drawers/factions.js';
+import {
+  setFactionProfile, addFactionMemory, removeFactionMemory, changeStanding, pinStanding, generateFaction, generateStartingTrio,
+  addFactionObjective, advanceFactionProject, addFactionFace, removeFactionFace, factionProfile,
+} from '../domain/factionProfile.js';
+import { MEMORY_KINDS } from '../data/factionOracles.js';
 import { roll3d } from './diceBox3d.js';
 import { renderSearchPanel } from './searchPanel.js';
 import { serializeMentionEditor, insertMentionNode } from './mentionEditor.js';
@@ -293,7 +299,7 @@ function renderPositionContent(contentId, doc, ui) {
   if (contentId === 'narrative') return navigatorBodyHtml(doc, ui);
   if (contentId === 'copilot') return renderCopilot(doc, ui);
   if (contentId === 'faction-events') {
-    return renderFactionEvents(doc, { factionEventsDrafts, factionEventsFactionFilterId, factionEventsLocationFilterId, factionEventsStepFactionId, factionRoundHistoryOpen, conflictEscalationSuggestions });
+    return renderFactionsPanel(doc, factionsPanelUi());
   }
   if (!isModuleVisible(store.getActiveProfile(), contentId)) return '';
   return renderDrawer(contentId, doc, ui);
@@ -1361,6 +1367,16 @@ let factionEventsStepFactionId = '';
 // undocking re-opens it (data-faction-events-undock) — so the same
 // renderFactionEvents() call never runs twice for one render pass.
 let factionEventsDockedInWhere = false;
+// The Factions panel (drawers/factions.js, FACTION-ROADMAP U3) and the
+// entity peek popover (U2): ephemeral view state, never persisted.
+let factionsTab = 'overview';
+let factionsDetailId = '';
+let factionsSearch = '';
+let factionsWebPair = '';
+let factionsOpenSections = new Set(['identity', 'motivation']);
+let factionsClassicOpen = false;
+let peekEntityId = '';
+let peekPinned = false;
 let factionRoundHistoryOpen = false; // ephemeral — "I want to see the history of faction turns per round" (Living Faction Engine Phase D), collapsed by default
 // Story Dashboard section accordion (docs/adr/0040 Phase 12f, replacing
 // the retired WHO/WHERE/WHAT/WHY/HOW tab strip) — which of the 5 former
@@ -1893,6 +1909,7 @@ export function mountShell(el) {
         </div>
       </div>
       <div class="mention-suggest" data-mention-suggest hidden></div>
+      <div class="entity-peek" data-entity-peek-pop hidden></div>
       <div class="inline-prompt" data-inline-prompt hidden>
         <div class="inline-prompt-fields" data-inline-prompt-fields></div>
         <div class="inline-prompt-row">
@@ -2045,6 +2062,93 @@ function onClick(ev) {
   if (hexcrawlPaletteMenu && !hit('.hexcrawl-menu-wrap')) { hexcrawlPaletteMenu = null; renderDrawerBody(); }
   if (docSortMenuOpen && !hit('.doc-sort-wrap')) { docSortMenuOpen = false; renderDrawerBody(); }
   if (hit('[data-doc-sort-menu-toggle]')) { docSortMenuOpen = !docSortMenuOpen; return renderDrawerBody(); }
+
+  // The entity peek popover (U2). An unpinned peek closes on any click
+  // outside it, and when Open is used from inside it.
+  if (peekEntityId && !peekPinned && !hit('[data-entity-peek]') && (!hit('[data-entity-peek-pop]') || hit('[data-open-entity]') || hit('[data-fx-detail-open]'))) {
+    peekEntityId = ''; renderEntityPeek();
+  }
+  const peekOpen = hit('[data-entity-peek]');
+  if (peekOpen && !hit('[data-entity-peek-pop] [data-peek-close]')) {
+    peekEntityId = peekOpen.dataset.entityPeek; if (!hit('[data-entity-peek-pop]')) peekPinned = false;
+    return renderEntityPeek();
+  }
+  if (hit('[data-peek-close]')) { peekEntityId = ''; peekPinned = false; return renderEntityPeek(); }
+  if (hit('[data-peek-pin]')) { peekPinned = !peekPinned; return renderEntityPeek(); }
+
+  // The Factions panel (drawers/factions.js).
+  const fxTab = hit('[data-fx-tab]');
+  if (fxTab) { factionsTab = fxTab.dataset.fxTab; factionsDetailId = ''; factionsWebPair = ''; return renderDrawerBody(); }
+  const fxDetail = hit('[data-fx-detail]');
+  if (fxDetail) { factionsDetailId = fxDetail.dataset.fxDetail; factionsWebPair = ''; if (!factionsDetailId) factionsTab = 'factions'; return renderDrawerBody(); }
+  const fxDetailOpen = hit('[data-fx-detail-open]');
+  if (fxDetailOpen) { peekEntityId = ''; peekPinned = false; renderEntityPeek(); return openFactionsPanel(fxDetailOpen.dataset.fxDetailOpen); }
+  const fxSection = hit('[data-fx-section-toggle]');
+  if (fxSection) {
+    const k = fxSection.dataset.fxSectionToggle;
+    if (factionsOpenSections.has(k)) factionsOpenSections.delete(k); else factionsOpenSections.add(k);
+    return renderDrawerBody();
+  }
+  const fxPair = hit('[data-fx-web-pair]');
+  if (fxPair) {
+    const v = fxPair.dataset.fxWebPair;
+    factionsWebPair = factionsWebPair === v ? '' : v;
+    if (factionsDetailId) factionsOpenSections.add('relationships');
+    return renderDrawerBody();
+  }
+  const fxNudge = hit('[data-fx-nudge]');
+  if (fxNudge) {
+    const [from, to, field, d] = fxNudge.dataset.fxNudge.split('::');
+    return store.update((doc) => changeStanding(doc, { fromId: from, toId: to, field, delta: Number(d), reason: 'GM adjustment', source: 'gm' }));
+  }
+  const fxAdvance = hit('[data-fx-advance-project]');
+  if (fxAdvance) return store.update((doc) => advanceFactionProject(doc, fxAdvance.dataset.fxAdvanceProject, 1));
+  if (hit('[data-fx-generate-trio]') || hit('[data-fx-generate-one]')) {
+    const trio = !!hit('[data-fx-generate-trio]');
+    const cur = store.get();
+    const loc = getCurrentWhereLocations(cur)[0];
+    const opts = { seed: Date.now() >>> 0, genrePack: cur.settings && cur.settings.genrePack, locationId: loc ? loc.id : undefined };
+    let made = [];
+    store.update((doc) => {
+      if (trio) { const r = generateStartingTrio(doc, opts); made = r.ids; return r.campaign; }
+      const r = generateFaction(doc, opts); made = [r.id]; return r.campaign;
+    });
+    const names = made.map((id) => (getEntity(store.get(), id) || {}).name).filter(Boolean);
+    toast(names.length ? `Generated ${names.join(', ')}` : 'Nothing generated');
+    if (made.length === 1) return openFactionsPanel(made[0]);
+    factionsTab = 'web'; factionsDetailId = '';
+    return openFactionsPanel('');
+  }
+  if (hit('[data-fx-new]')) {
+    let id = '';
+    store.update((doc) => { const r = createEntity(doc, { type: 'faction', name: 'New faction' }); id = r.id; return r.campaign; });
+    return openFactionsPanel(id);
+  }
+  const fxFaceRemove = hit('[data-fx-face-remove]');
+  if (fxFaceRemove) {
+    const [fid, nid] = fxFaceRemove.dataset.fxFaceRemove.split('::');
+    return store.update((doc) => removeFactionFace(doc, fid, nid));
+  }
+  const fxMemAdd = hit('[data-fx-memory-add]');
+  if (fxMemAdd) {
+    return openInlinePrompt('fx-memory', {
+      anchorRect: fxMemAdd.getBoundingClientRect(), meta: { factionId: fxMemAdd.dataset.fxMemoryAdd },
+      fields: [
+        { key: 'kind', label: 'Kind', type: 'select', options: MEMORY_KINDS.map((k) => ({ value: k.id, label: k.label })), value: 'grievance' },
+        { key: 'value', label: 'What it remembers', placeholder: 'e.g. The party sank its courier', value: '' },
+      ],
+    });
+  }
+  const fxMemRemove = hit('[data-fx-memory-remove]');
+  if (fxMemRemove) {
+    const [fid, mid] = fxMemRemove.dataset.fxMemoryRemove.split('::');
+    return store.update((doc) => removeFactionMemory(doc, fid, mid));
+  }
+  const fxObjAdd = hit('[data-fx-objective-add]');
+  if (fxObjAdd) {
+    return openInlinePrompt('fx-objective', { label: 'Objective', placeholder: 'e.g. Control the river toll', meta: { factionId: fxObjAdd.dataset.fxObjectiveAdd }, anchorRect: fxObjAdd.getBoundingClientRect() });
+  }
+  if (hit('[data-fx-classic-toggle]')) { factionsClassicOpen = !factionsClassicOpen; return; }
   const docSortPick = hit('[data-doc-sort-pick]');
   if (docSortPick) { docSort = docSortPick.dataset.docSortPick; docSortMenuOpen = false; return renderDrawerBody(); }
 
@@ -5023,6 +5127,7 @@ function onClick(ev) {
   }
   if (hit('[data-faction-events-undock]')) {
     factionEventsDockedInWhere = false;
+    factionsTab = 'history'; factionsDetailId = ''; factionsClassicOpen = true;
     openDrawerTab('faction-events');
     return render();
   }
@@ -5033,6 +5138,7 @@ function onClick(ev) {
   if (factionEventsJump) {
     factionEventsFactionFilterId = factionEventsJump.dataset.factionEventsJump;
     factionEventsLocationFilterId = '';
+    factionsTab = 'history'; factionsDetailId = ''; factionsClassicOpen = true;
     openDrawerTab('faction-events');
     return render();
   }
@@ -5040,6 +5146,7 @@ function onClick(ev) {
   if (factionEventsLocationJump) {
     factionEventsLocationFilterId = factionEventsLocationJump.dataset.factionEventsLocationJump;
     factionEventsFactionFilterId = '';
+    factionsTab = 'history'; factionsDetailId = ''; factionsClassicOpen = true;
     openDrawerTab('faction-events');
     return render();
   }
@@ -5390,7 +5497,7 @@ function onClick(ev) {
   if (generateFactionMission) {
     const factionId = generateFactionMission.dataset.generateFactionMission;
     store.update((d) => addMission(d, generateMission(d, { factionId, genrePack: store.get().settings.genrePack })));
-    return toast('Mission generated — see Faction Events → Missions');
+    return toast('Mission generated — see Factions › History › Missions');
   }
   const missionStatus = hit('[data-mission-status]');
   if (missionStatus) {
@@ -6017,6 +6124,8 @@ function onClick(ev) {
                   ? { entityType: 'composer-faction', mode: 'composer-faction', scope: null, query: '' }
                 : raw.startsWith('conflict-faction:')
                   ? { entityType: 'conflict-faction', mode: 'conflict-faction', scope: raw.slice('conflict-faction:'.length), query: '' }
+                : raw.startsWith('fx-face:')
+                  ? { entityType: 'fx-face', mode: 'fx-face', scope: raw.slice('fx-face:'.length), query: '' }
                 : raw.startsWith('faction-conflict-side:')
                   ? { entityType: 'faction-conflict-side', mode: 'faction-conflict-side', scope: raw.slice('faction-conflict-side:'.length), query: '' }
                 : raw.startsWith('where-faction-link:')
@@ -7403,6 +7512,31 @@ function onChange(ev) {
   if (wikiVis) return store.update((d) => setEntityVisibility(d, wikiVis.dataset.wikiVisibility, t.value));
   const wikiPlace = t.closest('[data-wiki-place-kind]');
   if (wikiPlace) return store.update((d) => setPlaceKind(d, wikiPlace.dataset.wikiPlaceKind, t.value));
+  // The Factions panel's profile fields, methods, flags, pins and search.
+  const fxProfile = t.closest('[data-fx-profile]');
+  if (fxProfile) {
+    const [fid, path] = fxProfile.dataset.fxProfile.split('::');
+    return store.update((d) => setFactionProfile(d, fid, path, t.value));
+  }
+  const fxMethod = t.closest('[data-fx-method]');
+  if (fxMethod) {
+    const [fid, m] = fxMethod.dataset.fxMethod.split('::');
+    return store.update((d) => {
+      const cur = factionProfile(getEntity(d, fid)).methods;
+      return setFactionProfile(d, fid, 'methods', t.checked ? [...cur, m] : cur.filter((x) => x !== m));
+    });
+  }
+  const fxFlag = t.closest('[data-fx-flag]');
+  if (fxFlag) {
+    const [fid, k] = fxFlag.dataset.fxFlag.split('::');
+    return store.update((d) => setFactionProfile(d, fid, k, t.checked));
+  }
+  const fxPin = t.closest('[data-fx-pin]');
+  if (fxPin) {
+    const [from, to, field] = fxPin.dataset.fxPin.split('::');
+    return store.update((d) => pinStanding(d, from, to, t.value === '' ? null : Number(t.value), field));
+  }
+  if (t.closest('[data-fx-search]')) { factionsSearch = t.value; return renderDrawerBody(); }
   // The Conflict entity's status, side fields and pressure gauges.
   const fconflictStatus = t.closest('[data-fconflict-status]');
   if (fconflictStatus) return store.update((d) => setConflictStatus(d, fconflictStatus.dataset.fconflictStatus, t.value));
@@ -10273,6 +10407,14 @@ function commitInlinePrompt() {
   const { kind, meta } = inlinePrompt;
   closeInlinePrompt();
 
+  if (kind === 'fx-memory') {
+    if (value) store.update((d) => addFactionMemory(d, meta.factionId, { kind: values.kind, text: value }));
+    return;
+  }
+  if (kind === 'fx-objective') {
+    if (value) store.update((d) => addFactionObjective(d, meta.factionId, { title: value }));
+    return;
+  }
   if (kind === 'shift-prompt') {
     if (value) { store.update((d) => applyStoryShift(d, meta.name, value)); toast(meta.name); }
   } else if (kind === 'statblock-add-field') {
@@ -10701,6 +10843,7 @@ function render() {
   renderStartupScreen();
   renderNewCampaignWizard();
   normalizeEntityTabs(doc);
+  renderEntityPeek();
 
   // Genre stylesheet (styles/genre-scifi.css / genre-fantasy.css) follows the profile's Genre Pack.
   document.documentElement.dataset.genre = genreStyleFamily(doc.settings.genrePack, doc.settings.statRuleset);
@@ -10773,7 +10916,7 @@ function render() {
     // data-drawer-open every other tile below uses.
     if (id === 'faction-events') {
       const d = drawerMeta('faction-events');
-      return `<button data-toggle-faction-events aria-expanded="${openDrawers.includes('faction-events')}" title="${factionEventsDockedInWhere ? 'Faction Events — currently docked in the WHERE tab' : 'Faction Events — SWN faction turns, narrows Cast to Factions'}"><span class="glyph">${d.glyph}</span><b>${d.label}</b>${factionEventsDockedInWhere ? ' <span class="dim small">(in WHERE)</span>' : ''}</button>`;
+      return `<button data-toggle-faction-events aria-expanded="${openDrawers.includes('faction-events')}" title="${factionEventsDockedInWhere ? 'Factions — the event log is docked in the WHERE tab' : 'Factions — overview, directory, web, plans and history'}"><span class="glyph">${d.glyph}</span><b>${d.label}</b>${factionEventsDockedInWhere ? ' <span class="dim small">(in WHERE)</span>' : ''}</button>`;
     }
     const d = drawerMeta(id);
     if (!d) return '';
@@ -11169,6 +11312,7 @@ function commitEntityPickerPick(picker, id) {
   if (picker.entityType === 'composer-faction') return store.update((d) => addComposerFaction(d, id));
   if (picker.entityType === 'conflict-faction') return store.update((d) => addRelationship(d, picker.scope, id, 'involves', 'involves'));
   if (picker.entityType === 'faction-conflict-side') return store.update((d) => addConflictSide(d, picker.scope, id));
+  if (picker.entityType === 'fx-face') return store.update((d) => addFactionFace(d, picker.scope, id));
   if (picker.entityType === 'where-faction-link') {
     // WHO's "+" on Factions active nearby (direct follow-up request,
     // replacing the old inline <select>) — links the picked faction to
@@ -11355,6 +11499,7 @@ const ENTITY_PICKER_CREATE_TYPE = {
   'composer-faction': 'faction',
   'conflict-faction': 'faction',
   'faction-conflict-side': 'faction',
+  'fx-face': 'npc',
   'contract-patron': 'npc',
   'party-vehicle': 'asset',
   'party-item': 'item',
@@ -11565,6 +11710,11 @@ function renderEntityPickerOverlay() {
     const inPlay = new Set(composerSnapshot(doc).factions.map((f) => f.id));
     candidates = listEntities(doc, ['faction']).filter((f) => !inPlay.has(f.id));
     emptyMessage = 'No other Faction entities yet — create one below.';
+  } else if (entityPicker.entityType === 'fx-face') {
+    const fx = getEntity(doc, entityPicker.scope);
+    const faces = new Set((fx && fx.faceIds) || []);
+    candidates = listEntities(doc, ['npc', 'lifeform']).filter((n) => !faces.has(n.id));
+    emptyMessage = 'No NPCs yet — create one below.';
   } else if (entityPicker.entityType === 'faction-conflict-side') {
     const fc = getEntity(doc, entityPicker.scope);
     const onSide = new Set(((fc && fc.sides) || []).map((sd) => sd.factionId));
@@ -12622,7 +12772,7 @@ function renderActiveDrawerHtmlUnguarded(doc) {
     </div>`;
   }
   if (activeDrawer === 'faction-events') {
-    return renderFactionEvents(doc, { factionEventsDrafts, factionEventsFactionFilterId, factionEventsLocationFilterId, factionEventsStepFactionId, factionRoundHistoryOpen, conflictEscalationSuggestions });
+    return renderFactionsPanel(doc, factionsPanelUi());
   }
   // Pinned SLOT ids (design/adr/rules-profiles-multi-campaign.md) resolve
   // through the active profile — renderPositionContent() then dispatches
@@ -12654,6 +12804,31 @@ function renderActiveDrawerHtmlUnguarded(doc) {
 // (design/UX-ROADMAP.md Step 3), without inventing a new tracked flag.
 function hasPendingAdvisorDecision(doc) {
   return buildStoryOptions(doc, { limit: 20 }).some((o) => !dismissedStoryOptionIds.has(o.id));
+}
+
+function factionsPanelUi() {
+  return {
+    factionsTab, factionsDetailId, factionsSearch, factionsWebPair, factionsOpenSections, factionsClassicOpen,
+    factionEventsOpts: { factionEventsDrafts, factionEventsFactionFilterId, factionEventsLocationFilterId, factionEventsStepFactionId, factionRoundHistoryOpen, conflictEscalationSuggestions },
+  };
+}
+// The peek popover (U2): one fixed card, rendered on every pass.
+function renderEntityPeek() {
+  const el = root && root.querySelector('[data-entity-peek-pop]');
+  if (!el) return;
+  const doc = store.get();
+  const html = peekEntityId && doc ? entityPeekHtml(doc, peekEntityId, { pinned: peekPinned }) : '';
+  if (!html) peekEntityId = '';
+  el.hidden = !html;
+  el.innerHTML = html;
+}
+// Opens the Factions panel, optionally on one faction's page.
+function openFactionsPanel(factionId = '') {
+  factionsDetailId = factionId;
+  if (factionId) factionsTab = 'factions';
+  if (anchoredPanels.includes('faction-events')) focusDrawerPanel('faction-events');
+  else openDrawerTab('faction-events');
+  return render();
 }
 
 function renderDrawerBody() {

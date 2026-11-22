@@ -12,6 +12,7 @@ import { ACTIVITIES } from '../../domain/activities.js';
 import { imageSrc } from '../imageSrc.js';
 import { isSameDistrict, getEntity, listEntities, LOCATION_OBJECT_TYPES, getSystemForLocation, getStarForLocation, getHexZoneForLocation, getEntityFaction } from '../../domain/entities.js';
 import { getCurrentWhereLocations, factionsInRegion, factionPresenceReasons } from '../../domain/factionTurnEngine.js';
+import { standing, stanceLabel } from '../../domain/factionProfile.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { buildMentionEditorHTML, richToolbarHTML, richToolbarToggleHTML, toolbarCollapsed } from '../mentionEditor.js';
 import { renderFactionEvents } from '../drawers/factionEvents.js';
@@ -262,7 +263,7 @@ function actorThumb(doc, npc, kind, { expandable = false, expanded = false } = {
 // name) since callers need different shapes — a plain
 // data-scene-asset-remove="id", vs Factions' compound
 // data-where-faction-unlink="locId::factionId".
-function entityThumb(doc, entity, { removeAttrHtml = '', expandAttrHtml = '', expanded = false, topLabel = '' } = {}) {
+function entityThumb(doc, entity, { removeAttrHtml = '', expandAttrHtml = '', expanded = false, topLabel = '', peek = false, subLabel = '' } = {}) {
   const img = entity.thumbnailId ? getGalleryImage(doc, entity.thumbnailId) : null;
   const photo = img
     ? `<img class="actor-thumb-photo" src="${esc(imageSrc(img))}" alt="">`
@@ -270,12 +271,19 @@ function entityThumb(doc, entity, { removeAttrHtml = '', expandAttrHtml = '', ex
   return `<div class="actor-thumb-wrap">
     ${topLabel ? `<span class="actor-thumb-toplabel">${esc(topLabel)}</span>` : ''}
     <div class="actor-thumb-circle">
-      <button type="button" class="actor-thumb" data-open-entity="${esc(entity.id)}" title="${esc(entity.name || 'Unnamed')}">${photo}</button>
+      <button type="button" class="actor-thumb" ${peek ? 'data-entity-peek' : 'data-open-entity'}="${esc(entity.id)}" title="${esc(entity.name || 'Unnamed')}">${photo}</button>
       ${expandAttrHtml ? `<button type="button" class="actor-thumb-badge actor-thumb-badge-expand" ${expandAttrHtml} title="${expanded ? 'Collapse details' : 'Details'}">${expanded ? '▾' : '▸'}</button>` : ''}
       ${removeAttrHtml ? `<button type="button" class="actor-thumb-badge actor-thumb-badge-remove" ${removeAttrHtml} title="Remove">✕</button>` : ''}
     </div>
     <span class="actor-thumb-name">${esc(entity.name || 'Unnamed')}</span>
+    ${subLabel ? `<span class="actor-thumb-sublabel">${esc(subLabel)}</span>` : ''}
   </div>`;
+}
+
+// A faction's stance toward the party as glyph, number and label
+// (FACTION-ROADMAP U1: never color alone).
+function factionStanceText(doc, f) {
+  return stanceLabel(standing(doc, f.id, 'party').value).text;
 }
 
 // Location details' top-label (direct follow-up request): "District" or
@@ -1372,6 +1380,7 @@ function factionsActiveNearbyBlock(doc, ui) {
     removeAttrHtml: `data-scene-faction-dismiss="${esc(f.id)}"`,
     expandAttrHtml: `data-faction-nearby-toggle="${esc(f.id)}"`,
     expanded: expandedSet.has(f.id),
+    peek: true, subLabel: factionStanceText(doc, f),
   })).join('');
   return collapsibleThumbGroup(ui, {
     key: 'who:factions-nearby', label: 'Factions involved', count: active.length,
@@ -1417,7 +1426,7 @@ function factionActivityHereBlock(doc) {
   const recent = here.slice(-5).reverse();
   const rows = recent.map((e) => {
     const loc = getEntity(doc, e.locationId);
-    return `<button type="button" class="entity-chip" data-faction-events-location-jump="${esc(e.locationId)}" title="Open Faction Events, filtered to ${esc(loc ? loc.name : 'this location')}">${esc(e.factionName || 'Unnamed faction')} — ${esc(e.narrative ? e.narrative.slice(0, 60) : ACTION_LABEL_FOR_WHERE[e.action] || e.action)}</button>`;
+    return `<button type="button" class="entity-chip" data-faction-events-location-jump="${esc(e.locationId)}" title="Open Factions › History, filtered to ${esc(loc ? loc.name : 'this location')}">${esc(e.factionName || 'Unnamed faction')} — ${esc(e.narrative ? e.narrative.slice(0, 60) : ACTION_LABEL_FOR_WHERE[e.action] || e.action)}</button>`;
   }).join('');
   return `
     <div class="workspace-mini-section">
@@ -1454,6 +1463,7 @@ function locationFactionsBlock(doc, ui) {
   if (!factions.length) return '';
   const thumbs = factions.map(({ faction, reasons }) => entityThumb(doc, faction, {
     topLabel: reasons.join(' · '),
+    peek: true, subLabel: factionStanceText(doc, faction),
   })).join('');
   return collapsibleThumbGroup(ui, {
     key: 'where:factions-here', label: 'Factions present here', count: factions.length,

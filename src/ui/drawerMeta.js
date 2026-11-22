@@ -38,7 +38,7 @@ export const DRAWERS = [
   // stays 'world-tracker' (profiles, module visibility and saved layouts
   // all name it).
   { id: 'world-tracker', glyph: '🪐', label: 'Planetfall' },
-  { id: 'faction-events', glyph: '⚔', label: 'Faction Events' },
+  { id: 'faction-events', glyph: '⚔', label: 'Factions' },
   { id: 'trade', glyph: '💰', label: 'Trade' },
   { id: 'documents', glyph: '📄', label: 'Docs' },
   { id: 'gallery', glyph: '🖼', label: 'Gallery' },

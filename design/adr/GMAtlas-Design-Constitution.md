@@ -248,7 +248,13 @@ The main modules by area (54 files in `src/domain/`):
   `factionState.js`, seeded once by `migrate.js` from faction
   `allied_with`/`rival_of` edges, plus the Factions relationship types
   and optional faction edge detail (`updateRelationshipMeta`, vocabulary
-  in `data/factionRelations.js`). The rest of the Factions design is
+  in `data/factionRelations.js`). F1 adds `factionProfile.js`: the
+  faction profile fields (written only when touched), standing derived
+  from the Ledger (decay, pins, ripple, grouped breakdown), objectives
+  with faction-project Threads whose segments carry Signs, faces, and the
+  seeded generator with its collision rule (tables in
+  `data/factionOracles.js`, verbs in `data/factionVerbs.js`). The rest of
+  the Factions design is
   unbuilt (design/FACTION-ROADMAP.md).
 - **Economy & jobs**: `trade.js` (Merchant Rules Lens pricing + contracts),
   `missions.js`, `enhancements.js` (Strain/capacity augmentation),
@@ -315,7 +321,11 @@ actually present on disk). Two non-game data files sit beside them:
   ui)` switch. Party carries the Colony/Starship/Warband Turn-Step tabs;
   each open entity is its own `entity:<id>` tab rendering Entity Detail
   (design/adr/composer-encounters-and-panels.md). `factionEvents.js` is
-  split out separately only to avoid a circular import.
+  split out separately only to avoid a circular import. `factions.js` is
+  the Factions panel (the `faction-events` drawer id and right-nav slot:
+  Overview, Factions, Web, Plans, Conflicts, History, and a faction's
+  page; the old Faction Events body lives under History) and the entity
+  peek popover (`data-entity-peek`), design/FACTION-ROADMAP.md U2–U3.
 - **`src/ui/portal/index.js`** — the portal surface (rule 4): the Help
   centre at `#/help`, shown instead of the campaign, in its own layout
   and stylesheet (`styles/portal.css`, sharing only `tokens.css`).

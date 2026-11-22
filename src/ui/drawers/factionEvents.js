@@ -402,7 +402,7 @@ export function renderFactionEvents(doc, { factionEventsDrafts, factionEventsFac
         : '';
 
   const dockRow = docked
-    ? `<div class="faction-events-dock-row"><h3>⚔ Faction Events</h3><button type="button" class="icon-btn" data-faction-events-undock title="Pop back to the Faction Events tab" aria-label="Pop back to the Faction Events tab">⬆</button></div>`
+    ? `<div class="faction-events-dock-row"><h3>⚔ Faction Events</h3><button type="button" class="icon-btn" data-faction-events-undock title="Pop back to the Factions panel" aria-label="Pop back to the Factions panel">⬆</button></div>`
     : `<div class="faction-events-dock-row"><button type="button" class="icon-btn" data-faction-events-dock title="Move to the WHERE workspace" aria-label="Move to the WHERE workspace">⬇</button></div>`;
 
   return `

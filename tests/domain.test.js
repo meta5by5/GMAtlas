@@ -13806,3 +13806,27 @@ test('Factions F1: the starting trio is three colliding factions with a seeded w
   const again = F1.generateStartingTrio(f0Default(), { seed: 11, genrePack: 'cyberpunk' });
   assert.deepEqual(again.ids.map((id) => F0.getEntity(again.campaign, id).name), t.ids.map((id) => F0.getEntity(t.campaign, id).name));
 });
+
+test('Factions F1: objectives by hand, Advance, and faces', () => {
+  const h = f1Campaign();
+  const a = h.mk('faction', 'Guild'); const n = h.mk('npc', 'Ves'); const loc = h.mk('location', 'Docks');
+  let c = F1.addFactionObjective(h.c, a, { title: 'Own the docks', stake: 'territory', targetRefs: [loc, 'missing'], segments: 3 });
+  const o = F1.factionObjectives(c, a)[0];
+  assert.equal(o.title, 'Own the docks'); assert.deepEqual(o.targetRefs, [loc]);
+  assert.equal(o.thread.segments, 3); assert.deepEqual(o.thread.signs, ['', '', '']);
+  assert.equal(F1.addFactionObjective(c, a, { title: '  ' }).factions.objectives.length, 1, 'a blank title adds nothing');
+  for (let i = 0; i < 3; i += 1) c = F1.advanceFactionProject(c, o.thread.id);
+  assert.equal(F1.factionObjectives(c, a)[0].status, 'achieved');
+  assert.equal(c.threads.find((t) => t.id === o.thread.id).done, true);
+  c = F1.advanceFactionProject(c, o.thread.id, -1);
+  assert.equal(F1.factionObjectives(c, a)[0].status, 'active', 'stepping back reopens it');
+  c = F1.addFactionFace(c, a, n);
+  assert.deepEqual(F0.getEntity(c, a).faceIds, [n]);
+  assert.equal(F0.getEntity(c, n).relationships.find((r) => r.to === a).type, 'member_of');
+  c = F1.addFactionFace(c, a, n);
+  assert.equal(F0.getEntity(c, a).faceIds.length, 1, 'no duplicate face');
+  assert.deepEqual(F0.getEntity(F1.addFactionFace(c, a, loc), a).faceIds, [n], 'only an NPC can be a face');
+  c = F1.removeFactionFace(c, a, n);
+  assert.deepEqual(F0.getEntity(c, a).faceIds, []);
+  assert.ok(F0.getEntity(c, n).relationships.some((r) => r.to === a), 'removing a face keeps the membership');
+});

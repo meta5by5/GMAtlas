@@ -96,7 +96,7 @@ export function advise(doc) {
   else if (hotFactionGoal) observation = `“${hotFactionGoal.faction.name}” is close to completing its faction goal — expect them to act on it soon, and to bank XP when it lands.`;
   else if (hotExpedition) observation = `“${hotExpedition.name}” is running low on supplies or dangerously exposed — force a supply-vs-route dilemma next.`;
   else if (hotWorldEvent) observation = `“${hotWorldEvent.factionName}” has moved directly against the party's own location — faction activity here may force a response scene next.`;
-  else if (factionRoundDue) observation = 'It\'s been a few scenes since factions last acted — consider Step or Full Round in Faction Events.';
+  else if (factionRoundDue) observation = 'It\'s been a few scenes since factions last acted — consider Step or Full Round in Factions › History.';
   else if (threat >= 7) observation = 'Threat is high — the situation is exposed, watched, or already tipping over.';
   else if (stress >= 7) observation = 'Stress is high — a scene without combat should follow, or someone breaks.';
   else if (resources <= 2) observation = 'Supplies are critically low — the next scene should address resupply, or someone pays for the shortage.';

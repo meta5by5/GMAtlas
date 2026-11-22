@@ -94,7 +94,7 @@ export function setFactionProfile(campaign, factionId, path, value) {
     let list = empty ? [] : (Array.isArray(value) ? value : String(value).split(/\s*[,;\n]\s*/));
     list = [...new Set(list.map((v) => String(v).trim()).filter(Boolean))];
     if (group === 'methods') list = list.filter((m) => METHOD_IDS.includes(m));
-    if (group === 'faceIds') list = list.filter((id) => { const n = getEntity(next, id); return n && n.type === 'npc'; });
+    if (group === 'faceIds') list = list.filter((id) => { const n = getEntity(next, id); return n && (n.type === 'npc' || n.type === 'lifeform'); });
     e[group] = list;
   } else if (group === 'reach' && !key) {
     const n = Math.round(Number(value));
@@ -493,6 +493,67 @@ export function generateStartingTrio(campaign, { seed = Date.now(), genrePack, l
     next = changeStanding(next, { fromId: c, toId: a, delta: d, reason: why, ripple: false });
   }
   return { campaign: next, ids };
+}
+
+/** Adds an objective by hand: the objective, its project and a 4-segment
+ *  faction-project Thread (Signs blank until the GM writes them). */
+export function addFactionObjective(campaign, factionId, { title, stake = '', targetRefs = [], segments = 4, signs } = {}) {
+  let next = normalizeFactionsState(clone(campaign));
+  if (!isFaction(next, factionId) || !String(title || '').trim()) return next;
+  const stamp = now();
+  const rnd = () => `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+  const objectiveId = `obj_${rnd()}`; const projectId = `prj_${rnd()}`; const threadId = `thr_${rnd()}`;
+  const n = clamp(Math.round(Number(segments)) || 4, 2, 12);
+  const f = getEntity(next, factionId);
+  next.factions.objectives.push({
+    id: objectiveId, factionId, title: String(title).trim(), intent: '', priority: 2, scope: '', successCondition: '', failureCondition: '',
+    deadline: '', status: 'active', visibility: 'gm', targetRefs: targetRefs.filter((id) => getEntity(next, id)), stake, collidesWith: null,
+    createdAt: stamp, updatedAt: stamp,
+  });
+  next.factions.projects.push({ id: projectId, factionId, objectiveId, threadId, status: 'active', createdAt: stamp, updatedAt: stamp });
+  if (!Array.isArray(next.threads)) next.threads = [];
+  next.threads.push({
+    id: threadId, name: `${f.name || 'Faction'}: ${String(title).trim()}`, filled: 0, segments: n, done: false, status: 'active', priority: 'normal',
+    kind: 'faction-project', factionId, objectiveId, projectId, signs: Array.isArray(signs) ? signs.slice(0, n).map(String) : Array(n).fill(''), createdAt: stamp,
+  });
+  return next;
+}
+
+/** Advance (U10): fills the next segment of a faction-project Thread. A
+ *  full Thread marks its objective `achieved` (the outcome a later phase
+ *  proposes for review); stepping back reopens it. */
+export function advanceFactionProject(campaign, threadId, delta = 1) {
+  const next = normalizeFactionsState(clone(campaign));
+  const t = (next.threads || []).find((x) => x.id === threadId && x.kind === 'faction-project');
+  if (!t) return next;
+  t.filled = clamp(t.filled + (delta < 0 ? -1 : 1), 0, t.segments);
+  t.done = t.filled >= t.segments;
+  t.status = t.done ? 'resolved' : (t.status === 'resolved' ? 'active' : t.status);
+  const o = next.factions.objectives.find((x) => x.id === t.objectiveId);
+  if (o) {
+    if (t.done && o.status === 'active') o.status = 'achieved';
+    else if (!t.done && o.status === 'achieved') o.status = 'active';
+    o.updatedAt = now();
+  }
+  return next;
+}
+
+/** Adds or removes an NPC as one of a faction's faces. Adding also makes it
+ *  a member (member_of) when it has no tie to the faction yet. */
+export function addFactionFace(campaign, factionId, npcId) {
+  let next = clone(campaign);
+  const f = getEntity(next, factionId); const n = getEntity(next, npcId);
+  if (!f || f.type !== 'faction' || !n || (n.type !== 'npc' && n.type !== 'lifeform')) return next;
+  if (!(n.relationships || []).some((r) => r.to === factionId)) next = addRelationship(next, npcId, factionId, 'face', 'member_of');
+  const g = getEntity(next, factionId);
+  g.faceIds = [...new Set([...(Array.isArray(g.faceIds) ? g.faceIds : []), npcId])];
+  return next;
+}
+export function removeFactionFace(campaign, factionId, npcId) {
+  const next = clone(campaign);
+  const f = getEntity(next, factionId);
+  if (f && Array.isArray(f.faceIds)) f.faceIds = f.faceIds.filter((x) => x !== npcId);
+  return next;
 }
 
 /** A faction's objectives, with their project and Thread. */
