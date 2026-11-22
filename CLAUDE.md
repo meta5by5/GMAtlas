@@ -54,10 +54,13 @@ non-trivial change; this file only covers day-to-day mechanics.
 - **`design/WIKI-ROADMAP.md`** — the proposed (unbuilt) campaign wiki &
   journal (W0–W6) and Google Drive backup/sharing (D1–D4), mapped onto the
   existing entities, mentions and maps.
-- **`design/FACTION-ROADMAP.md`** — the proposed (unbuilt) Living Factions
-  plan (F0–F8): a ruleset-neutral Faction Core, a standing Ledger, a
-  tension engine that proposes Conflicts, and the World Turn digest; it
-  opens with the questions that need answers before F1.
+- **`design/Faction-baseline.md`** — the governing design for Factions:
+  the Living Faction Engine SRS (a local-only PDF under the gitignored
+  `requirements/`) summarized and mapped onto GMAtlas, the owner's
+  answers, source conflicts and how each was settled, and the research
+  behind it. **`design/FACTION-ROADMAP.md`** is the build plan derived
+  from it (open questions, UX changes across panels U1–U15, phases
+  F0–F8, tests). Both are unbuilt proposals.
 - **`PROGRESS.md`** — the phase-by-phase status ledger. Check it when a
   phase number is ambiguous.
 - New architectural decisions (a new engine, a schema shape change, a
