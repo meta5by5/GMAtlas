@@ -13629,3 +13629,180 @@ test('Factions F0: faction edge detail validates, clamps, and removes on empty',
   assert.equal(F0.getEntity(x, a).relationships.find((rl) => rl.to === loc).hold, 'disputed');
   assert.equal(F0.getEntity(c, a).relationships.find((rl) => rl.to === b).stance, undefined, 'input not mutated');
 });
+
+// ---- Factions F1: profile fields, standing (decay, pins, ripple,
+// breakdown) and the seeded generator (design/FACTION-ROADMAP.md F1).
+import * as F1 from '../src/domain/factionProfile.js';
+
+function f1Campaign() {
+  let c = f0Default();
+  const mk = (type, name) => { const r = F0.createEntity(c, { type, name }); c = r.campaign; return r.id; };
+  return { get c() { return c; }, set c(v) { c = v; }, mk };
+}
+
+test('Factions F1: an untouched faction reads every profile default; setters validate', () => {
+  const h = f1Campaign();
+  const a = h.mk('faction', 'Helios');
+  const n = h.mk('npc', 'Ves');
+  let p = F1.factionProfile(F0.getEntity(h.c, a));
+  assert.equal(p.behavior.risk, 0); assert.equal(p.stage, 'auto'); assert.equal(p.attention, 0); assert.equal(p.reach, 2);
+  assert.equal(p.capabilities.force, 2, 'legacy force 3 seeds the Adequate band');
+  assert.equal(p.capabilities.influence, null);
+  assert.ok(!('behavior' in F0.getEntity(h.c, a)), 'nothing is written until touched');
+  let c = h.c;
+  c = F1.setFactionProfile(c, a, 'behavior.risk', 7);
+  c = F1.setFactionProfile(c, a, 'capabilities.influence', 4);
+  c = F1.setFactionProfile(c, a, 'capabilities.force', '');
+  c = F1.setFactionProfile(c, a, 'state.exposure', 9);
+  c = F1.setFactionProfile(c, a, 'methods', 'trade, bogus, espionage, trade');
+  c = F1.setFactionProfile(c, a, 'faceIds', [n, a, 'missing']);
+  c = F1.setFactionProfile(c, a, 'attention', 12);
+  c = F1.setFactionProfile(c, a, 'stage', 'sideways');
+  c = F1.setFactionProfile(c, a, 'size', 'empire');
+  c = F1.setFactionProfile(c, a, 'drive', 'Hoard');
+  c = F1.setFactionProfile(c, a, 'muted', true);
+  p = F1.factionProfile(F0.getEntity(c, a));
+  assert.equal(p.behavior.risk, 2); assert.equal(p.capabilities.influence, 4); assert.equal(p.capabilities.force, null);
+  assert.equal(p.state.exposure, 4); assert.deepEqual(p.methods, ['trade', 'espionage']); assert.deepEqual(p.faceIds, [n]);
+  assert.equal(p.attention, 9); assert.equal(p.stage, 'auto'); assert.equal(p.size, 'empire'); assert.equal(p.reach, 4);
+  assert.equal(p.drive, 'Hoard'); assert.equal(p.muted, true);
+  c = F1.addFactionMemory(c, a, { kind: 'betrayal', aboutId: 'party', text: 'Sold the cargo manifest', severity: 5 });
+  const m = F0.getEntity(c, a).memories[0];
+  assert.equal(m.kind, 'betrayal'); assert.equal(m.severity, 3);
+  c = F1.removeFactionMemory(c, a, m.id);
+  assert.equal(F0.getEntity(c, a).memories.length, 0);
+});
+
+test('Factions F1: stance sums the Ledger, decays by age, rounds and clamps', () => {
+  const h = f1Campaign();
+  const a = h.mk('faction', 'A'); const b = h.mk('faction', 'B');
+  let c = F1.changeStanding(h.c, { fromId: a, toId: b, delta: 2, reason: 'Shared a convoy', decay: 'none' });
+  c = F1.changeStanding(c, { fromId: a, toId: b, delta: 2, reason: 'Paid a debt', decay: 'fast' });
+  assert.equal(F1.stanceOf(c, a, b), 3, 'clamped to +3');
+  assert.equal(F1.standing(c, a, b).raw, 4);
+  c.factionTurnNumber = 4; // two half-lives for 'fast'
+  assert.equal(F1.standing(c, a, b).raw, 2.5);
+  assert.equal(F1.stanceOf(c, a, b), 3, 'rounds 2.5 up');
+  c.factionTurnNumber = 20;
+  assert.equal(F1.stanceOf(c, a, b), 2, 'the fast entry has faded; the permanent one stays');
+  c = F1.changeStanding(c, { fromId: a, toId: b, delta: -9, reason: 'Massacre at the docks' });
+  assert.equal(F1.stanceOf(c, a, b), -3);
+  assert.equal(F1.stanceOf(c, b, a), 0, 'stance is directional');
+  c = F1.changeStanding(c, { fromId: a, toId: 'party', field: 'trust', delta: -5, reason: 'Lied about the cargo' });
+  assert.equal(F1.trustOf(c, a, 'party'), -2, 'trust clamps to −2..+2');
+  assert.equal(F1.stanceOf(c, a, 'party'), 0, 'trust is separate from stance');
+  assert.equal(F1.stanceLabel(-2).text, '⚔ -2 Hostile');
+  assert.equal(F1.stanceLabel(3).label, 'Allied');
+});
+
+test('Factions F1: a pin overrides the Ledger, and clearing it restores the derived value', () => {
+  const h = f1Campaign();
+  const a = h.mk('faction', 'A'); const b = h.mk('faction', 'B');
+  let c = F1.changeStanding(h.c, { fromId: a, toId: b, delta: -2, reason: 'Border raids' });
+  c = F1.pinStanding(c, a, b, 3);
+  assert.equal(F1.stanceOf(c, a, b), 3);
+  assert.equal(F1.standing(c, a, b).pinned, true);
+  assert.equal(F1.standing(c, a, b).derived, -2);
+  c = F1.pinStanding(c, a, b, null);
+  assert.equal(F1.stanceOf(c, a, b), -2);
+  c = F1.pinStanding(c, a, 'party', 1, 'trust');
+  assert.equal(F1.trustOf(c, a, 'party'), 1);
+  c = F1.pinStanding(c, a, 'party', 99);
+  assert.equal(F1.stanceOf(c, a, 'party'), 3);
+});
+
+test('Factions F1: ripple moves friends with, and enemies against, the faction that changed', () => {
+  const h = f1Campaign();
+  const y = h.mk('faction', 'Y'); const friend = h.mk('faction', 'Friend'); const foe = h.mk('faction', 'Foe'); const bystander = h.mk('faction', 'Bystander');
+  const x = h.mk('faction', 'X');
+  let c = F1.changeStanding(h.c, { fromId: friend, toId: y, delta: 2, reason: 'Sworn allies', ripple: false });
+  c = F1.changeStanding(c, { fromId: foe, toId: y, delta: -3, reason: 'Old war', ripple: false });
+  c = F1.changeStanding(c, { fromId: y, toId: x, delta: -2, reason: 'X burned their warehouse', changeSetId: 'cs_1' });
+  const r = (from) => F0S.ledgerBetween(c, from, x, 'stance');
+  assert.equal(r(friend)[0].delta, -1); assert.equal(r(friend)[0].decay, 'fast'); assert.equal(r(friend)[0].changeSetId, 'cs_1');
+  assert.equal(r(foe)[0].delta, 1, 'the enemy of my enemy');
+  assert.equal(r(bystander).length, 0);
+  assert.equal(r(x).length, 0, 'the actor never ripples to itself');
+  // Party as the target ripples too, never as a faction.
+  c = F1.changeStanding(c, { fromId: y, toId: 'party', delta: 2, reason: 'Rescued their envoy' });
+  assert.equal(F0S.ledgerBetween(c, friend, 'party')[0].delta, 1);
+});
+
+test('Factions F1: the breakdown groups identical reasons and explains the number', () => {
+  const h = f1Campaign();
+  const a = h.mk('faction', 'A'); const b = h.mk('faction', 'B');
+  let c = h.c;
+  for (let i = 0; i < 3; i += 1) c = F1.changeStanding(c, { fromId: a, toId: b, delta: -1, reason: 'Undercut prices', decay: 'slow' });
+  c = F1.changeStanding(c, { fromId: a, toId: b, delta: 1, reason: 'Returned a hostage' });
+  const bd = F1.standingBreakdown(c, a, b);
+  assert.equal(bd.lines.length, 2);
+  assert.equal(bd.lines[0].reason, 'Undercut prices'); assert.equal(bd.lines[0].count, 3); assert.equal(bd.lines[0].total, -3);
+  assert.equal(bd.value, -2);
+});
+
+test('Factions F1: allied_with and rival_of edges imply stance and are kept in step', () => {
+  const h = f1Campaign();
+  const a = h.mk('faction', 'A'); const b = h.mk('faction', 'B');
+  let c = F0.addRelationship(h.c, a, b, 'allies', 'allied_with');
+  assert.equal(F1.stanceOf(c, a, b), 2, 'an edge typed by hand still reads as +2');
+  assert.equal(F1.standingBreakdown(c, a, b).lines[0].reason, 'Marked Allied With');
+  c = F1.changeStanding(c, { fromId: a, toId: b, delta: -1, reason: 'A broken promise' });
+  assert.equal(F1.stanceOf(c, a, b), 1, 'the implied +2 is seeded before the change, not lost');
+  const rel = () => F0.getEntity(c, a).relationships.find((r) => r.to === b);
+  assert.equal(rel().type, 'linked');
+  c = F1.changeStanding(c, { fromId: a, toId: b, delta: -3, reason: 'Ambush' });
+  assert.equal(rel().type, 'rival_of');
+  c = F0.updateRelationshipType(c, a, b, 'member_of');
+  c = F1.changeStanding(c, { fromId: a, toId: b, delta: 6, reason: 'Reconciled' });
+  assert.equal(rel().type, 'member_of', 'a type the GM chose is never overwritten');
+});
+
+test('Factions F1: the generator is seeded, and each new faction collides with one before it', () => {
+  const strip = (c) => F0.listEntities(c, ['faction', 'npc']).map((e) => ({ ...e, id: 0, createdAt: 0, relationships: (e.relationships || []).length, faceIds: (e.faceIds || []).length }));
+  const one = F1.generateFaction(f0Default(), { seed: 42, genrePack: 'sci-fi-generic' });
+  const two = F1.generateFaction(f0Default(), { seed: 42, genrePack: 'sci-fi-generic' });
+  assert.deepEqual(strip(one.campaign), strip(two.campaign), 'same seed, same faction');
+  const e = F0.getEntity(one.campaign, one.id);
+  assert.ok(e.name && e.factionType && e.motivation && e.drive && e.publicFace && e.hiddenAgenda);
+  assert.equal(one.collidesWith, null, 'the first faction is free');
+  const face = F0.getEntity(one.campaign, one.faceId);
+  assert.equal(face.type, 'npc');
+  assert.deepEqual(e.faceIds, [one.faceId]);
+  assert.equal(face.relationships.find((r) => r.to === one.id).type, 'member_of');
+  const objs = F1.factionObjectives(one.campaign, one.id);
+  assert.equal(objs.length, 1);
+  assert.equal(objs[0].thread.kind, 'faction-project');
+  assert.equal(objs[0].thread.signs.length, objs[0].thread.segments);
+  assert.ok(objs[0].thread.signs.every((s) => !s.includes('{place}')));
+  const second = F1.generateFaction(one.campaign, { seed: 7 });
+  assert.equal(second.collidesWith.factionId, one.id);
+  const o2 = F1.factionObjectives(second.campaign, second.id)[0];
+  assert.equal(o2.stake, objs[0].stake, 'collides over the same stake');
+  assert.equal(F1.stanceOf(second.campaign, second.id, one.id), -1);
+  assert.equal(F0.getEntity(second.campaign, second.id).name === e.name, false, 'names are unique');
+  assert.equal(one.campaign.entities.activeId, null, 'generation leaves the active entity alone');
+});
+
+test('Factions F1: with no objectives, a new faction collides with existing turf', () => {
+  const h = f1Campaign();
+  const owner = h.mk('faction', 'Harbor Watch');
+  const port = h.mk('location', 'Port Meridian');
+  const c = F0.addRelationship(h.c, owner, port, 'holds', 'controls');
+  const g = F1.generateFaction(c, { seed: 3, genrePack: 'fantasy' });
+  assert.deepEqual([g.collidesWith.factionId, g.collidesWith.locationId], [owner, port]);
+  const o = F1.factionObjectives(g.campaign, g.id)[0];
+  assert.ok(o.title.includes('Port Meridian'));
+  assert.deepEqual(o.targetRefs, [port]);
+  assert.equal(F0.getEntity(g.campaign, g.id).relationships.find((r) => r.to === port).type, 'claims');
+});
+
+test('Factions F1: the starting trio is three colliding factions with a seeded web', () => {
+  const t = F1.generateStartingTrio(f0Default(), { seed: 11, genrePack: 'cyberpunk' });
+  assert.equal(t.ids.length, 3);
+  const objs = t.ids.map((id) => F1.factionObjectives(t.campaign, id)[0]);
+  assert.equal(objs[0].collidesWith, null);
+  assert.ok(objs[1].collidesWith && objs[2].collidesWith);
+  assert.ok(F1.stanceOf(t.campaign, t.ids[0], t.ids[2]) !== 0 || F1.stanceOf(t.campaign, t.ids[2], t.ids[0]) !== 0);
+  const again = F1.generateStartingTrio(f0Default(), { seed: 11, genrePack: 'cyberpunk' });
+  assert.deepEqual(again.ids.map((id) => F0.getEntity(again.campaign, id).name), t.ids.map((id) => F0.getEntity(t.campaign, id).name));
+});

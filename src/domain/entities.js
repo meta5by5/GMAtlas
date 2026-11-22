@@ -1293,6 +1293,7 @@ const RELATIONSHIP_META = {
   },
   intensity: clampInt(INTENSITY_MIN, INTENSITY_MAX),
   trust: clampInt(TRUST_MIN, TRUST_MAX),
+  trustPinned: (v) => !!v,
   visibility: oneOf(VISIBILITY_STATES.map((s) => s.id)),
   hold: oneOf(TERRITORY_HOLDS.map((h) => h.id)),
   since: text,
