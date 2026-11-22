@@ -193,7 +193,9 @@ carries five 0–10 dials: threat/mystery default 2, resources/reputation/stress
 default 5), `entities` (items/activeId/history), `scenes`, `journal`,
 `timeline` (capped at the most recent 6 breadcrumbs), `threads`,
 `foreshadowing`, `worldFlags`, `factionEvents` + `factionTurnNumber`,
-`missions`, `director` (a largely-inert legacy carry-over, preserved rather
+`missions`, `factions` (the Factions store, schema version 2:
+objectives/projects/operations, the append-only `ledger`, events,
+changeSets, triggers, hooks, runs, settings), `director` (a largely-inert legacy carry-over, preserved rather
 than deleted per rule 5), `oracles` (overrides/usage/tags), `documents`
 (library/tabs/reference overrides), `gallery`, `battlemaps`, `party`,
 `colony`, `guide`, `settings` (genre/ruleset/templates/UI state/faction
@@ -241,8 +243,13 @@ The main modules by area (54 files in `src/domain/`):
   generator). The Conflict entity (type `faction-conflict`,
   design/Faction-baseline.md B4.8) has its stage ladder, status, stakes,
   sides and pressure in `entities.js`, with its vocabulary in
-  `data/conflictLadder.js`; the rest of the Factions design is unbuilt
-  (design/FACTION-ROADMAP.md).
+  `data/conflictLadder.js`. The Factions foundation (F0) is
+  `campaign.factions` (schema version 2) with its append-only Ledger in
+  `factionState.js`, seeded once by `migrate.js` from faction
+  `allied_with`/`rival_of` edges, plus the Factions relationship types
+  and optional faction edge detail (`updateRelationshipMeta`, vocabulary
+  in `data/factionRelations.js`). The rest of the Factions design is
+  unbuilt (design/FACTION-ROADMAP.md).
 - **Economy & jobs**: `trade.js` (Merchant Rules Lens pricing + contracts),
   `missions.js`, `enhancements.js` (Strain/capacity augmentation),
   `expeditions.js`.

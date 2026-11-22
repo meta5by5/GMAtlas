@@ -21,6 +21,7 @@ import { CREW_TASKS_5PFH } from '../data/crewTasksDefault5pfh.js';
 import { MAX_ENCOUNTERS } from '../domain/colony.js';
 import { hasCharacterTag, isPristineStatblockGroup, renameLegacyToughFields } from '../domain/statblocks.js';
 import { tagLegacyModuleTrackers } from '../domain/party.js';
+import { normalizeFactionsState, seedMigratedLedger } from '../domain/factionState.js';
 import { dnd5eStoryboardProfile, fiveLeaguesStoryboardProfile, FIVE_PARSECS_PROFILE_NAME, FIVE_PARSECS_HEADLINE_FIELDS } from '../domain/rulesProfiles.js';
 
 // Every legacy key the old app is known to write, plus the very old aliases.
@@ -302,6 +303,14 @@ export function migrateDocument(doc, now = new Date().toISOString()) {
   // Module-seeded Party Trackers from before trackers carried a moduleId get
   // tagged, so a later game-system change can remove them (party.js).
   d = tagLegacyModuleTrackers(d);
+
+  // Version 2 (design/Faction-baseline.md B4.12): the `factions` subtree is
+  // filled in (withDefaults already did, normalize guards a malformed one),
+  // and a document from before it gets its Ledger seeded once from its
+  // allied_with/rival_of faction edges. The seed is idempotent by id.
+  normalizeFactionsState(d);
+  const fromVersion = typeof (doc && doc.schemaVersion) === 'number' ? doc.schemaVersion : 0;
+  if (fromVersion < 2) d = seedMigratedLedger(d, now);
 
   d.schemaVersion = SCHEMA_VERSION;
   d.app = APP_NAME;

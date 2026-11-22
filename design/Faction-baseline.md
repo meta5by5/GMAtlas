@@ -686,6 +686,14 @@ campaign.factions = {
   `updatedAt`, and survives export and import (SRS 13.1).
 - **Sync:** everything is metadata (`syncPolicy` classifies
   `factions.*`), with no `data:` URLs.
+- **Built (F0, 2026-11-21):** the subtree is schema version 2. The seed
+  runs in `migrate.js` for any document older than version 2, only
+  between two factions, with a deterministic id per pair, so two devices
+  migrating the same campaign create the same entries and a repeat run
+  adds nothing. Faction edge detail is set through
+  `updateRelationshipMeta` (`stance`, `stancePinned`, `ties` as
+  `{kind, condition}`, `intensity`, `trust`, `visibility`, `hold` for
+  territory, and the provenance keys); invalid values are ignored.
 
 ---
 

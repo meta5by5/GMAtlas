@@ -35,6 +35,9 @@ export const CAMPAIGN_SYNC_POLICY = {
   factionEvents: 'gm',
   factionTurnNumber: 'gm',
   missions: 'gm',
+  // The faction engine's records (design/Faction-baseline.md B4.12): all
+  // metadata, never document bytes.
+  factions: 'gm',
   director: 'gm',
   oracles: 'gm',
   documents: 'gm',

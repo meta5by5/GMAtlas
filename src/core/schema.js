@@ -10,7 +10,25 @@
 export const APP_NAME = 'GMAtlas';
 
 // Bump this whenever the shape changes; add a matching step in migrate.js.
-export const SCHEMA_VERSION = 1;
+// 2: the `factions` subtree, and its Ledger seeded from allied_with/rival_of.
+export const SCHEMA_VERSION = 2;
+
+/** The empty `campaign.factions` subtree (design/Faction-baseline.md B4.12).
+ *  Routine faction work needs no confirmation, so autoApplyQuiet is on. */
+export function defaultFactionsState() {
+  return {
+    objectives: [], projects: [], operations: [],
+    ledger: [], events: [], changeSets: [],
+    triggers: [], hooks: [], runs: [],
+    lastProcessed: { turn: 0, seq: 0 },
+    settings: {
+      mode: 'standard', pressure: 'steady', autoApplyQuiet: true,
+      trigger: { kind: 'auto', everyEncounters: 3 },
+      approval: { low: 'routine', moderate: 'brief', high: 'approve' },
+      stageCap: 7, retaliation: true, relationshipRoll: true,
+    },
+  };
+}
 
 // Modules a Rules Profile can hide entirely (design/adr/rules-profiles-
 // multi-campaign.md). Party is deliberately NOT here — it stays always-
@@ -127,6 +145,15 @@ export function defaultCampaign(now = new Date().toISOString()) {
     // Co-Pilot narration. Additive/lazy-init like factionEvents above —
     // no migrate.js step needed.
     missions: [],
+
+    // Factions (design/Faction-baseline.md B4.12, FACTION-ROADMAP F0): the
+    // one store for the faction engine's own records. Existing faction data
+    // stays where it is (factionEvents/factionTurnNumber above, faction-*
+    // Threads, SWN fields on faction entities) and is read alongside.
+    // `ledger` is append-only: every stance/trust change is an entry
+    // (domain/factionState.js). migrate.js's version-2 step seeds it from
+    // pre-existing allied_with/rival_of edges.
+    factions: defaultFactionsState(),
 
     director: {},        // unified Story Director cascade state
     oracles: { overrides: {}, usage: {} },

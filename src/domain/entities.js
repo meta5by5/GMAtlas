@@ -18,6 +18,10 @@ import { economyTypesForModel } from '../data/economyTypes.js';
 import { SWN_XP_TABLE } from '../data/swnFactionData.js';
 import { entityTagSeedsFor, locationTagSeedsFor } from '../data/entityTagSeeds.js';
 import { CONFLICT_MAX_STAGE, CONFLICT_STATUSES, CONFLICT_SIDE_ROLES, CONFLICT_PRESSURES, CONFLICT_PRESSURE_MAX } from '../data/conflictLadder.js';
+import {
+  STANCE_MIN, STANCE_MAX, TRUST_MIN, TRUST_MAX, INTENSITY_MIN, INTENSITY_MAX, STORY_IMPORTANCE_MAX,
+  FACTION_TIES, VISIBILITY_STATES, TERRITORY_HOLDS,
+} from '../data/factionRelations.js';
 
 // `item` (ADR 0012): gear/weapons/armor as first-class entities — tags,
 // @mentions, relationships (`owns` now has a concrete use: "NPC X owns Item
@@ -85,11 +89,23 @@ export function entityTypeLabel(type, genrePackId) {
 // `connects_to` (doors, passages, stairs between places) and `appears_in`
 // (an entity's part in an Encounter) are the wiki's additions
 // (design/WIKI-ROADMAP.md W1).
-export const RELATIONSHIP_TYPES = ['linked', 'member_of', 'owns', 'controls', 'located_at', 'contains', 'allied_with', 'rival_of', 'bond', 'involves', 'connects_to', 'appears_in'];
+// The Factions additions (design/Faction-baseline.md B4.4, B4.11;
+// FACTION-ROADMAP F0) follow: people and factions (`leads` .. `encountered`)
+// and territory, a faction to a Location (`occupies` .. `blockades`; `owns`,
+// `controls` and `protects` serve territory too).
+export const RELATIONSHIP_TYPES = [
+  'linked', 'member_of', 'owns', 'controls', 'located_at', 'contains', 'allied_with', 'rival_of', 'bond', 'involves', 'connects_to', 'appears_in',
+  'leads', 'assigned_to', 'opposed_to', 'dependent_on', 'in_debt_to', 'investigating', 'protects', 'attacked', 'encountered',
+  'occupies', 'claims', 'contests', 'influences', 'blockades',
+];
 export const RELATIONSHIP_TYPE_LABEL = {
   linked: 'Linked', member_of: 'Member Of', owns: 'Owns', controls: 'Controls',
   located_at: 'Located At', contains: 'Contains', allied_with: 'Allied With', rival_of: 'Rival Of', bond: 'Bond',
   involves: 'Involves', connects_to: 'Connects To', appears_in: 'Appears In',
+  leads: 'Leads', assigned_to: 'Assigned To', opposed_to: 'Opposed To', dependent_on: 'Dependent On',
+  in_debt_to: 'In Debt To', investigating: 'Investigating', protects: 'Protects', attacked: 'Attacked',
+  encountered: 'Encountered', occupies: 'Occupies', claims: 'Claims', contests: 'Contests',
+  influences: 'Influences', blockades: 'Blockades',
 };
 // Which entity types a typed relationship's target is expected to be, for
 // "flag, don't delete" (pack 9, below) — null means no constraint (allied_with/
@@ -98,9 +114,14 @@ export const RELATIONSHIP_TYPE_LABEL = {
 // the Constitution's own edge taxonomy names as structurally directional
 // (pack 66's Member Of/Owns/Controls/Located At examples). `involves` (Faction
 // Conflict) joins them the same way — a Conflict's edge to a Faction.
+// `owns` widened for Factions: a faction owns an Asset, an Item or a place
+// (B4.11). The territory types point at a Location; `leads` and
+// `in_debt_to` at whoever is led or owed.
 const RELATIONSHIP_TYPE_TARGETS = {
-  member_of: ['faction'], owns: ['asset'], controls: ['faction', 'location', 'asset'], located_at: ['location'],
+  member_of: ['faction'], owns: ['asset', 'item', 'location'], controls: ['faction', 'location', 'asset'], located_at: ['location'],
   involves: ['faction'], appears_in: ['conflict'],
+  leads: ['faction'], in_debt_to: ['npc', 'faction'],
+  occupies: ['location'], claims: ['location'], contests: ['location'], influences: ['location', 'faction'], blockades: ['location'],
 };
 // Rival Of/Allied With/Bond aren't directional (no single fixed target type
 // the way Member Of always points at a faction), but they're still social
@@ -112,7 +133,7 @@ const RELATIONSHIP_TYPE_TARGETS = {
 // review.
 const RELATIONSHIP_TYPE_MUTUAL = {
   allied_with: ['npc', 'faction'], rival_of: ['npc', 'faction'], bond: ['npc', 'faction'],
-  connects_to: ['location'],
+  connects_to: ['location'], opposed_to: ['npc', 'faction'],
 };
 
 function clampStrength(n) {
@@ -1242,6 +1263,63 @@ export function updateRelationshipStrength(campaign, aId, bId, strength) {
   const a = getEntity(next, aId);
   const r = a && a.relationships.find((rel) => rel.to === bId);
   if (r) { normalizeRel(r); r.strength = clampStrength(strength); }
+  return next;
+}
+
+// The optional detail a faction edge carries (design/Faction-baseline.md
+// B4.4, B4.11). Each key validates its own value; an invalid one is
+// ignored, and null or '' removes the key so plain edges stay plain.
+const clampInt = (lo, hi) => (v) => {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : undefined;
+};
+const oneOf = (ids) => (v) => (ids.includes(v) ? v : undefined);
+const text = (v) => String(v).slice(0, 500);
+const TIE_IDS = FACTION_TIES.map((t) => t.id);
+const RELATIONSHIP_META = {
+  stance: clampInt(STANCE_MIN, STANCE_MAX),
+  stancePinned: (v) => !!v,
+  ties: (v) => {
+    if (!Array.isArray(v)) return undefined;
+    const seen = new Set();
+    const out = [];
+    for (const t of v) {
+      const kind = t && typeof t === 'object' ? t.kind : t;
+      if (!TIE_IDS.includes(kind) || seen.has(kind)) continue;
+      seen.add(kind);
+      out.push({ kind, condition: t && typeof t === 'object' && t.condition ? text(t.condition) : '' });
+    }
+    return out;
+  },
+  intensity: clampInt(INTENSITY_MIN, INTENSITY_MAX),
+  trust: clampInt(TRUST_MIN, TRUST_MAX),
+  visibility: oneOf(VISIBILITY_STATES.map((s) => s.id)),
+  hold: oneOf(TERRITORY_HOLDS.map((h) => h.id)),
+  since: text,
+  lastUsed: text,
+  sourceEventId: text,
+  confidence: (v) => { const n = Number(v); return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : undefined; },
+  storyImportance: clampInt(0, STORY_IMPORTANCE_MAX),
+};
+export const RELATIONSHIP_META_KEYS = Object.keys(RELATIONSHIP_META);
+
+/** Sets optional detail on one side of a relationship (A's edge to B):
+ *  stance, ties, intensity, trust, visibility, a territory hold, and the
+ *  provenance keys. `patch` is { key: value }; unknown keys and invalid
+ *  values are ignored, null or '' removes a key. */
+export function updateRelationshipMeta(campaign, aId, bId, patch) {
+  const next = clone(campaign);
+  const a = getEntity(next, aId);
+  const r = a && a.relationships.find((rel) => rel.to === bId);
+  if (!r || !patch || typeof patch !== 'object') return next;
+  normalizeRel(r);
+  for (const [k, v] of Object.entries(patch)) {
+    const check = RELATIONSHIP_META[k];
+    if (!check) continue;
+    if (v === null || v === '' || v === undefined) { delete r[k]; continue; }
+    const val = check(v);
+    if (val !== undefined) r[k] = val;
+  }
   return next;
 }
 

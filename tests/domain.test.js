@@ -13492,3 +13492,140 @@ test('Conflict entity: survives migration and a type change provisions its field
   const turned = FC.updateEntity(lore.campaign, lore.id, { type: 'faction-conflict' });
   assert.equal(FC.getEntity(turned, lore.id).stage, 1);
 });
+
+// ---- Factions F0: the `factions` subtree, the Ledger seed, new relationship
+// types and faction edge detail (design/FACTION-ROADMAP.md F0).
+import * as F0 from '../src/domain/entities.js';
+import * as F0S from '../src/domain/factionState.js';
+import { migrateDocument as f0Migrate } from '../src/core/migrate.js';
+import { defaultCampaign as f0Default, SCHEMA_VERSION as F0_VERSION } from '../src/core/schema.js';
+import { CAMPAIGN_SYNC_POLICY as F0_POLICY } from '../src/data/syncPolicy.js';
+import { syncScopeFor as f0Scope } from '../src/domain/syncOps.js';
+
+function f0Campaign() {
+  let c = f0Default();
+  const mk = (type, name) => { const r = F0.createEntity(c, { type, name }); c = r.campaign; return r.id; };
+  const a = mk('faction', 'Helios Syndicate');
+  const b = mk('faction', 'Pale Choir');
+  const d = mk('faction', 'Dust Union');
+  const n = mk('npc', 'Ves');
+  const loc = mk('location', 'Kiln Station');
+  c = F0.addRelationship(c, a, b, 'allies', 'allied_with');
+  c = F0.addRelationship(c, a, d, 'rivals', 'rival_of');
+  c = F0.addRelationship(c, n, a, 'rival', 'rival_of');
+  return { c, a, b, d, n, loc };
+}
+
+test('Factions F0: a new campaign has the factions subtree, with routine work auto-applied', () => {
+  const c = f0Default();
+  assert.equal(c.schemaVersion, F0_VERSION);
+  assert.ok(F0_VERSION >= 2);
+  for (const k of ['objectives', 'projects', 'operations', 'ledger', 'events', 'changeSets', 'triggers', 'hooks', 'runs']) assert.deepEqual(c.factions[k], []);
+  assert.equal(c.factions.settings.autoApplyQuiet, true);
+  assert.equal(c.factions.settings.trigger.everyEncounters, 3);
+  assert.equal(f0Scope(F0_POLICY, ['factions', 'ledger']), 'gm');
+});
+
+test('Factions F0: an export from before F0 imports with its data unchanged and its Ledger seeded once', () => {
+  const { c, a, b, d, n } = f0Campaign();
+  const old = JSON.parse(JSON.stringify(c));
+  old.schemaVersion = 1;
+  delete old.factions;
+  old.factionEvents = [{ id: 'fev_1', factionId: a, action: 'buyAsset' }];
+  old.factionTurnNumber = 4;
+  const m = f0Migrate(JSON.parse(JSON.stringify(old)));
+  assert.equal(m.schemaVersion, F0_VERSION);
+  assert.deepEqual(m.factionEvents, old.factionEvents);
+  assert.equal(m.factionTurnNumber, 4);
+  assert.deepEqual(m.entities.items.map((e) => e.id), old.entities.items.map((e) => e.id));
+  assert.deepEqual(F0.getEntity(m, a).relationships, F0.getEntity(old, a).relationships, 'edges untouched');
+  const led = m.factions.ledger;
+  assert.equal(led.length, 2, 'faction-to-faction allied_with and rival_of only; the NPC rivalry is not seeded');
+  const ally = led.find((l) => l.toId === b);
+  assert.equal(ally.fromId, a); assert.equal(ally.delta, 2); assert.equal(ally.source, 'migrated'); assert.equal(ally.field, 'stance');
+  assert.equal(led.find((l) => l.toId === d).delta, -2);
+  assert.ok(!led.some((l) => l.fromId === n));
+  // Migrating again, or re-running the seed, adds nothing.
+  const again = f0Migrate(JSON.parse(JSON.stringify({ ...m, schemaVersion: 1 })));
+  assert.equal(again.factions.ledger.length, 2);
+  assert.equal(F0S.seedMigratedLedger(m).factions.ledger.length, 2);
+  // A current document is not re-seeded.
+  const cur = f0Migrate(JSON.parse(JSON.stringify(m)));
+  assert.deepEqual(cur.factions.ledger, m.factions.ledger);
+});
+
+test('Factions F0: the export round trip keeps every faction record, id and reference', () => {
+  let { c, a, b } = f0Campaign();
+  c = F0S.seedMigratedLedger(c);
+  c = F0S.appendLedgerEntry(c, { fromId: b, toId: 'party', field: 'trust', delta: -1, reason: 'Broke the escort deal', decay: 'slow', source: 'gm' });
+  c.factions.objectives.push({ id: 'obj_1', factionId: a, title: 'Own the Kiln docks', createdAt: 'x', updatedAt: 'x' });
+  c = F0.updateRelationshipMeta(c, a, b, { stance: 3, trust: -1, ties: ['trade-partner', { kind: 'treaty-bound', condition: 'until the war ends' }], visibility: 'public' });
+  const back = f0Migrate(JSON.parse(JSON.stringify(c)));
+  assert.deepEqual(back.factions, c.factions);
+  assert.deepEqual(F0.getEntity(back, a).relationships, F0.getEntity(c, a).relationships);
+});
+
+test('Factions F0: a malformed factions subtree is repaired without losing what was there', () => {
+  const c = f0Default();
+  c.schemaVersion = 2;
+  c.factions = { ledger: { not: 'an array' }, objectives: [{ id: 'obj_k' }], settings: { mode: 'advanced' } };
+  const m = f0Migrate(c);
+  assert.deepEqual(m.factions.ledger, []);
+  assert.deepEqual(m.factions._legacy.ledger, { not: 'an array' });
+  assert.equal(m.factions.objectives[0].id, 'obj_k');
+  assert.equal(m.factions.settings.mode, 'advanced');
+  assert.equal(m.factions.settings.autoApplyQuiet, true);
+});
+
+test('Factions F0: the Ledger is append-only and validates its entries', () => {
+  const { c, a, b } = f0Campaign();
+  let x = F0S.appendLedgerEntry(c, { id: 'led_x', fromId: a, toId: b, field: 'nonsense', delta: 'abc', decay: 'weird', source: 'alien', visibility: 'nope' });
+  const e = x.factions.ledger[0];
+  assert.deepEqual([e.field, e.delta, e.decay, e.source, e.visibility], ['stance', 0, 'none', 'gm', 'gm']);
+  x = F0S.appendLedgerEntry(x, { id: 'led_x', fromId: a, toId: b, delta: 3 });
+  assert.equal(x.factions.ledger.length, 1, 'a repeated id is ignored');
+  x = F0S.appendLedgerEntry(x, { fromId: a, delta: 1 });
+  assert.equal(x.factions.ledger.length, 1, 'an entry needs both ends');
+  assert.equal(c.factions.ledger.length, 0, 'input not mutated');
+  assert.equal(F0S.ledgerBetween(x, a, b, 'stance').length, 1);
+});
+
+test('Factions F0: the new relationship types exist, with their target rules', () => {
+  for (const t of ['leads', 'assigned_to', 'opposed_to', 'dependent_on', 'in_debt_to', 'investigating', 'protects', 'attacked', 'encountered',
+    'occupies', 'claims', 'contests', 'influences', 'blockades', 'owns', 'controls']) {
+    assert.ok(F0.RELATIONSHIP_TYPES.includes(t), t);
+    assert.ok(F0.RELATIONSHIP_TYPE_LABEL[t], t);
+  }
+  let { c, a, n, loc } = f0Campaign();
+  c = F0.addRelationship(c, a, loc, 'blockade', 'blockades');
+  c = F0.addRelationship(c, n, a, 'leader', 'leads');
+  const rel = (from, to) => F0.getEntity(c, from).relationships.find((r) => r.to === to);
+  assert.equal(rel(a, loc).type, 'blockades');
+  assert.equal(rel(loc, a).type, 'linked', 'the reverse side starts linked');
+  assert.equal(F0.isRelationshipFlagged(c, rel(a, loc), 'faction'), false);
+  c = F0.updateRelationshipType(c, n, a, 'occupies');
+  assert.equal(F0.isRelationshipFlagged(c, rel(n, a), 'npc'), true, 'occupies points at a Location: flagged, not deleted');
+  assert.equal(rel(n, a).type, 'occupies');
+});
+
+test('Factions F0: faction edge detail validates, clamps, and removes on empty', () => {
+  const { c, a, b, loc } = f0Campaign();
+  let x = F0.updateRelationshipMeta(c, a, b, {
+    stance: 9, trust: -7, intensity: 0, ties: ['patron', 'patron', 'bogus'], visibility: 'secret',
+    confidence: 4, storyImportance: 2, since: 'turn 3', bogusKey: 1, hold: 'nonsense',
+  });
+  const r = F0.getEntity(x, a).relationships.find((rl) => rl.to === b);
+  assert.equal(r.stance, 3); assert.equal(r.trust, -2); assert.equal(r.intensity, 1);
+  assert.deepEqual(r.ties, [{ kind: 'patron', condition: '' }]);
+  assert.equal(r.visibility, 'secret'); assert.equal(r.confidence, 1); assert.equal(r.storyImportance, 2);
+  assert.equal(r.since, 'turn 3');
+  assert.ok(!('bogusKey' in r)); assert.ok(!('hold' in r));
+  assert.equal(r.type, 'allied_with', 'type untouched');
+  x = F0.updateRelationshipMeta(x, a, b, { stance: null, ties: '' });
+  const r2 = F0.getEntity(x, a).relationships.find((rl) => rl.to === b);
+  assert.ok(!('stance' in r2)); assert.ok(!('ties' in r2)); assert.equal(r2.trust, -2);
+  x = F0.addRelationship(x, a, loc, 'held', 'controls');
+  x = F0.updateRelationshipMeta(x, a, loc, { hold: 'disputed' });
+  assert.equal(F0.getEntity(x, a).relationships.find((rl) => rl.to === loc).hold, 'disputed');
+  assert.equal(F0.getEntity(c, a).relationships.find((rl) => rl.to === b).stance, undefined, 'input not mutated');
+});

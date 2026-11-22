@@ -282,6 +282,13 @@ These follow SRS 15.1, mapped onto GMAtlas.
 ladder.
 
 ### F0: Foundation
+*Built 2026-11-21.* `campaign.factions` and schema version 2
+(`core/schema.js`, `core/migrate.js`); the Ledger and its seed
+(`domain/factionState.js`); relationship vocabulary
+(`data/factionRelations.js`); the new types and `updateRelationshipMeta`
+(`domain/entities.js`); `factions` classified `gm` in `syncPolicy`; 7
+tests. The edge detail has no editor yet: F1's Factions panel adds it.
+
 - **Schema.** Add the `campaign.factions` subtree (B4.12):
   - `schemaVersion` goes up by one;
   - `migrate.js` absorbs older documents;
