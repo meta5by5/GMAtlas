@@ -329,9 +329,14 @@ run. What F1 delivers:
   thumbnails, which also show stance as glyph, number and label;
 - Advance, the one verb in use so far.
 
-Still to do: the peek on Cast, Graph, Timeline, wiki and Encounter chips,
-and the local graph beside Relationships. Overview's "Needs you", "Likely
-next" and opportunities sections arrive with F3 and F4.
+Finished with F2 (2026-11-22):
+- The peek opens from Graph nodes, Cast relationship chips, the Story
+  Dashboard's WHO/WHERE/WHAT detail cards and Timeline faction chips.
+- A two-hop local graph sits beside Relationships.
+
+Wiki links still open the page they name, because the wiki is for
+reading and its portal surface has no peek. Overview's "Needs you",
+"Likely next" and opportunities sections arrive with F3 and F4.
 
 - **Profile fields** (B4.2), added lazily and additively.
 - **Stance and trust:** derivation, ripple, pins and the grouped
@@ -355,6 +360,27 @@ next" and opportunities sections arrive with F3 and F4.
   every core relationship (SRS phase 1).
 
 ### F2: Events and history
+*Built 2026-11-22.* `domain/factionChanges.js`,
+`data/factionEventKinds.js`, design/adr/faction-change-sets.md; 6 tests
+and a smoke run. What F2 delivers:
+- The records, with links both ways.
+- Change sets with a version check, partial approval and force.
+- Undo through an inverse set. The Ledger gets reversal entries, never
+  deletions.
+- Idempotency keys.
+- `diffChanges`, so any mutator becomes a change set.
+- The five quick actions, in the peek with an inline confirm.
+- Record event, an inline form in History.
+- A journal entry for significant and major events, inside the same
+  change set.
+- Entity history on the faction page.
+- The Timeline merges scenes, Encounters, journal entries and faction
+  events, with kind and entity filters.
+- The wiki gains Standing and History sections. Player View shows only
+  public and player-known events and only standing toward the party.
+
+Hooks exist as records. Promoting them arrives in F6.
+
 - **Records:** Trigger, Action, Event, ChangeSet and Hook, each with a
   stable id and links both ways along the object chain (SRS 3.3).
 - **Record an event:** a GM-authored event that produces a change set,

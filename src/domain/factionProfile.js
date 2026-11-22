@@ -8,7 +8,7 @@
 import {
   createEntity, getEntity, listEntities, addRelationship, updateRelationshipMeta,
 } from './entities.js';
-import { normalizeFactionsState, factionsState, makeLedgerEntry, migratedLedgerId } from './factionState.js';
+import { normalizeFactionsState, factionsState, makeLedgerEntry, migratedLedgerId, liveLedgerEntries } from './factionState.js';
 import { makeRng } from './oracles.js';
 import {
   STANCE_MIN, STANCE_MAX, TRUST_MIN, TRUST_MAX, STANCE_LEVELS, MIGRATED_STANCE,
@@ -216,7 +216,7 @@ export function standingBreakdown(campaign, fromId, toId, field = 'stance') {
   const s = standing(campaign, fromId, toId, field);
   const turn = currentFactionTurn(campaign);
   const groups = new Map();
-  for (const l of s.entries) {
+  for (const l of liveLedgerEntries(s.entries)) {
     const key = `${l.reason}\u0000${l.decay}`;
     const g = groups.get(key) || { reason: l.reason || '(no reason given)', decay: l.decay, count: 0, total: 0, raw: 0, newestAge: Infinity, sources: new Set() };
     g.count += 1;

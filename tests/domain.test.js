@@ -13830,3 +13830,151 @@ test('Factions F1: objectives by hand, Advance, and faces', () => {
   assert.deepEqual(F0.getEntity(c, a).faceIds, []);
   assert.ok(F0.getEntity(c, n).relationships.some((r) => r.to === a), 'removing a face keeps the membership');
 });
+
+// ---- Factions F2: events, change sets (apply, undo, version check,
+// idempotency, partial approval), quick actions, entity history and the
+// Timeline (design/FACTION-ROADMAP.md F2).
+import * as F2 from '../src/domain/factionChanges.js';
+
+test('Factions F2: apply then undo gives back the identical records; the Ledger only appends', () => {
+  const h = f1Campaign();
+  const a = h.mk('faction', 'Helios');
+  const b = h.mk('faction', 'Miners');
+  let c = h.c;
+  const beforeA = JSON.stringify(F0.getEntity(c, a));
+  const r = F2.recordQuickAction(c, a, 'betrayed', { note: 'sold the convoy route', at: '2026-11-22T10:00:00Z' });
+  c = r.campaign;
+  assert.equal(r.conflicts.length, 0);
+  assert.equal(F1.stanceOf(c, a, 'party'), -2);
+  assert.equal(F1.trustOf(c, a, 'party'), -2);
+  assert.equal(F1.factionProfile(F0.getEntity(c, a)).memories[0].kind, 'betrayal');
+  assert.ok(c.journal.some((j) => j.factionEventId === r.eventId), 'a major event writes a journal entry');
+  const ev = c.factions.events.find((e) => e.id === r.eventId);
+  const cs = c.factions.changeSets.find((s) => s.id === r.changeSetId);
+  const trig = c.factions.triggers.find((t) => t.id === ev.triggerId);
+  assert.equal(ev.status, 'applied'); assert.equal(cs.eventId, ev.id); assert.deepEqual(trig.eventIds, [ev.id]);
+  assert.equal(trig.kind, 'player-action');
+  assert.ok(cs.changes.every((ch) => ch.status === 'applied'));
+  const ledgerLen = c.factions.ledger.length;
+  const u = F2.undoChangeSet(c, r.changeSetId);
+  c = u.campaign;
+  assert.equal(u.conflicts.length, 0);
+  assert.equal(JSON.stringify(F0.getEntity(c, a)), beforeA, 'the faction record is identical to before');
+  assert.equal(F1.stanceOf(c, a, 'party'), 0);
+  assert.equal(F1.trustOf(c, a, 'party'), 0);
+  assert.ok(!c.journal.some((j) => j.factionEventId === r.eventId), 'the journal entry is taken back');
+  assert.equal(c.factions.ledger.length, ledgerLen * 2, 'every Ledger entry gets a reversal, none are removed');
+  assert.equal(F1.standingBreakdown(c, a, 'party').lines.length, 0, 'undone pairs leave the breakdown');
+  const orig = c.factions.changeSets.find((s) => s.id === r.changeSetId);
+  const inv = c.factions.changeSets.find((s) => s.id === u.changeSetId);
+  assert.equal(orig.status, 'undone'); assert.equal(orig.undoneBy, inv.id); assert.equal(inv.undoOf, orig.id);
+  assert.equal(c.factions.events.find((e) => e.id === r.eventId).status, 'undone');
+  assert.equal(F2.undoChangeSet(c, r.changeSetId).changeSetId, '', 'an undone set cannot be undone twice');
+  void b;
+});
+
+test('Factions F2: the version check catches a GM edit made after the proposal', () => {
+  const h = f1Campaign();
+  const a = h.mk('faction', 'Helios');
+  let c = F1.setFactionProfile(h.c, a, 'attention', 1);
+  const r = F2.recordQuickAction(c, a, 'exposed', { at: '2026-11-22T10:00:00Z' });
+  // Propose the same change again without applying, then let the GM edit.
+  const p = F2.recordEvent(c, {
+    title: 'Raise attention', apply: false,
+    mutate: (x) => F1.setFactionProfile(x, a, 'attention', 5),
+  });
+  c = F1.setFactionProfile(p.campaign, a, 'attention', 7);
+  let ap = F2.applyChangeSet(c, p.changeSetId);
+  assert.equal(ap.conflicts.length, 1);
+  assert.equal(ap.conflicts[0].proposedBefore, 1);
+  assert.equal(ap.conflicts[0].current, 7, 'both versions are shown');
+  assert.equal(F1.factionProfile(F0.getEntity(ap.campaign, a)).attention, 7, 'nothing applied');
+  assert.equal(ap.campaign.factions.changeSets.find((s) => s.id === p.changeSetId).status, 'conflicted');
+  ap = F2.applyChangeSet(ap.campaign, p.changeSetId, { force: [ap.conflicts[0].changeId] });
+  assert.equal(F1.factionProfile(F0.getEntity(ap.campaign, a)).attention, 5);
+  const un = F2.undoChangeSet(ap.campaign, p.changeSetId);
+  assert.equal(F1.factionProfile(F0.getEntity(un.campaign, a)).attention, 7, 'undo restores the GM edit it overrode');
+  // An undo whose target changed since is a conflict too.
+  let x = F1.setFactionProfile(r.campaign, a, 'attention', 0);
+  const bad = F2.undoChangeSet(x, r.changeSetId);
+  assert.equal(bad.conflicts.length, 1);
+  assert.equal(bad.campaign.factions.changeSets.find((s) => s.id === r.changeSetId).status, 'applied');
+});
+
+test('Factions F2: an idempotency key stops duplicates', () => {
+  const h = f1Campaign();
+  const a = h.mk('faction', 'Helios');
+  let c = F2.recordQuickAction(h.c, a, 'helped', { idempotencyKey: 'k1' }).campaign;
+  const again = F2.recordQuickAction(c, a, 'helped', { idempotencyKey: 'k1' });
+  assert.equal(again.duplicate, true);
+  assert.equal(again.campaign.factions.events.length, 1);
+  assert.equal(F1.stanceOf(again.campaign, a, 'party'), 1);
+  // Applying an applied set again does nothing.
+  const re = F2.applyChangeSet(again.campaign, again.changeSetId);
+  assert.equal(re.applied.length, 0);
+  assert.equal(F1.stanceOf(re.campaign, a, 'party'), 1);
+});
+
+test('Factions F2: unticking a change unticks its dependents', () => {
+  const h = f1Campaign();
+  const a = h.mk('faction', 'Helios');
+  const c = h.c;
+  const p = F2.recordEvent(c, {
+    title: 'Two steps', apply: false,
+    changes: [
+      { type: 'update', target: { kind: 'entity', id: a, path: 'publicFace' }, after: 'Shipping cartel' },
+      { type: 'update', target: { kind: 'entity', id: a, path: 'hiddenAgenda' }, after: 'Smuggles relics', dependsOn: [0] },
+      { type: 'adjust-value', target: { kind: 'entity', id: a, path: 'attention' }, after: 3 },
+    ],
+  });
+  const cs = p.campaign.factions.changeSets.find((s) => s.id === p.changeSetId);
+  const [c1, c2, c3] = cs.changes;
+  assert.deepEqual(F2.dependentsOf(cs, [c1.id]), [c2.id]);
+  const ap = F2.applyChangeSet(p.campaign, p.changeSetId, { skip: [c1.id] });
+  assert.deepEqual(ap.skipped.sort(), [c1.id, c2.id].sort());
+  const e = F0.getEntity(ap.campaign, a);
+  assert.equal(e.attention, 3); assert.ok(!e.publicFace); assert.ok(!e.hiddenAgenda);
+  void c3;
+});
+
+test('Factions F2: diffChanges turns any mutator into slot changes, link by link', () => {
+  const h = f1Campaign();
+  const a = h.mk('faction', 'Helios');
+  const b = h.mk('faction', 'Miners');
+  const before = h.c;
+  const after = F0.addRelationship(F1.addFactionMemory(before, a, { kind: 'debt', text: 'Owes passage', id: 'mem_1' }), a, b, 'allied', 'allied_with');
+  const ch = F2.diffChanges(before, after);
+  assert.ok(ch.some((x) => x.type === 'add' && x.target.kind === 'entity-item' && x.target.itemId === 'mem_1'));
+  assert.ok(ch.some((x) => x.type === 'create-link' && x.target.from === a && x.target.to === b));
+  assert.ok(ch.some((x) => x.type === 'create-link' && x.target.from === b && x.target.to === a));
+  // Recording it and undoing restores both edges' absence.
+  let r = F2.recordEvent(before, { title: 'Alliance', mutate: () => after });
+  assert.equal(F0.getEntity(r.campaign, b).relationships.length, 1);
+  const u = F2.undoChangeSet(r.campaign, r.changeSetId);
+  assert.equal(F0.getEntity(u.campaign, a).relationships.length, 0);
+  assert.equal(F0.getEntity(u.campaign, b).relationships.length, 0);
+});
+
+test('Factions F2: entity history, event filters, and the Timeline merge', () => {
+  const h = f1Campaign();
+  const a = h.mk('faction', 'Helios');
+  const b = h.mk('faction', 'Miners');
+  let c = F2.recordQuickAction(h.c, a, 'deal', { at: '2026-11-22T10:00:00Z' }).campaign;
+  c = F2.recordGmEvent(c, { title: 'Miners strike the docks', actorId: b, towardId: a, stanceDelta: -1, significance: 'minor', visibility: 'public', at: '2026-11-22T11:00:00Z' }).campaign;
+  assert.equal(F1.stanceOf(c, b, a), -1);
+  assert.equal(F2.recordGmEvent(c, { title: '  ' }).eventId, '', 'a blank title records nothing');
+  const histA = F2.entityHistory(c, a);
+  assert.ok(histA.length >= 3, 'stance, trust, memory and the strike touch Helios');
+  assert.ok(histA.every((x) => x.text));
+  assert.equal(F2.factionEventList(c).length, 2);
+  assert.equal(F2.factionEventList(c, { entityId: b }).length, 1);
+  assert.equal(F2.factionEventList(c, { kind: 'player-action' }).length, 1);
+  assert.equal(F2.factionEventList(c, { playerView: true }).length, 1, 'only public events reach players');
+  assert.equal(F2.entityHistory(c, a, { playerView: true }).length, 1);
+  const tl = F2.campaignHistory(c);
+  const kinds = tl.map((i) => i.kind);
+  assert.ok(kinds.includes('faction'));
+  assert.ok(!tl.some((i) => i.kind === 'journal' && i.label.includes('struck a deal')), 'a faction event\'s own journal entry rides on the event');
+  assert.equal(F2.campaignHistory(c, { kinds: ['faction'], entityId: b }).length, 1);
+  assert.deepEqual(F2.campaignHistory(c, { kinds: ['scene'] }), []);
+});

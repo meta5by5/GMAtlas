@@ -46,7 +46,7 @@ export function migratedLedgerId(fromId, toId, field = 'stance') {
 export function makeLedgerEntry(fields, now = new Date().toISOString()) {
   const f = fields || {};
   const delta = Number(f.delta);
-  return {
+  const entry = {
     id: f.id || `led_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
     turn: Number.isFinite(Number(f.turn)) ? Number(f.turn) : 0,
     at: f.at || now,
@@ -61,6 +61,17 @@ export function makeLedgerEntry(fields, now = new Date().toISOString()) {
     changeSetId: f.changeSetId || '',
     visibility: VISIBILITY_IDS.includes(f.visibility) ? f.visibility : 'gm',
   };
+  // An undo never removes an entry: it appends one that cancels it
+  // (`reverses` names the cancelled entry), so history is never erased.
+  if (f.reverses) entry.reverses = String(f.reverses);
+  return entry;
+}
+
+/** Ledger entries with every undone pair (an entry and its reversal) left
+ *  out, for breakdowns and history lists. Sums are unaffected either way. */
+export function liveLedgerEntries(entries) {
+  const reversed = new Set(entries.filter((l) => l.reverses).map((l) => l.reverses));
+  return entries.filter((l) => !l.reverses && !reversed.has(l.id));
 }
 
 /** Appends one entry to the Ledger. Nothing in the Ledger is ever edited

@@ -351,7 +351,7 @@ function npcSceneDetailBody(doc, ui, scene, npc) {
   const state = getNpcSceneState(scene, npc.id);
   return `<div class="npc-scene-card npc-scene-card-detail">
     <div class="section-head-row">
-      <button type="button" class="entity-chip" data-open-entity="${esc(npc.id)}">${esc(npc.name || 'Unnamed')}</button>
+      <button type="button" class="entity-chip" data-entity-peek="${esc(npc.id)}">${esc(npc.name || 'Unnamed')}</button>
       <span class="entity-chip-row">
         <button type="button" class="icon-btn" data-scene-npc-roll-all="${esc(npc.id)}" title="Roll all fields (Disposition, Motivation, Threat Rank, Challenges, Opportunities)">🎲🎲</button>
         <button type="button" class="icon-btn" data-scene-npc-toggle="${esc(npc.id)}" title="Collapse">▾</button>
@@ -519,7 +519,7 @@ function locationDetailBody(doc, ui, loc) {
   const toolbarKey = `location:${loc.id}:story`;
   return `<div class="npc-scene-card npc-scene-card-detail">
     <div class="section-head-row">
-      <button type="button" class="entity-chip" data-open-entity="${esc(loc.id)}">${esc(loc.name || 'Unnamed')}</button>
+      <button type="button" class="entity-chip" data-entity-peek="${esc(loc.id)}">${esc(loc.name || 'Unnamed')}</button>
       <button type="button" class="icon-btn" data-location-details-toggle="${esc(loc.id)}" title="Collapse">▾</button>
     </div>
     <div class="npc-scene-card-body">
@@ -739,7 +739,7 @@ function whatConflictDetailBody(c) {
     </div>`).join('');
   return `<div class="npc-scene-card npc-scene-card-detail">
     <div class="section-head-row">
-      <button type="button" class="entity-chip" data-open-entity="${esc(c.id)}">${esc(c.name) || 'Unnamed'}</button>
+      <button type="button" class="entity-chip" data-entity-peek="${esc(c.id)}">${esc(c.name) || 'Unnamed'}</button>
       <span class="entity-chip-row">
         <button type="button" class="icon-btn" data-what-conflict-remove="${esc(c.id)}" title="Detach from WHAT (does not delete the Conflict)">✕</button>
       </span>
@@ -1334,7 +1334,7 @@ function factionDetailBody(faction) {
     .filter(([, v]) => strip(v));
   return `<div class="npc-scene-card npc-scene-card-detail">
     <div class="section-head-row">
-      <button type="button" class="entity-chip" data-open-entity="${esc(faction.id)}">${esc(faction.name || 'Unnamed')}</button>
+      <button type="button" class="entity-chip" data-entity-peek="${esc(faction.id)}">${esc(faction.name || 'Unnamed')}</button>
       <button type="button" class="icon-btn" data-faction-nearby-toggle="${esc(faction.id)}" title="Collapse">▾</button>
     </div>
     <div class="npc-scene-card-body">

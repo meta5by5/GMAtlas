@@ -10,7 +10,7 @@ import {
 import { ORACLE_TABLE_SOURCES, ORACLE_GROUPS_FANTASY } from '../../data/oracleGroups.js';
 import { referenceDocSource } from '../../domain/permissions.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
-import { campaignTimeline } from '../../domain/encounters.js';
+import { campaignHistory, TIMELINE_KINDS } from '../../domain/factionChanges.js';
 import { CONFLICT_STAGES, CONFLICT_STATUSES, CONFLICT_STAKES, CONFLICT_RESOLUTION_PATHS, CONFLICT_SIDE_ROLES, CONFLICT_PRESSURES, CONFLICT_PRESSURE_MAX } from '../../data/conflictLadder.js';
 import { wikiPanel, wikiPage, wikiReadButton } from './wiki.js';
 import { lightState, lightRemaining, isLit, formatLight } from '../../domain/torchTimer.js';
@@ -416,7 +416,7 @@ function inspector(doc, e, ui) {
          <button type="button" class="icon-btn" data-view-bond-track="${bond.gi}" title="View in Character Sheet">↧</button>`
       : numStepper(`<input type="number" class="rel-strength-input" data-entity-rel-strength="${esc(r.to)}" min="0" max="10" value="${Number(r.strength) || 0}" title="Strength/weight 0-10">`));
     return `<span class="rel-chip ${flagged ? 'rel-flagged' : ''}">${flagged ? `<span class="rel-flag" title="Flagged: ${RELATIONSHIP_TYPE_LABEL[r.type]} doesn't usually apply between ${withArticle(entityTypeLabel(e.type, doc.settings.genrePack))} entity and ${withArticle(entityTypeLabel(other.type, doc.settings.genrePack))} entity — nothing changed, just worth a review">⚠</span>` : ''}<select class="rel-type-select" data-entity-rel-type="${esc(r.to)}" title="Relationship type">${relTypeOptions(r.type)}</select>
-      <button type="button" class="rel-chip-name" data-open-entity="${esc(other.id)}" title="Open ${esc(other.name) || 'Unnamed'}">${esc(other.name) || 'Unnamed'}</button>
+      <button type="button" class="rel-chip-name" data-entity-peek="${esc(other.id)}" title="Peek at ${esc(other.name) || 'Unnamed'} (Open is inside)">${esc(other.name) || 'Unnamed'}</button>
       <input class="rel-label-input" data-entity-rel-label="${esc(r.to)}" value="${esc(r.label)}" placeholder="note (ally, rival…)" title="Edit this relationship's note">
       ${strengthOrBond}
       <button class="icon-btn" data-entity-unlink="${esc(r.to)}" title="Remove link" aria-label="Remove link">✕</button></span>`;
@@ -4509,7 +4509,7 @@ function partyRelationshipsSectionHtml(doc, ui) {
     if (!other) return '';
     return `<span class="rel-chip">
       <select class="rel-type-select" data-party-rel-type="${esc(r.to)}" title="Relationship type">${relTypeOptions(r.type)}</select>
-      <button type="button" class="rel-chip-name" data-open-entity="${esc(other.id)}" title="Open ${esc(other.name) || 'Unnamed'}">${esc(other.name) || 'Unnamed'}</button>
+      <button type="button" class="rel-chip-name" data-entity-peek="${esc(other.id)}" title="Peek at ${esc(other.name) || 'Unnamed'} (Open is inside)">${esc(other.name) || 'Unnamed'}</button>
       <input class="rel-label-input" data-party-rel-label="${esc(r.to)}" value="${esc(r.label)}" placeholder="note (ally, rival…)" title="Edit this relationship's note">
       ${numStepper(`<input type="number" class="rel-strength-input" data-party-rel-strength="${esc(r.to)}" min="0" max="10" value="${Number(r.strength) || 0}" title="Strength/weight 0-10">`)}
       <button class="icon-btn" data-party-unlink="${esc(r.to)}" title="Remove link" aria-label="Remove link">✕</button></span>`;
@@ -5112,9 +5112,22 @@ function partyPanelTabs(doc) {
 // off it, and an Encounter not made from a scene sits on the line at the
 // time it was made. Every Encounter opens its entity record.
 function colony(doc, ui = {}) {
-  const items = campaignTimeline(doc);
+  // The Timeline as the single history (design/FACTION-ROADMAP.md U7):
+  // scenes and their Encounters, journal entries and faction events (each
+  // with its turn marker and consequence count), filtered by kind and by
+  // one involved entity.
+  const kinds = ui.timelineKinds instanceof Set ? [...ui.timelineKinds] : [];
+  const entityId = ui.timelineEntityId || '';
+  const items = campaignHistory(doc, { kinds, entityId });
+  const filterOpts = listEntities(doc, ['faction', 'location', 'faction-conflict', 'npc'])
+    .sort((a, b) => String(a.type).localeCompare(String(b.type)) || String(a.name || '').localeCompare(String(b.name || '')));
+  const filters = `<div class="timeline-filters">
+      <button type="button" class="chip sm${kinds.length ? '' : ' active'}" data-tl-kind="" aria-pressed="${!kinds.length}">All</button>
+      ${TIMELINE_KINDS.map((k) => `<button type="button" class="chip sm${kinds.includes(k.id) ? ' active' : ''}" data-tl-kind="${k.id}" aria-pressed="${kinds.includes(k.id)}">${esc(k.label)}</button>`).join('')}
+      <select data-tl-entity aria-label="Only items involving"><option value="">Anyone, anywhere</option>${filterOpts.map((e) => `<option value="${esc(e.id)}" ${e.id === entityId ? 'selected' : ''}>${esc(entityTypeLabel(e.type, doc.settings.genrePack))}: ${esc(e.name || 'Unnamed')}</option>`).join('')}</select>
+    </div>`;
   if (!items.length) {
-    return `<p class="ws-placeholder">No scenes or encounters yet. Start a scene from the Navigator, or save one from the Encounter panel (💾, or the ✨ wizard), and it appears here.</p>`;
+    return `${filters}<p class="ws-placeholder">${kinds.length || entityId ? 'Nothing matches these filters.' : 'No scenes, encounters, journal entries or faction events yet. Start a scene from the Navigator, or save one from the Encounter panel (💾, or the ✨ wizard), and it appears here.'}</p>`;
   }
   const day = (iso) => (iso ? String(iso).slice(0, 10) : '');
   const encounterNode = (e, branch) => `
@@ -5124,18 +5137,43 @@ function colony(doc, ui = {}) {
       ${e.status ? `<span class="chip sm">${esc(e.status)}</span>` : ''}
       ${branch ? '' : `<span class="dim small">${esc(day(e.at))}</span>`}
     </li>`;
-  const rows = items.map((it) => (it.kind === 'scene' ? `
-    <li class="timeline-node timeline-scene">
+  const factionChips = (ids) => ids.map((id) => getEntity(doc, id)).filter(Boolean)
+    .map((f) => `<button type="button" class="entity-chip" data-entity-peek="${esc(f.id)}">${esc(f.name || 'Unnamed')}</button>`).join(' ');
+  const node = (it) => {
+    if (it.kind === 'scene') {
+      return `<li class="timeline-node timeline-scene">
       <span class="timeline-dot" aria-hidden="true">${esc(String(it.number || '•'))}</span>
       <span class="timeline-label">Scene ${esc(String(it.number || ''))}: ${esc(it.label)}</span>
       <span class="dim small">${esc(day(it.at))}</span>
       ${it.encounters.length ? `<ul class="timeline-branches">${it.encounters.map((e) => encounterNode(e, true)).join('')}</ul>` : ''}
-    </li>` : encounterNode(it, false))).join('');
-  const scenes = items.filter((i) => i.kind === 'scene').length;
-  const encounters = items.reduce((n, i) => n + (i.kind === 'encounter' ? 1 : i.encounters.length), 0);
-  return `
-    <p class="dim small">${scenes} scene${scenes === 1 ? '' : 's'} · ${encounters} encounter${encounters === 1 ? '' : 's'}, oldest first.</p>
-    <ol class="campaign-timeline">${rows}</ol>`;
+    </li>`;
+    }
+    if (it.kind === 'journal') {
+      return `<li class="timeline-node timeline-journal">
+      <span class="timeline-dot" aria-hidden="true">✎</span>
+      <span class="timeline-label small">${esc(it.label)}</span>
+      <span class="dim small">${esc(it.source)} · ${esc(day(it.at))}</span>
+    </li>`;
+    }
+    if (it.kind === 'faction') {
+      return `<li class="timeline-node timeline-faction${it.status === 'undone' ? ' fx-undone' : ''}">
+      <span class="timeline-dot" aria-hidden="true">⚑</span>
+      <span class="fx-turn" title="Faction turn">T${esc(String(it.turn || 0))}</span>
+      <span class="timeline-label">${esc(String(it.label || '').replace(/<[^>]+>/g, ' ').slice(0, 140))}</span>
+      ${factionChips(it.factionIds || [])}
+      ${it.consequences ? `<button type="button" class="chip sm" data-fx-open-history title="See the consequence chain in Factions › History">${it.consequences} consequence${it.consequences === 1 ? '' : 's'}</button>` : ''}
+      ${it.status && it.status !== 'applied' ? `<span class="chip sm">${esc(it.status)}</span>` : ''}
+      <span class="dim small">${esc(day(it.at))}</span>
+    </li>`;
+    }
+    return encounterNode(it, false);
+  };
+  const count = (k) => items.reduce((n, i) => n + (i.kind === k ? 1 : 0) + (k === 'encounter' && i.kind === 'scene' ? i.encounters.length : 0), 0);
+  const parts = [['scene', 'scene', 'scenes'], ['encounter', 'encounter', 'encounters'], ['journal', 'journal entry', 'journal entries'], ['faction', 'faction event', 'faction events']]
+    .map(([k, one, many]) => [count(k), one, many]).filter(([n]) => n).map(([n, one, many]) => `${n} ${n === 1 ? one : many}`);
+  return `${filters}
+    <p class="dim small">${parts.join(' · ')}, oldest first.</p>
+    <ol class="campaign-timeline">${items.map(node).join('')}</ol>`;
 }
 
 // --- Trade: Merchant Rules Lens (ADR 0003/0004) -----------------------------

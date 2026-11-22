@@ -253,9 +253,14 @@ The main modules by area (54 files in `src/domain/`):
   from the Ledger (decay, pins, ripple, grouped breakdown), objectives
   with faction-project Threads whose segments carry Signs, faces, and the
   seeded generator with its collision rule (tables in
-  `data/factionOracles.js`, verbs in `data/factionVerbs.js`). The rest of
-  the Factions design is
-  unbuilt (design/FACTION-ROADMAP.md).
+  `data/factionOracles.js`, verbs in `data/factionVerbs.js`). F2 adds
+  `factionChanges.js`: triggers, events, change sets and hooks. A change
+  set is applied with a version check and undone through an inverse set,
+  and any pure mutator becomes one through `diffChanges`
+  (design/adr/faction-change-sets.md). The module also provides the
+  quick actions (`data/factionEventKinds.js`), entity history and
+  `campaignHistory`, the Timeline's merged history. The rest of the
+  Factions design is unbuilt (design/FACTION-ROADMAP.md).
 - **Economy & jobs**: `trade.js` (Merchant Rules Lens pricing + contracts),
   `missions.js`, `enhancements.js` (Strain/capacity augmentation),
   `expeditions.js`.
@@ -326,6 +331,11 @@ actually present on disk). Two non-game data files sit beside them:
   Overview, Factions, Web, Plans, Conflicts, History, and a faction's
   page; the old Faction Events body lives under History) and the entity
   peek popover (`data-entity-peek`), design/FACTION-ROADMAP.md U2–U3.
+  Since F2, History lists events with their consequence chains, Undo and
+  Record event. The peek holds the quick actions, which confirm inline.
+  The peek also opens from Graph nodes, Cast relationship chips and the
+  Story Dashboard's detail cards, and a faction page draws a local
+  graph.
 - **`src/ui/portal/index.js`** — the portal surface (rule 4): the Help
   centre at `#/help`, shown instead of the campaign, in its own layout
   and stylesheet (`styles/portal.css`, sharing only `tokens.css`).

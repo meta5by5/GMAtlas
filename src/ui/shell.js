@@ -145,6 +145,7 @@ import {
 } from '../domain/fiveLeagues.js';
 import { renderFactionEvents } from './drawers/factionEvents.js';
 import { renderFactionsPanel, entityPeekHtml } from './drawers/factions.js';
+import { recordQuickAction, recordGmEvent, undoEvent, applyChangeSet, quickActionDef } from '../domain/factionChanges.js';
 import {
   setFactionProfile, addFactionMemory, removeFactionMemory, changeStanding, pinStanding, generateFaction, generateStartingTrio,
   addFactionObjective, advanceFactionProject, addFactionFace, removeFactionFace, factionProfile,
@@ -1377,6 +1378,13 @@ let factionsOpenSections = new Set(['identity', 'motivation']);
 let factionsClassicOpen = false;
 let peekEntityId = '';
 let peekPinned = false;
+let peekConfirm = ''; // a quick action waiting for its inline confirm (F2)
+let factionsHistFilter = {};
+let factionsRecordOpen = false;
+// The Timeline's filters (FACTION-ROADMAP U7): which kinds show, and one
+// entity every shown item must involve.
+let timelineKinds = new Set();
+let timelineEntityId = '';
 let factionRoundHistoryOpen = false; // ephemeral — "I want to see the history of faction turns per round" (Living Faction Engine Phase D), collapsed by default
 // Story Dashboard section accordion (docs/adr/0040 Phase 12f, replacing
 // the retired WHO/WHERE/WHAT/WHY/HOW tab strip) — which of the 5 former
@@ -2070,11 +2078,65 @@ function onClick(ev) {
   }
   const peekOpen = hit('[data-entity-peek]');
   if (peekOpen && !hit('[data-entity-peek-pop] [data-peek-close]')) {
+    if (peekEntityId !== peekOpen.dataset.entityPeek) peekConfirm = '';
     peekEntityId = peekOpen.dataset.entityPeek; if (!hit('[data-entity-peek-pop]')) peekPinned = false;
     return renderEntityPeek();
   }
   if (hit('[data-peek-close]')) { peekEntityId = ''; peekPinned = false; return renderEntityPeek(); }
   if (hit('[data-peek-pin]')) { peekPinned = !peekPinned; return renderEntityPeek(); }
+  // Quick actions (F2): every one confirms inline in the peek first.
+  const fxQuick = hit('[data-fx-quick]');
+  if (fxQuick) {
+    const [fid, act] = fxQuick.dataset.fxQuick.split('::');
+    peekEntityId = fid; peekConfirm = act;
+    return renderEntityPeek();
+  }
+  if (hit('[data-fx-quick-cancel]')) { peekConfirm = ''; return renderEntityPeek(); }
+  const fxQuickOk = hit('[data-fx-quick-confirm]');
+  if (fxQuickOk) {
+    const [fid, act] = fxQuickOk.dataset.fxQuickConfirm.split('::');
+    let title = '';
+    store.update((doc) => { const r = recordQuickAction(doc, fid, act); title = r.eventId ? (r.campaign.factions.events.find((e) => e.id === r.eventId) || {}).title : ''; return r.campaign; });
+    peekConfirm = '';
+    renderEntityPeek();
+    const def = quickActionDef(act);
+    return toast(title ? `Recorded: ${title}. Undo it from Factions › History.` : `Could not record ${def ? def.label : 'that'}`);
+  }
+  const fxUndo = hit('[data-fx-undo-event]');
+  if (fxUndo) {
+    let conflicts = [];
+    store.update((doc) => { const r = undoEvent(doc, fxUndo.dataset.fxUndoEvent); conflicts = r.conflicts; return r.campaign; });
+    return toast(conflicts.length ? 'Not undone: something it changed has been edited since. Nothing was changed.' : 'Undone. The event stays in History, marked undone.');
+  }
+  const fxForce = hit('[data-fx-apply-force]');
+  if (fxForce) {
+    return store.update((doc) => {
+      const id = fxForce.dataset.fxApplyForce;
+      const cs = ((doc.factions && doc.factions.changeSets) || []).find((s) => s.id === id);
+      return applyChangeSet(doc, id, { force: ((cs && cs.conflicts) || []).map((k) => k.changeId) }).campaign;
+    });
+  }
+  if (hit('[data-fx-open-history]')) { factionsTab = 'history'; return openFactionsPanel(''); }
+  if (hit('[data-fx-record-open]')) { factionsRecordOpen = !factionsRecordOpen; return renderDrawerBody(); }
+  const fxRecSubmit = hit('[data-fx-rec-submit]');
+  if (fxRecSubmit) {
+    const form = fxRecSubmit.closest('[data-fx-rec-form]');
+    const v = {};
+    if (form) for (const el of form.querySelectorAll('[data-fx-rec]')) v[el.dataset.fxRec] = el.value;
+    if (!String(v.title || '').trim()) return toast('Say what happened first.');
+    store.update((doc) => recordGmEvent(doc, { ...v, stanceDelta: Number(v.stanceDelta) || 0, trustDelta: Number(v.trustDelta) || 0 }).campaign);
+    factionsRecordOpen = false;
+    renderDrawerBody();
+    return toast('Event recorded.');
+  }
+  // The Timeline's filters (U7).
+  const tlKind = hit('[data-tl-kind]');
+  if (tlKind) {
+    const k = tlKind.dataset.tlKind;
+    if (!k) timelineKinds = new Set();
+    else if (timelineKinds.has(k)) timelineKinds.delete(k); else timelineKinds.add(k);
+    return renderDrawerBody();
+  }
 
   // The Factions panel (drawers/factions.js).
   const fxTab = hit('[data-fx-tab]');
@@ -3002,9 +3064,10 @@ function onClick(ev) {
     return toast('Recap saved to Journal');
   }
 
-  // --- graph node → open entity inspector ---
+  // --- graph node → the peek popover (FACTION-ROADMAP U2); its Open button
+  // opens the entity inspector as a node click used to. ---
   const gNode = hit('[data-graph-node]');
-  if (gNode) { openDrawerTab('entity-detail'); focusInspectorNameNextRender = true; store.update((d) => setActiveEntity(d, gNode.dataset.graphNode)); return; }
+  if (gNode) { if (peekEntityId !== gNode.dataset.graphNode) peekConfirm = ''; peekEntityId = gNode.dataset.graphNode; peekPinned = false; return renderEntityPeek(); }
 
   // --- graph zoom buttons (wheel-zoom/drag-pan are onWheel/onGraphMouse* below,
   // both bypass a full render for smoothness — these buttons are the discrete,
@@ -7537,6 +7600,9 @@ function onChange(ev) {
     return store.update((d) => pinStanding(d, from, to, t.value === '' ? null : Number(t.value), field));
   }
   if (t.closest('[data-fx-search]')) { factionsSearch = t.value; return renderDrawerBody(); }
+  const fxHist = t.closest('[data-fx-hist-filter]');
+  if (fxHist) { factionsHistFilter = { ...factionsHistFilter, [fxHist.dataset.fxHistFilter]: t.value }; return renderDrawerBody(); }
+  if (t.closest('[data-tl-entity]')) { timelineEntityId = t.value; return renderDrawerBody(); }
   // The Conflict entity's status, side fields and pressure gauges.
   const fconflictStatus = t.closest('[data-fconflict-status]');
   if (fconflictStatus) return store.update((d) => setConflictStatus(d, fconflictStatus.dataset.fconflictStatus, t.value));
@@ -12613,7 +12679,7 @@ function headExtraForDrawer(id) {
 // Every ephemeral UI flag a drawer template might read, in one place.
 function buildDrawerUi() {
   return {
-    encounterFormHtml,
+    encounterFormHtml, timelineKinds, timelineEntityId,
     oracleFilter, expandedOracleGroups, oracleEditorOpen, oracleTagEditorOpen, oracleTagFilter, oracleRouteToNavigator: oracleRoutingActive(), navigatorStepMapLink, docFilter, docTagFilters, docTagEditorOpen, docRenameOpen, docTagListOpen, docSort, docSortMenuOpen, statblockAddOpen, collapsedStatblockGroups, recapOpen, graphView,
     fiveLeaguesInfoOpen, fiveLeaguesItemNotesOpen,
     entitySearch, entityTypeFilter, entityTagFilters, entityTagListOpen, catalogPickerOpen, catalogSearch, relPickerOpen, relPickerFilter, storageInfo: store.storageInfo(),
@@ -12809,6 +12875,7 @@ function hasPendingAdvisorDecision(doc) {
 function factionsPanelUi() {
   return {
     factionsTab, factionsDetailId, factionsSearch, factionsWebPair, factionsOpenSections, factionsClassicOpen,
+    factionsHistFilter, factionsRecordOpen,
     factionEventsOpts: { factionEventsDrafts, factionEventsFactionFilterId, factionEventsLocationFilterId, factionEventsStepFactionId, factionRoundHistoryOpen, conflictEscalationSuggestions },
   };
 }
@@ -12817,8 +12884,8 @@ function renderEntityPeek() {
   const el = root && root.querySelector('[data-entity-peek-pop]');
   if (!el) return;
   const doc = store.get();
-  const html = peekEntityId && doc ? entityPeekHtml(doc, peekEntityId, { pinned: peekPinned }) : '';
-  if (!html) peekEntityId = '';
+  const html = peekEntityId && doc ? entityPeekHtml(doc, peekEntityId, { pinned: peekPinned, confirm: peekConfirm }) : '';
+  if (!html) { peekEntityId = ''; peekConfirm = ''; }
   el.hidden = !html;
   el.innerHTML = html;
 }

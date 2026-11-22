@@ -9,6 +9,9 @@ import {
   PLACE_KINDS, PLACE_KIND_LABEL, entityVisibility,
 } from '../../domain/wiki.js';
 import { buildMentionEditorHTML } from '../mentionEditor.js';
+import { listEntities } from '../../domain/entities.js';
+import { standing, stanceLabel } from '../../domain/factionProfile.js';
+import { factionEventList } from '../../domain/factionChanges.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -129,6 +132,28 @@ function pageBar(e, ui, crumbs) {
 }
 
 const NONE = '<span class="wiki-none">{none}</span>';
+
+// Engine-derived sections on faction and Conflict pages (design/FACTION-
+// ROADMAP.md U12). Player View shows only public and player-known events
+// and only the faction's standing toward the party, never the standing
+// between two factions (B4.10).
+const ENGINE_PAGE_TYPES = ['faction', 'faction-conflict'];
+function factionStandingHtml(doc, e, playerView) {
+  if (e.type !== 'faction') return '';
+  const row = (label, toId) => {
+    const s = stanceLabel(standing(doc, e.id, toId).value);
+    const back = toId === 'party' ? null : stanceLabel(standing(doc, toId, e.id).value);
+    return `<li>${label}: <b>${esc(s.text)}</b>${back ? ` <span class="dim small">· regarded as ${esc(back.text)}</span>` : ''}</li>`;
+  };
+  const others = playerView ? [] : listEntities(doc, ['faction']).filter((f) => f.id !== e.id);
+  return `<ul class="wiki-list">${row('Toward the party', 'party')}${others.map((f) => row(`Toward ${entityLink(f.id, f.name)}`, f.id)).join('')}</ul>`;
+}
+function engineHistoryHtml(doc, e, playerView) {
+  if (!ENGINE_PAGE_TYPES.includes(e.type)) return '';
+  const events = factionEventList(doc, { entityId: e.id, playerView, includeUndone: false }).slice(0, 20);
+  if (!events.length) return '';
+  return `<ol class="wiki-sessions">${events.map((ev) => `<li><span class="dim small">Turn ${ev.turn}</span> ${esc(ev.title)}${ev.summary ? `<div class="wiki-snippet">${esc(ev.summary)}</div>` : ''}</li>`).join('')}</ol>`;
+}
 const secId = (id) => `wiki-sec-${id}`;
 
 function refHtml(r) {
@@ -190,6 +215,8 @@ function gmParts(doc, e, ui) {
     part('contains', 'Contains', linkList(page.children, (c) => (c.placeKind ? ` <span class="dim small">${esc(PLACE_KIND_LABEL[c.placeKind])}</span>` : ''))),
     part('here', 'Here', linkList(page.here)),
     part('relationships', 'Relationships', relationsHtml(page, true)),
+    part('standing', 'Standing', factionStandingHtml(doc, e, false)),
+    part('history', 'History', engineHistoryHtml(doc, e, false)),
     part('linked-from', 'Linked from', linkedFromHtml),
     part('sessions', 'Appears in sessions', sessionsHtml),
   ].filter(Boolean);
@@ -228,6 +255,8 @@ function playerParts(doc, e, ui) {
     part('contains', 'Contains', linkList(safe.children)),
     part('here', 'Here', linkList(safe.here)),
     part('relationships', 'Relationships', relationsHtml(safe, false)),
+    part('standing', 'Standing', factionStandingHtml(doc, e, true)),
+    part('history', 'History', engineHistoryHtml(doc, e, true)),
   ].filter(Boolean);
   const html = `<article class="wiki-page wiki-player" data-wiki-page="${esc(e.id)}">
     ${pageBar(e, ui, crumbs)}

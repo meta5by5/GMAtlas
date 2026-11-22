@@ -24,6 +24,8 @@ import { STANCE_LEVELS, TRUST_MIN, TRUST_MAX } from '../../data/factionRelations
 import { CONFLICT_STAGES, CONFLICT_MAX_STAGE } from '../../data/conflictLadder.js';
 import { FACTION_VERBS } from '../../data/factionVerbs.js';
 import { renderFactionEvents } from './factionEvents.js';
+import { factionEventList, describeChange, entityHistory } from '../../domain/factionChanges.js';
+import { QUICK_ACTIONS, TRIGGER_KINDS, EVENT_SIGNIFICANCE } from '../../data/factionEventKinds.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -88,7 +90,11 @@ function overviewHtml(doc) {
     return full;
   }).filter(Boolean).sort((a, b) => ((b.thread && b.thread.filled / b.thread.segments) || 0) - ((a.thread && a.thread.filled / a.thread.segments) || 0));
   const byStance = factions.map((f) => ({ f, v: standing(doc, f.id, 'party').value })).sort((a, b) => a.v - b.v);
-  const events = (Array.isArray(doc.factionEvents) ? doc.factionEvents : []).slice(-4).reverse();
+  const recent = factionEventList(doc, { includeUndone: false }).slice(0, 4)
+    .map((e) => `<div class="fx-row dim small">• T${e.turn} ${esc(e.title)}</div>`);
+  const classic = (Array.isArray(doc.factionEvents) ? doc.factionEvents : []).slice(-Math.max(0, 4 - recent.length)).reverse()
+    .map((e) => `<div class="fx-row dim small">• ${esc(e.factionName || 'A faction')}: ${esc(strip(e.narrative || e.action || '').slice(0, 90))}</div>`);
+  const events = [...recent, ...classic];
   const section = (title, body) => `<section class="fx-ov-section"><h4>${title}</h4>${body}</section>`;
   return `
     <div class="fx-ov-head"><span class="dim small">Faction turn ${currentFactionTurn(doc)}</span>
@@ -101,7 +107,7 @@ function overviewHtml(doc) {
       ${o.thread ? `<button type="button" class="btn ghost sm" data-fx-advance-project="${esc(o.thread.id)}" title="Advance: fill the next segment and reveal its Sign">${esc(verb('advance'))}</button>` : ''}
       ${currentSign(o.thread) ? `<div class="dim small fx-sign">Sign: ${esc(currentSign(o.thread))}</div>` : ''}</div>`).join('')) : ''}
     ${section('Standing with the party', `<div class="entity-chips">${byStance.map(({ f }) => factionStanceChip(doc, f)).join('')}</div>`)}
-    ${events.length ? section('Recent events', events.map((e) => `<div class="fx-row dim small">• ${esc(e.factionName || 'A faction')}: ${esc(strip(e.narrative || e.action || '').slice(0, 90))}</div>`).join('')) : ''}`;
+    ${events.length ? section('Recent events', events.join('')) : ''}`;
 }
 
 // --------------------------------------------------------------------------
@@ -284,7 +290,7 @@ function detailSectionBody(doc, f, key) {
       <span class="small">regards: ${stanceBadge(doc, id, o.id)}</span>
       ${o.id !== 'party' ? `<span class="small dim">is regarded: ${stanceBadge(doc, o.id, id)}</span>` : ''}
       <button type="button" class="btn ghost sm" data-fx-web-pair="${esc(id)}::${esc(o.id)}">Why</button></div>`).join('');
-    return rows;
+    return `<div class="fx-rel-wrap"><div class="fx-rel-rows">${rows}</div>${localGraphSvg(doc, id)}</div>`;
   }
   if (key === 'territory') {
     const terr = (f.relationships || []).filter((r) => TERRITORY.includes(r.type)).map((r) => ({ r, e: getEntity(doc, r.to) })).filter((x) => x.e);
@@ -298,8 +304,12 @@ function detailSectionBody(doc, f, key) {
       <button type="button" class="btn ghost sm" data-fx-memory-add="${esc(id)}">＋ add a memory</button>`;
   }
   if (key === 'history') {
+    const changes = entityHistory(doc, id).slice(0, 12);
     const log = (Array.isArray(doc.factionEvents) ? doc.factionEvents : []).filter((e) => e.factionId === id).slice(-8).reverse();
-    return log.length ? log.map((e) => `<div class="fx-row dim small">• ${esc(strip(e.narrative || e.action || '').slice(0, 120))}</div>`).join('') : '<p class="dim small">Nothing recorded yet.</p>';
+    const rows = changes.map((h) => `<div class="fx-row small${h.undone ? ' fx-undone' : ''}"><span class="dim">T${h.turn}</span> ${esc(h.text)} <span class="dim">· ${esc(h.eventTitle)}${h.undo ? ' (undo)' : ''}${h.undone ? ' (undone)' : ''}</span></div>`).join('')
+      + log.map((e) => `<div class="fx-row dim small">• ${esc(strip(e.narrative || e.action || '').slice(0, 120))}</div>`).join('');
+    return `${rows || '<p class="dim small">Nothing recorded yet.</p>'}
+      <div class="action-bar">${quickActionButtons(id)}</div>`;
   }
   if (key === 'controls') {
     const chk = (k, label, hint) => `<label class="fx-method" title="${esc(hint)}"><input type="checkbox" data-fx-flag="${esc(id)}::${k}" ${p[k] ? 'checked' : ''}> ${esc(label)}</label>`;
@@ -332,6 +342,106 @@ function detailHtml(doc, f, ui) {
 }
 
 // --------------------------------------------------------------------------
+// Quick actions, the event history and Record an event (F2).
+
+function quickActionButtons(factionId) {
+  return QUICK_ACTIONS.map((q) => `<button type="button" class="chip sm" data-fx-quick="${esc(factionId)}::${q.id}" title="Record that the party ${esc(q.past)} this faction">${q.glyph} ${esc(q.label)}</button>`).join('');
+}
+
+function recordFormHtml(doc) {
+  const factions = listEntities(doc, ['faction']);
+  const opt = (v, l) => `<option value="${esc(v)}">${esc(l)}</option>`;
+  const deltas = [-2, -1, 0, 1, 2].map((n) => `<option value="${n}" ${n === 0 ? 'selected' : ''}>${n > 0 ? '+' : ''}${n}</option>`).join('');
+  return `<div class="fx-record-form" data-fx-rec-form>
+    <label class="fx-field"><span>What happened</span><input type="text" data-fx-rec="title" placeholder="e.g. The Guild seizes the river toll"></label>
+    <label class="fx-field"><span>Details</span><input type="text" data-fx-rec="summary" placeholder="Optional"></label>
+    <label class="fx-field fx-field-sm"><span>Who acted</span><select data-fx-rec="actorId">${opt('', '—')}${factions.map((f) => opt(f.id, f.name || 'Unnamed')).join('')}</select></label>
+    <label class="fx-field fx-field-sm"><span>Toward</span><select data-fx-rec="towardId">${opt('', '—')}${opt('party', 'The party')}${factions.map((f) => opt(f.id, f.name || 'Unnamed')).join('')}</select></label>
+    <label class="fx-field fx-field-sm"><span>Stance change</span><select data-fx-rec="stanceDelta">${deltas}</select></label>
+    <label class="fx-field fx-field-sm"><span>Trust change</span><select data-fx-rec="trustDelta">${deltas}</select></label>
+    <label class="fx-field fx-field-sm"><span>Remembered as</span><select data-fx-rec="memoryKind">${opt('', '— no memory —')}${MEMORY_KINDS.map((k) => opt(k.id, k.label)).join('')}</select></label>
+    <label class="fx-field fx-field-sm"><span>Significance</span><select data-fx-rec="significance">${EVENT_SIGNIFICANCE.map((s) => opt(s.id, `${s.label}${s.journal ? ' (journal entry)' : ''}`)).join('')}</select></label>
+    <label class="fx-field fx-field-sm"><span>Who knows</span><select data-fx-rec="visibility">${opt('gm', 'GM only')}${opt('public', 'Public')}${opt('player', 'Players know')}${opt('secret', 'Secret')}</select></label>
+    <div class="action-bar"><button type="button" class="btn primary sm" data-fx-rec-submit>Record event</button><button type="button" class="btn ghost sm" data-fx-record-open>Cancel</button></div>
+  </div>`;
+}
+
+function eventCardHtml(doc, e) {
+  const kind = (TRIGGER_KINDS.find((k) => k.id === (e.trigger || {}).kind) || {}).label || 'Event';
+  const sig = (EVENT_SIGNIFICANCE.find((s) => s.id === e.significance) || {}).label || '';
+  const applied = e.changeSets.flatMap((s) => s.changes.filter((c) => c.status === 'applied' || s.status === 'conflicted' || s.status === 'proposed'));
+  const shown = applied.filter((c) => !(c.target.kind === 'record' && c.target.collection === 'journal'));
+  const journaled = applied.length !== shown.length;
+  const conflicted = e.changeSets.filter((s) => s.status === 'conflicted');
+  const status = e.status === 'applied' ? '' : `<span class="chip sm">${esc(e.status)}</span>`;
+  return `<div class="fx-event fx-event-${esc(e.status)}">
+    <div class="fx-event-head"><span class="fx-turn" title="Faction turn">T${e.turn}</span> <b>${esc(e.title)}</b> ${status}
+      <span class="dim small">${esc(kind)}${sig ? ` · ${esc(sig)}` : ''}${e.visibility !== 'gm' ? ` · ${esc(e.visibility)}` : ''}</span>
+      ${e.status === 'applied' ? `<button type="button" class="btn ghost sm" data-fx-undo-event="${esc(e.id)}" title="Undo: record the inverse change set; nothing is erased">Undo</button>` : ''}</div>
+    ${e.summary ? `<div class="small">${esc(e.summary)}</div>` : ''}
+    ${shown.length ? `<ul class="fx-chain">${shown.map((c) => `<li class="small">→ ${esc(describeChange(doc, c))}</li>`).join('')}${journaled ? '<li class="small dim">→ Journal entry</li>' : ''}</ul>` : ''}
+    ${conflicted.map((s) => `<div class="fx-conflict small"><b>Changed since it was proposed.</b>
+      ${(s.conflicts || []).map((k) => `<div>${esc(describeChange(doc, { target: k.target, before: k.proposedBefore, after: k.after, type: 'update' }))} <span class="dim">· now: ${esc(typeof k.current === 'object' ? JSON.stringify(k.current).slice(0, 60) : String(k.current))}</span></div>`).join('')}
+      <button type="button" class="btn ghost sm" data-fx-apply-force="${esc(s.id)}">Apply anyway</button></div>`).join('')}
+  </div>`;
+}
+
+function historyHtml(doc, ui) {
+  const filt = ui.factionsHistFilter || {};
+  const factions = listEntities(doc, ['faction']);
+  const events = factionEventList(doc, { factionId: filt.factionId || '', kind: filt.kind || '' });
+  const sel = (key, opts) => `<select data-fx-hist-filter="${key}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${String(filt[key] || '') === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+  return `<div class="fx-hist-head">
+      ${sel('factionId', [['', 'All factions'], ...factions.map((f) => [f.id, f.name || 'Unnamed'])])}
+      ${sel('kind', [['', 'Every kind'], ...TRIGGER_KINDS.map((k) => [k.id, k.label])])}
+      ${ui.factionsRecordOpen ? '' : '<button type="button" class="btn ghost sm" data-fx-record-open>＋ Record event</button>'}
+    </div>
+    ${ui.factionsRecordOpen ? recordFormHtml(doc) : ''}
+    <div class="fx-events">${events.map((e) => eventCardHtml(doc, e)).join('') || '<p class="dim small">No events yet. Record one, or use a quick action on a faction (Helped, Hurt, Struck a deal, Betrayed, Exposed).</p>'}</div>`;
+}
+
+// A one- or two-hop graph around a faction (R16). Factions are squares,
+// everything else circles, and faction-to-faction edges carry the stance
+// glyph, so nothing relies on color. Every node opens the peek.
+function localGraphSvg(doc, id) {
+  const center = getEntity(doc, id);
+  if (!center) return '';
+  const neighbours = (e) => [...new Set((e.relationships || []).map((r) => r.to))].map((x) => getEntity(doc, x)).filter(Boolean);
+  const ring1 = neighbours(center).slice(0, 10);
+  const seen = new Set([id, ...ring1.map((n) => n.id)]);
+  const ring2 = [];
+  for (const n of ring1) {
+    for (const m of neighbours(n)) {
+      if (ring2.length >= 10 || seen.has(m.id)) continue;
+      seen.add(m.id); ring2.push({ e: m, via: n.id });
+    }
+  }
+  if (!ring1.length) return '<p class="dim small fx-lg-empty">No links yet, so there is no graph to draw.</p>';
+  const W = 320; const H = 240; const cx = W / 2; const cy = H / 2;
+  const pos = new Map([[id, [cx, cy]]]);
+  ring1.forEach((n, i) => { const a = (2 * Math.PI * i) / ring1.length - Math.PI / 2; pos.set(n.id, [cx + 72 * Math.cos(a), cy + 62 * Math.sin(a)]); });
+  ring2.forEach((n, i) => { const a = (2 * Math.PI * i) / ring2.length - Math.PI / 2 + 0.3; pos.set(n.e.id, [cx + 138 * Math.cos(a), cy + 104 * Math.sin(a)]); });
+  const edge = (a, b, dim) => {
+    const [x1, y1] = pos.get(a); const [x2, y2] = pos.get(b);
+    const A = getEntity(doc, a); const B = getEntity(doc, b);
+    const glyph = A && B && A.type === 'faction' && B.type === 'faction' ? stanceLabel(standing(doc, a, b).value).glyph : '';
+    return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" class="fx-lg-edge${dim ? ' dim' : ''}"/>${glyph ? `<text x="${((x1 + x2) / 2).toFixed(1)}" y="${((y1 + y2) / 2).toFixed(1)}" class="fx-lg-glyph">${esc(glyph)}</text>` : ''}`;
+  };
+  const node = (e, main) => {
+    const [x, y] = pos.get(e.id);
+    const shape = e.type === 'faction'
+      ? `<rect x="${(x - 7).toFixed(1)}" y="${(y - 7).toFixed(1)}" width="14" height="14" class="fx-lg-shape"/>`
+      : `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6" class="fx-lg-shape"/>`;
+    const name = String(e.name || '?');
+    return `<g class="fx-lg-node${main ? ' main' : ''}" data-entity-peek="${esc(e.id)}" role="button" tabindex="0"><title>${esc(name)} (${esc(entityTypeLabel(e.type))})</title>${shape}<text x="${x.toFixed(1)}" y="${(y + 18).toFixed(1)}" class="fx-lg-label">${esc(name.length > 14 ? `${name.slice(0, 13)}…` : name)}</text></g>`;
+  };
+  return `<svg class="fx-local-graph" viewBox="0 0 ${W} ${H}" role="img" aria-label="Links around ${esc(center.name || 'this faction')}, two steps out">
+    ${ring1.map((n) => edge(id, n.id, false)).join('')}${ring2.map((n) => edge(n.via, n.e.id, true)).join('')}
+    ${ring2.map((n) => node(n.e, false)).join('')}${ring1.map((n) => node(n, false)).join('')}${node(center, true)}
+  </svg>`;
+}
+
+// --------------------------------------------------------------------------
 
 /** The Factions panel body. `ui` carries shell.js's ephemeral state and
  *  the Faction Events options (passed straight through to History). */
@@ -347,7 +457,7 @@ export function renderFactionsPanel(doc, ui = {}) {
   else if (tab === 'web') body = webHtml(doc, ui);
   else if (tab === 'plans') body = plansHtml(doc);
   else if (tab === 'conflicts') body = conflictsHtml(doc);
-  else if (tab === 'history') body = `<details class="fx-classic" ${ui.factionsClassicOpen ? 'open' : ''}><summary data-fx-classic-toggle>Classic SWN turn, roster and event log</summary>${renderFactionEvents(doc, ui.factionEventsOpts || {})}</details>`;
+  else if (tab === 'history') body = `${historyHtml(doc, ui)}<details class="fx-classic" ${ui.factionsClassicOpen ? 'open' : ''}><summary data-fx-classic-toggle>Classic SWN turn, roster and event log</summary>${renderFactionEvents(doc, ui.factionEventsOpts || {})}</details>`;
   else body = overviewHtml(doc);
   return `<div class="fx-panel">${strip}<div class="fx-body">${body}</div></div>`;
 }
@@ -355,7 +465,7 @@ export function renderFactionsPanel(doc, ui = {}) {
 // --------------------------------------------------------------------------
 // The peek popover (U2): one component for every entity chip.
 
-export function entityPeekHtml(doc, id, { pinned = false } = {}) {
+export function entityPeekHtml(doc, id, { pinned = false, confirm = '' } = {}) {
   const e = getEntity(doc, id);
   if (!e) return '';
   const lines = [];
@@ -370,6 +480,12 @@ export function entityPeekHtml(doc, id, { pinned = false } = {}) {
     if (obj) lines.push(`<div class="small">Now: ${esc(obj.title)} <span class="dim">${esc(progressText(obj.thread))}</span></div>`);
     actions.push(`<button type="button" class="btn ghost sm" data-fx-detail-open="${esc(e.id)}">Faction page</button>`);
     if (obj && obj.thread && !obj.thread.done) actions.push(`<button type="button" class="btn ghost sm" data-fx-advance-project="${esc(obj.thread.id)}">${esc(verb('advance'))}</button>`);
+    const q = confirm && QUICK_ACTIONS.find((a) => a.id === confirm);
+    lines.push(q
+      ? `<div class="fx-quick-confirm small">Record: <b>the party ${esc(q.past)} ${esc(e.name || 'them')}</b>?
+          <button type="button" class="btn primary sm" data-fx-quick-confirm="${esc(e.id)}::${q.id}">Record</button>
+          <button type="button" class="btn ghost sm" data-fx-quick-cancel>Cancel</button></div>`
+      : `<div class="fx-quick small"><span class="dim">The party…</span> ${quickActionButtons(e.id)}</div>`);
   } else if (e.type === 'npc' || e.type === 'lifeform') {
     const of = (e.relationships || []).filter((r) => r.type === 'member_of').map((r) => getEntity(doc, r.to)).filter((x) => x && x.type === 'faction');
     if (of.length) lines.push(`<div class="small">Member of: ${of.map((f) => `<button type="button" class="entity-chip" data-entity-peek="${esc(f.id)}">${esc(f.name)}</button>`).join(' ')}</div>`);
