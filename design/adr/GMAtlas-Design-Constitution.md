@@ -206,7 +206,8 @@ missing field the first time it's touched, and an explicit `null`/`0`/`''` a
 GM already set is never overwritten by that backfill.
 
 Every entity (`type` ∈ `npc | location | faction | asset | lore | item |
-conflict`) carries relationships (`{to, label, type, strength}`, `type` ∈
+conflict | lifeform | faction-conflict`; `conflict` is labeled Encounter,
+`faction-conflict` is labeled Conflict) carries relationships (`{to, label, type, strength}`, `type` ∈
 `linked | member_of | owns | controls | located_at | contains | allied_with |
 rival_of | bond | involves`) and zero or more statblock groups. Every
 generated id is `<short-prefix>_<base36-timestamp>_<random-suffix>` —
@@ -237,7 +238,11 @@ The main modules by area (54 files in `src/domain/`):
   (the lightweight Pressure Track mini-game), `factionTurnEngine.js` (the
   full SWN-style propose-then-confirm Faction Turn Engine — the largest
   domain file), `factionConflicts.js` (Conflict-entity quick-start
-  generator).
+  generator). The Conflict entity (type `faction-conflict`,
+  design/Faction-baseline.md B4.8) has its stage ladder, status, stakes,
+  sides and pressure in `entities.js`, with its vocabulary in
+  `data/conflictLadder.js`; the rest of the Factions design is unbuilt
+  (design/FACTION-ROADMAP.md).
 - **Economy & jobs**: `trade.js` (Merchant Rules Lens pricing + contracts),
   `missions.js`, `enhancements.js` (Strain/capacity augmentation),
   `expeditions.js`.

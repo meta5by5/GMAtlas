@@ -3830,3 +3830,17 @@ input[type="number"] { -moz-appearance: textfield; }
 .party-tracker-number { width: auto; justify-content: space-between; gap: var(--sp-1); padding-inline: 0.35rem; }
 .party-tracker-number .statblock-key { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .party-tracker-number .number-row-input-wrap { flex: 0 0 auto; }
+
+/* Conflict entity (type 'faction-conflict'): the seven-stage ladder. The
+   current stage is marked by weight, an outline and aria-pressed, not by
+   color alone; passed stages are filled. */
+.conflict-ladder { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; margin: var(--sp-1) 0; }
+.conflict-stage { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 0; padding: 0.2rem 0.1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-inset); color: var(--text-dim); cursor: pointer; font: inherit; }
+.conflict-stage.passed { background: var(--bg-raised); color: var(--text); }
+.conflict-stage.current { border-color: var(--accent-strong); outline: 1px solid var(--accent-strong); color: var(--text); font-weight: 700; }
+.conflict-stage-n { font-size: 0.85rem; }
+.conflict-stage-label { font-size: 0.62rem; line-height: 1.1; text-align: center; overflow-wrap: anywhere; }
+.conflict-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: flex-end; }
+.conflict-pressure { flex: 1 1 7rem; }
+.conflict-side { display: flex; flex-direction: column; gap: 2px; padding: var(--sp-1) 0; border-top: 1px solid var(--border); }
+@media (max-width: 480px) { .conflict-stage-label { display: none; } }

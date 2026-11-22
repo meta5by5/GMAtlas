@@ -13386,3 +13386,109 @@ test('Encounter form: the current Encounter and its record stay equal, and a new
   assert.equal(E.composerHoldsUnsaved(c), false);
   assert.equal(E.composerHoldsUnsaved(E.newComposerEncounter(c)), true);
 });
+
+// --- Conflict entity (type 'faction-conflict', design/Faction-baseline.md B4.8)
+import * as FC from '../src/domain/entities.js';
+import { CONFLICT_STAGES as FC_STAGES } from '../src/data/conflictLadder.js';
+import { migrateDocument as fcMigrate } from '../src/core/migrate.js';
+
+function fcCampaign() {
+  let c = defaultCampaign();
+  let r = FC.createEntity(c, { type: 'faction', name: 'Helios' }); c = r.campaign; const helios = r.id;
+  r = FC.createEntity(c, { type: 'faction', name: 'Miners' }); c = r.campaign; const miners = r.id;
+  r = FC.createEntity(c, { type: 'faction-conflict', name: 'Port Meridian dispute' }); c = r.campaign;
+  return { c, helios, miners, fc: r.id };
+}
+
+test('Conflict entity: its own type and label, separate from the Encounter', () => {
+  assert.ok(FC.ENTITY_TYPES.includes('faction-conflict'));
+  assert.equal(FC.entityTypeLabel('faction-conflict', 'fantasy'), 'Conflict');
+  assert.equal(FC.entityTypeLabel('conflict', 'sci-fi-generic'), 'Encounter', 'the Encounter keeps its type and label');
+  assert.equal(FC_STAGES.length, 7);
+  const { c, fc } = fcCampaign();
+  const e = FC.getEntity(c, fc);
+  assert.equal(e.type, 'faction-conflict');
+  assert.equal(e.stage, 1);
+  assert.equal(e.conflictStatus, 'active');
+  assert.deepEqual(e.sides, []);
+  assert.equal(e.pressureUrgency, 0);
+  assert.equal(e.statedCause, undefined, 'no Encounter fields');
+});
+
+test('Conflict entity: sides add an involves edge, once, and only factions', () => {
+  let { c, helios, miners, fc } = fcCampaign();
+  c = FC.addConflictSide(c, fc, helios);
+  c = FC.addConflictSide(c, fc, miners, 'ally');
+  const again = FC.addConflictSide(c, fc, helios);
+  assert.equal(again, c, 'a faction already on a side is not added twice');
+  const e = FC.getEntity(c, fc);
+  assert.deepEqual(e.sides.map((s) => [s.factionId, s.role]), [[helios, 'primary'], [miners, 'ally']]);
+  assert.ok(e.relationships.some((r) => r.to === helios && r.type === 'involves'));
+  assert.ok(FC.getEntity(c, helios).relationships.some((r) => r.to === fc));
+  const npc = FC.createEntity(c, { type: 'npc', name: 'Governor' });
+  assert.equal(FC.addConflictSide(npc.campaign, fc, npc.id), npc.campaign, 'only a faction can be a side');
+});
+
+test('Conflict entity: side edits, removal keeps unrelated relationships', () => {
+  let { c, helios, miners, fc } = fcCampaign();
+  c = FC.addConflictSide(c, fc, helios);
+  const sid = FC.getEntity(c, fc).sides[0].id;
+  c = FC.updateConflictSide(c, fc, sid, 'redLines', 'No inspections');
+  c = FC.updateConflictSide(c, fc, sid, 'role', 'proxy');
+  assert.equal(FC.updateConflictSide(c, fc, sid, 'role', 'overlord'), c, 'unknown role refused');
+  assert.equal(FC.updateConflictSide(c, fc, sid, 'stage', 5), c, 'only side fields');
+  let side = FC.getEntity(c, fc).sides[0];
+  assert.equal(side.redLines, 'No inspections');
+  assert.equal(side.role, 'proxy');
+  c = FC.addRelationship(c, fc, miners, 'watching', 'linked');
+  c = FC.removeConflictSide(c, fc, sid);
+  const e = FC.getEntity(c, fc);
+  assert.equal(e.sides.length, 0);
+  assert.ok(!e.relationships.some((r) => r.to === helios), 'the side\'s involves edge goes');
+  assert.ok(!FC.getEntity(c, helios).relationships.some((r) => r.to === fc), 'and its mirror');
+  assert.ok(e.relationships.some((r) => r.to === miners), 'another relationship stays');
+});
+
+test('Conflict entity: the ladder resolves at 7, reignites below it, and clamps', () => {
+  let { c, fc } = fcCampaign();
+  c = FC.setConflictStage(c, fc, 4);
+  assert.equal(FC.getEntity(c, fc).stage, 4);
+  c = FC.setConflictStage(c, fc, 99);
+  assert.equal(FC.getEntity(c, fc).stage, 7);
+  assert.equal(FC.getEntity(c, fc).conflictStatus, 'resolved');
+  c = FC.setConflictStage(c, fc, 5);
+  assert.equal(FC.getEntity(c, fc).conflictStatus, 'active', 'reignited');
+  c = FC.setConflictStatus(c, fc, 'paused');
+  assert.equal(FC.getEntity(c, fc).stage, 5, 'pausing keeps the stage');
+  c = FC.setConflictStatus(c, fc, 'resolved');
+  assert.equal(FC.getEntity(c, fc).stage, 7);
+  c = FC.setConflictStatus(c, fc, 'active');
+  assert.equal(FC.getEntity(c, fc).stage, 6, 'reactivating a settled Conflict steps it back down');
+  assert.equal(FC.setConflictStatus(c, fc, 'won'), c, 'unknown status refused');
+  c = FC.setConflictStage(c, fc, 0);
+  assert.equal(FC.getEntity(c, fc).stage, 1);
+});
+
+test('Conflict entity: pressure clamps 0-3; mutators ignore other types', () => {
+  let { c, helios, fc } = fcCampaign();
+  c = FC.setConflictPressure(c, fc, 'pressureDrain', 9);
+  assert.equal(FC.getEntity(c, fc).pressureDrain, 3);
+  c = FC.setConflictPressure(c, fc, 'pressureDrain', -2);
+  assert.equal(FC.getEntity(c, fc).pressureDrain, 0);
+  assert.equal(FC.setConflictPressure(c, fc, 'stage', 2), c, 'only pressure keys');
+  assert.equal(FC.setConflictStage(c, helios, 3), c, 'a faction has no ladder');
+});
+
+test('Conflict entity: survives migration and a type change provisions its fields', () => {
+  let { c, helios, fc } = fcCampaign();
+  c = FC.addConflictSide(c, fc, helios);
+  c = FC.setConflictStage(c, fc, 3);
+  const back = fcMigrate(JSON.parse(JSON.stringify(c)));
+  const e = FC.getEntity(back, fc);
+  assert.equal(e.type, 'faction-conflict');
+  assert.equal(e.stage, 3);
+  assert.equal(e.sides.length, 1);
+  const lore = FC.createEntity(c, { type: 'lore', name: 'Old feud' });
+  const turned = FC.updateEntity(lore.campaign, lore.id, { type: 'faction-conflict' });
+  assert.equal(FC.getEntity(turned, lore.id).stage, 1);
+});

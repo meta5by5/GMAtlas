@@ -297,6 +297,7 @@ const INFOBOX_FIELDS = {
   faction: [['agenda', 'Agenda'], ['leadership', 'Leadership'], ['hq', 'HQ'], ['force', 'Force'], ['cunning', 'Cunning'], ['wealth', 'Wealth']],
   location: [['objectType', 'Kind of world'], ['biome', 'Biome'], ['developmentLevel', 'Development'], ['population', 'Population'], ['techLevel', 'Tech level'], ['starport', 'Starport']],
   conflict: [['status', 'Status'], ['statedCause', 'Stated cause']],
+  'faction-conflict': [['stage', 'Stage'], ['conflictStatus', 'Status'], ['stakesKind', 'Stakes'], ['stakes', 'At stake']],
 };
 
 /** Everything a wiki page shows for one entity, or null. `index` (from

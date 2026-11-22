@@ -184,6 +184,36 @@ export const WIKI_RECORD_SECTIONS = {
       ],
     },
   ],
+  'faction-conflict': [
+    {
+      id: 'faction-conflict-state',
+      title: 'Conflict',
+      fields: [
+        ['stage', 'Stage (1-7)', 'number'],
+        ['conflictStatus', 'Status', 'text'],
+        ['stakesKind', 'Stakes', 'text'],
+        ['stakes', 'What is at stake', 'long'],
+        ['origin', 'Origin', 'long'],
+        ['resolutionPath', 'Resolution', 'text'],
+        ['parentConflictId', 'Branched from', 'ref'],
+      ],
+    },
+    {
+      id: 'faction-conflict-sides',
+      title: 'Sides',
+      fields: [['sides', 'Sides', 'items']],
+    },
+    {
+      id: 'faction-conflict-pressure',
+      title: 'Pressure (0-3)',
+      fields: [
+        ['pressureUrgency', 'Urgency', 'number'],
+        ['pressureExposure', 'Public exposure', 'number'],
+        ['pressureDrain', 'Resource drain', 'number'],
+        ['pressureCivilian', 'Civilian impact', 'number'],
+      ],
+    },
+  ],
 };
 
 // Keys a page never lists as a record field: identity and bookkeeping, text

@@ -117,7 +117,7 @@ function redPickHtml(doc) {
   const genre = doc.settings && doc.settings.genrePack;
   return `<div class="wiki-redlink-pick" role="group" aria-label="Create a page">
     <span>Create “${esc(state.redPick)}” as</span>
-    ${['npc', 'location', 'faction', 'asset', 'lore', 'item', 'conflict', 'lifeform'].map((t) => `<button type="button" class="chip sm" data-wiki-create-type="${t}">${esc(entityTypeLabel(t, genre))}</button>`).join('')}
+    ${ENTITY_TYPES.map((t) => `<button type="button" class="chip sm" data-wiki-create-type="${t}">${esc(entityTypeLabel(t, genre))}</button>`).join('')}
     <button type="button" class="icon-btn" data-wiki-create-cancel aria-label="Cancel">✕</button>
   </div>`;
 }

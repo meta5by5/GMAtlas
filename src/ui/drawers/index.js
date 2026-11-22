@@ -11,6 +11,7 @@ import { ORACLE_TABLE_SOURCES, ORACLE_GROUPS_FANTASY } from '../../data/oracleGr
 import { referenceDocSource } from '../../domain/permissions.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { campaignTimeline } from '../../domain/encounters.js';
+import { CONFLICT_STAGES, CONFLICT_STATUSES, CONFLICT_STAKES, CONFLICT_RESOLUTION_PATHS, CONFLICT_SIDE_ROLES, CONFLICT_PRESSURES, CONFLICT_PRESSURE_MAX } from '../../data/conflictLadder.js';
 import { wikiPanel, wikiPage, wikiReadButton } from './wiki.js';
 import { lightState, lightRemaining, isLit, formatLight } from '../../domain/torchTimer.js';
 import {
@@ -497,6 +498,7 @@ function inspector(doc, e, ui) {
     ${npcSection(e)}
     ${factionSection(doc, e, ui)}
     ${conflictSection(doc, e, ui)}
+    ${factionConflictSection(doc, e)}
     ${fantasyLocationFieldsSection(doc, e, ui)}
     ${worldProfileSection(doc, e, ui)}
     ${worldDemographicsSection(doc, e, ui)}
@@ -654,6 +656,63 @@ function conflictSection(doc, e, ui) {
     <div class="faction-card">
       ${partySectionHeaderHtml(conflictKey, 'Escalation and depth', conflictCollapsed)}
       ${conflictCollapsed ? '' : conflictBodyHtml}
+    </div>`;
+}
+
+// The Conflict entity's own form (type 'faction-conflict',
+// design/Faction-baseline.md B4.8): the seven-stage ladder, status, stakes,
+// the sides (each an `involves` link to its faction), pressure and what it
+// branched from. Plain fields save through data-entity-field; the ladder,
+// status, sides and pressure have their own data-fconflict-* branches.
+function factionConflictSection(doc, e) {
+  if (e.type !== 'faction-conflict') return '';
+  const stage = Number(e.stage) || 1;
+  const status = e.conflictStatus || 'active';
+  const current = CONFLICT_STAGES.find((s) => s.n === stage) || CONFLICT_STAGES[0];
+  const ladder = CONFLICT_STAGES.map((s) => `<button type="button" class="conflict-stage${s.n === stage ? ' current' : ''}${s.n < stage ? ' passed' : ''}"
+      data-fconflict-stage="${esc(e.id)}::${s.n}" aria-pressed="${s.n === stage}" title="${esc(`${s.n}. ${s.label}: ${s.meaning}`)}">
+      <span class="conflict-stage-n">${s.n}</span><span class="conflict-stage-label">${esc(s.label)}</span></button>`).join('');
+  const opts = (list, value, blank) => `${blank ? `<option value="">${esc(blank)}</option>` : ''}${list.map((o) => `<option value="${esc(o.id)}" ${o.id === value ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}`;
+  const sides = (e.sides || []).map((sd) => {
+    const f = getEntity(doc, sd.factionId);
+    const text = (field, placeholder) => `<input data-fconflict-side-field="${esc(e.id)}::${esc(sd.id)}::${field}" value="${esc(sd[field] || '')}" placeholder="${esc(placeholder)}">`;
+    return `<div class="conflict-side">
+      <div class="thread-row">
+        <span class="thread-name">${f ? `<button type="button" class="entity-chip" data-open-entity="${esc(f.id)}">${esc(f.name || 'Unnamed')}</button>` : '<span class="dim">Missing faction</span>'}</span>
+        <select data-fconflict-side-field="${esc(e.id)}::${esc(sd.id)}::role" aria-label="Role">${opts(CONFLICT_SIDE_ROLES, sd.role)}</select>
+        <span class="thread-actions"><button type="button" class="icon-btn" data-fconflict-side-remove="${esc(e.id)}::${esc(sd.id)}" title="Remove this side" aria-label="Remove this side">✕</button></span>
+      </div>
+      ${text('desiredOutcome', 'What they want out of it')}
+      ${text('redLines', 'Red lines: what they will not accept')}
+      ${text('leverage', 'Leverage they hold')}
+      ${text('vulnerabilities', 'Where they are weak')}
+      ${text('compromise', 'What they might give up')}
+    </div>`;
+  }).join('');
+  const pressure = CONFLICT_PRESSURES.map((p) => `<label class="field-label conflict-pressure">${esc(p.label)}
+      ${numStepper(`<input type="number" min="0" max="${CONFLICT_PRESSURE_MAX}" class="rel-strength-input" data-fconflict-pressure="${esc(e.id)}::${p.key}" value="${Number(e[p.key]) || 0}">`)}
+    </label>`).join('');
+  const others = listEntities(doc, ['faction-conflict']).filter((c) => c.id !== e.id);
+  return `
+    <div class="faction-card conflict-card">
+      <span class="field-label-static">Stage · ${stage}. ${esc(current.label)}</span>
+      <div class="conflict-ladder" role="group" aria-label="Escalation stage">${ladder}</div>
+      <p class="dim small">${esc(current.meaning)}</p>
+      <div class="conflict-row">
+        <label class="field-label">Status <select data-fconflict-status="${esc(e.id)}">${opts(CONFLICT_STATUSES, status)}</select></label>
+        <label class="field-label">Stakes <select data-entity-field="stakesKind">${opts(CONFLICT_STAKES, e.stakesKind || '', '— choose —')}</select></label>
+        ${status === 'resolved' ? `<label class="field-label">Resolution <select data-entity-field="resolutionPath">${opts(CONFLICT_RESOLUTION_PATHS, e.resolutionPath || '', '— how it ended —')}</select></label>` : ''}
+      </div>
+      <label class="field-label">What is at stake <input data-entity-field="stakes" value="${esc(e.stakes || '')}" placeholder="Who controls the refinery by winter?"></label>
+      <label class="field-label">Origin <input data-entity-field="origin" value="${esc(e.origin || '')}" placeholder="How it started"></label>
+      <div class="statblock-head">
+        <span class="field-label-static">Sides</span>
+        <button type="button" class="icon-btn" data-entity-picker-open="faction-conflict-side:${esc(e.id)}" title="Add a faction as a side" aria-label="Add a faction as a side">＋</button>
+      </div>
+      ${sides || '<p class="dim small">No sides yet. Add the factions in this struggle with ＋.</p>'}
+      <span class="field-label-static">Pressure <span class="dim small">(0 none – 3 severe)</span></span>
+      <div class="conflict-row">${pressure}</div>
+      ${others.length ? `<label class="field-label">Branched from <select data-entity-field="parentConflictId"><option value="">— none —</option>${others.map((c) => `<option value="${esc(c.id)}" ${c.id === e.parentConflictId ? 'selected' : ''}>${esc(c.name || 'Unnamed')}</option>`).join('')}</select></label>` : ''}
     </div>`;
 }
 

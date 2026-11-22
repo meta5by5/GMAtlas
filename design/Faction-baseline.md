@@ -125,7 +125,10 @@ not add a parallel store** (SRS 1.4, 3.1).
 `conflict`) is now labeled **Encounter**. The SRS's faction **Conflict**
 is a different object. It gets its own entity type, internal
 `faction-conflict`, labeled **Conflict** (section 4.8). The existing
-Encounter type and its data are untouched.
+Encounter type and its data are untouched. **Built 2026-11-21:** the type,
+its fields, the stage ladder, status, stakes, sides (with `involves`
+links), pressure, the entity-panel form and its wiki fields
+(`data/conflictLadder.js`, `domain/entities.js`).
 
 ---
 
@@ -140,7 +143,7 @@ right-hand column says so.
 | 1 | One system or three layers? | **One system, built in layers.** Simulation depth (modes), detail (progressive disclosure) and resolution style are switchable, all on the same data. Everything original and sellable |
 | 2 | Neutral core plus "providers"? | **Dropped as a concept.** There is one original GMAtlas faction system. A campaign may *optionally* pick a **resolution style** that tells the engine how to roll outcomes. This is the SRS's "rules-lens adapter" (7.4), explained plainly in 4.6. No rules vocabulary goes into the engine |
 | 3 | Name | **Factions**: the panel, its nav button and the Settings section. The SRS's "Faction Navigator" is the Factions panel. GMAtlas's existing *Navigator* Storyboard column keeps its name and gains a Factions card |
-| 4 | What happens without review | **Auto-apply quiet moves: off by default.** Low-impact changes appear grouped as one routine line in each Faction Turn's review. Turning the setting on makes them background-only (SRS level 1). See conflict C1 |
+| 4 | What happens without review | **Routine work needs no confirmation** (SRS 5.2 level 1, 14.4; decided 2026-11-21, replacing the first answer of "off by default"). **Auto-apply quiet moves is on by default**: low-impact changes are resolved and recorded automatically, visible in History and undoable, never as a review item. Turning the setting off groups them into one routine line in each turn's review instead |
 | 5 | What triggers a turn | **The campaign turn model is kept**, with a **Faction Events step** in the turn steps. Settings offers three trigger choices: **every N Encounters**, **a campaign turn step**, and **the GM's Faction Turn button**. The 5PFH, Planetfall and Five Leagues workflows default to the turn step; others default to Encounters (N = 3). The button always works. Journal dates are added later (SRS 10.5) |
 | 6 | Death, merger, split | **Proposed loudly** (always critical, so always reviewed), **with consequences that ripple to allies and enemies** (4.8.4) |
 | 7 | AI prose | **No.** Oracles and deterministic tables. An optional **"✨ Retell this digest"** button may use AI later, and is never needed |
@@ -414,11 +417,11 @@ style, the confidence and the GM's decision.
 - **Change types:** add, update, remove, transfer, create-link,
   close-link, adjust-value, append-history, create-entity.
 - **Impact levels and default policies** follow SRS 9.3. The low-impact
-  default comes from answer 4:
+  default comes from answer 4 (routine work needs no confirmation):
 
 | Impact | Default policy |
 |---|---|
-| Low | Routine: grouped into one line, applied when the turn is accepted. Background only when Auto-apply quiet moves is on |
+| Low | Background: applied and recorded automatically, shown in History, undoable (Auto-apply quiet moves, on by default). With the setting off: one grouped routine line in the turn's review |
 | Moderate | Shown as a brief, applied when the turn is accepted, and can be unticked |
 | High | Needs GM approval |
 | Critical | Always needs explicit approval, and is never part of a bulk accept |
@@ -663,7 +666,7 @@ campaign.factions = {
   ledger: [], events: [] /* new-shape events */, changeSets: [],
   triggers: [], hooks: [], runs: [],
   lastProcessed: { turn: 0, seq: 0 },
-  settings: { mode: 'standard', pressure: 'steady', autoApplyQuiet: false,
+  settings: { mode: 'standard', pressure: 'steady', autoApplyQuiet: true,
               trigger: { kind: 'auto', everyEncounters: 3 },
               approval: { low: 'routine', moderate: 'brief', high: 'approve' },
               stageCap: 7, retaliation: true, relationshipRoll: true },
@@ -690,14 +693,14 @@ campaign.factions = {
 
 | # | Conflict | Resolution |
 |---|---|---|
-| C1 | Answer 4 (auto-apply off) against SRS 5.2 level 1 and 14.4 ("routine processing requires no mandatory manual confirmation") | **The owner's answer is the default.** Routine changes are one grouped line that the turn's single Accept covers, so no change ever needs its own confirmation. With the setting on, the SRS level-1 behavior applies exactly. **Open question Q1** in the roadmap |
+| C1 | The first answer 4 (auto-apply off) against SRS 5.2 level 1 and 14.4 ("routine processing requires no mandatory manual confirmation") | **Settled for the SRS** (2026-11-21): Auto-apply quiet moves is on by default, so routine work needs no confirmation. The setting can still be turned off |
 | C2 | SRS "Faction Navigator" against GMAtlas's existing Navigator column | The SRS feature is the **Factions** panel (answer 3). The Navigator column gains a compact Factions card, which is the "central management from the navigator" entry point |
 | C3 | SRS "Co-Pilot surfaces briefs" (12.3) against the Advisor being admin-only | Briefs surface in the Factions Overview and the Navigator card for everyone. The Advisor shows them too, to admins (answer 13) |
 | C4 | SRS ally/enemy types against answer 9's −3 to +3 | Decomposed into stance (−3..+3), ties, trust and intensity (4.4). Both are satisfied |
 | C5 | The first roadmap's "providers" against SRS genre and rules independence and answer 2 | Replaced by one original system plus an optional *resolution style* (4.6) |
 | C6 | The first roadmap's Blades-flavoured terms (tier, hold, status) against the originality rule | Renamed to GMAtlas terms: Reach, Stance, Attention, Signs, Drive, Memory |
 | C7 | SRS's "AI suggestions" (Phase 8) against answer 7 | AI only as the optional Retell button, never in decisions |
-| C8 | The SRS calls `Conflict` an object; GMAtlas's `conflict` type is the Encounter | A new type, `faction-conflict` (section 2) |
+| C8 | The SRS calls `Conflict` an object; GMAtlas's `conflict` type is the Encounter | A new type, `faction-conflict` (section 2). Decided and built 2026-11-21 |
 | C9 | SRS entity version history against the store's single backup slot | History comes from applied change sets with before values (4.6). No snapshot store |
 
 ---

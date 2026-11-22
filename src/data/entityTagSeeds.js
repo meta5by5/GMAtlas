@@ -33,6 +33,7 @@ const ENTITY_TAG_SEEDS_BY_GENRE = {
     lore: ['Corporate History', 'Alien Artifact', 'Star Chart', 'Old Earth Legend'],
     conflict: ['Border Dispute', 'Resource War', 'Corporate Rivalry'],
     lifeform: ['Xenofauna', 'Synthetic', 'Parasite', 'Apex Predator'],
+    'faction-conflict': ['Trade War', 'Insurgency', 'Corporate Takeover', 'Cold War'],
   },
   fantasy: {
     npc: ['Knight', 'Bandit', 'Wizard', 'Cleric', 'Noble', 'Peasant', 'Merchant', 'Ranger'],
@@ -43,6 +44,7 @@ const ENTITY_TAG_SEEDS_BY_GENRE = {
     lore: ['Prophecy', 'Ancient History', 'Legend', 'Forbidden Rite'],
     conflict: ['Border War', 'Blood Feud', 'Succession Crisis'],
     lifeform: ['Monster', 'Beast', 'Undead', 'Fey'],
+    'faction-conflict': ['Feud', 'Holy War', 'Rebellion', 'Guild Dispute'],
   },
 };
 

@@ -17,6 +17,7 @@ import {
 import { economyTypesForModel } from '../data/economyTypes.js';
 import { SWN_XP_TABLE } from '../data/swnFactionData.js';
 import { entityTagSeedsFor, locationTagSeedsFor } from '../data/entityTagSeeds.js';
+import { CONFLICT_MAX_STAGE, CONFLICT_STATUSES, CONFLICT_SIDE_ROLES, CONFLICT_PRESSURES, CONFLICT_PRESSURE_MAX } from '../data/conflictLadder.js';
 
 // `item` (ADR 0012): gear/weapons/armor as first-class entities — tags,
 // @mentions, relationships (`owns` now has a concrete use: "NPC X owns Item
@@ -43,7 +44,7 @@ import { entityTagSeedsFor, locationTagSeedsFor } from '../data/entityTagSeeds.j
 // same Character Sheet/Bestiary options), just a different label so a
 // creature/beast doesn't read as a "Non-Player Character" in Cast/Graph/
 // Search.
-export const ENTITY_TYPES = ['npc', 'location', 'faction', 'asset', 'lore', 'item', 'conflict', 'lifeform'];
+export const ENTITY_TYPES = ['npc', 'location', 'faction', 'asset', 'lore', 'item', 'conflict', 'lifeform', 'faction-conflict'];
 // Direct follow-up request: "revise all references to conflict entity type
 // to Encounter" — display-only, same posture as lifeform's own genre-aware
 // relabel just below (the stored `type: 'conflict'` value, every internal
@@ -52,7 +53,7 @@ export const ENTITY_TYPES = ['npc', 'location', 'faction', 'asset', 'lore', 'ite
 // categories are untouched here — see entityTypeLabel's own callers for
 // the literal "Conflict" UI strings that needed their own individual edits
 // since they don't route through this map).
-export const TYPE_LABEL = { npc: 'NPC', location: 'Location', faction: 'Faction', asset: 'Asset', lore: 'Lore', item: 'Item', conflict: 'Encounter', lifeform: 'Lifeform' };
+export const TYPE_LABEL = { npc: 'NPC', location: 'Location', faction: 'Faction', asset: 'Asset', lore: 'Lore', item: 'Item', conflict: 'Encounter', lifeform: 'Lifeform', 'faction-conflict': 'Conflict' };
 
 /** Direct follow-up request: "For all Fantasy (generic) genres, change any
  *  reference to 'Lifeform' as an entity type to 'Monster'" (later renamed
@@ -454,6 +455,25 @@ function ensureNpcFields(e) {
 // informationAsymmetry, partyLeverage) a GM opens only if a conflict
 // earns it. Nothing here is required — every field is blank by default,
 // same lazy-set-on-touch shape as every other entity type's fields.
+// The Conflict entity (type 'faction-conflict', design/Faction-baseline.md
+// B4.8): a persistent struggle between factions. Not the Encounter (type
+// 'conflict', above, which kept that internal id when it was relabeled).
+// Its sides are records here AND `involves` edges to each side's faction,
+// so the Graph, wiki and search see who is in it. Everything blank or at
+// its lowest by default; vocabulary lives in data/conflictLadder.js.
+function ensureFactionConflictFields(e) {
+  if (e.type !== 'faction-conflict') return;
+  if (!Number.isInteger(e.stage)) e.stage = 1;
+  if (e.conflictStatus === undefined) e.conflictStatus = 'active';
+  if (e.stakesKind === undefined) e.stakesKind = '';
+  if (e.stakes === undefined) e.stakes = '';
+  if (e.origin === undefined) e.origin = '';
+  if (e.resolutionPath === undefined) e.resolutionPath = '';
+  if (e.parentConflictId === undefined) e.parentConflictId = '';
+  if (!Array.isArray(e.sides)) e.sides = []; // [{id, factionId, role, desiredOutcome, redLines, leverage, vulnerabilities, compromise}]
+  for (const { key } of CONFLICT_PRESSURES) if (!Number.isFinite(e[key])) e[key] = 0;
+}
+
 function ensureConflictFields(e) {
   if (e.type !== 'conflict') return;
   if (e.status === undefined) e.status = 'cold'; // cold|simmering|active|escalated|open_war|resolved
@@ -706,6 +726,7 @@ function _create(campaign, { type = 'npc', name = '' } = {}) {
   ensureFactionFields(rec);
   ensureLocationFields(rec);
   ensureConflictFields(rec);
+  ensureFactionConflictFields(rec);
   ensureNpcFields(rec);
   return rec;
 }
@@ -822,7 +843,7 @@ export function createItemFromCatalog(campaign, catalogEntry) {
 export function updateEntity(campaign, id, patch) {
   const next = clone(campaign);
   const e = getEntity(next, id);
-  if (e) { Object.assign(e, patch); ensureAutoStatblock(e, next.settings); ensureFactionFields(e); ensureLocationFields(e); ensureConflictFields(e); ensureNpcFields(e); }
+  if (e) { Object.assign(e, patch); ensureAutoStatblock(e, next.settings); ensureFactionFields(e); ensureLocationFields(e); ensureConflictFields(e); ensureFactionConflictFields(e); ensureNpcFields(e); }
   return next;
 }
 
@@ -955,6 +976,104 @@ export function removeRelationship(campaign, aId, bId) {
   const a = getEntity(next, aId); const b = getEntity(next, bId);
   if (a) a.relationships = a.relationships.filter((r) => r.to !== bId);
   if (b) b.relationships = b.relationships.filter((r) => r.to !== aId);
+  return next;
+}
+
+// --- Conflict (type 'faction-conflict') mutators ---------------------------
+function conflictEntity(campaign, id) {
+  const e = getEntity(campaign, id);
+  if (!e || e.type !== 'faction-conflict') return null;
+  ensureFactionConflictFields(e);
+  return e;
+}
+const SIDE_TEXT_FIELDS = ['desiredOutcome', 'redLines', 'leverage', 'vulnerabilities', 'compromise'];
+const SIDE_ROLE_IDS = CONFLICT_SIDE_ROLES.map((r) => r.id);
+
+/** Adds a faction as a side, with an `involves` edge to it. A faction
+ *  already on a side isn't added twice. */
+export function addConflictSide(campaign, conflictId, factionId, role = 'primary') {
+  const next = clone(campaign);
+  const e = conflictEntity(next, conflictId);
+  const f = getEntity(next, factionId);
+  if (!e || !f || f.type !== 'faction' || e.sides.some((s) => s.factionId === factionId)) return campaign;
+  e.sides.push({
+    id: 'side_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    factionId,
+    role: SIDE_ROLE_IDS.includes(role) ? role : 'primary',
+    desiredOutcome: '', redLines: '', leverage: '', vulnerabilities: '', compromise: '',
+  });
+  _link(next, conflictId, factionId, 'involves', 'involves');
+  return next;
+}
+
+/** Edits one side's role or one of its text fields. */
+export function updateConflictSide(campaign, conflictId, sideId, field, value) {
+  const next = clone(campaign);
+  const e = conflictEntity(next, conflictId);
+  const side = e && e.sides.find((s) => s.id === sideId);
+  if (!side) return campaign;
+  if (field === 'role') {
+    if (!SIDE_ROLE_IDS.includes(value)) return campaign;
+    side.role = value;
+  } else if (SIDE_TEXT_FIELDS.includes(field)) {
+    side[field] = String(value == null ? '' : value);
+  } else {
+    return campaign;
+  }
+  return next;
+}
+
+/** Removes a side and the `involves` edge it added. Any other relationship
+ *  the GM set between the two entities is left alone. */
+export function removeConflictSide(campaign, conflictId, sideId) {
+  const next = clone(campaign);
+  const e = conflictEntity(next, conflictId);
+  const side = e && e.sides.find((s) => s.id === sideId);
+  if (!side) return campaign;
+  e.sides = e.sides.filter((s) => s.id !== sideId);
+  if (e.relationships.some((r) => r.to === side.factionId && r.type === 'involves')) {
+    e.relationships = e.relationships.filter((r) => !(r.to === side.factionId && r.type === 'involves'));
+    const f = getEntity(next, side.factionId);
+    if (f) f.relationships = f.relationships.filter((r) => !(r.to === conflictId && r.type === 'linked'));
+  }
+  return next;
+}
+
+/** Moves the Conflict to a stage, 1–7. Reaching the last stage resolves
+ *  it; moving back down from a resolved Conflict reignites it (active). */
+export function setConflictStage(campaign, conflictId, stage) {
+  const next = clone(campaign);
+  const e = conflictEntity(next, conflictId);
+  const n = Math.round(Number(stage));
+  if (!e || !Number.isFinite(n)) return campaign;
+  e.stage = Math.max(1, Math.min(CONFLICT_MAX_STAGE, n));
+  if (e.stage === CONFLICT_MAX_STAGE) e.conflictStatus = 'resolved';
+  else if (e.conflictStatus === 'resolved') e.conflictStatus = 'active';
+  return next;
+}
+
+/** Sets active / paused / resolved. Resolving moves it to the last stage;
+ *  reactivating a Conflict at the last stage drops it back one, since it
+ *  has reignited and is no longer the new status quo. */
+export function setConflictStatus(campaign, conflictId, status) {
+  if (!CONFLICT_STATUSES.some((s) => s.id === status)) return campaign;
+  const next = clone(campaign);
+  const e = conflictEntity(next, conflictId);
+  if (!e) return campaign;
+  e.conflictStatus = status;
+  if (status === 'resolved') e.stage = CONFLICT_MAX_STAGE;
+  else if (e.stage === CONFLICT_MAX_STAGE) e.stage = CONFLICT_MAX_STAGE - 1;
+  return next;
+}
+
+/** Sets one pressure gauge, clamped 0–3. */
+export function setConflictPressure(campaign, conflictId, key, value) {
+  if (!CONFLICT_PRESSURES.some((p) => p.key === key)) return campaign;
+  const next = clone(campaign);
+  const e = conflictEntity(next, conflictId);
+  const n = Math.round(Number(value));
+  if (!e || !Number.isFinite(n)) return campaign;
+  e[key] = Math.max(0, Math.min(CONFLICT_PRESSURE_MAX, n));
   return next;
 }
 

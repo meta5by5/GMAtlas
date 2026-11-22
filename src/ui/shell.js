@@ -47,6 +47,7 @@ import {
   addEntityStatblockItem, updateEntityStatblockItem, removeEntityStatblockItem,
   addEntityStatblockAttack, updateEntityStatblockAttack, removeEntityStatblockAttack, applyDnd5ePdfImport,
   setEntityStatblockTrackValue, setEntityStatblockAttributeValue, updateRelationshipLabel, updateRelationshipType, updateRelationshipStrength,
+  addConflictSide, updateConflictSide, removeConflictSide, setConflictStage, setConflictStatus, setConflictPressure,
   listEntities, ENTITY_TYPES, TYPE_LABEL, entityTypeLabel, setFactionStat, addFactionAsset, removeFactionAsset, createItemFromCatalog,
   addLocationTradeCode, removeLocationTradeCode, addLocationBase, removeLocationBase,
   addConflictSessionHook, toggleConflictSessionHookUsed, removeConflictSessionHook, addConflictIrreversibleFact,
@@ -2102,6 +2103,17 @@ function onClick(ev) {
     const v = inp ? inp.value : '';
     if (!String(v).trim()) return;
     return store.update((d) => addComposerSessionHook(d, v));
+  }
+  // A Conflict entity's ladder step and a side's ✕ (type 'faction-conflict').
+  const fconflictStage = hit('[data-fconflict-stage]');
+  if (fconflictStage) {
+    const [cid, n] = fconflictStage.dataset.fconflictStage.split('::');
+    return store.update((d) => setConflictStage(d, cid, Number(n)));
+  }
+  const fconflictSideRemove = hit('[data-fconflict-side-remove]');
+  if (fconflictSideRemove) {
+    const [cid, sid] = fconflictSideRemove.dataset.fconflictSideRemove.split('::');
+    return store.update((d) => removeConflictSide(d, cid, sid));
   }
   // An Encounter record's ✕ on one of its Factions involved (an `involves` link).
   const conflictFactionRemove = hit('[data-conflict-faction-remove]');
@@ -6005,6 +6017,8 @@ function onClick(ev) {
                   ? { entityType: 'composer-faction', mode: 'composer-faction', scope: null, query: '' }
                 : raw.startsWith('conflict-faction:')
                   ? { entityType: 'conflict-faction', mode: 'conflict-faction', scope: raw.slice('conflict-faction:'.length), query: '' }
+                : raw.startsWith('faction-conflict-side:')
+                  ? { entityType: 'faction-conflict-side', mode: 'faction-conflict-side', scope: raw.slice('faction-conflict-side:'.length), query: '' }
                 : raw.startsWith('where-faction-link:')
                   ? { entityType: 'where-faction-link', mode: 'link', scope: raw.slice('where-faction-link:'.length), query: '' }
                   : raw.startsWith('colony-encounter::')
@@ -7389,6 +7403,19 @@ function onChange(ev) {
   if (wikiVis) return store.update((d) => setEntityVisibility(d, wikiVis.dataset.wikiVisibility, t.value));
   const wikiPlace = t.closest('[data-wiki-place-kind]');
   if (wikiPlace) return store.update((d) => setPlaceKind(d, wikiPlace.dataset.wikiPlaceKind, t.value));
+  // The Conflict entity's status, side fields and pressure gauges.
+  const fconflictStatus = t.closest('[data-fconflict-status]');
+  if (fconflictStatus) return store.update((d) => setConflictStatus(d, fconflictStatus.dataset.fconflictStatus, t.value));
+  const fconflictSideField = t.closest('[data-fconflict-side-field]');
+  if (fconflictSideField) {
+    const [cid, sid, field] = fconflictSideField.dataset.fconflictSideField.split('::');
+    return store.update((d) => updateConflictSide(d, cid, sid, field, t.value));
+  }
+  const fconflictPressure = t.closest('[data-fconflict-pressure]');
+  if (fconflictPressure) {
+    const [cid, key] = fconflictPressure.dataset.fconflictPressure.split('::');
+    return store.update((d) => setConflictPressure(d, cid, key, t.value));
+  }
 
   const ef = t.closest('[data-entity-field]');
   if (ef) {
@@ -11141,6 +11168,7 @@ function commitEntityPickerPick(picker, id) {
   // The Composer's Factions involved ＋, and an Encounter record's own.
   if (picker.entityType === 'composer-faction') return store.update((d) => addComposerFaction(d, id));
   if (picker.entityType === 'conflict-faction') return store.update((d) => addRelationship(d, picker.scope, id, 'involves', 'involves'));
+  if (picker.entityType === 'faction-conflict-side') return store.update((d) => addConflictSide(d, picker.scope, id));
   if (picker.entityType === 'where-faction-link') {
     // WHO's "+" on Factions active nearby (direct follow-up request,
     // replacing the old inline <select>) — links the picked faction to
@@ -11326,6 +11354,7 @@ const ENTITY_PICKER_CREATE_TYPE = {
   'where-faction-link': 'faction',
   'composer-faction': 'faction',
   'conflict-faction': 'faction',
+  'faction-conflict-side': 'faction',
   'contract-patron': 'npc',
   'party-vehicle': 'asset',
   'party-item': 'item',
@@ -11535,6 +11564,11 @@ function renderEntityPickerOverlay() {
   } else if (entityPicker.entityType === 'composer-faction') {
     const inPlay = new Set(composerSnapshot(doc).factions.map((f) => f.id));
     candidates = listEntities(doc, ['faction']).filter((f) => !inPlay.has(f.id));
+    emptyMessage = 'No other Faction entities yet — create one below.';
+  } else if (entityPicker.entityType === 'faction-conflict-side') {
+    const fc = getEntity(doc, entityPicker.scope);
+    const onSide = new Set(((fc && fc.sides) || []).map((sd) => sd.factionId));
+    candidates = listEntities(doc, ['faction']).filter((f) => !onSide.has(f.id));
     emptyMessage = 'No other Faction entities yet — create one below.';
   } else if (entityPicker.entityType === 'conflict-faction') {
     const enc = getEntity(doc, entityPicker.scope);

@@ -27,39 +27,30 @@ The 17 original questions are answered (B3). The redesign raised the
 questions below. Each has a recommendation, and the plan assumes the
 recommendation until you say otherwise.
 
-1. **Auto-apply quiet moves and the SRS (conflict C1).** Your answer
-   (off by default) is applied. With it off:
-   - each Faction Turn's review shows routine changes as **one grouped
-     line**, which the turn's single Accept covers;
-   - so no change ever needs its own confirmation.
+**Decided 2026-11-21** (removed from this list):
+- **Routine work needs no confirmation** (SRS 14.4). Auto-apply quiet
+  moves is **on by default**. Routine changes are applied and recorded
+  without a review item, shown in History, and undoable (B3 answer 4,
+  conflict C1).
+- **The Conflict entity type** exists: internal `faction-conflict`,
+  labeled **Conflict**. It was built ahead of F0 (B2, F0 below).
 
-   The SRS's stricter reading of 14.4 ("routine processing requires no
-   mandatory manual confirmation") is met only with the setting on.
-   *Recommendation:* keep it off by default, and show a one-line hint
-   offering to switch it on after the third turn in which the GM accepts
-   routine changes unchanged.
+The questions still open:
 
-2. **Faction Conflict as a new entity type.** GMAtlas's `conflict` type
-   is now the Encounter.
-   - *Recommendation:* add a new type, `faction-conflict`, labeled
-     **Conflict**.
-   - It then gets wiki pages, search and the Graph for free.
-   - Encounters and their data are untouched.
-
-3. **Starter factions.** *Recommendation:* when the Factions panel is
+1. **Starter factions.** *Recommendation:* when the Factions panel is
    empty, it **offers** "Generate a starting trio". Three factions are
    generated, with colliding objectives (R1–R3) and a seeded web. This is
    never automatic.
 
-4. **The Encounter-count trigger.** *Recommendation:* the default is
+2. **The Encounter-count trigger.** *Recommendation:* the default is
    every **3** Encounters, for rulesets without a campaign-turn workflow.
 
-5. **An app-wide Review Queue?** The change-set and review machinery is
+3. **An app-wide Review Queue?** The change-set and review machinery is
    generic. *Recommendation:* build it for Factions first, with a
    `source` field on each change set. Trade events, expeditions and
    missions could feed the same queue later, without a redesign.
 
-6. **The existing SWN turn controls.** *Recommendation:* until F7 wraps
+4. **The existing SWN turn controls.** *Recommendation:* until F7 wraps
    the SWN engine as a resolution style, the current Step and Full Round
    controls stay available in the Factions panel under **History ›
    Classic SWN turn**. No existing campaign loses a feature.
@@ -72,7 +63,7 @@ These are the SRS 1.5 measures, made specific to GMAtlas:
 
 | Measure | Target |
 |---|---|
-| GM effort | A routine Faction Turn needs **one tap**, and **zero** taps with Auto-apply quiet moves on. No faction field is required beyond name, type, motivation and one objective |
+| GM effort | Routine faction work needs **no confirmation** (Auto-apply quiet moves, on by default). A turn with nothing above low impact needs **zero** taps. No faction field is required beyond name, type, motivation and one objective |
 | Decision quality | A turn surfaces **at most 3** interactive decisions on Steady. Everything else is a brief or routine |
 | Continuity | Every accepted event updates the entity, the graph edge, the journal and the Timeline in one atomic apply |
 | Explainability | Every proposal shows its trigger, intent, top three reasons, confidence and impact. The detail sits behind one tap |
@@ -167,7 +158,7 @@ Capabilities, Relationships, Territory & Assets, Memory, History, Hooks.
 - The right-nav Factions button shows the number of pending decisions.
 - A critical item is never only in a feed. It appears in "Needs you" and
   in the badge (SRS 12.3).
-- The component is generic, so other subsystems can use it later (Q5).
+- The component is generic, so other subsystems can use it later (Q3).
 
 ### U5. The Navigator's Factions card (F3)
 The Storyboard **Navigator** column gains a compact **Factions** card,
@@ -243,7 +234,7 @@ One Settings section holds:
 - Mode, Pressure and Resolution style;
 - the trigger (campaign turn step, every N Encounters, or the button
   only);
-- Auto-apply quiet moves;
+- Auto-apply quiet moves (on by default);
 - approval thresholds;
 - the stage cap;
 - retaliation on or off, and the session-start relationship roll.
@@ -299,8 +290,13 @@ ladder.
   Export and import round-trip it.
 - **Edge metadata** on faction relationships, and the new relationship
   types (B4.4, B4.11), each with its target rules.
-- **The `faction-conflict` entity type**, registered with its field
-  provisioning (Q2).
+- **The `faction-conflict` entity type.** *Built 2026-11-21:* the type
+  and label, its fields (stage 1–7, status, stakes, origin, resolution,
+  branched-from, sides, four pressure gauges), mutators that keep each
+  side's `involves` link in step, the entity-panel form with the
+  seven-step ladder, its wiki fields, graph color and tag seeds, plus 6
+  unit tests and a smoke run. F5 adds the pressure Thread and the tension
+  engine on top.
 - **The migration seed:** each `allied_with` and `rival_of` edge becomes
   a `migrated` Ledger entry.
 - **Tests:**
@@ -323,7 +319,7 @@ ladder.
 - **The generator:**
   - `generateFaction(campaign, {seed, genrePack, locationId})`;
   - the collision rule (B4.3);
-  - the starting trio (Q3).
+  - the starting trio (Q1).
 - **Views:**
   - U1 chips (read-only in this phase), the U2 peek popover;
   - U3's Overview (static sections), Factions, Web and faction detail;
@@ -382,7 +378,8 @@ ladder.
 - **Undo.**
 - **Propagation:** depth 2, a budget per run, and follow-on triggers
   queued for the next run.
-- **Settings and badges:** the **Auto-apply quiet moves** setting (off),
+- **Settings and badges:** the **Auto-apply quiet moves** setting (on
+  by default: routine work needs no confirmation),
   and the **U4** attention badges.
 - **Tests:**
   - a critical change is never applied by a bulk Accept or by
@@ -445,7 +442,7 @@ ladder.
   - a preview before a large run.
 - **Resolution styles:**
   - **Campaign ruleset** wraps `factionTurnEngine.js`, with its tests
-    unchanged; this retires the Classic SWN controls from Q6;
+    unchanged; this retires the Classic SWN controls from Q4;
   - **Oracle** and **GM decides**.
 - **Five Leagues:** Enemy Threat and Enemy Plans link to the named enemy
   faction's project.
@@ -563,8 +560,8 @@ The release is accepted when every item in SRS 14.1 (functional), 14.3
 (regression) and 14.4 (usability) passes, plus:
 1. A new campaign reaches three generated, colliding factions with a
    seeded web in **two taps**.
-2. On Steady, a routine Faction Turn needs **one tap**, and **zero**
-   with Auto-apply quiet moves on.
+2. Routine faction work is applied without any confirmation by
+   default. A turn with nothing above low impact needs **zero** taps.
 3. A 5PFH campaign's turn-step workflow runs a Faction Turn from its
    Faction Events step. A non-turn ruleset runs one after three
    Encounters.
