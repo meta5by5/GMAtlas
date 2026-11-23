@@ -11,6 +11,8 @@ import { ORACLE_TABLE_SOURCES, ORACLE_GROUPS_FANTASY } from '../../data/oracleGr
 import { referenceDocSource } from '../../domain/permissions.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { campaignHistory, TIMELINE_KINDS } from '../../domain/factionChanges.js';
+import { factionSettings } from '../../domain/factionTurn.js';
+import { FACTION_MODES, FACTION_PRESSURES, RESOLUTION_STYLES, FACTION_TURN_TRIGGERS } from '../../data/factionActions.js';
 import { CONFLICT_STAGES, CONFLICT_STATUSES, CONFLICT_STAKES, CONFLICT_RESOLUTION_PATHS, CONFLICT_SIDE_ROLES, CONFLICT_PRESSURES, CONFLICT_PRESSURE_MAX } from '../../data/conflictLadder.js';
 import { wikiPanel, wikiPage, wikiReadButton } from './wiki.js';
 import { lightState, lightRemaining, isLit, formatLight } from '../../domain/torchTimer.js';
@@ -3622,9 +3624,31 @@ function factionPacingSection(doc) {
 // Oracle drawer's browse tree (domain/oracles.js's excludeFactionOracleTables)
 // — campaign-scoped (doc.settings.factionOraclesEnabled), instant-apply,
 // same posture as Faction Pacing's own field right above it.
+// Settings > Factions (design/FACTION-ROADMAP.md U11): Mode, Pressure,
+// Resolution style, the trigger, and the switches. Each has one line saying
+// what changes and what doesn't.
+function factionTurnSettingsGroup(doc, ui) {
+  const s = factionSettings(doc);
+  const select = (key, list, value) => `<select data-fx-setting="${key}">${list.map((o) => `<option value="${o.id}" ${o.id === value ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`;
+  const help = (list, value) => esc((list.find((o) => o.id === value) || {}).help || '');
+  const check = (key, on, label, line) => `<label class="chip sm"><input type="checkbox" data-fx-setting="${key}" ${on ? 'checked' : ''}> ${esc(label)}</label><p class="dim small">${esc(line)}</p>`;
+  return `<div class="settings-group fx-settings">
+      ${sectionHeadRow('h3', 'Faction Turn', 'settings-faction-turn')}
+      ${helpBody('settings-faction-turn', 'How the factions move between sessions. None of these change your records or what the data means; they change how much is simulated and how outcomes are decided.', ui)}
+      <label class="fx-field"><span>Mode</span>${select('mode', FACTION_MODES, s.mode)}</label><p class="dim small">${help(FACTION_MODES, s.mode)}</p>
+      <label class="fx-field"><span>Pressure</span>${select('pressure', FACTION_PRESSURES, s.pressure)}</label><p class="dim small">${help(FACTION_PRESSURES, s.pressure)} It never changes the rules or what needs your approval.</p>
+      <label class="fx-field"><span>Resolution style</span>${select('resolution', RESOLUTION_STYLES, s.resolution)}</label><p class="dim small">${help(RESOLUTION_STYLES, s.resolution)} Outcome bands and what they change stay the same.</p>
+      <label class="fx-field"><span>When a turn is offered</span>${select('triggerKind', FACTION_TURN_TRIGGERS, s.trigger.kind)}</label><p class="dim small">${help(FACTION_TURN_TRIGGERS, s.trigger.kind)} The ▶ Faction Turn button always works.</p>
+      ${s.trigger.kind === 'button' ? '' : `<label class="fx-field fx-field-sm"><span>N Encounters</span><input type="number" min="1" max="20" data-fx-setting="everyEncounters" value="${s.trigger.everyEncounters}"></label>`}
+      ${check('autoApplyQuiet', s.autoApplyQuiet, 'Auto-apply quiet moves', 'Low-impact changes apply without a review item, still recorded and undoable. The Review Queue that uses it arrives with the next phase.')}
+      ${check('retaliation', s.retaliation, 'Factions retaliate', 'A wronged faction may answer the wrong in kind. Off: it remembers but never strikes back on its own.')}
+    </div>`;
+}
+
 function factionsSettingsSection(doc, ui) {
   const enabled = doc.settings.factionOraclesEnabled !== false;
   return `
+    ${factionTurnSettingsGroup(doc, ui)}
     ${factionPacingSection(doc)}
     <div class="settings-group">
       ${sectionHeadRow('h3', 'Faction Oracles', 'settings-faction-oracles')}

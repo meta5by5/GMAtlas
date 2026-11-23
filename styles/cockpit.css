@@ -3958,3 +3958,33 @@ input[type="number"] { -moz-appearance: textfield; }
 .timeline-filters select { max-width: 100%; }
 .timeline-faction, .timeline-journal { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-2); align-items: baseline; }
 @media (prefers-reduced-motion: reduce) { .fx-lg-shape { transition: none; } }
+
+/* Factions F3: the Faction Turn preview, impact chips, the due notice,
+   the Navigator's Factions card and the directory filters
+   (design/FACTION-ROADMAP.md F3, U5, U11, U14). Impact is a glyph and a
+   word; the border is only a third cue. */
+.fx-impact { display: inline-block; font-size: 0.72em; font-weight: 600; letter-spacing: 0.04em; padding: 0 var(--sp-1); border: 1px solid var(--border); border-radius: var(--radius-sm); white-space: nowrap; }
+.fx-impact-moderate { border-color: var(--accent); }
+.fx-impact-high { border-color: var(--warn); border-width: 2px; }
+.fx-impact-critical { border-color: var(--danger, var(--warn)); border-width: 2px; border-style: double; }
+.fx-due { margin: var(--sp-1) 0 var(--sp-2); }
+.fx-due.due { font-weight: 600; }
+.fx-run { display: flex; flex-direction: column; gap: var(--sp-2); }
+.fx-run-top { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: baseline; }
+.fx-run-action { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--sp-2) var(--sp-3); }
+.fx-run-action.off { opacity: 0.55; }
+.fx-run-head { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: baseline; }
+.fx-run-keep input { margin: 0; }
+.fx-run-because, .fx-run-outcome { margin-top: var(--sp-1); }
+.fx-run-outcome { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
+.fx-run-outcome select { max-width: 100%; }
+.fx-critical-note { font-weight: 600; }
+.fx-run-more { margin-top: var(--sp-1); }
+.fx-run-more > div { margin-top: var(--sp-1); }
+.fx-run-bar { position: sticky; bottom: 0; background: var(--bg-raised); padding: var(--sp-2) 0; }
+.navigator-factions { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--sp-2) var(--sp-3); margin-top: var(--sp-3); }
+.fx-nav-watch { display: flex; flex-direction: column; gap: var(--sp-1); margin: var(--sp-1) 0; }
+.fx-nav-step { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; margin: var(--sp-2) 0; }
+.fx-filters { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; margin: var(--sp-2) 0; }
+.fx-filters select { max-width: 100%; }
+.fx-settings .fx-field { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }

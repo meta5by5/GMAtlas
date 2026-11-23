@@ -22,7 +22,7 @@ export function defaultFactionsState() {
     triggers: [], hooks: [], runs: [],
     lastProcessed: { turn: 0, seq: 0 },
     settings: {
-      mode: 'standard', pressure: 'steady', autoApplyQuiet: true,
+      mode: 'standard', pressure: 'steady', resolution: 'gmatlas', autoApplyQuiet: true,
       trigger: { kind: 'auto', everyEncounters: 3 },
       approval: { low: 'routine', moderate: 'brief', high: 'approve' },
       stageCap: 7, retaliation: true, relationshipRoll: true,

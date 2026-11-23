@@ -25,7 +25,9 @@ import { CONFLICT_STAGES, CONFLICT_MAX_STAGE } from '../../data/conflictLadder.j
 import { FACTION_VERBS } from '../../data/factionVerbs.js';
 import { renderFactionEvents } from './factionEvents.js';
 import { factionEventList, describeChange, entityHistory } from '../../domain/factionChanges.js';
-import { QUICK_ACTIONS, TRIGGER_KINDS, EVENT_SIGNIFICANCE } from '../../data/factionEventKinds.js';
+import { QUICK_ACTIONS, TRIGGER_KINDS, EVENT_SIGNIFICANCE, IMPACT_LEVELS } from '../../data/factionEventKinds.js';
+import { previewRun, likelyNext, factionTurnDue, familyDef, bandDef, filterFactions, FACTION_FILTERS } from '../../domain/factionTurn.js';
+import { OUTCOME_BANDS, FACTION_MODES, FACTION_PRESSURES, RESOLUTION_STYLES, INVOLVEMENT } from '../../data/factionActions.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -36,7 +38,9 @@ const verb = (id) => (FACTION_VERBS.find((v) => v.id === id) || { label: id }).l
 /** The tabs this campaign has earned, in order. */
 export function factionsPanelTabs(doc) {
   const factions = listEntities(doc, ['faction']);
-  const tabs = [{ id: 'overview', label: 'Overview' }, { id: 'factions', label: `Factions (${factions.length})` }];
+  const tabs = [{ id: 'overview', label: 'Overview' }];
+  if (previewRun(doc)) tabs.push({ id: 'turn', label: '▶ Turn preview' });
+  tabs.push({ id: 'factions', label: `Factions (${factions.length})` });
   if (factions.length >= 2) tabs.push({ id: 'web', label: 'Web' });
   if (factionsState(doc).objectives.length) tabs.push({ id: 'plans', label: 'Plans' });
   if (listEntities(doc, ['faction-conflict']).length) tabs.push({ id: 'conflicts', label: 'Conflicts' });
@@ -68,6 +72,70 @@ function currentSign(thread) {
 }
 
 // --------------------------------------------------------------------------
+// The Faction Turn (F3): the button, impact chips and the run preview.
+
+/** An impact chip: glyph and word, never color alone (U15). */
+export function impactChip(impact) {
+  const l = IMPACT_LEVELS.find((x) => x.id === impact) || IMPACT_LEVELS[0];
+  return `<span class="fx-impact fx-impact-${esc(l.id)}" title="Impact: ${esc(l.label)}">${esc(l.glyph)} ${esc(l.label.toUpperCase())}</span>`;
+}
+
+/** ▶ Faction Turn, or "Open preview" when one is waiting. */
+export function factionTurnButton(doc) {
+  if (!listEntities(doc, ['faction']).length) return '';
+  return previewRun(doc)
+    ? '<button type="button" class="btn primary sm" data-fx-tab="turn" title="A Faction Turn is waiting for you to review it">▶ Open turn preview</button>'
+    : '<button type="button" class="btn primary sm" data-fx-turn-start title="Propose what the factions do next. Nothing changes until you commit.">▶ Faction Turn</button>';
+}
+
+function runActionCard(doc, run, a, ui) {
+  const fam = familyDef(a.family) || { label: a.family };
+  const band = bandDef(a.resolution.band);
+  const critical = a.impact === 'critical';
+  const kept = critical ? (ui.runInclude && ui.runInclude.has(a.id)) : !(ui.runSkip && ui.runSkip.has(a.id));
+  const inv = (INVOLVEMENT.find((i) => i.id === a.involvement) || {}).label || '';
+  const bandPicker = `<select data-fx-run-band="${esc(run.id)}::${esc(a.id)}" aria-label="Outcome band">
+      ${band ? '' : '<option value="" selected>Pick a band…</option>'}${OUTCOME_BANDS.map((b) => `<option value="${b.id}" ${band && band.id === b.id ? 'selected' : ''}>${esc(b.glyph)} ${esc(b.label)}</option>`).join('')}</select>`;
+  return `<div class="fx-run-action${kept ? '' : ' off'}">
+    <div class="fx-run-head">
+      <label class="fx-run-keep"><input type="checkbox" data-fx-run-keep="${esc(a.id)}" ${kept ? 'checked' : ''} ${band ? '' : 'disabled'}> <span class="sr-only">Keep</span></label>
+      ${impactChip(a.impact)} <b>${esc(a.title)}</b>
+      <span class="dim small">${esc(fam.label)} · ${esc(inv)}</span>
+    </div>
+    <div class="small fx-run-because">Because: ${esc(a.relevance.reasons.join(' · ') || 'it has a plan')}${a.why.length ? ` · chose ${esc(fam.label.toLowerCase())}: ${esc(a.why.join(', '))}` : ''}</div>
+    <div class="small fx-run-outcome">${band ? `<b>${esc(band.glyph)} ${esc(band.label)}</b>` : '<b>No band yet</b>'} ${bandPicker}
+      ${critical ? '<span class="fx-critical-note">Critical: never kept unless you tick it.</span>' : ''}</div>
+    <details class="fx-run-more"><summary class="small">Why (${esc(String(a.candidates.length))} options weighed) · Changes (${a.changes.length})${a.hooks.length ? ` · Hooks (${a.hooks.length})` : ''}</summary>
+      <div class="small"><b>Intent:</b> ${esc(a.intent)} · <b>Method:</b> ${esc(a.method)} · <b>Uses:</b> ${esc(a.resources)} · <b>Risk:</b> ${esc(a.risk)} · <b>Opposition:</b> ${esc(a.opposition)} · <b>Could fail:</b> ${esc(a.failure)}</div>
+      <div class="small"><b>Options weighed:</b> ${a.candidates.map((c) => `${c.chosen ? '<b>' : ''}${esc(c.label)} ${c.score > 0 ? '+' : ''}${esc(String(c.score))}${c.chosen ? '</b>' : ''}`).join(' · ')}</div>
+      <div class="small"><b>Resolution (${esc((RESOLUTION_STYLES.find((s) => s.id === a.resolution.style) || {}).label || '')}):</b> ${esc((a.resolution.factors || []).join(' · '))}</div>
+      ${a.changes.length ? `<ul class="fx-chain">${a.changes.map((t) => `<li class="small">→ ${esc(t)}</li>`).join('')}</ul>` : '<div class="small dim">No record changes: this one is told, not tracked.</div>'}
+      ${a.hooks.length ? `<div class="small"><b>Hooks:</b> ${a.hooks.map((h) => `${esc(h.type)}: ${esc(h.summary)}`).join(' · ')}</div>` : ''}
+    </details>
+  </div>`;
+}
+
+function turnPreviewHtml(doc, ui) {
+  const run = previewRun(doc);
+  if (!run) return `<p class="dim small">No turn waiting. ${factionTurnButton(doc)}</p>`;
+  const lab = (list, id) => (list.find((x) => x.id === id) || {}).label || id;
+  const idle = run.considered.filter((x) => !x.acting);
+  const kept = run.actions.filter((a) => a.resolution.band && (a.impact === 'critical' ? ui.runInclude && ui.runInclude.has(a.id) : !(ui.runSkip && ui.runSkip.has(a.id)))).length;
+  return `<div class="fx-run">
+    <div class="fx-run-top"><b>Faction Turn ${esc(String(run.turn))}</b>
+      <span class="dim small">${esc(lab(FACTION_MODES, run.mode))} · ${esc(lab(FACTION_PRESSURES, run.pressure))} · ${esc(lab(RESOLUTION_STYLES, run.style))} · ${run.actions.length} action${run.actions.length === 1 ? '' : 's'}${run.budget.loud !== null ? ` · loud moves ${run.budget.loudUsed}/${run.budget.loud}` : ''}${run.rerollOf ? ' · rerolled' : ''}</span></div>
+    <p class="dim small">Nothing has changed yet. Untick anything you don't want, set or override a band, then commit. Every committed action is recorded in History and can be undone.</p>
+    ${run.actions.map((a) => runActionCard(doc, run, a, ui)).join('') || '<p class="dim small">No faction is moved to act this turn. Committing still moves the faction clock on.</p>'}
+    ${idle.length ? `<details class="fx-run-idle"><summary class="small">Not acting (${idle.length})</summary>${idle.map((x) => `<div class="small">${esc((getEntity(doc, x.factionId) || {}).name || 'A faction')}: <span class="dim">${esc(x.skip)}</span></div>`).join('')}</details>` : ''}
+    <div class="action-bar fx-run-bar">
+      <button type="button" class="btn primary sm" data-fx-run-commit="${esc(run.id)}">Commit (${kept})</button>
+      <button type="button" class="btn ghost sm" data-fx-run-reroll="${esc(run.id)}" title="A new roll; this one is kept in the run history">🎲 Reroll</button>
+      <button type="button" class="btn ghost sm" data-fx-run-discard="${esc(run.id)}">Discard</button>
+    </div>
+  </div>`;
+}
+
+// --------------------------------------------------------------------------
 // Overview (static sections in F1).
 
 function overviewHtml(doc) {
@@ -96,9 +164,15 @@ function overviewHtml(doc) {
     .map((e) => `<div class="fx-row dim small">• ${esc(e.factionName || 'A faction')}: ${esc(strip(e.narrative || e.action || '').slice(0, 90))}</div>`);
   const events = [...recent, ...classic];
   const section = (title, body) => `<section class="fx-ov-section"><h4>${title}</h4>${body}</section>`;
+  const due = factionTurnDue(doc);
+  const preview = previewRun(doc);
+  const likely = preview ? [] : likelyNext(doc, 3);
   return `
     <div class="fx-ov-head"><span class="dim small">Faction turn ${currentFactionTurn(doc)}</span>
-      <span class="fx-ov-actions"><button type="button" class="btn ghost sm" data-fx-generate-one>🎲 Generate</button><button type="button" class="btn ghost sm" data-fx-new>＋ New</button></span></div>
+      <span class="fx-ov-actions">${factionTurnButton(doc)}<button type="button" class="btn ghost sm" data-fx-generate-one>🎲 Generate</button><button type="button" class="btn ghost sm" data-fx-new>＋ New</button></span></div>
+    ${due.reason ? `<div class="fx-due small${due.due ? ' due' : ''}">${due.due ? '◆ Faction Turn due' : '○'} · ${esc(due.reason)}</div>` : ''}
+    ${likely.length ? section('Likely next', likely.map((a) => `<div class="fx-row small">${impactChip(a.impact)} <button type="button" class="entity-chip" data-entity-peek="${esc(a.factionId)}">${esc((getEntity(doc, a.factionId) || {}).name || 'A faction')}</button> ${esc(a.label)}
+      <div class="dim small">because: ${esc(a.reasons.slice(0, 3).join(' · ') || 'it has a plan')}</div></div>`).join('')) : ''}
     ${conflicts.length ? section('Escalating', conflicts.slice(0, 4).map((c) => `<div class="fx-row">⚔ <button type="button" class="entity-chip" data-entity-peek="${esc(c.id)}">${esc(c.name || 'Unnamed conflict')}</button>
       <span class="dim small">${esc((CONFLICT_STAGES[(c.stage || 1) - 1] || {}).label || '')} (${c.stage || 1}/${CONFLICT_MAX_STAGE})</span></div>`).join('')) : ''}
     ${plans.length ? section('Plans in motion', plans.slice(0, 5).map((o) => `<div class="fx-row">
@@ -113,10 +187,29 @@ function overviewHtml(doc) {
 // --------------------------------------------------------------------------
 // Directory.
 
+function directoryFilters(doc, ui) {
+  const filt = ui.factionsFilter || {};
+  const all = listEntities(doc, ['faction']);
+  const types = [...new Set(all.map((f) => factionProfile(f).factionType).filter(Boolean))].sort();
+  const locIds = [...new Set(all.flatMap((f) => (f.relationships || []).map((r) => r.to)))];
+  const locs = locIds.map((id) => getEntity(doc, id)).filter((e) => e && e.type === 'location').sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  const conflicts = listEntities(doc, ['faction-conflict']);
+  const sel = (key, label, opts) => (opts.length ? `<select data-fx-filter="${key}" aria-label="${esc(label)}"><option value="">${esc(label)}</option>${opts.map(([v, l]) => `<option value="${esc(v)}" ${String(filt[key] || '') === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>` : '');
+  const active = Object.values(filt).some(Boolean);
+  return `<div class="fx-filters">
+    ${sel('type', 'Any type', types.map((t) => [t, t]))}
+    ${sel('stance', 'Any stance', FACTION_FILTERS.stance.map((o) => [o.id, o.label]))}
+    ${sel('status', 'Any status', FACTION_FILTERS.status.map((o) => [o.id, o.label]))}
+    ${sel('objective', 'Any plan', FACTION_FILTERS.objective.map((o) => [o.id, o.label]))}
+    ${sel('locationId', 'Any location', locs.map((l) => [l.id, l.name || 'Unnamed']))}
+    ${sel('conflictId', 'Any Conflict', conflicts.map((c) => [c.id, c.name || 'Unnamed']))}
+    ${sel('activity', 'Any activity', FACTION_FILTERS.activity.map((o) => [o.id, o.label]))}
+    ${active ? '<button type="button" class="btn ghost sm" data-fx-filter-clear>Clear filters</button>' : ''}
+  </div>`;
+}
+
 function directoryHtml(doc, ui) {
-  const q = String(ui.factionsSearch || '').toLowerCase();
-  const factions = listEntities(doc, ['faction'])
-    .filter((f) => !q || [f.name, f.factionType, f.drive, f.motivation].some((v) => String(v || '').toLowerCase().includes(q)));
+  const factions = filterFactions(doc, { ...(ui.factionsFilter || {}), q: ui.factionsSearch || '' });
   const cards = factions.map((f) => {
     const p = factionProfile(f);
     const obj = factionObjectives(doc, f.id).find((o) => o.status === 'active');
@@ -129,6 +222,7 @@ function directoryHtml(doc, ui) {
   }).join('');
   return `<div class="fx-dir-head"><input type="search" class="fx-search" data-fx-search value="${esc(ui.factionsSearch || '')}" placeholder="Search factions…" aria-label="Search factions">
     <button type="button" class="btn ghost sm" data-fx-new>＋ New</button><button type="button" class="btn ghost sm" data-fx-generate-one>🎲</button></div>
+    ${directoryFilters(doc, ui)}
     <div class="fx-cards">${cards || '<p class="dim small">No match.</p>'}</div>`;
 }
 
@@ -454,6 +548,7 @@ export function renderFactionsPanel(doc, ui = {}) {
   let body = '';
   if (detail && detail.type === 'faction') body = detailHtml(doc, detail, ui);
   else if (tab === 'factions') body = directoryHtml(doc, ui);
+  else if (tab === 'turn') body = turnPreviewHtml(doc, ui);
   else if (tab === 'web') body = webHtml(doc, ui);
   else if (tab === 'plans') body = plansHtml(doc);
   else if (tab === 'conflicts') body = conflictsHtml(doc);

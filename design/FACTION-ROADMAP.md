@@ -400,6 +400,31 @@ Hooks exist as records. Promoting them arrives in F6.
   structured change set (SRS phase 2).
 
 ### F3: The decision and simulation loop
+*Built 2026-11-22.* `domain/factionTurn.js` and `data/factionActions.js`
+(design/adr/faction-turn-pipeline.md); 9 tests and a smoke run.
+
+What F3 delivers:
+- the pipeline described below, with a read-only propose;
+- runs stored as preview, committed, superseded or discarded;
+- the Turn preview tab, where the GM can untick an action, set or
+  override its band, commit, reroll or discard;
+- Settings › Factions, U11 (Mode, Pressure, Resolution style, the
+  trigger, N Encounters, Auto-apply quiet moves, retaliation);
+- the Navigator's Factions card (U5), and ▶ Run Faction Turn in the
+  workflow card at Five Leagues Enemy Threat and Enemy Plans, Planetfall
+  Enemy Activity and Five Parsecs Faction Involvement;
+- the Overview's Likely next and due notice;
+- filters (U14) on the Factions directory rather than Universal Search.
+  Universal Search is a plain text box with no filter model, while the
+  directory already has the panel's own search.
+
+What F3 leaves out:
+- **Campaign ruleset style** stands in with GMAtlas style until F7.
+- **Split and merge** are recorded but change no records until F5.
+- **The event-driven mini-run** after a quick action is not built yet.
+  The quick action's trigger is answered at the next Faction Turn
+  instead.
+
 - **The pipeline** steps TRIGGER through PROPAGATE (B4.5):
   - relevance scoring, with the top three reasons;
   - candidate actions from the 27 SRS families, using original tables;

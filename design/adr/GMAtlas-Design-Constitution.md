@@ -259,8 +259,14 @@ The main modules by area (54 files in `src/domain/`):
   and any pure mutator becomes one through `diffChanges`
   (design/adr/faction-change-sets.md). The module also provides the
   quick actions (`data/factionEventKinds.js`), entity history and
-  `campaignHistory`, the Timeline's merged history. The rest of the
-  Factions design is unbuilt (design/FACTION-ROADMAP.md).
+  `campaignHistory`, the Timeline's merged history. F3 adds
+  `factionTurn.js`, the Faction Turn. It proposes a run read-only:
+  relevance with reasons, 3–5 scored candidates from the 27 action
+  families, a seeded resolution in one of four styles, and budgets. A
+  commit records each kept action as an undoable event and queues
+  follow-on triggers for the next run. Its content is all data in
+  `data/factionActions.js` (design/adr/faction-turn-pipeline.md). The rest
+  of the Factions design is unbuilt (design/FACTION-ROADMAP.md).
 - **Economy & jobs**: `trade.js` (Merchant Rules Lens pricing + contracts),
   `missions.js`, `enhancements.js` (Strain/capacity augmentation),
   `expeditions.js`.
@@ -335,7 +341,16 @@ actually present on disk). Two non-game data files sit beside them:
   Record event. The peek holds the quick actions, which confirm inline.
   The peek also opens from Graph nodes, Cast relationship chips and the
   Story Dashboard's detail cards, and a faction page draws a local
-  graph.
+  graph. Since F3:
+  - the Overview offers ▶ Faction Turn, a due notice and Likely next;
+  - a Turn preview tab shows each action with its impact, reasons, band
+    and changes, where the GM can untick it, set the band, commit, reroll
+    or discard;
+  - the directory has filters;
+  - Settings › Factions holds Mode, Pressure, Resolution style and the
+    trigger;
+  - the Navigator has a Factions card, and its workflow card offers ▶ Run
+    Faction Turn at the steps where enemies move.
 - **`src/ui/portal/index.js`** — the portal surface (rule 4): the Help
   centre at `#/help`, shown instead of the campaign, in its own layout
   and stylesheet (`styles/portal.css`, sharing only `tokens.css`).

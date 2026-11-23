@@ -146,6 +146,7 @@ import {
 import { renderFactionEvents } from './drawers/factionEvents.js';
 import { renderFactionsPanel, entityPeekHtml } from './drawers/factions.js';
 import { recordQuickAction, recordGmEvent, undoEvent, applyChangeSet, quickActionDef } from '../domain/factionChanges.js';
+import { startFactionTurn, rerollFactionTurn, discardFactionTurn, commitFactionRun, setRunActionBand, setFactionSetting, previewRun } from '../domain/factionTurn.js';
 import {
   setFactionProfile, addFactionMemory, removeFactionMemory, changeStanding, pinStanding, generateFaction, generateStartingTrio,
   addFactionObjective, advanceFactionProject, addFactionFace, removeFactionFace, factionProfile,
@@ -1381,6 +1382,11 @@ let peekPinned = false;
 let peekConfirm = ''; // a quick action waiting for its inline confirm (F2)
 let factionsHistFilter = {};
 let factionsRecordOpen = false;
+// The Faction Turn preview (F3): actions the GM unticked, and critical ones ticked.
+let runSkip = new Set();
+let runInclude = new Set();
+// The Factions directory's filters (U14).
+let factionsFilter = {};
 // The Timeline's filters (FACTION-ROADMAP U7): which kinds show, and one
 // entity every shown item must involve.
 let timelineKinds = new Set();
@@ -2116,7 +2122,38 @@ function onClick(ev) {
       return applyChangeSet(doc, id, { force: ((cs && cs.conflicts) || []).map((k) => k.changeId) }).campaign;
     });
   }
+  // The Faction Turn (F3): propose, review, commit, reroll, discard.
+  if (hit('[data-fx-turn-start]')) {
+    runSkip = new Set(); runInclude = new Set();
+    store.update((doc) => startFactionTurn(doc, { seed: Date.now() >>> 0, cause: 'button' }).campaign);
+    factionsTab = 'turn'; factionsDetailId = '';
+    return openFactionsPanel('');
+  }
+  const fxRunCommit = hit('[data-fx-run-commit]');
+  if (fxRunCommit) {
+    let r = { eventIds: [], conflicts: [] };
+    store.update((doc) => { r = commitFactionRun(doc, fxRunCommit.dataset.fxRunCommit, { skip: [...runSkip], include: [...runInclude] }); return r.campaign; });
+    runSkip = new Set(); runInclude = new Set();
+    factionsTab = 'history';
+    renderDrawerBody();
+    return toast(r.conflicts.length ? `Committed ${r.eventIds.length}; some changes conflicted with edits made since. See History.` : `Faction Turn committed: ${r.eventIds.length} event${r.eventIds.length === 1 ? '' : 's'}. Each can be undone from History.`);
+  }
+  const fxRunReroll = hit('[data-fx-run-reroll]');
+  if (fxRunReroll) {
+    runSkip = new Set(); runInclude = new Set();
+    store.update((doc) => rerollFactionTurn(doc, fxRunReroll.dataset.fxRunReroll, { seed: Date.now() >>> 0 }).campaign);
+    return renderDrawerBody();
+  }
+  const fxRunDiscard = hit('[data-fx-run-discard]');
+  if (fxRunDiscard) {
+    runSkip = new Set(); runInclude = new Set();
+    store.update((doc) => discardFactionTurn(doc, fxRunDiscard.dataset.fxRunDiscard));
+    factionsTab = 'overview';
+    return renderDrawerBody();
+  }
   if (hit('[data-fx-open-history]')) { factionsTab = 'history'; return openFactionsPanel(''); }
+  if (hit('[data-fx-filter-clear]')) { factionsFilter = {}; return renderDrawerBody(); }
+  if (hit('[data-fx-open-turn]')) { factionsTab = 'turn'; factionsDetailId = ''; return openFactionsPanel(''); }
   if (hit('[data-fx-record-open]')) { factionsRecordOpen = !factionsRecordOpen; return renderDrawerBody(); }
   const fxRecSubmit = hit('[data-fx-rec-submit]');
   if (fxRecSubmit) {
@@ -7602,6 +7639,26 @@ function onChange(ev) {
   if (t.closest('[data-fx-search]')) { factionsSearch = t.value; return renderDrawerBody(); }
   const fxHist = t.closest('[data-fx-hist-filter]');
   if (fxHist) { factionsHistFilter = { ...factionsHistFilter, [fxHist.dataset.fxHistFilter]: t.value }; return renderDrawerBody(); }
+  const fxFilter = t.closest('[data-fx-filter]');
+  if (fxFilter) { factionsFilter = { ...factionsFilter, [fxFilter.dataset.fxFilter]: t.value }; return renderDrawerBody(); }
+  // The Faction Turn preview (F3): keep/untick an action, set its band.
+  const fxRunKeep = t.closest('[data-fx-run-keep]');
+  if (fxRunKeep) {
+    const id = fxRunKeep.dataset.fxRunKeep;
+    const run = previewRun(store.get());
+    const a = run && run.actions.find((x) => x.id === id);
+    if (a && a.impact === 'critical') { if (t.checked) runInclude.add(id); else runInclude.delete(id); }
+    else if (t.checked) runSkip.delete(id); else runSkip.add(id);
+    return renderDrawerBody();
+  }
+  const fxRunBand = t.closest('[data-fx-run-band]');
+  if (fxRunBand && t.value) {
+    const [runId, actionId] = fxRunBand.dataset.fxRunBand.split('::');
+    return store.update((d) => setRunActionBand(d, runId, actionId, t.value));
+  }
+  // Settings > Factions (U11).
+  const fxSetting = t.closest('[data-fx-setting]');
+  if (fxSetting) return store.update((d) => setFactionSetting(d, fxSetting.dataset.fxSetting, t.type === 'checkbox' ? t.checked : t.value));
   if (t.closest('[data-tl-entity]')) { timelineEntityId = t.value; return renderDrawerBody(); }
   // The Conflict entity's status, side fields and pressure gauges.
   const fconflictStatus = t.closest('[data-fconflict-status]');
@@ -12875,7 +12932,7 @@ function hasPendingAdvisorDecision(doc) {
 function factionsPanelUi() {
   return {
     factionsTab, factionsDetailId, factionsSearch, factionsWebPair, factionsOpenSections, factionsClassicOpen,
-    factionsHistFilter, factionsRecordOpen,
+    factionsHistFilter, factionsRecordOpen, runSkip, runInclude, factionsFilter,
     factionEventsOpts: { factionEventsDrafts, factionEventsFactionFilterId, factionEventsLocationFilterId, factionEventsStepFactionId, factionRoundHistoryOpen, conflictEscalationSuggestions },
   };
 }

@@ -13978,3 +13978,230 @@ test('Factions F2: entity history, event filters, and the Timeline merge', () =>
   assert.equal(F2.campaignHistory(c, { kinds: ['faction'], entityId: b }).length, 1);
   assert.deepEqual(F2.campaignHistory(c, { kinds: ['scene'] }), []);
 });
+
+// ---- Factions F3: the Faction Turn pipeline (relevance, candidates,
+// behavior, resolution, budgets, seeds, runs, commit, follow-ons)
+// (design/FACTION-ROADMAP.md F3).
+import * as F3 from '../src/domain/factionTurn.js';
+
+function f3World() {
+  const h = f1Campaign();
+  const ids = {};
+  ids.guild = h.mk('faction', 'Lantern Guild');
+  ids.cult = h.mk('faction', 'Ashen Choir');
+  ids.idle = h.mk('faction', 'Quiet Hermits');
+  let c = h.c;
+  c = F1.addFactionObjective(c, ids.guild, { title: 'Corner the salt trade', stake: 'resources' });
+  c = F1.addFactionObjective(c, ids.cult, { title: 'Win the city to its creed', stake: 'ideology' });
+  c = F1.changeStanding(c, { fromId: ids.guild, toId: ids.cult, delta: -2, reason: 'old feud', ripple: false });
+  c = F1.changeStanding(c, { fromId: ids.cult, toId: ids.guild, delta: -2, reason: 'old feud', ripple: false });
+  // The hermits: no objective, no ties, no ratings.
+  for (const k of ['force', 'cunning', 'wealth']) c = F1.setFactionProfile(c, ids.idle, `capabilities.${k}`, '');
+  h.c = c;
+  return { h, ids };
+}
+
+test('Factions F3: an irrelevant faction is filtered out, with the reason kept', () => {
+  const { h, ids } = f3World();
+  const run = F3.proposeFactionTurn(h.c, { seed: 7 });
+  const idle = run.considered.find((x) => x.factionId === ids.idle);
+  assert.equal(idle.acting, false);
+  assert.match(idle.skip, /not relevant/);
+  assert.ok(!run.actions.some((a) => a.factionId === ids.idle));
+  const guild = run.considered.find((x) => x.factionId === ids.guild);
+  assert.equal(guild.acting, true);
+  assert.ok(guild.reasons.length >= 1 && guild.reasons.length <= 3, 'top three reasons at most');
+  // Muted and paused factions are skipped outright.
+  const muted = F3.proposeFactionTurn(F1.setFactionProfile(h.c, ids.guild, 'muted', true), { seed: 7 });
+  assert.equal(muted.considered.find((x) => x.factionId === ids.guild).skip, 'muted');
+});
+
+test('Factions F3: a cautious, peaceable faction does not choose open war', () => {
+  const { h, ids } = f3World();
+  let c = h.c;
+  for (const [axis, v] of Object.entries({ risk: -2, aggression: -2, patience: 2, compromise: 1 })) c = F1.setFactionProfile(c, ids.guild, `behavior.${axis}`, v);
+  c = F1.setFactionProfile(c, ids.guild, 'methods', ['trade', 'bribery', 'force']);
+  c = F1.setFactionProfile(c, ids.guild, 'capabilities.force', 4);
+  for (let seed = 1; seed <= 25; seed += 1) {
+    const a = F3.proposeFactionTurn(c, { seed }).actions.find((x) => x.factionId === ids.guild);
+    assert.ok(a, 'it still acts');
+    assert.ok(!['attack', 'threaten', 'blockade'].includes(a.family), `seed ${seed} chose ${a.family}`);
+  }
+  // A violent, reckless faction with the same rival does consider attacking.
+  let d = h.c;
+  for (const [axis, v] of Object.entries({ risk: 2, aggression: 2, compromise: -2 })) d = F1.setFactionProfile(d, ids.cult, `behavior.${axis}`, v);
+  d = F1.setFactionProfile(d, ids.cult, 'methods', ['force', 'raid']);
+  const cands = F3.candidateActions(d, F0.getEntity(d, ids.cult), { rng: () => 0.5 });
+  assert.ok(cands.some((x) => x.family === 'attack'), 'attack is a candidate for a violent faction');
+});
+
+test('Factions F3: the same seed gives the same run; a reroll keeps the earlier run', () => {
+  const { h } = f3World();
+  const strip = (r) => JSON.stringify(r.actions.map((a) => [a.factionId, a.family, a.target, a.resolution.band, a.resolution.roll, a.changes]));
+  const a = F3.proposeFactionTurn(h.c, { seed: 42 });
+  const b = F3.proposeFactionTurn(h.c, { seed: 42 });
+  assert.equal(strip(a), strip(b));
+  assert.notEqual(a.id, b.id, 'every run has its own id');
+  const s = F3.startFactionTurn(h.c, { seed: 42 });
+  const r = F3.rerollFactionTurn(s.campaign, s.runId, { seed: 43 });
+  const runs = r.campaign.factions.runs;
+  assert.equal(runs.length, 2);
+  assert.equal(runs.find((x) => x.id === s.runId).status, 'superseded');
+  assert.equal(runs.find((x) => x.id === r.runId).rerollOf, s.runId);
+  assert.equal(F3.previewRun(r.campaign).id, r.runId);
+  // Proposing is read-only.
+  const before = JSON.stringify(h.c);
+  F3.proposeFactionTurn(h.c, { seed: 1 });
+  assert.equal(JSON.stringify(h.c), before);
+});
+
+test('Factions F3: the budget holds (factions, events and loud moves)', () => {
+  const h = f1Campaign();
+  const ids = [];
+  for (let i = 0; i < 9; i += 1) ids.push(h.mk('faction', `Faction ${i}`));
+  let c = h.c;
+  for (const id of ids) {
+    c = F1.addFactionObjective(c, id, { title: 'Take control of the docks', stake: 'territory' });
+    for (const [axis, v] of Object.entries({ risk: 2, aggression: 2, compromise: -2 })) c = F1.setFactionProfile(c, id, `behavior.${axis}`, v);
+    c = F1.setFactionProfile(c, id, 'methods', ['force', 'raid', 'intimidation']);
+  }
+  for (let i = 0; i < ids.length; i += 1) c = F1.changeStanding(c, { fromId: ids[i], toId: ids[(i + 1) % ids.length], delta: -3, reason: 'feud', ripple: false });
+  const run = F3.proposeFactionTurn(c, { seed: 5 });
+  assert.equal(run.mode, 'standard');
+  assert.ok(run.actions.length <= 5, 'Standard: up to 5 factions act');
+  assert.ok(run.actions.filter((a) => a.loud).length <= 3, 'Steady: at most 3 loud moves');
+  const calm = F3.proposeFactionTurn(F3.setFactionSetting(c, 'pressure', 'calm'), { seed: 5 });
+  assert.ok(calm.actions.filter((a) => a.loud).length <= 2, 'Calm: at most 2 loud moves');
+  const adv = F3.proposeFactionTurn(F3.setFactionSetting(c, 'mode', 'advanced'), { seed: 5 });
+  assert.ok(adv.actions.length > 5 && adv.actions.length <= 8, 'Advanced: up to 8');
+  // Passive: only factions a trigger fired for.
+  let p = F3.setFactionSetting(c, 'mode', 'passive');
+  assert.equal(F3.proposeFactionTurn(p, { seed: 5 }).actions.length, 0, 'no trigger, no action');
+  p = F2.recordQuickAction(p, ids[0], 'hurt').campaign;
+  const pr = F3.proposeFactionTurn(p, { seed: 5 });
+  assert.ok(pr.actions.some((a) => a.factionId === ids[0]), 'the faction the trigger names acts');
+  assert.ok(pr.actions.length <= 3);
+  assert.ok(pr.actions.every((a) => a.relevance.reasons.some((t) => /Responding to|touched a faction it cares about/.test(t))), 'every actor has a trigger reason');
+});
+
+test('Factions F3: a faction with no ratings still gets a narrative-level suggestion', () => {
+  const h = f1Campaign();
+  const id = h.mk('faction', 'Nameless Few');
+  let c = F1.addFactionObjective(h.c, id, { title: 'Secure a safe haven', stake: 'survival' });
+  for (const k of ['force', 'cunning', 'wealth']) c = F1.setFactionProfile(c, id, `capabilities.${k}`, '');
+  assert.ok(Object.values(F1.factionProfile(F0.getEntity(c, id)).capabilities).every((v) => v === null));
+  const run = F3.proposeFactionTurn(c, { seed: 3 });
+  const a = run.actions.find((x) => x.factionId === id);
+  assert.ok(a, 'it acts');
+  assert.ok(a.intent && a.title);
+  assert.ok(a.resolution.band, 'a band is resolved');
+  assert.ok(a.resolution.factors.some((t) => /narrative level/.test(t)));
+  assert.ok(a.candidates.length >= 3 && a.candidates.length <= 5, '3–5 candidates');
+});
+
+test('Factions F3: committing records explained, undoable events and queues follow-ons', () => {
+  const { h, ids } = f3World();
+  let c = F3.setFactionSetting(h.c, 'resolution', 'gm');
+  let s = F3.startFactionTurn(c, { seed: 9 });
+  c = s.campaign;
+  const run = F3.previewRun(c);
+  assert.ok(run.actions.length >= 2);
+  assert.ok(run.actions.every((a) => a.resolution.band === ''), 'GM decides: no band yet');
+  // Unpicked bands are skipped; pick a band for every action.
+  for (const a of run.actions) c = F3.setRunActionBand(c, run.id, a.id, 'decisive');
+  const ready = F3.previewRun(c);
+  assert.ok(ready.actions.every((a) => a.resolution.band === 'decisive' && a.changes.length >= 0));
+  const turnBefore = F1.currentFactionTurn(c);
+  const r = F3.commitFactionRun(c, run.id, { at: '2026-11-22T12:00:00Z' });
+  c = r.campaign;
+  assert.equal(r.conflicts.length, 0);
+  assert.equal(F1.currentFactionTurn(c), turnBefore + 1, 'the faction clock moves on');
+  assert.equal(c.factions.runs.find((x) => x.id === run.id).status, 'committed');
+  for (const id of r.eventIds) {
+    const ev = c.factions.events.find((e) => e.id === id);
+    assert.equal(ev.status, 'applied');
+    assert.equal(ev.runId, run.id);
+    assert.equal(ev.band, 'decisive');
+    const trig = c.factions.triggers.find((t) => t.id === ev.triggerId);
+    assert.equal(trig.kind, 'faction-turn');
+  }
+  // Projects advanced, and each event undoes cleanly.
+  const guildThread = c.threads.find((t) => t.factionId === ids.guild);
+  const guildEvent = c.factions.events.find((e) => e.runId === run.id && e.action.actorId === ids.guild);
+  if (F3.familyDef(guildEvent.action.verb).advances) assert.equal(guildThread.filled, 2, 'decisive moves the project two steps');
+  const u = F2.undoEvent(c, guildEvent.id);
+  assert.equal(u.conflicts.length, 0);
+  assert.equal(u.campaign.threads.find((t) => t.factionId === ids.guild).filled, 0);
+  // A hostile success queues the target's reaction for the next run.
+  const hostile = c.factions.events.filter((e) => e.runId === run.id && F3.familyDef(e.action.verb).stance < 0 && (e.action.targetIds || []).length);
+  for (const e of hostile) {
+    const fo = c.factions.triggers.find((t) => t.kind === 'follow-on' && t.causeEventId === e.id);
+    assert.ok(fo, 'a follow-on trigger is queued');
+    assert.equal(fo.depth, 1);
+    assert.ok(!fo.processedRunId, 'not yet answered');
+  }
+  // Committing twice does nothing.
+  const again = F3.commitFactionRun(c, run.id);
+  assert.equal(again.eventIds.length, 0);
+});
+
+test('Factions F3: a critical action is never committed unless the GM names it', () => {
+  const h = f1Campaign();
+  const id = h.mk('faction', 'Broken Oath');
+  let c = F1.addFactionObjective(h.c, id, { title: 'Secure a safe haven', stake: 'survival' });
+  for (const [k, v] of Object.entries({ 'state.stability': 1, 'state.cohesion': 1, 'behavior.pragmatism': 2, 'behavior.compromise': -2, 'behavior.risk': -1 })) c = F1.setFactionProfile(c, id, k, v);
+  c = F3.setFactionSetting(c, 'resolution', 'gm');
+  const s = F3.startFactionTurn(c, { seed: 2 });
+  c = s.campaign;
+  let run = F3.previewRun(c);
+  const a = run.actions.find((x) => x.factionId === id);
+  assert.ok(['abandon', 'split'].includes(a.family), `endgame move, got ${a.family}`);
+  assert.equal(a.impact, 'critical');
+  c = F3.setRunActionBand(c, run.id, a.id, 'partial');
+  const skipped = F3.commitFactionRun(c, run.id);
+  assert.deepEqual(skipped.eventIds, []);
+  assert.ok(skipped.skipped.includes(a.id));
+  const kept = F3.commitFactionRun(c, run.id, { include: [a.id] });
+  assert.equal(kept.eventIds.length, 1);
+  const ev = kept.campaign.factions.events.find((e) => e.id === kept.eventIds[0]);
+  assert.equal(ev.significance, 'major');
+  assert.ok(kept.campaign.journal.some((j) => j.factionEventId === ev.id), 'a critical event is journaled');
+});
+
+test('Factions F3: a wronged faction retaliates against the party with a high-impact decision and a hook', () => {
+  const h = f1Campaign();
+  const id = h.mk('faction', 'Iron Wardens');
+  let c = F1.addFactionObjective(h.c, id, { title: 'Make the watch answer to it', stake: 'control' });
+  for (const [axis, v] of Object.entries({ aggression: 2, compromise: -2 })) c = F1.setFactionProfile(c, id, `behavior.${axis}`, v);
+  c = F2.recordQuickAction(c, id, 'betrayed').campaign;
+  const run = F3.proposeFactionTurn(c, { seed: 11 });
+  const a = run.actions.find((x) => x.factionId === id);
+  assert.equal(a.family, 'retaliate');
+  assert.equal(a.target.kind, 'party');
+  assert.equal(a.impact, 'high');
+  assert.equal(a.involvement, 'decision');
+  assert.ok(a.hooks.length && a.hooks[0].type === 'complication');
+  assert.ok(run.considered.find((x) => x.factionId === id).reasons.some((t) => /Responding to|wrong to answer/.test(t)));
+  // With retaliation switched off, it doesn't.
+  const off = F3.proposeFactionTurn(F3.setFactionSetting(c, 'retaliation', false), { seed: 11 });
+  assert.notEqual((off.actions.find((x) => x.factionId === id) || {}).family, 'retaliate');
+});
+
+test('Factions F3: directory filters by type, stance, status, plan, location, Conflict and activity', () => {
+  const { h, ids } = f3World();
+  let c = F1.setFactionProfile(h.c, ids.guild, 'factionType', 'Merchant league');
+  c = F1.setFactionProfile(c, ids.cult, 'muted', true);
+  c = F2.recordQuickAction(c, ids.guild, 'betrayed').campaign;
+  const r = F0.createEntity(c, { type: 'location', name: 'Saltgate' }); c = r.campaign;
+  c = F0.addRelationship(c, ids.guild, r.id, 'controls', 'controlled_by');
+  const names = (o) => F3.filterFactions(c, o).map((f) => f.name).sort();
+  assert.deepEqual(names({ type: 'Merchant league' }), ['Lantern Guild']);
+  assert.deepEqual(names({ stance: 'hostile' }), ['Lantern Guild']);
+  assert.deepEqual(names({ status: 'muted' }), ['Ashen Choir']);
+  assert.ok(!names({ status: 'active' }).includes('Ashen Choir'));
+  assert.deepEqual(names({ objective: 'none' }), ['Quiet Hermits']);
+  assert.deepEqual(names({ locationId: r.id }), ['Lantern Guild']);
+  assert.deepEqual(names({ activity: 'recent' }), ['Lantern Guild']);
+  assert.deepEqual(names({ q: 'choir' }), ['Ashen Choir']);
+  assert.equal(names({}).length, 3);
+});

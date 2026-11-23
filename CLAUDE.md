@@ -120,14 +120,14 @@ src/
     store.js       the ONLY persistence access (IndexedDB); pubsub via subscribe()
     migrate.js     legacy key absorption, lossless
     buildInfo.js   hand-maintained phase/version/changelog (Settings → Build)
-  data/            64 files — every game-content catalog (oracle tables x3 genre
+  data/            65 files — every game-content catalog (oracle tables x3 genre
                    packs, genre pack registry, rulesets, statblock/gear templates,
                    gear catalog, Rules Constitution provider registry, two
                    interchangeable faction content catalogs, trade economy/
                    commodities/biomes, UWP tables, suggestion lenses, enhancement
                    types, battlemap icons, Reference Library manifest). All content
                    is data — no ruleset vocabulary belongs in src/domain/.
-  domain/          65 files, pure/DOM-free, covered by tests/domain.test.js.
+  domain/          66 files, pure/DOM-free, covered by tests/domain.test.js.
                    session.js/context.js/scenes.js/copilot.js/recap.js orchestrate
                    the WHO/WHERE/WHAT/WHY/HOW model and Co-Pilot; oracles.js is the
                    roll engine; entities.js/statblocks.js/threads.js/graph.js/
@@ -135,8 +135,9 @@ src/
                    factions.js/factionTurnEngine.js/factionConflicts.js are three
                    coexisting faction-mechanic layers; factionState.js is the new
                    Factions store (campaign.factions, the Ledger; FACTION-ROADMAP
-                   F0), factionProfile.js its profile/standing/generator (F1) and
-                   factionChanges.js its events/change sets/undo (F2); trade.js/missions.js/
+                   F0), factionProfile.js its profile/standing/generator (F1),
+                   factionChanges.js its events/change sets/undo (F2) and
+                   factionTurn.js the Faction Turn pipeline and runs (F3); trade.js/missions.js/
                    enhancements.js/expeditions.js are economy & jobs;
                    documents.js/guide.js/mechanicsIndex.js/toc.js/worldbuilding.js/
                    hostileLocations.js are content & reference; party.js/colony.js/
@@ -174,7 +175,7 @@ styles/
   cockpit.css      layout + component styles (campaign surface)
   portal.css       portal surface layout (shares tokens.css only)
 tests/
-  domain.test.js   891 tests — domain modules, incl. sync-merge convergence
+  domain.test.js   900 tests — domain modules, incl. sync-merge convergence
   migrate.test.js  27 tests — legacy-key absorption + round-trip
 scripts/
   build.js         zero-dependency bundler (see below) — re-run after any src/ edit;

@@ -13,6 +13,9 @@ import { imageSrc } from '../imageSrc.js';
 import { isSameDistrict, getEntity, listEntities, LOCATION_OBJECT_TYPES, getSystemForLocation, getStarForLocation, getHexZoneForLocation, getEntityFaction } from '../../domain/entities.js';
 import { getCurrentWhereLocations, factionsInRegion, factionPresenceReasons } from '../../domain/factionTurnEngine.js';
 import { standing, stanceLabel } from '../../domain/factionProfile.js';
+import { likelyNext, factionTurnDue, previewRun, factionSettings } from '../../domain/factionTurn.js';
+import { FACTION_TURN_STEPS } from '../../data/factionActions.js';
+import { impactChip, factionTurnButton } from '../drawers/factions.js';
 import { oracleLinkTagsFor } from '../../data/entityFieldOracleLinks.js';
 import { buildMentionEditorHTML, richToolbarHTML, richToolbarToggleHTML, toolbarCollapsed } from '../mentionEditor.js';
 import { renderFactionEvents } from '../drawers/factionEvents.js';
@@ -1019,6 +1022,7 @@ export function navigatorBodyHtml(doc, ui) {
   return `
     ${narrativeComposerBlock(doc, ui)}
     ${navigatorWorkflowBlock(doc, ui)}
+    ${navigatorFactionsCard(doc, ui)}
     ${dashboardTrackersBlock(doc)}
     ${generatorsSection(ui, doc)}
     ${contractsSection(doc, ui, { collapsible: true })}
@@ -1177,6 +1181,7 @@ function navigatorWorkflowStepCard(doc, ui, def) {
         ${oracleBtn}
       </div>
       ${helpfulOraclesHtml(doc, stepId)}
+      ${FACTION_TURN_STEPS.includes(stepId) && factionSettings(doc).trigger.kind === 'auto' && listEntities(doc, ['faction']).length ? `<div class="fx-nav-step">${previewRun(doc) ? '<button type="button" class="btn primary sm" data-fx-open-turn>▶ Open turn preview</button>' : '<button type="button" class="btn primary sm" data-fx-turn-start>▶ Run Faction Turn</button>'} <span class="dim small">The other powers move at this step.</span></div>` : ''}
       ${mapRow}
       <button type="button" class="btn ghost sm" ${def.start}>＋ Add to Journal</button>
     </div>`;
@@ -1218,6 +1223,27 @@ function navigatorWorkflowBlock(doc, ui) {
     <div class="threads-head"><h3>Campaign Workflow</h3>${helpToggle(helpKey)}</div>
     ${wsHelpBody(helpKey, "Steps through the same Campaign Turn + 5PFH/Planetfall/Five Leagues Turn Step sequence as the Timeline panel's own Colony/Starship/Warband tabs — a second, parallel way to walk the same steps, not a replacement; editing either copy of Campaign Turn updates the same value. 🔮 jumps to a suggested Oracle table when one applies; a location-flavored step offers to pick or create a map, whose link travels with the step once you add it to the Journal.", ui)}
     ${cards}
+  </div>`;
+}
+
+// The Navigator's Factions card (design/FACTION-ROADMAP.md U5): the top
+// three things to watch, what is likely next, and ▶ Faction Turn. Only shown
+// once the campaign has a faction.
+function navigatorFactionsCard(doc, ui) {
+  if (!listEntities(doc, ['faction']).length) return '';
+  const due = factionTurnDue(doc);
+  const run = previewRun(doc);
+  const watch = run
+    ? run.actions.filter((a) => a.impact === 'high' || a.impact === 'critical').slice(0, 3)
+      .map((a) => `<div class="fx-row small">${impactChip(a.impact)} ${esc(a.title)}</div>`)
+    : likelyNext(doc, 3).map((a) => `<div class="fx-row small">${impactChip(a.impact)} <button type="button" class="entity-chip" data-entity-peek="${esc(a.factionId)}">${esc((getEntity(doc, a.factionId) || {}).name || 'A faction')}</button> ${esc(a.label)}<div class="dim small">because: ${esc(a.reasons.slice(0, 2).join(' · ') || 'it has a plan')}</div></div>`);
+  const helpKey = 'nav:factions';
+  return `<div class="navigator-factions">
+    <div class="threads-head"><h3>Factions</h3>${helpToggle(helpKey)}</div>
+    ${wsHelpBody(helpKey, 'What the factions are likely to do next, and the Faction Turn. Pressing ▶ only proposes; nothing changes until you commit the preview in the Factions panel.', ui)}
+    ${due.reason ? `<div class="fx-due small${due.due ? ' due' : ''}">${due.due ? '◆ Faction Turn due' : '○'} · ${esc(due.reason)}</div>` : ''}
+    ${watch.length ? `<div class="fx-nav-watch"><div class="dim small">${run ? 'Waiting in the preview' : 'Likely next'}</div>${watch.join('')}</div>` : ''}
+    <div class="action-bar">${factionTurnButton(doc).replace('data-fx-tab="turn"', 'data-fx-open-turn')}</div>
   </div>`;
 }
 
